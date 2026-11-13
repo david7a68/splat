@@ -1,4 +1,5 @@
 //! A reading view of creature values, with the original rules prose retained.
+#![warn(deprecated)] // Its parent allows old message functions; this file does not.
 use super::presentation;
 use crate::design::{
     self, Type, colors,

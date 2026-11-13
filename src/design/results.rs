@@ -310,10 +310,6 @@ impl<'a> Footer<'a> {
 
     /// The one way from a stored order to the footer, for the kept entries in `design` (these,
     /// and a typed outcome's).
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "the one caller of `Footer::result` that keeps an order with its result"
-    )]
     pub(in crate::design) fn add_kept(
         &mut self,
         order: ResultOrder,
@@ -321,7 +317,12 @@ impl<'a> Footer<'a> {
         has_undo: bool,
         draw: impl FnOnce(&mut Ui) + 'a,
     ) -> &mut Self {
-        self.result(order, words, has_undo, draw)
+        let rank = if has_undo {
+            super::components::FooterRank::Undo
+        } else {
+            super::components::FooterRank::Notice
+        };
+        self.push(rank, Some(order), words.into(), draw)
     }
 }
 
@@ -461,8 +462,10 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
 /// Every suppression of `clippy::disallowed_methods` that may stay, one row per suppression:
 /// the file, the item it is on (a function's name, or `<function or macro!> statement`), and the
 /// bans it is for. Clippy's `disallowed-methods` (`clippy.toml`) fails `check` on any call of
-/// `ResultOrder::issue`, `Footer::result` and `save_row_state`, by any name (an alias, a function
-/// item, a qualified path); a suppression frees only what it sits on.
+/// `ResultOrder::issue`, `Footer::result` and `save_row_state`, and of package M's escapes and
+/// helpers (`Ban::Words`, `Ban::Sentence`, `Ban::Order`, `Ban::Body`), by any name (an alias, a
+/// function item, a qualified path); a suppression frees only what it sits on. `Ban::Words` and
+/// `Ban::Body` are named escapes: their rows need not reach 0, but each new one is a visible row.
 ///
 /// `staged_allows_only_shrink` finds every suppression (`allow` or `expect`, any reason or none,
 /// also in `cfg_attr`, also of a group that holds the lint) and fails on one that is not listed,
@@ -470,7 +473,7 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
 /// listed one whose item no longer calls, or a row with no suppression, asks to remove the row.
 /// The rows can only go; at none with `Ban::Results`, those parts become private.
 ///
-/// **Package K.** K bans raw egui calls through the same lint (`Ban::Layout`). Its staged rows are
+/// **Package K.** K bans raw egui calls through the same lint (`Ban::Layout(n)`, `Ban::RowKey(n)`, each with the number of calls its item holds). Its staged rows are
 /// here; where one function holds both kinds of call, that function keeps one attribute and its
 /// row lists both bans. The owners of the raw calls, `src/design/` and the capture harness
 /// `src/visual_tests/`, list theirs in [`OWNED_ALLOWS`], which never shrinks to none.
@@ -514,7 +517,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/design/components.rs",
             "iter26_a_the_footer_keeps_the_body_top_and_reaches_its_last_message",
-            &[Ban::Results, Ban::Layout],
+            &[Ban::Results, Ban::Layout(1)],
         ),
         (
             "src/design/components.rs",
@@ -524,23 +527,22 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/design/components.rs",
             "iter27_a_the_footer_follows_a_short_body",
-            &[Ban::Results, Ban::Layout],
+            &[Ban::Results, Ban::Layout(2)],
         ),
         (
             "src/design/gallery.rs",
             "components",
-            &[Ban::Results, Ban::Layout],
+            &[Ban::Results, Ban::Layout(4)],
         ),
-        ("src/design/results.rs", "add_kept", &[Ban::Results]),
         ("src/design/results.rs", "record", &[Ban::Results]),
         ("src/dndbeyond.rs", "footer_messages", &[Ban::Results]),
-        ("src/dndbeyond.rs", "show", &[Ban::Results, Ban::Layout]),
+        ("src/dndbeyond.rs", "show", &[Ban::Results, Ban::Layout(1)]),
         ("src/encounter_run.rs", "keep_step", &[Ban::Results]),
         ("src/encounter_run.rs", "open", &[Ban::Results]),
         (
             "src/encounter_run/view.rs",
             "groups_tab",
-            &[Ban::Results, Ban::Layout],
+            &[Ban::Results, Ban::Layout(1)],
         ),
         (
             "src/encounter_run/view.rs",
@@ -550,7 +552,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters/groups.rs",
             "group_editor_view",
-            &[Ban::Results, Ban::Layout],
+            &[Ban::Results, Ban::Layout(1)],
         ),
         (
             "src/encounters/groups.rs",
@@ -565,7 +567,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters.rs",
             "creature_pane",
-            &[Ban::Results, Ban::Layout],
+            &[Ban::Results, Ban::Layout(3)],
         ),
         (
             "src/encounters.rs",
@@ -576,14 +578,14 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters.rs",
             "ledger_view",
-            &[Ban::Results, Ban::Layout],
+            &[Ban::Results, Ban::Layout(1)],
         ),
         ("src/encounters.rs", "results_into", &[Ban::Results]),
         ("src/encounters.rs", "result_stamp", &[Ban::Results]),
         (
             "src/encounters.rs",
             "run_settings",
-            &[Ban::Results, Ban::Layout],
+            &[Ban::Results, Ban::Layout(3)],
         ),
         ("src/encounters.rs", "save_draft", &[Ban::Results]),
         ("src/encounters.rs", "stamp_kept", &[Ban::Results]),
@@ -592,7 +594,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/library.rs",
             "editor_pane",
-            &[Ban::Results, Ban::Layout],
+            &[Ban::Results, Ban::Layout(5)],
         ),
         ("src/library.rs", "give_new_identity", &[Ban::Results]),
         (
@@ -618,7 +620,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/sessions/page.rs",
             "folder_form",
-            &[Ban::Results, Ban::Layout],
+            &[Ban::Results, Ban::Layout(1)],
         ),
         ("src/sessions/page.rs", "folder_messages", &[Ban::Results]),
         ("src/sessions/page.rs", "markers", &[Ban::Results]),
@@ -631,18 +633,18 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/sessions/page.rs",
             "reading_view",
-            &[Ban::Results, Ban::Layout],
+            &[Ban::Results, Ban::Layout(3)],
         ),
         ("src/sessions/page.rs", "session_footer", &[Ban::Results]),
         (
             "src/sessions/page.rs",
             "template_editor",
-            &[Ban::Results, Ban::Layout],
+            &[Ban::Results, Ban::Layout(4)],
         ),
         (
             "src/sessions/plan.rs",
             "plan_pane",
-            &[Ban::Results, Ban::Layout],
+            &[Ban::Results, Ban::Layout(2)],
         ),
         (
             "src/sessions/plan.rs",
@@ -667,7 +669,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/world/edit.rs",
             "edit_form",
-            &[Ban::Results, Ban::Layout],
+            &[Ban::Results, Ban::Layout(3)],
         ),
         (
             "src/world/edit.rs",
@@ -677,14 +679,14 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/world/page.rs",
             "creation_body",
-            &[Ban::Results, Ban::Layout],
+            &[Ban::Results, Ban::Layout(2)],
         ),
         (
             "src/world/page.rs",
             "creation_form",
-            &[Ban::Results, Ban::Layout],
+            &[Ban::Results, Ban::Layout(1)],
         ),
-        ("src/world/page.rs", "show", &[Ban::Results, Ban::Layout]),
+        ("src/world/page.rs", "show", &[Ban::Results, Ban::Layout(4)]),
         ("src/world/repair.rs", "choose", &[Ban::Results]),
         ("src/world/repair.rs", "edit", &[Ban::Results]),
         ("src/world/repair.rs", "footer", &[Ban::Results]),
@@ -692,281 +694,380 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/world.rs",
             "entry_controls",
-            &[Ban::Results, Ban::Layout],
+            &[Ban::Results, Ban::Layout(1)],
         ),
         ("src/world.rs", "stamp", &[Ban::Results]),
         // Package K: raw egui calls that a layout part replaces.
-        ("src/art.rs", "show_viewer", &[Ban::Layout]),
+        ("src/art.rs", "show_viewer", &[Ban::Layout(1)]),
         (
             "src/campaign_content.rs",
             "packages_content",
-            &[Ban::Layout],
+            &[Ban::Layout(4)],
         ),
         (
             "src/campaign_content.rs",
             "reconcile_section",
-            &[Ban::Layout],
+            &[Ban::Layout(1)],
         ),
-        ("src/campaign_content.rs", "show", &[Ban::Layout]),
-        ("src/campaigns.rs", "selector", &[Ban::Layout]),
+        ("src/campaign_content.rs", "show", &[Ban::Layout(1)]),
+        ("src/campaigns.rs", "selector", &[Ban::Layout(1)]),
         (
             "src/combat_sync.rs",
             "render_every_editable_group_at_minimum_size",
-            &[Ban::Layout],
+            &[Ban::Layout(1)],
         ),
-        ("src/copy_dialog.rs", "show", &[Ban::Layout]),
-        ("src/creature_filter.rs", "filter_bar", &[Ban::Layout]),
-        ("src/creature_filter.rs", "menu", &[Ban::Layout]),
+        ("src/copy_dialog.rs", "show", &[Ban::Layout(3)]),
+        ("src/creature_filter.rs", "filter_bar", &[Ban::Layout(1)]),
+        ("src/creature_filter.rs", "menu", &[Ban::Layout(2)]),
         (
             "src/encounter_run/ad_hoc.rs",
             "add_creature_form",
-            &[Ban::Layout],
+            &[Ban::Layout(2)],
         ),
-        ("src/encounter_run/dock.rs", "dice", &[Ban::Layout]),
-        ("src/encounter_run/rolling.rs", "row_menu", &[Ban::Layout]),
+        ("src/encounter_run/dock.rs", "dice", &[Ban::Layout(1)]),
+        (
+            "src/encounter_run/rolling.rs",
+            "row_menu",
+            &[Ban::Layout(2)],
+        ),
         (
             "src/encounter_run/view.rs",
             "conditions_tab",
-            &[Ban::Layout],
+            &[Ban::Layout(1)],
         ),
-        ("src/encounter_run/view.rs", "ended_view", &[Ban::Layout]),
-        ("src/encounter_run/view.rs", "group_row", &[Ban::Layout]),
-        ("src/encounter_run/view.rs", "live_footer", &[Ban::Layout]),
-        ("src/encounter_run/view.rs", "log_tab", &[Ban::Layout]),
-        ("src/encounter_run/view.rs", "notes_tab", &[Ban::Layout]),
+        ("src/encounter_run/view.rs", "ended_view", &[Ban::Layout(2)]),
+        ("src/encounter_run/view.rs", "group_row", &[Ban::Layout(3)]),
+        (
+            "src/encounter_run/view.rs",
+            "live_footer",
+            &[Ban::Layout(2)],
+        ),
+        ("src/encounter_run/view.rs", "log_tab", &[Ban::Layout(1)]),
+        ("src/encounter_run/view.rs", "notes_tab", &[Ban::Layout(1)]),
         (
             "src/encounter_run/view.rs",
             "optional_number",
-            &[Ban::Layout],
+            &[Ban::Layout(1)],
         ),
         (
             "src/encounter_run/view.rs",
             "other_effect_field",
-            &[Ban::Layout],
+            &[Ban::Layout(1)],
         ),
-        ("src/encounter_run/view.rs", "panel_tabs", &[Ban::Layout]),
-        ("src/encounter_run/view.rs", "record_tab", &[Ban::Layout]),
-        ("src/encounter_run/view.rs", "reference_tab", &[Ban::Layout]),
-        ("src/encounter_run/view.rs", "roster", &[Ban::Layout]),
-        ("src/encounter_run/view.rs", "setup_body", &[Ban::Layout]),
-        ("src/encounter_run/view.rs", "setup_row", &[Ban::Layout]),
+        ("src/encounter_run/view.rs", "panel_tabs", &[Ban::Layout(1)]),
+        ("src/encounter_run/view.rs", "record_tab", &[Ban::Layout(2)]),
+        (
+            "src/encounter_run/view.rs",
+            "reference_tab",
+            &[Ban::Layout(2)],
+        ),
+        ("src/encounter_run/view.rs", "roster", &[Ban::Layout(1)]),
+        ("src/encounter_run/view.rs", "setup_body", &[Ban::Layout(1)]),
+        ("src/encounter_run/view.rs", "setup_row", &[Ban::Layout(1)]),
         (
             "src/encounters.rs",
             "creature_search_with_summary",
-            &[Ban::Layout],
+            &[Ban::Layout(1)],
         ),
-        ("src/encounters.rs", "editor_view", &[Ban::Layout]),
-        ("src/encounters.rs", "notes_field", &[Ban::Layout]),
-        ("src/encounters.rs", "roster", &[Ban::Layout]),
-        ("src/encounters.rs", "roster_pane", &[Ban::Layout]),
-        ("src/encounters/groups.rs", "belongs_to", &[Ban::Layout]),
-        ("src/encounters/groups.rs", "change_row", &[Ban::Layout]),
-        ("src/encounters/groups.rs", "members", &[Ban::Layout]),
-        ("src/encounters/groups.rs", "members_pane", &[Ban::Layout]),
-        ("src/encounters/groups.rs", "of_encounter", &[Ban::Layout]),
-        ("src/encounters/groups.rs", "text_row", &[Ban::Layout]),
-        ("src/encounters/list.rs", "row_menu", &[Ban::Layout]),
-        ("src/encounters/list.rs", "side_control", &[Ban::Layout]),
-        ("src/lib.rs", "page", &[Ban::Layout]),
-        ("src/library.rs", "above_footer", &[Ban::Layout]),
-        ("src/library.rs", "folder_field", &[Ban::Layout]),
-        ("src/library.rs", "new_entry", &[Ban::Layout]),
-        ("src/library.rs", "package_form", &[Ban::Layout]),
-        ("src/library.rs", "scope_menu", &[Ban::Layout]),
-        ("src/library.rs", "show", &[Ban::Layout]),
-        ("src/lookup.rs", "panel", &[Ban::Layout]),
-        ("src/lookup.rs", "written_reader", &[Ban::Layout]),
-        ("src/loot_editor.rs", "line_row", &[Ban::Layout]),
-        ("src/loot_editor.rs", "table_menu", &[Ban::Layout]),
-        ("src/markdown_source.rs", "press_in_editor", &[Ban::Layout]),
+        ("src/encounters.rs", "editor_view", &[Ban::Layout(1)]),
+        ("src/encounters.rs", "notes_field", &[Ban::Layout(1)]),
+        ("src/encounters.rs", "roster", &[Ban::Layout(2)]),
+        ("src/encounters.rs", "roster_pane", &[Ban::Layout(1)]),
+        ("src/encounters/groups.rs", "belongs_to", &[Ban::Layout(1)]),
+        ("src/encounters/groups.rs", "change_row", &[Ban::Layout(3)]),
+        ("src/encounters/groups.rs", "members", &[Ban::Layout(1)]),
+        (
+            "src/encounters/groups.rs",
+            "members_pane",
+            &[Ban::Layout(1)],
+        ),
+        (
+            "src/encounters/groups.rs",
+            "of_encounter",
+            &[Ban::Layout(1)],
+        ),
+        ("src/encounters/groups.rs", "text_row", &[Ban::Layout(1)]),
+        ("src/encounters/list.rs", "row_menu", &[Ban::Layout(1)]),
+        ("src/encounters/list.rs", "side_control", &[Ban::Layout(2)]),
+        ("src/lib.rs", "page", &[Ban::Layout(3)]),
+        ("src/library.rs", "above_footer", &[Ban::Layout(1)]),
+        ("src/library.rs", "folder_field", &[Ban::Layout(2)]),
+        ("src/library.rs", "new_entry", &[Ban::Layout(3)]),
+        ("src/library.rs", "package_form", &[Ban::Layout(5)]),
+        ("src/library.rs", "scope_menu", &[Ban::Layout(1)]),
+        ("src/library.rs", "show", &[Ban::Layout(6)]),
+        ("src/lookup.rs", "panel", &[Ban::Layout(2)]),
+        ("src/lookup.rs", "written_reader", &[Ban::Layout(1)]),
+        ("src/loot_editor.rs", "line_row", &[Ban::Layout(1)]),
+        ("src/loot_editor.rs", "table_menu", &[Ban::Layout(1)]),
+        (
+            "src/markdown_source.rs",
+            "press_in_editor",
+            &[Ban::Layout(1)],
+        ),
         (
             "src/markdown_source.rs",
             "the_first_letter_of_a_wrapped_row_is_part_of_its_link",
-            &[Ban::Layout],
+            &[Ban::Layout(1)],
         ),
-        ("src/markdown_view.rs", "reader_table", &[Ban::Layout]),
+        ("src/markdown_view.rs", "reader_table", &[Ban::Layout(1)]),
         (
             "src/markdown_view.rs",
             "wide_tables_keep_whole_words_and_can_scroll_to_the_last_column",
-            &[Ban::Layout],
+            &[Ban::Layout(1)],
         ),
-        ("src/party.rs", "page_body", &[Ban::Layout]),
-        ("src/party.rs", "sheet_view", &[Ban::Layout]),
-        ("src/party_bar.rs", "more_players", &[Ban::Layout]),
-        ("src/party_bar.rs", "paint", &[Ban::Layout]),
+        ("src/party.rs", "page_body", &[Ban::Layout(1)]),
+        ("src/party.rs", "sheet_view", &[Ban::Layout(2)]),
+        ("src/party_bar.rs", "more_players", &[Ban::Layout(2)]),
+        ("src/party_bar.rs", "paint", &[Ban::Layout(1)]),
         (
             "src/processing/settings.rs",
             "input_section",
-            &[Ban::Layout],
+            &[Ban::Layout(1)],
         ),
-        ("src/processing/settings.rs", "key_row", &[Ban::Layout]),
-        ("src/processing/settings.rs", "llm_section", &[Ban::Layout]),
+        ("src/processing/settings.rs", "key_row", &[Ban::Layout(1)]),
+        (
+            "src/processing/settings.rs",
+            "llm_section",
+            &[Ban::Layout(4)],
+        ),
         (
             "src/processing/settings.rs",
             "speech_section",
-            &[Ban::Layout],
+            &[Ban::Layout(3)],
         ),
-        ("src/rolls.rs", "mode_menu", &[Ban::Layout]),
-        ("src/rolls.rs", "more_actions", &[Ban::Layout]),
-        ("src/rolls.rs", "outcome_line", &[Ban::Layout]),
-        ("src/rolls.rs", "rules_on_hover_and_focus", &[Ban::Layout]),
-        ("src/sessions/page.rs", "banner", &[Ban::Layout]),
-        ("src/sessions/page.rs", "list_pane", &[Ban::Layout]),
-        ("src/sessions/page.rs", "new_template_form", &[Ban::Layout]),
-        ("src/sessions/page.rs", "note_editor", &[Ban::Layout]),
-        ("src/sessions/page.rs", "notes_view", &[Ban::Layout]),
-        ("src/sessions/page.rs", "read_tab", &[Ban::Layout]),
-        ("src/sessions/page.rs", "recordings_tab", &[Ban::Layout]),
-        ("src/sessions/page.rs", "show_form", &[Ban::Layout]),
-        ("src/sessions/page.rs", "template_list", &[Ban::Layout]),
-        ("src/sessions/plan.rs", "event_fields", &[Ban::Layout]),
-        ("src/sessions/plan.rs", "fight_block", &[Ban::Layout]),
-        ("src/sessions/plan.rs", "place_field", &[Ban::Layout]),
-        ("src/sessions/plan.rs", "plan_menu", &[Ban::Layout]),
-        ("src/sessions/slash.rs", "note", &[Ban::Layout]),
-        ("src/sessions/slash.rs", "popup_at", &[Ban::Layout]),
-        ("src/timeline/checks.rs", "length_input", &[Ban::Layout]),
-        ("src/timeline/checks.rs", "table_line", &[Ban::Layout]),
-        ("src/timeline/page.rs", "detail", &[Ban::Layout]),
-        ("src/timeline/page.rs", "filters", &[Ban::Layout]),
-        ("src/timeline/page.rs", "list", &[Ban::Layout]),
-        ("src/timeline/page.rs", "new_events_line", &[Ban::Layout]),
+        ("src/rolls.rs", "mode_menu", &[Ban::Layout(1)]),
+        ("src/rolls.rs", "more_actions", &[Ban::Layout(1)]),
+        ("src/rolls.rs", "outcome_line", &[Ban::Layout(1)]),
+        (
+            "src/rolls.rs",
+            "rules_on_hover_and_focus",
+            &[Ban::Layout(2)],
+        ),
+        ("src/sessions/page.rs", "banner", &[Ban::Layout(1)]),
+        ("src/sessions/page.rs", "list_pane", &[Ban::Layout(1)]),
+        (
+            "src/sessions/page.rs",
+            "new_template_form",
+            &[Ban::Layout(1)],
+        ),
+        ("src/sessions/page.rs", "note_editor", &[Ban::Layout(2)]),
+        ("src/sessions/page.rs", "notes_view", &[Ban::Layout(3)]),
+        ("src/sessions/page.rs", "read_tab", &[Ban::Layout(1)]),
+        ("src/sessions/page.rs", "recordings_tab", &[Ban::Layout(1)]),
+        ("src/sessions/page.rs", "show_form", &[Ban::Layout(3)]),
+        ("src/sessions/page.rs", "template_list", &[Ban::Layout(1)]),
+        ("src/sessions/plan.rs", "event_fields", &[Ban::Layout(2)]),
+        ("src/sessions/plan.rs", "fight_block", &[Ban::Layout(1)]),
+        ("src/sessions/plan.rs", "place_field", &[Ban::Layout(1)]),
+        ("src/sessions/plan.rs", "plan_menu", &[Ban::Layout(2)]),
+        ("src/sessions/slash.rs", "note", &[Ban::Layout(1)]),
+        ("src/sessions/slash.rs", "popup_at", &[Ban::Layout(1)]),
+        ("src/timeline/checks.rs", "length_input", &[Ban::Layout(1)]),
+        ("src/timeline/checks.rs", "table_line", &[Ban::Layout(1)]),
+        ("src/timeline/page.rs", "detail", &[Ban::Layout(9)]),
+        ("src/timeline/page.rs", "filters", &[Ban::Layout(1)]),
+        ("src/timeline/page.rs", "list", &[Ban::Layout(1)]),
+        ("src/timeline/page.rs", "new_events_line", &[Ban::Layout(1)]),
         (
             "src/trackers.rs",
             "an_open_history_prepares_its_rows_once_and_draws_only_those_in_view",
-            &[Ban::Layout],
+            &[Ban::Layout(1)],
         ),
-        ("src/trackers/view.rs", "amount_field", &[Ban::Layout]),
-        ("src/trackers/view.rs", "show", &[Ban::Layout]),
-        ("src/world.rs", "add_form", &[Ban::Layout]),
-        ("src/world.rs", "make_entry_control", &[Ban::Layout]),
-        ("src/world.rs", "pick", &[Ban::Layout]),
-        ("src/world/page.rs", "new_menu", &[Ban::Layout]),
-        ("src/world/repair.rs", "editor_events", &[Ban::Layout]),
+        ("src/trackers/view.rs", "amount_field", &[Ban::Layout(1)]),
+        ("src/trackers/view.rs", "show", &[Ban::Layout(1)]),
+        ("src/world.rs", "add_form", &[Ban::Layout(2)]),
+        ("src/world.rs", "make_entry_control", &[Ban::Layout(1)]),
+        ("src/world.rs", "pick", &[Ban::Layout(1)]),
+        ("src/world/page.rs", "new_menu", &[Ban::Layout(1)]),
+        ("src/world/repair.rs", "editor_events", &[Ban::Layout(2)]),
+        // Package M (round 28): the escapes of `design::outcome`, and its own helpers.
+        ("src/design/outcome.rs", "__literal", &[Ban::Sentence]),
+        ("src/design/outcome.rs", "check_literal", &[Ban::Sentence]),
+        (
+            "src/design/outcome.rs",
+            "sentence! statement",
+            &[Ban::Sentence],
+        ),
+        (
+            "src/design/outcome.rs",
+            "sentence! statement",
+            &[Ban::Sentence],
+        ),
+        (
+            "src/design/outcome.rs",
+            "sentence! statement",
+            &[Ban::Sentence],
+        ),
+        ("src/design/outcome.rs", "rejected", &[Ban::Sentence]),
+        (
+            "src/design/outcome.rs",
+            "a_template_is_a_sentence_in_the_dms_words",
+            &[Ban::Sentence],
+        ),
+        (
+            "src/design/outcome.rs",
+            "outside_words_get_a_capital_and_an_end_mark",
+            &[Ban::Words],
+        ),
+        (
+            "src/design/outcome.rs",
+            "one_fault_has_one_tone_in_every_place",
+            &[Ban::Body],
+        ),
+        ("src/trackers.rs", "act_words", &[Ban::Words]),
+        ("src/trackers.rs", "cause", &[Ban::Words]),
+        ("src/trackers/history.rs", "show", &[Ban::Body]),
+        ("src/trackers/view.rs", "body", &[Ban::Body]),
+        ("src/trackers/view.rs", "footer", &[Ban::Words]),
     ]
 };
 
 /// The suppressions of `clippy::disallowed_methods` in the owners of the raw egui calls: the
 /// design system (`src/design/`) and its capture harness (`src/visual_tests/`). One row per
 /// suppression, as in [`STAGED_ALLOWS`], so each one sits on one function and frees nothing
-/// else; only rows in those two folders may stand here, and only for `Ban::Layout`.
+/// else; only rows in those two folders may stand here, and only for `Ban::Layout` and `Ban::RowKey`.
 #[cfg(test)]
 pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
     use suppressions::Ban;
     &[
-        ("src/design/column.rs", "finish_handle", &[Ban::Layout]),
-        ("src/design/components.rs", "add_field", &[Ban::Layout]),
-        ("src/design/components.rs", "dialog_width", &[Ban::Layout]),
+        ("src/design/column.rs", "finish_handle", &[Ban::Layout(1)]),
+        ("src/design/components.rs", "add_field", &[Ban::Layout(1)]),
+        (
+            "src/design/components.rs",
+            "dialog_width",
+            &[Ban::Layout(3)],
+        ),
         (
             "src/design/components.rs",
             "draft_comparison_labeled",
-            &[Ban::Layout],
+            &[Ban::Layout(1)],
         ),
         (
             "src/design/components.rs",
             "enclosing_lock_describes_each_control_and_stays_inside_its_scope",
-            &[Ban::Layout],
+            &[Ban::Layout(1)],
         ),
         (
             "src/design/components.rs",
             "hanging_add_strip",
-            &[Ban::Layout],
+            &[Ban::Layout(1)],
         ),
-        ("src/design/components.rs", "image_viewer", &[Ban::Layout]),
+        (
+            "src/design/components.rs",
+            "image_viewer",
+            &[Ban::Layout(1)],
+        ),
         (
             "src/design/components.rs",
             "iter3_text_input_placeholder_uses_body_and_faint",
-            &[Ban::Layout],
+            &[Ban::Layout(1)],
         ),
         (
             "src/design/components.rs",
             "iter_two_form_labels_share_sentence_case_small_muted_type",
-            &[Ban::Layout],
+            &[Ban::Layout(1)],
         ),
-        ("src/design/components.rs", "menu_submenu", &[Ban::Layout]),
+        (
+            "src/design/components.rs",
+            "menu_submenu",
+            &[Ban::Layout(1)],
+        ),
         (
             "src/design/components.rs",
             "number_field_with_id",
-            &[Ban::Layout],
+            &[Ban::Layout(1)],
         ),
-        ("src/design/components.rs", "overflow_tabs", &[Ban::Layout]),
-        ("src/design/components.rs", "row_menu", &[Ban::Layout]),
-        ("src/design/components.rs", "scroll_part", &[Ban::Layout]),
-        ("src/design/components.rs", "search_field", &[Ban::Layout]),
-        ("src/design/components.rs", "split_action", &[Ban::Layout]),
+        (
+            "src/design/components.rs",
+            "overflow_tabs",
+            &[Ban::Layout(1)],
+        ),
+        ("src/design/components.rs", "row_menu", &[Ban::Layout(1)]),
+        ("src/design/components.rs", "scroll_part", &[Ban::Layout(1)]),
+        (
+            "src/design/components.rs",
+            "search_field",
+            &[Ban::Layout(1)],
+        ),
+        (
+            "src/design/components.rs",
+            "split_action",
+            &[Ban::Layout(1)],
+        ),
         (
             "src/design/components.rs",
             "stepper_with_density",
-            &[Ban::Layout],
+            &[Ban::Layout(1)],
         ),
         (
             "src/design/components.rs",
             "text_field_label",
-            &[Ban::Layout],
+            &[Ban::Layout(1)],
         ),
-        ("src/design/components.rs", "text_input", &[Ban::Layout]),
-        ("src/design/gallery.rs", "markdown", &[Ban::Layout]),
-        ("src/design/gallery.rs", "show", &[Ban::Layout]),
-        ("src/design/layout.rs", "area", &[Ban::Layout]),
+        ("src/design/components.rs", "text_input", &[Ban::Layout(1)]),
+        ("src/design/gallery.rs", "markdown", &[Ban::Layout(1)]),
+        ("src/design/gallery.rs", "show", &[Ban::Layout(1)]),
+        ("src/design/layout.rs", "area", &[Ban::Layout(2)]),
         (
             "src/design/layout.rs",
             "field_id! statement",
-            &[Ban::Layout],
+            &[Ban::Layout(1)],
         ),
-        ("src/design/layout.rs", "menu_popup", &[Ban::Layout]),
-        ("src/design/layout.rs", "multi_line", &[Ban::Layout]),
-        ("src/design/layout.rs", "sideways_scroll", &[Ban::Layout]),
-        ("src/design/layout.rs", "single_line", &[Ban::Layout]),
-        ("src/design/layout.rs", "word! statement", &[Ban::Layout]),
+        ("src/design/layout.rs", "menu_popup", &[Ban::Layout(1)]),
+        ("src/design/layout.rs", "multi_line", &[Ban::Layout(1)]),
+        ("src/design/layout.rs", "sideways_scroll", &[Ban::Layout(1)]),
+        ("src/design/layout.rs", "single_line", &[Ban::Layout(1)]),
+        ("src/design/layout.rs", "word! statement", &[Ban::Layout(1)]),
         (
             "src/design/layout/tests.rs",
             "a_field_id_keeps_focus_across_a_layout_branch",
-            &[Ban::Layout],
+            &[Ban::Layout(2)],
         ),
         (
             "src/visual_tests/ergonomics.rs",
             "a_control_in_a_popup_is_not_its_background",
-            &[Ban::Layout],
+            &[Ban::Layout(1)],
         ),
         (
             "src/visual_tests/ergonomics.rs",
             "a_menu_over_a_column_splitter_is_an_app_fault",
-            &[Ban::Layout],
+            &[Ban::Layout(2)],
         ),
         (
             "src/visual_tests/ergonomics.rs",
             "a_press_on_a_menu_item_reaches_the_item_and_the_pair_stays_chrome",
-            &[Ban::Layout],
+            &[Ban::Layout(1)],
         ),
         (
             "src/visual_tests/ergonomics.rs",
             "a_press_where_a_scroll_bar_lies_on_a_row_reaches_the_bar_and_is_an_app_fault",
-            &[Ban::Layout],
+            &[Ban::Layout(2)],
         ),
         (
             "src/visual_tests/ergonomics.rs",
             "a_small_control_without_a_name_is_not_chrome",
-            &[Ban::Layout],
+            &[Ban::Layout(1)],
         ),
         (
             "src/visual_tests/ergonomics.rs",
             "a_thin_unnamed_control_inside_horizontal_content_is_not_chrome",
-            &[Ban::Layout],
+            &[Ban::Layout(1)],
         ),
         (
             "src/visual_tests/ergonomics.rs",
             "horizontal_clipping_is_allowed_only_where_a_real_scroll_bar_can_reveal_it",
-            &[Ban::Layout],
+            &[Ban::Layout(2)],
         ),
         (
             "src/visual_tests/ergonomics.rs",
             "only_the_real_scroll_bar_is_chrome",
-            &[Ban::Layout],
+            &[Ban::Layout(1)],
         ),
         (
             "src/visual_tests/ergonomics.rs",
             "scrolled_content_is_clipped_by_its_own_area_and_not_one_it_passes_behind",
-            &[Ban::Layout],
+            &[Ban::Layout(2)],
         ),
     ]
 };
@@ -1359,7 +1460,10 @@ mod tests {
         for (file, item, bans) in OWNED_ALLOWS {
             assert!(
                 (file.starts_with("src/design/") || file.starts_with("src/visual_tests/"))
-                    && *bans == [suppressions::Ban::Layout],
+                    && bans.iter().all(|ban| matches!(
+                        ban,
+                        suppressions::Ban::Layout(_) | suppressions::Ban::RowKey(_)
+                    )),
                 "{file} `{item}`: only the design system and its harness own raw egui calls"
             );
         }

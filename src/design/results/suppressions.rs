@@ -8,29 +8,49 @@
 //! that holds a nested function: those would free every banned call below them.
 
 /// What a suppression is for. Package O's bans: `ResultOrder::issue`, `Footer::result` and
-/// `save_row_state`. Package K's: the raw egui calls in `clippy.toml` that a layout part
-/// replaces (`Ban::Layout`). A function that calls both kinds keeps one attribute and one row
-/// that lists both. A row lists exactly the bans its item still calls.
+/// `save_row_state`. Package K (PR 304) adds its own variant for its egui bans when it merges
+/// after O; a function that calls both kinds keeps one attribute and one row that lists both.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Ban {
     Results,
-    Layout,
+    /// Package M: `Sentence::outside`, the named escape for words from outside the app. Its rows
+    /// need not reach 0, but a new one is a visible change of this table.
+    Words,
+    /// Package M: the helpers of `sentence!` (only the macro and `outcome.rs` use them).
+    Sentence,
+    /// Package M: `Footer::outcome_at`, a result with a hand-issued order (staged).
+    Order,
+    /// Package M: the body places `banner`, `row_fault` and `PagePlaceholder::show`. A named
+    /// escape: a body message is a review decision.
+    Body,
+    /// Package K: raw egui calls that a layout part replaces. The number is how many calls of
+    /// `clippy.toml`'s package K paths the item holds, counted in its tokens
+    /// (`design::layout::bans::count`), so a second raw call in an allowed item fails.
+    Layout(u16),
+    /// Package K: `RowIndex::from_data` and `TextKey::from_data`, row keys a reviewer reads; the
+    /// number of uses in the item.
+    RowKey(u16),
 }
 
 impl Ban {
-    /// Whether `body` still holds a call of this ban.
-    fn calls(self, body: &str) -> bool {
+    /// Text that one of this ban's calls leaves in a function that still needs its allow.
+    fn calls(self) -> &'static [&'static str] {
         match self {
-            Self::Results => RESULTS_CALLS.iter().any(|call| body.contains(call)),
-            Self::Layout => crate::design::lint::RAW_CALLS
-                .iter()
-                .any(|call| body.contains(call)),
+            Self::Results => &["::issue", "save_row_state", ".result("],
+            Self::Words => &["outside"],
+            Self::Sentence => &[
+                "__formatted",
+                "__literal",
+                "check_template",
+                "check_literal",
+            ],
+            Self::Order => &["outcome_at"],
+            Self::Body => &["banner", "row_fault", ".show("],
+            // Counted in the item's tokens instead (`check`).
+            Self::Layout(_) | Self::RowKey(_) => &[],
         }
     }
 }
-
-/// Text that one of `Ban::Results`'s calls leaves in a function that still needs its allow.
-const RESULTS_CALLS: [&str; 3] = ["::issue", "save_row_state", ".result("];
 
 /// Lint names whose suppression also suppresses `clippy::disallowed_methods`.
 const COVERS: [&str; 4] = [
@@ -156,138 +176,55 @@ pub(crate) fn code_only(text: &str) -> String {
     out
 }
 
-/// The name of the function a line starts, if it starts one.
-fn fn_name(line: &str) -> Option<&str> {
-    let at = line.find("fn ")?;
-    let before = &line[..at];
-    let allowed = |word: &str| {
-        word.starts_with("pub")
-            || word.ends_with(')')
-            || ["const", "async", "unsafe", "extern", "\"C\"", "default"].contains(&word)
-    };
-    if !before.split_whitespace().all(allowed) {
-        return None;
-    }
-    let rest = &line[at + 3..];
-    let end = rest
-        .find(|c: char| !(c.is_alphanumeric() || c == '_'))
-        .unwrap_or(rest.len());
-    (end > 0).then(|| &rest[..end])
-}
-
-/// The line where the bracket opened on `from` (or after it) closes.
-fn close_of(code: &[&str], from: usize, open: char, close: char) -> usize {
-    let mut depth = 0i32;
-    let mut seen = false;
-    for (at, line) in code.iter().enumerate().skip(from) {
-        for c in line.chars() {
-            if c == open {
-                depth += 1;
-                seen = true;
-            } else if c == close {
-                depth -= 1;
-            }
-        }
-        if seen && depth <= 0 {
-            return at;
-        }
-    }
-    code.len().saturating_sub(1)
-}
-
 /// Every suppression of `clippy::disallowed_methods` in one file, and the faults of the ones on
-/// a place they may not be.
+/// a place they may not be. The attributes come from the shared `syn` reader
+/// (`design::attributes`), so a list across lines, `cfg_attr` and an attribute inside a macro's
+/// tokens all count.
 pub(crate) fn find(path: &str, text: &str) -> (Vec<Suppression>, Vec<String>) {
-    let code = code_only(text);
-    let code: Vec<&str> = code.lines().collect();
+    use crate::design::attributes::{Kind, read};
     let raw: Vec<&str> = text.lines().collect();
-    let (mut found, mut faults) = (Vec::new(), Vec::new());
-    for at in 0..code.len() {
-        let line = code[at].trim_start();
-        if !(line.starts_with("#[") || line.starts_with("#![")) {
-            continue;
-        }
-        let end = close_of(&code, at, '[', ']');
-        let attribute = code[at..=end].join(" ");
-        let words: Vec<&str> = attribute
-            .split(|c: char| !(c.is_alphanumeric() || c == '_' || c == ':'))
-            .filter(|word| !word.is_empty())
-            .map(|word| word.trim_matches(':'))
-            .collect();
-        let suppresses = words.iter().any(|w| *w == "allow" || *w == "expect");
-        if !(suppresses && words.iter().any(|w| COVERS.contains(w))) {
-            continue;
-        }
-        let place = format!("{path}:{}", at + 1);
-        if line.starts_with("#![") {
+    let found = match read(text) {
+        Ok(found) => found,
+        Err(error) => return (Vec::new(), vec![format!("{path}: does not parse: {error}")]),
+    };
+    let (mut kept, mut faults) = (Vec::new(), Vec::new());
+    for attribute in found.iter().filter(|found| found.lets_pass(&COVERS)) {
+        let place = format!("{path}:{}", attribute.line);
+        if attribute.inner {
             faults.push(format!(
                 "{place}: a suppression of `clippy::disallowed_methods` for a whole file or module. Put it on the one function that calls."
             ));
             continue;
         }
-        // The item: the first line after other attributes, blank lines and comments.
-        let mut target = end + 1;
-        while target < code.len() {
-            let next = code[target].trim();
-            if next.is_empty() {
-                target += 1;
-            } else if next.starts_with("#[") {
-                target = close_of(&code, target, '[', ']') + 1;
-            } else {
-                break;
+        let (first, last) = attribute.lines;
+        let body = raw[first.saturating_sub(1)..last.min(raw.len())].join("\n");
+        let item = match &attribute.kind {
+            Kind::Fn { nested } => {
+                if let Some(nested) = nested {
+                    faults.push(format!(
+                        "{place}: a suppression on `fn {}`, which holds `fn {nested}`: it frees the nested function too. Put it on the innermost function that calls.",
+                        attribute.item
+                    ));
+                }
+                attribute.item.clone()
             }
-        }
-        let Some(item_line) = code.get(target).map(|l| l.trim()) else {
-            continue;
-        };
-        let first = item_line
-            .split(|c: char| c.is_whitespace() || c == '<' || c == '!')
-            .find(|w| !(w.starts_with("pub") || *w == "unsafe"))
-            .unwrap_or_default();
-        if let Some(name) = fn_name(item_line) {
-            let close = close_of(&code, target, '{', '}');
-            if let Some(nested) = code[target + 1..close]
-                .iter()
-                .find_map(|l| fn_name(l.trim()))
-            {
+            Kind::Mod { .. } | Kind::Impl | Kind::Trait | Kind::MacroRules => {
                 faults.push(format!(
-                    "{place}: a suppression on `fn {name}`, which holds `fn {nested}`: it frees the nested function too. Put it on the innermost function that calls."
+                    "{place}: a suppression on `{}`. Put it on the one function that calls.",
+                    attribute.item
                 ));
+                continue;
             }
-            found.push(Suppression {
-                line: at + 1,
-                item: name.to_owned(),
-                body: raw[target..=close.min(raw.len() - 1)].join("\n"),
-            });
-        } else if ["mod", "impl", "trait", "macro_rules"].contains(&first) {
-            faults.push(format!(
-                "{place}: a suppression on `{item_line}`. Put it on the one function that calls."
-            ));
-        } else {
-            // A statement: named by the function or macro around it.
-            let indent = code[target].len() - code[target].trim_start().len();
-            let enclosing = (0..target)
-                .rev()
-                .filter(|&i| code[i].len() - code[i].trim_start().len() < indent)
-                .find_map(|i| {
-                    let l = code[i].trim();
-                    fn_name(l).map(str::to_owned).or_else(|| {
-                        l.strip_prefix("macro_rules!")
-                            .map(|m| format!("{}!", m.trim().trim_end_matches('{').trim()))
-                    })
-                })
-                .unwrap_or_else(|| "file".to_owned());
-            let close = (target..code.len())
-                .find(|&i| code[i].trim_end().ends_with(';'))
-                .unwrap_or(target);
-            found.push(Suppression {
-                line: at + 1,
-                item: format!("{enclosing} statement"),
-                body: raw[target..=close].join("\n"),
-            });
-        }
+            Kind::Statement => attribute.item.clone(),
+            Kind::File | Kind::Other => "file statement".to_owned(),
+        };
+        kept.push(Suppression {
+            line: attribute.line,
+            item,
+            body,
+        });
     }
-    (found, faults)
+    (kept, faults)
 }
 
 /// Every suppression in `files` against `table`: one row per suppression (file, item, bans).
@@ -304,26 +241,52 @@ pub(crate) fn check(files: &[(String, String)], table: &[(&str, &str, &[Ban])]) 
             match row {
                 Some(row) => {
                     let (_, _, bans) = rows.remove(row);
-                    for ban in [Ban::Results, Ban::Layout] {
-                        let listed = bans.contains(&ban);
-                        let calls = ban.calls(&suppression.body);
-                        if listed && !calls {
-                            faults.push(format!(
-                                "{path}:{}: the suppression on `{}` has no staged call left. Remove it and its row in `design::results::STAGED_ALLOWS`.",
+                    let mut holds = bans
+                        .iter()
+                        .any(|ban| ban.calls().iter().any(|call| suppression.body.contains(call)));
+                    // Package K: the row's number of calls is the item's, exactly.
+                    use crate::design::layout::bans::{Group, count};
+                    for group in [Group::Layout, Group::RowKey] {
+                        let listed = bans
+                            .iter()
+                            .find_map(|ban| match (ban, group) {
+                                (Ban::Layout(n), Group::Layout) | (Ban::RowKey(n), Group::RowKey) => {
+                                    Some(usize::from(*n))
+                                }
+                                _ => None,
+                            })
+                            .unwrap_or(0);
+                        match count(&suppression.body, group) {
+                            Ok(found) => {
+                                holds |= found > 0;
+                                if found != listed {
+                                    faults.push(format!(
+                                        "{path}:{}: `{}` holds {found} {group:?} calls; its row lists {listed}. {}",
+                                        suppression.line,
+                                        suppression.item,
+                                        if found > listed {
+                                            "A new raw call: use the part that clippy.toml names."
+                                        } else {
+                                            "Lower the row's number."
+                                        }
+                                    ));
+                                }
+                            }
+                            Err(error) => faults.push(format!(
+                                "{path}:{}: `{}` does not lex: {error}",
                                 suppression.line, suppression.item
-                            ));
-                        } else if calls && !listed && ban == Ban::Layout {
-                            // Only for K's names: a row of O's text names can match a method
-                            // of another type, which Clippy does not ban.
-                            faults.push(format!(
-                                "{path}:{}: the row of `{}` does not list `Ban::{ban:?}`, which it calls. Add it.",
-                                suppression.line, suppression.item
-                            ));
+                            )),
                         }
+                    }
+                    if !holds {
+                        faults.push(format!(
+                            "{path}:{}: the suppression on `{}` has no staged call left. Remove it and its row in `design::results::STAGED_ALLOWS`.",
+                            suppression.line, suppression.item
+                        ));
                     }
                 }
                 None => faults.push(format!(
-                    "{path}:{}: a suppression of `clippy::disallowed_methods` on `{}` that `design::results::STAGED_ALLOWS` does not list. Use `design::Results`, `Footer::kept`, `design::save_row` and the layout parts instead.",
+                    "{path}:{}: a suppression of `clippy::disallowed_methods` on `{}` that `design::results::STAGED_ALLOWS` does not list. Use `design::Results`, `Footer::kept` and `design::save_row` instead.",
                     suppression.line, suppression.item
                 )),
             }
@@ -418,36 +381,52 @@ mod tests {
             "#[allow(clippy::disallowed_methods, reason = \"staged: ]\")]\nfn order() {{\n    let _ = \"}}\"; // }}\n{call}}}\nfn other() {{}}\n"
         );
         assert!(check(&file(&quoted), &[("src/new.rs", "order", STAGED)]).is_empty());
+        // Package M's bans: a listed suppression whose function still calls its escape passes;
+        // a list across lines is read whole.
+        let order = "#[allow(\n    clippy::disallowed_methods,\n    reason = \"staged\"\n)]\nfn draw() {\n    footer.outcome_at(order, done, &mut pressed);\n}\n";
+        assert_eq!(check(&file(order), &[]).len(), 1, "{order}");
+        assert!(check(&file(order), &[("src/new.rs", "draw", &[Ban::Order])]).is_empty());
+        let words = "#[allow(clippy::disallowed_methods)]\nfn cause() {\n    let f = Sentence::outside;\n}\n";
+        assert!(check(&file(words), &[("src/new.rs", "cause", &[Ban::Words])]).is_empty());
     }
 
-    /// Package K's rows: a row lists exactly the bans its item calls, and an allow in a macro's
-    /// body, or on the macro, is seen.
+    /// Package K's rows: the number of raw egui calls (and row keys) in a row is the item's,
+    /// exactly, counted in its tokens; a second raw call in an allowed item fails.
     #[test]
-    fn layout_rows_list_what_their_item_calls() {
-        const LAYOUT: &[Ban] = &[Ban::Layout];
-        const BOTH: &[Ban] = &[Ban::Results, Ban::Layout];
+    fn layout_rows_count_their_items_calls() {
         let raw = "    let _ = egui::ScrollArea::vertical();\n";
         let order = "    let _ = <crate::design::ResultOrder>::issue();\n";
-        let draw = format!("#[allow(clippy::disallowed_methods)]\nfn draw() {{\n{raw}}}\n");
-        assert!(check(&file(&draw), &[("src/new.rs", "draw", LAYOUT)]).is_empty());
-        // Listed for O's ban only, while it makes a raw egui call: the row must name K's too.
-        let faults = check(&file(&draw), &[("src/new.rs", "draw", STAGED)]);
+        let item =
+            |body: &str| format!("#[allow(clippy::disallowed_methods)]\nfn draw() {{\n{body}}}\n");
+        let one = item(raw);
+        assert!(check(&file(&one), &[("src/new.rs", "draw", &[Ban::Layout(1)])]).is_empty());
+        // A second raw call in the allowed function.
+        let two = item(&format!("{raw}{raw}"));
+        let faults = check(&file(&two), &[("src/new.rs", "draw", &[Ban::Layout(1)])]);
         assert!(
-            faults
-                .iter()
-                .any(|fault| fault.contains("does not list `Ban::Layout`")),
+            faults.len() == 1 && faults[0].contains("holds 2 Layout calls; its row lists 1"),
             "{faults:?}"
         );
-        // Both kinds in one function: one attribute, one row with both.
-        let both = format!("#[allow(clippy::disallowed_methods)]\nfn draw() {{\n{raw}{order}}}\n");
-        assert!(check(&file(&both), &[("src/new.rs", "draw", BOTH)]).is_empty());
-        // A row for a ban the item no longer calls.
-        let plain = "#[allow(clippy::disallowed_methods)]\nfn draw() {\n    let _ = 1;\n}\n";
-        assert_eq!(
-            check(&file(plain), &[("src/new.rs", "draw", LAYOUT)]).len(),
-            1
+        // Fewer calls than the row lists: lower it.
+        let faults = check(&file(&one), &[("src/new.rs", "draw", &[Ban::Layout(2)])]);
+        assert!(faults[0].contains("Lower the row's number"), "{faults:?}");
+        // A row for O's ban only, while the item makes a raw egui call.
+        let both = item(&format!("{raw}{order}"));
+        let faults = check(&file(&both), &[("src/new.rs", "draw", STAGED)]);
+        assert!(faults[0].contains("its row lists 0"), "{faults:?}");
+        assert!(
+            check(
+                &file(&both),
+                &[("src/new.rs", "draw", &[Ban::Results, Ban::Layout(1)])]
+            )
+            .is_empty()
         );
-        // In a macro's body: a function the macro makes is unlisted; on the macro, refused.
+        // A word in a string is not a call; a row key is counted on its own.
+        let words = item(
+            "    let _ = \"egui::ScrollArea::vertical()\";\n    let _ = RowIndex::from_data(1);\n",
+        );
+        assert!(check(&file(&words), &[("src/new.rs", "draw", &[Ban::RowKey(1)])]).is_empty());
+        // A function in a macro's body is unlisted; an allow on the macro is refused.
         let in_macro = format!(
             "macro_rules! screens {{\n    () => {{\n        #[allow(clippy::disallowed_methods)]\n        fn draw() {{\n{raw}        }}\n    }};\n}}\n"
         );

@@ -452,10 +452,10 @@ fn inline_create_moves_nothing_while_the_dm_types() {
 /// place does not keep it, which is the fault this part rules out.
 ///
 /// The stated limit: the types refuse an `egui::Id` and a bare text as a key, but a number read
-/// from the layout still compiles, `NAME.with(RowIndex(ui.next_auto_id().value() as usize))`, and
-/// so does `TextKey::from_data(format!("{:?}", ui.id()))`. That a key comes from the row's data
-/// is the caller's duty; the lint counts `RowIndex(` and `TextKey::` per file, so a review sees
-/// each new one.
+/// from the layout still compiles, `NAME.with(RowIndex::from_data(ui.next_auto_id().value() as
+/// usize))`, and so does `TextKey::from_data(format!("{:?}", ui.id()))`. That a key comes from
+/// the row's data is the caller's duty. Clippy bans both constructors outside `src/design/`, so
+/// each use is a counted row of `STAGED_ALLOWS` (`Ban::RowKey`) that a review reads.
 #[test]
 #[allow(
     clippy::disallowed_methods,

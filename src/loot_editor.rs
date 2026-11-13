@@ -2,6 +2,7 @@
 //! The add field takes the typed words with Enter, and offers the campaign's roll tables and
 //! Library items while the DM types. A roll names its table from a list, so a key that no
 //! table has shows on its row before play.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use crate::design::{self, Density, Status, Tone, Type, colors, icons};
 use crate::roll_table::{Table, TableRoll};
 use eframe::egui;

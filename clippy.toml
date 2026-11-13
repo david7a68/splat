@@ -42,6 +42,9 @@ disallowed-methods = [
     # `field_id!`, which take a literal and check it in a `const` block.
     { path = "splat::design::layout::Word::checked", reason = "use word!(\"…\")", allow-invalid = true },
     { path = "splat::design::layout::FieldId::checked", reason = "use field_id!(\"…\")", allow-invalid = true },
+    # Row keys that take any number or text: each use is a counted row a reviewer reads.
+    { path = "splat::design::layout::RowIndex::from_data", reason = "a row key from the row's data: one row in design::results::STAGED_ALLOWS (Ban::RowKey)", allow-invalid = true },
+    { path = "splat::design::layout::TextKey::from_data", reason = "a row key from the row's data: one row in design::results::STAGED_ALLOWS (Ban::RowKey)", allow-invalid = true },
     # Foreground layers: a popup, menu, window, tooltip or free area drawn by hand chooses its own
     # place and can cover a splitter or a scroll bar. Shared parts in `src/design/` own them. A
     # `LayerId` written as a struct with an `egui::Order` is the lint's `foreground-layer` rule.
@@ -134,4 +137,16 @@ disallowed-methods = [
     { path = "egui::Context::style_ui", reason = "layers, windows and egui's own panels belong to src/design/", allow-invalid = true },
     { path = "egui::Context::show_viewport_deferred", reason = "layers, windows and egui's own panels belong to src/design/", allow-invalid = true },
     { path = "egui::Context::show_viewport_immediate", reason = "layers, windows and egui's own panels belong to src/design/", allow-invalid = true },
+    # Package M: the escapes and helpers of `design::outcome`. A named escape stays where a
+    # reviewer agreed to it: one suppression on the innermost function, one row in
+    # `design::results::STAGED_ALLOWS` (`Ban::Words`, `Ban::Order`, `Ban::Body`).
+    { path = "splat::design::outcome::Sentence::outside", reason = "write the words with `sentence!`; words from outside the app (disk, the system, the DM) are a named escape: `Ban::Words`" },
+    { path = "splat::design::outcome::Sentence::__formatted", reason = "make sentences with `sentence!`" },
+    { path = "splat::design::outcome::Sentence::__literal", reason = "make sentences with `sentence!`" },
+    { path = "splat::design::outcome::check_template", reason = "make sentences with `sentence!`" },
+    { path = "splat::design::outcome::check_literal", reason = "make sentences with `sentence!`" },
+    { path = "splat::design::components::Footer::outcome_at", reason = "record the result in a `design::Results` store and use `Footer::kept_outcome`; a hand-issued order is staged: `Ban::Order`" },
+    { path = "splat::design::outcome::banner", reason = "put the notice in the pane's `Footer`; a body place is a review decision: `Ban::Body`" },
+    { path = "splat::design::outcome::row_fault", reason = "put the fault in the pane's `Footer`; a body place is a review decision: `Ban::Body`" },
+    { path = "splat::design::outcome::PagePlaceholder::show", reason = "a page placeholder is a review decision: `Ban::Body`" },
 ]

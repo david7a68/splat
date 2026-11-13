@@ -1,5 +1,6 @@
 //! Edit, for the DM's own world entries: one form for the status, the stat block, the place and
 //! the text. Save writes them together, with one Undo. Lookup and World show the same form.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{
     Change, ChangeKind, Go, Picker, Reader, link_name, reference, status, stored_link, world_field,
 };

@@ -1,4 +1,5 @@
 //! The encounter ledger and its local editor controls.
+#![warn(deprecated)] // Its parent allows old message functions; this file does not.
 use super::*;
 use crate::encounter_run::{FightSummary, SavedRunInfo};
 use std::path::Path;

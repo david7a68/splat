@@ -1,4 +1,5 @@
 //! The same disk comparison for encounter, group and creature drafts.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use crate::{
     design::{self, Action, Density, Tone, Type, colors},
     library::note_path,
