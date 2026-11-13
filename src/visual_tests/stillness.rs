@@ -1250,8 +1250,6 @@ pub struct Placed {
     pub start: f32,
     pub rect: egui::Rect,
     pub clip: egui::Rect,
-    /// The font size of its first words: a title is larger than the body text under it.
-    pub size: f32,
 }
 
 pub fn placed(painted: &[(egui::epaint::TextShape, egui::Rect)]) -> Vec<Placed> {
@@ -1272,12 +1270,6 @@ pub fn placed(painted: &[(egui::epaint::TextShape, egui::Rect)]) -> Vec<Placed> 
                 .unwrap_or(text.pos.x + text.galley.rect.min.x),
             rect: text.visual_bounding_rect(),
             clip: *clip,
-            size: text
-                .galley
-                .job
-                .sections
-                .first()
-                .map_or(0.0, |section| section.format.font_id.size),
         })
         .collect()
 }
@@ -1306,15 +1298,11 @@ pub fn quiet_rects(shapes: &[ClippedShape]) -> Vec<egui::Rect> {
     out
 }
 
-/// N4: a title is at least this much larger than the action's words.
-const TITLE_SIZE: f32 = 1.25;
-
 /// A line start N4 compares with: a text's first word, or a field's box (the field is the line).
 struct LineStart<'a> {
     words: &'a str,
     start: f32,
     rect: egui::Rect,
-    size: f32,
 }
 
 /// N4. A quiet action is a button whose rect is one of `quiet` (see `quiet_rects`). Its words
@@ -1328,20 +1316,26 @@ struct LineStart<'a> {
 ///
 /// Left out: actions and texts in a popup or menu (`popups`, their bodies), and an action row that
 /// a title line draws under its title (`design::TitleLine`, `world::title_line_actions`): there the
-/// first action keeps its icon at the text edge (round 27 ruling). That row is told from paint:
-/// a line within `3 × L` above it is the title, `TITLE_SIZE` times larger than the action's words.
-/// `popups` are the bounds of the foreground and tooltip layers, where egui draws menus.
+/// first action keeps its icon at the text edge (round 27 ruling). Those rows are the ones the
+/// title-line parts register (`design::layout::title_action_rows`, `title_rows`). `popups` are the
+/// bounds of the foreground and tooltip layers, where egui draws menus.
 pub fn line_starts(
     items: &[Item],
     quiet: &[egui::Rect],
     texts: &[Placed],
     popups: &[egui::Rect],
+    title_rows: &[egui::Rect],
 ) -> Vec<Raw> {
     let in_popup = |rect: egui::Rect| popups.iter().any(|popup| popup.contains(rect.center()));
     let texts: Vec<&Placed> = texts.iter().filter(|text| !in_popup(text.rect)).collect();
     let mut out = Vec::new();
     for item in items.iter().filter(|item| item.role == Role::Button) {
-        if in_popup(item.rect) || !quiet.iter().any(|rect| moved(*rect, item.rect).is_none()) {
+        if in_popup(item.rect)
+            || title_rows
+                .iter()
+                .any(|row| row.expand(MOVE_TOLERANCE).contains_rect(item.rect))
+            || !quiet.iter().any(|rect| moved(*rect, item.rect).is_none())
+        {
             continue;
         }
         let own: Vec<&&Placed> = texts
@@ -1392,7 +1386,6 @@ pub fn line_starts(
                 words: &text.words,
                 start: text.start,
                 rect: text.rect,
-                size: text.size,
             })
             .chain(
                 items
@@ -1402,7 +1395,6 @@ pub fn line_starts(
                         words: &field.name,
                         start: field.rect.left(),
                         rect: field.rect,
-                        size: 0.0,
                     }),
             )
             .filter(|line| !on_line(line.rect))
@@ -1423,13 +1415,6 @@ pub fn line_starts(
                 .min_by(|a, b| a.1.total_cmp(&b.1))
                 .map(|(line, _)| line)
         };
-        // A title line's action row under its title (and the title's context line).
-        if starts.iter().any(|line| {
-            let gap = item.rect.top() - line.rect.bottom();
-            (0.0..=3.0 * L).contains(&gap) && line.size >= TITLE_SIZE * words.size
-        }) {
-            continue;
-        }
         let edges: Vec<&LineStart<'_>> = [near(true, 3.0 * L), near(false, 3.0 * L)]
             .into_iter()
             .flatten()
@@ -2640,7 +2625,6 @@ mod tests {
             start: x,
             rect: at(x, y, width, 18.0),
             clip,
-            size: 14.0,
         };
         let progress = text("Processing: cleaning the transcript", 372.0, 200.0, 260.0);
         let cancel = |x: f32| item(Role::Button, "Cancel", at(x, 226.0, 64.0, 28.0), None);
@@ -2651,6 +2635,7 @@ mod tests {
             &[at(364.0, 226.0, 64.0, 28.0)],
             &[progress.clone(), words(372.0)],
             &[],
+            &[],
         );
         assert!(found.is_empty(), "{found:?}");
         // Without it, the words start 8 px right of the edge (routing 81): found. 1 px passes.
@@ -2658,6 +2643,7 @@ mod tests {
             &[cancel(372.0)],
             &[at(372.0, 226.0, 64.0, 28.0)],
             &[progress.clone(), words(380.0)],
+            &[],
             &[],
         );
         assert_eq!(found.len(), 1, "{found:?}");
@@ -2667,6 +2653,7 @@ mod tests {
                 &[cancel(365.0)],
                 &[at(365.0, 226.0, 64.0, 28.0)],
                 &[progress.clone(), words(373.0),],
+                &[],
                 &[]
             )
             .is_empty()
@@ -2679,6 +2666,7 @@ mod tests {
                 &[cancel(364.0)],
                 &[at(364.0, 226.0, 64.0, 28.0)],
                 &[progress.clone(), words(372.0), status,],
+                &[],
                 &[]
             )
             .is_empty()
@@ -2686,7 +2674,6 @@ mod tests {
         // A tall title on its line comes before it: the action is not first.
         let title = Placed {
             rect: at(372.0, 220.0, 120.0, 40.0),
-            size: 26.0,
             ..text("Rook Ambry", 372.0, 220.0, 120.0)
         };
         let edit = item(Role::Button, "Edit", at(500.0, 226.0, 64.0, 28.0), None);
@@ -2699,6 +2686,7 @@ mod tests {
                     text("Edit", 508.0, 231.0, 30.0),
                     text("NPC · Campaign", 372.0, 266.0, 100.0),
                 ],
+                &[],
                 &[]
             )
             .is_empty()
@@ -2709,6 +2697,7 @@ mod tests {
                 &[cancel(372.0)],
                 &[],
                 &[progress.clone(), words(380.0)],
+                &[],
                 &[]
             )
             .is_empty()
@@ -2723,6 +2712,7 @@ mod tests {
                 &[after(416.0)],
                 &[at(416.0, 226.0, 56.0, 28.0)],
                 &[label.clone(), undo(424.0),],
+                &[],
                 &[]
             )
             .is_empty()
@@ -2732,6 +2722,7 @@ mod tests {
                 &[after(404.0)],
                 &[at(404.0, 226.0, 56.0, 28.0)],
                 &[label, undo(416.0)],
+                &[],
                 &[]
             )
             .len(),
@@ -2752,6 +2743,7 @@ mod tests {
             &[at(156.0, 489.0, 94.0, 28.0)],
             &[text("Death saves", 164.0, 497.0, 77.0)],
             &[],
+            &[],
         );
         assert_eq!(found.len(), 1, "{found:?}");
         assert!(
@@ -2765,60 +2757,32 @@ mod tests {
                 &[at(148.0, 489.0, 94.0, 28.0)],
                 &[text("Death saves", 156.0, 497.0, 77.0)],
                 &[],
+                &[]
             )
             .is_empty()
         );
-        // A title line's action row under its title keeps its icon at the edge (round 27): left
-        // out. The same row under body text is found.
+        // A row that a title-line part registered under its title keeps its icon at the edge
+        // (round 27): left out. The same row, not registered, is found: its words are 20 px right
+        // of the title's edge.
         let edit = item(Role::Button, "Edit", at(364.0, 266.0, 64.0, 28.0), None);
         let row = [at(364.0, 266.0, 64.0, 28.0)];
-        let title = Placed {
-            size: 26.0,
-            ..text("Rook Ambry", 372.0, 226.0, 120.0)
-        };
+        let title = text("Rook Ambry", 372.0, 242.0, 120.0);
         let edit_words = text("Edit", 392.0, 271.0, 30.0);
-        // With the title's context line between them, it is still the title's row.
-        let context = text("NPC · Campaign", 372.0, 246.0, 100.0);
-        assert!(
-            line_starts(
-                std::slice::from_ref(&edit),
-                &row,
-                &[
-                    Placed {
-                        size: 26.0,
-                        rect: at(372.0, 214.0, 120.0, 28.0),
-                        ..text("Rook Ambry", 372.0, 214.0, 120.0)
-                    },
-                    context,
-                    edit_words.clone()
-                ],
-                &[]
-            )
-            .is_empty()
-        );
-        assert!(
-            line_starts(
-                std::slice::from_ref(&edit),
-                &row,
-                &[title, edit_words.clone()],
-                &[]
-            )
-            .is_empty()
-        );
-        let body = text("A note for tonight", 372.0, 242.0, 120.0);
+        let registered = [at(356.0, 262.0, 400.0, 36.0)];
+        let both = [title.clone(), edit_words.clone()];
+        assert!(line_starts(std::slice::from_ref(&edit), &row, &both, &[], &registered).is_empty());
+        let found = line_starts(std::slice::from_ref(&edit), &row, &both, &[], &[]);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].trigger.contains("20 px right of"));
+        // A registered row elsewhere does not leave it out.
+        let elsewhere = [at(356.0, 400.0, 400.0, 36.0)];
         assert_eq!(
-            line_starts(
-                std::slice::from_ref(&edit),
-                &row,
-                &[body.clone(), edit_words.clone()],
-                &[]
-            )
-            .len(),
+            line_starts(std::slice::from_ref(&edit), &row, &both, &[], &elsewhere).len(),
             1
         );
         // In a menu: left out.
         let menu = at(300.0, 200.0, 300.0, 200.0);
-        assert!(line_starts(&[edit], &row, &[body, edit_words], &[menu]).is_empty());
+        assert!(line_starts(&[edit], &row, &both, &[menu], &[]).is_empty());
     }
 
     fn finding(check: &'static str, state: &str) -> Finding {
