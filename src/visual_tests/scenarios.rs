@@ -347,6 +347,18 @@ fn creation_row(
     }
 }
 
+/// Round 27 FB9, FD8: the gap from a help line's words down to the next field's label, which
+/// must be `L`, so the help reads as its own control's and not the next field's.
+fn help_to_label_gap(d: &Driver<'_>, help: &str, label: &str) -> Option<f32> {
+    let help = d.painted_rect_in(help, egui::Rect::EVERYTHING)?;
+    let below = egui::Rect::from_min_max(
+        egui::pos2(help.left() - 1.0, help.bottom()),
+        egui::pos2(f32::INFINITY, help.bottom() + crate::design::XXL * 2.0),
+    );
+    let label = d.painted_word_rect(label, below)?;
+    Some(label.top() - help.bottom())
+}
+
 /// Round 26 review: words of the page that show inside the footer's area. A footer's own words
 /// are clipped to the footer; a page's words are clipped above it, so a clip that starts above
 /// the footer and a visible part inside it mean the page reaches under the footer.
@@ -1143,6 +1155,45 @@ pub mod library_browse {
         );
 
         d.scroll_at(READER, 12);
+        // Round 27 FC3: the floating header covers its band. No visible part of a row's text is
+        // inside it: a cell under the header shows from its first whole line below the hairline.
+        // Rows below the hairline still read, so an empty band alone is not the proof.
+        let header = d.painted_word_rect("Class Features", egui::Rect::EVERYTHING);
+        let table_left = d.painted_word_rect("Level", egui::Rect::EVERYTHING);
+        let (mut in_band, mut below) = (Vec::new(), Vec::new());
+        if let (Some(header), Some(table_left)) = (header, table_left) {
+            let band = header.top() - crate::design::XS..header.bottom() + crate::design::XS;
+            d.each_painted_text(|text, clip| {
+                let shown = egui::Rect::from_min_size(text.pos, text.galley.size()).intersect(clip);
+                // The header's own cells start at its words' top.
+                if !shown.is_positive()
+                    || shown.left() < table_left.left() - 1.0
+                    || (text.pos.y - header.top()).abs() <= 1.0
+                {
+                    return;
+                }
+                if shown.top() < band.end - 0.5 && shown.bottom() > band.start {
+                    in_band.push(text.galley.job.text.clone());
+                } else if shown.top() >= band.end - 0.5
+                    && shown.top() < band.end + crate::design::XXL * 2.0
+                {
+                    below.push(text.galley.job.text.clone());
+                }
+            });
+        }
+        d.observe(
+            "iter-27-L-FC3",
+            // The header row in the scrolled content has gone above the floating copy.
+            header
+                .zip(d.place_of("Class Features"))
+                .is_some_and(|(header, natural)| natural.top() < header.top() - 1.0)
+                && table_left.is_some()
+                && in_band.is_empty()
+                && !below.is_empty(),
+            format!(
+                "The scrolled class table's header floats, no row text shows in its band, and rows below it read: header {header:?}, text in the band {in_band:?}, text below {below:?}"
+            ),
+        );
         d.state("class-scrolled", Sizes::Default);
         d.goal("scroll down a long entry");
 
@@ -1605,6 +1656,20 @@ pub mod library_author {
                 "iter-26-C-FB6-library",
                 rows.iter().all(Result::is_ok),
                 format!("At {size:?}, Add folder and Create package on their field's line, reasons below: {rows:?}"),
+            );
+        }
+        for size in [SMALL, DEFAULT, LARGE] {
+            let gap = d.at_size(size, |d| {
+                help_to_label_gap(
+                    d,
+                    "Uses every entry in this package, including future entries.",
+                    "Folder",
+                )
+            });
+            d.observe(
+                "iter-27-L-FB9",
+                gap.is_some_and(|gap| (gap - crate::design::L).abs() <= 1.0),
+                format!("At {size:?}, the use help has L before the Folder label: {gap:?}"),
             );
         }
         d.state("manage-packages", Sizes::All);
@@ -2367,6 +2432,14 @@ pub mod campaign_content {
             editor_top(d),
             clean_top,
             "Starting a draft must keep the editor's top edge"
+        );
+        // Round 27 FA3: the draft's reason in the footer has the message form: a tone bar
+        // beside its words, as the footer's other messages have.
+        let reason = d.painted_rect_in("Save or discard to copy", egui::Rect::EVERYTHING);
+        d.observe(
+            "iter-27-L-FA3",
+            reason.is_some_and(|words| d.has_tone_bar(words, crate::design::colors().result.info)),
+            format!("The Library draft's reason is a footer message with its bar: {reason:?}"),
         );
         d.state("entry-dirty", Sizes::Default);
         d.click(SAVE_ENTRY);
@@ -9874,12 +9947,12 @@ pub mod library_scope {
         d.click(MODULE);
         d.click("About Ashen Marches");
         d.wait_for_text(PACKAGE_OWNER);
-        d.expect("Choose every entry");
+        d.expect("Choose all");
         let about = title_offsets(d, MODULE);
         file_line_centred(
             d,
             &[PACKAGE_OWNER],
-            // Round 25 FF3: `Choose every entry` is a toolbar action now.
+            // Round 25 FF3: `Choose all` (round 27 FD4) is a toolbar action now.
             &["Show file"],
             "package About",
         );
@@ -21499,6 +21572,22 @@ pub mod package_to_table {
         d.expect("Copper Coast");
         d.type_text("Copper Drake");
         d.expect("Choose for this campaign");
+        for size in [SMALL, DEFAULT, LARGE] {
+            let gap = d.at_size(size, |d| {
+                help_to_label_gap(
+                    d,
+                    "Adds this entry to the campaign’s package choices.",
+                    "Folder",
+                )
+            });
+            d.observe(
+                "iter-27-L-FD8",
+                gap.is_some_and(|gap| (gap - crate::design::L).abs() <= 1.0),
+                format!(
+                    "At {size:?}, the new entry's use help has L before the Folder label: {gap:?}"
+                ),
+            );
+        }
         d.state("new-entry-used-by-default", Sizes::All);
         d.click("Create entry");
         d.expect("Copper Drake");
@@ -21683,10 +21772,31 @@ pub mod share_to_package {
         d.wait_for_text("Ashen Marches/Captain Varra.md");
         d.expect("Also copies Captain Varra, because Watch Orders links to it.");
         assert!(!d.visible_text("Required entries: 1"));
+        // Round 27 FH10: the chosen value and typed words share one baseline in the Folder field.
+        let words_offset = |d: &Driver<'_>, words: &str| {
+            let field = d
+                .nodes()
+                .into_iter()
+                .find(|node| {
+                    node.name == "Folder" && node.role == egui::accesskit::Role::TextInput
+                })?
+                .rect;
+            let painted = d.painted_rect_in(words, field.expand(1.0))?;
+            Some(painted.top() - field.top())
+        };
+        let chosen = words_offset(d, "Main folder");
         d.state("private-dependency-shared-together", Sizes::All);
         d.wait_for_text("Ashen Marches/Watch Orders.md");
         d.type_into("Folder", "Watch/Captains");
         d.wait_for_text("Watch/Captains/Watch Orders.md");
+        let typed = words_offset(d, "Watch/Captains");
+        d.observe(
+            "iter-27-L-FH10",
+            chosen
+                .zip(typed)
+                .is_some_and(|(chosen, typed)| (chosen - typed).abs() <= 0.5),
+            format!("Main folder and the typed folder sit at one height in the field: {chosen:?}, {typed:?}"),
+        );
         d.click("Review Markdown");
         d.state("share-to-new-folder", Sizes::All);
         d.click("Copy both");

@@ -288,8 +288,11 @@ words in the text colour too; the draft's reason is the save row's. Discard reco
 named Create action follows the last field on that field's line (after its Browse…), centred on it. Choices
 (`Choose for this campaign`) come before that last field. Below the field is one line, as tall as a control and
 kept when empty, so typing moves nothing: quiet Cancel or Clear at its start when there is something to cancel,
-then the `Small` blocked reason. Settings' Add campaign, Manage packages (Add folder, Create package) and New entry
-have this one order; save rows keep their commit at the right edge. Creation and copy fields share one right edge.
+then the `Small` blocked reason, or, once nothing blocks the action, its preview (`Will create …`) on that same line.
+A preview that does not fit gives way at its start (`Will create …/modules/copper_coast`); its hover and accessible
+name keep it whole. The Create action keeps its words while the DM types. Help under a choice or field in these
+forms has `L` before the next field's label. Settings' Add campaign, Manage packages (Add folder, Create package,
+Register a copy) and New entry have this one order; save rows keep their commit at the right edge. Creation and copy fields share one right edge.
 
 Several safe choices after a message share one line when they fit. Put a destructive choice at the end
 after an `L` gap, or on its own line below after an `M` gap.
@@ -349,7 +352,7 @@ the kind line, as a spell's does, and so does a plain note's prose. Lookup's rea
 opened the entry. Library draws no value block. `design::reader` holds the typographic parts. Library shows quiet Back whenever it has reading
 history. Every way to open another entry records the entry it leaves: a link, a list row, the About row and the header
 count's menu. Back returns to the entry just left in one action, and a new entry ends Forward. Its toolbar stays on one line: Read and Edit Markdown at the left, then visible copy, creation and
-campaign-choice actions (`Choose for this campaign`, `Choose every entry`), then Back. Drop Back's key hint first; fold Copy, Make NPC note and the campaign choice into quiet More when needed, with
+campaign-choice actions (`Choose for this campaign`, `Choose all`), then Back. Drop Back's key hint first; fold Copy, Make NPC note and the campaign choice into quiet More when needed, with
 Back before More. Every toolbar action, Make NPC note and the actions in More included, is a Read control
 (28 px), so the toolbar row has one height and a campaign creature's title sits where a campaign spell's does. Lookup keeps its Back hint; its Back is a Read control (28 px), as its title line's icon buttons are, so the title line has one height with or without Back and the search field below never moves. Both use Alt+Left, and Alt+Right for Forward, which has no button. Lookup takes the key when focus is there. Beside the Library, the mouse's Back and Forward buttons act on the side under the pointer.
 
@@ -426,7 +429,7 @@ scroll area, with one leading `M` gap. What Splat applies stays inside Source an
 structured item fields stay in this end group. Unreadable files omit empty end sections. Related entries, Here
 and Mentioned in stay above them at reader measure. In narrow creature readers, each vital keeps its label and
 value together when wrapping. Pictures are 64 px thumbnails beside the title and meta line. Use one `L` gap
-after the kind line and one `M` gap after a spell's fact table. A standalone bold caption above a table is
+after the kind line, also before a warning or error that follows it, and one `M` gap after a spell's fact table. A standalone bold caption above a table is
 plain text.
 
 A stat block has a heavy rule, identity, labelled AC, HP and initiative, then a tight attribute table with
@@ -498,7 +501,7 @@ Draw the manifest error with `message_with_action`, then its muted `Small` conse
 text edge below the action. The consequence wraps at the pane's notice measure, not at the action's width. In Edit
 Markdown the error is in the message space below the save row, and the bordered action and its consequence follow
 directly below that space, at the message text edge: they depend on the saved file only, so they stay while the DM
-edits. Show the chosen and total entries (`5 of 6 entries chosen`, `All entries chosen`) and `Choose every entry`. A ticked box counts as chosen, whoever ticked it: the DM's choices and the entries
+edits. Show the chosen and total entries (`5 of 6 entries chosen`, `All entries chosen`) and `Choose all`, the name Campaign gives the same action. A ticked box counts as chosen, whoever ticked it: the DM's choices and the entries
 they need together, as Campaign's package row counts them
 with Undo. Its result
 and Undo sit in the pane's message footer, like manifest-write results (see Files and recovery). Omit the entry breadcrumb and Engine support. Empty package counts have no separator.
@@ -545,8 +548,8 @@ DRAFT, `Save my draft again` and red `Remove entry and lose draft`. Its result s
 removed. Its draft was discarded. Ember Cultist now needs a missing entry.`, with `Undo remove`. Its file line keeps
 the path and offers `Show folder` for the nearest folder still there: no link offers the missing file, and no
 Edit in Obsidian. The message names entries that need the deleted note. Undo remove gives back the draft, the
-entry's campaign use and the header count as one step. A moved draft shows the new path and old folder; moved-from text ends the
-file line. Its warning says `This entry moved on disk. Your draft is safe until you choose.`, and its two buttons
+entry's campaign use and the header count as one step. A moved draft shows the new path, then the muted old folder (`moved from Rules/`), then
+`Show file`: no link splits the statement about the path. Its warning says `This entry moved on disk. Your draft is safe until you choose.`, and its two buttons
 name the choices. File actions use the new path. Offer `Save my draft to its new path`; saving checks the disk ID to
 prevent a second file after a move.
 
@@ -711,7 +714,8 @@ the tabs, the file line, the title and the body never move. The editor starts di
 fixes', a write's), because a broken file's reason never clears after Discard or Reload; then Save's reason (a repair
 draft's parse error with a broken manifest's recovery, a refusal before the write, the disk's failure); then the
 notices: results with no Undo, the link Campaign sent the DM to fix, each broken link, the first heading, a stat line.
-With none of these, the footer says why other actions wait for the draft. So no result, reason, warning, Discard or
+With none of these, the footer says why other actions wait for the draft, as an info message
+with its bar and icon, the form of the footer's other messages. So no result, reason, warning, Discard or
 Undo moves the editor's top. With no entry
 open, they sit in the footer below the empty reader, with Remove's `Undo remove`, and below a form that takes the
 reader's place. A file that changed on disk keeps its messages above the comparison, which owns the pane. The link offer after a
@@ -802,19 +806,22 @@ choices: the discarded draft belonged to the file as it was.
 ### Packages
 
 Manage packages offers Clear only for filled fields. Folder is one editable field with a suggestion menu, then
-help. Suggestions include existing folders, use the combo arrow and normal text colour, and permit a new
+help. Typed words and the chosen value (`Main folder`) share one baseline, centred in the field. Suggestions include existing folders, use the combo arrow and normal text colour, and permit a new
 subfolder on save. New packages default to the parent of the last registered package. New package has Browse
 beside Folder and the full destination below it. Creating a package opens its first entry form.
 
 A copied package folder names the original under Add folder and puts its ID in Technical details. Add folder
-is blocked with `This folder is a copy.` Bordered `Register as a new package` sits on the warning's action
+is blocked; the warning is its reason, so the reason line under it stays empty, and `This folder is a copy.` is
+Add folder's hover and accessible description. Bordered `Register as a new package` sits on the warning's action
 line, above Technical details. It asks for a name, writes independent package and entry identities, and has
 one Undo for all files. Registration names the copy and what the registration chose, not what the campaign
 uses later: `Ashen Reaches is registered, with no entries chosen for this campaign.` (or `with every entry
 chosen`). Its use checkbox starts
-off when the original is used. Keep the warning above the `Register a copy` Label title and fields.
-The named Register action is primary when the name is ready and no run is open, as `Create package` is.
-Quiet Cancel follows it after an `L` gap. It closes the form without writing
+off when the original is used. Keep the warning above the `Register a copy` Label title and fields. The form has
+inline creation's one order: the use checkbox and its help, then `New package name` with `Register` at the end of
+its line, then the kept line with quiet Cancel at its start and the reason after it. `Register` keeps that one
+word, so it never changes width. It is primary when the name is ready and no run is open, as `Create package` is.
+Cancel closes the form without writing
 and keeps the name and the campaign choice for reopening. When the choice is off, help says the campaign keeps
 the original and the copy is registered but not chosen. When on, it says every entry is used, including future
 entries. Help under a field or section is `design::help`: `Small` muted words at `READER_MEASURE`. `Use the copy in encounters` keeps roster names, counts and changes, with one Undo. After registration,
@@ -1108,9 +1115,12 @@ file and the recovery, never the system's words. A rolled table selects the matc
 states the result below in UI sans, on one line reserved under the Roll row from the start, so a roll moves nothing
 below the table. A longer result ends in `…`; its hover keeps it whole. Typed rolls use well fill, a centred placeholder and dice as the column
 heading. A marker's optional `per` word (`day`, `watch`, or hours such as `4h`) says how often a journey's
-encounter checks roll the table; a word that Splat cannot read adds the warning `Interval not read; using one check
-each day.` under that table, which still rolls. `Cannot roll` stays the words for a fault in the dice or the rows.
-Fixed headers cover passing rows with page fill and a hairline. Generator cards name their table
+encounter checks roll the table; a word that Splat cannot read adds the warning `Splat cannot read how often to
+check (“per fortnight”). It rolls one check each day. Use day, watch or hours such as 4h.` under that table, which
+still rolls. Every warning under a table is a `Body` message, the interval warning and a fault in the rows alike.
+`Cannot roll` stays the words for a fault in the dice or the rows. Fixed headers cover passing rows with page fill
+and a hairline; a cell whose first lines pass under the header shows from its first whole line below the hairline,
+so no cut line of text shows there and a tall wrapped cell still reads to its end. Generator cards name their table
 sources below attributes. Every card's `Will save <path>` is the path Save NPC writes: the folder that holds most of
 the campaign's NPCs, or `NPCs/` when it has none. Without a names table, the World page's card says `Built-in names. To
 use your own, add a table of names to a note. Paste the marker on the line above the table.` with a quiet `Copy the

@@ -2372,7 +2372,7 @@ fn show_result(
     }
 }
 
-/// The result of `Choose every entry`.
+/// The result of `Choose all` on a package About page.
 pub(crate) const PACKAGE_USE_RESULT: &str =
     "Every entry in this package is now chosen for this campaign.";
 
@@ -2705,6 +2705,56 @@ pub(crate) fn creation_path(ui: &mut egui::Ui, root: &Path, relative: &str, dest
     response.on_hover_text(full);
 }
 
+/// A file line for a file that moved on disk under a draft: the new path, `moved from <folder>/`,
+/// then the file's links, so no link splits the statement about the path. The path gives way
+/// first: it ends in `…` when the line is short, and its hover and accessible name keep it whole.
+fn moved_file_parts(ui: &mut egui::Ui, root: &Path, relative: &str, from: &str, obsidian: bool) {
+    let path = root.join(relative);
+    let font = Type::Small.font(ui);
+    let gap = ui.spacing().item_spacing.x;
+    let budget = (ui.available_width()
+        - crate::world::entry_file_links_width(ui, obsidian)
+        - design::number_width(ui, from, &font)
+        - 2.0 * gap
+        - design::L)
+        .max(design::XXL);
+    let shown = design::words_that_fit(ui, relative, &font, budget);
+    let response = ui.label(Type::Small.rich(ui, shown).color(colors().muted));
+    design::named(ui, &response, &path.display().to_string());
+    response.on_hover_text(path.display().to_string());
+    ui.label(Type::Small.rich(ui, from).color(colors().muted));
+    crate::world::entry_file_links(ui, &path, obsidian);
+}
+
+/// `Will create <path>` on one line of a creation form's kept line. When the line is short, the
+/// path's start gives way (`Will create …/modules/copper_coast`), so its end, the new folder,
+/// stays in view; the hover and the accessible name keep the whole path.
+fn will_create(ui: &mut egui::Ui, path: &Path) {
+    let full = format!("Will create {}", path.display());
+    let font = Type::Small.font(ui);
+    let width = ui.available_width();
+    let mut shown = full.clone();
+    let path = path.display().to_string();
+    let starts: Vec<usize> = path.char_indices().map(|(at, _)| at).collect();
+    if starts.len() > 1 && design::number_width(ui, &full, &font) > width {
+        let fitted = |start: usize| format!("Will create …{}", &path[starts[start]..]);
+        // The fewest characters cut that fit, by halves: a few measures, not one per character.
+        let (mut low, mut high) = (1, starts.len() - 1);
+        while low < high {
+            let middle = (low + high) / 2;
+            if design::number_width(ui, &fitted(middle), &font) <= width {
+                high = middle;
+            } else {
+                low = middle + 1;
+            }
+        }
+        shown = fitted(low);
+    }
+    let response = ui.label(Type::Small.rich(ui, shown).color(colors().muted));
+    design::named(ui, &response, &full);
+    response.on_hover_text(full);
+}
+
 /// Existing folders, with an optional kind folder as the first suggestion.
 fn kind_folder(kind: &str) -> &'static str {
     match kind {
@@ -2780,6 +2830,9 @@ pub(crate) fn folder_field(
                                     .frame(false)
                                     .font(Type::Strong.font(ui))
                                     .margin(egui::Vec2::ZERO)
+                                    // Round 27 FH10: centred, as `Main folder` is painted, so
+                                    // typed words and the chosen value share one baseline.
+                                    .vertical_align(egui::Align::Center)
                                     .desired_width(width)
                                     .min_size(egui::vec2(width, design::XL)),
                             );
@@ -2844,13 +2897,26 @@ pub(crate) fn folder_field(
     );
 }
 
-pub(crate) fn use_checkbox(ui: &mut egui::Ui, not_used: &mut bool, help: &str) {
+/// `Choose for this campaign` and its help, which `help` gives for the box's state after this
+/// frame's click.
+pub(crate) fn use_checkbox(
+    ui: &mut egui::Ui,
+    not_used: &mut bool,
+    help: impl FnOnce(bool) -> &'static str,
+) {
     let mut enabled = !*not_used;
     ui.checkbox(&mut enabled, "Choose for this campaign");
     *not_used = !enabled;
     // Help keeps the reader measure (round 25 family).
-    design::help(ui, help);
+    design::help(ui, help(enabled));
+    // Round 27 FB9, FD8: `L` after the help, as after a field, so the help stays with its
+    // checkbox and does not read as help for the next field.
+    ui.add_space(design::L - ui.spacing().item_spacing.y);
 }
+
+/// The commit of `Register a copy`: one word, so the button keeps its width while the DM types
+/// the name (round 27 FD2).
+const REGISTER_COPY: &str = "Register";
 
 fn create_module(path: &Path, name: &str, namespace: &str) -> Result<Module, String> {
     if !path.is_absolute()
@@ -3517,7 +3583,7 @@ fn obsidian_for(root: &Path, owner: &Owner) -> bool {
 }
 
 /// The reader's owner and file line is one Read row for every owner, whatever it holds
-/// (status, `Show file`, a quiet `Choose every entry`), so the title below it does not move
+/// (status, `Show file`, a quiet `Choose all`), so the title below it does not move
 /// between a built-in entry, a campaign entry and a package About.
 fn file_line_row(ui: &mut egui::Ui, wrap: bool, add: impl FnOnce(&mut egui::Ui)) {
     let height = Density::Read.control();
@@ -5679,11 +5745,12 @@ impl Library {
                     self.copied_package = None;
                     self.copy_name_open = false;
                 }
+                let copy_reason = self
+                    .copied_package
+                    .is_some()
+                    .then_some("This folder is a copy.");
                 let add_reason = locked
-                    .or(self
-                        .copied_package
-                        .is_some()
-                        .then_some("This folder is a copy."))
+                    .or(copy_reason)
                     .or(self
                         .path
                         .trim()
@@ -5754,7 +5821,13 @@ impl Library {
                         }
                     }
                 }
-                crate::campaigns::creation_reason(ui, add_reason);
+                // Round 27 FA7, FD6: while the copy warning shows below, it is the reason; the
+                // kept line stays empty, and Add folder's hover and accessible description keep
+                // `This folder is a copy.`
+                crate::campaigns::creation_reason(
+                    ui,
+                    add_reason.filter(|_| locked.is_some() || copy_reason.is_none()),
+                );
 
                 if let Some(copy) = self.copied_package.clone() {
                     if Path::new(self.path.trim()).canonicalize().ok().as_ref() != Some(&copy.path)
@@ -5767,61 +5840,82 @@ impl Library {
                             .find(|m| m.id == copy.id)
                             .map_or(copy.name.as_str(), |m| m.name.as_str());
                         let warning = format!("This folder is a copy of {name}.");
-                        if self.copy_name_open {
-                            design::message(ui, Tone::Warning, &warning);
-                            form_heading(ui, "Register a copy");
-                            design::text_field(
-                                ui,
-                                "New package name",
-                                &mut self.copy_name,
-                                None,
-                                None,
-                            );
-                            if campaigns.active_campaign().is_some() {
-                                let mut enabled = !self.copy_not_used;
-                                ui.checkbox(&mut enabled, "Choose for this campaign");
-                                self.copy_not_used = !enabled;
-                                let help = if enabled {
-                                    "Uses every entry in this package, including future entries."
-                                } else {
-                                    "This campaign keeps the original. The copy is registered but not chosen."
-                                };
-                                design::help(ui, help);
-                            }
-                        }
-                        let label = if self.copy_name_open && self.copy_name.trim().is_empty() {
-                            "Register package".into()
-                        } else if self.copy_name_open {
-                            format!("Register {}", self.copy_name.trim())
-                        } else {
-                            "Register as a new package".into()
-                        };
                         let reason = locked
                             .or((self.copy_name_open && self.copy_name.trim().is_empty())
                                 .then_some("Type a name first."));
                         let register = if self.copy_name_open {
-                            ui.horizontal_wrapped(|ui| {
-                                // The commit of an inline creation form has one weight: primary,
-                                // as `Create package` is, unless a run owns the primary.
-                                let clicked = (if self.run_open {
-                                    Action::secondary(&label)
+                            design::message(ui, Tone::Warning, &warning);
+                            form_heading(ui, "Register a copy");
+                            // Round 27 FD2: the inline creation form's one order. The choice
+                            // first, then the name with `Register` at the end of its line, then
+                            // one kept line: quiet Cancel at its start, the reason after it. The
+                            // commit keeps one word, so typing moves nothing.
+                            if campaigns.active_campaign().is_some() {
+                                use_checkbox(ui, &mut self.copy_not_used, |chosen| {
+                                    if chosen {
+                                        "Uses every entry in this package, including future entries."
+                                    } else {
+                                        "This campaign keeps the original. The copy is registered but not chosen."
+                                    }
+                                });
+                            }
+                            // The commit of an inline creation form has one weight: primary, as
+                            // `Create package` is, unless a run owns the primary.
+                            let register_action = || {
+                                if self.run_open {
+                                    Action::secondary(REGISTER_COPY)
                                 } else {
-                                    Action::primary(&label)
-                                })
-                                .blocked(reason)
-                                .show(ui)
-                                .clicked();
-                                design::blocked_reason(ui, reason);
-                                ui.add_space(design::L);
-                                if Action::quiet("Cancel").show(ui).clicked() {
+                                    Action::primary(REGISTER_COPY)
+                                }
+                            };
+                            let register_width = register_action().natural_width(ui);
+                            let mut clicked = false;
+                            ui.horizontal_top(|ui| {
+                                let width = ui.available_width()
+                                    - register_width
+                                    - ui.spacing().item_spacing.x;
+                                ui.allocate_ui_with_layout(
+                                    egui::vec2(width, 0.0),
+                                    egui::Layout::top_down(egui::Align::Min),
+                                    |ui| {
+                                        design::text_field(
+                                            ui,
+                                            "New package name",
+                                            &mut self.copy_name,
+                                            None,
+                                            None,
+                                        );
+                                    },
+                                );
+                                ui.vertical(|ui| {
+                                    ui.add_space(design::L + design::XS);
+                                    clicked =
+                                        register_action().blocked(reason).show(ui).clicked();
+                                });
+                            });
+                            ui.horizontal(|ui| {
+                                // As tall as Cancel, kept when the reason is empty.
+                                ui.set_min_height(Density::Read.control());
+                                if Action::quiet("Cancel")
+                                    .density(Density::Read)
+                                    .line_start()
+                                    .show(ui)
+                                    .clicked()
+                                {
                                     self.copy_name_open = false;
                                 }
-                                clicked
-                            })
-                            .inner
+                                ui.add_space(design::L - ui.spacing().item_spacing.x);
+                                design::blocked_reason(ui, reason);
+                            });
+                            clicked
                         } else {
                             design::locked(ui, reason, |ui| {
-                                design::message_with_action(ui, Tone::Warning, &warning, &label)
+                                design::message_with_action(
+                                    ui,
+                                    Tone::Warning,
+                                    &warning,
+                                    "Register as a new package",
+                                )
                             })
                         };
                         if register {
@@ -5848,11 +5942,9 @@ impl Library {
                     // Round 26 FB6: the choice comes before the last field, so Create package can
                     // follow that field on its line.
                     if campaigns.active_campaign().is_some() {
-                        use_checkbox(
-                            ui,
-                            &mut self.package_not_used,
-                            "Uses every entry in this package, including future entries.",
-                        );
+                        use_checkbox(ui, &mut self.package_not_used, |_| {
+                            "Uses every entry in this package, including future entries."
+                        });
                     }
                     let reason =
                         locked.or(self.name.trim().is_empty().then_some("Type a name first."));
@@ -5913,28 +6005,6 @@ impl Library {
                             create = create_action().blocked(reason).show(ui).clicked();
                         });
                     });
-                    // The reason sits on its own line below, kept when empty; quiet Clear starts
-                    // it when there is something to clear.
-                    ui.horizontal(|ui| {
-                        // As tall as Clear, so Clear coming moves nothing.
-                        ui.set_min_height(Density::Read.control());
-                        if (!self.name.is_empty() || self.package_folder_changed)
-                            && Action::quiet("Clear")
-                                .name("Clear the new package fields")
-                                .density(Density::Read)
-                                .line_start()
-                                .show(ui)
-                                .clicked()
-                        {
-                            self.name.clear();
-                            self.package_path = None;
-                            self.package_folder_changed = false;
-                        }
-                        if !self.name.is_empty() || self.package_folder_changed {
-                            ui.add_space(design::L - ui.spacing().item_spacing.x);
-                        }
-                        design::blocked_reason(ui, reason);
-                    });
                     let namespace: String = self
                         .name
                         .trim()
@@ -5954,18 +6024,36 @@ impl Library {
                                 .map(|parent| Ok(parent.join(&namespace)))
                                 .unwrap_or_else(|| campaigns.package_folder(&namespace))
                         });
-                    if let Ok(root) = &root
-                        && !self.name.trim().is_empty()
-                    {
-                        ui.add(
-                            egui::Label::new(
-                                Type::Small
-                                    .rich(ui, format!("Will create {}", root.display()))
-                                    .color(c.muted),
-                            )
-                            .wrap(),
-                        );
-                    }
+                    // One kept line below, as tall as a control: quiet Clear at its start when
+                    // there is something to clear, then the reason, or the folder Create package
+                    // will make. Round 27: the preview lives in this line, so typing moves
+                    // nothing below the form.
+                    ui.horizontal(|ui| {
+                        // As tall as Clear, so Clear coming moves nothing.
+                        ui.set_min_height(Density::Read.control());
+                        if (!self.name.is_empty() || self.package_folder_changed)
+                            && Action::quiet("Clear")
+                                .name("Clear the new package fields")
+                                .density(Density::Read)
+                                .line_start()
+                                .show(ui)
+                                .clicked()
+                        {
+                            self.name.clear();
+                            self.package_path = None;
+                            self.package_folder_changed = false;
+                        }
+                        if !self.name.is_empty() || self.package_folder_changed {
+                            ui.add_space(design::L - ui.spacing().item_spacing.x);
+                        }
+                        match (&root, reason) {
+                            (_, Some(reason)) => design::blocked_reason(ui, Some(reason)),
+                            (Ok(root), None) if !self.name.trim().is_empty() => {
+                                will_create(ui, root);
+                            }
+                            _ => {}
+                        }
+                    });
                     {
                         if create {
                             let namespace: String = self
@@ -6176,7 +6264,7 @@ impl Library {
                     use_checkbox(
                         ui,
                         &mut self.new_not_used,
-                        "Adds this entry to the campaign’s package choices.",
+                        |_| "Adds this entry to the campaign’s package choices.",
                     );
                 }
                 let blocked = if dirty {
@@ -6211,6 +6299,18 @@ impl Library {
                             .clicked();
                     });
                 });
+                let relative = if self.new_folder.trim().is_empty() {
+                    format!("{}.md", self.new_name.trim())
+                } else {
+                    format!(
+                        "{}/{}.md",
+                        self.new_folder.trim().trim_end_matches('/'),
+                        self.new_name.trim()
+                    )
+                };
+                // One kept line: quiet Cancel at its start, then the reason, or the file Create
+                // entry will write. Round 27: the preview lives in this line, so typing moves
+                // nothing.
                 ui.horizontal(|ui| {
                     ui.set_min_height(Density::Read.control());
                     if Action::quiet("Cancel")
@@ -6223,25 +6323,17 @@ impl Library {
                         self.new_error = None;
                     }
                     ui.add_space(design::L - ui.spacing().item_spacing.x);
-                    design::blocked_reason(ui, blocked);
+                    if blocked.is_some() {
+                        design::blocked_reason(ui, blocked);
+                    } else if !self.new_name.trim().is_empty() {
+                        let destination = match &places[place] {
+                            Owner::Package(package) => &package.name,
+                            Owner::Campaign(campaign) => &campaign.name,
+                            Owner::Builtin => BUILTIN_NAME,
+                        };
+                        creation_path(ui, places[place].root().unwrap(), &relative, destination);
+                    }
                 });
-                let relative = if self.new_folder.trim().is_empty() {
-                    format!("{}.md", self.new_name.trim())
-                } else {
-                    format!(
-                        "{}/{}.md",
-                        self.new_folder.trim().trim_end_matches('/'),
-                        self.new_name.trim()
-                    )
-                };
-                if !self.new_name.trim().is_empty() {
-                    let destination = match &places[place] {
-                        Owner::Package(package) => &package.name,
-                        Owner::Campaign(campaign) => &campaign.name,
-                        Owner::Builtin => BUILTIN_NAME,
-                    };
-                    creation_path(ui, places[place].root().unwrap(), &relative, destination);
-                }
                 // A closure, so an early `return` ends only the creation.
                 (|| {
                     if create {
@@ -7009,7 +7101,7 @@ impl Library {
             Owner::Package(_)
                 if about && campaigns.active_campaign().is_some() && !every_chosen =>
             {
-                Some("Choose every entry")
+                Some("Choose all")
             }
             Owner::Package(_)
                 if !about
@@ -7218,18 +7310,9 @@ impl Library {
                 } else if file_gone_now {
                     gone_file_parts(ui, root, shown_path);
                 } else if let Some(from) = &moved_from {
-                    let width = (ui.available_width()
-                        - design::number_width(ui, from, &Type::Small.font(ui))
-                        - design::S)
-                        .max(design::XXL);
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(width, Density::Read.control()),
-                        egui::Layout::left_to_right(egui::Align::Center),
-                        |ui| {
-                            crate::world::entry_file_parts(ui, root, shown_path, obsidian);
-                        },
-                    );
-                    ui.label(Type::Small.rich(ui, from).color(colors().muted));
+                    // Round 27 FD7: one statement about the path, then its links: the new
+                    // path, the muted old folder, then `Show file`.
+                    moved_file_parts(ui, root, shown_path, from, obsidian);
                 } else {
                     crate::world::entry_file_parts(ui, root, shown_path, obsidian);
                 }
@@ -7687,10 +7770,10 @@ impl Library {
                 });
             }
             if waits && let Some(reason) = draft_reason {
+                // Round 27 FA3: the footer's message form (bar and icon), as its other
+                // messages have.
                 footer.notice(reason, move |ui| {
-                    ui.add(
-                        egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted)).wrap(),
-                    );
+                    design::message(ui, Tone::Info, reason);
                 });
             }
             // Round 26 FC4: the duplicate warning and its choices join Edit Markdown's messages,
@@ -8070,6 +8153,14 @@ impl Library {
                                                 subtitle,
                                                 parsed.as_ref().ok(),
                                             );
+                                            // Round 27 FH9: `L` between the kind line and its
+                                            // first warning, as between a kind line and prose,
+                                            // so the kind word does not read as the warning's.
+                                            if fault.is_some() || repair_problem.is_some() {
+                                                ui.add_space(
+                                                    design::L - ui.spacing().item_spacing.y,
+                                                );
+                                            }
                                             if let Some(fault) = &fault {
                                                 read_again = fault_notice(ui, fault);
                                             }
