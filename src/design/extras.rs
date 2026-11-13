@@ -10,6 +10,7 @@
 //! effects. A caller of `choice` gives words and whether the choice is the selected one.
 use super::{components::*, icons, tokens::*};
 use eframe::egui::{self, Align2, Response, Sense, Ui, WidgetInfo, WidgetType, pos2, vec2};
+use std::sync::Arc;
 
 // ------------------------------------------------------------------------------------------------
 // Space (N3)
@@ -183,26 +184,65 @@ pub fn heading(ui: &mut Ui, heading: Heading<'_>) -> Response {
 /// }
 /// ```
 pub fn choice(ui: &mut Ui, selected: bool, label: &str) -> Response {
+    choice_row(ui, selected, label, Lines::One)
+}
+
+/// How a choice row lays out its words.
+#[derive(Clone, Copy)]
+enum Lines<'a> {
+    /// One line, cut with an ellipsis; the row is as wide as its words in a sideways layout.
+    One,
+    /// Wrapped inside the row's full width, with a blocked choice's reason below.
+    Wrap { blocked: Option<&'a str> },
+}
+
+/// The one choice row behind [`choice`] and [`choice_wrapped`]: the check column, the fill on
+/// hover and press, the words and the focus ring.
+fn choice_row(ui: &mut Ui, selected: bool, label: &str, lines: Lines<'_>) -> Response {
     let c = colors();
     let font = Type::Body.font(ui);
-    let natural = S + ICON_SLOT + number_width(ui, label, &font) + S;
-    let width = if ui.layout().is_vertical() {
-        natural.max(ui.available_width())
-    } else {
-        natural
+    let blocked = match lines {
+        Lines::One => None,
+        Lines::Wrap { blocked } => blocked,
     };
-    let height = Density::Read.control();
-    let (rect, response) = ui.allocate_exact_size(vec2(width, height), Sense::click());
+    let color = if blocked.is_some() { c.muted } else { c.text };
+    let (width, height) = match lines {
+        Lines::One => {
+            let natural = S + ICON_SLOT + number_width(ui, label, &font) + S;
+            let width = if ui.layout().is_vertical() {
+                natural.max(ui.available_width())
+            } else {
+                natural
+            };
+            (width, Density::Read.control())
+        }
+        Lines::Wrap { blocked } => {
+            let width = ui.available_width();
+            (width, choice_wrapped_height(ui, label, blocked, width))
+        }
+    };
+    let sense = if blocked.is_some() {
+        Sense::hover()
+    } else {
+        Sense::click()
+    };
+    let (rect, response) = ui.allocate_exact_size(vec2(width, height), sense);
     response.widget_info(|| {
         WidgetInfo::selected(
             WidgetType::SelectableLabel,
-            ui.is_enabled(),
+            blocked.is_none() && ui.is_enabled(),
             selected,
             label,
         )
     });
+    if let Some(reason) = blocked {
+        ui.ctx()
+            .accesskit_node_builder(response.id, |node| node.set_description(reason));
+    }
     if ui.is_rect_visible(rect) {
-        let fill = if response.is_pointer_button_down_on() {
+        let fill = if blocked.is_some() {
+            None
+        } else if response.is_pointer_button_down_on() {
             Some(c.selected)
         } else if response.hovered() {
             Some(c.hover)
@@ -213,24 +253,41 @@ pub fn choice(ui: &mut Ui, selected: bool, label: &str) -> Response {
             ui.painter()
                 .rect_filled(rect, egui::CornerRadius::same(RADIUS_CONTROL as u8), fill);
         }
+        let left = rect.left() + S + ICON_SLOT;
+        // The first line's middle: the row's middle for one line, else `row_pad` below its top.
+        let (first, words, reason) = match lines {
+            Lines::One => {
+                let galley = one_line(ui, label, font, c.text, rect.width() - 2.0 * S - ICON_SLOT);
+                (rect.center().y, galley, None)
+            }
+            Lines::Wrap { blocked } => {
+                let (words, reason) = row_galleys(ui, label, blocked, width, color);
+                (
+                    rect.top() + row_pad() + Type::Body.line() / 2.0,
+                    words,
+                    reason,
+                )
+            }
+        };
         if selected {
             ui.painter().text(
-                pos2(rect.left() + S, rect.center().y),
+                pos2(rect.left() + S, first),
                 Align2::LEFT_CENTER,
                 icons::OK,
                 Type::Body.font(ui),
                 c.accent,
             );
         }
-        let galley = one_line(ui, label, font, c.text, rect.width() - 2.0 * S - ICON_SLOT);
-        ui.painter().galley(
-            pos2(
-                rect.left() + S + ICON_SLOT,
-                rect.center().y - galley.size().y / 2.0,
-            ),
-            galley,
-            c.text,
-        );
+        let top = match lines {
+            Lines::One => first - words.size().y / 2.0,
+            Lines::Wrap { .. } => rect.top() + row_pad(),
+        };
+        let below = words.size().y;
+        ui.painter().galley(pos2(left, top), words, color);
+        if let Some(reason) = reason {
+            ui.painter()
+                .galley(pos2(left, top + below), reason, c.muted);
+        }
         if response.has_focus() {
             focus_ring(ui, rect);
         }
@@ -246,6 +303,46 @@ pub fn choice_value<T: PartialEq>(ui: &mut Ui, current: &mut T, value: T, label:
         response.mark_changed();
     }
     response
+}
+
+/// The space above and below a row's words, so a one-line row is a `Read` control.
+fn row_pad() -> f32 {
+    ((Density::Read.control() - Type::Body.line()) / 2.0).max(XS)
+}
+
+/// A row's words, wrapped inside `width`: the label in `Body`, and a blocked choice's reason in
+/// `Small` below it.
+fn row_galleys(
+    ui: &Ui,
+    label: &str,
+    reason: Option<&str>,
+    width: f32,
+    color: egui::Color32,
+) -> (Arc<egui::Galley>, Option<Arc<egui::Galley>>) {
+    let c = colors();
+    let room = (width - 2.0 * S - ICON_SLOT).max(1.0);
+    let wrap = |words: &str, font: egui::FontId, color| {
+        ui.fonts_mut(|fonts| fonts.layout(words.to_owned(), font, color, room))
+    };
+    (
+        wrap(label, Type::Body.font(ui), color),
+        reason.map(|reason| wrap(reason, Type::Small.font(ui), c.muted)),
+    )
+}
+
+/// A [`choice_wrapped`] row's height in `width`: a `Read` control, or its wrapped words and pad.
+pub(super) fn choice_wrapped_height(ui: &Ui, label: &str, reason: Option<&str>, width: f32) -> f32 {
+    let (label, reason) = row_galleys(ui, label, reason, width, colors().text);
+    let words = label.size().y + reason.map_or(0.0, |reason| reason.size().y);
+    (words + 2.0 * row_pad()).max(Density::Read.control())
+}
+
+/// [`choice`] in a list whose rows wrap (the drop-down's, `Dropdown`): the same check column and
+/// look, its words wrapped inside the row (never cut), so two names that differ at their end
+/// stay apart; a blocked choice shows its reason below its words and takes no press and no
+/// keyboard focus.
+pub fn choice_wrapped(ui: &mut Ui, selected: bool, label: &str, blocked: Option<&str>) -> Response {
+    choice_row(ui, selected, label, Lines::Wrap { blocked })
 }
 
 #[cfg(test)]
