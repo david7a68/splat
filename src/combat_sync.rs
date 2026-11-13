@@ -1571,11 +1571,15 @@ impl CombatSync {
             ui.horizontal_wrapped(|ui| {
                 use crate::design::{self, Type};
                 ui.spacing_mut().item_spacing.x = 0.0;
-                let words = "Waiting for the first sheet read. If it does not come, check the connection in ";
+                // Round 27 FO2: the heading says the state (`Waiting for the first sheet read`);
+                // the block says only the next step.
+                let words = "If the first sheet read does not come, check the connection in ";
                 for word in words.split_inclusive(' ') {
                     ui.label(Type::Small.rich(ui, word).color(design::colors().muted));
                 }
-                if ui.available_width() < design::number_width(ui, "Settings.", &Type::Small.font(ui)) {
+                if ui.available_width()
+                    < design::number_width(ui, "Settings.", &Type::Small.font(ui))
+                {
                     ui.end_row();
                 }
                 if design::small_link(ui, "Settings").clicked() {
@@ -1779,6 +1783,18 @@ impl CombatSync {
                     let range = -MAX_HP_BONUS..=MAX_HP_BONUS;
                     edit_row(ui, "Maximum HP modifier", n, range, None)
                 });
+                // Round 27 FN3: the help sits directly under the stepper it explains, before
+                // the death saves, at the stepper's x. Round 26 AM2: it keeps the reader measure.
+                ui.label("");
+                // A top-down cell: a grid cell lays out left to right and centres a wrapping
+                // label in its row.
+                ui.vertical(|ui| {
+                    design::help(
+                        ui,
+                        "The maximum HP modifier raises or lowers maximum HP, as Aid does.",
+                    );
+                });
+                ui.end_row();
             }
             if let Some(death) = self.desired.groups.get_mut("death") {
                 for (field, label) in [
@@ -1797,13 +1813,6 @@ impl CombatSync {
                 ui.end_row();
             }
         });
-        if self.desired.contains_key("hp_bonus") {
-            // Round 26 AM2: every help line keeps the reader measure.
-            crate::design::help(
-                ui,
-                "The maximum HP modifier raises or lowers maximum HP, as Aid does.",
-            );
-        }
     }
     /// Short rest, long rest and restore to life. D&D Beyond applies each one itself.
     fn rests(&mut self, ui: &mut egui::Ui, max_hp: i64) {

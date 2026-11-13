@@ -28,6 +28,11 @@ before	Write the read-aloud text and tactics for the encounter	Do	save	1	Encount
 before	Back to the session plan, with tonight's encounter in it	Nav	Back to session	1	Encounters	Session	false
 before	Back to the session plan, with tonight's encounter in it	Find	Add a fight	1	Session		false
 before	Back to the session plan, with tonight's encounter in it	Do	plan the second fight	2	Session		false
+before	Change a planned fight's roster from the plan, and come back	Find	More actions for Shrine of Cinders	1	Session		false
+before	Change a planned fight's roster from the plan, and come back	Nav	Edit encounter	1	Session	Encounters	false
+before	Change a planned fight's roster from the plan, and come back	Do	duplicate a cultist	2	Encounters		false
+before	Change a planned fight's roster from the plan, and come back	Do	Save encounter	1	Encounters		false
+before	Change a planned fight's roster from the plan, and come back	Nav	Back to session	1	Encounters	Session	false
 before	Carry over what last week left into tonight's note	Do	Carry over	1	Session		false
 during	Set-up	Setup	save, quit and open the app at the table	0	Session		false
 during	Set-up	Setup	a microphone is there	0	Session		false
@@ -238,9 +243,8 @@ during	Stop recording	Do	Stop recording	1	Session		false
 after	Set-up	Setup	save, quit and open the app after the session	0	Session		false
 after	Set-up	Setup	the recording service has its keys	0	Session		false
 after	Review how the fight went: log and final HP	Find	open the fight	1	Session		false
-after	Say where the fight happened	Nav	open the fight on the Timeline	1	Session	Timeline	false
-after	Say where the fight happened	Do	type where it happened	2	Timeline		false
-after	Say where the fight happened	Nav	Session	1	Timeline	Session	false
+after	Say where the fight happened	Do	type where it happened	2	Session		false
+after	Set-up	Setup	the opened row and the next fight's action, at both sizes	15	Session		false
 after	Process the recording and read the summary	Sub	Recordings, 1 recording	1	Session		false
 after	Process the recording and read the summary	Do	Process	1	Session		false
 after	Process the recording and read the summary	Sub	Summary	1	Session		false
@@ -255,6 +259,7 @@ after	Link the fight in the note	Do	paste the link at the end of the note	3	Sess
 after	Put the fight's rewards in the note	Do	Add rewards	1	Session		false
 after	Check the party's HP for next time	Nav	Party	1	Session	Party	false
 after	Set-up	Setup	the plan holds a done scene with Hobb the Miller, in view	5	Party	Session	false
+after	Put what an NPC said in the NPC's own note	Find	close the fight's row	1	Session		false
 after	Put what an NPC said in the NPC's own note	Panel	Add to Log: Hobb the Miller	1	Session		false
 after	Put what an NPC said in the NPC's own note	Do	type the line	1	Session		false
 after	Put what an NPC said in the NPC's own note	Do	add it	1	Session		false

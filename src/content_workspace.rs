@@ -518,9 +518,18 @@ impl ManifestWrite {
         &self.path
     }
     /// One verb for the result and its `Undo write <file>`, whether the file was missing or
-    /// replaced (round 24 FF5).
+    /// replaced (round 24 FF5). Round 27 FC5: it also says what the file holds now, and, when it
+    /// replaced a file, that Undo puts the DM's old text back, so the DM can decide on Undo.
     pub fn message(&self) -> String {
-        format!("{} was written again.", self.path)
+        format!(
+            "{} was written again. It now has the package’s name and ID in the current format.{}",
+            self.path,
+            if self.before.is_some() {
+                " Undo puts your old text back."
+            } else {
+                ""
+            }
+        )
     }
     /// Whether the write replaced a file that was there. Tests only: the result says
     /// `written again` either way.

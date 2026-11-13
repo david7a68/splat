@@ -667,7 +667,7 @@ impl Campaigns {
                         let clicked = ui
                             .scope(|ui| {
                                 ui.spacing_mut().button_padding.x = design::S;
-                                let words = Type::Small.rich(ui, "Add campaign…");
+                                let words = Type::Small.rich(ui, "Add campaign");
                                 ui.selectable_label(false, words).clicked()
                             })
                             .inner;

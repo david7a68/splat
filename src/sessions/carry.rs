@@ -1160,6 +1160,7 @@ mod tests {
     fn fight(name: &str) -> PlanFight {
         PlanFight {
             saved: None,
+            id: uuid::Uuid::nil(),
             name: name.into(),
             path: format!("Encounters/{name}.md"),
             summary: String::new(),

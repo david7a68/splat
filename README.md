@@ -197,7 +197,7 @@ Session Read and Write views keep the same left-aligned prose width of at most 7
 The Write frame is no wider than the reader measure plus its padding and stays at the left edge. Read and Write sit at its top right edge.
 Spare width stays outside it; stored line breaks stay unchanged. Read omits plan links already shown beside the note, including group links and scenes.
 A task line under the plan heading is a scene: a row with a done box, whose tick writes the note at once.
-When the plan's closed rows do not fit, or an opened row would push the next fight out of view with scenes above it, the scenes fold to `N scenes`, with a section caret, on the Tonight line, so the next fight stays in view. A scene's words are a plan row title's size at the fights' title column.
+When the plan's closed rows do not fit, or an opened row would push the next fight out of view with scenes above it, or, with no fight still to come, an opened row's details do not fit with the rows, the scenes fold to `N scenes`, with a section caret, on the Tonight line, so the next fight stays in view. A scene's words are a plan row title's size at the fights' title column.
 `Scene`, the last line of the Add strip's More menu, adds one. With no run open, a creature's or an NPC's
 reader, and a scene that links one, has `Start fight`, which saves and starts `Fight with <name>`. A campaign
 World entry's reader, and a done scene that links one, has `Add to Log`, which adds one line in the DM's words
@@ -325,7 +325,7 @@ with **Always use this one**. Until you choose, the note's World row says **Plac
 and the header's **notes need fixing** link counts it. An empty World note says **Nothing written yet.**
 Its file line keeps the one **Edit in Obsidian** link.
 
-With no campaigns, the switcher says **No campaign** and offers **Add campaign…**.
+With no campaigns, the switcher says **No campaign** and offers **Add campaign**.
 New entry and Copy entry use **Destination** and show a short path, with the full path
 on hover. Sharing required campaign entries lists the copies before **Copy both**.
 

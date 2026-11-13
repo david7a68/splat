@@ -141,6 +141,9 @@ fn connection_help(ui: &mut egui::Ui) {
 pub struct DndBeyond {
     account_epoch: u64,
     campaigns: Vec<RemoteCampaign>,
+    /// The widest remote campaign name, measured once per list (round 27 AN2). It ends when
+    /// `campaigns` is replaced or cleared.
+    name_column: Option<f32>,
     pending: Option<Receiver<Result<Vec<RemoteCampaign>, String>>>,
     loaded: bool,
     error: Option<String>,
@@ -152,6 +155,16 @@ pub struct DndBeyond {
 }
 
 impl DndBeyond {
+    /// Give one remote campaign another name, as a new list from D&D Beyond would. Tests only:
+    /// the test list is fixed (`fetch`).
+    #[cfg(test)]
+    pub fn rename_remote(&mut self, id: &str, name: &str) {
+        for remote in self.campaigns.iter_mut().filter(|remote| remote.id == id) {
+            remote.name = name.to_owned();
+        }
+        self.name_column = None;
+    }
+
     /// A list is on its way, so what is on screen is due to change.
     #[cfg(test)]
     pub fn busy(&self) -> bool {
@@ -178,6 +191,7 @@ impl DndBeyond {
             self.pending_link = None;
             self.requested_visible_link = None;
             self.campaigns.clear();
+            self.name_column = None;
             local.cancel_import();
             self.loaded = false;
             self.account_epoch = epoch;
@@ -192,6 +206,7 @@ impl DndBeyond {
                     match result {
                         Ok(campaigns) => {
                             self.campaigns = campaigns;
+                            self.name_column = None;
                             self.loaded = true;
                             self.error = None;
                             if let Some((id, remote_id)) = self.pending_link.take() {
@@ -291,11 +306,49 @@ impl DndBeyond {
                 if self.loaded && self.campaigns.is_empty() {
                     ui.label("No campaigns returned for this account.");
                 }
+                // Round 27 AN2: one action column, `L` after the widest name, so each Add or
+                // Added sits near its name (it was at the column's far edge).
+                let font = crate::design::Type::Strong.font(ui);
+                let column = *self.name_column.get_or_insert_with(|| {
+                    self.campaigns
+                        .iter()
+                        .map(|remote| crate::design::number_width(ui, &remote.name, &font))
+                        .fold(0.0, f32::max)
+                });
                 for remote in &self.campaigns {
                     let added = local.is_added(&remote.id);
                     ui.horizontal(|ui| {
-                        ui.label(crate::design::Type::Strong.rich(ui, &remote.name));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        use crate::design::{self, Action, L};
+                        let left = ui.cursor().left();
+                        // Round 27 review: the action's room comes first, so Add (or Added) is
+                        // always whole inside the column; the name gets what is left, and a name
+                        // too long for it ends in `…`, whole on hover.
+                        let action =
+                            Action::secondary("Add…")
+                                .natural_width(ui)
+                                .max(design::number_width(
+                                    ui,
+                                    &format!("{} Added", design::icons::OK),
+                                    &design::Type::Body.font(ui),
+                                ));
+                        let name_room = (ui.available_width() - action - L).max(0.0);
+                        let words = design::one_line(
+                            ui,
+                            &remote.name,
+                            font.clone(),
+                            design::colors().text,
+                            name_room,
+                        );
+                        let cut = words.elided;
+                        let name = ui.add(egui::Label::new(words));
+                        if cut {
+                            name.on_hover_text(&remote.name);
+                        }
+                        // One action column, `L` after the widest name that fits.
+                        let at = left + column.min(name_room) + L;
+                        // The cursor is already one item gap past the name.
+                        ui.add_space((at - ui.cursor().left()).max(0.0));
+                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                             if added {
                                 crate::design::status(
                                     ui,
