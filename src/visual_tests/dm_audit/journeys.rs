@@ -1181,10 +1181,18 @@ fn the_race(a: &mut Audit<'_, '_>) {
     a.click(Do, "Crowd loves it");
     a.act(Panel, "Ctrl+T", |d| d.press_ctrl(Key::T));
     let values = ledger(a.d);
+    let live = run_file(a.d, SHRINE);
     a.outcome(
-        "the ledger holds the press in the fight: Favor at 3",
+        "the ledger holds the press made in the live fight (the run file running in round 2), \
+         for tonight's session: Favor at 3",
         sum(&values, "favor") == 3
-            && values.last().and_then(|entry| entry.why.as_deref()) == Some("Crowd loves it"),
+            && values.last().is_some_and(|press| {
+                press.why.as_deref() == Some("Crowd loves it")
+                    && press.session.is_some()
+                    && press.session == values[0].session
+            })
+            && run_phase(&live) == "Running"
+            && run_round(&live) == Some(2),
         &values,
     );
 
@@ -1743,15 +1751,15 @@ fn week_between(a: &mut Audit<'_, '_>) {
     );
 
     // The plan has no way into the encounter editor: the DM goes by Encounters.
+    // The planned fight's menu opens its encounter in the editor, with the way back to this
+    // session (pull request 291). Before it, the DM went by Encounters (FINDINGS J6-3).
     a.task("The Gate Watch is too easy: add a creature in the encounter editor");
-    a.click(Nav, NAV_ENCOUNTERS);
-    a.act(Find, "Edit beside Gate Watch", |d| {
-        d.click_beside_exact(GATE, EDIT_ENCOUNTER);
-    });
+    a.click(Find, &format!("More actions for {GATE}"));
+    a.click(Nav, "Edit encounter");
     a.act(Find, "search: oni", |d| d.type_into(FIND_CREATURE, "oni"));
     a.act(Do, "add an Oni", |d| d.click_first(ADD));
     a.click(Do, SAVE_ENCOUNTER);
-    a.click(Nav, NAV_SESSIONS);
+    a.click(Nav, "Back to session");
     let gate = file(a.d, &format!("Encounters/{GATE}.md"));
     let after = words(a.d);
     a.outcome(
