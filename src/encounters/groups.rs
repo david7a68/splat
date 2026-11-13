@@ -1441,7 +1441,8 @@ fn belongs_to(
                 ui.set_min_width(inner);
                 ui.set_max_width(inner);
                 ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
-                let any = design::choice(ui, current.is_none(), ANY_ENCOUNTER);
+                let any =
+                    design::extras::choice_wrapped(ui, current.is_none(), ANY_ENCOUNTER, None);
                 crate::rolls::menu_choice_focus(ui, &any);
                 if any.clicked() {
                     draft.setup.encounter = None;
@@ -1449,7 +1450,8 @@ fn belongs_to(
                 }
                 for (id, name) in &choices {
                     // The same choice again keeps a link that the note gives.
-                    let choice = design::choice(ui, current == Some(*id), name);
+                    let choice =
+                        design::extras::choice_wrapped(ui, current == Some(*id), name, None);
                     crate::rolls::menu_choice_focus(ui, &choice);
                     if choice.clicked() && current != Some(*id) {
                         draft.setup.encounter = Some(EntryRef::id(*id));

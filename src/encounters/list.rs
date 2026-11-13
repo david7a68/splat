@@ -200,10 +200,11 @@ pub(super) fn side_control(ui: &mut egui::Ui, name: &str, side: &mut String, cho
                         .map(String::as_str)
                         .filter(|choice| !matches!(*choice, "party" | "enemies")),
                 ) {
-                    if design::choice(
+                    if design::extras::choice_wrapped(
                         ui,
                         side == choice && !other,
                         &design::reader::human_label(choice),
+                        None,
                     )
                     .clicked()
                     {
@@ -211,7 +212,7 @@ pub(super) fn side_control(ui: &mut egui::Ui, name: &str, side: &mut String, cho
                         other = false;
                     }
                 }
-                if design::choice(ui, other, "Other…").clicked() {
+                if design::extras::choice_wrapped(ui, other, "Other…", None).clicked() {
                     other = true;
                 }
             });

@@ -6734,12 +6734,16 @@ impl Encounters {
                         .selected_text(selected)
                         .show_ui(ui, |ui| {
                             for rule in &rules {
-                                design::choice_value(
+                                if design::extras::choice_wrapped(
                                     ui,
-                                    &mut snapshot.options.inspiration_choice,
-                                    Some(rule.id),
+                                    snapshot.options.inspiration_choice == Some(rule.id),
                                     &line(rule),
-                                );
+                                    None,
+                                )
+                                .clicked()
+                                {
+                                    snapshot.options.inspiration_choice = Some(rule.id);
+                                }
                             }
                         });
                     design::named(ui, &combo.response, "Inspiration rule");
