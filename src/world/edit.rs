@@ -2146,8 +2146,9 @@ mod tests {
         let entry = &index.items[index.position(id).unwrap()].entry;
         let mut draft = EditDraft::open(&home, entry).unwrap();
         draft.now.status = "gone".into();
+        let discarded_at = crate::design::ResultOrder::issue();
         let mut reader = Reader {
-            discarded: Some((id, draft, crate::design::ResultOrder::issue())),
+            discarded: Some((id, draft, discarded_at)),
             ..Default::default()
         };
         // The note goes in its own campaign: the Undo is offered there.
@@ -2160,6 +2161,14 @@ mod tests {
                 && lines[0].words == "Rook draft discarded."
                 && lines[0].rank == super::super::FooterRank::Undo,
             "owner-home"
+        );
+        // It carries the order its Discard issued, not one made while the footer is built, so a
+        // later result goes ahead of it (round 27, package A's `ResultOrder`).
+        let later = crate::design::ResultOrder::issue();
+        let again = reader.lost_lines(&home_index);
+        assert!(
+            again[0].order == discarded_at && later > again[0].order,
+            "order-of-the-discard"
         );
         // Another campaign has no such note either, but the draft is not its own.
         let other_index = ContentIndex::load(&[], Some(&other)).unwrap();
