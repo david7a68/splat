@@ -1346,8 +1346,8 @@ Case A, the plan at 330 px
   `Add to notes` today (`:4388`), so this is the act that links it.
 - **The XP line,** first under it, when the notes use XP (below): the XP of the creatures that ended at 0 HP,
   also those marked absent at 0 HP, and each character's share. F1's function gives the numbers. The line
-  names what it counted and what still stood, so the DM can change it. With nobody at 0 HP it says `XP 0 for 0
-  at 0 HP`. When a creature at 0 HP has no XP that Splat knows (a made-up creature, an NPC with no stat
+  names what it counted and what still stood, so the DM can change it. With nobody at 0 HP it says `XP 0 · no creature at 0
+  HP` (and `XP 0.` before the names when none of them has XP that Splat knows). When a creature at 0 HP has no XP that Splat knows (a made-up creature, an NPC with no stat
   block), the line says so: `XP 450 for 3 at 0 HP. XP not known for Captain Varra: enter an award here.` The
   count is of the creatures whose XP is summed. It is still an XP line, and the link and the loot are written. An amount that is not known is left out of
   every sum and is never counted as zero. This is the rule (section 7).
