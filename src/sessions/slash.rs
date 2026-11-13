@@ -18,6 +18,7 @@ const RESULTS: usize = 8;
 /// More letters than any command has: the `/` was not a command.
 const LONGEST_TYPED: usize = 16;
 pub const SEARCH_NAME: &str = "Search to link";
+const SEARCH_FIELD: design::FieldId = crate::field_id!("search_to_link");
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Command {
@@ -569,10 +570,6 @@ fn roll(
 }
 
 /// A search field with the best results under it. Enter or a click links the chosen one.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn search(
     ui: &mut egui::Ui,
     index: Option<&ContentIndex>,
@@ -580,7 +577,7 @@ fn search(
     highlight: &mut usize,
     focus: &mut bool,
 ) -> Outcome {
-    let field_id = design::focus_id(SEARCH_NAME);
+    let field_id = SEARCH_FIELD.id();
     let in_field = ui.memory(|memory| memory.has_focus(field_id));
     let (up, down, enter) = if in_field {
         ui.input_mut(|i| {
@@ -596,13 +593,15 @@ fn search(
         (false, false, false)
     };
     let before = query.clone();
-    let field = design::search_field(
-        ui,
-        SEARCH_NAME,
-        query,
-        "Search entries and notes…",
-        MENU_WIDTH,
-    );
+    let field = SEARCH_FIELD
+        .search(
+            ui,
+            SEARCH_NAME,
+            query,
+            "Search entries and notes…",
+            MENU_WIDTH,
+        )
+        .field;
     if std::mem::take(focus) {
         field.request_focus();
     }

@@ -54,6 +54,10 @@ const CHECK_DISK_EVERY: Duration = Duration::from_secs(1);
 const SCAN_EVERY: Duration = Duration::from_secs(5);
 const MISSING_INPUT_ERROR: &str = "no such device";
 const PROCESSING_CANCELLED: &str = "Processing cancelled";
+const SESSION_TITLE: design::FieldId = crate::field_id!("session_title");
+const SESSION_DATE: design::FieldId = crate::field_id!("session_date");
+const TEMPLATE_NAME: design::FieldId = crate::field_id!("template_name");
+const SESSION_FOLDER: design::FieldId = crate::field_id!("session_folder");
 
 #[derive(Clone, Copy, Default, PartialEq)]
 enum View {
@@ -2943,10 +2947,6 @@ impl Sessions {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn record_control(&mut self, ui: &mut egui::Ui, settings: &ProcessingSettings) {
         // Stop is here whichever session is open. It can be urgent, if a player asks.
         if self.live.as_ref().is_some_and(|live| {
@@ -3002,7 +3002,7 @@ impl Sessions {
         }
         if let Some(reason) = reason {
             ui.label(Type::Small.rich(ui, reason).color(colors().muted));
-            ui.add_space(design::L);
+            design::gap(ui, design::Gap::L);
         }
     }
 
@@ -3378,8 +3378,13 @@ impl Sessions {
             "New session"
         };
         let c = colors();
-        design::group_heading(ui, heading, 0);
-        ui.add_space(design::XS);
+        design::heading(
+            ui,
+            design::Heading::Group {
+                title: heading,
+                count: 0,
+            },
+        );
         design::field(ui, "Number", None, None, |ui| {
             design::number_field(
                 ui,
@@ -3390,8 +3395,9 @@ impl Sessions {
                 Density::Read.control(),
             );
         });
-        let title = design::text_field(
+        let title = design::labelled_field(
             ui,
+            SESSION_TITLE.with(form.editing),
             "Session title",
             &mut form.title,
             Some("Optional. You can name it after you play."),
@@ -3402,7 +3408,14 @@ impl Sessions {
             title.request_focus();
         }
         let title_entered = title.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-        design::text_field(ui, "Date", &mut form.date, Some("As YYYY-MM-DD."), None);
+        design::labelled_field(
+            ui,
+            SESSION_DATE.with(form.editing),
+            "Date",
+            &mut form.date,
+            Some("As YYYY-MM-DD."),
+            None,
+        );
         if form.editing.is_none() {
             design::field(ui, "Template", None, None, |ui| {
                 let inner = egui::ComboBox::from_id_salt("session_template")
@@ -3411,7 +3424,8 @@ impl Sessions {
                     .icon(design::combo_icon)
                     .show_ui(ui, |ui| {
                         for template in &self.templates {
-                            ui.selectable_value(
+                            design::choice_value(
+                                ui,
                                 &mut form.template,
                                 template.name.clone(),
                                 &template.name,
@@ -4270,10 +4284,6 @@ impl Sessions {
 
     /// What play changed in the world in this session, from each entry's Log. The entry holds
     /// the line, so this list needs no store of its own.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn world_changes(&mut self, ui: &mut egui::Ui) {
         let Some(index) = ui.ctx().data(|data| {
             data.get_temp::<std::sync::Arc<crate::lookup::ContentIndex>>(egui::Id::new(
@@ -4298,7 +4308,7 @@ impl Sessions {
             .unwrap_or_default()
             .to_string_lossy()
             .into_owned();
-        design::reader::section_heading(ui, "World changes");
+        design::heading(ui, design::Heading::Section("World changes"));
         let mut open = None;
         for (source, line) in changes {
             let words = line.words();
@@ -4964,7 +4974,7 @@ impl Sessions {
                     }
                 }
                 process = pressed && !recording.summary;
-                ui.add_space(design::L);
+                design::gap(ui, design::Gap::L);
             }
         };
         if has_actions {
@@ -5075,12 +5085,13 @@ impl Sessions {
         }
         let c = colors();
         let session = self.selected;
-        // One `L` gap between the recording's last line and the events heading.
-        ui.add_space(design::L - ui.spacing().item_spacing.y);
-        design::group_heading(
+        // The heading adds the `L` gap between the recording's last line and itself.
+        design::heading(
             ui,
-            "Events marked in this recording",
-            recording.markers.len(),
+            design::Heading::Group {
+                title: "Events marked in this recording",
+                count: recording.markers.len(),
+            },
         );
         ui.label(
             Type::Small
@@ -5150,7 +5161,7 @@ impl Sessions {
         // session pane's footer (round 27 FI3).
         ui.scope(|ui| {
             for (index, (marker, title, key, added, facts, placement)) in rows.iter().enumerate() {
-                ui.scope(|ui| {
+                let row = ui.scope(|ui| {
                     ui.set_width(text + design::L + action);
                     design::table_row(ui, &widths, design::L, |ui, cell| {
                         ui.spacing_mut().item_spacing.x = design::S;
@@ -5246,6 +5257,7 @@ impl Sessions {
                         }
                     });
                 });
+                design::register_row(ui, row.response.rect);
             }
         });
         if let Some((at, marker, key)) = read_at {
@@ -5338,7 +5350,7 @@ impl Sessions {
                 .selected_text(made.word())
                 .show_ui(ui, |ui| {
                     for (option, label) in &options {
-                        ui.selectable_value(&mut made, *option, *label);
+                        design::choice_value(ui, &mut made, *option, label);
                     }
                 });
             design::named(ui, &inner.response, "Recording view");
@@ -5400,7 +5412,7 @@ impl Sessions {
                     .icon(design::combo_icon)
                     .show_ui(ui, |ui| {
                         for (at, (time, _)) in reading.parts.iter().enumerate() {
-                            ui.selectable_value(&mut reading.part, at, time);
+                            design::choice_value(ui, &mut reading.part, at, time);
                         }
                     });
                 design::named(ui, &inner.response, "Go to a time");
@@ -5416,7 +5428,7 @@ impl Sessions {
                 }
             });
         }
-        ui.add_space(design::XS);
+        design::gap(ui, design::Gap::XS);
         egui::ScrollArea::vertical()
             .id_salt((
                 "recording_text",
@@ -5507,7 +5519,7 @@ impl Sessions {
                 });
                 reading.mark = None;
                 // A part fills several screens, so the way on is also where the reading ends.
-                ui.add_space(design::S);
+                design::gap(ui, design::Gap::S);
                 if reading.part + 1 < count
                     && Action::secondary("Go on to the next part")
                         .density(Density::Read)
@@ -5550,7 +5562,7 @@ impl Sessions {
         let banner_primary = self.banner_has_primary(settings, self.run_open);
         let recordings = self.recordings.clone();
         if recordings.is_empty() {
-            ui.add_space(design::M);
+            design::gap(ui, design::Gap::M);
             let here = self
                 .live
                 .as_ref()
@@ -5601,8 +5613,8 @@ impl Sessions {
                 });
                 let primary = recovery.or(destination);
                 for (index, recording) in recordings.iter().enumerate() {
-                    ui.add_space(design::S);
-                    ui.scope_builder(
+                    design::gap(ui, design::Gap::S);
+                    let row = ui.scope_builder(
                         egui::UiBuilder::new().id(("recording_row", &recording.path)),
                         |ui| {
                             self.recording_row(
@@ -5615,6 +5627,7 @@ impl Sessions {
                             );
                         },
                     );
+                    design::register_row(ui, row.response.rect);
                     self.markers(ui, recording, book);
                     // Each marker row ends in a rule already.
                     if recording.markers.is_empty() {
@@ -5624,10 +5637,6 @@ impl Sessions {
             });
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn delete_dialog(&mut self, ctx: &egui::Context) {
         let focus_id = egui::Id::new("delete_recording_default_focused");
         let Some(path) = self.confirm_delete.clone() else {
@@ -5644,7 +5653,7 @@ impl Sessions {
                 ))
                 .wrap(),
             );
-            ui.add_space(design::S);
+            design::gap(ui, design::Gap::S);
             design::dialog_actions(
                 ui,
                 |ui| {
@@ -6026,10 +6035,6 @@ impl Sessions {
     }
 
     /// The session page below its title and state line, above its message footer.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn session_body(
         &mut self,
         ui: &mut egui::Ui,
@@ -6127,7 +6132,7 @@ impl Sessions {
                 }
             });
         });
-        ui.add_space(design::XS);
+        design::gap(ui, design::Gap::XS);
         match shown {
             Tab::Plan if beside => {
                 let height = ui.available_height();
@@ -6384,7 +6389,7 @@ impl Sessions {
         {
             self.view = View::Notes;
         }
-        ui.add_space(design::S);
+        design::gap(ui, design::Gap::S);
         egui::ScrollArea::vertical()
             .id_salt("template_list")
             .auto_shrink([false, false])
@@ -6451,9 +6456,8 @@ impl Sessions {
         let Some(mut name) = self.new_template.take() else {
             return;
         };
-        ui.add_space(design::L);
-        design::group_label(ui, "New template");
-        ui.add_space(design::M);
+        design::heading(ui, design::Heading::Label("New template"));
+        design::gap(ui, design::Gap::M);
         // Round 27 FL2, SL1: the one inline creation layout. `Create template` follows the name
         // field on its line, the help stays under the field, and the kept line below holds quiet
         // `Cancel` at its start and the reason after it, so typing moves nothing.
@@ -6473,8 +6477,9 @@ impl Sessions {
                 egui::vec2(width, 0.0),
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| {
-                    design::text_field(
+                    design::labelled_field(
                         ui,
+                        TEMPLATE_NAME,
                         "Template name",
                         &mut name,
                         Some("Starts with the title line only."),
@@ -6676,20 +6681,16 @@ impl Sessions {
         });
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn folder_fields(&mut self, ui: &mut egui::Ui, locked: Option<&str>) {
         ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
         let response = ui
             .add_enabled_ui(locked.is_none(), |ui| {
-                let response = ui.add(
-                    egui::TextEdit::singleline(&mut self.folder_text)
-                        .desired_width(ui.available_width() - 2.0 * design::S)
+                let width = ui.available_width() - 2.0 * design::S;
+                let response = SESSION_FOLDER.single_line(ui, &mut self.folder_text, |edit| {
+                    edit.desired_width(width)
                         .min_size(egui::vec2(0.0, Density::Read.control()))
-                        .margin(egui::vec2(design::S, design::XS)),
-                );
+                        .margin(egui::vec2(design::S, design::XS))
+                });
                 design::named(ui, &response, "Folder");
                 response
             })
@@ -6733,8 +6734,13 @@ impl Sessions {
             return;
         };
         ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
-        ui.add_space(design::XS);
-        design::group_heading(ui, "Session folder", 0);
+        design::heading(
+            ui,
+            design::Heading::Group {
+                title: "Session folder",
+                count: 0,
+            },
+        );
         let changed = super::resolve(&campaign, &self.folder_text).ok() != self.folder.clone();
         // `folder_messages` scanned the folder this frame, before the pane's body.
         let files = self
@@ -6743,7 +6749,6 @@ impl Sessions {
             .unwrap_or_else(|| self.scan_folder_files());
         let move_counts = self.folder_move_counts(book, &files).unwrap_or_default();
         let has_files = !move_counts.is_empty();
-        ui.add_space(design::XS);
         let blocked = if self.live.is_some() {
             Some("Stop the recording first.")
         } else if self.job.is_some() {

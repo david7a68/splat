@@ -555,7 +555,7 @@ fn plan_row_with(
     mut summary: impl FnMut(&mut egui::Ui),
     mut action: impl FnMut(&mut egui::Ui),
 ) {
-    ui.horizontal_top(|ui| {
+    let row = ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = design::S;
         // Round 27 FL4: the lead is centred in its `XL` slot, which is where a title's first
         // line is centred: a fight's link in its `XL` target, a scene's line in its `XL` band
@@ -612,6 +612,7 @@ fn plan_row_with(
             ui.expand_to_include_rect(action_rect.union(action_ui.min_rect()));
         });
     });
+    design::register_row(ui, row.response.rect);
 }
 
 /// A paused run needs its state here; the whole saved-run record stays in Encounters.
@@ -921,13 +922,9 @@ fn reveal_opened_played(
 }
 
 /// The rule below a row. Returns its height, which the scenes' fold counts with the row's.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn plan_rule(ui: &mut egui::Ui) -> f32 {
     let top = ui.cursor().top();
-    ui.add_space(design::S);
+    design::gap(ui, design::Gap::S);
     design::rule(ui);
     ui.cursor().top() - top
 }
@@ -940,6 +937,7 @@ struct PlanMenu<'a> {
     new: &'a str,
     blocked: Option<&'a str>,
     find: &'a str,
+    field: design::FieldId,
     hint: &'a str,
 }
 
@@ -987,8 +985,10 @@ fn plan_menu(
                 wrapped_words(ui, Type::Small, reason, colors().muted);
             }
             if names.len() > FIGHT_SEARCH_FROM {
-                let field =
-                    design::search_field(ui, menu.find, search, menu.hint, FIGHT_MENU_WIDTH);
+                let field = menu
+                    .field
+                    .search(ui, menu.find, search, menu.hint, FIGHT_MENU_WIDTH)
+                    .field;
                 if std::mem::take(focus) {
                     field.request_focus();
                 }
@@ -1055,7 +1055,7 @@ fn event_fields(ui: &mut egui::Ui, event: &mut timeline::Event) -> bool {
     reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
 )]
 fn place_field(ui: &mut egui::Ui, event: &mut timeline::Event) -> bool {
-    ui.add_space(design::XS);
+    design::gap(ui, design::Gap::XS);
     design::text_field(ui, "Where", &mut event.place, None, None).changed()
 }
 
@@ -2401,10 +2401,6 @@ impl Sessions {
 
     /// The open Travel row's checks: the table, **How long**, the lines and the last results.
     /// Returns the act the DM asked for, whether the length changed, and which Undo was pressed.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn travel_block(
         &mut self,
         ui: &mut egui::Ui,
@@ -2417,7 +2413,7 @@ impl Sessions {
         let travel = &mut self.travel;
         let focus = std::mem::take(&mut travel.focus_length);
         let mut undo = TravelUndo::None;
-        ui.add_space(design::XS);
+        design::gap(ui, design::Gap::XS);
         // Round 27 FE7: **How long** and its range come first, so the checks' results follow
         // their table directly, as on Timeline. The plan line's result is in the plan's footer.
         let typed = length_draft.words(event);
@@ -2429,7 +2425,6 @@ impl Sessions {
         let (length, changed) = design::field(ui, "How long", help.as_deref(), None, |ui| {
             checks::length_input(ui, length_draft, event, "", focus)
         });
-        ui.add_space(design::M);
         let view = checks::View {
             event,
             start,
@@ -3084,7 +3079,7 @@ impl Sessions {
                 let mut next_action = None;
                 for (at, event) in book.events.iter_mut().enumerate() {
                     if let Some((removed_at, words)) = &removed_row && *removed_at == at {
-                        ui.add_space(design::S);
+                        design::gap(ui, design::Gap::S);
                         undo_row_remove |= design::undo_message(ui, Tone::Success, words, "Undo remove");
                     }
                     if !event.is_in(session) { continue; }
@@ -3174,7 +3169,7 @@ impl Sessions {
                                 });
                                 if let Some(run) = ended.filter(|_| on_row) {
                                     if listed {
-                                        ui.add_space(design::S);
+                                        design::gap(ui, design::Gap::S);
                                         design::status(ui, Status { icon: icons::OK, word: "In notes", color: c.document.saved });
                                     } else if Action::quiet(ADD_REWARDS).name(&format!("Add rewards: {label}"))
                                         .density(Density::Read).show(ui).clicked() {
@@ -3184,7 +3179,7 @@ impl Sessions {
                                 if !running && event.run.is_none() {
                                     let linked = body.contains(&format!("^{}", event.id));
                                     if linked {
-                                        ui.add_space(design::S);
+                                        design::gap(ui, design::Gap::S);
                                         design::status(ui, Status { icon: icons::OK, word: "In notes", color: c.document.saved });
                                     }
                                     else if Action::quiet("Add to notes").name(&format!("Add to notes: {label}"))
@@ -3212,7 +3207,7 @@ impl Sessions {
                                     if taken != checks::Taken::Nothing { length_taken = taken; }
                                     if let Some(act) = act { travel_act = Some((event.id.clone(), act)); }
                                     if undo != TravelUndo::None { travel_undo = (undo, event.id.clone()); }
-                                    ui.add_space(design::XS);
+                                    design::gap(ui, design::Gap::XS);
                                 }
                                 changed |= event_fields(ui, event);
                                 if let Some(action) = rest_ruling(ui, event, ruling_undo.as_ref() == Some(&event.id)) {
@@ -3224,7 +3219,7 @@ impl Sessions {
                         }
                         details_above += ui.cursor().top() - details_top;
                         if self.row_notice == Some((session, at)) && self.deleted_run.is_some() {
-                            ui.add_space(design::S);
+                            design::gap(ui, design::Gap::S);
                             self.deleted_run_in_row(ui);
                         }
                         closed += plan_rule(ui);
@@ -3237,7 +3232,7 @@ impl Sessions {
                     reveal.after(ui, Some(&event.id), row.response.rect);
                 }
                 if let Some((at, words)) = &removed_row && *at >= event_count {
-                    ui.add_space(design::S);
+                    design::gap(ui, design::Gap::S);
                     undo_row_remove |= design::undo_message(ui, Tone::Success, words, "Undo remove");
                 }
                 let days = self.planned_days(book, session, plan);
@@ -3306,7 +3301,7 @@ impl Sessions {
                         });
                         closed += ui.cursor().top() - top;
                         if self.row_notice == Some((session, event_count + position)) && self.deleted_run.is_some() {
-                            ui.add_space(design::S);
+                            design::gap(ui, design::Gap::S);
                             self.deleted_run_in_row(ui);
                         }
                         let details_top = ui.cursor().top();
@@ -3354,11 +3349,11 @@ impl Sessions {
                             // Name each member left out, its base and its line, beside Edit group, each
                             // in its own fault's tone; then the group's own reason, as a warning.
                             for warning in &group.warnings {
-                                ui.add_space(design::XS);
+                                design::gap(ui, design::Gap::XS);
                                 design::small_message(ui, warning.tone(), warning);
                             }
                             for reason in group.own_problems() {
-                                ui.add_space(design::XS);
+                                design::gap(ui, design::Gap::XS);
                                 design::small_message(ui, Tone::Warning, reason);
                             }
                         }, |ui| {
@@ -3598,15 +3593,11 @@ impl Sessions {
     }
 
     /// The scene act's words under the place where the DM acted, while they show there.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn row_fault(&self, ui: &mut egui::Ui, place: Place, shown: Shown) {
         if let Some(fault) = &self.scenes.fault
             && shown.fault == Some(place)
         {
-            ui.add_space(design::XS);
+            design::gap(ui, design::Gap::XS);
             design::message(ui, Tone::Warning, &fault.words);
         }
     }
@@ -3698,10 +3689,6 @@ impl Sessions {
 
     /// `Removed “…” from tonight.` with `Undo remove`, at `place`, while the note is as the
     /// removal left it. A finished change: the success tone.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn removed_scene_message(&self, ui: &mut egui::Ui, place: Place, act: &mut Option<SceneAct>) {
         let Some((_, words, undo)) = &self.scenes.removed else {
             return;
@@ -3709,7 +3696,7 @@ impl Sessions {
         if self.draft.as_ref().is_none_or(|draft| !undo.live(draft)) {
             return;
         }
-        ui.add_space(design::S);
+        design::gap(ui, design::Gap::S);
         if design::undo_message(
             ui,
             Tone::Success,
@@ -3767,10 +3754,6 @@ impl Sessions {
     /// `Scene`'s field at the end of the plan. Enter adds a scene and keeps the field open for
     /// the next; Escape clears and closes it. What the field did shows directly under it while
     /// it is open, so the field never moves for its own result.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn scene_field(
         &mut self,
         ui: &mut egui::Ui,
@@ -3783,7 +3766,7 @@ impl Sessions {
             return;
         };
         let reveal = state.focus;
-        ui.add_space(design::S);
+        design::gap(ui, design::Gap::S);
         let result = design::add_field(
             ui,
             state,
@@ -3834,10 +3817,6 @@ impl Sessions {
     /// The Scene field's fault, and `Scene added to tonight.` with `Undo scene`, under the open
     /// field, so the field never moves for its own result. With `reveal`, the field's rectangle,
     /// the field and its words scroll into view together.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn field_result(
         &self,
         ui: &mut egui::Ui,
@@ -3850,7 +3829,7 @@ impl Sessions {
             && let Some(undo) = &self.scenes.added
             && self.draft.as_ref().is_some_and(|draft| undo.live(draft))
         {
-            ui.add_space(design::XS);
+            design::gap(ui, design::Gap::XS);
             if design::undo_message(ui, Tone::Success, "Scene added to tonight.", "Undo scene") {
                 *act = Some(SceneAct::UndoAdd);
             }
@@ -3941,10 +3920,6 @@ impl Sessions {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn removed_fight_message(&mut self, ui: &mut egui::Ui, session: Option<Uuid>, position: usize) {
         let Some((id, at, name, undo)) = &self.removed_fight else {
             return;
@@ -3955,7 +3930,7 @@ impl Sessions {
         {
             return;
         }
-        ui.add_space(design::S);
+        design::gap(ui, design::Gap::S);
         if design::undo_message(
             ui,
             Tone::Success,
@@ -4151,6 +4126,7 @@ impl Sessions {
             new: "New encounter",
             blocked: plan.blocked,
             find: "Find a fight",
+            field: crate::field_id!("find_a_fight"),
             hint: "Find a fight…",
         };
         match plan_menu(
@@ -4180,6 +4156,7 @@ impl Sessions {
             new: "New group",
             blocked: plan.group_blocked,
             find: "Find a group",
+            field: crate::field_id!("find_a_group"),
             hint: "Find a group…",
         };
         match plan_menu(
