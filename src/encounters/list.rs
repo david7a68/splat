@@ -95,6 +95,10 @@ fn menu_icon(word: &str) -> Option<&'static str> {
 /// words, after the quiet action's padding and any icon, and it ends the quiet action's padding
 /// before the menu's edge. The menu asks for its width with both, so the note keeps the menu's
 /// right margin and wraps before it.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(super) fn choice_note(ui: &mut egui::Ui, word: &str, note: Option<&str>) {
     if note.is_none() {
         return;
@@ -216,6 +220,10 @@ pub(super) fn side_control(ui: &mut egui::Ui, name: &str, side: &mut String, cho
     ui.data_mut(|data| data.insert_temp(id, other));
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn heading(ui: &mut egui::Ui, word: &str, count: usize) {
     design::group_heading(ui, word, count);
 }
@@ -239,6 +247,10 @@ fn section(
     }
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(super) fn list_row(
     ui: &mut egui::Ui,
     id: impl std::hash::Hash,
@@ -522,6 +534,10 @@ pub(crate) const UNFINISHED_UNREAD: &str =
 pub(crate) const ENDED_UNREAD: &str =
     "Splat cannot read the run folder, so it cannot show ended fights.";
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(super) fn in_progress_list(
     ui: &mut egui::Ui,
     page: &history::Arranged<'_>,
@@ -616,6 +632,10 @@ fn has_saved_run(page: &history::Arranged<'_>, row: &history::ReadyRow<'_>) -> b
         })
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(super) fn ready_list(
     ui: &mut egui::Ui,
     page: &history::Arranged<'_>,
@@ -746,6 +766,10 @@ pub(super) struct Reading<'a> {
 }
 
 /// History. Returns the screen y of the opened run's clean top edge, when a run is open there.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(super) fn history_list(
     ui: &mut egui::Ui,
     page: &history::Arranged<'_>,
@@ -877,6 +901,10 @@ pub(super) fn history_list(
 /// An ended fight, read in place. Returns true when the DM chooses to go on with it. `not_last`
 /// says why this fight cannot go on, when it is not the fight that was played last: then its
 /// sentence stands where the control would be.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn history_summary(
     ui: &mut egui::Ui,
     summary: &FightSummary,

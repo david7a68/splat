@@ -161,7 +161,8 @@ fn pane(ui: &mut Ui, room: f32, low: bool, current: &Cell<usize>, setup: Setup) 
     ui.scope_builder(egui::UiBuilder::new().max_rect(pane), |ui| {
         ScrollColumn::new("test_pane").show(ui, |ui| {
             if low {
-                ui.add_space(ui.max_rect().height() - 2.0 * Density::Read.control());
+                let room = ui.max_rect().height() - 2.0 * Density::Read.control();
+                ui.allocate_exact_size(vec2(0.0, room), Sense::hover());
             }
             let shown = dropdown(ui, current, setup);
             out = Some(Shown {
@@ -689,7 +690,7 @@ fn a_rich_tip_shows_on_focus_and_on_hover() {
     let target = Cell::new(Rect::NOTHING);
     let draw = |events| {
         frame(&ctx, vec2(1200.0, 640.0), events, |ui| {
-            let (_, rect) = ui.allocate_space(vec2(120.0, 28.0));
+            let (rect, _) = ui.allocate_exact_size(vec2(120.0, 28.0), Sense::hover());
             let response = ui.interact(rect, id, Sense::click());
             target.set(rect);
             let _ = rich_tip(
@@ -744,7 +745,7 @@ fn a_drag_carries_its_payload_and_its_ghost() {
         let grip = Cell::new(Rect::NOTHING);
         let draw = |events| {
             frame(&ctx, vec2(1200.0, 640.0), events, |ui| {
-                let (_, rect) = ui.allocate_space(vec2(160.0, 28.0));
+                let (rect, _) = ui.allocate_exact_size(vec2(160.0, 28.0), Sense::hover());
                 let response = ui.interact(rect, id, Sense::click_and_drag());
                 grip.set(rect);
                 drag_source(ui, &response, payload, Ghost::new("+", "Cinder Wolf"));
@@ -858,9 +859,9 @@ fn a_known_size_sizes_the_viewer_before_the_texture_loads() {
     }
 }
 
-/// Package X's `design::choice` and this part's `choice_row` draw the same selected row. When
-/// both exist, the one who lands second makes them one part (keeping the rows' wrap): this test
-/// reads `src/design/` with `syn` and fails while there are two.
+/// One part draws a chosen row: package X's `design::choice` (and its wrapping form,
+/// `choice_wrapped`, which the drop-down uses). This test reads `src/design/` with `syn` and
+/// fails if a private copy (`choice_row`) comes back beside it.
 #[test]
 fn one_choice_row() {
     let mut free_fns = Vec::new();
@@ -878,13 +879,12 @@ fn one_choice_row() {
         }
     }
     assert!(
-        free_fns.iter().any(|name| name == "choice_row"),
-        "the scan sees the copy"
+        free_fns.iter().any(|name| name == "choice"),
+        "the scan sees the part"
     );
     assert!(
-        !(free_fns.iter().any(|name| name == "choice")
-            && free_fns.iter().any(|name| name == "choice_row")),
-        "`design::choice` and `popups::choice_row` both exist: make them one part (rows wrap)"
+        !free_fns.iter().any(|name| name == "choice_row"),
+        "a copy of `design::choice` (`choice_row`) is back: use `choice` or `choice_wrapped`"
     );
 }
 

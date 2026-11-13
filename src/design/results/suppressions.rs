@@ -30,6 +30,10 @@ pub(crate) enum Ban {
     /// Package K: `RowIndex::from_data` and `TextKey::from_data`, row keys a reviewer reads; the
     /// number of uses in the item.
     RowKey(u16),
+    /// Package X: raw space, raw selectable choices, `search_field`, and the headings that do not
+    /// add their own space (`clippy.toml`, section "Package X"). The number is how many of those
+    /// calls the item holds, counted in its tokens as `Layout` is.
+    Extras(u16),
     /// Package P: `Footer::show_by_hand` (staged out: use `Footer::pane`) and `Fills::because`
     /// (the pane's one named escape), and the room-centred layouts; the number of calls in the
     /// item, counted in its tokens as `Layout` is.
@@ -51,7 +55,7 @@ impl Ban {
             Self::Order => &["outcome_at"],
             Self::Body => &["banner", "row_fault", ".show("],
             // Counted in the item's tokens instead (`check`).
-            Self::Layout(_) | Self::RowKey(_) | Self::Pane(_) => &[],
+            Self::Layout(_) | Self::RowKey(_) | Self::Extras(_) | Self::Pane(_) => &[],
         }
     }
 }
@@ -248,14 +252,15 @@ pub(crate) fn check(files: &[(String, String)], table: &[(&str, &str, &[Ban])]) 
                     let mut holds = bans
                         .iter()
                         .any(|ban| ban.calls().iter().any(|call| suppression.body.contains(call)));
-                    // Package K: the row's number of calls is the item's, exactly.
+                    // Packages K and X: the row's number of calls is the item's, exactly.
                     use crate::design::layout::bans::{Group, count};
-                    for group in [Group::Layout, Group::RowKey, Group::Pane] {
+                    for group in [Group::Layout, Group::RowKey, Group::Extras, Group::Pane] {
                         let listed = bans
                             .iter()
                             .find_map(|ban| match (ban, group) {
                                 (Ban::Layout(n), Group::Layout)
                                 | (Ban::RowKey(n), Group::RowKey)
+                                | (Ban::Extras(n), Group::Extras)
                                 | (Ban::Pane(n), Group::Pane) => Some(usize::from(*n)),
                                 _ => None,
                             })
@@ -438,5 +443,26 @@ mod tests {
         let on_macro =
             "#[allow(clippy::disallowed_methods)]\nmacro_rules! screens {\n    () => {};\n}\n";
         assert_eq!(check(&file(on_macro), &[]).len(), 1, "{on_macro}");
+        // Package X: a raw space counts as `Extras`, apart from K's calls; a second one fails.
+        let space = "    ui.add_space(8.0);\n";
+        let mixed = item(&format!("{raw}{space}"));
+        assert!(
+            check(
+                &file(&mixed),
+                &[("src/new.rs", "draw", &[Ban::Layout(1), Ban::Extras(1)])]
+            )
+            .is_empty()
+        );
+        let faults = check(&file(&mixed), &[("src/new.rs", "draw", &[Ban::Layout(1)])]);
+        assert!(
+            faults.len() == 1 && faults[0].contains("holds 1 Extras calls; its row lists 0"),
+            "{faults:?}"
+        );
+        let two = item(&format!("{space}{space}"));
+        let faults = check(&file(&two), &[("src/new.rs", "draw", &[Ban::Extras(1)])]);
+        assert!(
+            faults.len() == 1 && faults[0].contains("holds 2 Extras calls; its row lists 1"),
+            "{faults:?}"
+        );
     }
 }

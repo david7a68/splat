@@ -70,6 +70,10 @@ impl Links for NoLinks {
     }
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn reading_view(ui: &mut egui::Ui, reading: &Reading, links: &dyn Links) -> Option<usize> {
     ui.add_space(design::M);
     let mut selected = None;
@@ -217,6 +221,10 @@ pub(crate) fn show_run(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn show_inner(
     ui: &mut egui::Ui,
     name: &str,
@@ -297,6 +305,10 @@ pub(crate) const WIDE_READER: f32 = design::READER_MEASURE + design::XL + REFERE
 /// What the entry says. `styled` is the entry when it reads as a styled stat block.
 /// `lead_gap` is false when nothing above needs a gap before the first prose.
 #[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn content(
     ui: &mut egui::Ui,
     entry: Option<&Entry>,
@@ -341,6 +353,10 @@ fn content(
 }
 
 /// What is rarely wanted: where the entry comes from, and how it is built.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn reference(
     ui: &mut egui::Ui,
     entry: Option<&Entry>,

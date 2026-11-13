@@ -24,6 +24,10 @@ const DICE_RESULT_WIDTH: f32 = 32.0;
 impl Run {
     /// The entry controls have one fixed home, labelled with the row they act on, so
     /// no row moves when the selection changes. Typing needs no pointer travel at all.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     pub(super) fn dock(&mut self, ui: &mut egui::Ui) {
         let c = colors();
         let index = self.selected;

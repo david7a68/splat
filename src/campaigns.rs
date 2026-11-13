@@ -727,6 +727,10 @@ impl Campaigns {
     }
 
     /// The active campaign's folder and D&D Beyond link.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     pub fn show_active(
         &mut self,
         ui: &mut egui::Ui,
@@ -809,6 +813,10 @@ impl Campaigns {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn remove_dialog(&mut self, ctx: &egui::Context) {
         let Some(id) = self.confirm_remove else {
             return;
@@ -901,6 +909,10 @@ impl Campaigns {
     }
 
     /// The campaign list. Which exist, where, and how each is linked.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
@@ -1251,6 +1263,10 @@ impl Campaigns {
 
     /// Edit the active campaign's details from the page that links to them.
     /// Draws the details form while it is open, and says whether it drew it (with its primary save).
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     pub fn show_form_if_editing(&mut self, ui: &mut egui::Ui) -> bool {
         let open = self.editing.is_some();
         if open {

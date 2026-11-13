@@ -1389,6 +1389,10 @@ impl Run {
     }
 
     /// The panel's action tiles, as one line above the dock while the panel is hidden.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     pub(super) fn compact_actions(&mut self, ui: &mut egui::Ui) {
         let row = self.panel_row();
         let chips = self.chips(row);

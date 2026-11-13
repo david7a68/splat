@@ -1,7 +1,7 @@
 //! Every token and component, in each state, for the `gallery` visual scenario.
 // It shows the old message functions until Wave 3 makes them private.
 #![allow(deprecated)]
-use super::{reader as style, *};
+use super::{extras::space, reader as style, *};
 use eframe::egui::{self, Color32};
 
 fn swatch(ui: &mut egui::Ui, name: &str, color: Color32) {
@@ -35,8 +35,7 @@ fn swatches(ui: &mut egui::Ui, title: &str, list: &[(&str, Color32)]) {
 }
 
 fn design_group(ui: &mut egui::Ui, title: &str) {
-    ui.add_space(XS);
-    group_heading(ui, title, 0);
+    heading(ui, Heading::Group { title, count: 0 });
 }
 
 pub fn tokens(ui: &mut egui::Ui) {
@@ -187,11 +186,11 @@ pub fn components(ui: &mut egui::Ui) {
         let _ = icon_button(ui, icons::CLOSE, "Close");
         let _ = link(ui, "A link");
         let _ = small_link(ui, "A small link");
-        let mut choice = 1;
-        segmented(ui, &mut choice, &[(0, "Read"), (1, "Edit"), (2, "Log")]);
+        let mut page = 1;
+        segmented(ui, &mut page, &[(0, "Read"), (1, "Edit"), (2, "Log")]);
         let _ = split_action(ui, Action::secondary("Split"), "Other ways", |ui| {
-            let _ = ui.selectable_label(true, "The default");
-            let _ = ui.selectable_label(false, "Another way");
+            let _ = choice(ui, true, "The default");
+            let _ = choice(ui, false, "Another way");
         });
     });
     // The popup parts (package K2): a drop-down, a tip of typed lines, a drag source.
@@ -253,7 +252,14 @@ pub fn components(ui: &mut egui::Ui) {
             );
         });
         ui.vertical(|ui| {
-            search_field(ui, "Search", &mut empty, "Search…", 200.0);
+            let mut query = "Wolf".to_owned();
+            let _ = crate::field_id!("gallery_search").search(
+                ui,
+                "Search",
+                &mut query,
+                "Search…",
+                200.0,
+            );
             number_field(ui, "Amount", &mut amount, "Amount", 64.0, 30.0);
             let mut quantity = 3;
             stepper(ui, "Quantity", &mut quantity, 0..=99);
@@ -277,7 +283,13 @@ pub fn components(ui: &mut egui::Ui) {
     });
     ui.scope(|ui| {
         ui.set_max_width(ui.available_width().min(LIST_MEASURE));
-        group_heading(ui, "In progress", 1);
+        heading(
+            ui,
+            Heading::Group {
+                title: "In progress",
+                count: 1,
+            },
+        );
         ui.horizontal(|ui| {
             ui.vertical(|ui| {
                 ui.label(Type::Name.rich(ui, "Bridge Ambush"));
@@ -298,7 +310,13 @@ pub fn components(ui: &mut egui::Ui) {
                 let _ = Action::secondary("Resume").show(ui);
             });
         });
-        group_heading(ui, "Ready to run", 2);
+        heading(
+            ui,
+            Heading::Group {
+                title: "Ready to run",
+                count: 2,
+            },
+        );
         ui.horizontal(|ui| {
             ui.vertical(|ui| {
                 ui.label(Type::Name.rich(ui, "Bridge Ambush"));
@@ -333,7 +351,7 @@ pub fn components(ui: &mut egui::Ui) {
         let _ = Action::secondary("Packages")
             .blocked(Some("Save or discard to change packages."))
             .show(ui);
-        ui.add_space(L);
+        space(ui, L);
         blocked_reason(ui, Some("Paste your session cookie first."));
         let _ = Action::secondary("Connect")
             .blocked(Some("Paste your session cookie first."))
@@ -523,7 +541,7 @@ pub fn messages(ui: &mut egui::Ui) {
                 ("Range".to_owned(), "150 feet".to_owned()),
             ],
         );
-        style::section_heading(ui, "Section heading");
+        heading(ui, Heading::Section("Section heading"));
         style::markdown(
             ui,
             "| Ability | Score | Modifier |\n| --- | --- | --- |\n| Strength | 18 | +4 |\n| Dexterity | 10 | +0 |\n",

@@ -24,6 +24,10 @@ pub(super) fn lists_features(entry: &Entry) -> bool {
 
 /// Only recognize the imported core-traits block. Authored text and any trailing
 /// source material stay in the ordinary Markdown reader.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(super) fn show_source(ui: &mut egui::Ui, source: &str, name: &str) -> bool {
     const LABELS: &[&str] = &[
         "Primary Ability",
@@ -228,6 +232,10 @@ fn related(entry: &Entry, links: &dyn Links) -> Vec<(usize, String)> {
     .collect()
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(super) fn show_features(ui: &mut egui::Ui, entry: &Entry, links: &dyn Links) -> Option<usize> {
     let features = features(entry, links);
     let related = related(entry, links);

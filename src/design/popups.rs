@@ -10,7 +10,7 @@
 //!
 //! Each part's tests (`popups/tests.rs`) prove its rule once. A caller that uses a part, with no
 //! layer, `Area` or raw interaction of its own, has no duty left for that rule.
-use std::{any::Any, borrow::Cow, marker::PhantomData, sync::Arc};
+use std::{any::Any, borrow::Cow, marker::PhantomData};
 
 use eframe::egui::{
     self, Align, Align2, Id, Layout, Rect, RectAlign, Response, Sense, Ui, Vec2, WidgetInfo,
@@ -209,38 +209,6 @@ fn list_frame(ui: &Ui) -> egui::Frame {
     egui::Frame::popup(ui.style()).inner_margin(0.0)
 }
 
-/// The space above and below a row's words, so a one-line row is a `Read` control.
-fn row_pad() -> f32 {
-    ((Density::Read.control() - Type::Body.line()) / 2.0).max(XS)
-}
-
-/// A row's words, wrapped inside `width`: the label in `Body`, and a blocked choice's reason in
-/// `Small` below it.
-fn row_galleys(
-    ui: &Ui,
-    label: &str,
-    reason: Option<&str>,
-    width: f32,
-    color: egui::Color32,
-) -> (Arc<egui::Galley>, Option<Arc<egui::Galley>>) {
-    let c = colors();
-    let room = (width - 2.0 * S - ICON_SLOT).max(1.0);
-    let wrap = |words: &str, font: egui::FontId, color| {
-        ui.fonts_mut(|fonts| fonts.layout(words.to_owned(), font, color, room))
-    };
-    (
-        wrap(label, Type::Body.font(ui), color),
-        reason.map(|reason| wrap(reason, Type::Small.font(ui), c.muted)),
-    )
-}
-
-/// A row's height in `width`: a `Read` control, or its wrapped words and pad.
-fn row_height(ui: &Ui, label: &str, reason: Option<&str>, width: f32) -> f32 {
-    let (label, reason) = row_galleys(ui, label, reason, width, colors().text);
-    let words = label.size().y + reason.map_or(0.0, |reason| reason.size().y);
-    (words + 2.0 * row_pad()).max(Density::Read.control())
-}
-
 impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
     pub fn show(self, ui: &mut Ui, current: &mut T) -> DropdownResponse {
         let c = colors();
@@ -252,7 +220,7 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
         let control = self.id.id();
         let list = control.with("list");
         let was_open_id = list.with("was_open");
-        let (_, rect) = ui.allocate_space(vec2(width, height));
+        let (rect, _) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
         let sense = if enabled {
             Sense::click()
         } else {
@@ -393,13 +361,14 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
         let mut places = Vec::with_capacity(self.choices.len() + 1);
         let mut top = 0.0;
         for entry in &self.choices {
-            let height = row_height(ui, &entry.label, entry.blocked, rows_width);
+            let height =
+                super::extras::choice_wrapped_height(ui, &entry.label, entry.blocked, rows_width);
             places.push((top, height));
             top += height;
         }
         if let Some(word) = self.command {
             top += HAIRLINE_WIDTH;
-            let height = row_height(ui, word.as_str(), None, rows_width);
+            let height = super::extras::choice_wrapped_height(ui, word.as_str(), None, rows_width);
             places.push((top, height));
             top += height;
         }
@@ -442,7 +411,12 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
                 column.show(ui, |ui| {
                     for (at, entry) in self.choices.iter().enumerate() {
                         let selected = entry.value == *current;
-                        let row = choice_row(ui, selected, &entry.label, entry.blocked);
+                        let row = super::extras::choice_wrapped(
+                            ui,
+                            selected,
+                            &entry.label,
+                            entry.blocked,
+                        );
                         // The list opens with the keyboard on the chosen row.
                         if !was_open && selected && entry.blocked.is_none() {
                             row.request_focus();
@@ -457,7 +431,7 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
                     }
                     if let Some(word) = self.command {
                         rule(ui);
-                        let row = choice_row(ui, false, word.as_str(), None);
+                        let row = super::extras::choice_wrapped(ui, false, word.as_str(), None);
                         if newly_focused(ui, &row, revealed) {
                             reveal = Some((row.id, self.choices.len()));
                         }
@@ -505,75 +479,6 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
 /// (a popup's first pass only sizes it).
 fn newly_focused(ui: &Ui, row: &Response, revealed: Option<Id>) -> bool {
     row.has_focus() && revealed != Some(row.id) && !ui.is_sizing_pass()
-}
-
-/// One row of a list: a check mark when it is the chosen one, then its words, wrapped inside
-/// the row (never cut), and a blocked choice's reason below them; a blocked row takes no press
-/// and no keyboard focus.
-///
-/// Package X's `design::choice` (branch `iter-28-X-extras`) draws a selected choice with its
-/// check mark too, but cuts its words. The test `one_choice_row` fails when both exist, so
-/// whoever lands second makes them one part.
-fn choice_row(ui: &mut Ui, selected: bool, label: &str, blocked: Option<&str>) -> Response {
-    let c = colors();
-    let width = ui.available_width();
-    let color = if blocked.is_some() { c.muted } else { c.text };
-    let (words, reason) = row_galleys(ui, label, blocked, width, color);
-    let height = row_height(ui, label, blocked, width);
-    let sense = if blocked.is_some() {
-        Sense::hover()
-    } else {
-        Sense::click()
-    };
-    let (rect, response) = ui.allocate_exact_size(vec2(width, height), sense);
-    response.widget_info(|| {
-        WidgetInfo::selected(
-            WidgetType::SelectableLabel,
-            blocked.is_none() && ui.is_enabled(),
-            selected,
-            label,
-        )
-    });
-    if let Some(reason) = blocked {
-        ui.ctx()
-            .accesskit_node_builder(response.id, |node| node.set_description(reason));
-    }
-    if ui.is_rect_visible(rect) {
-        let fill = if blocked.is_some() {
-            None
-        } else if response.is_pointer_button_down_on() {
-            Some(c.selected)
-        } else if response.hovered() {
-            Some(c.hover)
-        } else {
-            None
-        };
-        if let Some(fill) = fill {
-            ui.painter()
-                .rect_filled(rect, egui::CornerRadius::same(RADIUS_CONTROL as u8), fill);
-        }
-        let top = rect.top() + row_pad();
-        if selected {
-            ui.painter().text(
-                pos2(rect.left() + S, top + Type::Body.line() / 2.0),
-                Align2::LEFT_CENTER,
-                icons::OK,
-                Type::Body.font(ui),
-                c.accent,
-            );
-        }
-        let left = rect.left() + S + ICON_SLOT;
-        let below = words.size().y;
-        ui.painter().galley(pos2(left, top), words, color);
-        if let Some(reason) = reason {
-            ui.painter()
-                .galley(pos2(left, top + below), reason, c.muted);
-        }
-        if response.has_focus() {
-            focus_ring(ui, rect);
-        }
-    }
-    response
 }
 
 /// One line of a [`rich_tip`]. Typed, so the tip's type and colours are the part's.
