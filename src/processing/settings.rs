@@ -361,6 +361,10 @@ impl ProcessingSettings {
             .map(|error| format!("These settings were not saved. {error}"));
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn key_row(&mut self, ui: &mut egui::Ui, slot: KeySlot, label: &str) {
         let (tx, ctx) = (
             self.replies.as_ref().map(|(tx, _)| tx.clone()),
@@ -375,29 +379,8 @@ impl ProcessingSettings {
             KeySlot::Speech => &self.config.speech_key_for,
             KeySlot::Llm => &self.config.llm_key_for,
         };
-        fn service_name(saved_for: &str) -> &str {
-            if saved_for.contains("api.openai.com") {
-                "OpenAI"
-            } else if saved_for.contains("anthropic.com") {
-                "Anthropic"
-            } else if saved_for.contains("groq.com") {
-                "Groq"
-            } else if saved_for.contains("googleapis.com") {
-                "Gemini"
-            } else if saved_for.contains("openrouter.ai") {
-                "OpenRouter"
-            } else {
-                saved_for
-                    .trim_start_matches("https://")
-                    .trim_start_matches("http://")
-                    .split('/')
-                    .next()
-                    .filter(|s| !s.is_empty())
-                    .unwrap_or("this service")
-            }
-        }
-        let owner = service_name(saved_for);
-        let target = service_name(match slot {
+        let owner = key_service_name(saved_for);
+        let target = key_service_name(match slot {
             KeySlot::Speech => &self.config.speech_url,
             KeySlot::Llm => &self.config.llm_url,
         });
@@ -522,6 +505,10 @@ impl ProcessingSettings {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn input_section(&mut self, ui: &mut egui::Ui) {
         let heading = ui
             .scope(|ui| design::group_heading(ui, "Recording", 0))
@@ -634,6 +621,10 @@ impl ProcessingSettings {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn speech_section(&mut self, ui: &mut egui::Ui) {
         design::group_heading(ui, "Speech service", 0);
         design::help(
@@ -704,6 +695,10 @@ impl ProcessingSettings {
         self.key_row(ui, KeySlot::Speech, "Speech API key");
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn llm_section(&mut self, ui: &mut egui::Ui) {
         design::group_heading(ui, "Transcript and summary", 0);
         design::help(
@@ -878,5 +873,28 @@ impl ProcessingSettings {
                 design::message(ui, Tone::Info, &words);
             });
         }
+    }
+}
+
+/// The service a key was saved for, by its address.
+fn key_service_name(saved_for: &str) -> &str {
+    if saved_for.contains("api.openai.com") {
+        "OpenAI"
+    } else if saved_for.contains("anthropic.com") {
+        "Anthropic"
+    } else if saved_for.contains("groq.com") {
+        "Groq"
+    } else if saved_for.contains("googleapis.com") {
+        "Gemini"
+    } else if saved_for.contains("openrouter.ai") {
+        "OpenRouter"
+    } else {
+        saved_for
+            .trim_start_matches("https://")
+            .trim_start_matches("http://")
+            .split('/')
+            .next()
+            .filter(|s| !s.is_empty())
+            .unwrap_or("this service")
     }
 }

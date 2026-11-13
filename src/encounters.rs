@@ -1924,6 +1924,10 @@ fn missing_creature_mark(
 
 /// A DM's notes in an editor. Every notes field has the same inner margin, and its frame ends at
 /// the right edge of the column it is in.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn notes_field(text: &mut String, rows: usize) -> egui::TextEdit<'_> {
     egui::TextEdit::multiline(text)
         .desired_rows(rows)
@@ -3995,7 +3999,7 @@ impl Encounters {
     /// numbers a DM most often changes have fields of their own.
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
     )]
     fn creature_pane(ui: &mut egui::Ui, editor: &mut CreatureEditor) -> Option<CreatureStep> {
         if editor.recovery.change.is_some() {
@@ -4711,7 +4715,7 @@ impl Encounters {
 
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
     )]
     fn ledger_view(
         &mut self,
@@ -5125,6 +5129,10 @@ impl Encounters {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn editor_view(
         &mut self,
         ui: &mut egui::Ui,
@@ -5805,6 +5813,10 @@ impl Encounters {
         Self::creature_search_with_summary(ui, creatures, search, focus_search, peek, roster, "")
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn creature_search_with_summary<'a>(
         ui: &mut egui::Ui,
         creatures: impl Iterator<Item = &'a Creature>,
@@ -5994,6 +6006,10 @@ impl Encounters {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn roster_pane(
         ui: &mut egui::Ui,
         draft: &mut Draft,
@@ -6114,6 +6130,10 @@ impl Encounters {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn roster(
         ui: &mut egui::Ui,
         draft: &mut Draft,
@@ -6589,7 +6609,7 @@ impl Encounters {
     /// Run folder and initiative rule. These belong to the campaign, not to one encounter.
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
     )]
     pub fn run_settings(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns) {
         self.poll(ui.ctx(), campaigns);

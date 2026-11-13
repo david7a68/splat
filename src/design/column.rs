@@ -176,6 +176,10 @@ fn fill_and_add<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     add(ui)
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
 fn finish_handle(ctx: &Context, id: &'static str, shown: &egui::Response) {
     // The handle's id is egui's own. A test drags a handle, so an update cannot lose it.
     let handle = Id::new(id).with("__resize");

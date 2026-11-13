@@ -618,6 +618,10 @@ impl Campaigns {
     }
 
     /// The always-visible campaign switcher. `blocked` says why it cannot change now.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     pub fn selector(&mut self, ui: &mut egui::Ui, blocked: Option<&str>) -> bool {
         let current = self.data.active_campaign_id;
         let mut add = false;
@@ -1277,15 +1281,6 @@ impl Campaigns {
             let empty = self.data.campaigns.is_empty();
             let mut fields = |ui: &mut egui::Ui| {
                 ui.add_space(design::XS);
-                let name = design::small_text_field(ui, "Campaign name", &mut self.name, None, None);
-                if std::mem::take(&mut self.focus_name) {
-                    name.request_focus();
-                }
-                let submit = if editing {
-                    "Save details"
-                } else {
-                    "Add campaign"
-                };
                 let unchanged = self
                     .editing
                     .and_then(|id| {
@@ -1299,79 +1294,103 @@ impl Campaigns {
                             && campaign.path == std::path::Path::new(self.path.trim())
                     });
                 let reason = match (self.name.trim().is_empty(), self.path.trim().is_empty()) {
-                    (true, true) => Some("Enter a campaign name and a folder first."),
-                    (true, false) => Some("Enter a campaign name first."),
-                    (false, true) => Some("Choose a folder first."),
-                    (false, false) if unchanged => Some("No changes to save."),
+                    (true, true) => Some(FormReason::NameAndFolder),
+                    (true, false) => Some(FormReason::Name),
+                    (false, true) => Some(FormReason::Folder),
+                    (false, false) if unchanged => Some(FormReason::Unchanged),
                     (false, false) => None,
                 };
                 let missing = reason.is_some();
-                let action = || {
-                    if primary {
-                        Action::primary(submit)
+                // One id per form: the add form and a campaign's details form never share a
+                // field, and neither loses focus when Settings changes between one and two
+                // columns (the ids do not come from the layout).
+                let name_id = CAMPAIGN_NAME.with(editing_id);
+                let folder_id = CAMPAIGN_FOLDER.with(editing_id);
+                let focus = std::mem::take(&mut self.focus_name);
+                let mut commit = false;
+                if !editing {
+                    // Round 26 FB6: the one inline creation layout. Add campaign follows the
+                    // folder field (after Browse…) on its line; the kept line below holds quiet
+                    // Cancel, when there is something to cancel, and the reason.
+                    let create = if primary {
+                        design::Create::primary(ADD_CAMPAIGN)
                     } else {
-                        Action::secondary(submit)
-                    }
-                };
-                // The buttons sit on the field's line, and end where the fields above end. Round 26
-                // FB6: in the add form, Add campaign follows the last field on its line.
-                let create_width = if editing {
-                    0.0
-                } else {
-                    action().natural_width(ui) + design::S
-                };
-                let room = ui.available_width();
-                let field = ui
-                    .vertical(|ui| {
-                        ui.set_max_width((room - BROWSE_WIDTH - design::S - create_width).max(120.0));
-                        design::small_text_field(ui, "Folder", &mut self.path, None, None)
-                    })
-                    .inner;
-                let browse = egui::Rect::from_min_size(
-                    egui::pos2(field.rect.right() + design::S, field.rect.top()),
-                    egui::vec2(BROWSE_WIDTH, field.rect.height()),
-                );
-                ui.scope_builder(egui::UiBuilder::new().max_rect(browse).layout(egui::Layout::right_to_left(egui::Align::Center)), |ui| {
-                    if Action::secondary("Browse…")
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
+                        design::Create::secondary(ADD_CAMPAIGN)
+                    };
+                    let cancel = !missing || self.remote.is_some();
+                    let form = design::InlineCreate::new()
+                        .field(
+                            design::CreateField::new(name_id, "Campaign name", &mut self.name)
+                                .focus(focus),
+                        )
+                        .field(
+                            design::CreateField::new(folder_id, "Folder", &mut self.path)
+                                .side_action(BROWSE)
+                                .help(FOLDER_HELP),
+                        )
+                        .create(create.blocked(reason))
+                        .kept_line(design::KeptLine::new().cancel(CANCEL, cancel))
+                        .show(ui);
+                    if form.side
                         && let Some(path) = crate::hermetic::pick_folder()
                     {
                         self.path = path.to_string_lossy().into_owned();
                     }
-                });
-                let mut commit = false;
-                if !editing {
-                    let create = egui::Rect::from_min_size(
-                        egui::pos2(browse.right() + design::S, field.rect.top()),
-                        egui::vec2(create_width - design::S, field.rect.height()),
+                    if form.cancel {
+                        self.clear_form();
+                    }
+                    commit = form.create;
+                } else {
+                    let name = design::labelled_field(
+                        ui,
+                        name_id,
+                        "Campaign name",
+                        &mut self.name,
+                        None,
+                        None,
                     );
-                    ui.scope_builder(egui::UiBuilder::new().max_rect(create).layout(egui::Layout::left_to_right(egui::Align::Center)), |ui| {
-                        commit = action().blocked(reason).density(Density::Read).show(ui).clicked();
-                    });
-                    // The reason sits on its own line below, which stays when empty, so typing
-                    // moves nothing; quiet Cancel starts that line when there is something to
-                    // cancel.
-                    ui.horizontal(|ui| {
-                        // As tall as Cancel, so Cancel coming moves nothing.
-                        ui.set_min_height(Density::Read.control());
-                        if !missing || self.remote.is_some() {
-                            if Action::quiet("Cancel")
+                    if focus {
+                        name.request_focus();
+                    }
+                    let room = ui.available_width();
+                    let field = ui
+                        .vertical(|ui| {
+                            ui.set_max_width((room - BROWSE_WIDTH - design::S).max(120.0));
+                            design::labelled_field(
+                                ui,
+                                folder_id,
+                                "Folder",
+                                &mut self.path,
+                                None,
+                                None,
+                            )
+                        })
+                        .inner;
+                    let browse = egui::Rect::from_min_size(
+                        egui::pos2(field.rect.right() + design::S, field.rect.top()),
+                        egui::vec2(BROWSE_WIDTH, field.rect.height()),
+                    );
+                    ui.scope_builder(
+                        egui::UiBuilder::new()
+                            .max_rect(browse)
+                            .layout(egui::Layout::right_to_left(egui::Align::Center)),
+                        |ui| {
+                            if Action::secondary(BROWSE.as_str())
                                 .density(Density::Read)
-                                .line_start()
                                 .show(ui)
                                 .clicked()
+                                && let Some(path) = crate::hermetic::pick_folder()
                             {
-                                self.clear_form();
+                                self.path = path.to_string_lossy().into_owned();
                             }
-                            ui.add_space(design::L - ui.spacing().item_spacing.x);
-                        }
-                        design::blocked_reason(ui, reason);
-                    });
-                }
-                design::help(ui, "Splat keeps this campaign’s notes, encounters and runs here. A folder in your Obsidian vault works.");
-                if editing {
+                        },
+                    );
+                    design::help(ui, FOLDER_HELP);
+                    let action = if primary {
+                        Action::primary("Save details")
+                    } else {
+                        Action::secondary("Save details")
+                    };
                     // A save row: state and Discard at the left, Save details at the right edge.
                     ui.horizontal(|ui| {
                         design::save_row_state(
@@ -1395,9 +1414,14 @@ impl Campaigns {
                         if !unchanged {
                             self.discarded_details = None;
                             if Action::quiet("Discard").show(ui).clicked()
-                                && let Some(saved) = self.data.campaigns.iter().find(|c| Some(c.id) == self.editing)
+                                && let Some(saved) = self
+                                    .data
+                                    .campaigns
+                                    .iter()
+                                    .find(|c| Some(c.id) == self.editing)
                             {
-                                self.discarded_details = Some((self.name.clone(), self.path.clone()));
+                                self.discarded_details =
+                                    Some((self.name.clone(), self.path.clone()));
                                 self.discarded_order = crate::design::ResultOrder::issue();
                                 self.name = saved.name.clone();
                                 self.path = saved.path.to_string_lossy().into_owned();
@@ -1406,7 +1430,8 @@ impl Campaigns {
                             self.clear_form();
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            commit = action().blocked(reason).show(ui).clicked();
+                            let reason = reason.map(design::CreateReasons::words);
+                            commit = action.blocked(reason).show(ui).clicked();
                             ui.spacing_mut().item_spacing.x = design::S;
                             design::blocked_reason(ui, reason.filter(|_| !unchanged));
                         });
@@ -1464,8 +1489,24 @@ pub(crate) fn creation_reason(ui: &mut egui::Ui, reason: Option<&str>) {
     });
 }
 
-/// The Browse button and the gap before it, beside the folder field.
+/// The Browse button and the gap before it, beside the details form's folder field.
 const BROWSE_WIDTH: f32 = 92.0;
+crate::create_reasons! {
+    /// Why the campaign form cannot add or save yet: every reason it can show, so its kept line
+    /// keeps room for the tallest.
+    enum FormReason {
+        NameAndFolder => "Enter a campaign name and a folder first.",
+        Name => "Enter a campaign name first.",
+        Folder => "Choose a folder first.",
+        Unchanged => "No changes to save.",
+    }
+}
+const CAMPAIGN_NAME: design::FieldId = crate::field_id!("campaign_name");
+const CAMPAIGN_FOLDER: design::FieldId = crate::field_id!("campaign_folder");
+const ADD_CAMPAIGN: design::Word = crate::word!("Add campaign");
+const BROWSE: design::Word = crate::word!("Browse…");
+const CANCEL: design::Word = crate::word!("Cancel");
+const FOLDER_HELP: &str = "Splat keeps this campaign’s notes, encounters and runs here. A folder in your Obsidian vault works.";
 
 /// By number, because a link can be stored with other formatting. An ID that is not a number
 /// links to nothing, and neither does a campaign with no link.

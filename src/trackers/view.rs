@@ -242,6 +242,10 @@ impl Trackers {
 }
 
 /// The message footer, then the empty state, a file that cannot be read, or the trackers.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, from_top: bool) {
     let mut act = None;
     // The footer comes first: why an act recorded nothing stays in view, also when the row it
@@ -844,6 +848,10 @@ fn name_cell(ui: &mut egui::Ui, view: &mut ViewState, name: &str, size: egui::Ve
 }
 
 /// `add: ask` puts a number field in the action's place. It holds focus until Enter or Escape.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn amount_field(
     ui: &mut egui::Ui,
     view: &mut ViewState,

@@ -1495,6 +1495,10 @@ impl Sessions {
     /// What cannot wait, on every page. It sits at the bottom, so that it never moves `Next
     /// turn` under a pointer parked on it. A silence takes no banner: it is often only a quiet
     /// table, and it shows in the rail and on the run's own line.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     pub fn banner(
         &mut self,
         ctx: &egui::Context,
@@ -3342,6 +3346,10 @@ impl Sessions {
         });
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn show_form(&mut self, ui: &mut egui::Ui) {
         let Some(mut form) = self.form.take() else {
             return;
@@ -3599,6 +3607,10 @@ impl Sessions {
         Ok(note.id)
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn list_pane(&mut self, ui: &mut egui::Ui) {
         let locked = self.draft.as_ref().is_some_and(Draft::needs_attention);
         let mut choose = None;
@@ -3728,6 +3740,10 @@ impl Sessions {
     }
 
     /// The one editor of a session's note, on the page and in the panel beside any page.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn note_editor(&mut self, ui: &mut egui::Ui, in_panel: bool) {
         let Some(draft) = &mut self.draft else {
             design::message(ui, Tone::Error, "This note could not be opened.");
@@ -4183,6 +4199,10 @@ impl Sessions {
         )
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn read_tab(&mut self, ui: &mut egui::Ui, book: &Book, plan: &Plan<'_>, beside: bool) {
         if self.draft.is_none() {
             return;
@@ -5207,7 +5227,7 @@ impl Sessions {
     /// is about 30 parts of a size the Reader handles.
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
     )]
     fn reading_view(&mut self, ui: &mut egui::Ui, book: &mut Book) {
         let c = colors();
@@ -5483,6 +5503,10 @@ impl Sessions {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn recordings_tab(
         &mut self,
         ui: &mut egui::Ui,
@@ -6117,6 +6141,10 @@ impl Sessions {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn notes_view(
         &mut self,
         ui: &mut egui::Ui,
@@ -6302,6 +6330,10 @@ impl Sessions {
             });
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn template_list(&mut self, ui: &mut egui::Ui, choose: &mut Option<String>) {
         if Action::quiet("Sessions")
             .icon(icons::BACK)
@@ -6369,6 +6401,10 @@ impl Sessions {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn new_template_form(&mut self, ui: &mut egui::Ui) {
         let Some(mut name) = self.new_template.take() else {
             return;
@@ -6444,7 +6480,7 @@ impl Sessions {
 
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
     )]
     fn template_editor(&mut self, ui: &mut egui::Ui) {
         let c = colors();
@@ -6604,7 +6640,7 @@ impl Sessions {
 
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
     )]
     fn folder_form(
         &mut self,

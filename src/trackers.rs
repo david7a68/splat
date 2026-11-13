@@ -3539,6 +3539,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn an_open_history_prepares_its_rows_once_and_draws_only_those_in_view() {
         use crate::test_support::{CachedWork, Counts};
         use egui_kittest::{Harness, kittest::Queryable};

@@ -432,7 +432,7 @@ impl WorldPage {
 
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
     )]
     pub fn show(
         &mut self,
@@ -971,7 +971,7 @@ impl WorldPage {
     /// marker` result and the error of the last Create or Save (round 27 FG2: no body places).
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
     )]
     fn creation_form(&mut self, ui: &mut egui::Ui, index: &ContentIndex, campaign: &Campaign) {
         let form = self.new_kind.is_some() || self.card_shown();
@@ -1020,7 +1020,7 @@ impl WorldPage {
     /// file's path. Typing moves nothing.
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
     )]
     fn creation_body(&mut self, ui: &mut egui::Ui, index: &ContentIndex, campaign: &Campaign) {
         let mut made = None;
@@ -1633,6 +1633,10 @@ impl WorldPage {
 }
 
 /// The same next step in the header and in an empty reader.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn new_menu(ui: &mut egui::Ui) -> Option<&'static str> {
     let mut choice = None;
     let label = format!("New {}", icons::DOWN);

@@ -3120,6 +3120,10 @@ mod tests {
         );
     }
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn render_every_editable_group_at_minimum_size() {
         let remote = full_remote(true);
         let mut sync = CombatSync::default();

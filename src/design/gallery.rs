@@ -129,7 +129,7 @@ pub fn tokens(ui: &mut egui::Ui) {
 
 #[allow(
     clippy::disallowed_methods,
-    reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
 )]
 pub fn components(ui: &mut egui::Ui) {
     let c = colors();
@@ -541,6 +541,10 @@ Reward: 40 gp
 ```
 ";
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
 pub fn markdown(ui: &mut egui::Ui) {
     ui.columns(2, |columns| {
         design_group(&mut columns[0], "Write");
@@ -560,6 +564,10 @@ pub fn markdown(ui: &mut egui::Ui) {
     });
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
 pub fn show(ui: &mut egui::Ui) {
     let id = egui::Id::new("gallery_sheet");
     let mut sheet = ui

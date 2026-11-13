@@ -255,6 +255,10 @@ pub fn show(
 }
 
 /// One line. Returns its place when the DM removes it.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn line_row(
     ui: &mut egui::Ui,
     name: &str,
@@ -401,6 +405,10 @@ fn line_row(
 }
 
 /// The quiet menu of the campaign's tables, with the caret after the word. Returns a choice.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn table_menu(
     ui: &mut egui::Ui,
     word: &str,

@@ -23,6 +23,9 @@ mod copy_dialog;
 mod creature_filter;
 mod credentials;
 mod design;
+// The layout parts are public only so that their `compile_fail` doc tests can name them.
+#[doc(hidden)]
+pub use design::layout;
 /// The ownership and cost parts of `design` (kept results, the save row, per-change caches),
 /// public only so that their compile-fail doc tests can name them. The app uses them through
 /// `design`.
@@ -1827,6 +1830,10 @@ impl Splat {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     #[allow(deprecated)] // Old message functions; Wave 2 moves this page to `design::outcome`.
     fn page(&mut self, ui: &mut egui::Ui) {
         let active = self.campaigns.active_campaign();

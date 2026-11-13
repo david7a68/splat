@@ -39,6 +39,7 @@ Past reviews found the same kinds of fault again and again. Check your own chang
 - **A rule fixed for one caller is not fixed.** Grep the shared helper and local copies of it, and fix every
   caller in the same change. Another screen that shows the same thing is also a caller: a list row and its
   pane, a preview and the live view.
+- **A ban is a list, not a proof.** `clippy.toml` holds the egui paths that a design part replaces. An egui helper that opens a layer or makes a text field and is not listed is found by review: add its path in the same PR.
 - **Layout rules that keep getting broken:** every target at least 24 px and clear of splitters; a quiet action
   that starts a line uses `line_start`; choices after a message start at its text, safe first, with exactly
   16 px (`L`) before a destructive one; nothing that grows with the content runs every frame.

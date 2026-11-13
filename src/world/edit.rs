@@ -878,7 +878,7 @@ impl Reader {
     /// The form, in place of the entry's rows and text.
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
     )]
     pub(super) fn edit_form(
         &mut self,

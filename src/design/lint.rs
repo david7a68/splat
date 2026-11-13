@@ -338,6 +338,12 @@ fn scan(
             for rule in message_rules(key, &text, code.lines().count()) {
                 *counts.entry(format!("{key} {rule}")).or_default() += 1;
             }
+            // Package K: a layer built by hand, a `CreateReasons` impl by hand (the syntax tree).
+            for rule in super::layout::bans::syntax_rules(&text)
+                .unwrap_or_else(|error| panic!("{key} does not parse: {error}"))
+            {
+                *counts.entry(format!("{key} {rule}")).or_default() += 1;
+            }
             let found = attributes::read(&text)
                 .unwrap_or_else(|error| panic!("{key} does not parse: {error}"));
             levels.insert(key.to_owned(), file_level(&found));
@@ -388,6 +394,8 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
                     "Put `#[allow(deprecated)]` on the function that calls, not on the crate"
                 }
                 "reason-end-mark" => "End a blocked reason with `.`, `?` or `!`",
+                "foreground-layer" => "Foreground layers and menus belong to src/design/",
+                "hand-create-reasons" => "Declare a form's reasons with `create_reasons!`",
                 "phrase-owner" => {
                     "Call the phrase's owner: `XP {` in src/difficulty.rs, `· line {` in `fault_words`, `N of M chosen` in `chosen_count`"
                 }
@@ -556,4 +564,69 @@ fn the_lint_finds_what_it_should() {
     assert!(violations("let s = \"a\"; // the campaign's rule").is_empty());
     // YAML's quoted scalars are file content: no letter on both sides of the mark.
     assert!(violations("\"splat_in: '[[Undercroft]]'\"").is_empty());
+}
+
+/// Package K: two fields with one `FieldId` name would share focus and text state; each name is
+/// used once (`field_id!` names, read from the syntax tree, in all of `src/`). A field shown once
+/// per row adds the row's key with `FieldId::with`; two live widgets with one id are the gate's
+/// `widget-id-clash` check.
+#[test]
+fn each_field_id_name_is_used_once() {
+    fn names(folder: &Path, found: &mut BTreeMap<String, Vec<String>>) {
+        for item in fs::read_dir(folder).expect("read source folder") {
+            let path = item.expect("read source entry").path();
+            if path.is_dir() {
+                names(&path, found);
+            } else if path.extension().is_some_and(|e| e == "rs") {
+                let text = fs::read_to_string(&path).expect("read source file");
+                let key = path.display().to_string();
+                for name in super::layout::bans::field_id_names(&text)
+                    .unwrap_or_else(|error| panic!("{key} does not parse: {error}"))
+                {
+                    found.entry(name).or_default().push(key.clone());
+                }
+            }
+        }
+    }
+    let mut found = BTreeMap::new();
+    names(
+        Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/src")),
+        &mut found,
+    );
+    assert!(
+        found.contains_key("campaign_name"),
+        "the scan finds field ids"
+    );
+    let twice: Vec<_> = found
+        .iter()
+        .filter(|(_, places)| places.len() > 1)
+        .map(|(name, places)| format!("{name}: {}", places.join(", ")))
+        .collect();
+    assert!(
+        twice.is_empty(),
+        "One name per field id:\n{}",
+        twice.join("\n")
+    );
+}
+
+/// Package K: no Clippy level is set outside the source, where no row could count it.
+#[test]
+fn no_lint_level_frees_raw_calls_outside_the_source() {
+    let root = env!("CARGO_MANIFEST_DIR");
+    for file in ["Cargo.toml", "crates/core/Cargo.toml", ".cargo/config.toml"] {
+        let text = fs::read_to_string(format!("{root}/{file}")).unwrap_or_default();
+        assert!(
+            !text.contains("disallowed_methods") && !text.contains("-A clippy"),
+            "{file} sets a Clippy level; set it on one `fn` instead"
+        );
+    }
+    let devenv = fs::read_to_string(format!("{root}/devenv.nix")).expect("devenv.nix");
+    let check = devenv
+        .lines()
+        .find(|line| line.contains("scripts.check.exec"))
+        .expect("the check script");
+    assert!(
+        check.contains("-D warnings") && !check.contains("-A "),
+        "{check}"
+    );
 }

@@ -4,6 +4,7 @@ pub mod column;
 mod comparison;
 pub mod components;
 pub mod icons;
+pub mod layout;
 pub mod memo;
 pub mod outcome;
 pub mod reader;
@@ -21,6 +22,14 @@ mod lint;
 
 pub use column::*;
 pub use components::*;
+// Wave 2 callers name the layout parts through `design`, as they name the components.
+#[allow(unused_imports)]
+pub use layout::{
+    ACTION_GAP, Create, CreateChoice, CreateField, CreateReasons, FieldId, InlineCreate, KeptLine,
+    MAX_WORD_CHARS, NARROWEST_PANE, NoReason, RowIndex, RowKey, ScrollColumn, Slot, SlotType,
+    TextKey, TitleAction, TitleLine, TitlePlacement, TitleType, Word, labelled_field, lane_width,
+    line_field, menu_popup, sideways_scroll, status_slot, title_lead_in, title_placement,
+};
 pub use results::Results;
 pub use save_row::{DraftState, save_row};
 pub use tokens::*;

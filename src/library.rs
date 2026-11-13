@@ -458,6 +458,10 @@ fn form_footer(
 
 /// The form above a form footer, in a scroll area that ends at the footer's top, so a long form
 /// never runs under the footer.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn above_footer<R>(ui: &mut egui::Ui, bottom: f32, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
     let height = (bottom - ui.cursor().top()).max(0.0);
     egui::ScrollArea::vertical()
@@ -2799,6 +2803,26 @@ fn kind_folder(kind: &str) -> &'static str {
     }
 }
 
+fn visit_folders(root: &Path, path: &Path, folders: &mut Vec<String>) {
+    let Ok(entries) = fs::read_dir(path) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        if entry.file_type().is_ok_and(|kind| kind.is_dir())
+            && !entry.file_name().to_string_lossy().starts_with('.')
+        {
+            if let Ok(path) = entry.path().strip_prefix(root) {
+                folders.push(path.to_string_lossy().to_string());
+            }
+            visit_folders(root, &entry.path(), folders);
+        }
+    }
+}
+
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(crate) fn folder_field(
     ui: &mut egui::Ui,
     label: &str,
@@ -2807,22 +2831,7 @@ pub(crate) fn folder_field(
     kind: Option<&str>,
 ) {
     let mut folders = Vec::new();
-    fn visit(root: &Path, path: &Path, folders: &mut Vec<String>) {
-        let Ok(entries) = fs::read_dir(path) else {
-            return;
-        };
-        for entry in entries.flatten() {
-            if entry.file_type().is_ok_and(|kind| kind.is_dir())
-                && !entry.file_name().to_string_lossy().starts_with('.')
-            {
-                if let Ok(path) = entry.path().strip_prefix(root) {
-                    folders.push(path.to_string_lossy().to_string());
-                }
-                visit(root, &entry.path(), folders);
-            }
-        }
-    }
-    visit(root, root, &mut folders);
+    visit_folders(root, root, &mut folders);
     if let Some(kind) = kind {
         folders.push(
             match kind {
@@ -4432,6 +4441,10 @@ impl Library {
             None
         }
     }
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     pub fn show(&mut self, ui: &mut egui::Ui, campaigns: &mut Campaigns) {
         // The New entry form's error ends with the form, however it closed.
         if !self.new_form {
@@ -5661,6 +5674,10 @@ impl Library {
     }
 
     /// What the catalogue shows. Choosing here never changes the active campaign.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn scope_menu(
         ui: &mut egui::Ui,
         compact: bool,
@@ -5855,6 +5872,10 @@ impl Library {
     }
 
     /// Registering a package is a form in the page, not a window over it.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn package_form(&mut self, ui: &mut egui::Ui, campaigns: &mut Campaigns) {
         let c = colors();
         let locked = self.draft_reason().or(self
@@ -6303,6 +6324,10 @@ impl Library {
             });
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn new_entry(&mut self, ui: &mut egui::Ui, dirty: bool, campaigns: &Campaigns) {
         if self.new_kind.is_empty() {
             self.new_kind = "creature".into();
@@ -6842,7 +6867,7 @@ impl Library {
     /// `pane_right` is the pane's right edge, where the reader's body may end.
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
     )]
     fn editor_pane(
         &mut self,

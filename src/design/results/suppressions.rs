@@ -23,6 +23,13 @@ pub(crate) enum Ban {
     /// Package M: the body places `banner`, `row_fault` and `PagePlaceholder::show`. A named
     /// escape: a body message is a review decision.
     Body,
+    /// Package K: raw egui calls that a layout part replaces. The number is how many calls of
+    /// `clippy.toml`'s package K paths the item holds, counted in its tokens
+    /// (`design::layout::bans::count`), so a second raw call in an allowed item fails.
+    Layout(u16),
+    /// Package K: `RowIndex::from_data` and `TextKey::from_data`, row keys a reviewer reads; the
+    /// number of uses in the item.
+    RowKey(u16),
 }
 
 impl Ban {
@@ -39,6 +46,8 @@ impl Ban {
             ],
             Self::Order => &["outcome_at"],
             Self::Body => &["banner", "row_fault", ".show("],
+            // Counted in the item's tokens instead (`check`).
+            Self::Layout(_) | Self::RowKey(_) => &[],
         }
     }
 }
@@ -232,10 +241,44 @@ pub(crate) fn check(files: &[(String, String)], table: &[(&str, &str, &[Ban])]) 
             match row {
                 Some(row) => {
                     let (_, _, bans) = rows.remove(row);
-                    if !bans
+                    let mut holds = bans
                         .iter()
-                        .any(|ban| ban.calls().iter().any(|call| suppression.body.contains(call)))
-                    {
+                        .any(|ban| ban.calls().iter().any(|call| suppression.body.contains(call)));
+                    // Package K: the row's number of calls is the item's, exactly.
+                    use crate::design::layout::bans::{Group, count};
+                    for group in [Group::Layout, Group::RowKey] {
+                        let listed = bans
+                            .iter()
+                            .find_map(|ban| match (ban, group) {
+                                (Ban::Layout(n), Group::Layout) | (Ban::RowKey(n), Group::RowKey) => {
+                                    Some(usize::from(*n))
+                                }
+                                _ => None,
+                            })
+                            .unwrap_or(0);
+                        match count(&suppression.body, group) {
+                            Ok(found) => {
+                                holds |= found > 0;
+                                if found != listed {
+                                    faults.push(format!(
+                                        "{path}:{}: `{}` holds {found} {group:?} calls; its row lists {listed}. {}",
+                                        suppression.line,
+                                        suppression.item,
+                                        if found > listed {
+                                            "A new raw call: use the part that clippy.toml names."
+                                        } else {
+                                            "Lower the row's number."
+                                        }
+                                    ));
+                                }
+                            }
+                            Err(error) => faults.push(format!(
+                                "{path}:{}: `{}` does not lex: {error}",
+                                suppression.line, suppression.item
+                            )),
+                        }
+                    }
+                    if !holds {
                         faults.push(format!(
                             "{path}:{}: the suppression on `{}` has no staged call left. Remove it and its row in `design::results::STAGED_ALLOWS`.",
                             suppression.line, suppression.item
@@ -345,5 +388,51 @@ mod tests {
         assert!(check(&file(order), &[("src/new.rs", "draw", &[Ban::Order])]).is_empty());
         let words = "#[allow(clippy::disallowed_methods)]\nfn cause() {\n    let f = Sentence::outside;\n}\n";
         assert!(check(&file(words), &[("src/new.rs", "cause", &[Ban::Words])]).is_empty());
+    }
+
+    /// Package K's rows: the number of raw egui calls (and row keys) in a row is the item's,
+    /// exactly, counted in its tokens; a second raw call in an allowed item fails.
+    #[test]
+    fn layout_rows_count_their_items_calls() {
+        let raw = "    let _ = egui::ScrollArea::vertical();\n";
+        let order = "    let _ = <crate::design::ResultOrder>::issue();\n";
+        let item =
+            |body: &str| format!("#[allow(clippy::disallowed_methods)]\nfn draw() {{\n{body}}}\n");
+        let one = item(raw);
+        assert!(check(&file(&one), &[("src/new.rs", "draw", &[Ban::Layout(1)])]).is_empty());
+        // A second raw call in the allowed function.
+        let two = item(&format!("{raw}{raw}"));
+        let faults = check(&file(&two), &[("src/new.rs", "draw", &[Ban::Layout(1)])]);
+        assert!(
+            faults.len() == 1 && faults[0].contains("holds 2 Layout calls; its row lists 1"),
+            "{faults:?}"
+        );
+        // Fewer calls than the row lists: lower it.
+        let faults = check(&file(&one), &[("src/new.rs", "draw", &[Ban::Layout(2)])]);
+        assert!(faults[0].contains("Lower the row's number"), "{faults:?}");
+        // A row for O's ban only, while the item makes a raw egui call.
+        let both = item(&format!("{raw}{order}"));
+        let faults = check(&file(&both), &[("src/new.rs", "draw", STAGED)]);
+        assert!(faults[0].contains("its row lists 0"), "{faults:?}");
+        assert!(
+            check(
+                &file(&both),
+                &[("src/new.rs", "draw", &[Ban::Results, Ban::Layout(1)])]
+            )
+            .is_empty()
+        );
+        // A word in a string is not a call; a row key is counted on its own.
+        let words = item(
+            "    let _ = \"egui::ScrollArea::vertical()\";\n    let _ = RowIndex::from_data(1);\n",
+        );
+        assert!(check(&file(&words), &[("src/new.rs", "draw", &[Ban::RowKey(1)])]).is_empty());
+        // A function in a macro's body is unlisted; an allow on the macro is refused.
+        let in_macro = format!(
+            "macro_rules! screens {{\n    () => {{\n        #[allow(clippy::disallowed_methods)]\n        fn draw() {{\n{raw}        }}\n    }};\n}}\n"
+        );
+        assert_eq!(check(&file(&in_macro), &[]).len(), 1, "{in_macro}");
+        let on_macro =
+            "#[allow(clippy::disallowed_methods)]\nmacro_rules! screens {\n    () => {};\n}\n";
+        assert_eq!(check(&file(on_macro), &[]).len(), 1, "{on_macro}");
     }
 }

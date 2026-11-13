@@ -45,3 +45,6 @@ src/encounter_run/loot.rs phrase-owner 2
 src/encounters.rs phrase-owner 1
 src/library.rs phrase-owner 1
 src/sessions/plan.rs phrase-owner 1
+# A layer built by hand (`LayerId { order: … }`, `Order::…`), which Clippy's method list cannot see
+# (package K). Wave 2 moves the drag ghost to a design part.
+src/encounter_run/view.rs foreground-layer 1

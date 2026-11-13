@@ -1199,6 +1199,10 @@ pub(super) fn add_target(ui: &mut egui::Ui, draft: &mut Draft, _snapshot: &Snaps
 
 /// The groups that belong to an encounter, each in a frame of its own, built here and saved
 /// with it. Returns true when the DM chooses to add creatures to one.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(super) fn of_encounter(
     ui: &mut egui::Ui,
     draft: &mut Draft,
@@ -1374,6 +1378,10 @@ pub(super) fn of_encounter(
 
 /// Who a group is for, in its editor. An encounter being built is a choice before it is saved,
 /// and under the name it has now.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn belongs_to(
     ui: &mut egui::Ui,
     draft: &mut GroupDraft,
@@ -1635,6 +1643,10 @@ pub(super) fn show_form_when_it_opens(ui: &egui::Ui) {
 
 /// A number that can stay the same, be set, or change by an amount. Each control keeps the
 /// override valid on its own, so that the form never holds a block that it cannot read.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn change_row(
     ui: &mut egui::Ui,
     label: &str,
@@ -1763,6 +1775,10 @@ fn single_change(label: &str, value: Option<Change>) -> Overrides {
 }
 
 /// One line of words, or nothing. Blank means no change.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn text_row(ui: &mut egui::Ui, label: &str, value: &mut Option<String>, hint: &str) {
     ui.horizontal(|ui| {
         let (rect, _) = ui.allocate_exact_size(
@@ -2180,7 +2196,7 @@ impl Encounters {
 
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
     )]
     pub(super) fn group_editor_view(
         &mut self,
@@ -2638,6 +2654,10 @@ fn member_result_into<'a>(
     }
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn members_pane(
     ui: &mut egui::Ui,
     draft: &mut GroupDraft,
@@ -2865,6 +2885,10 @@ fn members_heading(draft: &GroupDraft, snapshot: &Snapshot) -> String {
     )
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn members(
     ui: &mut egui::Ui,
     draft: &mut GroupDraft,
