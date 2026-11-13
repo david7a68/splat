@@ -20,6 +20,9 @@ pub struct Campaigns {
     writable: bool,
     editing: Option<Uuid>,
     focus_name: bool,
+    /// Edit details was pressed on Link and folder: the details form comes into view once, with
+    /// its Save, in that pane (round 28: the session folder's save row stands above the pane).
+    reveal_details: bool,
     form_open: bool,
     add_name: String,
     add_path: String,
@@ -63,6 +66,7 @@ impl Default for Campaigns {
             writable: false,
             editing: None,
             focus_name: false,
+            reveal_details: false,
             form_open: false,
             add_name: String::new(),
             add_path: String::new(),
@@ -349,6 +353,7 @@ impl Campaigns {
             writable: true,
             editing: None,
             focus_name: false,
+            reveal_details: false,
             form_open: false,
             add_name: String::new(),
             add_path: String::new(),
@@ -760,6 +765,7 @@ impl Campaigns {
                     }
                     self.remote = None;
                     self.editing = Some(campaign.id);
+                    self.reveal_details = true;
                     self.name = campaign.name.clone();
                     self.path = campaign.path.to_string_lossy().into_owned();
                 }
@@ -1255,7 +1261,11 @@ impl Campaigns {
         let open = self.editing.is_some();
         if open {
             ui.add_space(design::S);
-            self.form(ui, false, true);
+            let form = ui.scope(|ui| self.form(ui, false, true)).response.rect;
+            // Once, when Edit details opened it: the form and its Save come into view.
+            if std::mem::take(&mut self.reveal_details) {
+                ui.scroll_to_rect(form, None);
+            }
         }
         open
     }
@@ -1878,6 +1888,7 @@ mod tests {
             writable: true,
             editing: None,
             focus_name: false,
+            reveal_details: false,
             form_open: false,
             add_name: String::new(),
             add_path: String::new(),
