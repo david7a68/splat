@@ -712,7 +712,8 @@ World note repairs use “note”, including in Encounter search, their actions 
 Sessions use “session” for their repair and Undo actions. World rows say `Same note in two files`, including in Lookup. Other rows say `Same entry in two files`. World repairs say `Make <file> a separate note` and offer `Undo separate note`. Other bordered secondary repairs say `Make <file> a separate entry`. Their result
 names the file and keeps `Undo separate entry` on the message line. In the encounter and group editors, the
 creature search's repair puts its result, its Undo and a failure in the editor's footer, newest first among the
-editor's results; the campaign owns it, and its Undo or a new repair ends it. Folder repairs use `separate
+editor's results; the campaign owns it. Its Undo ends it, or a new repair replaces it; an Undo that fails (the file
+moved away) keeps it, with the reason, so the DM can try again. Folder repairs use `separate
 entries` and `Undo separate entries`, with one guarded Undo for the batch. In Library, each single-file
 or folder choice states which file or folder an encounter will keep or use, in `Small` muted text an
 `XS` gap below its own action. Library, World and Lookup draw the choices and these lines through
@@ -1932,7 +1933,8 @@ text's inner edge.
 
 A planned fight's summary ends with its difficulty in the one form
 (`5 party · 2 × Ember Cultist · XP 400 · Low (up to 2,800)`), and it keeps its lines: the limit gives way first, then
-the members from their end (Encounter difficulty, above). Each `·` of the form has the same blank on each side. The
+the members from their end (Encounter difficulty, above). Every `·` on the row, the summary's and the form's, has the
+same blank on each side: the font's own spacing around `·` is uneven, so the row moves each `·` by whole pixels. The
 opened row's `Read encounter` line does not say the difficulty again. A fight with no word because an input is not
 known ends its row with that, and whose, in the word's place: `XP not known: Nameless Thing`, or `Level not known:
 <name>`; with more names, the first and `and 2 more`. Where the row has no room, the first name shortens from its end
