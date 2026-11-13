@@ -3685,8 +3685,17 @@ fn natural_key(name: &str) -> Vec<(String, u64)> {
 
 pub(crate) const EDITOR_MAX_WIDTH: f32 = 720.0;
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn form_heading(ui: &mut egui::Ui, title: &str) {
-    design::heading(ui, design::Heading::Group { title, count: 0 });
+    ui.add_space(design::L);
+    ui.label(
+        Type::Label
+            .rich(ui, title.to_uppercase())
+            .color(colors().text),
+    );
 }
 
 fn obsidian_for(root: &Path, owner: &Owner) -> bool {
@@ -5743,26 +5752,20 @@ impl Library {
                     ui.set_max_width(inner);
                     ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
                     if active.is_some() {
-                        design::choice_value(ui, &mut scope, Scope::Uses, &label(Scope::Uses));
+                        ui.selectable_value(&mut scope, Scope::Uses, label(Scope::Uses));
                     }
-                    design::choice_value(ui, &mut scope, Scope::All, &label(Scope::All));
+                    ui.selectable_value(&mut scope, Scope::All, label(Scope::All));
                     ui.separator();
-                    design::choice_value(ui, &mut scope, Scope::Builtin, &label(Scope::Builtin));
+                    ui.selectable_value(&mut scope, Scope::Builtin, label(Scope::Builtin));
                     for m in campaigns.modules() {
-                        design::choice_value(
-                            ui,
+                        ui.selectable_value(
                             &mut scope,
                             Scope::Package(m.id),
-                            &label(Scope::Package(m.id)),
+                            label(Scope::Package(m.id)),
                         );
                     }
                     if active.is_some() {
-                        design::choice_value(
-                            ui,
-                            &mut scope,
-                            Scope::Campaign,
-                            &label(Scope::Campaign),
-                        );
+                        ui.selectable_value(&mut scope, Scope::Campaign, label(Scope::Campaign));
                     }
                 });
             combo.response.clone().on_hover_text(label(scope));
