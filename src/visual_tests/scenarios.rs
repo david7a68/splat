@@ -1784,6 +1784,29 @@ pub mod library_author {
                 format!("At {size:?}, Create entry on the Folder field's line, its reason below: {row:?}"),
             );
         }
+        d.state("new-entry-form", Sizes::All);
+        d.type_into(NEW_NAME_FIELD, NEW_NAME);
+        d.click(CREATE_ENTRY);
+        d.expect(NEW_NAME);
+        d.state("new-entry-created", Sizes::All);
+        d.goal("create a new entry");
+
+        // Creation closes the form. Open it again to check a name clash.
+        d.observe(
+            "New entry form",
+            !d.has(NEW_NAME_FIELD),
+            "The creation form closes after the entry is made",
+        );
+        d.click(NEW_ENTRY);
+        d.type_into(NEW_NAME_FIELD, NEW_NAME);
+        d.click(CREATE_ENTRY);
+        d.observe(
+            "T8.3",
+            d.has_containing("already exists")
+                && d.field_text(NEW_NAME_FIELD).as_deref() == Some(NEW_NAME),
+            "A name clash states the fix, and the typed name stays",
+        );
+
         // Two long folder paths that differ only near their ends: the suggestions wrap them
         // inside the popup, so each complete name is visible at 960 px and each can be chosen.
         let ashen = d.root.join("modules/ashen-marches");
@@ -1817,29 +1840,6 @@ pub mod library_author {
             format!(
                 "At 960 px both long folder names show whole and each can be chosen: {chosen:?}"
             ),
-        );
-        d.aside(|d| d.replace_text_in("Folder", "Creatures"));
-        d.state("new-entry-form", Sizes::All);
-        d.type_into(NEW_NAME_FIELD, NEW_NAME);
-        d.click(CREATE_ENTRY);
-        d.expect(NEW_NAME);
-        d.state("new-entry-created", Sizes::All);
-        d.goal("create a new entry");
-
-        // Creation closes the form. Open it again to check a name clash.
-        d.observe(
-            "New entry form",
-            !d.has(NEW_NAME_FIELD),
-            "The creation form closes after the entry is made",
-        );
-        d.click(NEW_ENTRY);
-        d.type_into(NEW_NAME_FIELD, NEW_NAME);
-        d.click(CREATE_ENTRY);
-        d.observe(
-            "T8.3",
-            d.has_containing("already exists")
-                && d.field_text(NEW_NAME_FIELD).as_deref() == Some(NEW_NAME),
-            "A name clash states the fix, and the typed name stays",
         );
     }
 }
