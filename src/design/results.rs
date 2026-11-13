@@ -458,40 +458,42 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
     }
 }
 
-/// Files that may still call `ResultOrder::issue`, `Footer::result` or `save_row_state`.
-/// Clippy's `disallowed-methods` (`clippy.toml`) fails `check` on any call of them, by any
-/// name (an alias, a function item); each file listed here has one
-/// `#![allow(clippy::disallowed_methods, reason = "staged: …")]`. The list can only shrink.
-/// When it is empty, those parts become private.
+/// The staged allows of `ResultOrder::issue`, `Footer::result` and `save_row_state`, by file.
+/// Clippy's `disallowed-methods` (`clippy.toml`) fails `check` on any call of them, by any name
+/// (an alias, a function item). Each function (or, in a macro, statement) that still calls one
+/// has its own `#[allow(clippy::disallowed_methods, reason = "staged: …")]`; a call in another
+/// function of the same file still fails. Never on a file, a module or an `impl` block, so the
+/// allow frees no other banned method there. The counts can only go down; at 0 everywhere, those
+/// parts become private.
 #[cfg(test)]
-pub(crate) const STAGED_ALLOWS: &[&str] = &[
-    "src/campaign_content.rs",
-    "src/campaigns.rs",
-    "src/combat_sync.rs",
-    "src/design/components.rs",
-    "src/design/gallery.rs",
-    "src/dndbeyond.rs",
-    "src/encounter_run.rs",
-    "src/encounter_run/view.rs",
-    "src/encounters.rs",
-    "src/encounters/groups.rs",
-    "src/library.rs",
-    "src/party.rs",
-    "src/party_sync.rs",
-    "src/sessions/carry.rs",
-    "src/sessions/page.rs",
-    "src/sessions/plan.rs",
-    "src/timeline.rs",
-    "src/timeline/page.rs",
-    "src/trackers/history.rs",
-    "src/world.rs",
-    "src/world/edit.rs",
-    "src/world/page.rs",
-    "src/world/repair.rs",
+pub(crate) const STAGED_ALLOWS: &[(&str, usize)] = &[
+    ("src/campaign_content.rs", 4),
+    ("src/campaigns.rs", 7),
+    ("src/combat_sync.rs", 2),
+    ("src/design/components.rs", 3),
+    ("src/design/gallery.rs", 1),
+    ("src/dndbeyond.rs", 2),
+    ("src/encounter_run.rs", 2),
+    ("src/encounter_run/view.rs", 2),
+    ("src/encounters.rs", 9),
+    ("src/encounters/groups.rs", 3),
+    ("src/library.rs", 10),
+    ("src/party.rs", 1),
+    ("src/party_sync.rs", 1),
+    ("src/sessions/carry.rs", 2),
+    ("src/sessions/page.rs", 10),
+    ("src/sessions/plan.rs", 5),
+    ("src/timeline.rs", 3),
+    ("src/timeline/page.rs", 3),
+    ("src/trackers/history.rs", 1),
+    ("src/world.rs", 3),
+    ("src/world/edit.rs", 3),
+    ("src/world/page.rs", 3),
+    ("src/world/repair.rs", 3),
 ];
 
 /// Calls of parts that a shared part replaces, by file, counted in the source text. They are a
-/// second net inside the files of [`STAGED_ALLOWS`], whose file-wide allow would let a new call
+/// second net inside the functions of [`STAGED_ALLOWS`], whose allow would let a new call
 /// in: a count can only go down. A file with fewer calls than its count asks to lower the count.
 ///
 /// - `ResultOrder::issue(`: only [`Results::record`] issues an order. Elsewhere, an order
@@ -866,26 +868,82 @@ mod tests {
         assert!(faults.is_empty(), "{}", faults.join("\n"));
     }
 
-    /// The files with a staged allow are exactly `STAGED_ALLOWS`: a new allow fails, and a
-    /// removed one asks to shorten the list.
+    /// The staged allows, counted per file, are exactly `STAGED_ALLOWS`: a new one fails, and a
+    /// removed one asks to lower the count. Each sits on one function or statement: an allow of
+    /// `clippy::disallowed_methods` on a file, a module or an `impl` block fails here (it would
+    /// also free the banned methods of package K there).
     #[test]
     fn staged_allows_only_shrink() {
         let mut files = Vec::new();
         collect(std::path::Path::new("src"), &mut files);
-        let marked = |text: &str| {
-            text.contains("#![allow(\n    clippy::disallowed_methods,\n    reason = \"staged:")
-        };
         let mut faults = Vec::new();
         for (path, text) in &files {
-            let listed = STAGED_ALLOWS.contains(&path.as_str());
-            if marked(text) && !listed {
+            if path == "src/design/results.rs" {
+                continue;
+            }
+            let count = text.matches("reason = \"staged:").count();
+            let allowed = STAGED_ALLOWS
+                .iter()
+                .find(|(file, _)| file == path)
+                .map_or(0, |(_, count)| *count);
+            if count > allowed {
                 faults.push(format!(
-                    "{path}: a new staged allow. Use `design::Results`, `Footer::kept` and `design::save_row` instead."
+                    "{path}: {count} staged allows, {allowed} allowed. Use `design::Results`, `Footer::kept` and `design::save_row` instead."
                 ));
-            } else if !marked(text) && listed {
+            } else if count < allowed {
                 faults.push(format!(
-                    "{path}: no staged allow is left. Remove it from `design::results::STAGED_ALLOWS`."
+                    "{path}: only {count} staged allows remain. Lower its count in `design::results::STAGED_ALLOWS` to {count}."
                 ));
+            }
+            let lines: Vec<&str> = text.lines().map(str::trim).collect();
+            for (at, line) in lines.iter().enumerate() {
+                if !(line.starts_with("#![allow(") || line.starts_with("#[allow(")) {
+                    continue;
+                }
+                // The attribute, to its closing `)]`.
+                let end = (at..lines.len())
+                    .find(|&i| lines[i].ends_with(")]"))
+                    .unwrap_or(at);
+                if !lines[at..=end]
+                    .iter()
+                    .any(|l| l.contains("clippy::disallowed_methods"))
+                {
+                    continue;
+                }
+                if line.starts_with("#![") {
+                    faults.push(format!(
+                        "{path}:{}: an allow of `clippy::disallowed_methods` for a whole file or module. Put it on the one function that calls.",
+                        at + 1
+                    ));
+                    continue;
+                }
+                // The item it is on: the first line after other attributes and comments.
+                let mut in_attribute = false;
+                let item = lines[end + 1..]
+                    .iter()
+                    .find(|l| {
+                        if in_attribute {
+                            in_attribute = !l.ends_with(']');
+                            return false;
+                        }
+                        if l.starts_with("#[") {
+                            in_attribute = !l.ends_with(']');
+                            return false;
+                        }
+                        !(l.is_empty() || l.starts_with("//"))
+                    })
+                    .copied()
+                    .unwrap_or_default();
+                let wide = item
+                    .split(|c: char| c.is_whitespace() || c == '<')
+                    .take(3)
+                    .any(|word| word == "mod" || word == "impl");
+                if wide {
+                    faults.push(format!(
+                        "{path}:{}: an allow of `clippy::disallowed_methods` on `{item}`. Put it on the one function that calls.",
+                        at + 1
+                    ));
+                }
             }
         }
         assert!(faults.is_empty(), "{}", faults.join("\n"));

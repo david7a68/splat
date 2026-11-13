@@ -1,9 +1,5 @@
 //! One catalogue: built-in, package and campaign-owned entries, with their authoring.
 //! Browsing it never changes the active campaign.
-#![allow(
-    clippy::disallowed_methods,
-    reason = "staged: this file still calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-)]
 mod class;
 mod creature;
 pub(crate) mod presentation;
@@ -491,6 +487,10 @@ struct ReaderPress {
 /// result. Results with a live Undo lead, then the warnings. `heading` is `None` when Edit
 /// Markdown's messages already hold it.
 #[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 fn reader_messages<'a>(
     footer: &mut design::Footer<'a>,
     heading: Option<&'a HeadingChoice>,
@@ -3596,6 +3596,10 @@ type ResultOrders = std::collections::HashMap<OrderKey, design::ResultOrder>;
 /// a link result each belong to one renamed entry: they go through `Footer::kept`, with the order
 /// their store issued bound to their words. The other kinds hold one result at a time, so their
 /// kind's slot is that result's.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 fn add_reader_result<'a>(
     footer: &mut design::Footer<'a>,
     results: &'a ReaderResults,
@@ -3760,6 +3764,10 @@ impl Library {
     pub fn refocus_draft(&mut self) {
         self.focus_markdown = true;
     }
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn register_copy(&mut self, campaigns: &mut Campaigns) -> Result<(), String> {
         let source = self
             .copied_package
@@ -3907,6 +3915,10 @@ impl Library {
                 .is_some_and(|(campaign, path, _, after)| !holds(&campaign.path, path, after));
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn give_new_identity(&mut self) -> Result<(), String> {
         let index = self.selected.ok_or("Open the copy first.")?;
         let note = &self.loaded.as_ref().unwrap().notes[index];
@@ -3993,6 +4005,10 @@ impl Library {
     }
 
     /// The DM chose the file over the draft. The draft stays one step of undo away.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn reload_note_from_disk(&mut self, index: usize) {
         let Some(change) = self.disk_change.take() else {
             return;
@@ -4082,6 +4098,10 @@ impl Library {
         self.scope_counts = None;
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn open_entry(&mut self, index: usize) {
         if self.dirty() {
             return;
@@ -5481,6 +5501,10 @@ impl Library {
 
     /// The page results' presses from the reader: the link update and its Undo, and the
     /// registration's Undo, its source change and that change's Undo.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn apply_page_press(&mut self, pressed: PagePress, campaigns: &mut Campaigns) {
         if pressed.unregistered
             && let Some(module) = self.unregistered.clone()
@@ -5730,6 +5754,10 @@ impl Library {
         self.section = Section::All;
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn unregister_dialog(&mut self, ctx: &egui::Context, campaigns: &mut Campaigns) {
         let Some(module) = self.confirm_unregister.clone() else {
             return;
@@ -6811,6 +6839,10 @@ impl Library {
     }
 
     /// `pane_right` is the pane's right edge, where the reader's body may end.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn editor_pane(
         &mut self,
         ui: &mut egui::Ui,
@@ -11177,6 +11209,10 @@ mod tests {
     /// AD1: on reload, every Undo result checks that its files still hold what its action wrote.
     /// Each caller is given one outside change; the check never writes a file.
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn iter14_e_changed_files_end_every_undo_result() {
         use crate::content_workspace::ContentEdits;
         let temp = tempfile::tempdir().unwrap();

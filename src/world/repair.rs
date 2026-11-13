@@ -1,8 +1,4 @@
 //! The same source editor for broken notes in Campaign and World.
-#![allow(
-    clippy::disallowed_methods,
-    reason = "staged: this file still calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-)]
 use super::file_fault::FileFault;
 use crate::{
     design::{self, colors},
@@ -277,6 +273,10 @@ impl Repair {
 
     /// The DM's choice after the file changed on disk under a changed draft. True when an
     /// Overwrite saved. `refused`: Save's own check refuses the draft.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn choose(
         &mut self,
         campaign: &Campaign,
@@ -307,6 +307,10 @@ impl Repair {
     /// or Undo reload), then Save's reason. It sits at the bottom of the pane, as tall as what it
     /// holds, so the editor never moves and both messages show whole. Returns whether Undo is
     /// pressed, and the y where the body ends.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn footer(&self, ui: &mut egui::Ui, problem: Option<&str>) -> (bool, f32) {
         let name = self.path.rsplit('/').next().unwrap_or(&self.path);
         let undo = if self.discarded.is_some() {
@@ -345,6 +349,10 @@ impl Repair {
     }
 
     /// The editor and its save row.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn edit(
         &mut self,
         ui: &mut egui::Ui,

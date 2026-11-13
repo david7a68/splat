@@ -2,10 +2,6 @@
 //! made from them. Obsidian stays a plain note's editor; an entry also has Edit here. A plain
 //! note becomes a Lookup item, not an entry, so nothing depends on it.
 //! See `docs/design/world-and-house-rules.md`.
-#![allow(
-    clippy::disallowed_methods,
-    reason = "staged: this file still calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-)]
 mod checks;
 pub(crate) mod edit;
 mod fields;
@@ -2303,6 +2299,10 @@ pub(crate) fn with_lines(mut lines: Vec<FooterLine>, more: Vec<FooterLine>) -> V
 /// what is left of `ui`, in the footer's order: results with a live Undo, then reasons, then
 /// notices. `id` is the pane instance's own. Returns the action pressed and the y where the body
 /// drawn next ends.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 pub(crate) fn draw_footer(
     ui: &mut egui::Ui,
     id: impl std::hash::Hash,
@@ -3987,6 +3987,10 @@ impl Reader {
     }
 
     /// A kept result was made now: it goes first among the results with a live Undo.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     pub(super) fn stamp(&mut self, act: FooterAct) {
         self.orders.insert(act, design::ResultOrder::issue());
     }
@@ -4340,6 +4344,10 @@ impl Reader {
         chosen
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn entry_controls(
         &mut self,
         ui: &mut egui::Ui,

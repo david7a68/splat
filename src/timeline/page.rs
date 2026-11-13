@@ -1,8 +1,4 @@
 //! The Timeline page: the whole campaign in story order, apart from any one session.
-#![allow(
-    clippy::disallowed_methods,
-    reason = "staged: this file still calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-)]
 use super::{Book, Event, Kind, checks, clock, clock_now, clock_words, day_numbers, reference};
 use crate::design::{self, Action, Density, Status, Tone, Type, colors, icons};
 use eframe::egui;
@@ -184,6 +180,10 @@ impl<'a> LiveUndos<'a> {
     }
 
     /// Add them to `footer`, which puts them newest first.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     pub(crate) fn into_footer(self, footer: &mut design::Footer<'a>) {
         for (order, words, draw) in self.items {
             footer.result(order, words, true, draw);
@@ -890,6 +890,10 @@ impl TimelinePage {
     /// pinned below the rows, so a result never moves a row: the link update after a rename and
     /// its Undo, the open event's rest ruling, the file's notices, a removal and an add. Each
     /// keeps its owner and end event; the footer only places them. Returns where the rows end.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn list_footer(
         &mut self,
         ui: &mut egui::Ui,
@@ -1621,6 +1625,10 @@ impl TimelinePage {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,

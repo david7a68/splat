@@ -2,10 +2,6 @@
 //! in story order. It stands apart from session notes. A note refers to an event by its
 //! stable ID, and the same link works in Obsidian, because each event is a block in
 //! `Timeline.md`. Version 2 keeps the events in the body.
-#![allow(
-    clippy::disallowed_methods,
-    reason = "staged: this file still calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-)]
 pub mod checks;
 pub(crate) mod formats;
 pub mod page;
@@ -773,6 +769,10 @@ fn new_id() -> String {
 /// When a kept result was made, so a footer lists its results with a live Undo newest first,
 /// whatever their kind. The owner of a result takes it when the result is made, every time, also
 /// when it repeats an earlier one.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 pub(crate) fn next_result_order() -> crate::design::ResultOrder {
     crate::design::ResultOrder::issue()
 }
@@ -932,6 +932,10 @@ impl Book {
     }
 
     /// Note an edit. It saves after a short pause, or at the next `save`.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     pub fn touch(&mut self) {
         self.changes += 1;
         self.run_write = false;
@@ -1481,6 +1485,10 @@ impl Book {
     }
 
     /// One press and one step of undo, not a dialog.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     pub fn remove(&mut self, id: &str) {
         if let Some(index) = self.events.iter().position(|event| event.id == id) {
             let label = self.events[index].label(day_numbers(&self.events)[index]);

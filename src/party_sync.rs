@@ -1,9 +1,5 @@
 //! Read-only API transport and the background reads that keep every party sheet current,
 //! whichever page is showing, from the time Splat connects to D&D Beyond.
-#![allow(
-    clippy::disallowed_methods,
-    reason = "staged: this file still calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-)]
 use crate::auth::Session;
 use eframe::egui;
 use reqwest::{
@@ -927,6 +923,10 @@ impl Reader {
         }
     }
     /// A saved note clears its character's warnings, so moving a note aside clears them too.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn campaign_copy_saved(&mut self, id: String, result: Result<Vec<PathBuf>, CampaignCopyError>) {
         let what = Stored::CampaignCopy(id.clone());
         match result {

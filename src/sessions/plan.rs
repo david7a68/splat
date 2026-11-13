@@ -1,9 +1,5 @@
 //! The Session page's plan: its rows (planned, open and played fights, groups and events), the
 //! Add strip, a row's menu and its opened detail.
-#![allow(
-    clippy::disallowed_methods,
-    reason = "staged: this file still calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-)]
 use super::{Added, Plan, Sessions, plan_summary, wrapped_words};
 use crate::{
     design::{self, Action, Density, Status, Tone, Type, colors, icons},
@@ -2546,6 +2542,10 @@ impl Sessions {
 
     /// Carry out an act on a journey's checks. `Plan` writes the session note; the others write
     /// `Timeline.md`.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn travel_act(
         &mut self,
         book: &mut Book,
@@ -2633,6 +2633,10 @@ impl Sessions {
 
     /// The session as a list, top to bottom: what happened, then what is still to come. It
     /// replaces a walk between Encounters, Timeline and the note.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     pub(super) fn plan_pane(&mut self, ui: &mut egui::Ui, book: &mut Book, plan: &Plan<'_>) {
         let session = self.selected;
         let here = self.group_session == session;
@@ -3803,6 +3807,10 @@ impl Sessions {
     /// One scene act, through the note's one act path: it follows the disk, changes the one line
     /// that the row was drawn from and saves at once. What it could not do shows where the DM
     /// acted. An act whose save failed keeps its Undo: the fragment waits in the draft.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn scene_act(&mut self, act: SceneAct, session: Option<Uuid>) {
         if let SceneAct::StartFight(fight) = act {
             self.wants_start_fight = Some(fight);
@@ -3918,6 +3926,10 @@ impl Sessions {
 
     /// The deletion's result. While it shows, it replaces the result of the removal action it
     /// follows, when that removal is of this run's own event.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn record_deleted_run(
         &mut self,
         book: &Book,
@@ -5425,6 +5437,10 @@ mod tests {
     /// holds what an act wrote after a restart. An Undo survives an act that leaves the note's
     /// words alone, and ends at one that changes them.
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn scenes_are_note_acts_with_their_own_undo() {
         use crate::sessions::{NewNote, create_note, plan_lines};
         use egui_kittest::kittest::Queryable;
