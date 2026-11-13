@@ -2814,14 +2814,15 @@ impl<'a> Driver<'a> {
         // Nodes are in AccessKit's pixels, painted texts in points.
         let points = crate::design::footer_bands(&self.harness.ctx);
         // A part of the content begins above the band and is painted into it, past egui's clip
-        // margin. A container that holds the whole band (the pane itself) is not a part of it.
+        // margin. What runs to the pane's bottom (the pane's frame, a column splitter at its edge)
+        // is not a part of it.
         let into = |bands: &[egui::Rect], rect: egui::Rect, shown: egui::Rect| {
             bands
                 .iter()
                 .find(|band| {
                     let inside = shown.intersect(**band);
                     rect.top() < band.top() - 0.5
-                        && !rect.contains_rect(**band)
+                        && rect.bottom() < band.bottom() - 0.5
                         && inside.is_positive()
                         && inside.height() > margin
                 })
