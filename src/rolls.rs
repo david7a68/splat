@@ -1736,10 +1736,6 @@ fn armed_hint(ui: &mut egui::Ui, status: &str, reserve: &str) {
 ///
 /// Each tile comes with its place in the entry's whole list of actions, if it has one: the
 /// number it shows is the number that arms it.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[(Option<usize>, Chip)]) {
     if chips.is_empty() {
         return;
@@ -1757,7 +1753,7 @@ pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[(Option<usize>, Chi
             .map(|place| place + 1)
     };
     set_entry(&ctx, entry);
-    ui.add_space(design::XS);
+    design::gap(ui, design::Gap::XS);
     let lines = tile_lines(ui.available_width(), chips.len());
     let shown: Vec<RollLink> = chips
         .iter()
@@ -1766,7 +1762,7 @@ pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[(Option<usize>, Chi
     let mut at = 0;
     for (line, (count, width)) in lines.into_iter().enumerate() {
         if line > 0 {
-            ui.add_space(design::S);
+            design::gap(ui, design::Gap::S);
         }
         let range = at..at + count;
         at += count;
@@ -1795,7 +1791,7 @@ pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[(Option<usize>, Chi
             }
         });
     }
-    ui.add_space(design::XS);
+    design::gap(ui, design::Gap::XS);
     if let Some(view) = &armed {
         // What to do now, then what can follow, each on its own line.
         armed_hint(ui, &view.status, &view.reserve);
@@ -1811,7 +1807,7 @@ pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[(Option<usize>, Chi
             outcome_line(ui, &outcome);
         });
     }
-    ui.add_space(design::S);
+    design::gap(ui, design::Gap::S);
 }
 
 /// The totals of an outcome in Strong, with their dice in hover. A muted `·` comes between
@@ -1860,10 +1856,6 @@ pub(crate) const BAR_BUTTONS: f32 = 28.0;
 /// The run's actions on one line above the dock while Lookup or Notes hide the panel: a
 /// quiet button for each tile, the armed one marked, with a run's changes in its numbers.
 /// The first button starts at the dock's content edge.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub(crate) fn compact_tiles(ui: &mut egui::Ui, chips: &[Chip]) {
     let ctx = ui.ctx().clone();
     let armed = ctx.data(|data| data.get_temp::<ArmedView>(armed_id()));
@@ -1871,7 +1863,7 @@ pub(crate) fn compact_tiles(ui: &mut egui::Ui, chips: &[Chip]) {
     ui.horizontal(|ui| {
         ui.set_height(BAR_BUTTONS);
         ui.spacing_mut().item_spacing.x = design::XS;
-        ui.add_space(design::S);
+        design::gap(ui, design::Gap::S);
         for (at, chip) in chips.iter().enumerate() {
             let lit = armed.as_ref().is_some_and(|view| view.link == chip.link);
             let shown = with_changes(&chip.link, changes);

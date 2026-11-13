@@ -89,10 +89,6 @@ impl Recovery {
         self.change.take()
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     pub fn show(&self, ui: &mut egui::Ui, draft: &str, what: &str) -> Option<bool> {
         let change = self.change.as_ref()?;
         let mut messages = vec![changed_on_disk(what)];
@@ -119,8 +115,8 @@ impl Recovery {
                 {
                     choice = Some(true);
                 }
-                // egui adds its item spacing too, so the whole gap is exactly `L`.
-                ui.add_space(design::L - ui.spacing().item_spacing.x);
+                // egui adds its item spacing (`S`, the theme's) too, so the whole gap is `L`.
+                design::gap(ui, design::Gap::S);
                 // FF7: the file is gone, so the choice says what it removes and loses.
                 let lose = if change.text.is_some() {
                     "Reload and lose my draft".to_owned()
@@ -147,7 +143,7 @@ impl Recovery {
                     lines
                 });
             if !lines.is_empty() {
-                ui.add_space(design::S);
+                design::gap(ui, design::Gap::S);
             }
             for (label, words) in &lines {
                 ui.horizontal_top(|ui| {

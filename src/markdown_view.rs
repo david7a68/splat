@@ -156,10 +156,6 @@ fn linked_markdown(
     })
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn show_with_density(
     ui: &mut egui::Ui,
     markdown: &str,
@@ -414,7 +410,7 @@ fn show_with_density(
                     if let Some(marker) = rolls.take() {
                         crate::roll_table::roll_control(ui, reader, &marker, &rows);
                     }
-                    ui.add_space(design::S);
+                    design::gap(ui, design::Gap::S);
                 }
                 inventory_table = false;
             }
@@ -429,15 +425,18 @@ fn show_with_density(
             }
             Event::Start(Tag::Heading { level, .. }) => {
                 flush(ui, &mut job, &mut target);
-                ui.add_space(if dense {
-                    design::S
-                } else {
-                    match level {
-                        pulldown_cmark::HeadingLevel::H1 => design::S,
-                        pulldown_cmark::HeadingLevel::H2 => design::L,
-                        _ => design::M,
-                    }
-                });
+                design::gap(
+                    ui,
+                    if dense {
+                        design::Gap::S
+                    } else {
+                        match level {
+                            pulldown_cmark::HeadingLevel::H1 => design::Gap::S,
+                            pulldown_cmark::HeadingLevel::H2 => design::Gap::L,
+                            _ => design::Gap::M,
+                        }
+                    },
+                );
                 heading = Some(level);
             }
             Event::End(TagEnd::Heading(level)) => {
@@ -450,7 +449,7 @@ fn show_with_density(
                     || (!dense && level == pulldown_cmark::HeadingLevel::H3)
                 {
                     design::rule(ui);
-                    ui.add_space(design::XS);
+                    design::gap(ui, design::Gap::XS);
                 }
                 heading = None;
             }
@@ -2111,7 +2110,7 @@ fn flush(ui: &mut egui::Ui, job: &mut LayoutJob, target: &mut Targets) {
         target.quote_bottom = rect.bottom();
     }
     if !target.row {
-        ui.add_space(design::S);
+        design::gap(ui, design::Gap::S);
     }
 }
 

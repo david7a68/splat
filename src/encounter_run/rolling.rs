@@ -1389,10 +1389,6 @@ impl Run {
     }
 
     /// The panel's action tiles, as one line above the dock while the panel is hidden.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     pub(super) fn compact_actions(&mut self, ui: &mut egui::Ui) {
         let row = self.panel_row();
         let chips = self.chips(row);
@@ -1406,7 +1402,7 @@ impl Run {
         let open_side = ui
             .horizontal(|ui| {
                 let open = death_saves && {
-                    ui.add_space(crate::design::S);
+                    crate::design::gap(ui, crate::design::Gap::S);
                     crate::design::Action::quiet("Death saves")
                         .density(crate::design::Density::Read)
                         .show(ui)

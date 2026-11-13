@@ -113,11 +113,11 @@ impl Run {
                     .show(ui)
                     .clicked();
                 // As the strip pairs Back to run with Next turn: one height, one small gap.
-                ui.add_space(design::S);
+                design::gap(ui, design::Gap::S);
                 if self.add_to_fight(words, Density::Glance).show(ui).clicked() {
                     self.show_arrivals();
                 }
-                ui.add_space(design::S);
+                design::gap(ui, design::Gap::S);
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                     let response = ui.label(
                         Type::Round
@@ -130,7 +130,7 @@ impl Run {
                         &response,
                         &format!("Run · {} · Round {}", self.name, self.state.round),
                     );
-                    ui.add_space(design::S);
+                    design::gap(ui, design::Gap::S);
                     // Drop the turn suffix before shortening the identifying name.
                     let room = ui.available_width() - design::HAIRLINE_WIDTH;
                     let least = (scale.name + design::HAIRLINE_WIDTH).min(turn_size);
@@ -517,7 +517,7 @@ impl Run {
                         // X69: `S` before the link, as `link_width` counts it, so a long
                         // name never runs into `Review`.
                         if fits_link {
-                            ui.add_space(design::S - ui.spacing().item_spacing.x);
+                            design::gap(ui, design::Gap::XS);
                         }
                         if !link.is_empty() && fits_link && design::small_link(ui, link).clicked() {
                             if link == "Review" {
@@ -553,7 +553,7 @@ impl Run {
                         }));
                     }
                     if let Some(summary) = &sheet {
-                        ui.add_space(design::S);
+                        design::gap(ui, design::Gap::S);
                         // The compact message's own top alignment is useful in stacked
                         // notices. Here its text-height box is centred by the control row.
                         let width =
@@ -587,7 +587,7 @@ impl Run {
                     }
                     if let Some((words, _, full)) = &reminder {
                         if sheet.is_some() || !next_shown {
-                            ui.add_space(design::S);
+                            design::gap(ui, design::Gap::S);
                         }
                         let response = ui
                             .horizontal(|ui| {

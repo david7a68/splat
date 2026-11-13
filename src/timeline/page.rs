@@ -14,6 +14,9 @@ const FILTERS_ON_ONE_ROW_FROM: f32 = design::LIST_MEASURE;
 const UNDO_ADD_FOR: Duration = Duration::from_secs(30);
 const COPIED_FOR: Duration = Duration::from_secs(2);
 
+const TIMELINE_SEARCH: design::FieldId = crate::field_id!("timeline_search");
+const EVENT_NOTES: design::FieldId = crate::field_id!("event_notes");
+
 #[derive(Clone, Copy, Default, PartialEq)]
 enum Filter {
     #[default]
@@ -593,9 +596,9 @@ impl TimelinePage {
             .width(design::READER_MEASURE / 4.0)
             .icon(design::combo_icon)
             .show_ui(ui, |ui| {
-                ui.selectable_value(&mut chosen, None, "No session");
+                design::choice_value(ui, &mut chosen, None, "No session");
                 for session in sessions {
-                    ui.selectable_value(&mut chosen, Some(session.id), &session.label);
+                    design::choice_value(ui, &mut chosen, Some(session.id), &session.label);
                 }
             });
         design::named(ui, &inner.response, "Session for new events");
@@ -633,7 +636,14 @@ impl TimelinePage {
             if wide {
                 tabs(ui, &mut self.filter);
             }
-            design::search_field(ui, "Search the timeline", &mut self.search, "Search", 160.0);
+            // `Clear` changes `self.search`, which `before` below sees; nothing else to reset.
+            let _ = TIMELINE_SEARCH.search(
+                ui,
+                "Search the timeline",
+                &mut self.search,
+                "Search",
+                160.0,
+            );
             let label = self
                 .session
                 .and_then(|id| sessions.iter().find(|session| session.id == id))
@@ -645,9 +655,14 @@ impl TimelinePage {
                 .width(150.0)
                 .icon(design::combo_icon)
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.session, None, "All sessions");
+                    design::choice_value(ui, &mut self.session, None, "All sessions");
                     for session in sessions {
-                        ui.selectable_value(&mut self.session, Some(session.id), &session.label);
+                        design::choice_value(
+                            ui,
+                            &mut self.session,
+                            Some(session.id),
+                            &session.label,
+                        );
                     }
                 });
             design::named(ui, &inner.response, "Show one session");
@@ -1363,7 +1378,7 @@ impl TimelinePage {
         ui.scope(|ui| {
             ui.set_max_width(header_width);
             let event = &mut book.events[index];
-            ui.add_space(design::XS);
+            design::gap(ui, design::Gap::XS);
             let hint = (event.kind == Kind::Day)
                 .then_some("Optional. Days number themselves, so a name is extra.");
             let title = design::text_field(ui, "Title", &mut event.title, hint, None);
@@ -1372,7 +1387,7 @@ impl TimelinePage {
                 title.request_focus();
             }
         });
-        ui.add_space(design::S);
+        design::gap(ui, design::Gap::S);
         design::rule(ui);
         let mut ruling = None;
         let mut area = egui::ScrollArea::vertical()
@@ -1396,7 +1411,7 @@ impl TimelinePage {
             ui.set_max_width(form_width);
             let event = &mut book.events[index];
             let mut length = event.duration.clone();
-            ui.add_space(design::M);
+            design::gap(ui, design::Gap::M);
             let day_start = starts
                 .filter(|_| event.kind == Kind::Day)
                 .map(|start| format!("Starts: {}", clock_words(start)));
@@ -1407,15 +1422,14 @@ impl TimelinePage {
                     .icon(design::combo_icon)
                     .show_ui(ui, |ui| {
                         for kind in Kind::ALL {
-                            changed |= ui
-                                .selectable_value(&mut event.kind, kind, kind.word())
+                            changed |= design::choice_value(ui, &mut event.kind, kind, kind.word())
                                 .changed();
                         }
                     });
                 design::named(ui, &inner.response, "Kind of event");
             });
             if event.kind != Kind::Day {
-                ui.add_space(design::M);
+                design::gap(ui, design::Gap::M);
                 design::field(ui, "How long", Some(super::LENGTH_HELP), None, |ui| {
                     let hint = match event.kind {
                         Kind::LongRest => "8 hours",
@@ -1431,9 +1445,15 @@ impl TimelinePage {
                     } else {
                         // With no checks to follow it, the event changes as the DM types.
                         let width = ui.available_width();
-                        changed |=
-                            design::text_input(ui, "How long", &mut event.duration, hint, width)
-                                .changed();
+                        changed |= design::line_field(
+                            ui,
+                            checks::length_field(event),
+                            "How long",
+                            &mut event.duration,
+                            hint,
+                            width,
+                        )
+                        .changed();
                     }
                 });
             }
@@ -1467,7 +1487,7 @@ impl TimelinePage {
             }
             // A journey's encounter checks, under its own **How long**.
             if checks::shown(event) {
-                ui.add_space(design::M);
+                design::gap(ui, design::Gap::M);
                 let view = checks::View {
                     event,
                     start: starts,
@@ -1482,10 +1502,10 @@ impl TimelinePage {
                 undo_checks |= design::undo_line(ui, Tone::Success, result);
                 checks_act = checks::lines(ui, &view, &mut self.checks).or(checks_act.take());
             }
-            ui.add_space(design::M);
+            design::gap(ui, design::Gap::M);
             changed |= design::text_field(ui, "Where", &mut event.place, None, None).changed();
             changed |= self.place_help(ui, event);
-            ui.add_space(design::M);
+            design::gap(ui, design::Gap::M);
             design::field(ui, "Session", None, None, |ui| {
                 let label = event
                     .session
@@ -1497,17 +1517,16 @@ impl TimelinePage {
                     .width(ui.available_width().min(design::FORM_WIDTH))
                     .icon(design::combo_icon)
                     .show_ui(ui, |ui| {
-                        changed |= ui
-                            .selectable_value(&mut event.session, None, "No session")
+                        changed |= design::choice_value(ui, &mut event.session, None, "No session")
                             .changed();
                         for session in sessions {
-                            changed |= ui
-                                .selectable_value(
-                                    &mut event.session,
-                                    Some(session.id),
-                                    &session.label,
-                                )
-                                .changed();
+                            changed |= design::choice_value(
+                                ui,
+                                &mut event.session,
+                                Some(session.id),
+                                &session.label,
+                            )
+                            .changed();
                         }
                     });
                 design::named(ui, &inner.response, "Session of this event");
@@ -1520,7 +1539,7 @@ impl TimelinePage {
                 self.open_session = Some(session);
             }
             if !event.result.is_empty() {
-                ui.add_space(design::M);
+                design::gap(ui, design::Gap::M);
                 design::field(ui, "From the run", None, None, |ui| {
                     ui.label(
                         Type::Body
@@ -1535,14 +1554,15 @@ impl TimelinePage {
                     );
                 });
             }
-            ui.add_space(design::M);
+            design::gap(ui, design::Gap::M);
             design::field(ui, "Notes", None, None, |ui| {
-                let response = ui.add(
-                    egui::TextEdit::multiline(&mut event.notes)
-                        .desired_width(ui.available_width() - 2.0 * design::S)
+                let width = ui.available_width() - 2.0 * design::S;
+                let notes = EVENT_NOTES.with(design::TextKey::from_data(event.id.as_str()));
+                let response = notes.multi_line(ui, &mut event.notes, |edit| {
+                    edit.desired_width(width)
                         .desired_rows(3)
-                        .margin(egui::vec2(design::S, design::S)),
-                );
+                        .margin(egui::vec2(design::S, design::S))
+                });
                 design::named(ui, &response, "Notes on this event");
                 changed |= response.changed();
             });
@@ -1571,8 +1591,8 @@ impl TimelinePage {
                     }
                 });
             }
-            ui.add_space(design::XS);
-            ui.add_space(design::M);
+            design::gap(ui, design::Gap::XS);
+            design::gap(ui, design::Gap::M);
             design::field(ui, "Place after", None, None, |ui| {
                 let before = index
                     .checked_sub(1)
@@ -1583,15 +1603,12 @@ impl TimelinePage {
                     .width(ui.available_width().min(design::FORM_WIDTH))
                     .icon(design::combo_icon)
                     .show_ui(ui, |ui| {
-                        if ui
-                            .selectable_label(false, "Start of the timeline")
-                            .clicked()
-                        {
+                        if design::choice(ui, false, "Start of the timeline").clicked() {
                             placed = Some(None);
                         }
                         for (at, label) in labels.iter().enumerate() {
                             if at != index {
-                                let row = ui.selectable_label(at + 1 == index, label);
+                                let row = design::choice(ui, at + 1 == index, label);
                                 if row.clicked() {
                                     placed = Some(Some(ids[at].clone()));
                                 }
@@ -1608,7 +1625,7 @@ impl TimelinePage {
             });
             // With the list hidden, the event's results end its form, so they move no field.
             if self.narrow {
-                ui.add_space(design::M);
+                design::gap(ui, design::Gap::M);
                 file_notices(ui, book);
                 self.event_results(ui, book, notes, &id);
             }
@@ -1743,7 +1760,7 @@ impl TimelinePage {
         {
             self.play_current = true;
         }
-        ui.add_space(design::XS);
+        design::gap(ui, design::Gap::XS);
         if book.events.is_empty() && book.unreadable.is_none() {
             let bottom = self.list_footer(ui, book, notes, None);
             let mut first = false;
@@ -1786,7 +1803,7 @@ impl TimelinePage {
         if !(narrow && event_open) {
             self.filters(ui, sessions, current);
         }
-        ui.add_space(design::XS);
+        design::gap(ui, design::Gap::XS);
         // Beside Lookup or Notes at a small window, two columns would crush the list.
         if narrow {
             if event_open {

@@ -63,6 +63,11 @@ const SPEECH_CHOICES: [(&str, &str, &str); 3] = [
 ];
 const OTHER_SERVICE: &str = "Another service";
 
+const SPEECH_KEY: design::FieldId = crate::field_id!("speech_api_key");
+const LLM_KEY: design::FieldId = crate::field_id!("llm_api_key");
+const CLEAN_PROMPT: design::FieldId = crate::field_id!("clean_prompt");
+const REVIEW_PROMPT: design::FieldId = crate::field_id!("review_prompt");
+
 #[derive(Default)]
 struct Store {
     path: Option<PathBuf>,
@@ -396,6 +401,10 @@ impl ProcessingSettings {
         let remove_name = format!("{remove}: {label}");
         let held = self.held(slot).is_some();
         let focus = slot == KeySlot::Speech && std::mem::take(&mut self.focus_speech_key);
+        let key_field = match slot {
+            KeySlot::Speech => SPEECH_KEY,
+            KeySlot::Llm => LLM_KEY,
+        };
         let mut save = false;
         // The field and `Save key` share the form's width, so `Save key` ends at the edge the
         // other fields end at. Its slot stays when it is hidden, so typing moves nothing. The
@@ -410,21 +419,21 @@ impl ProcessingSettings {
                 reason = (empty && show_save).then_some("Paste a key first.");
                 let save_width = Action::secondary("Save key").natural_width(ui);
                 let width = (row - save_width - ui.spacing().item_spacing.x).max(design::L * 4.0);
-                let response = ui.add(
-                    egui::TextEdit::singleline(&mut field.typing)
-                        .password(true)
+                let hint = design::placeholder(
+                    ui,
+                    if saved && fits {
+                        "Paste a new key to replace it"
+                    } else {
+                        "Paste the key"
+                    },
+                );
+                let response = key_field.single_line(ui, &mut field.typing, |edit| {
+                    edit.password(true)
                         .desired_width(width - 2.0 * design::S)
                         .min_size(egui::vec2(width, 0.0))
                         .margin(egui::vec2(design::S, 5.0))
-                        .hint_text(design::placeholder(
-                            ui,
-                            if saved && fits {
-                                "Paste a new key to replace it"
-                            } else {
-                                "Paste the key"
-                            },
-                        )),
-                );
+                        .hint_text(hint)
+                });
                 design::named(ui, &response, label);
                 if focus {
                     response.request_focus();
@@ -510,9 +519,13 @@ impl ProcessingSettings {
         reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
     )]
     fn input_section(&mut self, ui: &mut egui::Ui) {
-        let heading = ui
-            .scope(|ui| design::group_heading(ui, "Recording", 0))
-            .response;
+        let heading = design::heading(
+            ui,
+            design::Heading::Group {
+                title: "Recording",
+                count: 0,
+            },
+        );
         if self.focus_input {
             heading.scroll_to_me(Some(egui::Align::TOP));
         }
@@ -557,21 +570,21 @@ impl ProcessingSettings {
                             .width(ui.available_width().min(design::FORM_WIDTH))
                             .icon(design::combo_icon)
                             .show_ui(ui, |ui| {
-                                changed |= ui
-                                    .selectable_value(
+                                changed |= design::choice_value(
+                                    ui,
+                                    &mut self.config.input,
+                                    None,
+                                    "System default",
+                                )
+                                .changed();
+                                for input in &inputs {
+                                    changed |= design::choice_value(
+                                        ui,
                                         &mut self.config.input,
-                                        None,
-                                        "System default",
+                                        Some(input.name.clone()),
+                                        &input.description,
                                     )
                                     .changed();
-                                for input in &inputs {
-                                    changed |= ui
-                                        .selectable_value(
-                                            &mut self.config.input,
-                                            Some(input.name.clone()),
-                                            &input.description,
-                                        )
-                                        .changed();
                                 }
                             });
                         design::named(ui, &inner.response, "Recording input");
@@ -630,7 +643,6 @@ impl ProcessingSettings {
         reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
     )]
     fn speech_section(&mut self, ui: &mut egui::Ui) {
-        design::group_heading(ui, "Speech service", 0);
         design::help(
             ui,
             "Turns your recording into text. Choose a speech service and enter its API key.",
@@ -647,14 +659,11 @@ impl ProcessingSettings {
                 .icon(design::combo_icon)
                 .show_ui(ui, |ui| {
                     for (name, url, model) in SPEECH_CHOICES {
-                        if ui.selectable_label(current == name, name).clicked() {
+                        if design::choice(ui, current == name, name).clicked() {
                             chosen = Some((url, model));
                         }
                     }
-                    if ui
-                        .selectable_label(current == OTHER_SERVICE, OTHER_SERVICE)
-                        .clicked()
-                    {
+                    if design::choice(ui, current == OTHER_SERVICE, OTHER_SERVICE).clicked() {
                         chosen = Some(("", ""));
                     }
                 });
@@ -704,7 +713,6 @@ impl ProcessingSettings {
         reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
     )]
     fn llm_section(&mut self, ui: &mut egui::Ui) {
-        design::group_heading(ui, "Transcript and summary", 0);
         design::help(
             ui,
             "Goes over the transcript twice: once to clean it and mark events, and once to check that work against the raw words.",
@@ -723,14 +731,11 @@ impl ProcessingSettings {
                 .icon(design::combo_icon)
                 .show_ui(ui, |ui| {
                     for (name, provider, url, model) in LLM_CHOICES {
-                        if ui.selectable_label(current == name, name).clicked() {
+                        if design::choice(ui, current == name, name).clicked() {
                             chosen = Some((provider, url, model));
                         }
                     }
-                    if ui
-                        .selectable_label(current == OTHER_SERVICE, OTHER_SERVICE)
-                        .clicked()
-                    {
+                    if design::choice(ui, current == OTHER_SERVICE, OTHER_SERVICE).clicked() {
                         chosen = Some((Provider::OpenAiCompatible, "", ""));
                     }
                 });
@@ -778,29 +783,29 @@ impl ProcessingSettings {
         let mut changed = false;
         // Technical, and a stray key here changes every later job.
         design::quiet_section(ui, "Transcript and summary instructions", |ui| {
-            for (label, help, prompt, default) in [
+            for (label, field_id, help, prompt, default) in [
                 (
                     "First pass: clean and mark",
+                    CLEAN_PROMPT,
                     "Cleans the raw transcript and marks events in it.",
                     &mut self.config.clean_prompt,
                     super::default_clean_prompt(),
                 ),
                 (
                     "Second pass: check and summarize",
+                    REVIEW_PROMPT,
                     "Checks the first pass against the raw transcript, corrects it, and writes the summary. Splat divides its reply at the headings # Review and # Marked transcript.",
                     &mut self.config.review_prompt,
                     super::default_review_prompt(),
                 ),
             ] {
                 design::small_field(ui, label, None, None, |ui| {
-                    let response = ui.add(
-                        egui::TextEdit::multiline(prompt)
-                            .desired_width(
-                                ui.available_width().min(design::FORM_WIDTH) - 2.0 * design::S,
-                            )
+                    let width = ui.available_width().min(design::FORM_WIDTH) - 2.0 * design::S;
+                    let response = field_id.multi_line(ui, prompt, |edit| {
+                        edit.desired_width(width)
                             .desired_rows(6)
-                            .margin(egui::vec2(design::S, design::S)),
-                    );
+                            .margin(egui::vec2(design::S, design::S))
+                    });
                     design::named(ui, &response, label);
                     changed |= response.changed();
                     // The field's own help, at the reader measure like the rest of this tab.
@@ -822,10 +827,6 @@ impl ProcessingSettings {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     pub fn show(&mut self, ui: &mut egui::Ui) {
         design::help(
             ui,
@@ -835,11 +836,24 @@ impl ProcessingSettings {
         // first group heading, as after any help.
         let reveal = std::mem::take(&mut self.reveal_problem);
         self.reason_rect = None;
-        ui.add_space(design::L);
         self.input_section(ui);
-        ui.add_space(design::L);
+        // The headings stand outside the `push_id` scopes: a heading in a new `Ui` is first in
+        // it and adds no space above itself.
+        design::heading(
+            ui,
+            design::Heading::Group {
+                title: "Speech service",
+                count: 0,
+            },
+        );
         ui.push_id("speech_settings", |ui| self.speech_section(ui));
-        ui.add_space(design::L);
+        design::heading(
+            ui,
+            design::Heading::Group {
+                title: "Transcript and summary",
+                count: 0,
+            },
+        );
         ui.push_id("llm_settings", |ui| self.llm_section(ui));
         // After the DM chooses a service that leaves a field empty, that field's reason comes
         // into view; the notice is in the tab's footer. A key problem has its reason at the key
