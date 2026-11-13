@@ -368,7 +368,9 @@ pub fn run(d: &mut Driver<'_>) {
     d.aside(|d| {
         d.press_ctrl(Key::T);
         d.expect("No house rules in play");
-        let framed = d.control_frame(RULES_ROUTE).is_some();
+        let framed = d
+            .control_frame(RULES_ROUTE)
+            .is_some_and(|frame| frame.stroke.width > 0.0);
         let away = !d.has("House rules in play");
         d.click(RULES_ROUTE);
         d.expect("House rules in play");
@@ -624,12 +626,14 @@ pub fn run(d: &mut Driver<'_>) {
     let title = title_line_words(d);
     d.observe(
         "T19.3",
-        d.has_label("DUE 2") && !title.iter().any(|words| words.starts_with("Due")),
+        d.has_label("DUE 2") && !title.iter().any(|words| words.contains("Due")),
         format!("The title line holds no Due count beside the DUE 2 heading: {title:?}"),
     );
     d.observe(
         "T19.2",
-        d.in_view("Add to Timeline") && d.control_frame("Add to Timeline").is_some(),
+        d.in_view("Add to Timeline")
+            && d.control_frame("Add to Timeline")
+                .is_some_and(|frame| frame.stroke.width > 0.0),
         "Add to Timeline, a message action without an icon, has a border",
     );
     d.state("trackers-over-an-entry", Sizes::Small);
