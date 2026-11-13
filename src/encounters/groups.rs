@@ -2,8 +2,7 @@
 //! roster. A group is prepared here and added to a run from the run's own panel.
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{
-    ADD_PANE_MAX_WIDTH, Creature, Draft, EditorPane, Encounters, NAME_FIELD, ROSTER_MAX_WIDTH,
-    Snapshot,
+    ADD_PANE_MAX_WIDTH, Creature, Draft, EditorPane, Encounters, ROSTER_MAX_WIDTH, Snapshot,
 };
 use crate::{
     campaigns::Campaigns,
@@ -37,6 +36,10 @@ const MISSING_ENCOUNTER: &str = "Deleted encounter";
 pub(crate) const ENCOUNTER_DELETED: &str = "Encounter deleted";
 const NOTES_FIELD: &str = "Group notes";
 const LABEL_WIDTH: f32 = 120.0;
+const OVERRIDE_NAME: design::FieldId = crate::field_id!("override_name");
+const OVERRIDE_NOTE: design::FieldId = crate::field_id!("override_note");
+const GROUP_NAME: design::FieldId = crate::field_id!("group_name");
+const ENCOUNTER_GROUP_NAME: design::FieldId = crate::field_id!("encounter_group_name");
 /// The name of a roster slot's button, for the form it opens.
 pub(super) const SLOT_OPTIONS: &str =
     "Options: starting HP, temporary HP, initiative group and changes";
@@ -64,12 +67,29 @@ struct GroupSetup {
     #[serde(flatten)]
     extra: Mapping,
 }
+/// The standalone group's name field. Its id comes from the group's own id, which the first
+/// save does not change, so the field keeps its focus and its text history through a save.
+fn name_field(ui: &mut egui::Ui, draft: &mut GroupDraft, width: f32) -> egui::Response {
+    let font = Type::Heading.font(ui);
+    GROUP_NAME
+        .with(draft.id)
+        .single_line(ui, &mut draft.name, |edit| {
+            edit.desired_width(width)
+                .min_size(egui::vec2(0.0, Density::Scan.control()))
+                .margin(egui::vec2(design::S, design::XS))
+                .font(font)
+        })
+}
+
 /// Why Save group waits on an empty group.
 const EMPTY_REASON: &str = "Add a creature first.";
 
 #[derive(Clone)]
 pub(super) struct GroupDraft {
     recovery: super::disk::Recovery,
+    /// The group's own id (`splat_id`), the same before and after its first save and after a
+    /// recovery. Its fields take it as their key; the path changes at the first save.
+    id: Uuid,
     path: String,
     baseline: Option<String>,
     source: String,
@@ -131,6 +151,7 @@ impl GroupDraft {
         };
         Self {
             recovery: Default::default(),
+            id,
             path: format!("{FOLDER}/{id}.md"),
             baseline: None,
             source: format!(
@@ -176,6 +197,7 @@ impl GroupDraft {
         let notes = splat::content::list_formats::prose(&entry);
         Ok(Self {
             recovery: Default::default(),
+            id: entry.id,
             path: path.into(),
             baseline: Some(text.clone()),
             member_lines: splat::content::list_formats::group_member_lines(&text, &entry.flags),
@@ -1043,24 +1065,17 @@ fn list_row(
 }
 
 /// One flat set of group headings inside the ledger's Groups section.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub(super) fn list(
     ui: &mut egui::Ui,
     snapshot: &Snapshot,
     blocked: Option<&'static str>,
     action: &mut Option<super::ListAction>,
 ) {
-    // FB8: a sub-heading after a group has `M` more above it, so it reads as the start of its
-    // own groups, not the end of the ones above. The first follows the Groups heading as it is.
-    let mut first = true;
-    let mut sub_heading = |ui: &mut egui::Ui, title: &str, count: usize| {
-        if !std::mem::take(&mut first) {
-            ui.add_space(design::M);
-        }
-        design::group_heading(ui, title, count);
+    // FB8: a sub-heading after a group has its heading's space above it, so it reads as the
+    // start of its own groups, not the end of the ones above. The first follows the Groups
+    // heading as it is.
+    let sub_heading = |ui: &mut egui::Ui, title: &str, count: usize| {
+        design::heading(ui, design::Heading::Group { title, count });
     };
     let any: Vec<_> = snapshot
         .groups
@@ -1203,10 +1218,6 @@ pub(super) fn add_target(ui: &mut egui::Ui, draft: &mut Draft, _snapshot: &Snaps
 
 /// The groups that belong to an encounter, each in a frame of its own, built here and saved
 /// with it. Returns true when the DM chooses to add creatures to one.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub(super) fn of_encounter(
     ui: &mut egui::Ui,
     draft: &mut Draft,
@@ -1220,21 +1231,22 @@ pub(super) fn of_encounter(
     let mut go_to_search = false;
     let mut discard = None;
     let this = (draft.id, draft.name.clone());
-    ui.add_space(design::M);
-    design::group_heading(
+    design::heading(
         ui,
-        "Groups for this encounter",
-        draft
-            .groups
-            .iter()
-            .filter(|group| group.belongs_to(draft.id))
-            .count(),
+        design::Heading::Group {
+            title: "Groups for this encounter",
+            count: draft
+                .groups
+                .iter()
+                .filter(|group| group.belongs_to(draft.id))
+                .count(),
+        },
     );
     design::help(
         ui,
         "They arrive when you add them to a run of this encounter. Save encounter saves them too.",
     );
-    ui.add_space(design::XS);
+    design::gap(ui, design::Gap::XS);
     let reveal = std::mem::take(&mut draft.reveal_group);
     let Draft {
         groups,
@@ -1314,14 +1326,17 @@ pub(super) fn of_encounter(
                             ui.with_layout(
                                 egui::Layout::left_to_right(egui::Align::Center),
                                 |ui| {
-                                    let response = ui.add(
-                                        egui::TextEdit::singleline(&mut group.name)
-                                            .desired_width(
-                                                (ui.available_width() - 2.0 * design::S)
-                                                    .min(design::FORM_WIDTH),
-                                            )
-                                            .margin(egui::vec2(design::S, 4.0))
-                                            .font(Type::Heading.font(ui)),
+                                    let width = (ui.available_width() - 2.0 * design::S)
+                                        .min(design::FORM_WIDTH);
+                                    let font = Type::Heading.font(ui);
+                                    let response = ENCOUNTER_GROUP_NAME.with(group.id).single_line(
+                                        ui,
+                                        &mut group.name,
+                                        |edit| {
+                                            edit.desired_width(width)
+                                                .margin(egui::vec2(design::S, 4.0))
+                                                .font(font)
+                                        },
                                     );
                                     design::named(
                                         ui,
@@ -1351,7 +1366,7 @@ pub(super) fn of_encounter(
             if adding && reveal {
                 frame.response.scroll_to_me(Some(egui::Align::Max));
             }
-            ui.add_space(design::S);
+            design::gap(ui, design::Gap::S);
         });
     }
     if let Some((index, delete)) = discard {
@@ -1447,7 +1462,8 @@ fn belongs_to(
                 ui.set_min_width(inner);
                 ui.set_max_width(inner);
                 ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
-                let any = ui.selectable_label(current.is_none(), ANY_ENCOUNTER);
+                let any =
+                    design::extras::choice_wrapped(ui, current.is_none(), ANY_ENCOUNTER, None);
                 crate::rolls::menu_choice_focus(ui, &any);
                 if any.clicked() {
                     draft.setup.encounter = None;
@@ -1455,7 +1471,8 @@ fn belongs_to(
                 }
                 for (id, name) in &choices {
                     // The same choice again keeps a link that the note gives.
-                    let choice = ui.selectable_label(current == Some(*id), *name);
+                    let choice =
+                        design::extras::choice_wrapped(ui, current == Some(*id), name, None);
                     crate::rolls::menu_choice_focus(ui, &choice);
                     if choice.clicked() && current != Some(*id) {
                         draft.setup.encounter = Some(EntryRef::id(*id));
@@ -1683,17 +1700,15 @@ fn change_row(
             .width(86.0)
             .selected_text(word)
             .show_ui(ui, |ui| {
-                if ui.selectable_label(value.is_none(), "Same").clicked() {
+                if design::choice(ui, value.is_none(), "Same").clicked() {
                     *value = None;
                 }
                 if set.is_some()
-                    && ui
-                        .selectable_label(matches!(value, Some(Change::Set(_))), "Set to")
-                        .clicked()
+                    && design::choice(ui, matches!(value, Some(Change::Set(_))), "Set to").clicked()
                 {
                     *value = Some(Change::Set(low));
                 }
-                let add_option = ui.selectable_label(matches!(value, Some(Change::Add(_))), "Add");
+                let add_option = design::choice(ui, matches!(value, Some(Change::Add(_))), "Add");
                 design::named(ui, &add_option, &format!("{label}: Add"));
                 if add_option.clicked() {
                     *value = Some(Change::Add(1));
@@ -1779,11 +1794,13 @@ fn single_change(label: &str, value: Option<Change>) -> Overrides {
 }
 
 /// One line of words, or nothing. Blank means no change.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
-fn text_row(ui: &mut egui::Ui, label: &str, value: &mut Option<String>, hint: &str) {
+fn text_row(
+    ui: &mut egui::Ui,
+    field: design::FieldId,
+    label: &str,
+    value: &mut Option<String>,
+    hint: &str,
+) {
     ui.horizontal(|ui| {
         let (rect, _) = ui.allocate_exact_size(
             egui::vec2(LABEL_WIDTH, Density::Read.control()),
@@ -1798,7 +1815,7 @@ fn text_row(ui: &mut egui::Ui, label: &str, value: &mut Option<String>, hint: &s
         );
         let mut text = value.clone().unwrap_or_default();
         let width = text_field_width(ui.available_width());
-        if design::text_input(ui, label, &mut text, hint, width).changed() {
+        if design::line_field(ui, field, label, &mut text, hint, width).changed() {
             *value = (!text.trim().is_empty()).then_some(text);
         }
     });
@@ -1861,7 +1878,7 @@ pub(super) fn overrides_form(
     let base = Base::of(entry, side);
     let before = overrides.clone();
     let linked = entry.fields.contains_key("splat_external");
-    ui.add_space(design::XS);
+    design::gap(ui, design::Gap::XS);
     let mut done = false;
     let heading = ui
         .horizontal(|ui| {
@@ -1903,7 +1920,13 @@ pub(super) fn overrides_form(
     {
         design::message(ui, FaultKind::InvalidChange.tone(), &override_error(&error));
     }
-    text_row(ui, "Display name", &mut overrides.name, &entry.name);
+    text_row(
+        ui,
+        OVERRIDE_NAME.with(design::TextKey::from_data(id)),
+        "Display name",
+        &mut overrides.name,
+        &entry.name,
+    );
     // Only a name just typed: opening the form must not edit what a note holds.
     if overrides.name != before.name {
         overrides.name = overrides
@@ -2011,9 +2034,15 @@ pub(super) fn overrides_form(
             conditions_row(ui, id, &mut overrides.conditions);
         });
     }
-    text_row(ui, "Note", &mut overrides.note, "Why this creature differs");
+    text_row(
+        ui,
+        OVERRIDE_NOTE.with(design::TextKey::from_data(id)),
+        "Note",
+        &mut overrides.note,
+        "Why this creature differs",
+    );
     // A group of rows, as Starting conditions is.
-    design::group_label(ui, "Loot");
+    design::heading(ui, design::Heading::Label("Loot"));
     // The loot field ends at the form's edge; `Roll on a table` follows it.
     let loot_width = form_edge(ui)
         + ui.spacing().item_spacing.x
@@ -2040,7 +2069,7 @@ pub(super) fn overrides_form(
     reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
 )]
 fn conditions_row(ui: &mut egui::Ui, id: &str, conditions: &mut Vec<String>) {
-    design::group_label(ui, "Starting conditions");
+    design::heading(ui, design::Heading::Label("Starting conditions"));
     // The run's grid: fixed columns, `S` apart.
     if let Some(name) =
         crate::encounter_run::view::conditions_grid(ui, "starting_conditions", |name| {
@@ -2287,14 +2316,7 @@ impl Encounters {
             let column = column_right.map_or(f32::INFINITY, |right| {
                 right - ui.cursor().left() - 2.0 * design::S
             });
-            let response = ui.add(
-                egui::TextEdit::singleline(&mut draft.name)
-                    .id(design::focus_id(NAME_FIELD))
-                    .desired_width(width.min(name_width(column)))
-                    .min_size(egui::vec2(0.0, Density::Scan.control()))
-                    .margin(egui::vec2(design::S, design::XS))
-                    .font(Type::Heading.font(ui)),
-            );
+            let response = name_field(ui, draft, width.min(name_width(column)));
             design::named(ui, &response, &format!("Group name: {}", draft.name));
             if response.changed() {
                 draft.touch();
@@ -2579,10 +2601,6 @@ fn draft_member_summary(draft: &GroupDraft, snapshot: &Snapshot) -> String {
         .join(", ")
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn add_pane(
     ui: &mut egui::Ui,
     draft: &mut GroupDraft,
@@ -2593,7 +2611,13 @@ fn add_pane(
     compact: bool,
 ) {
     if !compact {
-        design::group_heading(ui, "Add creatures", 0);
+        design::heading(
+            ui,
+            design::Heading::Group {
+                title: "Add creatures",
+                count: 0,
+            },
+        );
     }
     super::lane_help(
         ui,
@@ -2810,12 +2834,12 @@ fn group_fields(
     });
     if open.is_none() {
         design::help(ui, "Party, enemies, or any other name, such as rivals.");
-        ui.add_space(design::S);
+        design::gap(ui, design::Gap::S);
     }
     if open.is_none_or(|(id, _)| !draft.belongs_to(id)) {
         belongs_to(ui, draft, snapshot, open, name_right);
     }
-    ui.add_space(design::S);
+    design::gap(ui, design::Gap::S);
     let unread = splat::content::list_formats::unread_group_members(&draft.source, &draft.flags);
     let count = draft
         .setup
@@ -3400,6 +3424,59 @@ mod tests {
     use super::*;
 
     /// FT4: UI text names a value in curly quotation marks, never straight ones.
+    #[test]
+    fn a_group_name_keeps_focus_and_undo_through_its_first_save() {
+        use egui_kittest::kittest::Queryable;
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = campaign(dir.path());
+        let mut fresh = GroupDraft::new();
+        fresh.name = String::new();
+        let first_path = fresh.path.clone();
+        let draft = std::rc::Rc::new(std::cell::RefCell::new(fresh));
+        let shown = draft.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(600.0, 200.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    name_field(ui, &mut shown.borrow_mut(), 300.0);
+                });
+            });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        harness
+            .get_by_role(egui::accesskit::Role::TextInput)
+            .click();
+        harness.run_steps(2);
+        harness.event(egui::Event::Text("Rival".into()));
+        harness.run_steps(2);
+        assert_eq!(draft.borrow().name, "Rival");
+        harness.run_steps(40);
+        // The first save names the file, so the draft's path changes.
+        draft.borrow_mut().check_disk(&campaign).unwrap();
+        assert_ne!(draft.borrow().path, first_path, "the path changed");
+        harness.run_steps(2);
+        harness.event(egui::Event::Text(" Team".into()));
+        harness.run_steps(2);
+        assert_eq!(
+            draft.borrow().name,
+            "Rival Team",
+            "The field keeps its focus through the save"
+        );
+        harness.event(egui::Event::Key {
+            key: egui::Key::Z,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::COMMAND,
+        });
+        harness.run_steps(2);
+        assert_eq!(
+            draft.borrow().name,
+            "Rival",
+            "Undo takes back the last edit"
+        );
+    }
+
     #[test]
     fn iter_17_b_unread_changes_use_curly_quotes() {
         let words = unread_changes("+2 to hit");
