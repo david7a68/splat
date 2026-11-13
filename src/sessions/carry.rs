@@ -1421,6 +1421,7 @@ mod tests {
         assert_eq!(fs::read_to_string(&tonight.path).unwrap(), drafted);
     }
 
+    #[allow(clippy::disallowed_methods)]
     fn harness(
         dir: &Path,
         selected: Uuid,
@@ -1455,7 +1456,7 @@ mod tests {
                             let mut undos = crate::timeline::page::LiveUndos::new();
                             page.carry_in_footer(&mut undos, &mut footer, &act);
                             undos.into_footer(&mut footer);
-                            let _bottom = footer.show(ui);
+                            let _bottom = footer.show_by_hand(ui);
                             if let Some(super::super::SessionAct::UndoCarry(session)) = act.take() {
                                 page.undo_carry(session);
                             }

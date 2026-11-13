@@ -1,0 +1,613 @@
+//! A pane: its body, then its one message footer, placed by the part for every caller.
+//!
+//! `Footer::pane(ui, body, add)` makes the body's `Ui` from the cursor to the pane's bottom and
+//! draws the footer after it. The caller gives the messages and the body; it gets back only what
+//! its body returns, never a y, so it cannot size the body by hand, draw the body before the
+//! footer, or wrap it in a `Ui` the footer cannot see (round 28, `footer-escape.md`).
+//!
+//! - **`Body::Content` is the scroll column.** The part makes the vertical `ScrollColumn` (lane
+//!   kept) and runs `add` as its content. Where the content ends is egui's own scroll output, the
+//!   content's height and offset, not a guess from widget rects. The footer sits `S` below the
+//!   content when the content is shorter than the room and not scrolled; it is pinned at the
+//!   pane's bottom otherwise, and then draws a hairline where the content goes on below it. A body
+//!   that takes all the room (a widget sized to the room, a layout that centres or justifies, a
+//!   column as tall as the room) reads as tall: the footer is pinned below the room and never over
+//!   a control. A header that must not scroll is drawn before the pane. A vertical `ScrollColumn`
+//!   inside a `Content` pane is refused (a panic in debug builds and tests); a sideways scroll is
+//!   allowed.
+//! - **`Body::Fills(Fills::because(reason))`** is the one escape, for a body that manages its own
+//!   room: an editor, the live roster, several columns that each scroll. Its footer is pinned
+//!   below the room, with no hairline. Clippy refuses `Fills::because` outside `src/design/`, so
+//!   each use carries a counted allow.
+//!
+//! The part keeps the body's top and never covers its content. Content that places itself by
+//! the room's height (centred in it) moves when a message shrinks the room: that is the caller's
+//! fault. Clippy refuses `Ui::centered_and_justified` and `Ui::vertical_centered_justified`
+//! outside `src/design/`, and the gate's stillness check (G1a) catches the rest.
+//!
+//! Proof once, in the part (`components::tests::iter28_p_the_pane_places_its_footer_for_every_body`
+//! and `iter27_a_the_footer_follows_a_short_body`): placement for each body shape, short and long,
+//! checked against the accessibility tree's own rects, and the press proof (body press and footer
+//! press while the footer follows, is pinned, grows and empties). A caller that uses `pane` with
+//! no custom layer, clip, `Area` or raw interaction does not repeat it. Duties left with the
+//! caller: none for placement.
+//!
+//! The caller gets no y:
+//!
+//! ```compile_fail,E0308
+//! use splat::pane::{Body, Footer};
+//! fn body_end(ui: &mut eframe::egui::Ui) {
+//!     let footer = Footer::new("pane", 400.0);
+//!     let bottom: f32 = footer.pane(ui, Body::Content, |ui| {
+//!         ui.label("A row");
+//!     });
+//! }
+//! ```
+//!
+//! What the body returns comes back, and nothing else:
+//!
+//! ```
+//! use splat::pane::{Body, Footer};
+//! fn rows(ui: &mut eframe::egui::Ui) -> usize {
+//!     let footer = Footer::new("pane", 400.0);
+//!     footer.pane(ui, Body::Content, |ui| {
+//!         ui.label("A row");
+//!         1
+//!     })
+//! }
+//! ```
+//!
+//! A footer is placed once, with its body: it cannot be drawn again, before or after.
+//!
+//! ```compile_fail,E0382
+//! use splat::pane::{Body, Footer};
+//! fn twice(ui: &mut eframe::egui::Ui) {
+//!     let footer = Footer::new("pane", 400.0);
+//!     footer.pane(ui, Body::Content, |ui| ui.label("Body"));
+//!     footer.pane(ui, Body::Content, |ui| ui.label("A second body"));
+//! }
+//! ```
+//!
+//! ```
+//! use splat::pane::{Body, Footer};
+//! fn once(ui: &mut eframe::egui::Ui) {
+//!     Footer::new("pane", 400.0).pane(ui, Body::Content, |ui| ui.label("Body"));
+//! }
+//! ```
+//!
+//! A body that fills its room names why, from a closed list, through the one constructor that
+//! Clippy can refuse; no free words, and no way around `Fills::because`:
+//!
+//! ```compile_fail,E0308
+//! use splat::pane::{Body, Footer};
+//! fn editor(ui: &mut eframe::egui::Ui) {
+//!     Footer::new("pane", 400.0).pane(ui, Body::Fills("an editor"), |_| ());
+//! }
+//! ```
+//!
+//! ```compile_fail,E0423
+//! use splat::pane::{Body, Fills, FillsReason, Footer};
+//! fn editor(ui: &mut eframe::egui::Ui) {
+//!     Footer::new("pane", 400.0).pane(ui, Body::Fills(Fills(FillsReason::MarkdownEditor)), |_| ());
+//! }
+//! ```
+//!
+//! ```
+//! use splat::pane::{Body, Fills, FillsReason, Footer};
+//! fn editor(ui: &mut eframe::egui::Ui) {
+//!     let body = Body::Fills(Fills::because(FillsReason::MarkdownEditor));
+//!     Footer::new("pane", 400.0).pane(ui, body, |_| ());
+//! }
+//! ```
+//!
+//! A caller cannot change what a pane measured: the record's fields are private, read only.
+//!
+//! ```compile_fail,E0616
+//! fn move_end(record: &mut splat::pane::PaneRecord) {
+//!     record.offset = 0.0;
+//! }
+//! ```
+//!
+//! ```
+//! fn read_end(record: &mut splat::pane::PaneRecord) {
+//!     let _ = record.offset();
+//! }
+//! ```
+//!
+//! Stable rustdoc does not check the error codes above, so each failing case differs from the
+//! compiling case after it only by the rule it shows.
+
+pub use super::components::Footer;
+use super::{layout::ScrollColumn, tokens::S};
+use eframe::egui::{self, Id, LayerId, Rect, Sense, Ui, pos2, vec2};
+
+/// What a pane's body is, for the footer's place.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Body {
+    /// Rows, forms, readers and lists: the pane's scroll column. The footer follows the content
+    /// `S` below its end, and is pinned when the content is as tall as the room or scrolled.
+    Content,
+    /// A body that manages its own room: the footer is pinned. The one named escape.
+    Fills(Fills),
+}
+
+/// Why a body manages its own room. Built only by `Fills::because`, which Clippy refuses outside
+/// `src/design/`: each use carries a counted allow.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Fills(FillsReason);
+
+impl Fills {
+    pub fn because(reason: FillsReason) -> Self {
+        Self(reason)
+    }
+
+    pub fn reason(self) -> FillsReason {
+        self.0
+    }
+
+    /// For the design system's own tests, which prove the escape: Clippy refuses `because`.
+    #[cfg(test)]
+    pub(in crate::design) fn for_test(reason: FillsReason) -> Self {
+        Self(reason)
+    }
+}
+
+/// Why a body fills its room. Closed: a new reason is a change to this part.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum FillsReason {
+    /// A Markdown editor as tall as its room (Library's Edit Markdown).
+    MarkdownEditor,
+    /// A note's editor as tall as its room (a session note, a template, a gone session).
+    NoteEditor,
+    /// The live run's roster, whose room is the pane less the footer.
+    LiveRoster,
+    /// Several columns side by side, each with its own scroll (Party's list and sheet).
+    Columns,
+}
+
+/// Where a pane's footer stands.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Placement {
+    /// `S` below the content, which is shorter than the room and not scrolled.
+    Follows,
+    /// At the pane's bottom: the content is as tall as the room or scrolled, or the body is
+    /// `Body::Fills`.
+    Pinned,
+}
+
+/// What kind of pane is open now, innermost last, per layer.
+#[derive(Clone, Default)]
+struct Open {
+    pass: u64,
+    panes: Vec<(LayerId, bool)>,
+}
+
+fn open_id() -> Id {
+    Id::new("design_open_panes")
+}
+
+/// Open (`Some(content)`) or close (`None`) the innermost pane on `ui`'s layer.
+fn open(ui: &Ui, content: Option<bool>) {
+    let (layer, pass) = (ui.layer_id(), ui.ctx().cumulative_pass_nr());
+    ui.ctx().data_mut(|data| {
+        let open = data.get_temp_mut_or_default::<Open>(open_id());
+        if open.pass != pass {
+            *open = Open {
+                pass,
+                panes: Vec::new(),
+            };
+        }
+        match content {
+            Some(content) => open.panes.push((layer, content)),
+            None => {
+                open.panes.pop();
+            }
+        }
+    });
+}
+
+/// Whether a vertical `ScrollColumn` about to be drawn on `ui` is inside a `Body::Content` pane,
+/// which is a scroll column already. Debug builds and tests refuse it (a panic, so that its caller
+/// is fixed); a release build draws its content in place (`ScrollColumn::inline`), and the pane
+/// scrolls it.
+pub(super) fn column_in_content(ui: &Ui) -> bool {
+    let (layer, pass) = (ui.layer_id(), ui.ctx().cumulative_pass_nr());
+    let inside = ui.ctx().data(|data| {
+        data.get_temp::<Open>(open_id())
+            .is_some_and(|open| open.pass == pass && open.panes.last() == Some(&(layer, true)))
+    });
+    assert!(
+        !(inside && cfg!(debug_assertions)),
+        "a ScrollColumn inside a `Body::Content` pane: the pane is the scroll column. Give its \
+         content to the pane, draw a header that must not scroll before the pane, or use \
+         `Body::Fills(Fills::because(FillsReason::Columns))` for columns that each scroll"
+    );
+    inside
+}
+
+/// Each pane identity drawn in this pass. Two live panes with one identity would share their
+/// footer's height, scroll and focus; debug builds and tests refuse the second.
+fn claim(ui: &Ui, id: Id) {
+    let pass = ui.ctx().cumulative_pass_nr();
+    let fresh = ui.ctx().data_mut(|data| {
+        let claimed = data.get_temp_mut_or_default::<(u64, std::collections::HashSet<Id>)>(
+            Id::new("design_pane_identities"),
+        );
+        if claimed.0 != pass {
+            *claimed = (pass, Default::default());
+        }
+        claimed.1.insert(id)
+    });
+    assert!(
+        fresh || !cfg!(debug_assertions),
+        "two panes with one identity in one `Ui`: give each its own footer id or `push_id` scope"
+    );
+}
+
+fn widget_count(ui: &Ui) -> usize {
+    let layer = ui.layer_id();
+    ui.ctx()
+        .viewport(|viewport| viewport.this_pass.widgets.get_layer(layer).count())
+}
+
+/// A body control that gained keyboard focus in this pass comes whole into the pane's view,
+/// above the footer: Tab never reaches a control hidden under it. Only a control that the body
+/// added (`widgets`, on the pane's layer) is scrolled to; a change of focus with a pointer press,
+/// hold or release is not, as `scroll_part` does for the footer.
+fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>) {
+    let focused = ui.ctx().memory(|memory| memory.focused());
+    let seen = id.with("seen_focus");
+    if ui.ctx().data(|data| data.get_temp::<Option<Id>>(seen)) == Some(focused) {
+        return;
+    }
+    ui.ctx().data_mut(|data| data.insert_temp(seen, focused));
+    let pointer = ui.input(|input| {
+        let pointer = &input.pointer;
+        pointer.any_down() || pointer.any_pressed() || pointer.any_released()
+    });
+    let layer = ui.layer_id();
+    let rect = focused.filter(|_| !pointer).and_then(|focused| {
+        ui.ctx().viewport(|viewport| {
+            let widgets_now = &viewport.this_pass.widgets;
+            let (at_layer, at) = widgets_now.order(focused)?;
+            (at_layer == layer && widgets.contains(&at))
+                .then(|| widgets_now.get(focused).map(|widget| widget.rect))
+                .flatten()
+        })
+    });
+    if let Some(rect) = rect {
+        ui.scroll_to_rect(rect, None);
+    }
+}
+
+/// The scroll facts of a `Body::Content` pane: its viewport, its content's height, its offset.
+#[derive(Clone, Copy, Debug)]
+struct Scroll {
+    viewport: Rect,
+    height: f32,
+    offset: f32,
+}
+
+impl Scroll {
+    /// The content is shorter than the room and not scrolled.
+    fn fits(self) -> bool {
+        self.height < self.viewport.height() - 0.5 && self.offset <= 0.5
+    }
+
+    /// Content goes on below the room.
+    fn cut(self) -> bool {
+        self.viewport.top() + self.height - self.offset > self.viewport.bottom() + 0.5
+    }
+}
+
+/// What a pane did in one pass, for the gate (package G): its room, its body kind, the scroll
+/// output of a `Content` body (viewport, content height, offset), its footer's rect when it held
+/// a message, where the footer stands, and whether it cut content (then it draws its hairline).
+#[derive(Clone, Copy, Debug)]
+pub struct PaneRecord {
+    id: Id,
+    local: Id,
+    room: Rect,
+    body: Body,
+    viewport: Option<Rect>,
+    height: Option<f32>,
+    offset: f32,
+    footer: Option<Rect>,
+    placement: Placement,
+    cut: bool,
+}
+
+impl PaneRecord {
+    /// The footer's id, scoped to the pane's parent `Ui` (its focus group is `id().with("focus")`).
+    pub fn id(&self) -> Id {
+        self.id
+    }
+
+    /// The id the caller gave `Footer::new`, before the pane scoped it.
+    pub fn local(&self) -> Id {
+        self.local
+    }
+
+    /// The pane's room: from the body's top to the pane's bottom.
+    pub fn room(&self) -> Rect {
+        self.room
+    }
+
+    pub fn body(&self) -> Body {
+        self.body
+    }
+
+    /// The scroll column's viewport, for a `Content` body.
+    pub fn viewport(&self) -> Option<Rect> {
+        self.viewport
+    }
+
+    /// The content's height as egui laid it out, for a `Content` body.
+    pub fn content_height(&self) -> Option<f32> {
+        self.height
+    }
+
+    /// How far the content is scrolled.
+    pub fn offset(&self) -> f32 {
+        self.offset
+    }
+
+    /// Whether the scroll output says the content fits: a `Content` body shorter than its room
+    /// and not scrolled.
+    pub fn fits(&self) -> bool {
+        match (self.viewport, self.height) {
+            (Some(viewport), Some(height)) => Scroll {
+                viewport,
+                height,
+                offset: self.offset,
+            }
+            .fits(),
+            _ => false,
+        }
+    }
+
+    /// The footer's rect, when it held a message.
+    pub fn footer(&self) -> Option<Rect> {
+        self.footer
+    }
+
+    /// Whether the footer follows the content or is pinned. Set also while it is empty.
+    pub fn placement(&self) -> Placement {
+        self.placement
+    }
+
+    /// Whether the footer cut content: it then draws its hairline.
+    pub fn cut(&self) -> bool {
+        self.cut
+    }
+}
+
+/// Where test builds keep each pane's record of a pass.
+#[cfg(test)]
+const PANE_RECORDS: &str = "design_pane_records";
+
+#[cfg(test)]
+fn keep(ui: &Ui, pane: PaneRecord) {
+    let pass = ui.ctx().cumulative_pass_nr();
+    ui.ctx().data_mut(|data| {
+        let kept = data.get_temp_mut_or_default::<(u64, Vec<PaneRecord>)>(Id::new(PANE_RECORDS));
+        if kept.0 != pass {
+            *kept = (pass, Vec::new());
+        }
+        kept.1.push(pane);
+    });
+}
+
+/// Each pane of the last completed pass, in the order they finished (an inner pane before the
+/// pane that holds it), keyed by the footer's id; empty when that pass drew none (a record
+/// never outlives its pane). Only test builds keep them, beside `footer_bands`. Package G's
+/// check "a footer below a short body" (G6) reads them through `Driver::pane_records`, and
+/// checks them against its own accessibility-tree rects, not against the record's placement:
+/// for a pane that is not `Body::Fills`, whose footer shows and whose scroll output `fits()`, a
+/// gap of more than `2 × L` from the last body widget to the footer is a finding.
+#[cfg(test)]
+pub fn pane_records(ctx: &egui::Context) -> Vec<PaneRecord> {
+    let last = ctx.cumulative_pass_nr().saturating_sub(1);
+    ctx.data(|data| data.get_temp::<(u64, Vec<PaneRecord>)>(Id::new(PANE_RECORDS)))
+        .filter(|(pass, _)| *pass == last)
+        .map(|(_, panes)| panes)
+        .unwrap_or_default()
+}
+
+/// The record of the pane whose footer the caller made with `Footer::new(local, …)`, in the last
+/// completed pass (the first, when several scopes draw one).
+#[cfg(test)]
+pub fn pane_record(ctx: &egui::Context, local: Id) -> Option<PaneRecord> {
+    pane_records(ctx)
+        .into_iter()
+        .find(|record| record.local == local)
+}
+
+/// G6 from rects the gate reads itself (the accessibility tree), not from the record's placement.
+/// For a pane that is not `Body::Fills`, whose scroll output says its content fits, the gap from
+/// the last body widget above `footer` (its rect, scaled like `body`) to the footer's top; `Some`
+/// when it is more than `2 × L` (row padding and a frame under the last item end there). `scale`
+/// turns the record's points into the rects' units.
+#[cfg(test)]
+pub fn short_body_gap(
+    record: &PaneRecord,
+    scale: f32,
+    footer: Rect,
+    body: impl IntoIterator<Item = Rect>,
+) -> Option<f32> {
+    if matches!(record.body, Body::Fills(_)) || !record.fits() {
+        return None;
+    }
+    let room = record.room * scale;
+    let end = body
+        .into_iter()
+        .filter(|rect| {
+            rect.is_positive()
+                && rect.top() >= room.top() - 0.5
+                && rect.bottom() <= footer.top() + 0.5
+                && rect.right() > room.left()
+                && rect.left() < room.right()
+        })
+        .map(|rect| rect.bottom())
+        .fold(room.top(), f32::max);
+    let gap = footer.top() - end;
+    (gap > 2.0 * super::tokens::L * scale).then_some(gap)
+}
+
+/// The rect of the footer that the caller made with `Footer::new(local, …)`, as egui laid out its
+/// focus group in the last pass (the first, when several scopes draw one).
+#[cfg(test)]
+pub fn footer_rect(ctx: &egui::Context, local: Id) -> Option<Rect> {
+    let id = pane_record(ctx, local)?.id;
+    ctx.read_response(id.with("focus"))
+        .map(|response| response.rect)
+}
+
+/// The body's clip: what is left of `ui`'s clip above the body's room. The one place that
+/// decides where the body is cut. Seam for round 28's N12 (package X, ruling R4: a footer never
+/// cuts through a registered row): X narrows this clip to the last whole row the pane's column
+/// registers, and the pane's hairline then marks that cut; no caller changes.
+fn body_clip(ui: &Ui, body_room: Rect) -> Rect {
+    let mut clip = ui.clip_rect();
+    clip.max.y = clip.max.y.min(body_room.bottom());
+    clip
+}
+
+impl Footer<'_> {
+    /// The pane: its body, drawn by `add` from the cursor down (for `Body::Content`, as the
+    /// pane's own scroll column), then the footer when it holds a message: `S` below the
+    /// content when it fits, or pinned at the bottom of what is left of `ui`. The body's top is
+    /// the same with or without messages; only its room's bottom comes up by the footer's
+    /// height (and `S`) while the footer holds a message. The pane takes the rest of `ui`. `ui`
+    /// lays out top down. Returns what `add` returns.
+    pub fn pane<R>(mut self, ui: &mut Ui, body: Body, add: impl FnOnce(&mut Ui) -> R) -> R {
+        debug_assert!(
+            ui.layout().main_dir() == egui::Direction::TopDown,
+            "a pane's message footer ends a top-down Ui"
+        );
+        let room = ui.available_rect_before_wrap();
+        // The pane's identity is scoped to its parent `Ui`, so one pane function drawn in two
+        // `push_id` scopes keeps two footers apart; two in one scope are refused.
+        let local = self.rescope(ui.id());
+        let (id, width) = self.id_and_width(room.width());
+        claim(ui, id);
+        let key = id.with("height");
+        let stored = ui
+            .ctx()
+            .data(|data| data.get_temp::<f32>(key))
+            .unwrap_or(0.0);
+        let shown = !self.is_empty();
+        if !shown && stored != 0.0 {
+            ui.ctx().data_mut(|data| data.remove::<f32>(key));
+            ui.ctx().request_discard("the message footer emptied");
+        }
+        let most = (room.height() / 3.0).floor().max(0.0);
+        // Last pass's height; a change is measured below, and the pass is drawn again.
+        let height = if shown { stored.min(most) } else { 0.0 };
+        let pinned = room.bottom() - height;
+        // The body has the same room whether the footer follows it or is pinned, so it never
+        // changes its own size when the footer moves.
+        let limit = if height > 0.0 {
+            pinned - S
+        } else {
+            room.bottom()
+        };
+        let body_room = Rect::from_min_max(room.min, pos2(room.right(), limit.max(room.top())));
+
+        // The body, in the part's own `Ui`; one id in every state, so its scroll and focus stay.
+        let mut body_ui = ui.new_child(
+            egui::UiBuilder::new()
+                .id_salt(id.with("body"))
+                .max_rect(body_room)
+                .layout(*ui.layout()),
+        );
+        body_ui.set_clip_rect(body_clip(ui, body_room));
+        let (inner, scroll) = match body {
+            Body::Content => {
+                // The viewport is the real room, however small: egui's own 64 px minimum would
+                // leave the last rows of a small room out of reach under the clip.
+                let room_height = body_room.height();
+                let output = ScrollColumn::new(id.with("column"))
+                    .max_height(room_height)
+                    .min_scrolled_height(room_height)
+                    .show(&mut body_ui, |ui| {
+                        open(ui, Some(true));
+                        let first = widget_count(ui);
+                        let inner = add(ui);
+                        let last = widget_count(ui);
+                        open(ui, None);
+                        reveal_focus(ui, id, first..last);
+                        inner
+                    });
+                let scroll = Scroll {
+                    viewport: output.inner_rect,
+                    height: output.content_size.y,
+                    offset: output.state.offset.y,
+                };
+                (output.inner, Some(scroll))
+            }
+            Body::Fills(_) => {
+                open(&body_ui, Some(false));
+                let inner = add(&mut body_ui);
+                open(&body_ui, None);
+                (inner, None)
+            }
+        };
+        drop(body_ui);
+
+        let placement = match scroll {
+            Some(scroll) if scroll.fits() => Placement::Follows,
+            _ => Placement::Pinned,
+        };
+        // Content goes on below the room: the footer cuts it, and draws its hairline.
+        let cut = shown && scroll.is_some_and(Scroll::cut);
+        let mut footer = None;
+        if shown {
+            let top = match (placement, scroll) {
+                (Placement::Follows, Some(scroll)) => {
+                    (scroll.viewport.top() + scroll.height + S).min(pinned)
+                }
+                _ => pinned,
+            };
+            let rect = Rect::from_min_size(pos2(room.left(), top), vec2(width, height));
+            // Nothing in the body under the footer takes a press there, nor in the `S` above it
+            // (egui gives a press to a widget a few points away): the footer comes after the body,
+            // so this blank target is above the body's, and the footer's own controls above it.
+            let _ = ui.interact(
+                Rect::from_min_max(pos2(rect.left(), rect.top() - S), rect.max),
+                id.with("blocks_body"),
+                Sense::CLICK,
+            );
+            self.draw_messages(ui, rect, cut, most, stored);
+            if height > 0.0 {
+                footer = Some(rect);
+                #[cfg(test)]
+                super::components::record_band(ui, room, rect);
+            } else {
+                // Not measured yet: this pass is drawn again with the footer's height.
+                ui.ctx()
+                    .request_discard("the message footer measures its height");
+            }
+        }
+        ui.advance_cursor_after_rect(room);
+        #[cfg(test)]
+        keep(
+            ui,
+            PaneRecord {
+                id,
+                local,
+                room,
+                body,
+                viewport: scroll.map(|scroll| scroll.viewport),
+                height: scroll.map(|scroll| scroll.height),
+                offset: scroll.map_or(0.0, |scroll| scroll.offset),
+                footer,
+                placement,
+                cut,
+            },
+        );
+        #[cfg(not(test))]
+        let _ = (footer, placement, local);
+        inner
+    }
+}

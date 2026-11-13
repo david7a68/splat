@@ -2323,7 +2323,7 @@ pub(crate) fn draw_footer(
             FooterRank::Notice => footer.notice(line.words.as_str(), draw),
         };
     }
-    let bottom = footer.show(ui);
+    let bottom = footer.show_by_hand(ui);
     (pressed.get(), bottom)
 }
 

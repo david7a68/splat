@@ -4092,7 +4092,7 @@ impl Encounters {
                 design::message(ui, Tone::Error, &error);
             });
         }
-        let bottom = footer.show(ui);
+        let bottom = footer.show_by_hand(ui);
         let mut body = body_above(ui, bottom);
         let ui = &mut body;
         // As wide as the pane: a form's fixed width would push the scroll bar past its edge.
@@ -4889,7 +4889,7 @@ impl Encounters {
                 }
             });
         }
-        let bottom = footer.show(ui);
+        let bottom = footer.show_by_hand(ui);
         if let Some(kind) = pressed.get() {
             self.undo_kept(kind, Some((active, campaigns.modules())));
         }
@@ -5555,7 +5555,7 @@ impl Encounters {
                 unread_roster_rows(ui, &root, &path, &notes, faults);
             });
         }
-        let bottom = footer.show(ui);
+        let bottom = footer.show_by_hand(ui);
         if let Some(kind) = pressed.get() {
             self.undo_kept(kind, Some((active, campaigns.modules())));
         }
@@ -6935,7 +6935,7 @@ impl Encounters {
         }
         // The form above is drawn already and ends above the footer's room, so no body is
         // bounded by its top.
-        let _ = footer.show(ui);
+        let _ = footer.show_by_hand(ui);
         if undo_discard.get()
             && let Some(options) = self.discarded_options.take()
             && let Some(snapshot) = self.snapshot.as_mut()
@@ -7343,7 +7343,7 @@ mod tests {
                     });
                 }
                 identity_failure_into(ui.ctx(), &mut footer);
-                let bottom = footer.show(ui);
+                let bottom = footer.show_by_hand(ui);
                 if pressed.get() {
                     undo_identity(ui.ctx());
                 }
@@ -8709,6 +8709,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `Footer::show_by_hand` (design::results::STAGED_ALLOWS)"
+    )]
     fn integrity_d8_a_changed_encounter_compares_and_keeps_unknown_fields() {
         let dir = tempfile::tempdir().unwrap();
         let campaign = campaign(dir.path());
@@ -8754,7 +8758,7 @@ mod tests {
                     let pressed = std::cell::Cell::new(None);
                     let mut footer = design::Footer::new("test_footer", ui.available_width());
                     editor.kept_into_footer(&mut footer, &kinds, &pressed);
-                    let bottom = footer.show(ui);
+                    let bottom = footer.show_by_hand(ui);
                     if let Some(kind) = pressed.get() {
                         editor.undo_kept(kind, None);
                     }

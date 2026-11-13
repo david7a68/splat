@@ -401,6 +401,9 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
                 "reason-end-mark" => "End a blocked reason with `.`, `?` or `!`",
                 "foreground-layer" => "Foreground layers and menus belong to src/design/",
                 "hand-create-reasons" => "Declare a form's reasons with `create_reasons!`",
+                "banned-alias" => {
+                    "Name a banned owner or function as clippy.toml names it: an alias (`use … as …`, `type … =`) hides it from the counts"
+                }
                 "phrase-owner" => {
                     "Call the phrase's owner: `XP {` in src/difficulty.rs, `· line {` in `fault_words`, `N of M chosen` in `chosen_count`, a close icon's `Dismiss this …` in `MessageChoice::Dismiss`"
                 }

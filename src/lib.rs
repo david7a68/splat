@@ -27,6 +27,9 @@ mod design;
 #[doc(hidden)]
 pub use design::extras;
 pub use design::layout;
+// The pane is public only so that its `compile_fail` doc tests can name it.
+#[doc(hidden)]
+pub use design::pane;
 /// The ownership and cost parts of `design` (kept results, the save row, per-change caches),
 /// public only so that their compile-fail doc tests can name them. The app uses them through
 /// `design`.
@@ -1896,7 +1899,7 @@ impl Splat {
                             let mut footer =
                                 design::Footer::new("recording_settings_footer", width);
                             self.processing.footer_messages(&mut footer);
-                            footer.show(ui)
+                            footer.show_by_hand(ui)
                         };
                         egui::ScrollArea::vertical()
                             .id_salt("recording_settings")
@@ -1934,7 +1937,7 @@ impl Splat {
                         );
                         self.settings.footer_messages(&mut footer);
                         self.dndbeyond.footer_messages(&mut footer, false);
-                        footer.show(ui)
+                        footer.show_by_hand(ui)
                     };
                     let page = egui::ScrollArea::vertical()
                         .id_salt("settings_page")
@@ -2218,7 +2221,7 @@ impl Splat {
                                 // move result share this one footer; its scan is shared with
                                 // the form below.
                                 self.sessions.folder_messages(&mut footer, &self.timeline);
-                                footer.show(ui)
+                                footer.show_by_hand(ui)
                             };
                             egui::ScrollArea::vertical()
                                 .id_salt("campaign_link")

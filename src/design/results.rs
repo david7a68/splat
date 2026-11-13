@@ -486,7 +486,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "new_result! statement",
             &[Ban::Results],
         ),
-        ("src/campaign_content.rs", "page_footer", &[Ban::Results]),
+        (
+            "src/campaign_content.rs",
+            "page_footer",
+            &[Ban::Results, Ban::Pane(1)],
+        ),
         (
             "src/campaign_content.rs",
             "repair_section_content",
@@ -517,7 +521,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/design/components.rs",
             "iter26_a_the_footer_keeps_the_body_top_and_reaches_its_last_message",
-            &[Ban::Results, Ban::Layout(1)],
+            &[Ban::Results, Ban::Layout(1), Ban::Pane(1)],
         ),
         (
             "src/design/components.rs",
@@ -527,7 +531,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/design/components.rs",
             "iter27_a_the_footer_follows_a_short_body",
-            &[Ban::Results, Ban::Layout(2)],
+            &[Ban::Results, Ban::Layout(1), Ban::Pane(1)],
         ),
         (
             "src/design/gallery.rs",
@@ -546,17 +550,17 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/view.rs",
             "groups_tab",
-            &[Ban::Results, Ban::Layout(1)],
+            &[Ban::Results, Ban::Layout(1), Ban::Pane(1)],
         ),
         (
             "src/encounter_run/view.rs",
             "message_footer",
-            &[Ban::Results, Ban::Extras(2)],
+            &[Ban::Results, Ban::Extras(2), Ban::Pane(1)],
         ),
         (
             "src/encounters/groups.rs",
             "group_editor_view",
-            &[Ban::Results, Ban::Layout(1), Ban::Extras(1)],
+            &[Ban::Results, Ban::Layout(1), Ban::Extras(1), Ban::Pane(1)],
         ),
         (
             "src/encounters/groups.rs",
@@ -571,25 +575,25 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters.rs",
             "creature_pane",
-            &[Ban::Results, Ban::Layout(3)],
+            &[Ban::Results, Ban::Layout(3), Ban::Pane(1)],
         ),
         (
             "src/encounters.rs",
             "i20_w1_search_finds_a_hidden_duplicate_and_repairs_it_with_undo",
-            &[Ban::Results],
+            &[Ban::Results, Ban::Pane(1)],
         ),
         ("src/encounters.rs", "kept_into_footer", &[Ban::Results]),
         (
             "src/encounters.rs",
             "ledger_view",
-            &[Ban::Results, Ban::Layout(1), Ban::Extras(2)],
+            &[Ban::Results, Ban::Layout(1), Ban::Extras(2), Ban::Pane(1)],
         ),
         ("src/encounters.rs", "results_into", &[Ban::Results]),
         ("src/encounters.rs", "result_stamp", &[Ban::Results]),
         (
             "src/encounters.rs",
             "run_settings",
-            &[Ban::Results, Ban::Layout(3), Ban::Extras(3)],
+            &[Ban::Results, Ban::Layout(3), Ban::Extras(3), Ban::Pane(1)],
         ),
         ("src/encounters.rs", "save_draft", &[Ban::Results]),
         ("src/encounters.rs", "stamp_kept", &[Ban::Results]),
@@ -598,7 +602,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/library.rs",
             "editor_pane",
-            &[Ban::Results, Ban::Layout(5), Ban::Extras(6)],
+            &[Ban::Results, Ban::Layout(5), Ban::Extras(6), Ban::Pane(3)],
         ),
         ("src/library.rs", "give_new_identity", &[Ban::Results]),
         (
@@ -647,7 +651,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "reading_view",
             &[Ban::Results, Ban::Layout(3), Ban::Extras(4)],
         ),
-        ("src/sessions/page.rs", "session_footer", &[Ban::Results]),
+        (
+            "src/sessions/page.rs",
+            "session_footer",
+            &[Ban::Results, Ban::Pane(1)],
+        ),
         (
             "src/sessions/page.rs",
             "template_editor",
@@ -656,7 +664,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/sessions/plan.rs",
             "plan_pane",
-            &[Ban::Results, Ban::Layout(2), Ban::Extras(9)],
+            &[Ban::Results, Ban::Layout(2), Ban::Extras(9), Ban::Pane(1)],
         ),
         (
             "src/sessions/plan.rs",
@@ -671,7 +679,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/sessions/plan.rs", "travel_act", &[Ban::Results]),
         ("src/timeline/page.rs", "into_footer", &[Ban::Results]),
-        ("src/timeline/page.rs", "list_footer", &[Ban::Results]),
+        (
+            "src/timeline/page.rs",
+            "list_footer",
+            &[Ban::Results, Ban::Pane(1)],
+        ),
         (
             "src/timeline/page.rs",
             "show",
@@ -700,7 +712,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/world/page.rs",
             "creation_form",
-            &[Ban::Results, Ban::Layout(1)],
+            &[Ban::Results, Ban::Layout(1), Ban::Pane(1)],
         ),
         (
             "src/world/page.rs",
@@ -709,8 +721,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/world/repair.rs", "choose", &[Ban::Results]),
         ("src/world/repair.rs", "edit", &[Ban::Results]),
-        ("src/world/repair.rs", "footer", &[Ban::Results]),
-        ("src/world.rs", "draw_footer", &[Ban::Results]),
+        (
+            "src/world/repair.rs",
+            "footer",
+            &[Ban::Results, Ban::Pane(1)],
+        ),
+        ("src/world.rs", "draw_footer", &[Ban::Results, Ban::Pane(1)]),
         (
             "src/world.rs",
             "entry_controls",
@@ -734,11 +750,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "src/campaigns.rs",
             "selector",
             &[Ban::Layout(1), Ban::Extras(5)],
-        ),
-        (
-            "src/combat_sync.rs",
-            "render_every_editable_group_at_minimum_size",
-            &[Ban::Layout(1)],
         ),
         (
             "src/copy_dialog.rs",
@@ -807,7 +818,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/view.rs",
             "reference_tab",
-            &[Ban::Layout(2), Ban::Extras(1)],
+            &[Ban::Layout(2), Ban::Extras(1), Ban::Pane(1)],
         ),
         ("src/encounter_run/view.rs", "roster", &[Ban::Layout(1)]),
         (
@@ -828,7 +839,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters.rs",
             "editor_view",
-            &[Ban::Layout(1), Ban::Extras(2)],
+            &[Ban::Layout(1), Ban::Pane(1), Ban::Extras(2)],
         ),
         ("src/encounters.rs", "notes_field", &[Ban::Layout(1)]),
         (
@@ -869,7 +880,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "side_control",
             &[Ban::Layout(2), Ban::Extras(2)],
         ),
-        ("src/lib.rs", "page", &[Ban::Layout(3), Ban::Extras(6)]),
+        (
+            "src/lib.rs",
+            "page",
+            &[Ban::Layout(3), Ban::Extras(6), Ban::Pane(3)],
+        ),
         ("src/library.rs", "above_footer", &[Ban::Layout(1)]),
         (
             "src/library.rs",
@@ -924,12 +939,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "wide_tables_keep_whole_words_and_can_scroll_to_the_last_column",
             &[Ban::Layout(1)],
         ),
-        ("src/party.rs", "page_body", &[Ban::Layout(1)]),
-        (
-            "src/party.rs",
-            "sheet_view",
-            &[Ban::Layout(2), Ban::Extras(3)],
-        ),
+        ("src/party.rs", "sheet_view", &[Ban::Extras(3)]),
         ("src/party_bar.rs", "more_players", &[Ban::Layout(2)]),
         ("src/party_bar.rs", "paint", &[Ban::Layout(1)]),
         (
@@ -1087,10 +1097,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Body, Ban::Extras(2)],
         ),
         ("src/trackers/view.rs", "body", &[Ban::Body, Ban::Extras(4)]),
-        ("src/trackers/view.rs", "footer", &[Ban::Words]),
-        // Package X: raw space, raw selectable choices, `search_field` and headings that do not
-        // add their own space (`Ban::Extras`). Wave 2 moves each to `design::gap`, `heading`,
-        // `choice` or `FieldId::search` and removes its row.
+        (
+            "src/trackers/view.rs",
+            "footer",
+            &[Ban::Words, Ban::Pane(1)],
+        ),
         ("src/art.rs", "figure", &[Ban::Extras(1)]),
         ("src/campaigns.rs", "remove_dialog", &[Ban::Extras(1)]),
         ("src/campaigns.rs", "show", &[Ban::Extras(3)]),
@@ -1343,6 +1354,32 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/world/related.rs", "history_rows", &[Ban::Extras(1)]),
         ("src/world/related.rs", "related", &[Ban::Extras(7)]),
+        (
+            "src/encounters/groups.rs",
+            "editor_members",
+            &[Ban::Pane(1)],
+        ),
+        (
+            "src/encounters/groups.rs",
+            "a_group_changed_on_disk_blocks_the_whole_save_and_keeps_the_draft",
+            &[Ban::Pane(1)],
+        ),
+        ("src/sessions/carry.rs", "harness", &[Ban::Pane(1)]),
+        ("src/sessions/page.rs", "draft_footer", &[Ban::Pane(1)]),
+        ("src/sessions/page.rs", "notes_panel", &[Ban::Pane(1)]),
+        ("src/sessions/page.rs", "templates_view", &[Ban::Pane(1)]),
+        (
+            "src/encounters.rs",
+            "integrity_d8_a_changed_encounter_compares_and_keeps_unknown_fields",
+            &[Ban::Pane(1)],
+        ),
+        ("src/library.rs", "form_footer", &[Ban::Pane(1)]),
+        ("src/party.rs", "show", &[Ban::Pane(1)]),
+        (
+            "src/settings.rs",
+            "a_failed_removal_keeps_disconnect_until_it_works",
+            &[Ban::Pane(1)],
+        ),
     ]
 };
 
@@ -1356,6 +1393,11 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
     use suppressions::Ban;
     &[
         ("src/design/column.rs", "finish_handle", &[Ban::Layout(1)]),
+        (
+            "src/design/components.rs",
+            "iter28_p_the_pane_places_its_footer_for_every_body",
+            &[Ban::Layout(1)],
+        ),
         (
             "src/design/components.rs",
             "add_field",
@@ -1807,7 +1849,7 @@ mod tests {
                             },
                         );
                     }
-                    let _body_end = footer.show(ui);
+                    footer.pane(ui, crate::design::Body::Content, |_| ());
                 });
             crate::design::theme::install(&harness.ctx);
             harness.run();

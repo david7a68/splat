@@ -1083,6 +1083,37 @@ impl<'a> Driver<'a> {
             .collect()
     }
 
+    /// What each `Footer::pane` did in the last completed pass (package P's registry, in points):
+    /// its id, room, body kind, the scroll output of a `Content` body (viewport, content height,
+    /// offset), its footer's rect and its placement.
+    pub fn pane_records(&self) -> Vec<crate::design::pane::PaneRecord> {
+        crate::design::pane::pane_records(&self.harness.ctx)
+    }
+
+    /// G6, "a footer below a short body", from this driver's own accessibility rects: for each
+    /// pane that is not `Body::Fills` and whose scroll output says its content fits, a gap of
+    /// more than `2 × L` from the last body widget to its footer is a finding.
+    pub fn short_body_gaps(&self) -> Vec<String> {
+        let scale = self.harness.ctx.pixels_per_point();
+        let nodes = self.nodes();
+        self.pane_records()
+            .iter()
+            .filter_map(|record| {
+                let focus = accesskit::NodeId(record.id().with("focus").value());
+                let footer = nodes.iter().find(|node| node.id == focus)?.rect;
+                let body = nodes
+                    .iter()
+                    .filter(|node| node.id != focus)
+                    .map(|node| node.rect);
+                let gap = crate::design::pane::short_body_gap(record, scale, footer, body)?;
+                Some(format!(
+                    "{:?}: footer {footer:?}, {gap} px below the body",
+                    record.id()
+                ))
+            })
+            .collect()
+    }
+
     /// Can a person see this text or control right now?
     pub fn in_view(&self, name: &str) -> bool {
         self.nodes()

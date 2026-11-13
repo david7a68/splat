@@ -1050,7 +1050,7 @@ impl CampaignContent {
                         .package_warnings(ui, campaigns, active, warnings.unavailable);
                 });
             }
-            footer.show(ui)
+            footer.show_by_hand(ui)
         };
         let this = me.into_inner();
         this.press_result(press.take());

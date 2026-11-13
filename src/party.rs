@@ -131,6 +131,20 @@ impl Party {
 
     /// A read of the selected sheet, in D&D Beyond's own fields. Test builds have no route
     /// to a live one, so a visual test shows the sync panel's editable values this way.
+    /// For visual tests: swap in a party's members and its read error, and get the old ones back
+    /// (an empty party whose read failed, then the party as it was).
+    #[cfg(test)]
+    pub fn swap_members_and_error(
+        &mut self,
+        members: Vec<crate::party_sync::Member>,
+        error: Option<String>,
+    ) -> (Vec<crate::party_sync::Member>, Option<String>) {
+        (
+            std::mem::replace(&mut self.reader.members, members),
+            std::mem::replace(&mut self.reader.error, error),
+        )
+    }
+
     #[cfg(test)]
     pub fn simulate_sheet_read(&mut self, max_hp: i64, sheet: &Value) {
         let id = self
@@ -298,6 +312,7 @@ impl Party {
         self.reader.select(id);
     }
 
+    #[allow(clippy::disallowed_methods)]
     pub fn show(&mut self, ui: &mut egui::Ui, session: Option<Session>, linked: bool) {
         let c = colors();
         let fetched = self
@@ -375,22 +390,26 @@ impl Party {
         if refresh && let Some(session) = session.clone() {
             self.reader.refresh_by_hand(session, ui.ctx());
         }
-        // Round 27 FA4, FH1: the page's notices and results that come and go sit in one footer
-        // at the bottom of the page, below the list and the sheet, in a child `Ui` that starts
-        // here. So a notice that comes, or its close icon, moves no member row and no sheet.
-        let rest = ui.available_rect_before_wrap();
-        ui.scope_builder(egui::UiBuilder::new().max_rect(rest), |ui| {
-            // `show` ends `ui` where the footer starts, so the body below ends there.
-            let _ = self.page_footer(ui, session.is_some(), linked);
+        // Round 27 FA4, FH1: the page's notices and results that come and go sit in one footer,
+        // below the list and the sheet. So a notice that comes, or its close icon, moves no
+        // member row and no sheet. Round 28: the pane places it, `S` below the content or pinned.
+        let presses = PagePresses::default();
+        let footer = self.page_footer(&presses, session.is_some(), linked);
+        // The list and the sheet are columns that each scroll; the footer is pinned below them.
+        // An empty state is short content, and the footer follows it.
+        let columns = linked && !self.reader.members.is_empty();
+        let body = if columns {
+            design::Body::Fills(design::Fills::because(design::FillsReason::Columns))
+        } else {
+            design::Body::Content
+        };
+        footer.pane(ui, body, |ui| {
             self.page_body(ui, session, linked);
         });
+        self.page_pressed(presses);
     }
 
     /// The page below its header, above its footer: the empty states, or the list and the sheet.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn page_body(&mut self, ui: &mut egui::Ui, session: Option<Session>, linked: bool) {
         let mut open_link = false;
         if !linked {
@@ -499,39 +518,35 @@ impl Party {
             .show_inside(ui, |ui| {
                 // Round 25 family: the list keeps the scroll bar's lane whether or not the bar
                 // shows, so no row or header column moves when the list starts to scroll.
-                let rows_width = ui.available_width() - ui.spacing().scroll.allocated_width();
+                let rows_width = ui.available_width() - design::lane_width();
                 ui.scope(|ui| {
                     ui.set_max_width(rows_width);
                     member_header(ui);
                 });
                 design::rule(ui);
-                egui::ScrollArea::vertical()
-                    .id_salt("party_members_list")
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        ui.set_max_width(rows_width);
-                        ui.spacing_mut().item_spacing.y = 0.0;
-                        for m in &self.reader.members {
-                            let record = self.reader.sheets.get(&m.id);
-                            let portrait = self.portrait(record);
-                            let is_selected = selected.as_ref() == Some(&m.id);
-                            let from_fights = record.and_then(|record| self.tonight_values(record));
-                            if member_row(
-                                ui,
-                                m,
-                                record,
-                                portrait.as_deref(),
-                                from_fights,
-                                is_selected,
-                                self.reader.conflicts.contains_key(&m.id),
-                            )
-                            .clicked()
-                            {
-                                selected = Some(m.id.clone());
-                                self.search.clear();
-                            }
+                design::ScrollColumn::new("party_members_list").show(ui, |ui| {
+                    ui.spacing_mut().item_spacing.y = 0.0;
+                    for m in &self.reader.members {
+                        let record = self.reader.sheets.get(&m.id);
+                        let portrait = self.portrait(record);
+                        let is_selected = selected.as_ref() == Some(&m.id);
+                        let from_fights = record.and_then(|record| self.tonight_values(record));
+                        if member_row(
+                            ui,
+                            m,
+                            record,
+                            portrait.as_deref(),
+                            from_fights,
+                            is_selected,
+                            self.reader.conflicts.contains_key(&m.id),
+                        )
+                        .clicked()
+                        {
+                            selected = Some(m.id.clone());
+                            self.search.clear();
                         }
-                    });
+                    }
+                });
             });
         if selected != self.reader.selected
             && let Some(id) = selected
@@ -548,26 +563,25 @@ impl Party {
             .show_inside(ui, |ui| self.sheet_view(ui, session));
     }
 
-    /// The page's one message footer (round 27 FA4, FH1), at the bottom of the page below the
-    /// list and the sheet. Its order: the errors (the party's read, a character's read beside its
-    /// kept edits), then the replaced-sheet results, the local-edit notices with their actions,
-    /// the storage warnings and the stopped-sync notice. Each keeps its owner and end event: a
-    /// result or the stopped-sync notice ends at its close icon, a local-edit notice when its
-    /// sheet is replaced. Returns where the body ends.
+    /// The page's one message footer (round 27 FA4, FH1), below the list and the sheet. Its
+    /// order: the errors (the party's read, a character's read beside its kept edits), then the
+    /// replaced-sheet results, the local-edit notices with their actions, the storage warnings
+    /// and the stopped-sync notice. Each keeps its owner and end event: a result or the
+    /// stopped-sync notice ends at its close icon, a local-edit notice when its sheet is
+    /// replaced. The messages own their words, so the body can change the page while the footer
+    /// waits for it; a press is kept in `presses` and done by `page_pressed`.
     #[allow(
         clippy::disallowed_methods,
         reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
     )]
-    fn page_footer(&mut self, ui: &mut egui::Ui, connected: bool, linked: bool) -> f32 {
-        use std::cell::Cell;
-        let width = ui.available_width().min(design::LIST_MEASURE);
-        let dismiss_stopped = Cell::new(false);
-        let dismiss_archived = Cell::new(false);
-        let wants_settings = Cell::new(false);
-        // The local-edit notice whose Replace the DM pressed: `None` inside replaces every one.
-        let replace = Cell::new(None::<Option<String>>);
+    fn page_footer<'p>(
+        &self,
+        presses: &'p PagePresses,
+        connected: bool,
+        linked: bool,
+    ) -> design::Footer<'p> {
         let reader = &self.reader;
-        let mut footer = design::Footer::new("party_page_footer", width);
+        let mut footer = design::Footer::new("party_page_footer", design::LIST_MEASURE);
         if linked {
             if let Some(error) = reader.error.clone() {
                 footer.reason(error.clone(), move |ui| {
@@ -588,21 +602,23 @@ impl Party {
             for path in &reader.archived {
                 let name = reader
                     .archived_owners
-                    .get(path)
+                    .get(&**path)
                     .map(|id| reader.member_name(id))
                     .unwrap_or("This character");
                 let words =
                     format!("{name}’s sheet now matches D&D Beyond. Your edited version is kept.");
-                let dismiss = &dismiss_archived;
+                let dismiss = &presses.dismiss_archived;
                 let order = reader
                     .archived_orders
-                    .get(path)
+                    .get(&**path)
                     .copied()
                     .unwrap_or_default();
+                // A shared path: no copy each frame.
+                let path = std::sync::Arc::clone(path);
                 footer.result(order, words.clone(), false, move |ui| {
                     if dismissable(ui, |ui| {
                         storage_notice(ui, Tone::Success, &words, &["Show file"], |ui| {
-                            show_file(ui, path);
+                            show_file(ui, &path);
                         });
                     }) {
                         dismiss.set(true);
@@ -611,7 +627,8 @@ impl Party {
             }
             let several = reader.conflicts.len() > 1;
             let waiting = reader.force_waiting();
-            for (id, path) in &reader.conflicts {
+            // `at` is the notice's place among the conflicts: its id is looked up at the press.
+            for (at, (id, path)) in reader.conflicts.iter().enumerate() {
                 let name = reader.member_name(id);
                 let next = if connected {
                     "Replacing keeps your version as a copy."
@@ -628,7 +645,8 @@ impl Party {
                 } else {
                     "Replace with D&D Beyond sheet"
                 };
-                let (settings, replace) = (&wants_settings, &replace);
+                let (settings, replace) = (&presses.wants_settings, &presses.replace);
+                let path = std::sync::Arc::clone(path);
                 footer.notice(words.clone(), move |ui| {
                     storage_notice(ui, Tone::Warning, &words, &[action, "Show file"], |ui| {
                         if !connected {
@@ -649,9 +667,9 @@ impl Party {
                             .show(ui)
                             .clicked()
                         {
-                            replace.set(Some(several.then(|| id.clone())));
+                            replace.set(Some(several.then_some(at)));
                         }
-                        show_file(ui, path);
+                        show_file(ui, &path);
                     });
                 });
             }
@@ -664,7 +682,7 @@ impl Party {
             }
         }
         if self.sync_stopped {
-            let dismiss = &dismiss_stopped;
+            let dismiss = &presses.dismiss_stopped;
             footer.notice(SYNC_STOPPED, move |ui| {
                 if dismissable(ui, |ui| {
                     design::message(ui, Tone::Warning, SYNC_STOPPED);
@@ -673,22 +691,29 @@ impl Party {
                 }
             });
         }
-        let bottom = footer.show(ui);
-        if dismiss_stopped.get() {
+        footer
+    }
+
+    /// Do what the DM pressed in the page's footer.
+    fn page_pressed(&mut self, presses: PagePresses) {
+        if presses.dismiss_stopped.get() {
             self.sync_stopped = false;
         }
-        if dismiss_archived.get() {
+        if presses.dismiss_archived.get() {
             self.reader.archived.clear();
             self.reader.archived_orders.clear();
             self.reader.archived_owners.clear();
         }
-        self.wants_settings |= wants_settings.get();
-        match replace.take() {
+        self.wants_settings |= presses.wants_settings.get();
+        match presses.replace.take() {
             Some(None) => self.reader.force_read(),
-            Some(Some(id)) => self.reader.force_read_character(&id),
+            Some(Some(at)) => {
+                if let Some(id) = self.reader.conflicts.keys().nth(at).cloned() {
+                    self.reader.force_read_character(&id);
+                }
+            }
             None => {}
         }
-        bottom
     }
 
     fn portrait(&self, record: Option<&EntitySnapshot>) -> Option<std::path::PathBuf> {
@@ -751,7 +776,7 @@ impl Party {
 
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
     )]
     fn sheet_view(&mut self, ui: &mut egui::Ui, session: Option<Session>) {
         let c = colors();
@@ -798,35 +823,35 @@ impl Party {
                 }
             });
         }
+        // Round 26: the sync panel's result sits in the sheet's footer, below the sheet, so what
+        // is above stays. It ends at its close icon. Round 28: the sheet's pane is its scroll
+        // column, one per page, so each page keeps its own scroll.
+        let dismissed = std::cell::Cell::new(false);
+        let sheet_footer = |page: Option<usize>, combat: &crate::combat_sync::CombatSync| {
+            let mut footer =
+                design::Footer::new(("party_sheet_footer", id, page), design::LIST_MEASURE);
+            if session.is_some() {
+                combat.footer_messages(&mut footer, &dismissed);
+            }
+            footer
+        };
         let Some(record) = newer(self.combat.record(), self.reader.sheets.get(id)) else {
-            // Round 26: the sync panel's result sits in the sheet's footer, in a child `Ui` that
-            // starts here, so what is above stays.
-            let rest = ui.available_rect_before_wrap();
-            ui.scope_builder(egui::UiBuilder::new().max_rect(rest), |ui| {
-                let width = ui.available_width().min(design::LIST_MEASURE);
-                let mut footer = design::Footer::new(("party_sheet_footer", id), width);
-                if session.is_some() {
-                    self.combat.footer_messages(&mut footer);
+            // The panel scrolls above the footer when it needs more room.
+            sheet_footer(None, &self.combat).pane(ui, design::Body::Content, |ui| {
+                if session.is_some() && self.sync_heading(ui) {
+                    self.sync_panel(ui);
                 }
-                let bottom = footer.show(ui);
-                // The panel scrolls above the footer when it needs more room.
-                egui::ScrollArea::vertical()
-                    .id_salt(("party_sheet_no_copy", id))
-                    .max_height((bottom - ui.cursor().top()).max(0.0))
-                    .auto_shrink([false, true])
-                    .show(ui, |ui| {
-                        if session.is_some() && self.sync_heading(ui) {
-                            self.sync_panel(ui);
-                        }
-                        if !self.reader.loading() {
-                            ui.label(
-                                Type::Body
-                                    .rich(ui, "No local copy is available for this character.")
-                                    .color(c.muted),
-                            );
-                        }
-                    });
+                if !self.reader.loading() {
+                    ui.label(
+                        Type::Body
+                            .rich(ui, "No local copy is available for this character.")
+                            .color(c.muted),
+                    );
+                }
             });
+            if dismissed.get() {
+                self.combat.end_action_notice();
+            }
             return;
         };
         let before = self.page;
@@ -867,61 +892,60 @@ impl Party {
                 .map(|entry| splat::character::check::review(record, entry));
             self.content_entry = Some((record.source.content_hash.clone(), entry));
         }
-        // The footer and the sheet share a child `Ui` that starts below the tabs.
-        let rest = ui.available_rect_before_wrap();
-        ui.scope_builder(egui::UiBuilder::new().max_rect(rest), |ui| {
-            // Round 26: the sync panel's result sits in the sheet's footer, below its scroll area.
-            let bottom = {
-                let width = ui.available_width().min(design::LIST_MEASURE);
-                let mut footer = design::Footer::new(("party_sheet_footer", id), width);
-                if session.is_some() {
-                    self.combat.footer_messages(&mut footer);
+        // The sheet pane starts below the tabs.
+        sheet_footer(Some(self.page), &self.combat).pane(ui, design::Body::Content, |ui| {
+            {
+                // The heading and its body are one block, below the tabs: the tabs never sit
+                // between them. Both scroll with the sheet, as one scroll is easier at the table
+                // than a scroll inside a scroll.
+                if session.is_some() && self.sync_heading(ui) {
+                    self.sync_panel(ui);
                 }
-                footer.show(ui)
-            };
-            egui::ScrollArea::vertical()
-                .id_salt((id, self.page))
-                .max_height((bottom - ui.cursor().top()).max(0.0))
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    // The heading and its body are one block, below the tabs: the tabs never sit
-                    // between them. Both scroll with the sheet, as one scroll is easier at the table
-                    // than a scroll inside a scroll.
-                    if session.is_some() && self.sync_heading(ui) {
-                        self.sync_panel(ui);
-                    }
-                    let Some(record) = newer(self.combat.record(), self.reader.sheets.get(id))
-                    else {
-                        return;
-                    };
-                    // One person has one HP on this page: the list's, while tonight's fights count.
-                    let live = self
-                        .tonight_values(record)
-                        .map(|(hp, temporary_hp)| LiveValues {
-                            hp: Some(hp),
-                            max_hp: record.stat("max_hp"),
-                            temporary_hp,
-                            death_saves: record.initial.death_saves.clone(),
-                            death_saves_shown: false,
-                            conditions: sheet_labels(record),
-                        });
-                    sheet_page(ui, record, self.page, &self.search, live.as_ref());
-                    if self.page == 0 {
-                        ui.add_space(design::M);
-                        design::quiet_section(ui, "Technical details", |ui| {
-                            source_and_parity(
-                                ui,
-                                record,
-                                self.content_entry.as_ref().map(|(_, entry)| entry),
-                                self.character_review.as_ref(),
-                                self.reader.campaign_path(),
-                                self.reader.local_scope(),
-                            );
-                        });
-                    }
-                });
+                let Some(record) = newer(self.combat.record(), self.reader.sheets.get(id)) else {
+                    return;
+                };
+                // One person has one HP on this page: the list's, while tonight's fights count.
+                let live = self
+                    .tonight_values(record)
+                    .map(|(hp, temporary_hp)| LiveValues {
+                        hp: Some(hp),
+                        max_hp: record.stat("max_hp"),
+                        temporary_hp,
+                        death_saves: record.initial.death_saves.clone(),
+                        death_saves_shown: false,
+                        conditions: sheet_labels(record),
+                    });
+                sheet_page(ui, record, self.page, &self.search, live.as_ref());
+                if self.page == 0 {
+                    ui.add_space(design::M);
+                    design::quiet_section(ui, "Technical details", |ui| {
+                        source_and_parity(
+                            ui,
+                            record,
+                            self.content_entry.as_ref().map(|(_, entry)| entry),
+                            self.character_review.as_ref(),
+                            self.reader.campaign_path(),
+                            self.reader.local_scope(),
+                        );
+                    });
+                }
+            }
         });
+        if dismissed.get() {
+            self.combat.end_action_notice();
+        }
     }
+}
+
+/// What the DM pressed in the Party page's footer, done after the page is drawn.
+#[derive(Default)]
+struct PagePresses {
+    dismiss_stopped: std::cell::Cell<bool>,
+    dismiss_archived: std::cell::Cell<bool>,
+    wants_settings: std::cell::Cell<bool>,
+    /// The local-edit notice whose Replace the DM pressed: `None` inside replaces every one.
+    /// The notice's place among the conflicts, so no id is copied each frame.
+    replace: std::cell::Cell<Option<Option<usize>>>,
 }
 
 /// Keep each storage message and its actions together at the list measure.
@@ -2736,6 +2760,54 @@ mod sheet_now_tests {
                 assert!(action.left() - message.right() <= design::L + design::XS);
             }
         }
+        // Two characters with local edits, A and B, in the page's real footer: B's Replace
+        // forces a read of B alone, and A stays as it was (the press keeps its notice's place
+        // among the conflicts, not a copy of its id).
+        let party = std::rc::Rc::new(std::cell::RefCell::new(super::Party::default()));
+        for (id, path) in [("a", "/campaign/a.md"), ("b", "/campaign/b.md")] {
+            party
+                .borrow_mut()
+                .reader
+                .conflicts
+                .insert(id.into(), std::path::Path::new(path).into());
+        }
+        let drawn = party.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(960.0, 640.0))
+            .build_ui(move |ui| {
+                let presses = super::PagePresses::default();
+                let footer = drawn.borrow().page_footer(&presses, true, true);
+                footer.pane(ui, design::Body::Content, |_| ());
+                drawn.borrow_mut().page_pressed(presses);
+            });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(3);
+        let replaces: Vec<_> = harness
+            .get_all_by_label("Replace with D&D Beyond sheet")
+            .map(|node| node.rect())
+            .collect();
+        assert_eq!(replaces.len(), 2, "each local-edit notice has its Replace");
+        let second = replaces
+            .iter()
+            .max_by(|x, y| x.top().total_cmp(&y.top()))
+            .copied()
+            .unwrap();
+        harness.event(egui::Event::PointerMoved(second.center()));
+        for pressed in [true, false] {
+            harness.event(egui::Event::PointerButton {
+                pos: second.center(),
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            });
+            harness.run_steps(1);
+        }
+        harness.run_steps(2);
+        assert_eq!(
+            party.borrow().reader.forced(),
+            ["b"],
+            "Replace on the second notice forces a read of B only; A is unchanged"
+        );
     }
 
     #[test]

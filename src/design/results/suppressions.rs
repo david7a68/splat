@@ -34,6 +34,10 @@ pub(crate) enum Ban {
     /// add their own space (`clippy.toml`, section "Package X"). The number is how many of those
     /// calls the item holds, counted in its tokens as `Layout` is.
     Extras(u16),
+    /// Package P: `Footer::show_by_hand` (staged out: use `Footer::pane`) and `Fills::because`
+    /// (the pane's one named escape), and the room-centred layouts; the number of calls in the
+    /// item, counted in its tokens as `Layout` is.
+    Pane(u16),
 }
 
 impl Ban {
@@ -51,7 +55,7 @@ impl Ban {
             Self::Order => &["outcome_at"],
             Self::Body => &["banner", "row_fault", ".show("],
             // Counted in the item's tokens instead (`check`).
-            Self::Layout(_) | Self::RowKey(_) | Self::Extras(_) => &[],
+            Self::Layout(_) | Self::RowKey(_) | Self::Extras(_) | Self::Pane(_) => &[],
         }
     }
 }
@@ -250,13 +254,14 @@ pub(crate) fn check(files: &[(String, String)], table: &[(&str, &str, &[Ban])]) 
                         .any(|ban| ban.calls().iter().any(|call| suppression.body.contains(call)));
                     // Packages K and X: the row's number of calls is the item's, exactly.
                     use crate::design::layout::bans::{Group, count};
-                    for group in [Group::Layout, Group::RowKey, Group::Extras] {
+                    for group in [Group::Layout, Group::RowKey, Group::Extras, Group::Pane] {
                         let listed = bans
                             .iter()
                             .find_map(|ban| match (ban, group) {
                                 (Ban::Layout(n), Group::Layout)
                                 | (Ban::RowKey(n), Group::RowKey)
-                                | (Ban::Extras(n), Group::Extras) => Some(usize::from(*n)),
+                                | (Ban::Extras(n), Group::Extras)
+                                | (Ban::Pane(n), Group::Pane) => Some(usize::from(*n)),
                                 _ => None,
                             })
                             .unwrap_or(0);

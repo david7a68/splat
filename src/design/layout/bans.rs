@@ -24,6 +24,9 @@ pub(crate) enum Group {
     Layout,
     /// A row key a reviewer checks: `RowIndex::from_data`, `TextKey::from_data`.
     RowKey,
+    /// Package P's paths (`clippy.toml`, "# Package P"): a footer placed by hand, the pane's
+    /// escape `Fills::because`, and the layouts that place content by the room's height.
+    Pane,
     /// Package X: raw space, raw selectable choices, a search field without `Clear`, a heading
     /// that does not add its own space (`clippy.toml`, section "Package X").
     Extras,
@@ -54,7 +57,8 @@ enum Shape {
 }
 
 /// The egui types whose banned functions are methods of a value.
-const RECEIVERS: [&str; 7] = [
+const RECEIVERS: [&str; 8] = [
+    "Footer",
     "Ui",
     "Response",
     "Context",
@@ -81,7 +85,11 @@ const MENU_MODULE: [&str; 6] = [
 /// Every package K and package X path of `clippy.toml`, as the shapes it is written in at a call.
 fn patterns() -> Vec<(Group, Shape)> {
     let mut out = Vec::new();
-    for (letter, lines) in [('K', section('K')), ('X', section('X'))] {
+    for (letter, lines) in [
+        ('K', section('K')),
+        ('X', section('X')),
+        ('P', section('P')),
+    ] {
         shapes(letter, lines, &mut out);
     }
     out
@@ -102,6 +110,8 @@ fn shapes(letter: char, lines: &str, out: &mut Vec<(Group, Shape)>) {
         let owner = segments[segments.len() - 2];
         let group = if letter == 'X' {
             Group::Extras
+        } else if letter == 'P' {
+            Group::Pane
         } else if matches!(owner, "RowIndex" | "TextKey") {
             Group::RowKey
         } else {
@@ -216,12 +226,93 @@ pub(crate) fn count(source: &str, group: Group) -> Result<usize, String> {
 /// The rules [`syntax_rules`] can find.
 const ORDERS: [&str; 5] = ["Foreground", "Tooltip", "Middle", "Debug", "Background"];
 
+/// Every banned path of `clippy.toml`, all packages' lists, by its last two segments: the
+/// owner or module and the name. A renaming import or a type alias of one would hide it from
+/// the counters, which match names in an item's tokens.
+fn banned_paths() -> Vec<(String, String)> {
+    CLIPPY
+        .lines()
+        .filter_map(|line| line.split("path = \"").nth(1)?.split('"').next())
+        .filter_map(|path| {
+            let segments: Vec<&str> = path.split("::").collect();
+            let [.., owner, name] = segments.as_slice() else {
+                return None;
+            };
+            Some(((*owner).to_owned(), (*name).to_owned()))
+        })
+        .collect()
+}
+
+/// Whether `path` (an import's or an alias's, segment by segment) names a banned owner (a type
+/// whose functions `clippy.toml` bans: `Fills`, `Footer`, `ScrollArea`) or a banned function by
+/// its owner or module (`Fills::because`, `outcome::banner`).
+fn names_a_ban(path: &[String], bans: &[(String, String)]) -> bool {
+    let Some(last) = path.last() else {
+        return false;
+    };
+    let owner = bans
+        .iter()
+        .any(|(owner, _)| owner == last && owner.starts_with(|c: char| c.is_ascii_uppercase()));
+    let function = path.len() >= 2
+        && bans
+            .iter()
+            .any(|(owner, name)| name == last && *owner == path[path.len() - 2]);
+    owner || function
+}
+
 #[derive(Default)]
 struct Rules {
     found: Vec<&'static str>,
+    bans: Vec<(String, String)>,
+}
+
+impl Rules {
+    /// A renaming import (`use … as …`) of a banned owner or function, anywhere in `tree`.
+    fn renamed(&mut self, tree: &syn::UseTree, prefix: &mut Vec<String>) {
+        match tree {
+            syn::UseTree::Path(path) => {
+                prefix.push(path.ident.to_string());
+                self.renamed(&path.tree, prefix);
+                prefix.pop();
+            }
+            syn::UseTree::Rename(rename) => {
+                prefix.push(rename.ident.to_string());
+                if names_a_ban(prefix, &self.bans) {
+                    self.found.push("banned-alias");
+                }
+                prefix.pop();
+            }
+            syn::UseTree::Group(group) => {
+                for tree in &group.items {
+                    self.renamed(tree, prefix);
+                }
+            }
+            syn::UseTree::Name(_) | syn::UseTree::Glob(_) => {}
+        }
+    }
 }
 
 impl<'ast> Visit<'ast> for Rules {
+    fn visit_item_use(&mut self, node: &'ast syn::ItemUse) {
+        self.renamed(&node.tree, &mut Vec::new());
+        visit::visit_item_use(self, node);
+    }
+
+    fn visit_item_type(&mut self, node: &'ast syn::ItemType) {
+        if let syn::Type::Path(alias) = &*node.ty {
+            let path: Vec<String> = alias
+                .path
+                .segments
+                .iter()
+                .map(|segment| segment.ident.to_string())
+                .collect();
+            if names_a_ban(&path, &self.bans) {
+                self.found.push("banned-alias");
+            }
+        }
+        visit::visit_item_type(self, node);
+    }
+
     fn visit_expr_struct(&mut self, node: &'ast syn::ExprStruct) {
         if node
             .path
@@ -263,7 +354,10 @@ impl<'ast> Visit<'ast> for Rules {
 /// K's rules that only the syntax tree can see, once per finding (see the module's doc).
 pub(crate) fn syntax_rules(text: &str) -> Result<Vec<&'static str>, String> {
     let file = syn::parse_file(text).map_err(|error| error.to_string())?;
-    let mut rules = Rules::default();
+    let mut rules = Rules {
+        bans: banned_paths(),
+        ..Rules::default()
+    };
     rules.visit_file(&file);
     Ok(rules.found)
 }
@@ -421,6 +515,28 @@ mod tests {
             rules("impl design::CreateReasons for Why {}"),
             ["hand-create-reasons"]
         );
+        // Review of PR 305: an alias would hide a banned name from the token counters, so a
+        // renaming import or a type alias of any banned owner or function is refused, in an
+        // allowed function too, for every package's list.
+        for text in [
+            "#[allow(clippy::disallowed_methods)] fn show() { use crate::design::Fills as Fill; let _ = Fill::because(FillsReason::Columns); }",
+            "use crate::design::{Body, Fills as Room};",
+            "type Fill = crate::design::Fills;",
+            "use crate::design::pane::Fills::because as fills;",
+            "use eframe::egui::ScrollArea as Area;",
+            "use crate::design::outcome::banner as notice;",
+            "type Hand = splat::design::components::Footer<'static>;",
+        ] {
+            assert_eq!(rules(text), ["banned-alias"], "{text}");
+        }
+        for text in [
+            "use crate::design::{Body, Fills};",
+            "use egui::accesskit::Action as Access;",
+            "type Groups = BTreeMap<String, Value>;",
+            "use splat::content::formats::patch_model as patch_fields;",
+        ] {
+            assert!(rules(text).is_empty(), "{text}");
+        }
         assert_eq!(
             field_id_names("const A: FieldId = crate::field_id!(\"a_name\");").unwrap(),
             ["a_name"]

@@ -8,6 +8,7 @@ pub mod icons;
 pub mod layout;
 pub mod memo;
 pub mod outcome;
+pub mod pane;
 pub mod reader;
 pub mod results;
 pub mod save_row;
@@ -34,6 +35,9 @@ pub use layout::{
     TextKey, TitleAction, TitleLine, TitlePlacement, TitleType, Word, labelled_field, lane_width,
     line_field, menu_popup, sideways_scroll, status_slot, title_lead_in, title_placement,
 };
+// Wave 2 callers name the pane's escape through `design`.
+#[allow(unused_imports)]
+pub use pane::{Body, Fills, FillsReason, Placement};
 pub use results::Results;
 pub use save_row::{DraftState, save_row};
 pub use tokens::*;

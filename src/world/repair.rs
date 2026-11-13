@@ -349,7 +349,7 @@ impl Repair {
                 design::message(ui, design::Tone::Error, reason);
             });
         }
-        let bottom = footer.show(ui);
+        let bottom = footer.show_by_hand(ui);
         (pressed.get(), bottom)
     }
 

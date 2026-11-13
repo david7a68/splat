@@ -2930,7 +2930,7 @@ impl Sessions {
         // The fold measures the room the rows have with an empty footer, so that a result coming
         // or going never folds or unfolds the scenes.
         let pane_bottom = ui.available_rect_before_wrap().bottom();
-        let body_bottom = footer.show(ui);
+        let body_bottom = footer.show_by_hand(ui);
         let footer_height = pane_bottom - body_bottom;
         match footer_act.take() {
             Some(FooterAct::GoToGroup) => {
