@@ -555,7 +555,7 @@ fn plan_row_with(
     mut summary: impl FnMut(&mut egui::Ui),
     mut action: impl FnMut(&mut egui::Ui),
 ) {
-    let row = ui.horizontal_top(|ui| {
+    ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = design::S;
         // Round 27 FL4: the lead is centred in its `XL` slot, which is where a title's first
         // line is centred: a fight's link in its `XL` target, a scene's line in its `XL` band
@@ -612,7 +612,6 @@ fn plan_row_with(
             ui.expand_to_include_rect(action_rect.union(action_ui.min_rect()));
         });
     });
-    design::register_row(ui, row.response.rect);
 }
 
 /// A paused run needs its state here; the whole saved-run record stays in Encounters.
