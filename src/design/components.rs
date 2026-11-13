@@ -2844,15 +2844,15 @@ pub fn undo_line(ui: &mut Ui, tone: Tone, result: Option<(&str, &str)>) -> bool 
         ui.label(Type::Body.rich(ui, icon).color(color));
         ui.add_space(XS);
         let font = Type::Body.font(ui);
-        let mut room = ui.available_width() - gap - button.natural_width(ui);
-        // A cut adds `…` past the room it was given, so a cut leaves room for it.
-        if number_width(ui, text, &font) > room {
-            room -= number_width(ui, "…", &font);
-        }
-        let words = one_line(ui, text, font, colors().text, room);
-        let cut = words.elided;
+        let room = ui.available_width() - gap - button.natural_width(ui);
+        // App round 2: the words shorten by whole words, never inside one.
+        let fitted = words_that_fit(ui, text, &font, room);
+        let cut = fitted != text;
+        let words = one_line(ui, &fitted, font, colors().text, room);
         let response = ui.add(egui::Label::new(words));
         if cut {
+            // The cut words are what shows; the whole words are its name and its hover.
+            named(ui, &response, text);
             response.clone().on_hover_text(text);
         }
         let bar = Rect::from_min_max(
@@ -2877,7 +2877,8 @@ pub fn undo_message_height(ui: &Ui, tone: Tone, text: &str, action: &str, width:
     let font = Type::Body.font(ui);
     let icon_width = number_width(ui, tone.parts().0, &font);
     let gap = ui.spacing().item_spacing.x;
-    let inset = S + 1.0 + icon_width + XS + gap;
+    // As `undo_message` measures its line (X13).
+    let inset = S + 1.0 + icon_width + XS;
     if width >= number_width(ui, text, &font) + inset + gap + button.natural_width(ui) {
         return Density::Read.control();
     }
@@ -2920,14 +2921,16 @@ fn undo_message_inside(
     let button_width = button.natural_width(ui);
     let icon_width = number_width(ui, tone.parts().0, &Type::Body.font(ui));
     // The words start `XS` after the icon whatever the caller's spacing; the gap follows them.
-    let inset = S + 1.0 + icon_width + XS + ui.spacing().item_spacing.x;
+    // App round 2, X13: the line is measured as `message` draws it, with one gap before the
+    // action, so the action wraps only when it is wider than the room after the words.
+    let inset = S + 1.0 + icon_width + XS;
     let text_width = number_width(ui, text, &Type::Body.font(ui)) + inset;
     let gap = ui.spacing().item_spacing.x;
     let mut pressed = false;
     if ui.available_width() < text_width + gap + button_width {
         message(ui, tone, text);
         ui.horizontal(|ui| {
-            ui.add_space((inset - gap).max(0.0));
+            ui.add_space(inset);
             pressed = button.line_start_in_column().show(ui).clicked();
         });
     } else {
