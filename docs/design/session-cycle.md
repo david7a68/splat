@@ -435,7 +435,7 @@ that G7 allows.
 | 31 | A stat block's action tiles in a run | The key hint says `Ctrl+1` where it said `1`, on its line and at its right edge. A tile whose name would be cut beside it shows no hint; its hover and accessible name keep the keys | By the lead's ruling after app round 2 (X54) |
 | 32 | Run dock, line two | `Effect` (row 6) is decided by the room after **Absent** alone, so it shows also beside a selected name that its slot cut (X9). Nothing of today's dock moves; an act shows or hides only `Effect`'s and rows 33 and 34's words | By the lead's ruling after app round 2 |
 | 33 | Run dock, the selected name | A name that its slot cuts keeps its last word after its first whole words, `Ashfang, Eldest… Ridge` for `Ashfang, Eldest Wolf…`, at the same place and height in the same slot (X53). The run header's names, the notice line's and Undo's are as today | By the lead's ruling after app round 2 |
-| 34 | The **Conditions** tab | Its help says `No HP, AC or roll changes by itself. A time you type counts down on that creature’s turns. Other effects stay local and do not sync.` at its place, and may take one more line below its first (X7). Where the dock has no room for `Effect`, the field's words are `Other effect, such as Bless 10 rounds` (X8) | By the lead's ruling after app round 2 |
+| 34 | The **Conditions** tab | Its help says `No HP, AC or roll changes by itself. A time you type counts down at the end of that creature’s turn: Bless 10 rounds goes from 10 to 9. Other effects stay local and do not sync.` at its place, and may take one more line below its first (X7). Where the dock has no room for `Effect`, the field's words are `Other effect, such as Bless 10 rounds` (X8) | By the lead's ruling after app round 2 |
 | 26 | History on the Encounters page, with a run opened there | Until the DM scrolls the list, the run stays at the list's top when the list's visible height changes, as at 960x640 after it opened at 1200x800 (X36); the top is a clean edge, the top of the row's own gap below the list's clip margin, and the list keeps room below its end while the run is open, so the row reaches the top also when little follows it (X37). `COMBAT LOG` is `M` below the last Final state row, so the log moves down by 6 px (X66). Otherwise only the list's scroll offset differs: items keep their place across and their size, and only the list's edges cut them | By the lead's ruling after app round 2 |
 | 27 | The encounter editor beside Lookup at 960x640 | `Save encounter` and `Start fight` keep their place across and move up to the name field's line, which ends before them (X51). Everything below the header moves straight up by the line they left, and what comes into view at the pane's bottom shows | By the lead's ruling after app round 2 |
 | 25 | The **Last time** line of a session before play, while it offers `Carry over` | `Carry over` sits `L` after the line's last word: the preview's, or the link's when no word of the preview fits (X24). It moves straight left on its line, at its size, from the pane's right edge; nothing else on the line moves, and the preview keeps its words. In the plain evening the new session's line has no preview, so the action stands `L` after its link | By the lead's ruling after app round 2 |
@@ -679,7 +679,8 @@ A count is its own target, 24 px wide or more, so the name beside it keeps its a
 **Exact words.** `Effect`. Dock field: `Effect on <name>, such as Bless 10 rounds`. On the row and the notice
 line: `Bless 9`, `Bless · last round`,
 `Bless · time is up`. The Conditions tab's help says `No HP, AC or roll changes by itself. A time you type
-counts down on that creature’s turns. Other effects stay local and do not sync.` (X7); an official condition's
+counts down at the end of that creature’s turn: Bless 10 rounds goes from 10 to 9. Other effects stay local and do
+not sync.` (X7); an official condition's
 count is on its tick, `✓ Frightened 10`, and Other effects lists other words only (X11).
 
 | State | What shows |
@@ -1345,8 +1346,8 @@ Case A, the plan at 330 px
   `Add to notes` today (`:4388`), so this is the act that links it.
 - **The XP line,** first under it, when the notes use XP (below): the XP of the creatures that ended at 0 HP,
   also those marked absent at 0 HP, and each character's share. F1's function gives the numbers. The line
-  names what it counted and what still stood, so the DM can change it. With nobody at 0 HP it says `XP 0 for 0
-  at 0 HP`. When a creature at 0 HP has no XP that Splat knows (a made-up creature, an NPC with no stat
+  names what it counted and what still stood, so the DM can change it. With nobody at 0 HP it says `XP 0 · no creature at 0
+  HP` (and `XP 0.` before the names when none of them has XP that Splat knows). When a creature at 0 HP has no XP that Splat knows (a made-up creature, an NPC with no stat
   block), the line says so: `XP 450 for 3 at 0 HP. XP not known for Captain Varra: enter an award here.` The
   count is of the creatures whose XP is summed. It is still an XP line, and the link and the loot are written. An amount that is not known is left out of
   every sum and is never counted as zero. This is the rule (section 7).

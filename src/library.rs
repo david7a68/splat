@@ -3664,14 +3664,14 @@ impl Place {
     }
 }
 impl Library {
-    /// The footer order of the open entry's link result, as its footer reads it: a check reads
-    /// it to prove that each result keeps the order its own update issued (review of PR 298).
-    #[cfg(test)]
+    /// The footer order of the open entry's link result: the order its own update issued
+    /// (review of PR 298). The footer reads it here, and so does the check that proves it.
     pub(crate) fn open_link_result_order(&self) -> Option<design::ResultOrder> {
-        self.page_results
-            .links
-            .as_ref()
-            .map(|_| self.page_results.link_orders.1)
+        let (id, root) = self.open_entry_key()?;
+        self.link_edits
+            .iter()
+            .find(|result| result.owner == id && result.source.root == root)
+            .map(|result| result.order)
     }
 
     pub fn refocus_draft(&mut self) {
@@ -4705,11 +4705,7 @@ impl Library {
                     .find(|offer| owns(offer.owner, &offer.source))
                     .map(|offer| offer.order)
                     .unwrap_or_default(),
-                self.link_edits
-                    .iter()
-                    .find(|result| owns(result.owner, &result.source))
-                    .map(|result| result.order)
-                    .unwrap_or_default(),
+                self.open_link_result_order().unwrap_or_default(),
             ),
             registration: self.package_copy.as_ref().map(|copy| {
                 (

@@ -814,9 +814,6 @@ pub(crate) struct Run {
     /// The Arrivals reasons for typed totals that cannot be read (FI5), for one
     /// `totals_revision`, one read of the groups and one encounter. Never saved.
     arrival_reasons: Option<(ReasonsKey, Arc<[String]>)>,
-    /// The widest roster name in the dock's `Heading`, for one `revision`, roster size and type
-    /// size (FK1). Never saved.
-    widest_name: Option<((u64, usize, u32), f32)>,
     /// Never saved.
     carried: Option<CarriedHp>,
     rest_order: u64,
@@ -1331,7 +1328,6 @@ impl Run {
             scale_seen: None,
             scale_revision: 0,
             arrival_reasons: None,
-            widest_name: None,
             carried: None,
             rest_order: 0,
             armed: None,
@@ -2936,9 +2932,9 @@ impl Run {
                         )
                     }
                     (Condition::Effect(effect), _) => {
-                        format!("effect {} on {}", effect.name, name(i))
+                        format!("add effect {} on {}", effect.name, name(i))
                     }
-                    (Condition::Label(words), _) => format!("{words} on {}", name(i)),
+                    (Condition::Label(words), _) => format!("add {words} on {}", name(i)),
                 }
             }
             Command::RemoveCondition(i, at) => match condition(i, at) {
@@ -2949,7 +2945,7 @@ impl Run {
                 ),
                 Some(old) if old.is_effect() => format!("remove {} from {}", old.name(), name(i)),
                 old => format!(
-                    "{} off {}",
+                    "remove {} from {}",
                     old.map_or("an effect", Condition::name),
                     name(i)
                 ),
@@ -4583,7 +4579,6 @@ impl Run {
             scale_seen: None,
             scale_revision: 0,
             arrival_reasons: None,
-            widest_name: None,
             carried: None,
             rest_order: saved.rest_order,
             armed: None,
@@ -5866,7 +5861,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             run.undo_label(),
-            format!("Undo: effect Poisoned on {}", names[0])
+            format!("Undo: add effect Poisoned on {}", names[0])
         );
         assert_eq!(run.state.participants[0].conditions, vec!["Poisoned 2"]);
         for words in [
@@ -9480,7 +9475,7 @@ mod tests {
             rewards.xp_line(),
             (
                 format!(
-                    "XP 0 for 0 at 0 HP. XP not known for {}: enter an award here.",
+                    "XP 0. XP not known for {}: enter an award here.",
                     run.state.participants[1].name
                 ),
                 0,
@@ -9496,6 +9491,24 @@ mod tests {
         assert_eq!(
             known.xp_line().0,
             "XP 400 for 2 at 0 HP · 80 each for 5 · 1 still stood (XP 200)"
+        );
+        // Round 27 FM4: nothing at 0 HP is said in words, not as three zeros.
+        let none_down = loot::Rewards {
+            standing: vec![Some(200), Some(200), Some(200)],
+            characters: 5,
+            ..loot::Rewards::default()
+        };
+        assert_eq!(
+            none_down.xp_line(),
+            (
+                "XP 0 · no creature at 0 HP · 3 still stood (XP 600)".to_owned(),
+                0,
+                0
+            )
+        );
+        assert_eq!(
+            crate::sessions::first_number(&none_down.xp_line().0),
+            Some(0)
         );
         let mut reopened = close_and_reopen(&mut run, campaign);
         assert_same_undo(&run, &reopened);
@@ -10277,6 +10290,54 @@ mod tests {
         same.total = "5".into();
         add_from(&mut run, &same, &known);
         assert!(run.state.participants.last().unwrap().changes.is_none());
+        // iter-27-R FJ5: Lookup's `Add to fight` takes the same step with no typed values: one
+        // Wolf joins with its own HP and a rolled initiative, and Undo takes only it away.
+        let rows = run.state.participants.len();
+        let wolf = known[0].entry.clone();
+        assert_eq!(run.add_to_fight_reason(&wolf), None);
+        run.add_entry_to_fight(wolf.clone(), None).unwrap();
+        assert_eq!(run.state.participants.len(), rows + 1, "iter-27-R-FJ5");
+        let p = run.state.participants.last().unwrap();
+        assert_eq!((p.max_hp, p.side.as_str()), (Some(20), "enemies"));
+        assert!(p.initiative.is_some() && p.changes.is_none());
+        assert!(
+            run.undo_label().starts_with("Undo: add Wolf"),
+            "{}",
+            run.undo_label()
+        );
+        run.undo();
+        assert_eq!(run.state.participants.len(), rows, "iter-27-R-FJ5 Undo");
+        // An NPC joins under its own name with that stat block, as World's form adds it.
+        let mut npc = creature();
+        npc.name = "Captain Varra Black".into();
+        npc.kind = "npc".into();
+        run.add_entry_to_fight(wolf.clone(), Some(&npc)).unwrap();
+        assert!(
+            run.state
+                .participants
+                .iter()
+                .any(|p| p.name.starts_with("Captain Varra Black")),
+            "iter-27-R-FJ5 NPC"
+        );
+        run.undo();
+        assert_eq!(run.state.participants.len(), rows);
+        // A stat block with no maximum HP cannot join without a typed HP: the reason says
+        // where, and nothing joins.
+        let mut no_hp = (*wolf).clone();
+        if let Some(stats) = no_hp
+            .fields
+            .get_mut("splat_stats")
+            .and_then(|stats| stats.as_mapping_mut())
+        {
+            stats.remove("max_hp");
+        }
+        let reason = run.add_entry_to_fight(Arc::new(no_hp), None).unwrap_err();
+        assert!(reason.contains("Arrivals"), "{reason}");
+        assert_eq!(run.state.participants.len(), rows);
+        // An ended fight takes none.
+        run.apply(Command::End("Won".into())).unwrap();
+        assert!(run.add_entry_to_fight(wolf, None).is_err());
+        assert_eq!(run.state.participants.len(), rows);
     }
 
     #[test]

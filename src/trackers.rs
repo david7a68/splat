@@ -1169,33 +1169,54 @@ pub fn result_words(rules: &Rules, ledger: &Ledger, state: &State, entries: &[En
 /// The act's own words: the notice it ended or rolled on, or the values it left.
 fn act_words(rules: &Rules, ledger: &Ledger, state: &State, entries: &[Entry]) -> String {
     let label = label(rules, ledger, entries);
-    if let Some(entry) = head(entries).filter(|e| e.notice.is_some()) {
-        if entry.done || entry.dismissed {
-            return format!("{label}.");
+    // An act on a notice says what happened in a sentence; `Undo: <label>` keeps the label.
+    if let Some(entry) = head(entries).filter(|e| e.notice.is_some())
+        && let Some(notice) = &entry.notice
+    {
+        let short = notice_name(rules, ledger, notice);
+        let ends = entries.iter().filter(|e| e.dismissed).count();
+        if let (NoticeRef::Day { mark, .. }, true) = (notice, entry.dismissed && ends > 1) {
+            return format!("{} is dismissed for {ends} days.", rules.day_title(mark));
+        }
+        if entry.done {
+            return format!("{short} is done.");
+        }
+        if entry.dismissed {
+            return format!("{short} is dismissed.");
         }
         if let Some(Roll::Table(roll)) = &entry.roll {
             let name = roll
                 .name
                 .as_ref()
-                .map_or(String::new(), |n| format!("{n} "));
-            return format!("{label}: {name}{} · {}", roll.value, roll.row);
+                .map_or(String::new(), |n| format!(" for {n}"));
+            let mut words = format!(
+                "Rolled {} on {}{name}: {}",
+                roll.value,
+                rules.table_name(&roll.table),
+                roll.row.trim()
+            );
+            if !words.ends_with(['.', '!', '?']) {
+                words.push('.');
+            }
+            return words;
         }
     }
+    // Each value it left is a sentence of its own; `Undo: <label>` below names the act.
     let values: Vec<String> = entries
         .iter()
         .filter(|entry| entry.notice.is_none())
         .filter_map(|entry| {
             let after = state.after.get(&entry.id)?;
             Some(format!(
-                "{} {after}",
-                place_name(rules, entry.tracker.as_deref()?, entry.instance.as_deref())
+                "{} changed to {after}.",
+                line_name(rules, entry.tracker.as_deref()?, entry.instance.as_deref())
             ))
         })
         .collect();
     let mut words = if values.is_empty() {
         format!("{label}.")
     } else {
-        format!("{label}: {}.", values.join(", "))
+        values.join(" ")
     };
     for entry in entries {
         if let Some(Roll::Dice(text)) = &entry.roll {
@@ -1205,23 +1226,48 @@ fn act_words(rules: &Rules, ledger: &Ledger, state: &State, entries: &[Entry]) -
             }
         }
     }
-    let due: Vec<String> = entries
+    let raised: Vec<(String, i64)> = entries
         .iter()
         .flat_map(|entry| {
             state.raised.get(&entry.id).into_iter().flatten().map(|at| {
-                short_name(
+                let name = short_name(
                     rules,
                     entry.tracker.as_deref().unwrap_or_default(),
                     entry.instance.as_deref(),
                     *at,
-                )
+                );
+                (name, *at)
             })
         })
         .collect();
-    if !due.is_empty() {
-        words.push_str(&format!(" Due: {}.", due.join(", ")));
+    // Two notices with one name say their marks: `Bell at 20 and Bell at 40 are due.`
+    let due: Vec<String> = raised
+        .iter()
+        .map(|(name, at)| {
+            if raised.iter().filter(|(other, _)| other == name).count() > 1 {
+                format!("{name} at {at}")
+            } else {
+                name.clone()
+            }
+        })
+        .collect();
+    match due.as_slice() {
+        [] => {}
+        [one] => words.push_str(&format!(" {one} is due.")),
+        [many @ .., last] => {
+            words.push_str(&format!(" {} and {last} are due.", many.join(", ")));
+        }
     }
     words
+}
+
+/// A tracker's line in a sentence: `Seals for Party`, or the tracker's name alone.
+fn line_name(rules: &Rules, key: &str, instance: Option<&str>) -> String {
+    let name = rules.def(key).map_or(key, |def| def.name.as_str());
+    match instance {
+        Some(instance) => format!("{name} for {instance}"),
+        None => name.to_owned(),
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1443,6 +1489,11 @@ pub struct Trackers {
     /// `Undo add` of this event.
     pub wants_undo_add: Option<String>,
     pub(crate) view: view::ViewState,
+    /// Counts each `settle`, so the view measures its columns again only when a value or a
+    /// definition changed.
+    pub(crate) revision: u64,
+    /// `Campaign → Rules and runs` in the empty state: the shell shows that page.
+    pub wants_rules: bool,
     /// Each tracker's history, by key: worked out when the ledger or the definitions change.
     history: HashMap<String, Vec<history::Row>>,
     /// The problems list, each with the house rule note it belongs to: worked out with the
@@ -1487,7 +1538,12 @@ impl Trackers {
         {
             self.manifest = Some(CampaignDocument::load(campaign).map(|document| document.path));
             self.index = Some(index);
-            self.rules = self.rules_now();
+            let rules = self.rules_now();
+            if !rules.same_definitions(&self.rules) {
+                // New definitions: the value column fits them afresh.
+                self.view.widest_value = 0.0;
+            }
+            self.rules = rules;
             self.settle();
             self.last_check = None;
         }
@@ -1585,6 +1641,7 @@ impl Trackers {
 
     /// Work the values, the notices, the histories and the newest act out of the ledger again.
     fn settle(&mut self) {
+        self.revision += 1;
         self.state = replay(&self.rules, &self.ledger, &self.today);
         self.history = history::rows(&self.rules, &self.ledger, &self.state);
         self.problems = history::problems(&self.rules, &self.state);
@@ -1650,6 +1707,7 @@ impl Trackers {
         });
         let done = self.finish(result);
         if changed {
+            self.view.widest_value = 0.0;
             self.rules = rules;
             self.settle();
         }
@@ -2035,7 +2093,7 @@ mod tests {
         assert_eq!(t.reason, None);
         assert_eq!(t.due(), 1);
         let words = result_words(&t.rules, &t.ledger, &t.state, t.newest());
-        assert_eq!(words, "Cistern or Sands: Elapsed race time 20. Due: Bell.");
+        assert_eq!(words, "Elapsed race time changed to 20. Bell is due.");
         assert_eq!(newest_label(t), "Cistern or Sands");
         // The result line's label and words are worked out with the act, not in each frame.
         assert_eq!(t.result, Some(("Cistern or Sands".into(), words)));
@@ -2054,6 +2112,14 @@ mod tests {
                 .clone();
             assert_eq!(roll.name.as_deref(), Some(name));
             assert_eq!(newest_label(t), "Rival Track roll");
+            // The result is a sentence; Undo keeps the label.
+            assert_eq!(
+                result_words(&t.rules, &t.ledger, &t.state, t.newest()),
+                format!(
+                    "Rolled {} on Rival Track for {name}: {}",
+                    roll.value, roll.row
+                )
+            );
         }
         let before = file(&race);
         let t = &mut race.trackers;
@@ -2073,7 +2139,7 @@ mod tests {
         assert_eq!(newest_label(t), "Bell done");
         assert_eq!(
             result_words(&t.rules, &t.ledger, &t.state, t.newest()),
-            "Bell done."
+            "Bell is done."
         );
 
         // `min` blocks a press, and says why beside it.
@@ -2090,9 +2156,25 @@ mod tests {
         t.press("favor", None, "Throw a gift", None);
         let words = result_words(&t.rules, &t.ledger, &t.state, t.newest());
         assert!(
-            words.starts_with("Throw a gift: Crowd Favor 0. Rolled ")
+            words.starts_with("Crowd Favor changed to 0. Rolled ")
                 && words.ends_with(": A healing potion."),
             "{words}"
+        );
+        // One change that passes two marks names both, in one sentence.
+        let jump = Ledger {
+            changes: vec![Entry {
+                id: "c-0000j040".into(),
+                tracker: Some("race_clock".into()),
+                add: Some(40),
+                why: Some("Enter room".into()),
+                ..Entry::default()
+            }],
+            ..Ledger::default()
+        };
+        let jumped = replay(&t.rules, &jump, &Today::Day(1));
+        assert_eq!(
+            result_words(&t.rules, &jump, &jumped, &jump.changes),
+            "Elapsed race time changed to 40. Bell at 20 and Bell at 40 are due."
         );
 
         // An instance has its own value and its own notice.
@@ -2140,7 +2222,7 @@ mod tests {
         );
         assert_eq!(
             result_words(&t.rules, &t.ledger, &t.state, t.newest()),
-            "Lose seal: Seals (Old Guard) 0. First seal for Old Guard is no longer due."
+            "Seals for Old Guard changed to 0. First seal for Old Guard is no longer due."
         );
         let lowered = t.newest().to_vec();
         t.undo(&lowered);
@@ -2159,7 +2241,7 @@ mod tests {
         let t = &mut race.trackers;
         assert_eq!(
             result_words(&t.rules, &t.ledger, &t.state, t.newest()),
-            "Collect soul: Elapsed race time 30, Souls in the jar 1."
+            "Elapsed race time changed to 30. Souls in the jar changed to 1."
         );
         t.undo(&pressed);
         assert_eq!(value(&race, "souls", None), 0);
@@ -2302,7 +2384,7 @@ mod tests {
         let t = &race.trackers;
         assert_eq!(
             t.removed.as_ref().map(|r| r.words.as_str()),
-            Some("Removed: End of month, Day 32 done.")
+            Some("Removed End of month, Day 32 done: Crowd Favor +1.")
         );
         assert_eq!(
             t.state
@@ -2689,10 +2771,7 @@ mod tests {
         assert!(state.due.is_empty(), "{:?}", state.due);
         assert_eq!(
             result_words(&rules, &ledger, &state, &done),
-            format!(
-                "{}. First for Old Guard is no longer due.",
-                label(&rules, &ledger, &done)
-            )
+            "Rest, Day 7 is done. First for Old Guard is no longer due."
         );
     }
 
@@ -2754,8 +2833,12 @@ mod tests {
             .map(|row| row.words.as_str())
             .collect();
         assert_eq!(rows[..2], ["Enter room: +10", "Enter room: +10"]);
-        assert!(rows[2].starts_with("Wandering, 0:00 to 0:39 roll: "));
-        assert_eq!(rows[3], "Bell done.");
+        assert!(
+            rows[2].starts_with("Rolled ") && rows[2].contains(" on Wandering, 0:00 to 0:39: "),
+            "{}",
+            rows[2]
+        );
+        assert_eq!(rows[3], "Bell is done.");
         assert_eq!(t.history["race_clock"][1].value, Some(20));
         // The first room is what the second room's crossing depends on: Remove of it would
         // leave the roll and the Done with no notice, so it writes nothing and names them.
@@ -2782,7 +2865,9 @@ mod tests {
         assert_eq!(t.history_reason, None);
         assert_eq!(
             t.removed.as_ref().map(|r| r.words.as_str()),
-            Some("Removed: Enter room. With it: Wandering, 0:00 to 0:39 roll; Bell done.")
+            Some(
+                "Removed Enter room: Elapsed race time +10. With it: Wandering, 0:00 to 0:39 roll; Bell done."
+            )
         );
         assert_eq!(t.ledger.changes, kept.changes[..1]);
         assert_eq!(
@@ -3004,7 +3089,7 @@ mod tests {
         t.remove(note, &older);
         assert_eq!(
             t.removed.as_ref().map(|r| r.words.as_str()),
-            Some("Removed: Typed in Obsidian.")
+            Some("Removed Typed in Obsidian: Crowd Favor +2.")
         );
         assert_eq!(value(&race, "favor", None), -1, "Splat clamps nothing");
         let t = &mut race.trackers;
@@ -3336,6 +3421,99 @@ mod tests {
             h.query_by_label("CROWD FAVOR HISTORY 5,001").is_some()
         })
         .expect("a changed ledger prepares its rows again");
+    }
+
+    /// FE1, AE2: every tracker line of the panel shares one value column and one first-action
+    /// edge, and a value that gains a digit moves no action. The columns are measured once for
+    /// each change of the trackers, never on an unchanged frame.
+    #[test]
+    fn the_panel_shares_its_columns_and_measures_them_once_per_change() {
+        use egui_kittest::{Harness, kittest::Queryable};
+        let mut race = race();
+        let t = std::mem::take(&mut race.trackers);
+        let mut h = Harness::builder()
+            // Wide enough that every first action fits after the values: the layout in which a
+            // wider value could push the actions.
+            .with_size(eframe::egui::vec2(480.0, 640.0))
+            .build_ui_state(|ui, t: &mut Trackers| view::show(ui, t, false), t);
+        crate::design::theme::install(&h.ctx);
+        h.run_steps(4);
+        let left = |h: &Harness<'_, Trackers>, name: &str| h.get_by_label(name).rect().left();
+        let firsts = |h: &Harness<'_, Trackers>| {
+            [
+                "Enter room",
+                "Crowd loves it",
+                "Take seal: Party",
+                "Take seal: Keyring",
+            ]
+            .map(|name| left(h, name))
+        };
+        let before = firsts(&h);
+        assert!(
+            before.iter().all(|x| (x - before[0]).abs() < 0.5),
+            "the first actions of three trackers start at one edge: {before:?}"
+        );
+        let measured = h.state().view.measured;
+        h.run_steps(5);
+        assert_eq!(
+            h.state().view.measured,
+            measured,
+            "an unchanged frame measures no column"
+        );
+        // 0 / 120 becomes 10 / 120, and Crowd Favor 0 becomes 1: measured again, no move.
+        h.state_mut().press("race_clock", None, "Enter room", None);
+        h.state_mut().press("favor", None, "Crowd loves it", None);
+        h.run_steps(4);
+        let t = h.state();
+        assert_eq!(t.state.value(&t.rules, "race_clock", None), 10);
+        let changed = h.state().view.measured;
+        assert!(
+            changed > measured,
+            "a change of the values measures the columns again"
+        );
+        h.run_steps(5);
+        assert_eq!(
+            h.state().view.measured,
+            changed,
+            "unchanged frames after the change measure no column"
+        );
+        assert_eq!(
+            firsts(&h),
+            before,
+            "a value with one more digit moves no action"
+        );
+        // 999 / 120, then `Fight minute` makes 1000 / 120, wider than the slot of three
+        // digits; Undo takes it back to 999. The value column keeps the room it needed, so the
+        // actions do not move back and forth.
+        let typed = Entry {
+            id: "c-00000999".into(),
+            tracker: Some("race_clock".into()),
+            set: Some(999),
+            why: Some("Typed in Obsidian".into()),
+            ..Entry::default()
+        };
+        ledger::commit(&ledger::path(&race.campaign.path), |_| {
+            Ok(Op::Append(vec![typed]))
+        })
+        .unwrap();
+        h.state_mut().read_disk();
+        h.run_steps(4);
+        h.state_mut()
+            .press("race_clock", None, "Fight minute", None);
+        h.run_steps(4);
+        let t = h.state();
+        assert_eq!(t.state.value(&t.rules, "race_clock", None), 1000);
+        let wide = firsts(&h);
+        let pressed = h.state().newest().to_vec();
+        h.state_mut().undo(&pressed);
+        h.run_steps(4);
+        let t = h.state();
+        assert_eq!(t.state.value(&t.rules, "race_clock", None), 999);
+        assert_eq!(
+            firsts(&h),
+            wide,
+            "Undo of 1000 / 120 keeps the value column, and no action moves back"
+        );
     }
 
     #[test]
