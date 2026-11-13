@@ -4886,6 +4886,10 @@ mod tests {
     /// of every word. The last Undo, reached by keyboard and by pointer, ends its own result only:
     /// the other 19 stay, with their Undo.
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn iter26_a_the_footer_keeps_the_body_top_and_reaches_its_last_message() {
         use egui_kittest::kittest::{NodeT, Queryable};
         use std::{cell::RefCell, rc::Rc};
@@ -5166,6 +5170,10 @@ mod tests {
     /// adds them in: A then B, B then A; removing a middle result keeps the others' places; A,
     /// B, Undo A, then A again is newer than B. A redraw or changed words issue nothing. A reason
     /// stays after the results, and a result with no live Undo after the notices.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn iter27_a_footer_results_go_newest_first_by_their_action() {
         // The words, top down, of a footer that holds `results` (added in this order) with a
         // reason and a notice added first.
@@ -5281,6 +5289,10 @@ mod tests {
     /// its content grows; the pane's own press area, which lies under a following footer, never
     /// takes the footer's press; a click on an outside field moves focus there and typing goes
     /// there; Tab reaches the last Undo of an overflowing footer, in view.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn iter27_a_the_footer_follows_a_short_body() {
         use egui_kittest::kittest::{NodeT, Queryable};
         use std::{

@@ -831,6 +831,10 @@ impl Run {
     /// never moves when one comes or goes. It is drawn in a child of `ui` over `rect`, at its
     /// bottom, and the y where the body above it ends is returned. A stat-block error is one
     /// of them: its whole fault wraps there, with its repair place under its words.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn message_footer(
         &mut self,
         ui: &mut egui::Ui,
@@ -2957,6 +2961,10 @@ impl Run {
     /// The campaign's encounter groups. A group is dragged to the initiative list, or added
     /// with its button, by the rule the campaign chose for initiative.
     /// Whatever joins a fight after it starts: one creature, or a prepared group.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn groups_tab(&mut self, ui: &mut egui::Ui) {
         let mut add = None;
         // FB1: the newest arrival's result, and a tie's Move button, sit in a footer pinned

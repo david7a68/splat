@@ -125,6 +125,10 @@ pub fn tokens(ui: &mut egui::Ui) {
     }
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 pub fn components(ui: &mut egui::Ui) {
     let c = colors();
     page_header(ui, "Encounters", Some("2 ready · 1 in progress"), |ui| {

@@ -549,6 +549,10 @@ impl Party {
     /// the storage warnings and the stopped-sync notice. Each keeps its owner and end event: a
     /// result or the stopped-sync notice ends at its close icon, a local-edit notice when its
     /// sheet is replaced. Returns where the body ends.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn page_footer(&mut self, ui: &mut egui::Ui, connected: bool, linked: bool) -> f32 {
         use std::cell::Cell;
         let width = ui.available_width().min(design::LIST_MEASURE);

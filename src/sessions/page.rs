@@ -284,6 +284,10 @@ struct LinkUndoState {
 
 /// A notice the page just made: it takes a new footer order in `order`, so it lists as the
 /// newest result.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 fn new_notice(
     order: &mut Option<design::ResultOrder>,
     notice: (Tone, String),
@@ -1401,6 +1405,10 @@ impl Sessions {
     /// a file changed, moved or copied elsewhere, a save that failed) sits in the bottom banner,
     /// so it never moves the tabs or the note the DM types in. The result of the DM's own
     /// action keeps its place above the tabs. Each one wraps at `LIST_MEASURE`.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn banner_notices(&mut self, ui: &mut egui::Ui) {
         let notes = self.on_page && self.view == View::Notes && self.form.is_none();
         let width = ui.available_width().min(design::LIST_MEASURE);
@@ -2290,6 +2298,10 @@ impl Sessions {
     }
 
     /// The DM took the link offer: write the notes, and keep what Undo needs.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     pub fn accept_event_link_offer(&mut self, offer: LinkOffer, book: &Book) {
         self.update_event_link_notes(offer.changes);
         self.link_order = Some(design::ResultOrder::issue());
@@ -3454,6 +3466,10 @@ impl Sessions {
         self.move_run_here = self.notice.as_ref().map(|(_, words)| (new, words.clone()));
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn move_run_to_session(&mut self, book: &mut Book, run: Uuid, session: Uuid) {
         let Some(event) = book.events.iter_mut().find(|event| event.run == Some(run)) else {
             return;
@@ -4998,6 +5014,10 @@ impl Sessions {
         });
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn markers(&mut self, ui: &mut egui::Ui, recording: &Recording, book: &mut Book) {
         if recording.markers.is_empty() {
             return;
@@ -5184,6 +5204,10 @@ impl Sessions {
 
     /// One text from a recording, in the whole pane, one part at a time. A 5-hour transcript
     /// is about 30 parts of a size the Reader handles.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn reading_view(&mut self, ui: &mut egui::Ui, book: &mut Book) {
         let c = colors();
         let session = self.selected;
@@ -5627,6 +5651,10 @@ impl Sessions {
     /// Round 26 FM4, FD3: the session page's results and notices that come and go sit in its
     /// message footer, pinned at the pane's bottom, so the title's line, Last time, the tabs and
     /// the recordings never move when one comes. Returns where the body ends.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn session_footer(
         &mut self,
         ui: &mut egui::Ui,
@@ -6413,6 +6441,10 @@ impl Sessions {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn template_editor(&mut self, ui: &mut egui::Ui) {
         let c = colors();
         let Some(template) = self
@@ -6569,6 +6601,10 @@ impl Sessions {
         });
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn folder_form(
         &mut self,
         ui: &mut egui::Ui,
@@ -6782,6 +6818,10 @@ impl Sessions {
 
     /// Round 26 FN2, FN5: the Session folder form's messages, in the message footer of the pane
     /// that holds the form, so a typed letter, a refusal or a result never moves its save row.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     pub fn folder_messages<'a>(&mut self, footer: &mut design::Footer<'a>, book: &Book) {
         let files = self.scan_folder_files();
         let counts = self.folder_move_counts(book, &files);

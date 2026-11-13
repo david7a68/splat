@@ -429,6 +429,10 @@ impl WorldPage {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
@@ -964,6 +968,10 @@ impl WorldPage {
 
     /// A creation form or the held NPC's card, with the pane's footer: the card's `Copy the
     /// marker` result and the error of the last Create or Save (round 27 FG2: no body places).
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn creation_form(&mut self, ui: &mut egui::Ui, index: &ContentIndex, campaign: &Campaign) {
         let form = self.new_kind.is_some() || self.card_shown();
         // The copy's result, with the order its press issued; it has no Undo.
@@ -1009,6 +1017,10 @@ impl WorldPage {
     /// action after the last field on that field's line, centred on it, then one kept line
     /// below, as tall as a control: quiet `Cancel` at its start, then the reason or the new
     /// file's path. Typing moves nothing.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn creation_body(&mut self, ui: &mut egui::Ui, index: &ContentIndex, campaign: &Campaign) {
         let mut made = None;
         if let Some(kind) = self.new_kind {

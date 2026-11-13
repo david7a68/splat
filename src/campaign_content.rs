@@ -158,6 +158,10 @@ macro_rules! new_result {
             .retain(|(kind, _): &(PageResult, design::ResultOrder)| {
                 *kind != $kind && kind.has_undo()
             });
+        #[allow(
+            clippy::disallowed_methods,
+            reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+        )]
         $page
             .result_order
             .insert(0, ($kind, design::ResultOrder::issue()));
@@ -946,6 +950,10 @@ impl CampaignContent {
     /// or refusal, then the page's errors), then the plain results and the package warnings.
     /// Each message keeps its owner and end event: a repair's messages name its file and end with
     /// that repair's state, as before.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn page_footer(
         &mut self,
         ui: &mut egui::Ui,
@@ -1454,6 +1462,10 @@ impl CampaignContent {
         });
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn repair_section_content(
         &mut self,
         ui: &mut egui::Ui,
@@ -1676,6 +1688,10 @@ impl CampaignContent {
         });
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn selection_bar_content(
         &mut self,
         ui: &mut egui::Ui,
