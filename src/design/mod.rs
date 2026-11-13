@@ -34,8 +34,9 @@ pub use extras::{Gap, Heading, choice, choice_value, gap, heading};
 pub use layout::{
     ACTION_GAP, Create, CreateChoice, CreateField, CreateReasons, FieldId, InlineCreate, KeptLine,
     MAX_WORD_CHARS, NARROWEST_PANE, NoReason, RowIndex, RowKey, ScrollColumn, Slot, SlotType,
-    TextKey, TitleAction, TitleLine, TitlePlacement, TitleType, Word, labelled_field, lane_width,
-    line_field, menu_popup, sideways_scroll, status_slot, title_lead_in, title_placement,
+    TextKey, TitleAction, TitleActionRow, TitleLine, TitlePlacement, TitleType, Word,
+    labelled_field, lane_width, line_field, menu_popup, register_title_row, sideways_scroll,
+    status_slot, title_lead_in, title_placement,
 };
 // Wave 2 callers name the pane's escape through `design`.
 #[allow(unused_imports)]

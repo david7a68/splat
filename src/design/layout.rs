@@ -1031,6 +1031,52 @@ impl TitleLineResponse {
     }
 }
 
+/// One row of actions that a title line drew under its title (`TitlePlacement::Under`): the
+/// title's rect, the row's rect (from its first target's left edge to its last target's right
+/// edge, one control high) and how many actions it holds. [`TitleLine`] and the readers' title
+/// lines (`world::title_line_actions`) register each row they draw; actions that follow the title
+/// on its line register none.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TitleActionRow {
+    pub title: Rect,
+    pub row: Rect,
+    pub actions: usize,
+}
+
+/// Where test builds keep each title action row of a pass.
+#[cfg(test)]
+const TITLE_ACTION_ROWS: &str = "design_title_action_rows";
+
+/// Register a row of actions drawn under a title. Only test builds keep it.
+pub fn register_title_row(ui: &Ui, row: TitleActionRow) {
+    #[cfg(test)]
+    {
+        let pass = ui.ctx().cumulative_pass_nr();
+        ui.ctx().data_mut(|data| {
+            let kept = data
+                .get_temp_mut_or_default::<(u64, Vec<TitleActionRow>)>(Id::new(TITLE_ACTION_ROWS));
+            if kept.0 != pass {
+                *kept = (pass, Vec::new());
+            }
+            kept.1.push(row);
+        });
+    }
+    #[cfg(not(test))]
+    let _ = (ui, row);
+}
+
+/// Each action row drawn under a title in the last completed pass, in draw order; empty when
+/// that pass drew none (a row never outlives its title line). Package G reads them through
+/// `Driver::title_action_rows`.
+#[cfg(test)]
+pub fn title_action_rows(ctx: &egui::Context) -> Vec<TitleActionRow> {
+    let last = ctx.cumulative_pass_nr().saturating_sub(1);
+    ctx.data(|data| data.get_temp::<(u64, Vec<TitleActionRow>)>(Id::new(TITLE_ACTION_ROWS)))
+        .filter(|(pass, _)| *pass == last)
+        .map(|(_, rows)| rows)
+        .unwrap_or_default()
+}
+
 /// A title line's widths, measured once per frame and used by both the placement and the draw.
 struct TitleMetrics {
     title: f32,
@@ -1165,13 +1211,16 @@ impl<'a> TitleLine<'a> {
                 0
             }
             TitlePlacement::Under(rows) => {
-                ui.horizontal_wrapped(|ui| {
-                    ui.spacing_mut().item_spacing.x = XS;
-                    ui.add(title.wrap());
-                    if let Some((words, context)) = context {
-                        ui.add(context.wrap()).on_hover_text(words);
-                    }
-                });
+                let title_rect = ui
+                    .horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing.x = XS;
+                        ui.add(title.wrap());
+                        if let Some((words, context)) = context {
+                            ui.add(context.wrap()).on_hover_text(words);
+                        }
+                    })
+                    .response
+                    .rect;
                 for row in &rows {
                     let (line, _) = ui.allocate_exact_size(vec2(room, height), Sense::hover());
                     let mut row_ui = ui.new_child(
@@ -1192,6 +1241,14 @@ impl<'a> TitleLine<'a> {
                             pressed = Some(self.actions[at].word);
                         }
                     }
+                    register_title_row(
+                        ui,
+                        TitleActionRow {
+                            title: title_rect,
+                            row: Rect::from_min_max(line.min, egui::pos2(x, line.bottom())),
+                            actions: row.len(),
+                        },
+                    );
                 }
                 rows.len()
             }

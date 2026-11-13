@@ -301,6 +301,33 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
                 "{word:?} inside {width}"
             );
         }
+        // The gate's registry (N4) holds exactly the rows drawn under the title: one per row,
+        // each under the title and holding its own actions, every action once.
+        let registered = super::title_action_rows(&ctx);
+        assert_eq!(
+            registered.len(),
+            rows,
+            "one registered row per row at {width}"
+        );
+        assert_eq!(
+            registered.iter().map(|r| r.actions).sum::<usize>(),
+            if rows == 0 { 0 } else { WORDS.len() },
+            "every action once at {width}"
+        );
+        let mut next = 0;
+        for row in &registered {
+            assert!(
+                row.row.top() >= row.title.bottom() - 0.5,
+                "under the title: {row:?}"
+            );
+            for rect in &rects[next..next + row.actions] {
+                assert!(
+                    row.row.expand(0.5).contains_rect(*rect),
+                    "{rect:?} in {row:?}"
+                );
+            }
+            next += row.actions;
+        }
         (rows, rects)
     };
     // One line, to half a point.

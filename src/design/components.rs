@@ -3448,15 +3448,19 @@ pub fn section_icon(ui: &mut Ui, openness: f32, response: &Response) {
     phosphor_icon(ui, response.rect, icon, colors().muted);
 }
 
-/// A collapsing section with the icon set's arrow.
+/// A collapsing section with the icon set's arrow. Its header says whether it is open
+/// (expanded) to a screen reader.
 pub fn section<R>(
     ui: &mut Ui,
     title: impl Into<egui::WidgetText>,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> egui::CollapsingResponse<R> {
-    egui::CollapsingHeader::new(title)
-        .icon(section_icon)
-        .show(ui, add)
+    with_expanded(
+        ui,
+        egui::CollapsingHeader::new(title)
+            .icon(section_icon)
+            .show(ui, add),
+    )
 }
 
 /// A collapsing section that stays open when its title changes, such as a count.
@@ -3466,10 +3470,24 @@ pub fn section_with_id<R>(
     title: impl Into<egui::WidgetText>,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> egui::CollapsingResponse<R> {
-    egui::CollapsingHeader::new(title)
-        .id_salt(id)
-        .icon(section_icon)
-        .show(ui, add)
+    with_expanded(
+        ui,
+        egui::CollapsingHeader::new(title)
+            .id_salt(id)
+            .icon(section_icon)
+            .show(ui, add),
+    )
+}
+
+/// egui gives a collapsing header no expanded state: set it from the section's own state, after
+/// this frame's click, so the tree says what the DM sees.
+fn with_expanded<R>(ui: &Ui, response: egui::CollapsingResponse<R>) -> egui::CollapsingResponse<R> {
+    let id = response.header_response.id;
+    let open = egui::collapsing_header::CollapsingState::load(ui.ctx(), id)
+        .is_some_and(|state| state.is_open());
+    ui.ctx()
+        .accesskit_node_builder(id, |node| node.set_expanded(open));
+    response
 }
 
 /// A collapsing section for what matters least: technical details at the end of a page.
@@ -4686,6 +4704,42 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Every section form says to a screen reader whether it is open, and the state follows a
+    /// click on its own header only.
+    #[test]
+    fn a_section_says_whether_it_is_open() {
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(400.0, 300.0))
+            .build_ui(|ui| {
+                let _ = section(ui, "Details", |ui| ui.label("Inside details"));
+                let _ = section_with_id(ui, "notes", "3 notes", |ui| ui.label("Inside notes"));
+                let _ = quiet_section(ui, "Technical", |ui| ui.label("Inside technical"));
+            });
+        super::super::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let expanded = |harness: &egui_kittest::Harness<'_>| {
+            use egui_kittest::kittest::Queryable;
+            ["Details", "3 notes", "Technical"].map(|name| {
+                harness
+                    .get_by_label(name)
+                    .accesskit_node()
+                    .data()
+                    .is_expanded()
+            })
+        };
+        assert_eq!(expanded(&harness), [Some(false); 3], "closed at first");
+        {
+            use egui_kittest::kittest::Queryable;
+            harness.get_by_label("3 notes").click();
+        }
+        harness.run_steps(3);
+        assert_eq!(
+            expanded(&harness),
+            [Some(false), Some(true), Some(false)],
+            "only the clicked section opens"
+        );
     }
 
     /// SD1, ST2: a `line_start` quiet action puts its words at the text edge. With an icon, the
