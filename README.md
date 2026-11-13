@@ -126,8 +126,8 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   is more than `3 × L` after its last words (form and table rows are exempt). **G6** a pane's
   footer is more than `2 × L` below a short body (`pane::short_body_gap` for a `Footer::pane`;
   the footer band for a pane placed by hand). **G7** two live widgets share one id. **N2** an
-  icon control's centre is more than 1 px off the centre of the text line beside it. **N4**
-  (report-only) a quiet action that paints first on its line does not start its words at the
+  icon control's centre is more than 1 px off the centre of the text line beside it. **N4** a quiet
+  action that paints first on its line does not start its words at the
   text edge of the line above or below, or one that is not first hangs over what comes before
   it. **N5** a
   text that starts with an icon wrapped inside its own layout job. These block. Report-only:

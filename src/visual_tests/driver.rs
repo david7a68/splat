@@ -3024,10 +3024,19 @@ impl<'a> Driver<'a> {
         if size == SMALL {
             found.extend(stillness::doubled_words(&items, &lines));
         }
+        // Popup and menu bodies: egui chrome that is not thin (a scroll bar is).
+        let popups: Vec<egui::Rect> = controls
+            .iter()
+            .filter(|control| {
+                control.chrome && control.rect.width() > 20.0 && control.rect.height() > 20.0
+            })
+            .map(|control| control.rect)
+            .collect();
         found.extend(stillness::line_starts(
             &items,
             &stillness::quiet_rects(shapes),
             &stillness::placed(&painted),
+            &popups,
         ));
         self.stillness.headers.push(stillness::HeaderView {
             window: window.clone(),

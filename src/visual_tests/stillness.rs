@@ -15,7 +15,7 @@
 //!
 //! G1a, G1b, G1c and G3 block: a finding that `stillness_known::KNOWN` does not list fails the
 //! run, and so does a listed state with fewer findings (the list may only shrink). So do G6, G7
-//! (two live widgets with one id, package K's `layout::widget_id_clashes`), N2 and N5. G2, G4, N8
+//! (two live widgets with one id, package K's `layout::widget_id_clashes`), N2, N4 and N5. G2, G4, N8
 //! and G1b's renamed tier (`G1B_RENAMED`) are report-only.
 //!
 //! G1 compares two states in a row at one window size. It matches a control by its pane, role,
@@ -70,7 +70,7 @@ pub const CHECKS: [&str; 13] = [
     N8,
 ];
 /// The checks whose findings must be in `stillness_known::KNOWN`.
-pub const BLOCKING: [&str; 8] = [G1A, G1B, G1C, G3, G6, G7, N2, N5];
+pub const BLOCKING: [&str; 9] = [G1A, G1B, G1C, G3, G6, G7, N2, N4, N5];
 
 /// An edge may move by rounding up to this much (the design's ±1 px).
 const MOVE_TOLERANCE: f32 = 1.0;
@@ -1250,6 +1250,8 @@ pub struct Placed {
     pub start: f32,
     pub rect: egui::Rect,
     pub clip: egui::Rect,
+    /// The font size of its first words: a title is larger than the body text under it.
+    pub size: f32,
 }
 
 pub fn placed(painted: &[(egui::epaint::TextShape, egui::Rect)]) -> Vec<Placed> {
@@ -1270,6 +1272,12 @@ pub fn placed(painted: &[(egui::epaint::TextShape, egui::Rect)]) -> Vec<Placed> 
                 .unwrap_or(text.pos.x + text.galley.rect.min.x),
             rect: text.visual_bounding_rect(),
             clip: *clip,
+            size: text
+                .galley
+                .job
+                .sections
+                .first()
+                .map_or(0.0, |section| section.format.font_id.size),
         })
         .collect()
 }
@@ -1298,19 +1306,44 @@ pub fn quiet_rects(shapes: &[ClippedShape]) -> Vec<egui::Rect> {
     out
 }
 
+/// N4: a title is at least this much larger than the action's words.
+const TITLE_SIZE: f32 = 1.25;
+
+/// A line start N4 compares with: a text's first word, or a field's box (the field is the line).
+struct LineStart<'a> {
+    words: &'a str,
+    start: f32,
+    rect: egui::Rect,
+    size: f32,
+}
+
 /// N4. A quiet action is a button whose rect is one of `quiet` (see `quiet_rects`). Its words
 /// start where its first non-icon text starts. It paints first on its line when no text of its
-/// clip, outside it, lies on its line to its left. Then its words start, within 1 px, at the text
-/// edge: the start of the nearest line above or of the nearest line below it in its clip (within
-/// `2 × L`, and within `3 × L` sideways); it is a finding when they match neither. A quiet action that is not first does not reach left over the text before it
-/// (`line_start` hangs its padding into the gutter; mid-line it covers its neighbour).
-pub fn line_starts(items: &[Item], quiet: &[egui::Rect], texts: &[Placed]) -> Vec<Raw> {
+/// clip, outside it, lies on its line to its left ("on its line": the heights overlap by at
+/// least half the smaller one). Then its words start, within 1 px, at the text edge: the start of
+/// the nearest line above or of the nearest line below it in its clip (within `2 × L`, and within
+/// `3 × L` sideways); a line that starts with a field starts at the field's box. It is a finding
+/// when they match neither. A quiet action that is not first does not reach left over the text
+/// before it (`line_start` hangs its padding into the gutter; mid-line it covers its neighbour).
+///
+/// Left out: actions and texts in a popup or menu (`popups`, their bodies), and an action row that
+/// a title line draws under its title (`design::TitleLine`, `world::title_line_actions`): there the
+/// first action keeps its icon at the text edge (round 27 ruling). That row is told from paint:
+/// the nearest line above it is the title, `TITLE_SIZE` times larger than the action's words.
+pub fn line_starts(
+    items: &[Item],
+    quiet: &[egui::Rect],
+    texts: &[Placed],
+    popups: &[egui::Rect],
+) -> Vec<Raw> {
+    let in_popup = |rect: egui::Rect| popups.iter().any(|popup| popup.contains(rect.center()));
+    let texts: Vec<&Placed> = texts.iter().filter(|text| !in_popup(text.rect)).collect();
     let mut out = Vec::new();
     for item in items.iter().filter(|item| item.role == Role::Button) {
-        if !quiet.iter().any(|rect| moved(*rect, item.rect).is_none()) {
+        if in_popup(item.rect) || !quiet.iter().any(|rect| moved(*rect, item.rect).is_none()) {
             continue;
         }
-        let own: Vec<&Placed> = texts
+        let own: Vec<&&Placed> = texts
             .iter()
             .filter(|text| item.rect.expand(1.0).contains(text.rect.center()))
             .filter(|text| !icon_only(&text.words))
@@ -1319,16 +1352,14 @@ pub fn line_starts(items: &[Item], quiet: &[egui::Rect], texts: &[Placed]) -> Ve
             continue;
         };
         let clip = words.clip;
-        // On its line: the heights overlap by at least half the smaller one (a tall title beside
-        // a button is on the button's line).
         let on_line = |rect: egui::Rect| {
             let overlap = rect.bottom().min(item.rect.bottom()) - rect.top().max(item.rect.top());
             overlap >= 0.5 * rect.height().min(item.rect.height())
         };
-        let outside = |text: &&Placed| {
+        let outside = |text: &&&Placed| {
             text.clip == clip && !item.rect.expand(1.0).contains(text.rect.center())
         };
-        let before: Vec<&Placed> = texts
+        let before: Vec<&&Placed> = texts
             .iter()
             .filter(outside)
             .filter(|text| on_line(text.rect) && text.rect.right() <= words.start)
@@ -1352,26 +1383,53 @@ pub fn line_starts(items: &[Item], quiet: &[egui::Rect], texts: &[Placed]) -> Ve
             }
             continue;
         }
-        // The nearest line above and the nearest below, in its clip, within `2 × L`.
-        let near = |above: bool| {
-            texts
+        let starts: Vec<LineStart<'_>> = texts
+            .iter()
+            .filter(outside)
+            .filter(|text| !icon_only(&text.words))
+            .map(|text| LineStart {
+                words: &text.words,
+                start: text.start,
+                rect: text.rect,
+                size: text.size,
+            })
+            .chain(
+                items
+                    .iter()
+                    .filter(|field| field.is_field() && clip.contains(field.rect.center()))
+                    .map(|field| LineStart {
+                        words: &field.name,
+                        start: field.rect.left(),
+                        rect: field.rect,
+                        size: 0.0,
+                    }),
+            )
+            .filter(|line| !on_line(line.rect))
+            .collect();
+        // The nearest line above and the nearest below, within `2 × L`.
+        let near = |above: bool, sideways: f32| {
+            starts
                 .iter()
-                .filter(outside)
-                .filter(|text| !icon_only(&text.words))
-                .filter(|text| (text.start - words.start).abs() <= 3.0 * L)
-                .filter(|text| !on_line(text.rect))
-                .filter_map(|text| {
+                .filter(|line| (line.start - words.start).abs() <= sideways)
+                .filter_map(|line| {
                     let gap = if above {
-                        item.rect.top() - text.rect.bottom()
+                        item.rect.top() - line.rect.bottom()
                     } else {
-                        text.rect.top() - item.rect.bottom()
+                        line.rect.top() - item.rect.bottom()
                     };
-                    (0.0..=2.0 * L).contains(&gap).then_some((text, gap))
+                    (0.0..=2.0 * L).contains(&gap).then_some((line, gap))
                 })
                 .min_by(|a, b| a.1.total_cmp(&b.1))
-                .map(|(text, _)| text)
+                .map(|(line, _)| line)
         };
-        let edges: Vec<&Placed> = [near(true), near(false)].into_iter().flatten().collect();
+        // A title line's action row under its title.
+        if near(true, f32::INFINITY).is_some_and(|line| line.size >= TITLE_SIZE * words.size) {
+            continue;
+        }
+        let edges: Vec<&LineStart<'_>> = [near(true, 3.0 * L), near(false, 3.0 * L)]
+            .into_iter()
+            .flatten()
+            .collect();
         // The words line up with either neighbour: that is the block's text edge.
         if edges.is_empty()
             || edges
@@ -2578,6 +2636,7 @@ mod tests {
             start: x,
             rect: at(x, y, width, 18.0),
             clip,
+            size: 14.0,
         };
         let progress = text("Processing: cleaning the transcript", 372.0, 200.0, 260.0);
         let cancel = |x: f32| item(Role::Button, "Cancel", at(x, 226.0, 64.0, 28.0), None);
@@ -2587,6 +2646,7 @@ mod tests {
             &[cancel(364.0)],
             &[at(364.0, 226.0, 64.0, 28.0)],
             &[progress.clone(), words(372.0)],
+            &[],
         );
         assert!(found.is_empty(), "{found:?}");
         // Without it, the words start 8 px right of the edge (routing 81): found. 1 px passes.
@@ -2594,6 +2654,7 @@ mod tests {
             &[cancel(372.0)],
             &[at(372.0, 226.0, 64.0, 28.0)],
             &[progress.clone(), words(380.0)],
+            &[],
         );
         assert_eq!(found.len(), 1, "{found:?}");
         assert!(found[0].trigger.contains("8 px right of"));
@@ -2601,7 +2662,8 @@ mod tests {
             line_starts(
                 &[cancel(365.0)],
                 &[at(365.0, 226.0, 64.0, 28.0)],
-                &[progress.clone(), words(373.0),]
+                &[progress.clone(), words(373.0),],
+                &[]
             )
             .is_empty()
         );
@@ -2612,13 +2674,15 @@ mod tests {
             line_starts(
                 &[cancel(364.0)],
                 &[at(364.0, 226.0, 64.0, 28.0)],
-                &[progress.clone(), words(372.0), status,]
+                &[progress.clone(), words(372.0), status,],
+                &[]
             )
             .is_empty()
         );
         // A tall title on its line comes before it: the action is not first.
         let title = Placed {
             rect: at(372.0, 220.0, 120.0, 40.0),
+            size: 26.0,
             ..text("Rook Ambry", 372.0, 220.0, 120.0)
         };
         let edit = item(Role::Button, "Edit", at(500.0, 226.0, 64.0, 28.0), None);
@@ -2630,12 +2694,21 @@ mod tests {
                     title,
                     text("Edit", 508.0, 231.0, 30.0),
                     text("NPC · Campaign", 372.0, 266.0, 100.0),
-                ]
+                ],
+                &[]
             )
             .is_empty()
         );
         // A bordered (not quiet) action is not N4's.
-        assert!(line_starts(&[cancel(372.0)], &[], &[progress.clone(), words(380.0)]).is_empty());
+        assert!(
+            line_starts(
+                &[cancel(372.0)],
+                &[],
+                &[progress.clone(), words(380.0)],
+                &[]
+            )
+            .is_empty()
+        );
         // Not first on its line: normal padding passes; a `line_start` hang over the words before
         // it is found.
         let label = text("Saved", 372.0, 231.0, 40.0);
@@ -2645,7 +2718,8 @@ mod tests {
             line_starts(
                 &[after(416.0)],
                 &[at(416.0, 226.0, 56.0, 28.0)],
-                &[label.clone(), undo(424.0),]
+                &[label.clone(), undo(424.0),],
+                &[]
             )
             .is_empty()
         );
@@ -2653,11 +2727,67 @@ mod tests {
             line_starts(
                 &[after(404.0)],
                 &[at(404.0, 226.0, 56.0, 28.0)],
-                &[label, undo(416.0)]
+                &[label, undo(416.0)],
+                &[]
             )
             .len(),
             1
         );
+
+        // Routing 61: the line below starts with a field; its box is the edge. `Death saves` 8 px
+        // right of it is found; at the box it passes.
+        let saves = |x: f32| item(Role::Button, "Death saves", at(x, 489.0, 94.0, 28.0), None);
+        let amount = item(
+            Role::TextInput,
+            "Amount",
+            at(156.0, 532.0, 72.0, 24.0),
+            Some(clip),
+        );
+        let found = line_starts(
+            &[saves(156.0), amount.clone()],
+            &[at(156.0, 489.0, 94.0, 28.0)],
+            &[text("Death saves", 164.0, 497.0, 77.0)],
+            &[],
+        );
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(
+            found[0]
+                .trigger
+                .contains("8 px right of the text edge of \"Amount\"")
+        );
+        assert!(
+            line_starts(
+                &[saves(148.0), amount],
+                &[at(148.0, 489.0, 94.0, 28.0)],
+                &[text("Death saves", 156.0, 497.0, 77.0)],
+                &[],
+            )
+            .is_empty()
+        );
+        // A title line's action row under its title keeps its icon at the edge (round 27): left
+        // out. The same row under body text is found.
+        let edit = item(Role::Button, "Edit", at(364.0, 266.0, 64.0, 28.0), None);
+        let row = [at(364.0, 266.0, 64.0, 28.0)];
+        let title = Placed {
+            size: 26.0,
+            ..text("Rook Ambry", 372.0, 226.0, 120.0)
+        };
+        let edit_words = text("Edit", 392.0, 271.0, 30.0);
+        assert!(line_starts(&[edit.clone()], &row, &[title, edit_words.clone()], &[]).is_empty());
+        let body = text("A note for tonight", 372.0, 242.0, 120.0);
+        assert_eq!(
+            line_starts(
+                &[edit.clone()],
+                &row,
+                &[body.clone(), edit_words.clone()],
+                &[]
+            )
+            .len(),
+            1
+        );
+        // In a menu: left out.
+        let menu = at(300.0, 200.0, 300.0, 200.0);
+        assert!(line_starts(&[edit], &row, &[body, edit_words], &[menu]).is_empty());
     }
 
     fn finding(check: &'static str, state: &str) -> Finding {
