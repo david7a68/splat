@@ -89,7 +89,9 @@
     ["N4/quiet-action-line-start","03-editor-high","1200x800","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","03-editor-high","1920x1080","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","03-editor-high","960x640","Button \"Filter creatures\"",1],
-    ["N4/quiet-action-line-start","05-editor-unknown","960x640","Button \"Filter creatures\"",1]
+    ["N4/quiet-action-line-start","05-editor-unknown","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","07-plan-beside-lookup","960x640","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","11-plan-opened-unknown-beside-lookup","960x640","Button \"All sessions\"",1]
   ],
   "encounter-groups": [
     ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Changes for Cinder Wolf\"",2],
@@ -341,6 +343,16 @@
     ["N2/icon-off-text-centre","06-log-field-blocked-by-edit","960x640","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
     ["N2/icon-off-text-centre","07-log-words-of-a-deleted-entry","960x640","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
     ["N2/icon-off-text-centre","08-log-words-without-an-entry","960x640","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
+    ["N4/quiet-action-line-start","02-log-line-added-in-lookup","1200x800","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","02-log-line-added-in-lookup","960x640","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","03-status-changed-in-lookup","960x640","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","04-log-field-from-scene","1200x800","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","04-log-field-from-scene","960x640","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","05-log-header-long-title","1200x800","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","05-log-header-long-title","960x640","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","06-log-field-blocked-by-edit","960x640","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","07-log-words-of-a-deleted-entry","960x640","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","08-log-words-without-an-entry","960x640","Button \"All sessions\"",1],
     ["N5/icon-starts-wrapping-text","07-log-words-of-a-deleted-entry","960x640","Text \"\\u{e4e0} Captain Varra Black: told the party who burned the ropes at the ford\"",1],
     ["N5/icon-starts-wrapping-text","08-log-words-without-an-entry","960x640","Text \"\\u{e4e0} Captain Varra Black: told the party who burned the ropes at the ford\"",1]
   ],
@@ -718,7 +730,8 @@
     ["N4/quiet-action-line-start","04-loot-table-suggestion","960x640","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","05-loot-in-the-editor","1200x800","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","05-loot-in-the-editor","1920x1080","Button \"Filter creatures\"",1],
-    ["N4/quiet-action-line-start","05-loot-in-the-editor","960x640","Button \"Filter creatures\"",1]
+    ["N4/quiet-action-line-start","05-loot-in-the-editor","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","08-rewards-for-loot-beside-lookup","960x640","Button \"All sessions\"",1]
   ],
   "run-overrides": [
     ["G1b/pressed-control-moved","03-slot-changes-open","960x640","Button \"Options: starting HP, temporary HP, initiative group and changes\"",1],
@@ -770,7 +783,11 @@
   "session-carry-over": [
     ["G6/footer-far-below-body","03-carried-over","960x640","Button \"More actions for Talk to Hobb the miller about the ropes\"",1],
     ["G6/footer-far-below-body","04-carried-over-beside-lookup","960x640","Button \"More actions for Talk to Hobb the miller about the ropes\"",1],
-    ["G6/footer-far-below-body","05-carried-recap-in-read","1200x800","Label \"Open\"",1]
+    ["G6/footer-far-below-body","05-carried-recap-in-read","1200x800","Label \"Open\"",1],
+    ["N4/quiet-action-line-start","02-carry-over-offered-beside-lookup","1200x800","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","02-carry-over-offered-beside-lookup","960x640","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","04-carried-over-beside-lookup","960x640","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","06-carried-recap-in-read-beside-lookup","960x640","Button \"All sessions\"",1]
   ],
   "session-notes": [
     ["G1b/pressed-control-moved","22-timeline-time-not-counted","960x640","Button \"Travel · Session 1\"",1],
@@ -797,7 +814,9 @@
     ["N2/icon-off-text-centre","27-session-long-title","1200x800","Button \"Dismiss\"",1],
     ["N2/icon-off-text-centre","27-session-long-title","1920x1080","Button \"Dismiss\"",1],
     ["N4/quiet-action-line-start","41-timeline-beside-lookup","1200x800","Button \"All events\"",1],
-    ["N4/quiet-action-line-start","41-timeline-beside-lookup","960x640","Button \"All events\"",1]
+    ["N4/quiet-action-line-start","41-timeline-beside-lookup","960x640","Button \"All events\"",1],
+    ["N4/quiet-action-line-start","42-session-beside-lookup","960x640","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","49-lookup-written-card-link","960x640","Button \"All sessions\"",1]
   ],
   "session-plan": [
     ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Save encounter\"",1],
@@ -830,6 +849,9 @@
     ["N2/icon-off-text-centre","09-several-targets","1920x1080","CheckBox \"Half damage: Cinder Wolf 2\"",1],
     ["N2/icon-off-text-centre","09-several-targets","960x640","CheckBox \"Half damage: Cinder Wolf 1\"",1],
     ["N2/icon-off-text-centre","09-several-targets","960x640","CheckBox \"Half damage: Cinder Wolf 2\"",1],
+    ["N4/quiet-action-line-start","04-planned-fight-removed-beside-lookup","960x640","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","18-rewards-offered-beside-lookup","960x640","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","20-rewards-added-beside-lookup","960x640","Button \"All sessions\"",1],
     ["N4/quiet-action-line-start","40-roster-row-menu","1200x800","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","40-roster-row-menu","960x640","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","42-read-aloud-field","1200x800","Button \"Filter creatures\"",1],
@@ -853,7 +875,11 @@
   ],
   "session-plan-scenes": [
     ["G1b/pressed-control-moved","08-scenes-folded","960x640","Button \"Long rest · Session 1 · \\u{e182} Everyone at full\"",2],
-    ["G6/footer-far-below-body","08-scenes-folded","960x640","Label \"5\\u{a0}party ·\\u{a0}2\\u{a0}×\\u{a0}Ember\\u{a0}Cultist ·\\u{a0}XP\\u{a0}400\\u{a0}·\\u{a0}Low\\u{a0}(up\\u{a0}to\\u{a0}2,800)\"",1]
+    ["G6/footer-far-below-body","08-scenes-folded","960x640","Label \"5\\u{a0}party ·\\u{a0}2\\u{a0}×\\u{a0}Ember\\u{a0}Cultist ·\\u{a0}XP\\u{a0}400\\u{a0}·\\u{a0}Low\\u{a0}(up\\u{a0}to\\u{a0}2,800)\"",1],
+    ["N4/quiet-action-line-start","02-scene-link-in-lookup","1200x800","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","02-scene-link-in-lookup","960x640","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","03-scene-menu-with-lookup","1200x800","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","03-scene-menu-with-lookup","960x640","Button \"All sessions\"",1]
   ],
   "session-recording": [
     ["G1b/pressed-control-moved","04-recording-listed","960x640","Button \"Recordings, 1 recording\"",1],
@@ -984,8 +1010,10 @@
     ["N4/quiet-action-line-start","32-recording-processing-again","1200x800","Button \"Cancel processing\"",1],
     ["N4/quiet-action-line-start","32-recording-processing-again","1920x1080","Button \"Cancel processing\"",1],
     ["N4/quiet-action-line-start","32-recording-processing-again","960x640","Button \"Cancel processing\"",1],
+    ["N4/quiet-action-line-start","40-recording-summary-narrow","1200x800","Button \"All sessions\"",1],
     ["N4/quiet-action-line-start","40-recording-summary-narrow","1200x800","Button \"Back to recordings\"",1],
     ["N4/quiet-action-line-start","40-recording-summary-narrow","1920x1080","Button \"Back to recordings\"",1],
+    ["N4/quiet-action-line-start","40-recording-summary-narrow","960x640","Button \"All sessions\"",1],
     ["N4/quiet-action-line-start","40-recording-summary-narrow","960x640","Button \"Back to recordings\"",1]
   ],
   "settings": [
@@ -1023,7 +1051,18 @@
     ["G6/footer-far-below-body","07-tracker-history-in-the-reader","1920x1080","Label \"5\\u{a0}party ·\\u{a0}2\\u{a0}×\\u{a0}Ember\\u{a0}Cultist ·\\u{a0}XP\\u{a0}400\\u{a0}·\\u{a0}Low\\u{a0}(up\\u{a0}to\\u{a0}2,800)\"",1],
     ["G6/footer-far-below-body","07-tracker-history-in-the-reader","960x640","Label \"5\\u{a0}party ·\\u{a0}2\\u{a0}×\\u{a0}Ember\\u{a0}Cultist ·\\u{a0}XP\\u{a0}400\\u{a0}·\\u{a0}Low\\u{a0}(up\\u{a0}to\\u{a0}2,800)\"",1],
     ["G6/footer-far-below-body","08-tracker-history-removed","1200x800","Label \"5\\u{a0}party ·\\u{a0}2\\u{a0}×\\u{a0}Ember\\u{a0}Cultist ·\\u{a0}XP\\u{a0}400\\u{a0}·\\u{a0}Low\\u{a0}(up\\u{a0}to\\u{a0}2,800)\"",1],
-    ["G6/footer-far-below-body","08-tracker-history-removed","960x640","Label \"5\\u{a0}party ·\\u{a0}2\\u{a0}×\\u{a0}Ember\\u{a0}Cultist ·\\u{a0}XP\\u{a0}400\\u{a0}·\\u{a0}Low\\u{a0}(up\\u{a0}to\\u{a0}2,800)\"",1]
+    ["G6/footer-far-below-body","08-tracker-history-removed","960x640","Label \"5\\u{a0}party ·\\u{a0}2\\u{a0}×\\u{a0}Ember\\u{a0}Cultist ·\\u{a0}XP\\u{a0}400\\u{a0}·\\u{a0}Low\\u{a0}(up\\u{a0}to\\u{a0}2,800)\"",1],
+    ["N4/quiet-action-line-start","02-trackers-beside-the-plan","1200x800","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","02-trackers-beside-the-plan","960x640","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","03-trackers-three-notices","1200x800","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","03-trackers-three-notices","960x640","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","05-trackers-over-an-entry","960x640","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","06-trackers-day-mark-due","1200x800","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","06-trackers-day-mark-due","960x640","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","07-tracker-history-in-the-reader","1200x800","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","07-tracker-history-in-the-reader","960x640","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","08-tracker-history-removed","1200x800","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","08-tracker-history-removed","960x640","Button \"All sessions\"",1]
   ],
   "travel-checks": [
     ["G1b/pressed-control-moved","06-travel-checks-timeline","960x640","Button \"Travel · 1 day · Session 1\"",1],
@@ -1031,12 +1070,16 @@
     ["N4/quiet-action-line-start","01-travel-checks-rolled","1200x800","Button \"On the road\"",1],
     ["N4/quiet-action-line-start","01-travel-checks-rolled","1920x1080","Button \"On the road\"",1],
     ["N4/quiet-action-line-start","01-travel-checks-rolled","960x640","Button \"On the road\"",1],
+    ["N4/quiet-action-line-start","02-travel-checks-rolled-lookup","960x640","Button \"All sessions\"",1],
     ["N4/quiet-action-line-start","02-travel-checks-rolled-lookup","960x640","Button \"On the road\"",1],
+    ["N4/quiet-action-line-start","04-travel-checks-planned-lookup","960x640","Button \"All sessions\"",1],
     ["N4/quiet-action-line-start","04-travel-checks-planned-lookup","960x640","Button \"On the road\"",1],
     ["N4/quiet-action-line-start","05-travel-checks-outside","960x640","Button \"On the road\"",1],
     ["N4/quiet-action-line-start","06-travel-checks-timeline","960x640","Button \"On the road\"",1],
     ["N4/quiet-action-line-start","07-travel-checks-timeline-lookup","960x640","Button \"All events\"",1],
-    ["N4/quiet-action-line-start","07-travel-checks-timeline-lookup","960x640","Button \"On the road\"",1]
+    ["N4/quiet-action-line-start","07-travel-checks-timeline-lookup","960x640","Button \"On the road\"",1],
+    ["N4/quiet-action-line-start","09-travel-checks-road-day-lookup","1200x800","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","09-travel-checks-road-day-lookup","960x640","Button \"All sessions\"",1]
   ],
   "world": [
     ["G1b/pressed-control-moved","08-world-generated-npc-saved","960x640","Button \"Reroll\"",1],
@@ -1045,7 +1088,8 @@
   "world-facts": [
     ["G6/footer-far-below-body","07-group-joined-with-log","960x640","Link \"The Arena (opens The Arena)\"",1],
     ["G6/footer-far-below-body","09-log-line-added","960x640","Link \"Session 1 (opens Session 1)\"",1],
-    ["G6/footer-far-below-body","11-group-joined-with-log-in-prep","960x640","Link \"The Arena (opens The Arena)\"",1]
+    ["G6/footer-far-below-body","11-group-joined-with-log-in-prep","960x640","Link \"The Arena (opens The Arena)\"",1],
+    ["N4/quiet-action-line-start","12-session-world-changes-in-prep-beside-lookup","960x640","Button \"All sessions\"",1]
   ],
   "world-note-deleted": [
     ["N4/quiet-action-line-start","06-npc-deleted-stat-block-encounter-search","1200x800","Button \"Filter creatures\"",1],

@@ -2126,6 +2126,28 @@ pub(crate) fn title_line_actions(
                 ));
                 next += width + design::XS;
             }
+            // Each row under the title, for the gate (`design::title_action_rows`).
+            for row in 0..count {
+                let targets: Vec<egui::Rect> = places
+                    .iter()
+                    .zip(&widths)
+                    .zip(rows)
+                    .filter(|(_, at)| **at == row)
+                    .map(|((at, width), _)| {
+                        egui::Rect::from_min_size(*at, egui::vec2(*width, height))
+                    })
+                    .collect();
+                if let Some(rect) = targets.iter().copied().reduce(|a, b| a.union(b)) {
+                    design::register_title_row(
+                        ui,
+                        design::TitleActionRow {
+                            title: cell,
+                            row: rect,
+                            actions: targets.len(),
+                        },
+                    );
+                }
+            }
         }
     }
     actions
@@ -6150,6 +6172,49 @@ mod tests {
         );
         // No actions: nothing to place.
         assert_eq!(title_line_rows(10.0, 10.0, 600.0, &[]), None);
+        // The draw registers each row it puts under the title for the gate (N4), and none when
+        // the actions follow the title.
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let draw = |width: f32| {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(width, 400.0),
+                )),
+                ..Default::default()
+            };
+            let _ = ctx.run(input, |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let cell = ui.label("Zarel").rect;
+                    let room = ui.available_width();
+                    let _ = title_line_actions(
+                        ui,
+                        cell,
+                        cell.width(),
+                        room,
+                        vec![
+                            Action::quiet("Edit"),
+                            Action::quiet("Start fight"),
+                            Action::quiet("Add to Log"),
+                        ],
+                    );
+                });
+            });
+            design::layout::title_action_rows(&ctx)
+        };
+        assert_eq!(draw(1200.0), [], "beside the title: no row");
+        let narrow = draw(170.0);
+        assert!(narrow.len() > 1, "rows wrap at 170: {narrow:?}");
+        assert_eq!(narrow.iter().map(|row| row.actions).sum::<usize>(), 3);
+        for pair in narrow.windows(2) {
+            assert!(pair[1].row.top() >= pair[0].row.bottom(), "{narrow:?}");
+        }
+        assert!(
+            narrow
+                .iter()
+                .all(|row| row.row.top() >= row.title.bottom() - 0.5)
+        );
     }
 
     #[test]
