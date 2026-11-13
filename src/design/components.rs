@@ -2914,12 +2914,14 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
         !room.footer.contains_rect(clip) && room.band.x_range().intersects(rect.x_range())
     });
     // The scroll area's viewport (egui widens its clip by a margin), ending above the footer.
+    // With a footer, the row is judged against the footer's room, not against the clip of a part
+    // it sits in (a collapsing body ends its clip at its own edge).
     let margin = ui.visuals().clip_rect_margin;
     let view = Rect::from_min_max(
         pos2(clip.left(), clip.top() + margin),
         pos2(
             clip.right(),
-            (clip.bottom() - margin).min(room.map_or(f32::INFINITY, |room| room.band.top())),
+            room.map_or(clip.bottom() - margin, |room| room.band.top()),
         ),
     );
     let whole_at = |top: f32| top >= view.top() - 0.5 && top + rect.height() <= view.bottom() + 0.5;
