@@ -236,7 +236,7 @@ pub(super) fn list_row(
     name: &str,
     detail: &str,
     status: bool,
-    rating: Option<&crate::difficulty::Rating>,
+    difficulty: Option<&crate::difficulty::Difficulty>,
     actions: impl FnOnce(&mut egui::Ui),
 ) {
     ui.push_id(id, |ui| {
@@ -267,21 +267,20 @@ pub(super) fn list_row(
                             } else {
                                 0.0
                             };
-                        let visible_detail = fit_detail(ui, detail, &Type::Small.font(ui), room);
-                        // F1: the word ends the line only when the detail stays whole with it.
-                        // When it gives way, hover and the accessible name keep it (V7).
-                        let whole = match rating {
-                            Some(rating) => format!("{detail} · {}", rating.word.text()),
+                        // F1, FB2, FB6: the difficulty ends the line in its one form, and the
+                        // detail gives way first. Hover and the accessible name keep the whole
+                        // line (V7).
+                        let parts = difficulty.and_then(crate::difficulty::Difficulty::parts);
+                        let form = difficulty.and_then(crate::difficulty::Difficulty::form);
+                        let form_width = form.as_ref().map_or(0.0, |form| {
+                            design::number_width(ui, &format!(" · {form}"), &Type::Small.font(ui))
+                        });
+                        let visible_detail =
+                            fit_detail(ui, detail, &Type::Small.font(ui), room - form_width);
+                        let whole = match &form {
+                            Some(form) => format!("{detail} · {form}"),
                             None => detail.to_owned(),
                         };
-                        let rating = rating.filter(|rating| {
-                            visible_detail == detail
-                                && design::number_width(
-                                    ui,
-                                    &format!("{detail} · {}", rating.word.text()),
-                                    &Type::Small.font(ui),
-                                ) <= room
-                        });
                         let warning = visible_detail.split(" · ").position(|part| {
                             matches!(part, "Changed on disk" | "Offered in no fight")
                         });
@@ -332,20 +331,26 @@ pub(super) fn list_row(
                                 },
                             );
                         }
-                        let Some(rating) = rating else {
+                        let Some(parts) = parts else {
                             let response =
                                 ui.add(egui::Label::new(job).extend()).on_hover_text(&whole);
                             design::row_detail(ui, &response);
                             design::named(ui, &response, &format!("{name} · {whole}"));
                             return;
                         };
-                        let word = rating.word.text();
                         crate::difficulty::append(&mut job, ui, Type::Small, " · ", colors().muted);
-                        crate::difficulty::append(&mut job, ui, Type::Small, word, colors().text);
+                        crate::difficulty::append_form(&mut job, ui, Type::Small, &parts);
                         let response = ui.add(egui::Label::new(job).extend());
                         design::row_detail(ui, &response);
-                        design::named(ui, &response, &format!("{name} · {detail} · {word}"));
-                        crate::difficulty::describe(ui, response, rating);
+                        design::named(ui, &response, &format!("{name} · {whole}"));
+                        let response = if visible_detail == detail {
+                            response
+                        } else {
+                            response.on_hover_text(&whole)
+                        };
+                        if let Some(rating) = difficulty.and_then(|d| d.rating.as_ref()) {
+                            crate::difficulty::describe(ui, response, rating);
+                        }
                     },
                 );
             },
@@ -654,11 +659,7 @@ pub(super) fn ready_list(
                 .unwrap_or("No participants yet"),
             false,
             // A fight with an unfinished run is not ready, so it has no word (F1).
-            template
-                .difficulty
-                .rating
-                .as_ref()
-                .filter(|_| !row.unfinished_run),
+            Some(&template.difficulty).filter(|_| !row.unfinished_run),
             |ui| {
                 row_menu(ui, &template.name, |ui| {
                     if menu_action(ui, "Edit encounter", None) {
@@ -1043,16 +1044,22 @@ mod iter_2_c_tests {
     use crate::timeline::{Book, Kind, page::SessionLink};
     use std::path::PathBuf;
 
-    /// F1: a Ready row's word joins its detail only when the detail stays whole with it on its
-    /// one line; else the line is as it was.
+    /// F1, FB2, FB6: a Ready row's line ends with the difficulty in its one form at every width;
+    /// the detail gives way first, by whole words, and a line with room keeps it whole.
     #[test]
-    fn the_difficulty_word_never_costs_a_detail_word() {
+    fn the_difficulty_form_never_gives_way_to_the_detail() {
         let ctx = egui::Context::default();
         design::theme::install(&ctx);
         let rating = crate::difficulty::above_high();
+        let rating = crate::difficulty::Difficulty {
+            xp: rating.xp,
+            rating: Some(rating),
+            unknown: 0,
+            missing: None,
+        };
         let detail = "5 party · Cinder Tyrant · 2 × Ember Cultist";
         let widths: Vec<f32> = (200..=520).step_by(4).map(|width| width as f32).collect();
-        let lines = |rating: Option<&crate::difficulty::Rating>| {
+        let lines = |rating: Option<&crate::difficulty::Difficulty>| {
             let mut lines = Vec::new();
             for width in &widths {
                 let output = ctx.run(Default::default(), |ctx| {
@@ -1064,7 +1071,7 @@ mod iter_2_c_tests {
                     });
                 });
                 let line = output.shapes.iter().find_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text) if text.galley.job.text.starts_with("5 party") => {
+                    egui::Shape::Text(text) if text.galley.job.text.contains("XP 6,300") => {
                         Some(text.galley.job.text.clone())
                     }
                     _ => None,
@@ -1073,17 +1080,22 @@ mod iter_2_c_tests {
             }
             lines
         };
-        let (plain, rated) = (lines(None), lines(Some(&rating)));
-        let word = format!("{detail} · Above High");
-        for (plain, rated) in plain.iter().zip(&rated) {
+        let rated = lines(Some(&rating));
+        const FORM: &str = " · XP 6,300 · Above High";
+        for line in &rated {
+            let shown = line.strip_suffix(FORM);
             assert!(
-                rated == plain || (plain == detail && *rated == word),
-                "{plain:?} → {rated:?}"
+                shown.is_some_and(|shown| shown == detail
+                    || shown.strip_suffix('…').is_some_and(|cut| {
+                        detail.starts_with(cut.trim_end_matches([' ', '·', ',']))
+                    })),
+                "{line:?}"
             );
         }
-        // The word shows where it fits, and gives way where it would cut the detail.
+        // The detail is whole where it fits, and gives way where it does not.
+        let whole = format!("{detail}{FORM}");
         assert!(
-            rated.contains(&word) && rated.iter().any(|line| *line != word),
+            rated.contains(&whole) && rated.iter().any(|line| *line != whole),
             "{rated:?}"
         );
     }

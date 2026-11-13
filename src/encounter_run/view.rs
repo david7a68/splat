@@ -27,6 +27,8 @@ struct GroupDrag(Uuid);
 
 pub(super) const AMOUNT: &str = "Amount";
 const READ_ALOUD: &str = "Read-aloud and notes";
+/// FI10: Arrivals says what the fight becomes when a group joins.
+pub(crate) const FIGHT_AFTER: &str = "Fight after: ";
 /// Two lines of controls in a frame.
 pub(super) const DOCK_HEIGHT: f32 = 36.0 + 4.0 + 28.0 + 8.0;
 /// The dock's width from which Damage has its key hint, and Temp HP and Roll their full forms.
@@ -3557,11 +3559,12 @@ impl Run {
                     &Type::Small.font(ui),
                 )
                 <= grip.rect.width();
-        // F1: what the fight becomes, after the XP. Only where the totals and the status words
-        // are in the heading and stay there with it.
+        // F1, FI10: what the fight becomes when the group joins, after the group's own XP, in
+        // the one difficulty form: ` · Fight after: XP 450 · Low`. Only where the totals and
+        // the status words are in the heading and stay there with it.
         let word = rating
             .as_ref()
-            .map(|rating| format!(" → {}", rating.word.text()));
+            .map(|rating| format!(" · {FIGHT_AFTER}{}", rating.form(false)));
         let word = word.filter(|word| {
             let line = if status.is_empty() {
                 format!("{totals_text}{word}")
@@ -3589,20 +3592,28 @@ impl Run {
         });
         if let Some(rating) = shown {
             let words = format!(
-                "Adds {} XP; the fight becomes {}",
+                "Adds {} XP. {FIGHT_AFTER}{}.",
                 crate::encounter_run::grouped_number(adds),
-                rating.word.text()
+                rating.form(true)
             );
             ui.ctx()
                 .accesskit_node_builder(grip.id, |node| node.set_description(words));
         }
-        let word_rect = ui.painter().text(
-            grip.rect.right_center(),
-            Align2::RIGHT_CENTER,
-            word.clone().unwrap_or_default(),
-            Type::Small.font(ui),
-            c.text,
-        );
+        // The word in the text colour; the rest muted, as every difficulty line.
+        let mut job = egui::text::LayoutJob::default();
+        if let Some(rating) = shown {
+            crate::difficulty::append(
+                &mut job,
+                ui,
+                Type::Small,
+                &format!(" · {FIGHT_AFTER}"),
+                c.muted,
+            );
+            crate::difficulty::append_form(&mut job, ui, Type::Small, &rating.parts(false));
+        }
+        let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
+        let word_rect = Align2::RIGHT_CENTER.anchor_size(grip.rect.right_center(), galley.size());
+        ui.painter().galley(word_rect.min, galley, c.text);
         let totals = ui.painter().text(
             pos2(word_rect.left(), grip.rect.center().y),
             Align2::RIGHT_CENTER,

@@ -1475,9 +1475,9 @@ fn slot_sheet<'a>(
     let creature = snapshot.creatures.iter().find(|c| c.id == id)?;
     party.sheet(creature.character.as_deref()?)
 }
-/// `ROSTER 8 · XP 1,050 of 1,125 · Moderate`: the editor's roster heading, with the difficulty
-/// at its end while the line has room for it (F1). A fight with no word because an input is
-/// not known says whose (X2).
+/// `ROSTER 8 · XP 1,050 · Moderate (up to 1,125)`: the editor's roster heading, with the
+/// difficulty in its one form at its end (F1, FB6). With no room for the limit, the XP and the
+/// word stay. A fight with no word because an input is not known says whose (X2, FB4).
 fn roster_heading(
     ui: &mut egui::Ui,
     count: usize,
@@ -1493,21 +1493,24 @@ fn roster_heading(
         }
         return;
     };
-    let plain = job.clone();
-    let c = colors();
-    let numbers = format!(" · {} · ", rating.numbers());
-    crate::difficulty::append(&mut job, ui, Type::Label, &numbers, c.muted);
-    crate::difficulty::append(&mut job, ui, Type::Label, rating.word.text(), c.text);
-    if crate::difficulty::width(ui, &job) > ui.available_width() {
-        ui.label(plain);
-        return;
+    crate::difficulty::append(&mut job, ui, Type::Label, " · ", colors().muted);
+    let whole = {
+        let mut whole = job.clone();
+        crate::difficulty::append_form(&mut whole, ui, Type::Label, &rating.parts(true));
+        whole
+    };
+    if crate::difficulty::width(ui, &whole) <= ui.available_width() {
+        job = whole;
+    } else {
+        crate::difficulty::append_form(&mut job, ui, Type::Label, &rating.parts(false));
     }
     let response = ui.label(job);
     crate::difficulty::describe(ui, response, rating);
 }
 
-/// `Moderate · XP 1,050 of 1,125` at the right of the narrow editor's tab row, while the row has
-/// room for it (F1). A fight with no word because an input is not known says whose (X2).
+/// `XP 1,050 · Moderate (up to 1,125)` at the right of the narrow editor's tab row, in the one
+/// form (F1, FB6); with less room, `XP 1,050 · Moderate`. A fight with no word because an input
+/// is not known says whose (X2).
 fn narrow_difficulty(ui: &mut egui::Ui, difficulty: &crate::difficulty::Difficulty) {
     let Some(rating) = &difficulty.rating else {
         if let Some(missing) = &difficulty.missing {
@@ -1515,20 +1518,18 @@ fn narrow_difficulty(ui: &mut egui::Ui, difficulty: &crate::difficulty::Difficul
         }
         return;
     };
-    let c = colors();
-    let mut job = egui::text::LayoutJob::default();
-    crate::difficulty::append(&mut job, ui, Type::Small, rating.word.text(), c.text);
-    crate::difficulty::append(
-        &mut job,
-        ui,
-        Type::Small,
-        &format!(" · {}", rating.numbers()),
-        c.muted,
-    );
-    let width = crate::difficulty::width(ui, &job);
-    if width + design::L > ui.available_width() {
+    let form = |limit: bool| {
+        let mut job = egui::text::LayoutJob::default();
+        crate::difficulty::append_form(&mut job, ui, Type::Small, &rating.parts(limit));
+        job
+    };
+    let fits = |job: &egui::text::LayoutJob| {
+        crate::difficulty::width(ui, job) + design::L <= ui.available_width()
+    };
+    let job = [form(true), form(false)].into_iter().find(fits);
+    let Some(job) = job else {
         return;
-    }
+    };
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         let response = ui.label(job);
         crate::difficulty::describe(ui, response, rating);
@@ -7157,8 +7158,26 @@ mod tests {
                 data.insert_temp(egui::Id::new("reader_link_index"), index.clone())
             });
             egui::CentralPanel::default().show(ctx, |ui| {
+                // FF8: the result and its Undo are in the editor's footer, as the editor
+                // draws them.
+                let pressed = std::cell::Cell::new(false);
+                let mut footer = design::Footer::new("identity_test_footer", ui.available_width());
+                if let Some((_, words, undo)) = identity_line(ui.ctx()) {
+                    let pressed = &pressed;
+                    footer.result(words.clone(), true, move |ui| {
+                        if design::undo_message(ui, Tone::Success, &words, undo) {
+                            pressed.set(true);
+                        }
+                    });
+                }
+                identity_failure_into(ui.ctx(), &mut footer);
+                let bottom = footer.show(ui);
+                if pressed.get() {
+                    undo_identity(ui.ctx());
+                }
+                let mut body = body_above(ui, bottom);
                 Encounters::creature_search(
-                    ui,
+                    &mut body,
                     std::iter::empty(),
                     &mut "Rook".to_owned(),
                     &mut false,
@@ -7186,12 +7205,24 @@ mod tests {
                 .count(),
             2
         );
-        harness.get_by_label("Rook copy.md is now a separate entry.");
+        assert!(
+            harness
+                .query_all_by_label("Rook copy.md is now a separate entry.")
+                .next()
+                .is_some()
+        );
         harness.get_by_label("Undo separate entry").click();
         harness.run_steps(2);
         assert_eq!(
             fs::read_to_string(dir.path().join("Rook copy.md")).unwrap(),
             original
+        );
+        // Its Undo ends the result.
+        assert!(
+            harness
+                .query_all_by_label("Rook copy.md is now a separate entry.")
+                .next()
+                .is_none()
         );
     }
 

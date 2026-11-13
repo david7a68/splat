@@ -3925,8 +3925,8 @@ pub mod encounter_build {
             let words = d.at_size(size, |d| d.painted_in(eframe::egui::Rect::EVERYTHING));
             d.observe(
                 "T5.7",
-                words.contains("ROSTER 8 · XP 125 of 2,800 · Low")
-                    || words.contains("Low · XP 125 of 2,800"),
+                words.contains("ROSTER 8 · XP 125 · Low (up to 2,800)")
+                    || words.contains("XP 125 · Low"),
                 format!("At {size:?} the saved roster says its XP and word: {words}"),
             );
         }
@@ -15575,18 +15575,28 @@ pub mod encounter_groups {
         );
         // T5.7 in Arrivals: after a group's XP, what the fight becomes when it joins. Bridge
         // Ambush's three creatures and the goblins are far below the party's Low 2,800.
-        let joins = d.at_size(DEFAULT, |d| {
+        // iter-27-B FI10: in the one form, named as the fight after: ` · Fight after: XP 450 ·
+        // Low`.
+        let fight_after = |d: &Driver<'_>| {
             let mut words = Vec::new();
             d.each_painted_text(|text, _| {
-                if text.galley.job.text.starts_with(" → ") {
+                if text.galley.job.text.starts_with(" · Fight after: ") {
                     words.push(text.galley.job.text.clone());
                 }
             });
             words
-        });
+        };
+        let joins = d.at_size(DEFAULT, |d| fight_after(d));
         d.observe(
             "T5.7-arrivals",
-            !joins.is_empty() && joins.iter().all(|word| word == " → Low"),
+            !joins.is_empty()
+                && joins.iter().all(|word| {
+                    word.strip_prefix(" · Fight after: XP ")
+                        .and_then(|rest| rest.strip_suffix(" · Low"))
+                        .is_some_and(|xp| {
+                            !xp.is_empty() && xp.chars().all(|c| c.is_ascii_digit() || c == ',')
+                        })
+                }),
             format!("Each group heading with room says what the fight becomes: {joins:?}"),
         );
         // The words are worked out after a step, not on each frame of the panel.
@@ -15602,7 +15612,7 @@ pub mod encounter_groups {
             d.settle();
             d.at_size(LARGE, |_| ());
             d.settle();
-            d.visible_text(" → Low")
+            !fight_after(d).is_empty()
         });
         d.observe(
             "F1-arrivals-cache",

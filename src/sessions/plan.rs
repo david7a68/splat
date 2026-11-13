@@ -600,14 +600,20 @@ fn plan_details(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
     });
 }
 
-/// A planned fight's summary. Its difficulty word (F1) ends it only when the summary keeps its
-/// lines with the word. FL2, FI7: each fact keeps its words together, the members wrap between
-/// members and never inside one, and no line starts or ends with `·`.
-fn planned_summary(ui: &mut egui::Ui, summary: &str, rating: Option<&crate::difficulty::Rating>) {
+/// A planned fight's summary, ended by its difficulty in the one form (F1, FB6):
+/// `5 party · 2 × Ember Cultist · XP 400 · Low (up to 2,800)`, or `XP not known` (FB4). The
+/// form never gives way (FB2): where it would add a line, the summary gives way from its end,
+/// by whole words, with `…`; hover and the accessible name keep the whole summary. FL2, FI7:
+/// each fact keeps its words together, the members wrap between members and never inside one,
+/// and no line starts or ends with `·`.
+fn planned_summary(
+    ui: &mut egui::Ui,
+    summary: &str,
+    difficulty: Option<&crate::difficulty::Difficulty>,
+) {
     let c = colors();
     let font = Type::Small.font(ui);
     let width = ui.available_width();
-    let text = fight_summary_text(summary);
     let laid = |text: String| without_loose_separators(ui, text, &font, width);
     let rows = |text: &str| {
         ui.fonts_mut(|fonts| {
@@ -617,111 +623,106 @@ fn planned_summary(ui: &mut egui::Ui, summary: &str, rating: Option<&crate::diff
                 .len()
         })
     };
-    let alone = laid(text.clone());
-    let with_word = rating.map(|rating| {
-        let word = rating.word.text().replace(' ', "\u{a0}");
-        (laid(format!("{text}{FACT_SEPARATOR}{word}")), word)
-    });
-    match rating
-        .zip(with_word)
-        .filter(|(_, (whole, _))| rows(whole) == rows(&alone))
-    {
-        Some((rating, (whole, word))) => {
-            // The word keeps the text colour; the facts before it are muted.
-            let facts = whole.strip_suffix(word.as_str()).unwrap_or(&whole);
-            let mut job = egui::text::LayoutJob::default();
-            crate::difficulty::append(&mut job, ui, Type::Small, facts, c.muted);
-            crate::difficulty::append(&mut job, ui, Type::Small, &word, c.text);
-            job.wrap.max_width = width;
-            let response = ui.add(egui::Label::new(job).wrap());
-            design::named(
-                ui,
-                &response,
-                &format!("{summary} · {}", rating.word.text()),
-            );
+    let alone = laid(fight_summary_text(summary));
+    let Some(parts) = difficulty.and_then(crate::difficulty::Difficulty::parts) else {
+        let response = ui.add(egui::Label::new(Type::Small.rich(ui, alone).color(c.muted)).wrap());
+        // The breaks only steer the wrap; the name keeps the summary's words.
+        design::named(ui, &response, summary);
+        return;
+    };
+    // The form keeps its words together and wraps whole.
+    let parts: Vec<(String, bool)> = parts
+        .into_iter()
+        .map(|(words, word)| (words.replace(' ', "\u{a0}"), word))
+        .collect();
+    let form: String = parts.iter().map(|(words, _)| words.as_str()).collect();
+    let with_form = |facts: &str| {
+        laid(format!(
+            "{}{FACT_SEPARATOR}{form}",
+            fight_summary_text(facts)
+        ))
+    };
+    let lines = rows(&alone);
+    // The summary's facts and members, each with the separator before it. It gives way by
+    // whole ones, from its end: `5 party · 1 × Cinder Tyrant, …`.
+    let mut units: Vec<(&str, &str)> = Vec::new();
+    for (index, fact) in summary.split(" · ").enumerate() {
+        for (at, member) in fact.split(", ").enumerate() {
+            let before = match (index, at) {
+                (0, 0) => "",
+                (_, 0) => " · ",
+                _ => ", ",
+            };
+            units.push((before, member));
+        }
+    }
+    let words = &units;
+    let cut_at = |count: usize| {
+        let kept: String = units[..count]
+            .iter()
+            .map(|(before, unit)| format!("{before}{unit}"))
+            .collect();
+        format!("{kept}{}…", units[count].0)
+    };
+    let whole = with_form(summary);
+    let (shown, cut) = if rows(&whole) <= lines {
+        (whole, false)
+    } else {
+        // The most whole words that keep the lines, by halves; with none, the form alone.
+        let (mut fits, mut over) = (0, words.len());
+        while over - fits > 1 {
+            let middle = (fits + over) / 2;
+            if rows(&with_form(&cut_at(middle))) <= lines {
+                fits = middle;
+            } else {
+                over = middle;
+            }
+        }
+        let shown = if fits == 0 {
+            form.clone()
+        } else {
+            with_form(&cut_at(fits))
+        };
+        (shown, true)
+    };
+    let facts = shown.strip_suffix(form.as_str()).unwrap_or("");
+    let mut job = egui::text::LayoutJob::default();
+    crate::difficulty::append(&mut job, ui, Type::Small, facts, c.muted);
+    crate::difficulty::append_form(&mut job, ui, Type::Small, &parts);
+    job.wrap.max_width = width;
+    let response = ui.add(egui::Label::new(job).wrap());
+    let plain_form = form.replace('\u{a0}', " ");
+    design::named(ui, &response, &format!("{summary} · {plain_form}"));
+    let difficulty = difficulty.expect("the form came from it");
+    match (&difficulty.rating, &difficulty.missing) {
+        (Some(rating), _) => {
+            let response = if cut {
+                response.on_hover_text(summary)
+            } else {
+                response
+            };
             crate::difficulty::describe(ui, response, rating);
         }
-        None => {
-            let response =
-                ui.add(egui::Label::new(Type::Small.rich(ui, alone).color(c.muted)).wrap());
-            // The breaks only steer the wrap; the name keeps the summary's words.
-            design::named(ui, &response, summary);
+        // W1-D2: whose input is not known, on hover.
+        (None, Some(missing)) => {
+            let names = missing.words().unwrap_or_default();
+            let hover = match (cut, names.is_empty()) {
+                (true, true) => summary.to_owned(),
+                (true, false) => format!("{summary}\n{names}"),
+                (false, _) => names,
+            };
+            if !hover.is_empty() {
+                response.on_hover_text(hover);
+            }
         }
+        (None, None) => {}
     }
 }
 
-/// The opened planned fight's link to its encounter. With its difficulty known, the line ends
-/// with ` · Low · XP 550 of 750` (F1), when the line has room for the whole. With no word
-/// because an input is not known, it says whose: ` · XP not known: Nameless Thing` (W1-D2).
-fn read_encounter(
-    ui: &mut egui::Ui,
-    difficulty: Option<&crate::difficulty::Difficulty>,
-) -> egui::Response {
-    // The link keeps its place; the words take the room to its right on the same line.
-    let link = design::link(ui, "Read encounter");
-    let Some(difficulty) = difficulty else {
-        return link;
-    };
-    let c = colors();
-    let room = ui.max_rect().right() - link.rect.right();
-    let muted = |words: &str| {
-        let mut job = egui::text::LayoutJob::default();
-        crate::difficulty::append(&mut job, ui, Type::Body, &format!(" · {words}"), c.muted);
-        job
-    };
-    // The reason whole, else without its names, which hover and the accessible name keep.
-    let mut whole = None;
-    let job = match (&difficulty.rating, &difficulty.missing) {
-        (Some(rating), _) => {
-            let mut job = egui::text::LayoutJob::default();
-            crate::difficulty::append(&mut job, ui, Type::Body, " · ", c.muted);
-            crate::difficulty::append(&mut job, ui, Type::Body, rating.word.text(), c.text);
-            crate::difficulty::append(
-                &mut job,
-                ui,
-                Type::Body,
-                &format!(" · {}", rating.numbers()),
-                c.muted,
-            );
-            job
-        }
-        (None, Some(missing)) => {
-            let Some(words) = missing.words() else {
-                return link;
-            };
-            let job = muted(&words);
-            if crate::difficulty::width(ui, &job) <= room {
-                job
-            } else {
-                whole = Some(words);
-                muted(missing.short())
-            }
-        }
-        (None, None) => return link,
-    };
-    let width = crate::difficulty::width(ui, &job);
-    if width <= room {
-        // The words start at the link's right edge, so the blank before the first separator
-        // is the blank of the job's own leading space (V9). `ui.put` would lay them out
-        // justified and centred. The label keeps the link's height, as before.
-        let rect =
-            egui::Rect::from_min_size(link.rect.right_top(), egui::vec2(width, link.rect.height()));
-        let response = ui
-            .scope_builder(
-                egui::UiBuilder::new().max_rect(rect).layout(
-                    egui::Layout::left_to_right(egui::Align::Center).with_cross_justify(true),
-                ),
-                |ui| ui.add(egui::Label::new(job).extend()),
-            )
-            .inner;
-        if let Some(rating) = &difficulty.rating {
-            crate::difficulty::describe(ui, response, rating);
-        } else if let Some(whole) = whole {
-            design::named(ui, &response, &whole);
-            response.on_hover_text(whole);
-        }
-    }
-    link
+/// The opened planned fight's link to its encounter. FH6: the row above it already says the
+/// difficulty, so this line does not say it again.
+fn read_encounter(ui: &mut egui::Ui) -> egui::Response {
+    design::link(ui, "Read encounter")
 }
 
 /// The rule below a row. Returns its height, which the scenes' fold counts with the row's.
@@ -2834,7 +2835,7 @@ impl Sessions {
                                 }
                             } else if let Some(saved) = saved {
                                 design::status(ui, Status { icon: icons::RUN, word: &plan_saved_status(saved), color: c.muted });
-                            } else { planned_summary(ui, &on_road(ui, &fight.summary, day.as_deref()), fight.difficulty.rating.as_ref()); }
+                            } else { planned_summary(ui, &on_road(ui, &fight.summary, day.as_deref()), Some(&fight.difficulty)); }
                         }, |ui| {
                             design::row_menu(ui, &fight.name, |ui| {
                                 if Action::quiet("Remove from tonight").show(ui).clicked() {
@@ -2874,7 +2875,7 @@ impl Sessions {
                         let details_top = ui.cursor().top();
                         if self.open_planned.as_ref() == Some(&fight.path) {
                             plan_details(ui, |ui| {
-                                if read_encounter(ui, Some(&fight.difficulty).filter(|_| !running && saved.is_none())).clicked() { self.wants_lookup = Some(fight.name.clone()); }
+                                if read_encounter(ui).clicked() { self.wants_lookup = Some(fight.name.clone()); }
                             });
                         }
                         // The next fight's row, to the end of its own details, and what is above it.
@@ -4322,7 +4323,7 @@ mod tests {
     fn pr284_review_row_height_and_long_journey_name() {
         let ctx = egui::Context::default();
         design::theme::install(&ctx);
-        let rating = crate::difficulty::above_high();
+        let rating = rated(crate::difficulty::above_high());
         let summary = "5 party · 2 × Ember Cultist";
         let day = "Day 2 of The road to the ford beyond the old northern quarry";
         let (mut full, mut short, mut hidden) = (0, 0, 0);
@@ -4637,8 +4638,19 @@ mod tests {
         });
     }
 
-    /// V9 and W1-D2: the opened planned fight's line has the same blank on each side of every
-    /// separator, with the word and its numbers, and with the reason when no word shows.
+    /// A planned fight's difficulty with this word.
+    fn rated(rating: crate::difficulty::Rating) -> crate::difficulty::Difficulty {
+        crate::difficulty::Difficulty {
+            xp: rating.xp,
+            rating: Some(rating),
+            unknown: 0,
+            missing: None,
+        }
+    }
+
+    /// V9 and W1-D2: the planned fight's row has the same blank on each side of every
+    /// separator, with the form (FB6) and with `XP not known` when no word shows (FB4). FH6:
+    /// the opened line under it says the difficulty no more.
     #[test]
     fn read_encounter_has_one_blank_each_side_of_each_separator() {
         use crate::difficulty::{Difficulty, Missing, Unknown};
@@ -4660,21 +4672,23 @@ mod tests {
                 names: vec!["Nameless Thing".into(), "Wisp".into()],
             }),
         };
+        let mut low = crate::difficulty::above_high();
+        low.word = crate::difficulty::Word::Low;
+        low.xp = 400;
         for (difficulty, words) in [
-            (rated, "Read encounter · Above High · XP 6,300"),
+            (rated, "5 party · 2 × Ember Cultist · XP 6,300 · Above High"),
             (
-                unknown,
-                "Read encounter · XP not known: Nameless Thing and 1 more",
+                self::rated(low),
+                "5 party · 2 × Ember Cultist · XP 400 · Low (up to 750)",
             ),
+            (unknown, "5 party · 2 × Ember Cultist · XP not known"),
         ] {
             // The second frame has the app's fonts.
             let frame = || {
                 ctx.run(Default::default(), |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         ui.set_width(design::LIST_MEASURE);
-                        plan_details(ui, |ui| {
-                            read_encounter(ui, Some(&difficulty));
-                        });
+                        planned_summary(ui, "5 party · 2 × Ember Cultist", Some(&difficulty));
                     });
                 })
             };
@@ -4716,43 +4730,81 @@ mod tests {
     }
 
     #[test]
-    fn the_difficulty_word_joins_a_summary_only_when_the_summary_keeps_its_lines() {
+    fn the_difficulty_form_ends_a_summary_and_the_summary_gives_way() {
         let ctx = egui::Context::default();
         design::theme::install(&ctx);
-        let rating = crate::difficulty::above_high();
-        let summary = "5 party · Cinder Tyrant · 2 × Ember Cultist";
-        let widths: Vec<f32> = (120..=360).map(|width| width as f32).collect();
-        let output = ctx.run(Default::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                for width in &widths {
-                    let height = |ui: &mut egui::Ui, rating| {
-                        ui.scope(|ui| {
-                            ui.set_width(*width);
-                            planned_summary(ui, summary, rating);
-                        })
-                        .response
-                        .rect
-                        .height()
-                    };
-                    let plain = height(ui, None);
-                    assert_eq!(height(ui, Some(&rating)), plain, "at {width} px");
-                }
-            });
-        });
-        let shown = output
-            .shapes
-            .iter()
-            .filter(|shape| match &shape.shape {
-                egui::Shape::Text(text) => text.galley.job.text.ends_with("Above\u{a0}High"),
-                _ => false,
-            })
-            .count();
-        // The word shows where it fits, and gives way where it would add a line.
-        assert!(
-            shown > 0 && shown < widths.len(),
-            "{shown} of {}",
-            widths.len()
-        );
+        let rating = rated(crate::difficulty::above_high());
+        let summary = "5 party · Cinder Tyrant · 2 × Ember Cultist, 1 × Wolf";
+        let (mut whole, mut cut) = (0, 0);
+        for width in (120..=640).step_by(4).map(|width| width as f32) {
+            let mut heights = (0.0, 0.0);
+            // The second frame has the app's fonts.
+            let mut output = None;
+            for _ in 0..2 {
+                output = Some(ctx.run(Default::default(), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let height = |ui: &mut egui::Ui, rating| {
+                            ui.scope(|ui| {
+                                ui.set_width(width);
+                                planned_summary(ui, summary, rating);
+                            })
+                            .response
+                            .rect
+                            .height()
+                        };
+                        heights = (height(ui, None), height(ui, Some(&rating)));
+                    });
+                }));
+            }
+            let (plain, with) = heights;
+            assert!(with <= plain + 0.5, "at {width} px: {with} > {plain}");
+            let texts: Vec<String> = output
+                .unwrap()
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text.contains("XP") => Some(
+                        text.galley
+                            .job
+                            .text
+                            .replace('\u{a0}', " ")
+                            .replace('\n', " · ")
+                            .replace(" · · ", " · "),
+                    ),
+                    _ => None,
+                })
+                .collect();
+            // FB2: the form ends the row at every width.
+            let [line] = texts.as_slice() else {
+                panic!("at {width} px: {texts:?}");
+            };
+            let facts = line
+                .strip_suffix("XP 6,300 · Above High")
+                .unwrap_or_else(|| panic!("at {width} px: {line:?}"));
+            let facts = facts.trim_end_matches([' ', '·']);
+            if facts.replace(" · ", " ") == summary.replace(" · ", " ") {
+                whole += 1;
+            } else {
+                // The summary gives way by whole facts and members, never inside one.
+                cut += 1;
+                let kept = facts
+                    .strip_suffix('…')
+                    .unwrap_or_else(|| panic!("{line:?}"));
+                let kept = kept.trim_end_matches([' ', '·', ',']);
+                assert!(
+                    kept.is_empty()
+                        || [
+                            "5 party",
+                            "5 party · Cinder Tyrant",
+                            "5 party · Cinder Tyrant · 2 × Ember Cultist"
+                        ]
+                        .iter()
+                        .any(|unit| kept.replace(" · ", " ") == unit.replace(" · ", " ")),
+                    "at {width} px a member was cut inside: {line:?}"
+                );
+            }
+        }
+        assert!(whole > 0 && cut > 0, "whole {whole}, cut {cut}");
     }
 
     #[test]

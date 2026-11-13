@@ -137,6 +137,22 @@ impl Missing {
 }
 
 impl Difficulty {
+    /// The form (`Rating::parts`), or `XP not known` in the same place when a word is missing
+    /// because an input is not known (FB4). `None` when nothing could bring a word (no party,
+    /// no table, no foe).
+    pub fn parts(&self) -> Option<Vec<Part>> {
+        match (&self.rating, &self.missing) {
+            (Some(rating), _) => Some(rating.parts(true)),
+            (None, Some(missing)) => Some(vec![(missing.short().to_owned(), false)]),
+            (None, None) => None,
+        }
+    }
+
+    /// The form as plain words.
+    pub fn form(&self) -> Option<String> {
+        Some(self.parts()?.into_iter().map(|(words, _)| words).collect())
+    }
+
     /// The names of the inputs that are not known, from their places. A name that is not
     /// found is left out, and each name is said once.
     pub fn named(mut self, name: impl Fn(Unknown, usize) -> Option<String>) -> Self {
@@ -262,17 +278,39 @@ impl Scale {
     }
 }
 
+/// One part of the difficulty form, and whether it is the word (drawn in the text colour; the
+/// other parts are muted).
+pub type Part = (String, bool);
+
+/// T5.7, FB6, FH7: the one form of a fight's difficulty, on every screen that shows it:
+/// `XP 400 · Low (up to 2,800)`. The number in brackets is the word's limit; Above High has
+/// none. `limit: false` leaves it out, where the line names what the XP is for (Arrivals'
+/// `Fight after: XP 450 · Low`).
 impl Rating {
-    /// `XP 1,050 of 1,125`: the XP and the budget of the word. Above High has no budget.
-    pub fn numbers(&self) -> String {
+    pub fn parts(&self, limit: bool) -> Vec<Part> {
         let xp = crate::encounter_run::grouped_number(self.xp);
-        match self.word {
-            Word::AboveHigh => format!("XP {xp}"),
-            word => format!(
-                "XP {xp} of {}",
-                crate::encounter_run::grouped_number(self.budgets[word as usize])
-            ),
+        let mut parts = vec![
+            (format!("XP {xp} · "), false),
+            (self.word.text().to_owned(), true),
+        ];
+        if limit && self.word != Word::AboveHigh {
+            parts.push((
+                format!(
+                    " (up to {})",
+                    crate::encounter_run::grouped_number(self.budgets[self.word as usize])
+                ),
+                false,
+            ));
         }
+        parts
+    }
+
+    /// The form as plain words.
+    pub fn form(&self, limit: bool) -> String {
+        self.parts(limit)
+            .into_iter()
+            .map(|(words, _)| words)
+            .collect()
     }
 
     /// The hover and accessible description of the word:
@@ -311,6 +349,20 @@ pub(crate) fn append(
             ..Default::default()
         },
     );
+}
+
+/// The difficulty form's parts at the end of `job`, in `kind`: the word in the text colour, the
+/// rest muted. Every line that shows a fight's difficulty draws it with this.
+pub(crate) fn append_form(
+    job: &mut egui::text::LayoutJob,
+    ui: &egui::Ui,
+    kind: crate::design::Type,
+    parts: &[Part],
+) {
+    let c = crate::design::colors();
+    for (words, word) in parts {
+        append(job, ui, kind, words, if *word { c.text } else { c.muted });
+    }
 }
 
 /// The width of a job on one line.
@@ -380,7 +432,10 @@ mod tests {
             (rating.word, rating.budgets),
             (Word::Low, [750, 1125, 2000])
         );
-        assert_eq!(rating.numbers(), "XP 750 of 750");
+        // FB6, FH7: one form, with the word's limit named.
+        assert_eq!(rating.form(true), "XP 750 · Low (up to 750)");
+        assert_eq!(rating.form(false), "XP 750 · Low");
+        assert_eq!(low.form().as_deref(), Some("XP 750 · Low (up to 750)"));
         assert_eq!(
             rating.budget_line(),
             "Budget for 5 at level 3: Low 750 · Moderate 1,125 · High 2,000"
@@ -392,8 +447,8 @@ mod tests {
         assert_eq!(word(&five, &[Some(2000)]), Some(Word::High));
         let above = weigh(&five, &[Some(2400)]).rating.unwrap();
         assert_eq!(
-            (above.word, above.numbers().as_str()),
-            (Word::AboveHigh, "XP 2,400")
+            (above.word, above.form(true).as_str()),
+            (Word::AboveHigh, "XP 2,400 · Above High")
         );
         // Mixed levels, and a roster with no character, say so in the budget line.
         let mixed = weigh(&[Some(3), Some(4)], &[Some(50)]).rating.unwrap();
@@ -427,6 +482,8 @@ mod tests {
                 names: Vec::new(),
             })
         };
+        // FB4: a fight with no word says so in the word's place.
+        assert_eq!(unknown.form().as_deref(), Some("XP not known"));
         assert_eq!(
             (unknown.xp, unknown.rating, unknown.missing),
             (100, None, missing(Unknown::Xp, &[1, 2]))
@@ -458,6 +515,9 @@ mod tests {
         assert_eq!(scale.weigh(&[], [Some(100)]).rating, None);
         // Nothing stands against the party.
         assert_eq!(scale.weigh(&five, []).rating, None);
+        // Outside the rule: nothing the DM could fill in brings a word, so nothing shows.
+        assert_eq!(scale.weigh(&five, []).form(), None);
+        assert_eq!(scale.weigh(&[Some(21)], [Some(100)]).form(), None);
         // The rules have no table.
         let no_table = Scale {
             budgets: None,
