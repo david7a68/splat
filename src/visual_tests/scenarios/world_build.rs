@@ -6663,6 +6663,12 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     };
     let unreadable_y = bite_y(d);
     d.state("invalid-package-in-paused-run", Sizes::All);
+    footer_presses(
+        d,
+        "iter-27-R-FD5-press-appears",
+        Some("Cinder Wolf.md cannot be read now."),
+        false,
+    );
     close_run(d);
     go_library(d);
     search_library(d, "Cinder Wolf");
@@ -6693,6 +6699,18 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
         ),
     );
     d.state("repaired-package-in-paused-run", Sizes::All);
+    footer_presses(
+        d,
+        "iter-27-R-FD5-press-grows",
+        Some("Cinder Wolf.md has changed."),
+        true,
+    );
+    // Another row's stat block, from a file that did not change: the footer is empty.
+    d.click_row("Ember Cultist");
+    if !d.has(SOURCE_SECTION) {
+        d.click("Stat block");
+    }
+    footer_presses(d, "iter-27-R-FD5-press-clears", None, false);
 
     // iter-22-E-SD1: a repair draft's notice and save-row state come from its current parse. The
     // saved file stays unreadable on its owner line until Save or a newer file.
@@ -11175,4 +11193,65 @@ fn package_list_tops(d: &mut Driver<'_>) -> [Option<f32>; 3] {
                 .map(|node| node.rect.top())
         })
     })
+}
+
+/// The stat block's last section, next to the run panel's footer.
+const SOURCE_SECTION: &str = "Source and identifiers";
+
+/// iter-27-R FD5, review of PR 295 (revision 19 press proof): at 960, 1200 and 1920, with the
+/// run's panel on the stat block, each press reaches only its own control while the panel's
+/// footer holds `notice` (`None`: the footer is empty). The stat block's last action, `Source
+/// and identifiers`, is scrolled to the body's end next to the footer and opens only itself;
+/// the footer's `Read the new version`, when `action`, opens only Lookup and is reached by Tab;
+/// and typing in an outside field (`Amount`) changes only that field.
+fn footer_presses(d: &mut Driver<'_>, id: &str, notice: Option<&str>, action: bool) {
+    const SOURCE: &str = SOURCE_SECTION;
+    const OPENED: &str = "Starting snapshot, saved with this run";
+    for size in [(960.0, 640.0), (1200.0, 800.0), (1920.0, 1080.0)] {
+        let report = d.act_at_size(size, |d| {
+            let footer = |d: &Driver<'_>| notice.is_none_or(|words| d.has_containing(words));
+            let empty = |d: &Driver<'_>| {
+                notice.is_some() || !d.has_containing("uses the copy from the start of the fight")
+            };
+            // The body's end: the stat block scrolled down, so its last action is the body's
+            // lowest control, next to the footer.
+            if let Some(tab) = d.place_of("Stat block") {
+                d.scroll_at(egui::pos2(tab.center().x, tab.bottom() + 120.0), 12);
+            }
+            let source = d.place_of(SOURCE);
+            d.click(SOURCE);
+            let body = d.has_containing(OPENED) && !d.has("Close Lookup") && footer(d) && empty(d);
+            d.click(SOURCE);
+            let closed = !d.has_containing(OPENED);
+            let (pressed, tab) = if action {
+                d.click("Read the new version");
+                let pressed = d.has("Close Lookup") && !d.has_containing(OPENED);
+                d.press_ctrl(egui::Key::K);
+                if !d.has("Read the new version") {
+                    d.click("Stat block");
+                }
+                let tab = d.tab_to("Read the new version")
+                    && d.focused_name().as_deref() == Some("Read the new version");
+                (pressed, tab)
+            } else {
+                (!d.has("Read the new version"), true)
+            };
+            d.click("Amount");
+            d.type_text("7");
+            let typed = d.focused_name().as_deref() == Some("Amount")
+                && !d.has("Close Lookup")
+                && !d.has_containing(OPENED)
+                && footer(d)
+                && empty(d);
+            d.clear_text_in("Amount");
+            (
+                body && closed && pressed && tab && typed && source.is_some(),
+                format!(
+                    "source {source:?}: body {body}, closed again {closed}, footer action {pressed}, \
+                     Tab {tab}, outside field {typed}"
+                ),
+            )
+        });
+        d.observe(id, report.0, format!("At {size:?}: {}", report.1));
+    }
 }

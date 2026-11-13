@@ -1513,7 +1513,7 @@ hover and accessible name hold every whole word. After damage to a row marked Co
 its second line until the next step, only in the room that the effects leave; else only in the hover and the
 accessible name. In Conditions an official condition's count is on its tick, `✓ Frightened 10`, while the
 grid fits its room; else it is listed under Other effects, which lists other words with their whole words. The
-tab's help says `No HP, AC or roll changes by itself. A number after the words counts down at the end of that creature’s turn: Bless 10 becomes Bless 9.` An
+tab's help says `No HP, AC or roll changes by itself. A time you type counts down at the end of that creature’s turn: Bless 10 rounds goes from 10 to 9.` An
 ended run shows them as words, and a click does nothing.
 
 The notice line has a third part after the state notice and the sheet summary: the current turn's reminders,

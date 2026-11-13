@@ -34,6 +34,21 @@ fn reminders(d: &Driver<'_>, name: &str) -> Option<String> {
         .find_map(|node| node.name.strip_prefix(&start).map(str::to_owned))
 }
 
+/// The Conditions help's own example of a time, and the counts it says that time goes from and
+/// to at the end of a turn: `Bless 10 rounds`, `10`, `9` (review of PR 295).
+fn help_example(d: &Driver<'_>) -> Option<(String, String, String)> {
+    let help = d
+        .nodes()
+        .into_iter()
+        .map(|node| node.name)
+        .find(|name| name.contains("counts down at the end"))?;
+    let (_, rest) = help.split_once("turn: ")?;
+    let (example, rest) = rest.split_once(" goes from ")?;
+    let (from, rest) = rest.split_once(" to ")?;
+    let to = rest.split('.').next()?;
+    Some((example.to_owned(), from.to_owned(), to.to_owned()))
+}
+
 /// The heights of these rows, as the roster draws them.
 fn heights(d: &Driver<'_>, rows: &[&str]) -> Vec<Option<f32>> {
     rows.iter()
@@ -267,11 +282,13 @@ pub fn run(d: &mut Driver<'_>) {
         d.visible_text(&tick) && !d.has("More actions for Frightened 10"),
         format!("The tick says {tick:?}, and Other effects does not list it again"),
     );
+    let example = help_example(d);
     d.observe(
         "X7",
-        d.has_containing("A number after the words counts down at the end of that creature’s turn: Bless 10 becomes Bless 9.")
-            && !d.has_containing("No number changes by itself."),
-        "The Conditions help says what is true now",
+        d.has_containing("A time you type counts down at the end of that creature’s turn: Bless 10 rounds goes from 10 to 9.")
+            && !d.has_containing("No number changes by itself.")
+            && example.is_some(),
+        format!("The Conditions help says what is true now, with an example: {example:?}"),
     );
     d.observe(
         "X8",
@@ -301,5 +318,45 @@ pub fn run(d: &mut Driver<'_>) {
         "T20.6",
         !row_name(d, &current).contains("Conc save DC"),
         "The DC lasts until the next step",
+    );
+
+    // X7, T20.3, review of PR 295: the help's own example does what the help says. Typed in
+    // Other effect on a row, it counts down at the end of that row's turn, from and to the
+    // numbers the help names, and the count is saved through a restart.
+    let Some((example, from, to)) = example else {
+        d.observe("X7-example", false, "The help has no example to type");
+        return;
+    };
+    let words = example
+        .split(&format!(" {from} "))
+        .next()
+        .unwrap_or(&example)
+        .to_owned();
+    d.click_row(ISELLE);
+    d.click("Conditions for this participant");
+    d.click("Other effect");
+    d.type_text(&example);
+    d.press(Key::Enter);
+    let joined = row_name(d, ISELLE).contains(&format!("{words} {from}"));
+    let mut ended = false;
+    for _ in 0..20 {
+        let hers = current_participant(d).as_deref() == Some(ISELLE);
+        d.click(NEXT_TURN);
+        if hers {
+            ended = true;
+            break;
+        }
+    }
+    let counted = row_name(d, ISELLE).contains(&format!("{words} {to}"));
+    d.restart();
+    let kept = row_name(d, ISELLE).contains(&format!("{words} {to}"));
+    d.observe(
+        "X7-example",
+        joined && ended && counted && kept,
+        format!(
+            "The help's example {example:?} joined ({joined}), her turn ended ({ended}), it says \
+             {words} {to} ({counted}) and after a restart ({kept}): {}",
+            row_name(d, ISELLE)
+        ),
     );
 }

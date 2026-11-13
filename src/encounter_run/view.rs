@@ -54,7 +54,7 @@ const NAME_LINES: usize = 3;
 /// X8: the Conditions field's words while the dock has no room for `Effect`.
 const OTHER_EFFECT_TIMED: &str = "Other effect, such as Bless 10 rounds";
 /// X7: what the Conditions tab records, and what Splat does with a time the DM types.
-const CONDITIONS_HELP: &str = "No HP, AC or roll changes by itself. A number after the words counts down at the end of that creature’s turn: Bless 10 becomes Bless 9. Other effects stay local and do not sync.";
+const CONDITIONS_HELP: &str = "No HP, AC or roll changes by itself. A time you type counts down at the end of that creature’s turn: Bless 10 rounds goes from 10 to 9. Other effects stay local and do not sync.";
 /// A creature's effects beyond the official conditions, in the run's Conditions tab and in a
 /// change form alike: the `Other effects` label, then each in Body text with its row menu.
 /// Returns the position in `effects` of the one the DM removed. `field` is the width of the
