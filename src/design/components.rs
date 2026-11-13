@@ -2991,7 +2991,10 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
     };
     // egui puts scrolled content on whole pixels, so the row needs the delta rounded up.
     let need = (rect.bottom() - view.bottom()).ceil();
-    let by = need.min(next.owed.ceil());
+    // egui scrolls to a target only past the clip, and adds the item spacing: its least scroll is
+    // the spacing and a pixel. A row that needs less moves by that much, within the room lost.
+    let least = ui.spacing().item_spacing.y + 1.0;
+    let by = need.max(least).min(next.owed.ceil());
     // What holds the reveal back; only the checks read it.
     #[cfg_attr(not(test), allow(unused_variables))]
     let held = if next.owed <= 0.0 {
