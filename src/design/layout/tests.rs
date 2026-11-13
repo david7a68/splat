@@ -92,20 +92,23 @@ fn painted_whole(painted: &[Painted], words: &str) -> bool {
 }
 
 /// F14: the content's right edge is the same with and without the scroll bar, also when the
-/// caller's style has floating bars that take no width.
+/// caller's style has floating bars that take no width, or solid bars wider than the lane.
 #[test]
 fn scroll_column_keeps_the_lane_with_and_without_the_bar() {
     let ctx = context();
-    let edge = |rows: usize, floating: bool| {
+    let edge = |rows: usize, style: usize| {
         let mut right = 0.0;
         let mut given = 0.0;
         let mut overflows = false;
+        let mut inner = 0.0;
         frame(&ctx, vec2(600.0, 300.0), |ui| {
-            if floating {
-                ui.spacing_mut().scroll = egui::style::ScrollStyle::floating();
+            match style {
+                1 => ui.spacing_mut().scroll = egui::style::ScrollStyle::floating(),
+                2 => ui.spacing_mut().scroll.bar_width = 24.0,
+                _ => {}
             }
             given = ui.max_rect().right();
-            let output = ScrollColumn::new(("lane", rows, floating))
+            let output = ScrollColumn::new(("lane", rows, style))
                 .max_height(200.0)
                 .show(ui, |ui| {
                     for row in 0..rows {
@@ -114,21 +117,27 @@ fn scroll_column_keeps_the_lane_with_and_without_the_bar() {
                     right = ui.max_rect().right();
                 });
             overflows = output.content_size.y > output.inner_rect.height();
+            inner = output.inner_rect.right();
         });
-        (right, given, overflows)
+        (right, given, overflows, inner)
     };
     assert!(lane_width() > 0.0);
-    for floating in [false, true] {
+    for style in [0, 1, 2] {
         // Two frames each, so the bar's state settles.
-        edge(1, floating);
-        let (short, given, short_bar) = edge(1, floating);
-        edge(80, floating);
-        let (tall, _, tall_bar) = edge(80, floating);
+        edge(1, style);
+        let (short, given, short_bar, _) = edge(1, style);
+        edge(80, style);
+        let (tall, _, tall_bar, inner) = edge(80, style);
+        // The bar starts where the area's inner rect ends: the content is clear of it.
+        assert!(
+            tall <= inner + 0.01,
+            "the bar does not cover the content (style {style})"
+        );
         assert!(
             !short_bar && tall_bar,
             "one column has a bar and one has none"
         );
-        assert_eq!(short, tall, "the content ends at one edge");
+        assert_eq!(short, tall, "the content ends at one edge (style {style})");
         assert_eq!(short, given - lane_width(), "the lane is kept");
     }
 }
@@ -244,8 +253,10 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
     });
     let at = |width: f32| {
         let mut rows = 0;
+        let mut left = 0.0;
         let (nodes, painted) = frame_with(&ctx, vec2(width + 40.0, 400.0), Vec::new(), |ui| {
             let rect = Rect::from_min_size(ui.cursor().min, vec2(width, 300.0));
+            left = rect.left();
             ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
                 rows = line().show(ui).rows;
             });
@@ -253,7 +264,15 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
         for words in WORDS.into_iter().chain([title, kind]) {
             assert!(painted_whole(&painted, words), "{words:?} whole at {width}");
         }
-        (rows, WORDS.map(|word| bounds(&nodes, word)))
+        let rects = WORDS.map(|word| bounds(&nodes, word));
+        // The draw keeps to the measure: every action ends inside the width it was given.
+        for (word, rect) in WORDS.iter().zip(&rects) {
+            assert!(
+                rect.right() <= left + width + 0.5,
+                "{word:?} inside {width}"
+            );
+        }
+        (rows, rects)
     };
     // One line, to half a point.
     let (rows, beside) = at(need + 0.5);
@@ -308,7 +327,7 @@ fn the_longest_word_fits_the_narrowest_pane() {
 crate::create_reasons! {
     enum TestReason {
         NoFolder => "Choose a folder first.",
-        Long => "Splat cannot add a campaign here, because another campaign already keeps its notes in this folder. Choose another folder first.",
+        Long => "Splat cannot add a campaign here, because another campaign already keeps its notes, encounters and runs in this folder, and two campaigns in one folder would write over each other. Choose another folder first, or open the other campaign.",
     }
 }
 
@@ -366,7 +385,19 @@ fn inline_create_moves_nothing_while_the_dm_types() {
                     .iter()
                     .find(|text| text.text == TestReason::Long.words())
                     .expect("the long reason is painted");
-                assert!(long.rect.height() > 1.5 * Type::Small.line());
+                assert!(
+                    long.rect.height() > Density::Read.control(),
+                    "taller than a control"
+                );
+                // It fits its kept line: it ends above the help under that line.
+                let help = painted
+                    .iter()
+                    .find(|text| text.text == "Splat keeps the notes here.")
+                    .expect("the help is painted");
+                assert!(
+                    long.rect.bottom() <= help.rect.top(),
+                    "the reason has its room"
+                );
             }
             if reason.is_none() {
                 // The preview keeps one line, cut at its start; its accessible name is whole.
