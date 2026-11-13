@@ -815,14 +815,13 @@ impl Reader {
                 )
             })
             .collect();
-        if let Some((at, draft)) = &self.discarded
+        if let Some((at, draft, order)) = &self.discarded
             && draft.campaign == here
             && index.position(*at).is_none()
         {
-            lines.push(super::FooterLine::discarded(
-                &draft.name,
-                super::FooterAct::Discarded,
-            ));
+            lines.push(
+                super::FooterLine::discarded(&draft.name, super::FooterAct::Discarded).at(*order),
+            );
         }
         lines
     }
@@ -837,8 +836,7 @@ impl Reader {
     /// `Discard draft` of a lost draft: it waits in `discarded` for `Undo discard`.
     pub(super) fn discard_lost(&mut self, id: Uuid) {
         if let Some(draft) = self.edits.remove(&id) {
-            self.discarded = Some((id, draft));
-            self.stamp(super::FooterAct::Discarded);
+            self.discarded = Some((id, draft, design::ResultOrder::issue()));
         }
     }
 
@@ -849,9 +847,10 @@ impl Reader {
         campaign: &Campaign,
         id: Uuid,
     ) -> Option<super::FooterLine> {
-        let (at, draft) = self.discarded.as_ref()?;
-        (*at == id && draft.campaign == campaign.id)
-            .then(|| super::FooterLine::discarded(&draft.name, super::FooterAct::Discarded))
+        let (at, draft, order) = self.discarded.as_ref()?;
+        (*at == id && draft.campaign == campaign.id).then(|| {
+            super::FooterLine::discarded(&draft.name, super::FooterAct::Discarded).at(*order)
+        })
     }
 
     /// The form, in place of the entry's rows and text.
@@ -1226,8 +1225,7 @@ impl Reader {
             self.picker = None;
             self.form_focused = false;
             if draft.dirty() {
-                self.discarded = Some((id, draft));
-                self.stamp(super::FooterAct::Discarded);
+                self.discarded = Some((id, draft, design::ResultOrder::issue()));
             }
             return None;
         }
@@ -2149,7 +2147,7 @@ mod tests {
         let mut draft = EditDraft::open(&home, entry).unwrap();
         draft.now.status = "gone".into();
         let mut reader = Reader {
-            discarded: Some((id, draft)),
+            discarded: Some((id, draft, crate::design::ResultOrder::issue())),
             ..Default::default()
         };
         // The note goes in its own campaign: the Undo is offered there.

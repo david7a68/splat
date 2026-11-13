@@ -588,6 +588,38 @@ pub fn run(d: &mut Driver<'_>) {
         format!("Undo of the older Long rest: its event gone {rest_gone}, the newer scene and its Undo kept {scene_kept}"),
     );
 
+    // Review of PR 298, item 1: a removal made on Timeline after the scene is the newer result in
+    // the plan too, as its order is kept with the removal itself. Then Undo, and the same removal
+    // again on Timeline, with no plan drawn between: the new removal is newer again.
+    d.click("Add Long rest");
+    d.expect("Undo add");
+    let removal_newest = |d: &mut Driver<'_>| {
+        d.click(NAV_TIMELINE);
+        d.click_starting("Long rest · ");
+        d.click("More actions for Long rest");
+        d.click("Remove this event");
+        d.click(NAV_SESSIONS);
+        d.expect("Undo remove");
+        let (remove_top, scene_top) = (top(d, "Undo remove"), top(d, "Undo scene"));
+        (
+            events(d) == rests
+                && remove_top
+                    .zip(scene_top)
+                    .is_some_and(|(remove, scene)| remove < scene),
+            format!("The Timeline removal's Undo {remove_top:?}, the older scene's {scene_top:?}"),
+        )
+    };
+    let (first, first_detail) = removal_newest(d);
+    d.observe("review-298-1-removal-newest", first, first_detail);
+    d.click("Undo remove");
+    let back = events(d) == rests + 1;
+    let (again, again_detail) = removal_newest(d);
+    d.observe(
+        "review-298-1-removal-again",
+        back && again,
+        format!("Undo put the Long rest back {back}; {again_detail}"),
+    );
+
     // App round 1, W1-D1: the fold measures the rows as they are when closed. Two fights and two
     // scenes at 1200x800: a Travel row opened with its checks does not fold the scenes.
     fs::write(root(d).join("Road.md"), ROAD).unwrap();

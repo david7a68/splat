@@ -877,19 +877,22 @@ impl Run {
             .recharge_result()
             .filter(|_| !setup)
             .map(|recharged| recharged.words.clone());
+        // Both results belong to the newest step, so they take its order (issued when the step
+        // was done, `newest_step_order`).
+        let step_order = self.newest_step_order();
         // After the words its messages borrow, so it is dropped first.
         let mut footer = design::Footer::new(("run_messages", self.id), rect.width());
-        if used {
+        if used && let Some(order) = step_order {
             // The result of the DM's own press, with its Undo: it leads the footer.
-            footer.result(SAVED_HP_USED, true, |ui| {
+            footer.result(order, SAVED_HP_USED, true, |ui| {
                 if design::undo_message(ui, Tone::Success, SAVED_HP_USED, "Undo use saved HP") {
                     undo_saved.set(true);
                 }
             });
         }
         // X4: a recharge roll's result, until the next act. Its Undo is the header's.
-        if let Some(words) = recharged.as_deref() {
-            footer.result(words, false, |ui| {
+        if let (Some(words), Some(order)) = (recharged.as_deref(), step_order) {
+            footer.result(order, words, false, |ui| {
                 design::message(ui, Tone::Info, words);
             });
         }
@@ -2950,9 +2953,11 @@ impl Run {
         // step is the newest, so it leads; the reasons follow.
         // The message names itself; the footer's own name never takes the Log's words.
         let words = String::new();
+        // The result belongs to the newest step, so it takes that step's order.
+        let order = self.newest_step_order();
         let mut footer = design::Footer::new(("arrival_footer", self.id), ui.available_width());
-        if result {
-            footer.result(words, true, |ui| self.arrival_result(ui));
+        if result && let Some(order) = order {
+            footer.result(order, words, true, |ui| self.arrival_result(ui));
         }
         for reason in reasons.iter() {
             footer.reason(reason.as_str(), move |ui| {

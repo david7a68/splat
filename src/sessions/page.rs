@@ -85,6 +85,8 @@ struct MarkerAdded {
     session: Option<Uuid>,
     id: String,
     title: String,
+    /// When the marker was added: its result's footer order.
+    order: design::ResultOrder,
 }
 
 #[derive(Clone, Copy, Default, PartialEq)]
@@ -109,7 +111,7 @@ pub struct Plan<'a> {
     pub group_discarded: bool,
     pub group_discarded_name: String,
     /// When that discard was made, for the plan footer's newest-first order.
-    pub group_discarded_order: u64,
+    pub group_discarded_order: Option<design::ResultOrder>,
     /// A fight is open that something can still join.
     pub arrivals_open: bool,
     pub group_editor: std::cell::RefCell<&'a mut dyn FnMut(&mut egui::Ui)>,
@@ -196,6 +198,8 @@ struct Added {
     label: String,
     at: Instant,
     count: usize,
+    /// When the add was done: its result's footer order.
+    order: design::ResultOrder,
 }
 
 /// Something failed where the DM may not be looking. It stays until they dismiss it.
@@ -278,6 +282,16 @@ struct LinkUndoState {
     title: String,
 }
 
+/// A notice the page just made: it takes a new footer order in `order`, so it lists as the
+/// newest result.
+fn new_notice(
+    order: &mut Option<design::ResultOrder>,
+    notice: (Tone, String),
+) -> Option<(Tone, String)> {
+    *order = Some(design::ResultOrder::issue());
+    Some(notice)
+}
+
 #[derive(Default)]
 pub struct Sessions {
     identity_undo: Option<super::IdentityUndo>,
@@ -296,13 +310,19 @@ pub struct Sessions {
     /// after it is in view above the footer (or a few draws pass), the draws it took, and the
     /// pass it was last drawn in.
     pub(super) row_reveal: Option<(String, u8, u64)>,
-    /// When the link update's result was made (`timeline::next_result_order`).
-    link_order: u64,
-    /// When each kept result in this page's footers was made, so live Undo results go newest
-    /// first whatever their kind (review of PR 274, item 2).
-    pub(super) result_orders: crate::timeline::page::ResultOrder,
+    /// When the link update's result was made.
+    link_order: Option<design::ResultOrder>,
+    /// When the separate-session result in `identity_undo` was made: its footer order. Each
+    /// result keeps its own order, issued by its action (review of PR 298).
+    identity_order: design::ResultOrder,
+    /// When the group removal in `removed_group` was done.
+    pub(super) removed_group_order: design::ResultOrder,
+    /// When the run deletion in `deleted_run` was done.
+    pub(super) deleted_run_order: design::ResultOrder,
     folder_text: String,
     folder_notice: Option<String>,
+    /// When the folder move that made `folder_notice` was done, for its footer order.
+    folder_notice_order: Option<design::ResultOrder>,
     view: View,
     tab: Tab,
     /// The list of sessions stands beside this one, and it already gives the date.
@@ -370,10 +390,14 @@ pub struct Sessions {
     new_template: Option<String>,
     template_error: Option<String>,
     deleted_template: Option<(String, String)>,
+    /// When the template in `deleted_template` was deleted: its result's footer order.
+    deleted_template_order: design::ResultOrder,
     recordings: Vec<Recording>,
     live: Option<Live>,
     confirm_record: bool,
     notice: Option<(Tone, String)>,
+    /// When `notice` was made (`new_notice`), for its footer order.
+    notice_order: Option<design::ResultOrder>,
     /// A copy of a notice that arrived on its own (processing finished). While `notice` still
     /// equals it, the notice sits in the bottom banner; any later notice replaces it and keeps
     /// its own place above the tabs, as the result of the DM's action.
@@ -474,6 +498,8 @@ struct MovedRun {
     body: String,
     events: Vec<timeline::Event>,
     words: String,
+    /// When the move was done: its result's footer order.
+    order: design::ResultOrder,
 }
 
 fn processing_llm(settings: &ProcessingSettings) -> String {
@@ -1416,11 +1442,13 @@ impl Sessions {
                 ) {
                     match super::new_identity(copy) {
                         Ok(undo) => {
-                            self.result_orders.renew("identity");
+                            self.identity_order = design::ResultOrder::issue();
                             self.identity_undo = Some(undo);
                             self.refresh();
                         }
-                        Err(error) => self.notice = Some((Tone::Error, error)),
+                        Err(error) => {
+                            self.notice = new_notice(&mut self.notice_order, (Tone::Error, error))
+                        }
                     }
                 }
             }
@@ -1811,12 +1839,15 @@ impl Sessions {
                 self.processed_recording = failed_recording.clone();
                 self.job_done = true;
                 self.job_warned = false;
-                self.notice = Some((
-                    Tone::Success,
-                    format!(
-                        "“{label}” is processed. Read the result, and add the events you want to the timeline."
+                self.notice = new_notice(
+                    &mut self.notice_order,
+                    (
+                        Tone::Success,
+                        format!(
+                            "“{label}” is processed. Read the result, and add the events you want to the timeline."
+                        ),
                     ),
-                ));
+                );
                 self.arrived_notice.clone_from(&self.notice);
             }
             Ok(Some(warning)) => {
@@ -2134,7 +2165,7 @@ impl Sessions {
             }
             Err(error) => {
                 self.notice_session = None;
-                self.notice = Some((Tone::Error, error));
+                self.notice = new_notice(&mut self.notice_order, (Tone::Error, error));
             }
         }
     }
@@ -2261,7 +2292,7 @@ impl Sessions {
     /// The DM took the link offer: write the notes, and keep what Undo needs.
     pub fn accept_event_link_offer(&mut self, offer: LinkOffer, book: &Book) {
         self.update_event_link_notes(offer.changes);
-        self.link_order = crate::timeline::next_result_order();
+        self.link_order = Some(design::ResultOrder::issue());
         self.link_undo_state = Some(LinkUndoState {
             notes: self.note_bodies(),
             events: book.events.clone(),
@@ -2289,7 +2320,7 @@ impl Sessions {
     }
 
     /// When the link update's result was made, for the footer's newest-first order.
-    pub fn event_link_order(&self) -> u64 {
+    pub fn event_link_order(&self) -> Option<design::ResultOrder> {
         self.link_order
     }
 
@@ -2719,18 +2750,21 @@ impl Sessions {
         }
         if tell {
             self.notice_session = Some(session);
-            self.notice = Some(if has_audio {
-                self.saved_at = Some(Instant::now());
-                (
-                    Tone::Success,
-                    format!("Recording saved: {}.", recording_title(&path)),
-                )
-            } else {
-                (
-                    Tone::Warning,
-                    format!("Nothing was recorded for “{label}”."),
-                )
-            });
+            self.notice = new_notice(
+                &mut self.notice_order,
+                if has_audio {
+                    self.saved_at = Some(Instant::now());
+                    (
+                        Tone::Success,
+                        format!("Recording saved: {}.", recording_title(&path)),
+                    )
+                } else {
+                    (
+                        Tone::Warning,
+                        format!("Nothing was recorded for “{label}”."),
+                    )
+                },
+            );
         }
         self.refresh_recordings();
         has_audio
@@ -2794,10 +2828,13 @@ impl Sessions {
         session: Uuid,
     ) {
         if !recording.exists() {
-            self.notice = Some((
-                Tone::Warning,
-                "Audio removed. Restore the WAV file to process it.".into(),
-            ));
+            self.notice = new_notice(
+                &mut self.notice_order,
+                (
+                    Tone::Warning,
+                    "Audio removed. Restore the WAV file to process it.".into(),
+                ),
+            );
             return;
         }
         let note = self
@@ -3080,7 +3117,7 @@ impl Sessions {
                             && let Err(error) = self.start_recording(settings, session)
                         {
                             self.notice_session = None;
-                            self.notice = Some((Tone::Error, error));
+                            self.notice = new_notice(&mut self.notice_order, (Tone::Error, error));
                         }
                     }
                     if Action::secondary("Not now").show(ui).clicked() {
@@ -3409,7 +3446,10 @@ impl Sessions {
         let Some(note) = self.notes.iter().find(|note| note.id == session) else {
             return;
         };
-        self.notice = Some((Tone::Info, format!("{name} stays in {}.", note.label())));
+        self.notice = new_notice(
+            &mut self.notice_order,
+            (Tone::Info, format!("{name} stays in {}.", note.label())),
+        );
         self.notice_session = Some(new);
         self.move_run_here = self.notice.as_ref().map(|(_, words)| (new, words.clone()));
     }
@@ -3430,10 +3470,10 @@ impl Sessions {
             .find(|note| note.id == session)
             .map_or(1, |note| note.number);
         let words = format!("{name} moved to Session {number}.");
-        self.notice = Some((Tone::Success, words.clone()));
+        self.notice = new_notice(&mut self.notice_order, (Tone::Success, words.clone()));
         self.notice_session = Some(session);
-        self.result_orders.renew("move");
         self.moved_run = Some(MovedRun {
+            order: design::ResultOrder::issue(),
             before,
             open_run,
             body: self
@@ -4249,7 +4289,10 @@ impl Sessions {
 
     /// A note's link that no entry answers to. Saying so is better than a link that does nothing.
     pub fn no_entry_named(&mut self, name: &str) {
-        self.notice = Some((Tone::Info, format!("No entry is named {name}.")));
+        self.notice = new_notice(
+            &mut self.notice_order,
+            (Tone::Info, format!("No entry is named {name}.")),
+        );
         self.notice_session = None;
     }
 
@@ -4894,7 +4937,7 @@ impl Sessions {
                 self.finish_recording();
             }
             if let Err(error) = self.start_recording(settings, session) {
-                self.notice = Some((Tone::Error, error));
+                self.notice = new_notice(&mut self.notice_order, (Tone::Error, error));
             }
         }
         if again {
@@ -5121,8 +5164,8 @@ impl Sessions {
                                 {
                                     let id = book.add_marker(marker, key, session);
                                     book.save();
-                                    self.result_orders.renew("marker");
                                     self.recording_added = Some(MarkerAdded {
+                                        order: design::ResultOrder::issue(),
                                         session,
                                         id,
                                         title: (*title).to_owned(),
@@ -5366,13 +5409,13 @@ impl Sessions {
                                     {
                                         let id = book.add_marker(marker, key, session);
                                         book.save();
-                                        self.result_orders.renew("marker");
                                         let title = if marker.title.is_empty() {
                                             marker.kind.word()
                                         } else {
                                             marker.title.as_str()
                                         };
                                         self.recording_added = Some(MarkerAdded {
+                                            order: design::ResultOrder::issue(),
                                             session,
                                             id,
                                             title: title.to_owned(),
@@ -5408,7 +5451,10 @@ impl Sessions {
             insert_in_note(&mut draft.body, &body);
             draft.edited();
             self.notice_session = None;
-            self.notice = Some((Tone::Success, "Added to the notes.".to_owned()));
+            self.notice = new_notice(
+                &mut self.notice_order,
+                (Tone::Success, "Added to the notes.".to_owned()),
+            );
         }
     }
 
@@ -5547,10 +5593,13 @@ impl Sessions {
                 self.job_done = false;
                 self.job_warned = false;
             }
-            self.notice = Some(match delete_recording(&path) {
-                Ok(()) => (Tone::Success, "Recording deleted.".to_owned()),
-                Err(error) => (Tone::Error, format!("Not deleted. {error}")),
-            });
+            self.notice = new_notice(
+                &mut self.notice_order,
+                match delete_recording(&path) {
+                    Ok(()) => (Tone::Success, "Recording deleted.".to_owned()),
+                    Err(error) => (Tone::Error, format!("Not deleted. {error}")),
+                },
+            );
             self.refresh_recordings();
         }
     }
@@ -5605,6 +5654,8 @@ impl Sessions {
             .clone()
             .filter(|_| shown && !self.notice_arrived())
         {
+            // Every notice is made with its order (`new_notice`); a draw never issues one.
+            let order = self.notice_order.unwrap_or_default();
             let act = &act;
             if let Some(session) = self
                 .move_run_here
@@ -5614,13 +5665,17 @@ impl Sessions {
                 })
                 .map(|(session, _)| *session)
             {
-                footer.result(words.clone(), false, move |ui| {
+                footer.result(order, words.clone(), false, move |ui| {
                     if design::message_with_action(ui, tone, &words, "Move it here") {
                         act.set(Some(SessionAct::MoveRunHere(session)));
                     }
                 });
             } else if self.moved_run.is_some() {
-                let order = self.result_orders.of("move", &words);
+                let order = self
+                    .moved_run
+                    .as_ref()
+                    .map(|moved| moved.order)
+                    .unwrap_or_default();
                 undos.push(order, words.clone(), move |ui| {
                     if design::undo_message(ui, tone, &words, "Undo move") {
                         act.set(Some(SessionAct::UndoMove));
@@ -5649,7 +5704,7 @@ impl Sessions {
                 if tone == Tone::Error {
                     footer.reason(name, draw);
                 } else {
-                    footer.result(name, false, draw);
+                    footer.result(order, name, false, draw);
                 }
             }
         }
@@ -5659,7 +5714,7 @@ impl Sessions {
             let filename = undo.path.file_name().unwrap_or_default().to_string_lossy();
             let words = format!("{filename} is now a separate session.");
             let act = &act;
-            let order = self.result_orders.of("identity", &undo.path);
+            let order = self.identity_order;
             undos.push(order, words.clone(), move |ui| {
                 if design::undo_message(ui, Tone::Success, &words, "Undo separate session") {
                     act.set(Some(SessionAct::UndoIdentity));
@@ -5764,7 +5819,7 @@ impl Sessions {
                 self.session_name(added.session).as_deref(),
                 None,
             );
-            let order = self.result_orders.of("marker", &added.id);
+            let order = added.order;
             let act = &act;
             undos.push(order, words.clone(), move |ui| {
                 if design::undo_message(ui, Tone::Success, &words, "Undo add") {
@@ -5798,7 +5853,9 @@ impl Sessions {
                             self.identity_undo = None;
                             self.refresh();
                         }
-                        Err(error) => self.notice = Some((Tone::Error, error)),
+                        Err(error) => {
+                            self.notice = new_notice(&mut self.notice_order, (Tone::Error, error))
+                        }
                     }
                 }
             }
@@ -6257,7 +6314,7 @@ impl Sessions {
     fn deleted_template_in<'a>(&self, undos: &mut LiveUndos<'a>, act: &'a std::cell::Cell<bool>) {
         if let Some((name, _)) = &self.deleted_template {
             let words = format!("Deleted “{name}”.");
-            let order = self.result_orders.of("deleted template", name);
+            let order = self.deleted_template_order;
             let drawn = words.clone();
             undos.push(order, words, move |ui| {
                 if design::undo_message(ui, Tone::Success, &drawn, "Undo delete") {
@@ -6435,7 +6492,7 @@ impl Sessions {
                         .template_draft
                         .take()
                         .map_or_else(|| template.body.clone(), |draft| draft.body);
-                    self.result_orders.renew("deleted template");
+                    self.deleted_template_order = design::ResultOrder::issue();
                     self.deleted_template = Some((template.name.clone(), body));
                     self.template = None;
                     self.refresh();
@@ -6658,6 +6715,7 @@ impl Sessions {
                     self.folder_error = None;
                     self.folder_notice =
                         move_files.then(|| format!("Moved {move_counts} to {}.", self.folder_text));
+                    self.folder_notice_order = Some(design::ResultOrder::issue());
                     self.manifest_changed = Some(campaign.path.clone());
                     self.draft = None;
                     self.template_draft = None;
@@ -6741,8 +6799,8 @@ impl Sessions {
                 design::message(ui, Tone::Warning, &words);
             });
         }
-        if let Some(words) = self.folder_notice.clone() {
-            footer.result(words.clone(), false, move |ui| {
+        if let (Some(words), Some(order)) = (self.folder_notice.clone(), self.folder_notice_order) {
+            footer.result(order, words.clone(), false, move |ui| {
                 design::message(ui, Tone::Success, &words);
             });
         }
