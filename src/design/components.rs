@@ -2864,11 +2864,11 @@ struct NextAction {
     promised: bool,
     /// The last reveal stopped at the room lost, short of what the row needed.
     capped: bool,
-    /// The last pass it was drawn in, its footer and the scroll area that owns it: a waiting
-    /// reveal ends when any of them changes.
+    /// The last pass it was drawn in, and its footer: a waiting reveal ends when the action is
+    /// not drawn in a pass or the footer changes. (egui's stack IDs of a scroll area change from
+    /// pass to pass, so the area is checked within each pass: it must be the pane's own.)
     pass: u64,
     footer: Option<Id>,
-    area: Option<Id>,
 }
 
 /// A next action as the reveal saw it in the last finished pass, for checks.
@@ -2948,25 +2948,23 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
             let parent = frame.parent.as_ref().map(|parent| parent.id);
             room.is_some_and(|room| parent == Some(room.pane))
         })
-        .map(|frame| frame.id);
-    // A waiting reveal belongs to this action in this area under this footer: it ends in the
-    // first pass the action is not drawn there, or the footer (its page, its campaign) changes.
+        .is_some();
+    // A waiting reveal belongs to this action under this footer: it ends in the first pass the
+    // action is not drawn, or the footer (its page, its campaign) changes.
     let pass = ctx.cumulative_pass_nr();
     let footer = room.map(|room| room.id);
-    if next.pass + 1 < pass || next.area != area || next.footer != footer {
+    if next.pass + 1 < pass || next.footer != footer {
         next.owed = 0.0;
         next.promised = false;
     }
-    (next.pass, next.area, next.footer) = (pass, area, footer);
+    (next.pass, next.footer) = (pass, footer);
     // The DM's own scroll or press in the pane ends what a footer owed the row; a row seen whole
     // has had what it was owed.
     if scrolled || whole_at(rect.top()) {
         next.promised = false;
         next.owed = 0.0;
     }
-    let lost = room
-        .filter(|_| area.is_some())
-        .map_or(0.0, |room| room.lost);
+    let lost = room.filter(|_| area).map_or(0.0, |room| room.lost);
     if lost > 0.0 && (next.whole || next.owed > 0.0) && !whole_at(rect.top()) {
         if next.owed == 0.0 {
             next.pointer = pointer;

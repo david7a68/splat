@@ -1012,7 +1012,7 @@ pub fn run(d: &mut Driver<'_>) {
             .iter()
             .filter(|row| !row.disabled)
             .map(|row| row.name.clone())
-            .chain(nodes.iter().filter_map(|link| {
+            .chain(nodes.iter().filter(|link| !link.disabled).filter_map(|link| {
                 let name = link
                     .name
                     .strip_prefix("Change initiative for ")
