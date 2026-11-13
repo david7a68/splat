@@ -213,6 +213,9 @@ struct Keep {
     /// back a scroll that brought the newly focused control into view. (Focus that stays on a
     /// field while the DM clicks an action keeps the hold.)
     focus: Option<Id>,
+    /// The control pressed: focus that comes to it (egui focuses a clicked control a pass later)
+    /// is not a move.
+    pressed: Id,
     /// The room's height at the press: a footer that comes or goes ends the hold.
     room: Option<f32>,
 }
@@ -242,7 +245,7 @@ fn with_held(ui: &Ui, change: impl FnOnce(&mut Held, u64)) {
 /// that `held_seen` gives): hold it in place.
 pub fn hold_press(ui: &Ui, control: impl std::hash::Hash, pressed: &egui::Response) {
     let control = Id::new(control);
-    let top = pressed.rect.top();
+    let (top, pressed_id) = (pressed.rect.top(), pressed.id);
     let focus = ui.ctx().memory(|memory| memory.focused());
     with_held(ui, |held, pass| {
         held.keep = Some(Keep {
@@ -252,6 +255,7 @@ pub fn hold_press(ui: &Ui, control: impl std::hash::Hash, pressed: &egui::Respon
             now: None,
             content: None,
             focus,
+            pressed: pressed_id,
             room: None,
         });
     });
@@ -446,7 +450,7 @@ fn hold_place<R>(ui: &Ui, mut held: Held, output: &egui::scroll_area::ScrollArea
             Some("scrolled")
         } else if pass > keep.pass + KEEP_PASSES {
             Some("passes")
-        } else if focus != keep.focus {
+        } else if focus != keep.focus && focus != Some(keep.pressed) {
             Some("focus moved")
         } else if room_changed && !pending {
             keep.room = Some(room);
@@ -1015,7 +1019,8 @@ mod hold_tests {
         h.run_steps(4);
         h.get_by_label("Add a row above").click();
         h.step();
-        // The keyboard moves focus: egui handles Tab in the pass it comes in.
+        // The keyboard moves focus past the pressed control: egui handles Tab in its pass.
+        h.key_press(egui::Key::Tab);
         h.key_press(egui::Key::Tab);
         h.step();
         let focused = h.ctx.memory(|memory| memory.focused());
