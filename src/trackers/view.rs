@@ -138,6 +138,13 @@ fn columns(
 }
 
 impl ViewState {
+    /// The width the columns were last measured for, and the columns (tests).
+    #[cfg(test)]
+    pub(crate) fn columns_seen(&self) -> Option<(f32, String)> {
+        self.columns
+            .map(|(_, width, columns)| (f32::from_bits(width), format!("{columns:?}")))
+    }
+
     /// The amount field again, with the number typed for an act that recorded nothing.
     pub(super) fn ask_again(
         &mut self,

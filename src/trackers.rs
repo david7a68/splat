@@ -3652,6 +3652,7 @@ mod tests {
             .map(|name| left(h, name))
         };
         let before = firsts(&h);
+        let seen_before = h.state().view.columns_seen();
         assert!(
             before.iter().all(|x| (x - before[0]).abs() < 0.5),
             "the first actions of three trackers start at one edge: {before:?}"
@@ -3683,7 +3684,8 @@ mod tests {
         assert_eq!(
             firsts(&h),
             before,
-            "a value with one more digit moves no action"
+            "a value with one more digit moves no action: columns {seen_before:?}, then {:?}",
+            h.state().view.columns_seen()
         );
         // 999 / 120, then `Fight minute` makes 1000 / 120, wider than the slot of three
         // digits; Undo takes it back to 999. The value column keeps the room it needed, so the
