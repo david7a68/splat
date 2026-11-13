@@ -1858,7 +1858,7 @@ pub struct Complete;
 /// fn form(ui: &mut eframe::egui::Ui, name: &mut String) {
 ///     let reason = name.is_empty().then_some(Reason::NoName);
 ///     let _ = InlineCreate::new()
-///         .field(CreateField::new(splat::field_id!("doc_form_name"), "Name", name))
+///         .field(CreateField::new(splat::field_id!("doc_form_name").once(splat::layout::Once::Example), "Name", name))
 ///         .create(Create::primary(splat::word!("Create")).blocked(reason))
 ///         .kept_line(KeptLine::new())
 ///         .show(ui);
@@ -1888,9 +1888,9 @@ pub struct Complete;
 /// use splat::layout::{Create, CreateField, InlineCreate, NoReason};
 /// let (mut a, mut b) = (String::new(), String::new());
 /// let _ = InlineCreate::new()
-///     .field(CreateField::new(splat::field_id!("doc_a"), "A", &mut a))
+///     .field(CreateField::new(splat::field_id!("doc_a").once(splat::layout::Once::Example), "A", &mut a))
 ///     .create(Create::<NoReason>::primary(splat::word!("Create")))
-///     .field(CreateField::new(splat::field_id!("doc_b"), "B", &mut b));
+///     .field(CreateField::new(splat::field_id!("doc_b").once(splat::layout::Once::Example), "B", &mut b));
 /// ```
 ///
 /// A form with no kept line has no `show`:
@@ -1899,7 +1899,7 @@ pub struct Complete;
 /// use splat::layout::{Create, CreateField, InlineCreate, NoReason};
 /// fn form(ui: &mut eframe::egui::Ui, name: &mut String) {
 ///     let _ = InlineCreate::new()
-///         .field(CreateField::new(splat::field_id!("doc_name"), "Name", name))
+///         .field(CreateField::new(splat::field_id!("doc_name").once(splat::layout::Once::Example), "Name", name))
 ///         .create(Create::<NoReason>::primary(splat::word!("Create")))
 ///         .show(ui);
 /// }

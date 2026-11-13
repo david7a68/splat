@@ -27,9 +27,9 @@ use uuid::Uuid;
 struct GroupDrag(Uuid);
 
 pub(super) const AMOUNT: &str = "Amount";
-const OTHER_EFFECT_FIELD: design::FieldId = crate::field_id!("run_other_effect");
-const OUTCOME_FIELD: design::FieldId = crate::field_id!("run_outcome");
-const DM_NOTE_FIELD: design::FieldId = crate::field_id!("run_dm_note");
+const OTHER_EFFECT_FIELD: design::FieldName = crate::field_id!("run_other_effect");
+const OUTCOME_FIELD: design::FieldName = crate::field_id!("run_outcome");
+const DM_NOTE_FIELD: design::FieldName = crate::field_id!("run_dm_note");
 const READ_ALOUD: &str = "Read-aloud and notes";
 /// FI10: Arrivals says what the fight becomes when a group joins.
 pub(crate) const FIGHT_AFTER: &str = "Fight after: ";
@@ -116,7 +116,7 @@ pub(crate) fn other_effect_field(
     (width, placeholder): (f32, &str),
     focus: bool,
 ) -> (bool, egui::Response) {
-    let id = OTHER_EFFECT_FIELD.with(owner);
+    let id = OTHER_EFFECT_FIELD.of(owner);
     ui.horizontal(|ui| {
         let response = design::line_field(ui, id, "Other effect", text, placeholder, width);
         if focus {
@@ -2227,7 +2227,7 @@ impl Run {
             if self.ending {
                 let field = design::line_field(
                     ui,
-                    OUTCOME_FIELD.with(self.id),
+                    OUTCOME_FIELD.of(self.id),
                     "Outcome",
                     &mut self.outcome,
                     "Outcome, if any",
@@ -4594,7 +4594,7 @@ impl Run {
                         design::line_field(
                             ui,
                             DM_NOTE_FIELD
-                                .with(self.id)
+                                .of(self.id)
                                 .with(design::TextKey::from_data(p.key.clone())),
                             "DM note",
                             &mut self.note,
