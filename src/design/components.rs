@@ -2706,10 +2706,19 @@ impl<'a> Footer<'a> {
         let pane = ui.available_rect_before_wrap();
         let body_key = self.id.with("body");
         let top = ui.cursor().top();
+        let whole = ui.max_rect();
         let last = ui.ctx().data(|data| data.get_temp::<FooterBody>(body_key));
         let remember = |ui: &Ui, limit: f32, footer: f32| {
             ui.ctx().data_mut(|data| {
-                data.insert_temp(body_key, FooterBody { top, limit, footer });
+                data.insert_temp(
+                    body_key,
+                    FooterBody {
+                        top,
+                        limit,
+                        footer,
+                        whole,
+                    },
+                );
             });
         };
         if self.messages.is_empty() {
@@ -2823,13 +2832,14 @@ impl<'a> Footer<'a> {
     }
 }
 
-/// Where a pane's body started in the last pass, the y it had to end at, and the footer's top
-/// (the pane's bottom when the footer was empty).
+/// Where a pane's body started in the last pass, the y it had to end at, the footer's top (the
+/// pane's bottom when the footer was empty), and the pane `Ui`'s whole rect.
 #[derive(Clone, Copy, Debug)]
 struct FooterBody {
     top: f32,
     limit: f32,
     footer: f32,
+    whole: Rect,
 }
 
 impl FooterBody {
@@ -2841,11 +2851,9 @@ impl FooterBody {
     /// the body is each widget on the pane's layer, across `x`, that is not one of the footer's
     /// own (`own`, by id: egui can keep an older place for them), starts at or below the body's
     /// top (also under the footer: a body grows under a footer that follows it), and does not
-    /// span the whole room from the body's top to its
-    /// limit: those are the pane and its frames, or a scroll area as tall as its room, whose
-    /// lines count instead. A body that is one such widget (an editor as tall as the room) fills
-    /// it. This runs only while the footer holds a message, and looks at each widget egui kept
-    /// once.
+    /// hold the pane `Ui`'s whole rect: those are the pane, its panel and their frames. A body
+    /// widget as tall as its room (an editor, a scroll area that does not shrink) fills it. This
+    /// runs only while the footer holds a message, and looks at each widget egui kept once.
     fn body_height(
         self,
         ui: &Ui,
@@ -2865,7 +2873,7 @@ impl FooterBody {
                         && rect.right() > *x.start()
                         && rect.left() < *x.end()
                         && rect.top() >= self.top - 0.5
-                        && !(rect.top() <= self.top + 0.5 && rect.bottom() >= self.limit - 0.5)
+                        && !rect.expand(0.5).contains_rect(self.whole)
                 })
                 .map(|rect| rect.bottom())
                 .reduce(f32::max)
@@ -4977,10 +4985,10 @@ mod tests {
                         "{count} at {size:?}: the body {body:?} starts below the save row {row:?}"
                     );
                     if count > 0 {
-                        // iter-27-A: the body here is a scroll area as tall as its room, with
-                        // one short line. The footer follows that line, `S` below it, and the
-                        // body is clipped at the footer's top, so it never shows or takes a press
-                        // under the footer.
+                        // iter-27-A: the body here is a scroll area as tall as its room, so it
+                        // fills the pane and the footer is pinned; its words end above the
+                        // footer, and the body is clipped at the footer's top, so it never shows
+                        // or takes a press under it.
                         let footer = footer_rect(&harness).expect("the footer is drawn");
                         let (words, clip) = text_at(&harness, BODY).expect("the body's words show");
                         assert!(
