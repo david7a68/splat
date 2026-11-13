@@ -537,6 +537,35 @@ fn inside_journey(before: &[Event], starts: &[Option<u64>], event: &Event) -> Op
         .then(|| starts[at].map(|start| start.saturating_add(offset)))
 }
 
+/// Round 27 FE10: each fight played at a journey's check, by its ID, with its day on the road in
+/// the plan row's words (`Day 2 of Travel`), while its journey is before it and covers the check.
+pub fn road_days(events: &[Event]) -> std::collections::HashMap<String, String> {
+    let starts = clock(events);
+    events
+        .iter()
+        .enumerate()
+        .filter_map(|(index, event)| {
+            let within = event
+                .within
+                .as_ref()
+                .filter(|_| event.kind == Kind::Encounter)?;
+            let at = events[..index]
+                .iter()
+                .position(|journey| journey.id == within.journey && journey.kind == Kind::Travel)?;
+            if !checks::covers(&events[at], within.at) {
+                return None;
+            }
+            let minute = starts[at]
+                .unwrap_or(0)
+                .saturating_add(within.at.saturating_mul(HOUR));
+            Some((
+                event.id.clone(),
+                format!("Day {} of {}", minute / DAY + 1, events[at].label(0)),
+            ))
+        })
+        .collect()
+}
+
 /// The clock after every event, for the page to say where the story is now.
 pub fn clock_now(events: &[Event]) -> Option<u64> {
     walk(events).1
