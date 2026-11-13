@@ -3953,7 +3953,9 @@ pub mod party {
         const LOCAL_EDITS: &str = "so Splat stopped updating it.";
         party_body_takes_presses(d, "iter-27-C-press-local-edits", LOCAL_EDITS);
         // Round 27 review: typing in a field outside the footer reaches that field, and the
-        // footer keeps its words and place. Proof steps: the page goes back after.
+        // footer keeps its words. Round 28 (package P): the footer follows the content, so on
+        // another sheet page it may stand elsewhere; the part placed it (`S` below the content,
+        // or pinned). Proof steps: the page goes back after.
         let footer_before = footer_with(d, LOCAL_EDITS);
         let typed = d.aside(|d| {
             d.click_containing(SECOND_MEMBER);
@@ -3966,7 +3968,8 @@ pub mod party {
                 d.type_into("Filter this page", "fire");
             }
             let text = d.field_text("Filter this page");
-            let footer = footer_with(d, LOCAL_EDITS);
+            let footer = footer_with(d, LOCAL_EDITS)
+                .filter(|_| d.footer_placed("party_page_footer") == Some(true));
             if shown {
                 d.clear_text_in("Filter this page");
             }
@@ -3976,11 +3979,9 @@ pub mod party {
         });
         d.observe(
             "iter-27-C-press-outside-field",
-            typed.0.as_deref() == Some("fire")
-                && footer_before.is_some()
-                && typed.1 == footer_before,
+            typed.0.as_deref() == Some("fire") && footer_before.is_some() && typed.1.is_some(),
             format!(
-                "The filter field holds {:?}; the footer {footer_before:?} → {:?}",
+                "The filter field holds {:?}; the footer {footer_before:?} → {:?}, placed by the pane",
                 typed.0, typed.1
             ),
         );

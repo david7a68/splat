@@ -1083,6 +1083,31 @@ impl<'a> Driver<'a> {
             .collect()
     }
 
+    /// What each `Footer::pane` measured and placed now (package P's registry, in points): the
+    /// footer's id, the content's end, the footer's top, and whether it follows the content or is
+    /// pinned. The check "a footer below a short body" (G6) reads it: a following footer's top is
+    /// at most `S + 1` below the content's end.
+    pub fn pane_records(&self) -> Vec<crate::design::pane::PaneRecord> {
+        crate::design::pane::pane_records(&self.harness.ctx)
+    }
+
+    /// Whether the pane whose footer has `id` placed it as the part does: `S` (±1) below the
+    /// content's end while it follows, or pinned. `None` when no such pane holds a message.
+    pub fn footer_placed(&self, id: impl std::hash::Hash) -> Option<bool> {
+        let id = egui::Id::new(id);
+        let record = self
+            .pane_records()
+            .into_iter()
+            .find(|record| record.id() == id)?;
+        let top = record.footer_top()?;
+        Some(match record.placement() {
+            crate::design::Placement::Follows => {
+                (top - record.content_end() - crate::design::S).abs() <= 1.0
+            }
+            crate::design::Placement::Pinned => true,
+        })
+    }
+
     /// Can a person see this text or control right now?
     pub fn in_view(&self, name: &str) -> bool {
         self.nodes()
