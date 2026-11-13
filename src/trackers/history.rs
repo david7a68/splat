@@ -79,16 +79,11 @@ pub fn rows(rules: &Rules, ledger: &Ledger, state: &State) -> HashMap<String, Ve
         let words = if entry.notice.is_some() {
             result_words(rules, ledger, state, one)
         } else {
-            let amount = match (entry.set, entry.add) {
-                (Some(set), _) => format!("set to {set}"),
-                (None, Some(add)) => format!("{add:+}"),
-                (None, None) => String::new(),
-            };
             let place = entry
                 .instance
                 .as_ref()
                 .map_or(String::new(), |name| format!("{name} "));
-            format!("{}: {place}{amount}", label(rules, ledger, one))
+            format!("{}: {place}{}", label(rules, ledger, one), amount(entry))
         };
         rows.entry(key).or_default().push(Row {
             entry: entry.clone(),
@@ -97,6 +92,40 @@ pub fn rows(rules: &Rules, ledger: &Ledger, state: &State) -> HashMap<String, Ve
         });
     }
     rows
+}
+
+/// A change's amount as a row says it: `+1`, `-2` or `set to 4`.
+fn amount(entry: &Entry) -> String {
+    match (entry.set, entry.add) {
+        (Some(set), _) => format!("set to {set}"),
+        (None, Some(add)) => format!("{add:+}"),
+        (None, None) => String::new(),
+    }
+}
+
+/// What a `Remove` names for one press: its label with each line it changed and by how much
+/// (`Take seal: Keyring +1`, the tracker's name for a tracker without lines), so the result says
+/// which of two rows with one label went. A notice's press is its label (`Bell done`).
+fn removed_words(rules: &Rules, ledger: &Ledger, press: &[Entry]) -> String {
+    let name = label(rules, ledger, press);
+    let changes: Vec<String> = press
+        .iter()
+        .filter(|entry| entry.notice.is_none())
+        .filter_map(|entry| {
+            let line = match &entry.instance {
+                Some(line) => line.clone(),
+                None => rules
+                    .def(entry.tracker.as_deref()?)
+                    .map(|def| def.name.clone())?,
+            };
+            Some(format!("{line} {}", amount(entry)))
+        })
+        .collect();
+    if changes.is_empty() {
+        name
+    } else {
+        format!("{name}: {}", changes.join(", "))
+    }
 }
 
 /// The problems list, each with the note it belongs to: a note in play that cannot be used, a
@@ -223,12 +252,12 @@ fn removal(
             .filter(|other| other.same_press(entry))
             .cloned()
             .collect();
-        let name = label(rules, ledger, &press);
+        let name = removed_words(rules, ledger, &press);
         if !names.contains(&name) {
             names.push(name);
         }
     }
-    let mut words = format!("Removed: {}.", names[0]);
+    let mut words = format!("Removed {}.", names[0]);
     if names.len() > 1 {
         words.push_str(&format!(" With it: {}.", names[1..].join("; ")));
     }

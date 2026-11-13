@@ -2413,6 +2413,10 @@ impl Splat {
             self.page = Page::Campaign;
             self.campaign_tab = CampaignTab::Link;
         }
+        if std::mem::take(&mut self.trackers.wants_rules) {
+            self.page = Page::Campaign;
+            self.campaign_tab = CampaignTab::RunSettings;
+        }
         if std::mem::take(&mut self.encounters.wants_run_folder) {
             self.page = Page::Campaign;
             self.campaign_tab = CampaignTab::RunSettings;
