@@ -2936,7 +2936,7 @@ impl<'a> Driver<'a> {
         found.extend(stillness::icon_centres(&items, &lines));
         found.extend(stillness::icon_wraps(&lines));
         if size == SMALL {
-            found.extend(stillness::doubled_words(&lines));
+            found.extend(stillness::doubled_words(&items, &lines));
         }
         self.stillness.headers.push(stillness::HeaderView {
             window: window.clone(),

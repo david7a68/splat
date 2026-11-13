@@ -945,6 +945,10 @@ pub fn footer_gaps(items: &[Item], footers: &[egui::Rect]) -> Vec<Raw> {
         let Some((item, bottom)) = last else {
             continue;
         };
+        // The last item runs past its scroll area: the body fills the pane.
+        if item.rect.bottom() > bottom + MOVE_TOLERANCE {
+            continue;
+        }
         let gap = band.top() + S - bottom;
         if gap > S + MOVE_TOLERANCE {
             out.push(Raw {
@@ -1003,10 +1007,15 @@ pub fn lines(painted: &[(egui::epaint::TextShape, egui::Rect)]) -> Vec<Line> {
         .collect()
 }
 
-/// N2: an icon control (a control that paints only icons) sits on the line of the nearest text
-/// beside it: within `3 × L` to its left or right, its first row overlapping the control's height.
-/// The control's centre is within 1 px of that row's centre.
+/// N2: an icon control (a control that paints only icons) sits on the line of the text beside
+/// it: a text within `3 × L` to its left or right whose first row overlaps the control's height;
+/// of those, the row whose centre is nearest the control's. The control's centre is within 1 px
+/// of that row's centre. Text inside a text field counts as the field, whose box is the line.
 pub fn icon_centres(items: &[Item], lines: &[Line]) -> Vec<Raw> {
+    let fields: Vec<&Item> = items
+        .iter()
+        .filter(|item| matches!(item.role, Role::TextInput | Role::MultilineTextInput))
+        .collect();
     let mut out = Vec::new();
     for item in items.iter().filter(|item| !item.is_label()) {
         let inside = |line: &Line| item.rect.expand(1.0).contains(line.rect.center());
@@ -1018,28 +1027,38 @@ pub fn icon_centres(items: &[Item], lines: &[Line]) -> Vec<Raw> {
         let beside = lines
             .iter()
             .filter(|line| !inside(line) && !icon_only(&line.words))
-            .filter(|line| line.first.y_range().intersects(item.rect.y_range()))
             .map(|line| {
-                let gap = if line.first.right() <= item.rect.left() {
-                    item.rect.left() - line.first.right()
-                } else if line.first.left() >= item.rect.right() {
-                    line.first.left() - item.rect.right()
+                let field = fields
+                    .iter()
+                    .find(|field| field.rect.contains(line.first.center()))
+                    .map(|field| field.rect);
+                (line, field.unwrap_or(line.first))
+            })
+            .filter(|(_, row)| row.y_range().intersects(item.rect.y_range()))
+            .filter(|(_, row)| {
+                let gap = if row.right() <= item.rect.left() {
+                    item.rect.left() - row.right()
+                } else if row.left() >= item.rect.right() {
+                    row.left() - item.rect.right()
                 } else {
                     f32::INFINITY
                 };
-                (line, gap)
+                gap <= 3.0 * L
             })
-            .filter(|(_, gap)| *gap <= 3.0 * L)
-            .min_by(|a, b| a.1.total_cmp(&b.1));
-        let Some((line, _)) = beside else {
+            .min_by(|a, b| {
+                (a.1.center().y - centre.y)
+                    .abs()
+                    .total_cmp(&(b.1.center().y - centre.y).abs())
+            });
+        let Some((line, row)) = beside else {
             continue;
         };
-        let off = centre.y - line.first.center().y;
+        let off = centre.y - row.center().y;
         if off.abs() > MOVE_TOLERANCE {
             out.push(Raw {
                 check: N2,
                 control: display(item),
-                old: line.first,
+                old: row,
                 new: item.rect,
                 trigger: format!(
                     "{:.0} px {} the centre of {:?}",
@@ -1053,13 +1072,16 @@ pub fn icon_centres(items: &[Item], lines: &[Line]) -> Vec<Raw> {
     out
 }
 
-/// N5: a text whose layout job wraps starts with an icon. A wrapped second row then starts under
-/// the icon, not under the words (`design::wrapped_status` keeps the icon outside the job).
+/// N5: a text that starts with an icon wrapped inside its own layout job: it has more rows than
+/// written lines, so a second row starts under the icon, not under the words
+/// (`design::wrapped_status` keeps the icon outside the job). A text that has not wrapped yet is
+/// not found: nearly every egui label can wrap.
 pub fn icon_wraps(lines: &[Line]) -> Vec<Raw> {
     lines
         .iter()
         .filter(|line| {
             line.wraps
+                && line.rows > line.words.lines().count().max(1)
                 && line.words.trim_start().chars().next().is_some_and(is_icon)
                 && !icon_only(&line.words)
         })
@@ -1068,11 +1090,11 @@ pub fn icon_wraps(lines: &[Line]) -> Vec<Raw> {
             control: format!("Text {:?}", line.words),
             old: line.first,
             new: line.rect,
-            trigger: if line.rows > 1 {
-                format!("wrapped onto {} rows", line.rows)
-            } else {
-                "can wrap; one row now".to_owned()
-            },
+            trigger: format!(
+                "wrapped onto {} rows from {} written lines",
+                line.rows,
+                line.words.lines().count().max(1)
+            ),
         })
         .collect()
 }
@@ -1093,10 +1115,25 @@ fn is_number(raw: &str) -> bool {
 }
 
 /// N8: one word twice in a row: in one text (`Travel Travel`, or across a number: `Day 1: Day`),
-/// or as the last word of a text and the first word of the text just after it on its line.
-pub fn doubled_words(lines: &[Line]) -> Vec<Raw> {
+/// or as the last word of a text and the first word of the text just after it on its line. Text in
+/// a multi-line field is the file the DM writes, not the app's words, and is left out.
+pub fn doubled_words(items: &[Item], lines: &[Line]) -> Vec<Raw> {
+    let editors: Vec<egui::Rect> = items
+        .iter()
+        .filter(|item| item.role == Role::MultilineTextInput)
+        .map(|item| item.rect)
+        .collect();
+    let shown: Vec<&Line> = lines
+        .iter()
+        .filter(|line| {
+            !editors
+                .iter()
+                .any(|editor| editor.contains(line.first.center()))
+        })
+        .collect();
+    let lines = shown;
     let mut out = Vec::new();
-    for line in lines {
+    for line in &lines {
         let raw: Vec<&str> = line.words.split_whitespace().collect();
         for (index, current) in raw.iter().enumerate() {
             let Some(first) = word(current) else {
@@ -1120,11 +1157,11 @@ pub fn doubled_words(lines: &[Line]) -> Vec<Raw> {
             }
         }
     }
-    for left in lines {
+    for left in &lines {
         let Some(last) = left.words.split_whitespace().last().and_then(word) else {
             continue;
         };
-        for right in lines {
+        for right in &lines {
             let same_line = (left.first.center().y - right.first.center().y).abs() <= 2.0;
             let gap = right.first.left() - left.rect.right();
             if same_line
@@ -1864,12 +1901,13 @@ mod tests {
             footer_gaps(std::slice::from_ref(&row), &[pane_band(1028.0)]).len(),
             1
         );
-        // A body that fills the pane is clipped at the band: it passes.
+        // A body that fills the pane runs past its scroll area: it passes, also when the scroll
+        // area ends above the band (an editor's frame margin).
         let tall = item(
             Role::Label,
             "Long note",
             at(420.0, 300.0, 400.0, 2000.0),
-            Some(at(400.0, 100.0, 500.0, 928.0)),
+            Some(at(400.0, 100.0, 500.0, 800.0)),
         );
         assert!(footer_gaps(&[tall], &[pane_band(1028.0)]).is_empty());
         // Another pane's content beside it does not count.
@@ -1915,6 +1953,24 @@ mod tests {
             )
             .is_empty()
         );
+        // A two-line row: the title line is the one beside the icon, not the detail line.
+        let detail = line("5 party · 1 × Wolf", at(372.0, 252.0, 120.0, 16.0));
+        assert!(icon_centres(&[menu(228.0)], &[title.clone(), detail, dots(228.0)]).is_empty());
+        // Text in a field: the field's box is the line.
+        let field = item(Role::TextInput, "Name", at(372.0, 226.0, 120.0, 28.0), None);
+        let typed = line("New encounter", at(380.0, 232.0, 100.0, 18.0));
+        let back = item(Role::Button, "Back", at(340.0, 228.0, 24.0, 24.0), None);
+        let arrow = line("\u{e058}", at(345.0, 232.0, 14.0, 16.0));
+        assert!(
+            icon_centres(
+                &[field.clone(), back.clone()],
+                &[typed.clone(), arrow.clone()]
+            )
+            .is_empty()
+        );
+        let low = item(Role::Button, "Back", at(340.0, 234.0, 24.0, 24.0), None);
+        let low_arrow = line("\u{e058}", at(345.0, 238.0, 14.0, 16.0));
+        assert_eq!(icon_centres(&[field, low], &[typed, low_arrow]).len(), 1);
         let far = item(Role::Button, "Close", at(900.0, 222.0, 24.0, 24.0), None);
         assert!(
             icon_centres(
@@ -1936,7 +1992,13 @@ mod tests {
         let found = icon_wraps(std::slice::from_ref(&status));
         assert_eq!(found.len(), 1);
         assert!(found[0].trigger.starts_with("wrapped onto 2"));
-        // Words first, or a job that does not wrap, or an icon alone: nothing.
+        // Words first, a job that does not wrap, an icon alone, one row, or a written second line:
+        // nothing.
+        let mut one_row = status.clone();
+        one_row.rows = 1;
+        let mut written = status.clone();
+        written.words = "\u{e3b2} Changed\n1 × Rival Captain".into();
+        assert!(icon_wraps(&[one_row, written]).is_empty());
         let mut words_first = status.clone();
         words_first.words = "Captain Varra Black \u{e4e0}".into();
         let mut no_wrap = status.clone();
@@ -1950,24 +2012,39 @@ mod tests {
     fn n8_finds_a_word_twice_in_a_row() {
         let at_line = |words: &str, x: f32, width: f32| line(words, at(x, 100.0, width, 20.0));
         assert_eq!(
-            doubled_words(&[at_line("Travel Travel", 0.0, 100.0)]).len(),
+            doubled_words(&[], &[at_line("Travel Travel", 0.0, 100.0)]).len(),
             1
         );
-        assert_eq!(doubled_words(&[at_line("Day 1: Day", 0.0, 100.0)]).len(), 1);
+        assert_eq!(
+            doubled_words(&[], &[at_line("Day 1: Day", 0.0, 100.0)]).len(),
+            1
+        );
         // Two texts on one line: `Travel` then `Travel ·`.
         let pair = [
             at_line("Travel", 0.0, 50.0),
             at_line("Travel · 2 hours", 58.0, 120.0),
         ];
-        assert_eq!(doubled_words(&pair).len(), 1);
+        assert_eq!(doubled_words(&[], &pair).len(), 1);
         // Passing: different words, a word after other words, a number twice, texts far apart.
-        assert!(doubled_words(&[at_line("Day 1: Harvest Eve", 0.0, 140.0)]).is_empty());
-        assert!(doubled_words(&[at_line("Rule · Creating a Rule", 0.0, 140.0)]).is_empty());
+        assert!(doubled_words(&[], &[at_line("Day 1: Harvest Eve", 0.0, 140.0)]).is_empty());
+        assert!(doubled_words(&[], &[at_line("Rule · Creating a Rule", 0.0, 140.0)]).is_empty());
         assert!(
-            doubled_words(&[at_line("2d6 2d6", 0.0, 60.0), at_line("1 1", 80.0, 20.0)]).is_empty()
+            doubled_words(
+                &[],
+                &[at_line("2d6 2d6", 0.0, 60.0), at_line("1 1", 80.0, 20.0)]
+            )
+            .is_empty()
         );
         let apart = [at_line("Travel", 0.0, 50.0), at_line("Travel", 300.0, 50.0)];
-        assert!(doubled_words(&apart).is_empty());
+        assert!(doubled_words(&[], &apart).is_empty());
+        // The file in a Markdown editor is the DM's text.
+        let editor = item(
+            Role::MultilineTextInput,
+            "Markdown editor",
+            at(0.0, 0.0, 400.0, 400.0),
+            None,
+        );
+        assert!(doubled_words(&[editor], &[at_line("attack attack", 0.0, 100.0)]).is_empty());
     }
 
     fn finding(check: &'static str, state: &str) -> Finding {
