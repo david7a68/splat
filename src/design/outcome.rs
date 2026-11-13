@@ -2288,12 +2288,14 @@ mod tests {
             });
         }
 
-        /// Two activations in one frame from two sources: Enter on the focused `keyed`, and an
-        /// AccessKit click on `clicked` (egui takes one AccessKit click per pass).
-        pub(super) fn two_activations(h: &mut Harness<'_, App>, keyed: &str, clicked: &str) {
-            h.get_by_label(keyed).focus();
-            h.run_steps(2);
+        /// Two activations in one frame from two sources: the release of a pointer press on
+        /// `pointed` (pressed in the frame before), and an AccessKit click on `clicked` in the
+        /// same frame (egui takes one AccessKit click per pass).
+        pub(super) fn two_activations(h: &mut Harness<'_, App>, pointed: &str, clicked: &str) {
+            let at = h.get_by_label(pointed).rect().center();
             let target = h.get_by_label(clicked).accesskit_node().id();
+            pointer(h, at, true);
+            h.step();
             h.event(egui::Event::AccessKitActionRequest(
                 egui::accesskit::ActionRequest {
                     action: egui::accesskit::Action::Click,
@@ -2301,7 +2303,8 @@ mod tests {
                     data: None,
                 },
             ));
-            h.key_press(egui::Key::Enter);
+            pointer(h, at, false);
+            h.step();
             h.run_steps(2);
         }
 

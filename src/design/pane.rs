@@ -979,8 +979,14 @@ mod hold_tests {
         crate::design::theme::install(&h.ctx);
         h.run_steps(4);
         h.get_by_label("Add a row above").click();
+        h.step();
         h.get_by_label("Next control").focus();
-        h.run_steps(8);
+        h.step();
+        assert!(
+            h.ctx.memory(|memory| memory.focused()).is_some(),
+            "the next control has focus"
+        );
+        h.run_steps(6);
         let ends = h.ctx.data(|data| {
             data.get_temp::<Vec<(&'static str, u64, Option<Id>)>>(Id::new("design_pane_hold_ends"))
         });
