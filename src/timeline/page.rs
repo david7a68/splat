@@ -1447,7 +1447,7 @@ impl TimelinePage {
                         let width = ui.available_width();
                         changed |= design::line_field(
                             ui,
-                            checks::LENGTH,
+                            checks::length_field(event),
                             "How long",
                             &mut event.duration,
                             hint,
@@ -1557,7 +1557,8 @@ impl TimelinePage {
             design::gap(ui, design::Gap::M);
             design::field(ui, "Notes", None, None, |ui| {
                 let width = ui.available_width() - 2.0 * design::S;
-                let response = EVENT_NOTES.multi_line(ui, &mut event.notes, |edit| {
+                let notes = EVENT_NOTES.with(design::TextKey::from_data(event.id.as_str()));
+                let response = notes.multi_line(ui, &mut event.notes, |edit| {
                     edit.desired_width(width)
                         .desired_rows(3)
                         .margin(egui::vec2(design::S, design::S))

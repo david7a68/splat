@@ -998,7 +998,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/slash.rs", "note", &[Ban::Layout(1)]),
         ("src/sessions/slash.rs", "popup_at", &[Ban::Layout(1)]),
         ("src/timeline/checks.rs", "table_line", &[Ban::Layout(1)]),
-        ("src/timeline/page.rs", "detail", &[Ban::Layout(7)]),
+        (
+            "src/timeline/page.rs",
+            "detail",
+            &[Ban::Layout(7), Ban::RowKey(1)],
+        ),
         ("src/timeline/page.rs", "filters", &[Ban::Layout(1)]),
         ("src/timeline/page.rs", "list", &[Ban::Layout(1)]),
         ("src/timeline/page.rs", "new_events_line", &[Ban::Layout(1)]),
@@ -1007,6 +1011,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "an_open_history_prepares_its_rows_once_and_draws_only_those_in_view",
             &[Ban::Layout(1)],
         ),
+        ("src/timeline/checks.rs", "length_field", &[Ban::RowKey(1)]),
         ("src/trackers/view.rs", "amount_field", &[Ban::RowKey(3)]),
         (
             "src/trackers/view.rs",
