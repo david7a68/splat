@@ -1480,6 +1480,19 @@ impl<'a> Driver<'a> {
     /// G1b: the controls as a press sees them, with their pane and whether a popup holds them.
     fn press_nodes(&self) -> Vec<stillness::PressNode> {
         let viewport = self.harness.ctx.content_rect();
+        // A toggle's selected state, so that G1b exempts only a real selection change.
+        let mut selected = std::collections::HashMap::new();
+        ergonomics::visit_nodes(&self.harness, |node, _| {
+            let access = node.accesskit_node();
+            let state = access.is_selected().or_else(|| {
+                access
+                    .toggled()
+                    .map(|toggled| toggled == accesskit::Toggled::True)
+            });
+            if let Some(state) = state {
+                selected.insert(access.id().0, state);
+            }
+        });
         ergonomics::controls(&self.harness)
             .into_iter()
             .filter(|control| !control.chrome && !control.is_label())
@@ -1498,6 +1511,7 @@ impl<'a> Driver<'a> {
                     .intersect(viewport),
                 scope: control.scope,
                 popup: control.popup.is_some(),
+                selected: selected.get(&control.id).copied(),
             })
             .collect()
     }

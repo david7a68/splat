@@ -28,7 +28,7 @@
 //! found in the painted shapes by what `design::message` and `design::small_message` draw: a 3 px
 //! bar in a result tone, a tone icon after it, then the words. That search goes when Wave 2 has
 //! moved every caller to the typed places.
-use super::ergonomics::{Control, StateKey};
+use super::ergonomics::Control;
 use crate::design::outcome::MessagePlace;
 use crate::design::{L, S, XS};
 use eframe::egui::{self, accesskit::Role, epaint::ClippedShape};
@@ -675,6 +675,8 @@ pub struct PressNode {
     pub scope: u64,
     /// Drawn in a popup (a menu): a menu entry is not the button that opened the menu.
     pub popup: bool,
+    /// Its selected or toggled state, when it is a toggle (AccessKit's selected or toggled).
+    pub selected: Option<bool>,
 }
 
 /// The control a press goes to, found again after the press.
@@ -721,10 +723,14 @@ pub fn pressed(nodes: &[PressNode], point: egui::Pos2, page: &str) -> Option<Pre
     })
 }
 
-/// The selected-toggle exemption: the line and one side edge stay, the width changes by at most
-/// `TOGGLE_WEIGHT`, and the press point is still on the control.
-fn toggle_weight(old: egui::Rect, new: egui::Rect, point: egui::Pos2) -> bool {
-    (old.top() - new.top()).abs() <= MOVE_TOLERANCE
+/// The selected-toggle exemption: the control is a toggle whose selection the press changed (its
+/// selected state is known before and after, and differs), its line and one side edge stay, the
+/// width changes by at most `TOGGLE_WEIGHT`, and the press point is still on it. An ordinary
+/// button that grows is a move.
+fn toggle_weight(before: &PressNode, after: &PressNode, point: egui::Pos2) -> bool {
+    let (old, new) = (before.rect, after.rect);
+    matches!((before.selected, after.selected), (Some(a), Some(b)) if a != b)
+        && (old.top() - new.top()).abs() <= MOVE_TOLERANCE
         && (old.bottom() - new.bottom()).abs() <= MOVE_TOLERANCE
         && ((old.left() - new.left()).abs() <= MOVE_TOLERANCE
             || (old.right() - new.right()).abs() <= MOVE_TOLERANCE)
@@ -749,19 +755,19 @@ pub fn press_moves(
         .iter()
         .filter(|node| same_identity(node, &before.node))
         .collect();
-    let (rect, by_name) = if let Some(node) = equal.get(before.place) {
-        (node.rect, true)
+    let (now, by_name) = if let Some(node) = equal.get(before.place) {
+        (*node, true)
     } else if equal.is_empty() {
         let node = after
             .iter()
             .find(|node| node.id == before.node.id && node.role == before.node.role)?;
-        (node.rect, false)
+        (node, false)
     } else {
         return None;
     };
-    let old = before.node.rect;
+    let (old, rect) = (before.node.rect, now.rect);
     moved(old, rect)?;
-    if toggle_weight(old, rect, before.point) {
+    if toggle_weight(&before.node, now, before.point) {
         return None;
     }
     Some(Raw {
@@ -1384,57 +1390,128 @@ impl Tracker {
     }
 }
 
-/// A known line: a blocking check, a state, and its exact count of findings.
-pub type KnownLine = (&'static str, StateKey<'static>, usize);
+/// A known line's key: a blocking check, a scenario, a state, a window, and the name of the control
+/// or text it found. Counting per name means a fix in one control cannot hide a new fault in
+/// another of the same state.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct KnownKey {
+    pub scenario: String,
+    pub check: String,
+    pub state: String,
+    pub window: String,
+    pub name: String,
+}
 
-/// Blocking-check lines by state: a state with more findings than `known` lists (or not listed),
-/// then a listed state with fewer (the list is stale). Both fail a run. Escaped findings do not
-/// count. A scenario that did not run gives no stale line.
-pub fn compare_known(
-    findings: &[Finding],
-    known: &[KnownLine],
-    scenarios: &[&str],
-) -> (Vec<String>, Vec<String>) {
-    let mut found: BTreeMap<(&str, StateKey<'_>), usize> = BTreeMap::new();
+impl std::fmt::Display for KnownKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} / {} / {} / {} / {}",
+            self.check, self.scenario, self.state, self.window, self.name
+        )
+    }
+}
+
+/// The known lines: each key with its exact count of findings.
+pub type Known = BTreeMap<KnownKey, usize>;
+
+/// `stillness_known.json` and `stillness-known.json`: per scenario, its lines as
+/// `[check, state, window, name, count]`.
+type KnownFile = BTreeMap<String, Vec<(String, String, String, String, usize)>>;
+
+pub fn parse_known(text: &str) -> Result<Known, String> {
+    let file: KnownFile = serde_json::from_str(text).map_err(|error| error.to_string())?;
+    let mut out = Known::new();
+    for (scenario, lines) in file {
+        for (check, state, window, name, count) in lines {
+            if !BLOCKING.contains(&check.as_str()) {
+                return Err(format!("{check} is not a blocking check"));
+            }
+            let key = KnownKey {
+                scenario: scenario.clone(),
+                check,
+                state,
+                window,
+                name,
+            };
+            if out.insert(key.clone(), count).is_some() {
+                return Err(format!("{key} is listed twice"));
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// The list in this source.
+pub fn known() -> Known {
+    parse_known(include_str!("stillness_known.json"))
+        .unwrap_or_else(|error| panic!("src/visual_tests/stillness_known.json: {error}"))
+}
+
+/// The list as its file: one scenario per block, one line per key, so a diff shows each change.
+pub fn known_file(known: &Known) -> String {
+    let mut by_scenario: BTreeMap<&str, Vec<String>> = BTreeMap::new();
+    for (key, count) in known {
+        let line = serde_json::to_string(&(&key.check, &key.state, &key.window, &key.name, count))
+            .expect("encode a known line");
+        by_scenario.entry(&key.scenario).or_default().push(line);
+    }
+    let blocks: Vec<String> = by_scenario
+        .iter()
+        .map(|(scenario, lines)| {
+            format!(
+                "  {}: [\n    {}\n  ]",
+                serde_json::to_string(scenario).expect("encode a scenario"),
+                lines.join(",\n    ")
+            )
+        })
+        .collect();
+    format!("{{\n{}\n}}\n", blocks.join(",\n"))
+}
+
+/// What this run's findings count per key.
+pub fn found_lines(findings: &[Finding]) -> Known {
+    let mut found = Known::new();
     for finding in findings
         .iter()
         .filter(|f| f.escaped.is_none() && BLOCKING.contains(&f.check))
     {
-        let key = (
-            finding.check,
-            (
-                finding.scenario.as_str(),
-                finding.state.as_str(),
-                finding.window.as_str(),
-            ),
-        );
-        *found.entry(key).or_default() += 1;
+        *found
+            .entry(KnownKey {
+                scenario: finding.scenario.clone(),
+                check: finding.check.to_owned(),
+                state: finding.state.clone(),
+                window: finding.window.clone(),
+                name: finding.control.clone(),
+            })
+            .or_default() += 1;
     }
-    let listed = |check: &str, key: StateKey<'_>| {
-        known
-            .iter()
-            .filter(|(c, k, _)| *c == check && *k == key)
-            .map(|(.., count)| count)
-            .sum::<usize>()
-    };
-    let line =
-        |check: &str, (scenario, state, window): StateKey<'_>, count: usize, limit: usize| {
-            format!("{check} / {scenario} / {state} / {window}: {count} (known {limit})")
-        };
+    found
+}
+
+/// Lines by key: a key with more findings than `known` lists (or not listed), then a listed key of a
+/// scenario that ran with fewer (the list is stale). Both fail a run. Escaped findings do not count.
+pub fn compare_known(
+    findings: &[Finding],
+    known: &Known,
+    scenarios: &[&str],
+) -> (Vec<String>, Vec<String>) {
+    let found = found_lines(findings);
+    let listed = |key: &KnownKey| known.get(key).copied().unwrap_or(0);
     let worse = found
         .iter()
-        .filter(|((check, key), count)| **count > listed(check, *key))
-        .map(|((check, key), count)| line(check, *key, *count, listed(check, *key)))
+        .filter(|(key, count)| **count > listed(key))
+        .map(|(key, count)| format!("{key}: {count} (known {})", listed(key)))
         .collect();
     let stale = known
         .iter()
-        .filter(|(_, (scenario, ..), _)| scenarios.contains(scenario))
-        .filter_map(|(check, key, limit)| {
-            let count = found.get(&(*check, *key)).copied().unwrap_or(0);
+        .filter(|(key, _)| scenarios.contains(&key.scenario.as_str()))
+        .filter_map(|(key, limit)| {
+            let count = found.get(key).copied().unwrap_or(0);
             (count < *limit).then(|| {
                 format!(
-                    "{}. Fixed: lower or remove its line in stillness_known::KNOWN",
-                    line(check, *key, count, *limit)
+                    "{key}: {count} (known {limit}). Fixed: lower or remove its line in \
+                     stillness_known.json"
                 )
             })
         })
@@ -1442,52 +1519,80 @@ pub fn compare_known(
     (worse, stale)
 }
 
-/// The Rust name of a blocking check's constant, for `stillness_known.rs`.
-fn constant(check: &str) -> &'static str {
-    match check {
-        G1A => "G1A",
-        G1B => "G1B",
-        G1C => "G1C",
-        G3 => "G3",
-        G6 => "G6",
-        G7 => "G7",
-        N2 => "N2",
-        N5 => "N5",
-        _ => "?",
-    }
+/// `stillness-known.json` of a run: the lines its scenarios need, in the list's form. A package
+/// that fixed lines replaces its scenarios' blocks in `stillness_known.json` with these; the gate
+/// refuses a line that is higher than, or not in, the list of the merge base with `origin/main`.
+pub fn known_lines(findings: &[Finding], scenarios: &[&str]) -> String {
+    let mut found = found_lines(findings);
+    found.retain(|key, _| scenarios.contains(&key.scenario.as_str()));
+    known_file(&found)
 }
 
-/// `stillness-known.txt`: the known lines this run's findings need, one block per scenario that
-/// ran, in the form and order of `stillness_known.rs`. A package that fixed lines replaces its
-/// scenarios' blocks with these; a line may only go down or go.
-pub fn known_lines(findings: &[Finding], scenarios: &[&str]) -> String {
-    let mut found: BTreeMap<(&str, &str, &str, &str), usize> = BTreeMap::new();
-    for finding in findings
-        .iter()
-        .filter(|f| f.escaped.is_none() && BLOCKING.contains(&f.check))
-    {
-        *found
-            .entry((
-                finding.scenario.as_str(),
-                constant(finding.check),
-                finding.state.as_str(),
-                finding.window.as_str(),
-            ))
-            .or_default() += 1;
-    }
-    let mut ran: Vec<&str> = scenarios.to_vec();
-    ran.sort_unstable();
-    let mut out = String::new();
-    for scenario in ran {
-        out.push_str(&format!("    // {scenario}\n"));
-        for ((_, check, state, window), count) in found.iter().filter(|(key, _)| key.0 == scenario)
-        {
-            out.push_str(&format!(
-                "    ({check}, ({scenario:?}, {state:?}, {window:?}), {count}),\n"
-            ));
+/// The list of the merge base with `origin/main`, as the gate could read it.
+pub enum Base {
+    List(Known),
+    /// The merge base has no list yet: this list is the first.
+    Absent(String),
+    /// The merge base or its list could not be read.
+    Unreadable(String),
+}
+
+/// Each `SPLAT_STILLNESS_RAISE` entry, one per line: `<key> => <reason>`.
+pub fn raises(text: &str) -> Vec<(String, String)> {
+    text.lines()
+        .filter_map(|line| {
+            let (key, reason) = line.split_once(" => ")?;
+            Some((key.trim().to_owned(), reason.trim().to_owned()))
+        })
+        .filter(|(key, reason)| !key.is_empty() && !reason.is_empty())
+        .collect()
+}
+
+/// The list may only shrink: against the merge base's list, a new key or a higher count fails with
+/// its key, unless `raises` names that key with a reason. Returns the failures and the notes the
+/// report prints (each raise used, the base's state). A base that cannot be read fails only in the
+/// landing gate (`landing`), and is a loud note everywhere.
+pub fn compare_base(
+    current: &Known,
+    base: &Base,
+    raises: &[(String, String)],
+    landing: bool,
+) -> (Vec<String>, Vec<String>) {
+    let mut failures = Vec::new();
+    let mut notes = Vec::new();
+    match base {
+        Base::Absent(why) => notes.push(format!(
+            "FIRST LIST: the merge base has no stillness_known.json ({why}); this list is the first \
+             and is not compared"
+        )),
+        Base::Unreadable(why) => {
+            let line = format!("BASE NOT READ: the known lists were not compared with origin/main: {why}");
+            if landing {
+                failures.push(line);
+            } else {
+                notes.push(line);
+            }
+        }
+        Base::List(base) => {
+            for (key, count) in current {
+                let before = base.get(key).copied().unwrap_or(0);
+                if *count <= before {
+                    continue;
+                }
+                let name = key.to_string();
+                match raises.iter().find(|(raised, _)| raised == name.trim()) {
+                    Some((_, reason)) => notes.push(format!(
+                        "RAISED (SPLAT_STILLNESS_RAISE): {name}: {before} -> {count}: {reason}"
+                    )),
+                    None => failures.push(format!(
+                        "Known line raised against the merge base: {name}: {before} -> {count}. \
+                         Fix it, or name it in SPLAT_STILLNESS_RAISE=\"{name} => <reason>\""
+                    )),
+                }
+            }
         }
     }
-    out
+    (failures, notes)
 }
 
 /// `stillness.json`: a JSON array with one finding per line, so `grep` and `diff` read it.
@@ -1514,7 +1619,7 @@ impl Report {
     pub fn new(
         findings: &[Finding],
         escapes: &[(String, String, &'static str)],
-        known: &[KnownLine],
+        known: &Known,
         time: Duration,
     ) -> Self {
         let counts = CHECKS
@@ -1539,7 +1644,12 @@ impl Report {
         }
         let known = BLOCKING
             .iter()
-            .map(|check| (*check, known.iter().filter(|(c, ..)| c == check).count()))
+            .map(|check| {
+                (
+                    *check,
+                    known.keys().filter(|key| key.check == *check).count(),
+                )
+            })
             .collect();
         Self {
             counts,
@@ -1574,7 +1684,7 @@ impl Report {
             .map(|(check, lines)| format!("{check} {lines}"))
             .collect();
         format!(
-            "Stillness (stillness.json): {}. Known lines: {}. expect_moves: {} uses. Check time {:?} (summed over workers).",
+            "Stillness (stillness.json): {}. Known lines: {}. expect_moves: {} uses. Check time {:?} (elapsed inside the checks, summed over workers).",
             counts.join("; "),
             known.join(", "),
             self.escapes.values().map(Vec::len).sum::<usize>(),
@@ -1598,7 +1708,7 @@ impl Report {
             ));
         }
         out.push_str(&format!(
-            "\nCheck time, summed over workers: {:?}.\n",
+            "\nCheck time: elapsed time inside the checks, summed over the workers: {:?}.\n",
             self.time
         ));
         if !self.escapes.is_empty() {
@@ -1825,6 +1935,7 @@ mod tests {
             shown: rect,
             scope: 1,
             popup,
+            selected: None,
         }
     }
 
@@ -1865,6 +1976,12 @@ mod tests {
         assert!(
             press_moves(&before, &after(at(301.5, 51.5, 80.0, 24.0)), "Run", "Click").is_some()
         );
+        // An ordinary button that only grows 2 px is a move: no selection changed.
+        assert_eq!(
+            press_moves(&before, &after(at(300.0, 50.0, 82.0, 24.0)), "Run", "Click")
+                .map(|raw| raw.check),
+            Some(G1B)
+        );
         // Renamed: found by id, never blocking.
         let renamed = [node(7, "Stop", at(500.0, 50.0, 80.0, 24.0), false)];
         assert_eq!(
@@ -1875,33 +1992,36 @@ mod tests {
 
     #[test]
     fn g1b_exempts_a_selected_toggle_up_to_its_weight_and_no_more() {
-        let toggle = at(500.0, 70.0, 110.0, 28.0);
-        let before = pressed(
-            &[node(3, "Edit Markdown", toggle, false)],
-            toggle.center(),
-            "Library",
-        )
-        .expect("the toggle");
-        let grown = |width| {
-            [node(
-                3,
-                "Edit Markdown",
-                at(500.0, 70.0, 110.0 + width, 28.0),
-                false,
-            )]
+        let toggle = |rect, selected| PressNode {
+            selected: Some(selected),
+            ..node(3, "Edit Markdown", rect, false)
         };
-        assert!(press_moves(&before, &grown(TOGGLE_WEIGHT), "Library", "Click").is_none());
+        let off = at(500.0, 70.0, 110.0, 28.0);
+        let before = pressed(&[toggle(off, false)], off.center(), "Library").expect("the toggle");
+        let grown = |width, selected| [toggle(at(500.0, 70.0, 110.0 + width, 28.0), selected)];
+        // The press selected it: it may grow by its weight.
+        assert!(press_moves(&before, &grown(TOGGLE_WEIGHT, true), "Library", "Click").is_none());
         assert_eq!(
-            press_moves(&before, &grown(TOGGLE_WEIGHT + 0.5), "Library", "Click").map(|r| r.check),
+            press_moves(
+                &before,
+                &grown(TOGGLE_WEIGHT + 0.5, true),
+                "Library",
+                "Click"
+            )
+            .map(|r| r.check),
             Some(G1B)
         );
+        // A toggle whose selection did not change, and a control with no selected state, may not.
+        assert!(press_moves(&before, &grown(2.0, false), "Library", "Click").is_some());
+        let plain = pressed(
+            &[node(3, "Edit Markdown", off, false)],
+            off.center(),
+            "Library",
+        )
+        .expect("a plain button");
+        assert!(press_moves(&plain, &grown(2.0, true), "Library", "Click").is_some());
         // Its line must stay: the same growth one line lower is a move.
-        let lower = [node(
-            3,
-            "Edit Markdown",
-            at(500.0, 72.0, 112.0, 28.0),
-            false,
-        )];
+        let lower = [toggle(at(500.0, 72.0, 112.0, 28.0), true)];
         assert!(press_moves(&before, &lower, "Library", "Click").is_some());
     }
 
@@ -2292,26 +2412,76 @@ mod tests {
 
     #[test]
     fn known_lines_fail_a_new_finding_and_a_stale_line() {
-        let known: &[KnownLine] = &[(G3, ("s", "01-a", "960x640"), 1)];
+        let key = |check: &str, state: &str| KnownKey {
+            scenario: "s".into(),
+            check: check.into(),
+            state: state.into(),
+            window: "960x640".into(),
+            name: String::new(),
+        };
+        let known: Known = [(key(G3, "01-a"), 1)].into_iter().collect();
         let run = [finding(G3, "01-a"), finding(G2, "02-b")];
-        assert_eq!(compare_known(&run, known, &["s"]), (vec![], vec![]));
+        assert_eq!(compare_known(&run, &known, &["s"]), (vec![], vec![]));
         let more = [finding(G3, "01-a"), finding(G1A, "02-b")];
-        let (worse, stale) = compare_known(&more, known, &["s"]);
+        let (worse, stale) = compare_known(&more, &known, &["s"]);
         assert_eq!((worse.len(), stale.len()), (1, 0), "{worse:?}");
-        let (worse, stale) = compare_known(&[], known, &["s"]);
+        let (worse, stale) = compare_known(&[], &known, &["s"]);
         assert_eq!((worse.len(), stale.len()), (0, 1));
-        assert_eq!(compare_known(&[], known, &["other"]), (vec![], vec![]));
-        // The file a package pastes from: one block per scenario that ran, in the list's form.
-        let lines = known_lines(&[finding(G3, "01-a"), finding(G2, "02-b")], &["s", "t"]);
-        assert_eq!(
-            lines,
-            "    // s\n    (G3, (\"s\", \"01-a\", \"960x640\"), 1),\n    // t\n"
-        );
+        assert_eq!(compare_known(&[], &known, &["other"]), (vec![], vec![]));
         let mut escaped = finding(G1A, "02-b");
         escaped.escaped = Some("A reorder.");
         assert_eq!(
-            compare_known(&[finding(G3, "01-a"), escaped], known, &["s"]),
+            compare_known(&[finding(G3, "01-a"), escaped], &known, &["s"]),
             (vec![], vec![])
+        );
+        // One name per key: a fault exchanged for another in the same state is a new key.
+        let mut other = finding(G3, "01-a");
+        other.control = "Button \"Edit\"".into();
+        assert_eq!(compare_known(&[other], &known, &["s"]).0.len(), 1);
+        // The file a package pastes from: the run's scenarios, in the list's form, and it reads back.
+        let file = known_lines(&[finding(G3, "01-a"), finding(G2, "02-b")], &["s", "t"]);
+        assert_eq!(
+            file,
+            "{\n  \"s\": [\n    [\"G3/far-action\",\"01-a\",\"960x640\",\"\",1]\n  ]\n}\n"
+        );
+        assert_eq!(parse_known(&file), Ok(known.clone()));
+        // The workflow cannot raise the list: against the merge base's list, a higher count and an
+        // added key each fail with their key; only a named raise lets one through.
+        let base = Base::List(known.clone());
+        let mut raised = known.clone();
+        raised.insert(key(G3, "01-a"), 2);
+        raised.insert(key(N5, "03-c"), 1);
+        let (failures, _) = compare_base(&raised, &base, &[], false);
+        assert_eq!(failures.len(), 2, "{failures:?}");
+        assert!(
+            failures
+                .iter()
+                .any(|f| f.contains("G3/far-action / s / 01-a") && f.contains("1 -> 2"))
+        );
+        assert!(
+            failures
+                .iter()
+                .any(|f| f.contains("N5/icon-starts-wrapping-text / s / 03-c"))
+        );
+        let named = raises(
+            "N5/icon-starts-wrapping-text / s / 03-c / 960x640 /  => a new wrap, fixed in #400",
+        );
+        let (failures, notes) = compare_base(&raised, &base, &named, false);
+        assert_eq!(failures.len(), 1, "{failures:?}");
+        assert!(
+            notes
+                .iter()
+                .any(|n| n.starts_with("RAISED") && n.contains("fixed in #400"))
+        );
+        // Lowering passes; an unread base fails only in the landing gate; a first list passes.
+        assert!(compare_base(&Known::new(), &base, &[], true).0.is_empty());
+        let unread = Base::Unreadable("no origin/main".into());
+        assert!(compare_base(&known, &unread, &[], false).0.is_empty());
+        assert_eq!(compare_base(&known, &unread, &[], true).0.len(), 1);
+        assert!(
+            compare_base(&raised, &Base::Absent("x".into()), &[], true)
+                .0
+                .is_empty()
         );
     }
 }

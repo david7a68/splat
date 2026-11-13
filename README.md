@@ -131,13 +131,19 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   **G1b** for a control found again only by its id, **G2** a short header action at the widest
   size is gone or paints other words at a narrower size, **G4** one pane shows a text of four or
   more words twice, and **N8** one word shown twice in a row (`Travel Travel`).
-- A blocking check fails the run on a line that `KNOWN` in `src/visual_tests/stillness_known.rs`
-  does not list, and on a listed state with fewer lines, so the list only shrinks. The list has
-  one block per scenario, headed `// <scenario>`. To lower your lines after a fix, run your
-  scenarios (`visual-test <label> --only a,b`): each run writes
-  `artifacts/screenshots/<label>/stillness-known.txt` with the lines those scenarios need, one
-  block per scenario. Replace your scenarios' blocks in `stillness_known.rs` with those blocks and
-  run `cargo fmt`. A count may only go down; a new line needs a fix or an `expect_moves`.
+- The known lines are `src/visual_tests/stillness_known.json`: per scenario, one line per
+  `[check, state, window, name, count]`, where the name is the control or text the check found.
+  A blocking check fails the run on a finding that has no line or more than its count, and on a
+  listed line of a scenario that ran with fewer. The gate also reads the list of the merge base
+  with `origin/main` (`git show`) and fails on any line that is new or higher there, naming its
+  key, so the list can only shrink. A raise passes only when `SPLAT_STILLNESS_RAISE` names it, one
+  line per raise: `<check> / <scenario> / <state> / <window> / <name> => <reason>`; the report
+  prints each raise for the reviewer and `land.sh`. When the base cannot be read, the report says
+  so, and the landing gate (`land.sh`) fails.
+- To lower your lines after a fix, run your scenarios (`visual-test <label> --only a,b`). Each
+  run writes `artifacts/screenshots/<label>/stillness-known.json` with the lines those scenarios
+  need now. Replace your scenarios' blocks in `stillness_known.json` with those blocks. Pasting a
+  block cannot raise the list: the gate compares it with the merge base.
 - `d.expect_moves("reason")` before a state where a move is the point (a reorder, an answered
   question that goes) is the one escape from G1a and G1b; it never covers G1c. Its findings
   stay in `stillness.json` with the reason, and the report counts each use per scenario.

@@ -43,7 +43,6 @@ mod settle_probe;
 mod slots;
 mod steps;
 mod stillness;
-mod stillness_known;
 mod video;
 
 use driver::{Driver, Outcome};
@@ -762,7 +761,7 @@ fn prepare_output(directory: &Path, capture: bool) {
         "ergonomics.md",
         "chrome-observation.json",
         "stillness.json",
-        "stillness-known.txt",
+        "stillness-known.json",
     ] {
         match fs::remove_file(directory.join(name)) {
             Ok(()) => {}
@@ -783,7 +782,7 @@ fn a_run_without_captures_clears_reports_but_keeps_other_files() {
         "ergonomics.md",
         "chrome-observation.json",
         "stillness.json",
-        "stillness-known.txt",
+        "stillness-known.json",
     ];
     let retained = ["empty__01__960x640.png", "manifest.txt", "notes.md"];
     for name in reports.into_iter().chain(retained) {
@@ -991,6 +990,48 @@ fn the_full_baseline_writer_refuses_a_mixed_overlap() {
     assert_eq!(Baseline::parse(text.as_bytes()).unwrap(), clean);
 }
 
+/// The G list of the merge base with `origin/main`, read with git, for `stillness::compare_base`.
+fn base_known() -> stillness::Base {
+    const LIST: &str = "src/visual_tests/stillness_known.json";
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .args(args)
+            .output()
+            .map_err(|error| format!("git {}: {error}", args.join(" ")))
+    };
+    // `SPLAT_STILLNESS_BASE` names another base ref, for a proof run; the gate uses origin/main.
+    let main = std::env::var("SPLAT_STILLNESS_BASE").unwrap_or_else(|_| "origin/main".into());
+    let base = match git(&["merge-base", "HEAD", &main]) {
+        Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout).trim().to_owned(),
+        Ok(out) => {
+            return stillness::Base::Unreadable(format!(
+                "git merge-base HEAD {main}: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ));
+        }
+        Err(error) => return stillness::Base::Unreadable(error),
+    };
+    let path = format!("{base}:{LIST}");
+    match git(&["cat-file", "-e", &path]) {
+        Ok(out) if out.status.success() => {}
+        Ok(_) => return stillness::Base::Absent(format!("{base} has no {LIST}")),
+        Err(error) => return stillness::Base::Unreadable(error),
+    }
+    match git(&["show", &path]) {
+        Ok(out) if out.status.success() => {
+            match stillness::parse_known(&String::from_utf8_lossy(&out.stdout)) {
+                Ok(list) => stillness::Base::List(list),
+                Err(error) => stillness::Base::Unreadable(format!("{path}: {error}")),
+            }
+        }
+        Ok(out) => stillness::Base::Unreadable(format!(
+            "git show {path}: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        )),
+        Err(error) => stillness::Base::Unreadable(error),
+    }
+}
+
 /// Every scenario runs in one test, so the report and baseline see one whole run.
 #[test]
 fn visual_suite() {
@@ -1061,11 +1102,17 @@ fn visual_suite() {
     regressions.extend(mixed);
     regressions.extend(fixed);
     // A blocking G check's line that the known list lacks, or a stale line, fails like a
-    // regression.
-    let (still_worse, still_stale) =
-        stillness::compare_known(&still, stillness_known::KNOWN, &names);
+    // regression; so does a list that is higher than the merge base's, unless a reviewer named
+    // the raise in `SPLAT_STILLNESS_RAISE`.
+    let known_lines = stillness::known();
+    let (still_worse, still_stale) = stillness::compare_known(&still, &known_lines, &names);
     regressions.extend(still_worse);
     regressions.extend(still_stale);
+    let raised = stillness::raises(&std::env::var("SPLAT_STILLNESS_RAISE").unwrap_or_default());
+    let landing = std::env::var("SPLAT_LAND_LOCKED").is_ok_and(|value| value == "1");
+    let (base_failures, base_notes) =
+        stillness::compare_base(&known_lines, &base_known(), &raised, landing);
+    regressions.extend(base_failures);
     let known_open: Vec<String> = ergonomics::KNOWN_APP_VS_CHROME
         .iter()
         .filter(|((scenario, ..), _)| names.contains(scenario))
@@ -1103,21 +1150,25 @@ fn visual_suite() {
         serde_json::to_vec_pretty(&report).expect("encode report"),
     )
     .expect("write ergonomics.json");
-    let still_report =
-        stillness::Report::new(&still, &still_escapes, stillness_known::KNOWN, still_time);
+    let still_report = stillness::Report::new(&still, &still_escapes, &known_lines, still_time);
     fs::write(
         directory.join("stillness.json"),
         stillness::json_lines(&still),
     )
     .expect("write stillness.json");
     fs::write(
-        directory.join("stillness-known.txt"),
+        directory.join("stillness-known.json"),
         stillness::known_lines(&still, &names),
     )
-    .expect("write stillness-known.txt");
+    .expect("write stillness-known.json");
     fs::write(
         directory.join("ergonomics.md"),
-        ergonomics::write_markdown(&report) + &still_report.markdown(),
+        ergonomics::write_markdown(&report)
+            + &still_report.markdown()
+            + &base_notes
+                .iter()
+                .map(|note| format!("\n- Stillness list: {note}"))
+                .collect::<String>(),
     )
     .expect("write ergonomics.md");
     if capture {
@@ -1159,6 +1210,9 @@ fn visual_suite() {
         println!("Known app-vs-chrome pair (the list must end empty): {line}");
     }
     println!("{}", still_report.summary());
+    for note in &base_notes {
+        println!("Stillness list: {note}");
+    }
     let silent = if names.len() == SCENARIOS.len() {
         silent_section8_tests(&passes, &violations, &not_measured, &look_review)
     } else {
