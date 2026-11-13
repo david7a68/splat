@@ -630,13 +630,22 @@ fn planned_summary(
         design::named(ui, &response, summary);
         return;
     };
-    // The form keeps its words together and wraps whole.
-    let parts: Vec<(String, bool)> = parts
-        .into_iter()
-        .map(|(words, word)| (words.replace(' ', "\u{a0}"), word))
-        .collect();
-    let form: String = parts.iter().map(|(words, _)| words.as_str()).collect();
-    let with_form = |facts: &str| {
+    // The form keeps its words together and wraps whole. Where the row has no room for it,
+    // the word's limit gives way first, then the summary from its end.
+    let nb = |parts: Vec<(String, bool)>| -> Vec<(String, bool)> {
+        parts
+            .into_iter()
+            .map(|(words, word)| (words.replace(' ', "\u{a0}"), word))
+            .collect()
+    };
+    let full = nb(parts);
+    let short = difficulty
+        .and_then(|difficulty| difficulty.rating.as_ref())
+        .map_or_else(|| full.clone(), |rating| nb(rating.parts(false)));
+    let joined = |parts: &[(String, bool)]| -> String {
+        parts.iter().map(|(words, _)| words.as_str()).collect()
+    };
+    let with_form = |facts: &str, form: &str| {
         laid(format!(
             "{}{FACT_SEPARATOR}{form}",
             fight_summary_text(facts)
@@ -656,7 +665,6 @@ fn planned_summary(
             units.push((before, member));
         }
     }
-    let words = &units;
     let cut_at = |count: usize| {
         let kept: String = units[..count]
             .iter()
@@ -664,34 +672,41 @@ fn planned_summary(
             .collect();
         format!("{kept}{}…", units[count].0)
     };
-    let whole = with_form(summary);
-    let (shown, cut) = if rows(&whole) <= lines {
-        (whole, false)
+    let whole = [&full, &short]
+        .into_iter()
+        .map(|parts| (with_form(summary, &joined(parts)), parts))
+        .find(|(shown, _)| rows(shown) <= lines);
+    let (shown, parts, cut) = if let Some((shown, parts)) = whole {
+        (shown, parts.clone(), false)
     } else {
-        // The most whole words that keep the lines, by halves; with none, the form alone.
-        let (mut fits, mut over) = (0, words.len());
+        // The most whole facts and members that keep the lines, by halves; with none, the
+        // form alone.
+        let form = joined(&short);
+        let (mut fits, mut over) = (0, units.len());
         while over - fits > 1 {
             let middle = (fits + over) / 2;
-            if rows(&with_form(&cut_at(middle))) <= lines {
+            if rows(&with_form(&cut_at(middle), &form)) <= lines {
                 fits = middle;
             } else {
                 over = middle;
             }
         }
         let shown = if fits == 0 {
-            form.clone()
+            form
         } else {
-            with_form(&cut_at(fits))
+            with_form(&cut_at(fits), &form)
         };
-        (shown, true)
+        (shown, short.clone(), true)
     };
+    let form = joined(&parts);
     let facts = shown.strip_suffix(form.as_str()).unwrap_or("");
     let mut job = egui::text::LayoutJob::default();
     crate::difficulty::append(&mut job, ui, Type::Small, facts, c.muted);
     crate::difficulty::append_form(&mut job, ui, Type::Small, &parts);
     job.wrap.max_width = width;
     let response = ui.add(egui::Label::new(job).wrap());
-    let plain_form = form.replace('\u{a0}', " ");
+    // The accessible name keeps the whole summary and the whole form.
+    let plain_form = joined(&full).replace('\u{a0}', " ");
     design::named(ui, &response, &format!("{summary} · {plain_form}"));
     let difficulty = difficulty.expect("the form came from it");
     match (&difficulty.rating, &difficulty.missing) {

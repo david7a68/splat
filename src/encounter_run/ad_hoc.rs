@@ -215,7 +215,7 @@ pub(super) fn matches_for<'a>(
         .iter()
         .filter(|creature| creature.lower.contains(typed))
         .collect();
-    matches.sort_by_key(|creature| (creature.lower != typed, !creature.lower.starts_with(typed)));
+    matches.sort_by_key(|creature| crate::matching::creature_tier(&creature.lower, typed));
     matches
 }
 

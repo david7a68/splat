@@ -15244,6 +15244,26 @@ pub mod encounter_groups {
             format!("Add right edges and scroll bar, tall then short: {lanes:?}"),
         );
         d.type_into(FIND, "wolf");
+        // iter-27-B FI5: the one creature order, as Arrivals sorts it: the exact name first, then
+        // every name that holds the search in the list's order (Werewolf before Winter Wolf).
+        let order = {
+            let mut found: Vec<(f32, String)> = Vec::new();
+            d.each_painted_text(|text, clip| {
+                let words = &text.galley.job.text;
+                if ["Wolf", "Werewolf", "Winter Wolf"].contains(&words.as_str())
+                    && clip.intersects(text.visual_bounding_rect())
+                {
+                    found.push((text.pos.y, words.clone()));
+                }
+            });
+            found.sort_by(|a, b| a.0.total_cmp(&b.0));
+            found.into_iter().map(|(_, name)| name).collect::<Vec<_>>()
+        };
+        d.observe(
+            "iter-27-B-FI5",
+            order == ["Wolf", "Werewolf", "Winter Wolf"],
+            format!("The group editor's search for wolf: {order:?}"),
+        );
         d.state("group-find-creature", Sizes::Default);
         d.click_beside_exact("Wolf", ADD);
         d.click(SAVE_GROUP);
@@ -15612,7 +15632,8 @@ pub mod encounter_groups {
             d.settle();
             d.at_size(LARGE, |_| ());
             d.settle();
-            !fight_after(d).is_empty()
+            // At 960 the heading has no room for it; the default size does.
+            !d.at_size(DEFAULT, |d| fight_after(d)).is_empty()
         });
         d.observe(
             "F1-arrivals-cache",

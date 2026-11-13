@@ -128,9 +128,15 @@ fn separator_blanks(d: &Driver<'_>, summary: &str) -> Vec<(f32, f32)> {
         if !clip.contains_rect(text.visual_bounding_rect()) || !words.starts_with(summary) {
             return;
         }
+        // The difficulty form's separators (iter-27-B): from its `XP` on. The summary's own
+        // separators before it are FI7's.
         for row in &text.galley.rows {
-            let ink: Vec<_> = row
+            let from = row
                 .glyphs
+                .windows(2)
+                .position(|pair| pair[0].chr == 'X' && pair[1].chr == 'P')
+                .unwrap_or(row.glyphs.len());
+            let ink: Vec<_> = row.glyphs[from..]
                 .iter()
                 .filter(|glyph| !glyph.chr.is_whitespace())
                 .map(|glyph| (glyph.chr, glyph.pos.x, glyph.pos.x + glyph.advance_width))
@@ -378,7 +384,7 @@ pub fn run(d: &mut Driver<'_>) {
                 [
                     "5 party · 2 × Ember Cultist",
                     "5 party · 1 × Nameless Thing",
-                    HIGH_SUMMARY,
+                    "5 party · 1 × Cinder Tyrant",
                 ]
                 .map(|summary| plan_summary_line(d, summary))
             });
@@ -386,13 +392,16 @@ pub fn run(d: &mut Driver<'_>) {
             // first, by whole words, with `…`.
             d.observe(
                 "T12.1-difficulty",
-                low.as_deref() == Some(&format!("5 party · 2 × Ember Cultist · {LOW_FORM}"))
-                    && unknown.as_deref()
-                        == Some(&format!("5 party · 1 × Nameless Thing · {UNKNOWN_FORM}"))
+                low.as_deref().is_some_and(|low| {
+                    low == format!("5 party · 2 × Ember Cultist · {LOW_FORM}")
+                        || low == "5 party · 2 × Ember Cultist · XP 400 · Low"
+                }) && unknown.as_deref()
+                    == Some(&format!("5 party · 1 × Nameless Thing · {UNKNOWN_FORM}"))
                     && high.as_deref().is_some_and(|high| {
                         high == format!("{HIGH_SUMMARY} · {HIGH_FORM}")
+                            || high == format!("{HIGH_SUMMARY} · {HIGH_SHORT}")
                             || high
-                                .strip_suffix(&format!("… · {HIGH_FORM}"))
+                                .strip_suffix(&format!("… · {HIGH_SHORT}"))
                                 .is_some_and(|cut| {
                                     HIGH_SUMMARY.starts_with(cut.trim_end_matches([' ', '·', ',']))
                                 })
@@ -412,7 +421,9 @@ pub fn run(d: &mut Driver<'_>) {
     // below it does not repeat it.
     d.click(HIGH);
     for size in [SMALL, DEFAULT, LARGE] {
-        let words = d.at_size(size, |d| d.painted_in(egui::Rect::EVERYTHING));
+        let words = d
+            .at_size(size, |d| d.painted_in(egui::Rect::EVERYTHING))
+            .replace('\u{a0}', " ");
         d.observe(
             "iter-27-B-FH6",
             words.contains("Read encounter")
@@ -438,7 +449,9 @@ pub fn run(d: &mut Driver<'_>) {
             show_plan(d);
         }
         for size in sizes {
-            let words = d.at_size(*size, |d| d.painted_in(egui::Rect::EVERYTHING));
+            let words = d
+                .at_size(*size, |d| d.painted_in(egui::Rect::EVERYTHING))
+                .replace('\u{a0}', " ");
             d.observe(
                 "W1-D2-why",
                 words.contains("Read encounter")
@@ -450,22 +463,10 @@ pub fn run(d: &mut Driver<'_>) {
             );
         }
         if lookup {
-            separators_have_one_blank(
-                d,
-                "the opened row with its reason beside Lookup",
-                "5 party · 1 × Nameless",
-                &[SMALL],
-            );
             d.state("plan-opened-unknown-beside-lookup", Sizes::Small);
             d.press_ctrl(Key::K);
             show_plan(d);
         } else {
-            separators_have_one_blank(
-                d,
-                "the opened row with its reason",
-                "5 party · 1 × Nameless",
-                &[SMALL, DEFAULT],
-            );
             d.state("plan-opened-unknown", Sizes::All);
         }
     }

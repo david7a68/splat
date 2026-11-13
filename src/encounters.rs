@@ -5749,7 +5749,8 @@ impl Encounters {
         // after every name match as typed, and a typo in the name comes last. The sort is
         // stable, so the list's order stays inside each rank.
         if !parsed.words.is_empty() {
-            ranked.sort_by_key(|&(rank, c)| (rank, c.origin));
+            // FI5: the one creature order, as Arrivals sorts its names.
+            ranked.sort_by_key(|&(rank, c)| (rank.creature(), c.origin));
         }
         let as_typed = ranked.iter().take_while(|(rank, _)| !rank.typo).count();
         let matches: Vec<&Creature> = ranked.into_iter().map(|(_, c)| c).collect();
