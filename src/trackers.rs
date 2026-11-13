@@ -3362,6 +3362,7 @@ mod tests {
         assert_eq!(t.result, shown);
         assert_eq!(value(&race, "favor", None), 1);
         // A failed Undo keeps the act's entry and its order.
+        let t = &mut race.trackers;
         let owner = t.played_owner().unwrap();
         let kept = t
             .results
