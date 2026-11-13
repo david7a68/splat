@@ -301,6 +301,81 @@ fn without_loose_separators(
     text
 }
 
+/// V9 (review of PR 299): every `·` on a plan row has the same blank on each side. The font's
+/// own spacing around `·` is not even, so the row is laid out once, each `·` gets a section of its
+/// own, and it moves by half the difference between its two blanks, in whole pixels
+/// (`leading_space`; the text after it moves back by as much, so nothing else on the row moves).
+fn even_separators(ui: &egui::Ui, job: egui::text::LayoutJob) -> egui::text::LayoutJob {
+    // Each `·` in a section of its own, and the text after it in the next one. `dots` holds
+    // their sections in text order, which is the galley's glyph order.
+    let mut dots = Vec::new();
+    let mut split = egui::text::LayoutJob {
+        text: job.text.clone(),
+        wrap: job.wrap.clone(),
+        ..Default::default()
+    };
+    for section in &job.sections {
+        let mut from = section.byte_range.start;
+        for (at, chr) in job.text[section.byte_range.clone()].char_indices() {
+            let at = section.byte_range.start + at;
+            if chr != '·' {
+                continue;
+            }
+            for range in [from..at, at..at + chr.len_utf8()] {
+                if range.start == at {
+                    dots.push(split.sections.len());
+                }
+                if !range.is_empty() {
+                    split.sections.push(egui::text::LayoutSection {
+                        leading_space: 0.0,
+                        byte_range: range,
+                        format: section.format.clone(),
+                    });
+                }
+            }
+            from = at + chr.len_utf8();
+        }
+        if from < section.byte_range.end {
+            split.sections.push(egui::text::LayoutSection {
+                leading_space: 0.0,
+                byte_range: from..section.byte_range.end,
+                format: section.format.clone(),
+            });
+        }
+    }
+    let galley = ui.fonts_mut(|fonts| fonts.layout_job(split.clone()));
+    let mut dot_sections = dots.into_iter();
+    for row in &galley.rows {
+        let glyphs = &row.glyphs;
+        for (at, dot) in glyphs.iter().enumerate() {
+            if dot.chr != '·' {
+                continue;
+            }
+            let Some(section) = dot_sections.next() else {
+                break;
+            };
+            let previous = glyphs[..at].iter().rev().find(|g| !g.chr.is_whitespace());
+            let next = glyphs[at + 1..].iter().find(|g| !g.chr.is_whitespace());
+            let (Some(previous), Some(next)) = (previous, next) else {
+                continue;
+            };
+            let before = dot.pos.x - (previous.pos.x + previous.advance_width);
+            let after = next.pos.x - (dot.pos.x + dot.advance_width);
+            // Glyphs sit on whole pixels, so the `·` moves by whole pixels: half the
+            // difference, rounded, leaves the two blanks within one pixel.
+            let pixel = 1.0 / ui.ctx().pixels_per_point();
+            let half = ((after - before) / 2.0 / pixel).round() * pixel;
+            if let Some(dot_section) = split.sections.get_mut(section) {
+                dot_section.leading_space += half;
+            }
+            if let Some(following) = split.sections.get_mut(section + 1) {
+                following.leading_space -= half;
+            }
+        }
+    }
+    split
+}
+
 /// FL2: a planned fight's summary for the plan: each fact keeps its words together, and the
 /// members (`2 × Cinder Wolf, 1 × Ember Cultist`) wrap between members, never inside one.
 fn fight_summary_text(summary: &str) -> String {
@@ -713,10 +788,14 @@ fn planned_summary(
             {
                 let least = format!("{short}: {first}…").replace(' ', "\u{a0}");
                 let kept = most(&least);
-                if kept > 0 {
+                fitted = if kept > 0 {
                     let facts = cut_at(kept);
-                    fitted = missing.fitted(|words| fits_with(&facts, words));
-                }
+                    missing.fitted(|words| fits_with(&facts, words))
+                } else {
+                    // No fact or member keeps its place: the named reason alone, in the room the
+                    // summary leaves (review of PR 299).
+                    missing.fitted(|words| rows(&laid(words.replace(' ', "\u{a0}"))) <= lines)
+                };
             }
             let form = nb(vec![(fitted.unwrap_or_else(|| short.to_owned()), false)]);
             (form.clone(), form)
@@ -753,6 +832,7 @@ fn planned_summary(
     crate::difficulty::append(&mut job, ui, Type::Small, facts, c.muted);
     crate::difficulty::append_form(&mut job, ui, Type::Small, &parts);
     job.wrap.max_width = width;
+    let job = even_separators(ui, job);
     let response = ui.add(egui::Label::new(job).wrap());
     // The accessible name keeps the whole summary and the whole form.
     let plain_form = missing.map_or_else(
@@ -5032,22 +5112,14 @@ mod tests {
                 .iter()
                 .filter(|glyph| !glyph.0.is_whitespace())
                 .collect();
-            // The difficulty form's separators, from its `XP` on (iter-27-B); the summary's own
-            // separators before it are FI7's.
-            let from = (1..ink.len())
-                .find(|at| ink[*at - 1].0 == 'X' && ink[*at].0 == 'P')
-                .unwrap_or(ink.len());
-            let blanks: Vec<(f32, f32)> = (from.max(1)..ink.len() - 1)
+            // Every separator on the row: the summary's, the join before the difficulty form,
+            // and the form's own.
+            let blanks: Vec<(f32, f32)> = (1..ink.len() - 1)
                 .filter(|at| ink[*at].0 == '·')
                 .map(|at| (ink[at].1 - ink[at - 1].2, ink[at + 1].1 - ink[at].2))
                 .collect();
-            // A form with a word has a separator; a reason has none.
-            let rated = words
-                .split(" · XP ")
-                .nth(1)
-                .is_some_and(|rest| rest.starts_with(|c: char| c.is_ascii_digit()));
             assert!(
-                (!rated || !blanks.is_empty())
+                !blanks.is_empty()
                     && blanks
                         .iter()
                         .all(|(before, after)| (before - after).abs() <= 1.0 && *before >= 2.0),
@@ -5132,6 +5204,53 @@ mod tests {
             }
         }
         assert!(whole > 0 && cut > 0, "whole {whole}, cut {cut}");
+        // Review of PR 299: one creature whose XP is not known, at a width where the named
+        // reason fits alone but not after the summary: the summary gives way, the name shows.
+        use crate::difficulty::{Difficulty, Missing, Unknown};
+        let nameless = Difficulty {
+            xp: 0,
+            rating: None,
+            unknown: 1,
+            missing: Some(Missing {
+                what: Unknown::Xp,
+                at: vec![0],
+                names: vec!["Nameless Thing".into()],
+            }),
+        };
+        let one = "1 × Nameless Thing";
+        let mut painted = None;
+        let mut widths = None;
+        for _ in 0..3 {
+            let output = ctx.run(Default::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let font = Type::Small.font(ui);
+                    let wide =
+                        |text: &str| design::number_width(ui, &text.replace(' ', "\u{a0}"), &font);
+                    let alone = wide("XP not known: Nameless Thing");
+                    let after = wide(&format!("{one} · XP not known: N…"));
+                    let width = (alone + after) / 2.0;
+                    widths = Some((alone, after, width, wide(one)));
+                    ui.scope(|ui| {
+                        ui.set_width(width);
+                        planned_summary(ui, one, Some(&nameless));
+                    });
+                });
+            });
+            painted = output.shapes.iter().find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.job.text.contains("XP") => {
+                    Some(text.galley.job.text.replace('\u{a0}', " "))
+                }
+                _ => None,
+            });
+        }
+        let (alone, after, width, summary_width) = widths.unwrap();
+        assert!(alone < width && width < after && summary_width < width);
+        assert!(
+            painted
+                .as_deref()
+                .is_some_and(|line| line.contains("XP not known: Nameless")),
+            "at {width} px: {painted:?}"
+        );
     }
 
     #[test]

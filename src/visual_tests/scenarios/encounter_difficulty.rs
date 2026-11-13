@@ -128,15 +128,11 @@ fn separator_blanks(d: &Driver<'_>, summary: &str) -> Vec<(f32, f32)> {
         if !clip.contains_rect(text.visual_bounding_rect()) || !words.starts_with(summary) {
             return;
         }
-        // The difficulty form's separators (iter-27-B): from its `XP` on. The summary's own
-        // separators before it are FI7's.
+        // Every separator on the row: the summary's, the join before the difficulty form and
+        // the form's own.
         for row in &text.galley.rows {
-            let from = row
+            let ink: Vec<_> = row
                 .glyphs
-                .windows(2)
-                .position(|pair| pair[0].chr == 'X' && pair[1].chr == 'P')
-                .unwrap_or(row.glyphs.len());
-            let ink: Vec<_> = row.glyphs[from..]
                 .iter()
                 .filter(|glyph| !glyph.chr.is_whitespace())
                 .map(|glyph| (glyph.chr, glyph.pos.x, glyph.pos.x + glyph.advance_width))
@@ -503,10 +499,17 @@ pub fn run(d: &mut Driver<'_>) {
             );
         }
         if lookup {
+            separators_have_one_blank(
+                d,
+                "the row with its reason beside Lookup",
+                "5 party",
+                &[SMALL],
+            );
             d.state("plan-opened-unknown-beside-lookup", Sizes::Small);
             d.press_ctrl(Key::K);
             show_plan(d);
         } else {
+            separators_have_one_blank(d, "the row with its reason", "5 party", &[SMALL, DEFAULT]);
             d.state("plan-opened-unknown", Sizes::All);
         }
     }

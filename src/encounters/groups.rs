@@ -90,6 +90,9 @@ pub(super) struct GroupDraft {
     replaced: Option<Replaced>,
     /// When the newest member result was made (`result_stamp`).
     member_stamp: u64,
+    /// Changes at each edit of the draft (`touch`), and only then; a new draft has its own. Save's
+    /// cached check is keyed by it (FN5, review of PR 299).
+    revision: u64,
     /// Whether the members are the saved ones, worked out once after each change (FJ6); `None`
     /// until then. Editing input (this frame or the one before, as a click's change lands late)
     /// and the events that change the members or the saved ones clear it.
@@ -145,6 +148,7 @@ impl GroupDraft {
             removed_member: None,
             replaced: None,
             member_stamp: 0,
+            revision: super::result_stamp(),
             members_saved: None,
             edited_last_frame: false,
             repair_error: None,
@@ -181,6 +185,7 @@ impl GroupDraft {
             removed_member: None,
             replaced: None,
             member_stamp: 0,
+            revision: super::result_stamp(),
             members_saved: None,
             edited_last_frame: false,
             repair_error: None,
@@ -198,6 +203,11 @@ impl GroupDraft {
     /// Give this group the owner `earlier` had, and change nothing else: Undo of a move.
     pub(super) fn take_owner_from(&mut self, earlier: &GroupDraft) {
         self.setup.encounter = earlier.setup.encounter.clone();
+        self.touch();
+    }
+    /// The draft changed: Save's cached check runs again.
+    pub(super) fn touch(&mut self) {
+        self.revision = super::result_stamp();
     }
     /// No member that Save would write: Save refuses the group.
     pub(super) fn is_empty(&self) -> bool {
@@ -234,6 +244,7 @@ impl GroupDraft {
     /// back at its place, and other draft edits stay.
     pub(super) fn undo_member_result(&mut self) {
         self.members_saved = None;
+        self.touch();
         if let Some(result) = self.replaced.take() {
             if let Some(member) = self.setup.members.get_mut(result.index) {
                 member.creature = result.before;
@@ -346,6 +357,7 @@ impl GroupDraft {
         snapshot: &Snapshot,
     ) -> Result<(), String> {
         use splat::content::{layout::Document, list_formats};
+        self.touch();
         let member = list_formats::unread_group_members(&self.source, &self.flags)
             .into_iter()
             .find(|member| member.flag.line == line)
@@ -433,6 +445,7 @@ impl GroupDraft {
         Ok(())
     }
     pub(super) fn add(&mut self, id: Uuid) {
+        self.touch();
         self.members_saved = None;
         // The same creature again is one more of it, unless that member has its own changes.
         if let Some(member) = self
@@ -469,6 +482,7 @@ impl GroupDraft {
         self.baseline.is_some()
     }
     pub(super) fn add_named(&mut self, id: Uuid, name: String) {
+        self.touch();
         self.members_saved = None;
         self.setup.members.push(MemberDraft {
             extra: Mapping::new(),
@@ -641,6 +655,7 @@ impl GroupDraft {
         self.write(campaign, &text)
     }
     pub(super) fn check_disk(&mut self, campaign: &Campaign) -> Result<(), String> {
+        self.touch();
         if self.baseline.is_none() {
             self.path = super::named_note_path(&campaign.path, FOLDER, &self.name)?;
         }
@@ -704,6 +719,7 @@ impl GroupDraft {
         ))
     }
     pub(super) fn saved_text(&mut self, text: &str) {
+        self.touch();
         self.recovery = Default::default();
         self.source = text.to_owned();
         if let Ok(entry) = Entry::parse(&self.path, text) {
@@ -1423,6 +1439,7 @@ fn belongs_to(
                 crate::rolls::menu_choice_focus(ui, &any);
                 if any.clicked() {
                     draft.setup.encounter = None;
+                    draft.touch();
                 }
                 for (id, name) in &choices {
                     // The same choice again keeps a link that the note gives.
@@ -1430,6 +1447,7 @@ fn belongs_to(
                     crate::rolls::menu_choice_focus(ui, &choice);
                     if choice.clicked() && current != Some(*id) {
                         draft.setup.encounter = Some(EntryRef::id(*id));
+                        draft.touch();
                     }
                 }
             });
@@ -2036,7 +2054,8 @@ fn conditions_row(ui: &mut egui::Ui, conditions: &mut Vec<String>) {
 
 impl Encounters {
     /// Why Save would refuse the open group now, if it would. Checked again only when the
-    /// campaign's read (its revision), an edit (the edit epoch) or the open group changes.
+    /// campaign's read (its revision) or the draft (its own revision) changes: never for a held
+    /// pointer or a scroll (review of PR 299).
     fn group_refusal(&mut self) -> Option<Refusal> {
         let (snapshot, draft) = (self.snapshot.as_ref()?, self.group_draft.as_ref()?);
         #[cfg(test)]
@@ -2044,15 +2063,12 @@ impl Encounters {
         let fresh = self
             .group_check
             .as_ref()
-            .is_some_and(|((revision, epoch, path), _)| {
-                *revision == snapshot.revision && *epoch == self.edit_epoch && *path == draft.path
+            .is_some_and(|((revision, draft_revision), _)| {
+                *revision == snapshot.revision && *draft_revision == draft.revision
             });
         if !fresh {
             let refusal = draft.check(snapshot, None).err();
-            self.group_check = Some((
-                (snapshot.revision, self.edit_epoch, draft.path.clone()),
-                refusal,
-            ));
+            self.group_check = Some(((snapshot.revision, draft.revision), refusal));
         }
         self.group_check
             .as_ref()
@@ -2232,6 +2248,9 @@ impl Encounters {
                     .font(Type::Heading.font(ui)),
             );
             design::named(ui, &response, &format!("Group name: {}", draft.name));
+            if response.changed() {
+                draft.touch();
+            }
             name_right = response.rect.right();
             if focus_name {
                 design::focus_and_select(ui, response.id, &draft.name);
@@ -2690,7 +2709,11 @@ fn group_fields(
     ui.horizontal(|ui| {
         choice_label(ui, SIDE_FIELD);
         let name = format!("{SIDE_FIELD} for {}", draft.name);
+        let side = draft.setup.side.clone();
         super::side_control(ui, &name, &mut draft.setup.side, &[]);
+        if draft.setup.side != side {
+            draft.touch();
+        }
     });
     if open.is_none() {
         design::help(ui, "Party, enemies, or any other name, such as rivals.");
@@ -2802,6 +2825,8 @@ fn members(
     expanded: &mut Option<String>,
 ) {
     let (mut remove, mut raise, mut lower, mut replaced) = (None, None, None, None);
+    // A change made by a widget that edits a member in place (its count, its open changes).
+    let mut edited = false;
     let total = draft.setup.members.len();
     let side = draft.setup.side.clone();
     let path = draft.path.clone();
@@ -2891,6 +2916,9 @@ fn members(
                         .custom_parser(|text| text.replace(',', "").parse().ok()),
                 );
                 design::named(ui, &count, &format!("How many of {name}"));
+                if count.changed() {
+                    edited = true;
+                }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     super::row_menu(ui, &name, |ui| {
                         if super::menu_action(
@@ -2987,9 +3015,14 @@ fn members(
                     show_form_when_it_opens(ui);
                     *expanded = Some(key.clone());
                 }
+                // The open form edits one member's changes: a change to them is an edit.
+                let before = is_open.then(|| member.overrides.clone());
                 if is_open && overrides_form(ui, &key, &mut member.overrides, entry, &side, None) {
                     *expanded = None;
                     ui.scroll_to_rect(member_row, Some(egui::Align::Min));
+                }
+                if before.is_some_and(|before| before != member.overrides) {
+                    edited = true;
                 }
             }
             design::rule(ui);
@@ -2998,6 +3031,9 @@ fn members(
     // A move, a removal or a replacement changes the members: the comparison runs again.
     if remove.or(raise).or(lower).is_some() || replaced.is_some() {
         draft.members_saved = None;
+    }
+    if edited || remove.or(raise).or(lower).is_some() || replaced.is_some() {
+        draft.touch();
     }
     // An open form is keyed by place. Left open, it would now edit another member.
     if remove.or(raise).or(lower).is_some() {

@@ -17042,6 +17042,67 @@ pub mod encounter_groups {
             d.settle();
             d.visible_text("Invalid")
         });
+        // Review of PR 299: a held pointer (pressed on a control, carried away, let go elsewhere)
+        // and a wheel scroll change no draft, so they run no check.
+        let checks_idle = checks.steady(d, |d| {
+            let Some(away) = d.place_of(&format!("Group notes for {GROUP_LOST}")) else {
+                return false;
+            };
+            d.drag_hold("Changes for Cinder Wolf", away);
+            d.drag_release(away);
+            d.scroll_at(away.center(), 1);
+            d.scroll_up_at(away.center(), 1);
+            d.settle();
+            d.visible_text("Invalid") && !d.has("Discard")
+        });
+        // An outside file change and a creature change each run it again: a new note, then the
+        // missing member's creature written into the campaign (its member then resolves).
+        let campaign_root = d.root.join("campaigns/emberfall");
+        let reread = |d: &mut Driver<'_>| {
+            d.focus_window(false);
+            d.focus_window(true);
+            d.settle();
+        };
+        let creature_note = |name: &str, id: uuid::Uuid| {
+            splat::content::formats::fixture(
+                "Fixture.md",
+                &format!("splat_id: {id}\nsplat_kind: creature\nsplat_name: {name}\nsplat_creature: {{cr_text: '1/4 (XP 50; PB +2)'}}\nsplat_stats:\n  max_hp: {{value: 10}}\n  armor_class: {{value: 15}}\n  initiative: {{value: 2}}\n  speed: {{value: 30}}\n"),
+                "",
+            )
+            .expect("schema-2 fixture")
+        };
+        std::fs::create_dir_all(campaign_root.join("Creatures")).unwrap();
+        let outside = campaign_root.join("Creatures/Outside Watcher.md");
+        let checks_outside = checks.refresh(d, 1, |d| {
+            std::fs::write(
+                &outside,
+                creature_note(
+                    "Outside Watcher",
+                    splat::character::stable_id("visual:outside"),
+                ),
+            )
+            .unwrap();
+            reread(d);
+            d.visible_text("Invalid") && d.has("Replace Unknown creature")
+        });
+        let found = campaign_root.join("Creatures/Lost Scout.md");
+        let checks_creature = checks.refresh(d, 1, |d| {
+            std::fs::write(
+                &found,
+                creature_note(
+                    "Lost Scout",
+                    splat::character::stable_id("visual:group:lost:creature"),
+                ),
+            )
+            .unwrap();
+            reread(d);
+            d.visible_text("Invalid") && !d.has("Replace Unknown creature")
+        });
+        // Both notes go again, and the group is as it was.
+        std::fs::remove_file(&outside).unwrap();
+        std::fs::remove_file(&found).unwrap();
+        reread(d);
+        d.expect("Replace Unknown creature");
         // Outside the rule's scope: once the members change, a line may no longer be the
         // member's, so the fault names none, as Save's check does. Discard brings the line back.
         let before = crate::encounters::group_checks();
@@ -17060,9 +17121,14 @@ pub mod encounter_groups {
         );
         d.observe(
             "iter-27-B-FN5-cache",
-            checks_warm.is_ok() && checks_steady.is_ok() && checked,
+            checks_warm.is_ok()
+                && checks_steady.is_ok()
+                && checks_idle.is_ok()
+                && checks_outside.is_ok()
+                && checks_creature.is_ok()
+                && checked,
             format!(
-                "Group check: warm {checks_warm:?}, steady {checks_steady:?}, ran again after the move {checked}"
+                "Group check: warm {checks_warm:?}, steady {checks_steady:?}, held pointer and scroll {checks_idle:?}, outside file {checks_outside:?}, creature {checks_creature:?}, ran again after the move {checked}"
             ),
         );
         let changed = refresh.is_ok();

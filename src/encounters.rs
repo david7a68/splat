@@ -2036,67 +2036,103 @@ fn creature_result_row(
 }
 
 /// FF8: the creature search's separation of a copied note (`Rook Ambry copy.md is now a
-/// separate note.`) with its Undo, or why a separation or its Undo failed. Its owner is the
+/// separate note.`) with its Undo, and why the last separation or Undo failed. Its owner is the
 /// campaign it changed (kept by campaign id, so a switch and back keeps it); it shows in the
-/// footer of the editor whose search made it. A new separation replaces it; its Undo ends it, or
-/// replaces it with the Undo's failure.
-#[derive(Clone)]
-enum IdentityResult {
-    Done {
-        change: crate::world::Change,
-        stamp: u64,
-    },
-    Failed(String),
+/// footer of the editor whose search made it. The change stays until its Undo succeeds or a new
+/// separation replaces it, so a failed Undo can be tried again (review of PR 299). The change's
+/// note text is behind an `Arc`: a draw copies none of it.
+#[derive(Clone, Default)]
+struct IdentityResult {
+    done: Option<(Arc<IdentityChange>, u64)>,
+    error: Option<String>,
+}
+
+/// A separation's change, with the note's text before and after it.
+struct IdentityChange(crate::world::Change);
+
+impl Clone for IdentityChange {
+    fn clone(&self) -> Self {
+        #[cfg(test)]
+        IDENTITY_COPIES.with(|copies| copies.set(copies.get() + 1));
+        Self(self.0.clone())
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How often a separation's change, with its note text, was copied.
+    static IDENTITY_COPIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 fn identity_key(campaign: Uuid) -> egui::Id {
     egui::Id::new(("encounter_identity_undo", campaign))
 }
 
-/// The campaign the creature search reads, and its separation result.
-fn identity_result(ctx: &egui::Context) -> Option<(Campaign, IdentityResult)> {
-    let index = ctx.data(|data| {
+/// The creature search's campaign, by id, from its index.
+fn identity_campaign(ctx: &egui::Context) -> Option<Arc<crate::lookup::ContentIndex>> {
+    ctx.data(|data| {
         data.get_temp::<Arc<crate::lookup::ContentIndex>>(egui::Id::new("reader_link_index"))
-    })?;
-    let campaign = index.campaign.clone()?;
-    let result = ctx.data(|data| data.get_temp::<IdentityResult>(identity_key(campaign.id)))?;
-    Some((campaign, result))
+    })
+    .filter(|index| index.campaign.is_some())
+}
+
+/// The separation result of the creature search's campaign.
+fn identity_result(ctx: &egui::Context) -> Option<IdentityResult> {
+    let id = identity_campaign(ctx)?.campaign.as_ref()?.id;
+    ctx.data(|data| data.get_temp::<IdentityResult>(identity_key(id)))
 }
 
 /// The separation result's place among an editor's results: its stamp, words and Undo.
 fn identity_line(ctx: &egui::Context) -> Option<(u64, String, &'static str)> {
-    match identity_result(ctx)?.1 {
-        IdentityResult::Done { change, stamp } => Some((
-            stamp,
-            change.message().to_owned(),
-            change.identity_undo_label(),
-        )),
-        IdentityResult::Failed(_) => None,
-    }
+    let (change, stamp) = identity_result(ctx)?.done?;
+    Some((
+        stamp,
+        change.0.message().to_owned(),
+        change.0.identity_undo_label(),
+    ))
 }
 
 /// A failed separation, or its failed Undo, as a reason in an editor's footer.
 fn identity_failure_into(ctx: &egui::Context, footer: &mut design::Footer<'_>) {
-    if let Some((_, IdentityResult::Failed(error))) = identity_result(ctx) {
+    if let Some(error) = identity_result(ctx).and_then(|result| result.error) {
         footer.reason(error.clone(), move |ui| {
             design::message(ui, Tone::Warning, &error);
         });
     }
 }
 
-/// Undo the separation, after its Undo was pressed in a footer.
+/// Undo the separation, after its Undo was pressed in a footer. A failure keeps the change, so
+/// its Undo stays offered with the reason.
 fn undo_identity(ctx: &egui::Context) {
-    let Some((campaign, IdentityResult::Done { change, .. })) = identity_result(ctx) else {
+    let Some(index) = identity_campaign(ctx) else {
+        return;
+    };
+    let Some(campaign) = index.campaign.as_ref() else {
         return;
     };
     let key = identity_key(campaign.id);
-    match change.undo(&campaign) {
+    let Some(mut result) = ctx.data(|data| data.get_temp::<IdentityResult>(key)) else {
+        return;
+    };
+    let Some((change, _)) = &result.done else {
+        return;
+    };
+    match change.0.undo(campaign) {
         Ok(()) => ctx.data_mut(|data| {
             data.remove::<IdentityResult>(key);
             data.insert_temp(egui::Id::new("encounter_identity_changed"), true);
         }),
-        Err(error) => ctx.data_mut(|data| data.insert_temp(key, IdentityResult::Failed(error))),
+        Err(error) => {
+            result.error = Some(error);
+            ctx.data_mut(|data| data.insert_temp(key, result));
+        }
     }
+}
+
+/// How often a separation's change was copied, for its test.
+#[cfg(test)]
+pub(crate) fn identity_copies() -> usize {
+    IDENTITY_COPIES.with(std::cell::Cell::get)
 }
 
 /// A copied note is still a search result, with the same repair used by Lookup.
@@ -2140,20 +2176,26 @@ fn duplicate_creature_results(ui: &mut egui::Ui, query: &str) -> bool {
                 let filename = path.rsplit('/').next().unwrap_or(path);
                 let action = noun.action(filename);
                 if Action::secondary(&action).hint(&action).show(ui).clicked() {
-                    // FF8: the result, its Undo or the failure goes to the editor's footer.
-                    let result = match crate::world::new_identity(campaign, path) {
+                    // FF8: the result, its Undo or the failure goes to the editor's footer. A
+                    // new separation replaces the result; a failed one keeps the last change
+                    // and its Undo.
+                    let key = identity_key(campaign.id);
+                    let mut result = ui
+                        .data(|data| data.get_temp::<IdentityResult>(key))
+                        .unwrap_or_default();
+                    match crate::world::new_identity(campaign, path) {
                         Ok((change, _)) => {
                             ui.data_mut(|data| {
                                 data.insert_temp(egui::Id::new("encounter_identity_changed"), true)
                             });
-                            IdentityResult::Done {
-                                change,
-                                stamp: result_stamp(),
-                            }
+                            result = IdentityResult {
+                                done: Some((Arc::new(IdentityChange(change)), result_stamp())),
+                                error: None,
+                            };
                         }
-                        Err(error) => IdentityResult::Failed(error),
-                    };
-                    ui.data_mut(|data| data.insert_temp(identity_key(campaign.id), result));
+                        Err(error) => result.error = Some(error),
+                    }
+                    ui.data_mut(|data| data.insert_temp(key, result));
                 }
                 if let Some(remaining) = paths.iter().find(|other| *other != path) {
                     crate::library::duplicate_repair_consequence(
@@ -2670,9 +2712,9 @@ pub struct Encounters {
     /// How often frames reached that key's guard.
     #[cfg(test)]
     validation_reached: usize,
-    /// Save's check of the open group draft (FN5, AI2), with the snapshot revision, edit epoch
-    /// and group path it was made for. An unchanged frame does not check again.
-    group_check: Option<((Uuid, u64, String), Option<groups::Refusal>)>,
+    /// Save's check of the open group draft (FN5, AI2), with the snapshot revision and the
+    /// draft's own revision it was made for. A frame with no change does not check again.
+    group_check: Option<((Uuid, u64), Option<groups::Refusal>)>,
     /// The open draft's difficulty, with the snapshot revision, edit epoch and draft it was
     /// worked out for.
     difficulty: Option<((Uuid, u64, Uuid), Arc<crate::difficulty::Difficulty>)>,
@@ -7204,6 +7246,9 @@ mod tests {
         let original = fs::read_to_string(dir.path().join("Rook.md")).unwrap();
         fs::write(dir.path().join("Rook copy.md"), &original).unwrap();
         let index = Arc::new(crate::lookup::ContentIndex::load(&[], Some(&active)).unwrap());
+        // The search can be hidden (a compact editor's roster tab); the footer stays.
+        let search_shown = Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let shown = Arc::clone(&search_shown);
         let mut harness = egui_kittest::Harness::new(move |ctx| {
             ctx.data_mut(|data| {
                 data.insert_temp(egui::Id::new("reader_link_index"), index.clone())
@@ -7227,6 +7272,9 @@ mod tests {
                     undo_identity(ui.ctx());
                 }
                 let mut body = body_above(ui, bottom);
+                if !shown.load(std::sync::atomic::Ordering::Relaxed) {
+                    return;
+                }
                 Encounters::creature_search(
                     &mut body,
                     std::iter::empty(),
@@ -7261,6 +7309,46 @@ mod tests {
                 .query_all_by_label("Rook copy.md is now a separate entry.")
                 .next()
                 .is_some()
+        );
+        // Review of PR 299: unchanged redraws copy none of the change's note text, also with
+        // the search hidden.
+        let copies = identity_copies();
+        harness.run_steps(4);
+        search_shown.store(false, std::sync::atomic::Ordering::Relaxed);
+        harness.run_steps(4);
+        assert!(harness.query_by_label("Undo separate entry").is_some());
+        search_shown.store(true, std::sync::atomic::Ordering::Relaxed);
+        harness.run_steps(2);
+        assert_eq!(identity_copies(), copies, "redraws copied the change");
+        // Review of PR 299: an Undo that fails (the file moved away) keeps the change and its
+        // Undo, says why, and works once the file is back.
+        let separated = fs::read_to_string(dir.path().join("Rook copy.md")).unwrap();
+        fs::rename(
+            dir.path().join("Rook copy.md"),
+            dir.path().join("Rook copy.away"),
+        )
+        .unwrap();
+        harness.get_by_label("Undo separate entry").click();
+        harness.run_steps(2);
+        assert!(!dir.path().join("Rook copy.md").exists());
+        assert!(
+            harness.query_by_label("Undo separate entry").is_some(),
+            "a failed Undo keeps its Undo"
+        );
+        assert!(
+            harness
+                .query_all_by_label("Rook copy.md is now a separate entry.")
+                .next()
+                .is_some()
+        );
+        fs::rename(
+            dir.path().join("Rook copy.away"),
+            dir.path().join("Rook copy.md"),
+        )
+        .unwrap();
+        assert_eq!(
+            fs::read_to_string(dir.path().join("Rook copy.md")).unwrap(),
+            separated
         );
         harness.get_by_label("Undo separate entry").click();
         harness.run_steps(2);
