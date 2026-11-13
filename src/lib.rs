@@ -1934,7 +1934,6 @@ impl Splat {
                         ui.vertical(|ui| {
                             let mut campaigns = campaigns.borrow_mut();
                             let campaigns: &mut campaigns::Campaigns = &mut campaigns;
-                            design::gap(ui, design::Gap::L);
                             let list =
                             |ui: &mut egui::Ui,
                              campaigns: &mut campaigns::Campaigns,
@@ -1942,6 +1941,7 @@ impl Splat {
                                 campaigns.show(ui, session.clone(), dndbeyond, blocked);
                             };
                             if ui.ctx().content_rect().width() >= 1000.0 {
+                                design::gap(ui, design::Gap::L);
                                 // A clear gutter, so that the left column's text does not run on.
                                 // Not `ui.columns`, whose justified layout stretches the words in a paragraph.
                                 let half = (ui.available_width() - design::XL) / 2.0;
@@ -1972,12 +1972,14 @@ impl Splat {
                             } else {
                                 settings.campaign_form_open = campaigns.form_open();
                                 if has_run {
+                                    // The account's heading is first in the column: no space above.
                                     settings.show_compact(ui);
                                     design::gap(ui, design::Gap::L);
                                     list(ui, campaigns, dndbeyond);
                                 } else {
-                                    list(ui, campaigns, dndbeyond);
                                     design::gap(ui, design::Gap::L);
+                                    list(ui, campaigns, dndbeyond);
+                                    // The account's heading adds the space above it.
                                     settings.show_compact(ui);
                                 }
                             }

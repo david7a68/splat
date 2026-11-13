@@ -413,16 +413,13 @@ impl DndBeyond {
         blocked: Option<&str>,
     ) {
         ui.horizontal(|ui| {
-            // Its own scope: the heading's space under it stays inside it, not in this line.
-            ui.scope(|ui| {
-                crate::design::heading(
-                    ui,
-                    crate::design::Heading::Group {
-                        title: "D&D Beyond",
-                        count: 0,
-                    },
-                )
-            });
+            crate::design::heading(
+                ui,
+                crate::design::Heading::Group {
+                    title: "D&D Beyond",
+                    count: 0,
+                },
+            );
             if self.pending.is_some() {
                 crate::design::spinner(ui);
                 ui.weak("Refreshing…");

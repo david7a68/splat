@@ -761,8 +761,7 @@ impl Campaigns {
         design::gap(ui, design::Gap::S);
         ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
         ui.horizontal(|ui| {
-            // Its own scope: the heading's space under it stays inside it, not in this line.
-            ui.scope(|ui| design::heading(ui, design::Heading::Label("Folder")));
+            design::heading(ui, design::Heading::Label("Folder"));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if Action::quiet("Edit details")
                     .blocked(blocked)
@@ -929,16 +928,13 @@ impl Campaigns {
         ui.set_max_width(self.list_width(ui.available_width()));
         self.remove_dialog(ui.ctx());
         ui.horizontal(|ui| {
-            // Its own scope: the heading's space under it stays inside it, not in this line.
-            ui.scope(|ui| {
-                design::heading(
-                    ui,
-                    design::Heading::Group {
-                        title: "Campaigns",
-                        count: self.data.campaigns.len(),
-                    },
-                )
-            });
+            design::heading(
+                ui,
+                design::Heading::Group {
+                    title: "Campaigns",
+                    count: self.data.campaigns.len(),
+                },
+            );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if (!self.data.campaigns.is_empty() || !self.writable)
                     && Action::quiet("Reload from disk")
@@ -981,7 +977,7 @@ impl Campaigns {
             for campaign in self.data.campaigns.clone() {
                 let active = self.data.active_campaign_id == Some(campaign.id);
                 ui.push_id(campaign.id, |ui| {
-                    let row = ui.horizontal(|ui| {
+                    ui.horizontal(|ui| {
                         ui.set_min_height(Density::Glance.row() + design::XS);
                         let row_left = ui.cursor().left();
                         let row_right = ui.max_rect().right();
@@ -1096,7 +1092,6 @@ impl Campaigns {
                             },
                         );
                     });
-                    design::register_row(ui, row.response.rect);
                     if self.editing == Some(campaign.id) {
                         self.form(ui, false, true);
                     }

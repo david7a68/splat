@@ -490,7 +490,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/campaign_content.rs",
             "repair_section_content",
-            &[Ban::Results],
+            &[Ban::Results, Ban::Extras(1)],
         ),
         (
             "src/campaign_content.rs",

@@ -1483,7 +1483,7 @@ impl CampaignContent {
 
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
     )]
     fn repair_section_content(
         &mut self,
@@ -1556,13 +1556,7 @@ impl CampaignContent {
             ui.data_mut(|data| data.insert_temp(id, open));
             if open {
                 // The message above names the file; the editor's accessible name names it too.
-                design::heading(
-                    ui,
-                    design::Heading::Group {
-                        title: "Repair",
-                        count: 0,
-                    },
-                );
+                design::group_heading(ui, "Repair", 0);
                 ui.scope(|ui| {
                     // What is wrong comes first, and stays true as the DM edits.
 
@@ -2578,16 +2572,13 @@ impl CampaignContent {
                 if self.dependencies {
                     ui.horizontal(|ui| {
                         ui.set_min_height(Density::Read.control());
-                        // Its own scope: the heading's space under it stays inside it, not in this line.
-                        ui.scope(|ui| {
-                            design::heading(
-                                ui,
-                                design::Heading::Group {
-                                    title: "Needed by your entries",
-                                    count: closure.required.len(),
-                                },
-                            )
-                        });
+                        design::heading(
+                            ui,
+                            design::Heading::Group {
+                                title: "Needed by your entries",
+                                count: closure.required.len(),
+                            },
+                        );
                     });
                     let _ = NEEDED_SEARCH
                         .search(
