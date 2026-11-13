@@ -328,7 +328,10 @@ impl Run {
 
     /// Beside the amount, so the stat block that asks for the roll stays in view. Laid out
     /// right to left: the result, then the button, then the field.
-    #[allow(clippy::disallowed_methods)]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn dice(&mut self, ui: &mut egui::Ui, narrow: bool) {
         ui.spacing_mut().item_spacing.x = design::XS;
         if !narrow {

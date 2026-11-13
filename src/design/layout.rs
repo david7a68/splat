@@ -120,7 +120,7 @@ impl Word {
 macro_rules! word {
     ($word:literal) => {
         const {
-            #[allow(clippy::disallowed_methods)]
+            #[allow(clippy::disallowed_methods, reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)")]
             let word = $crate::layout::Word::checked($word);
             word
         }
@@ -254,6 +254,10 @@ impl FieldId {
     /// A one-line field with this id that no shared part draws (a password, a code font).
     /// `style` sets the rest of the `TextEdit`; Clippy refuses another id on it outside
     /// `src/design/`. The field is drawn here, so the gate's `widget-id-clash` check sees it.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+    )]
     pub fn single_line<'t>(
         self,
         ui: &mut Ui,
@@ -266,6 +270,10 @@ impl FieldId {
     }
 
     /// A multi-line field with this id that no shared part draws.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+    )]
     pub fn multi_line<'t>(
         self,
         ui: &mut Ui,
@@ -382,7 +390,7 @@ pub fn widget_id_clashes(
 macro_rules! field_id {
     ($name:literal) => {
         const {
-            #[allow(clippy::disallowed_methods)]
+            #[allow(clippy::disallowed_methods, reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)")]
             let id = $crate::layout::FieldId::checked($name);
             id
         }
@@ -510,6 +518,10 @@ impl ScrollColumn {
         self
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+    )]
     fn area(&self) -> egui::ScrollArea {
         let mut area = if self.sideways {
             egui::ScrollArea::both()
@@ -589,6 +601,10 @@ impl ScrollColumn {
 
 /// A sideways scroll for one wide table or strip: it never scrolls up and down, so it sits
 /// inside a page's own `ScrollColumn`.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
 pub fn sideways_scroll<R>(
     ui: &mut Ui,
     id_salt: impl Hash,
@@ -1595,6 +1611,10 @@ fn preview_line(ui: &mut Ui, preview: &str) {
 
 /// A menu that opens under `response`, for a row or a control with more actions. The one place
 /// a menu popup is made outside `row_menu`, so a placement rule for menus has one home.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
 pub fn menu_popup(response: &Response) -> egui::Popup<'_> {
     egui::Popup::menu(response)
 }

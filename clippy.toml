@@ -1,13 +1,17 @@
-# Raw egui calls that a shared part in `src/design/` replaces (docs/design-system.md, Widgets).
-# The list holds the paths below, read from egui 0.33.3's API; it is not a proof that no other
-# helper opens a layer or makes a text field. Review finds such a helper and adds its path here.
-# `check` runs Clippy with `-D warnings`, so a new raw call outside `src/design/` fails it. A function
-# that still makes such a call carries `#[allow(clippy::disallowed_methods)]` on its own `fn`; the
-# source lint (`src/design/lint.rs`) counts those per file, the count can only go down, and it
-# refuses any other form (a module, an `impl`, `expect`, `cfg_attr`, a group, several lines).
-# The paths name egui, which only the `splat` crate uses:
-# `allow-invalid` keeps the other workspace crates quiet.
+# Calls that a shared part in `src/design/` replaces (docs/design-system.md, Widgets). `check` runs
+# Clippy with `-D warnings`, so a new call outside its owner fails it. Each function that still
+# calls one has its own `#[allow(clippy::disallowed_methods, reason = "staged: ...")]` (never on a
+# file, a module, an `impl`, or a function that holds a nested one); `design::results::STAGED_ALLOWS`
+# lists each one with the bans it is for (package O: `Ban::Results`; package K: `Ban::Layout`), and
+# it can only shrink. Package K's egui paths are the list below, read from egui 0.33.3's API; review
+# finds a helper that opens a layer or makes a text field and is not listed, and adds its path. The
+# egui paths name a crate only `splat` uses: `allow-invalid` keeps the other workspace crates quiet.
 disallowed-methods = [
+    # Package O: kept results, the save row.
+    { path = "splat::design::components::ResultOrder::issue", reason = "record the result in a `design::Results` store: it issues the order at the action" },
+    { path = "splat::design::components::Footer::result", reason = "give the footer a kept result from a `design::Results` store with `Footer::kept` or `Footer::kept_line`" },
+    { path = "splat::design::components::save_row_state", reason = "use `design::save_row` with a `DraftState`" },
+    # Package K: layout parts.
     # Scroll areas: `design::ScrollColumn` keeps the scroll bar's lane, so nothing moves when the bar
     # comes (family F14); `design::sideways_scroll` is the sideways table scroll. These are all of
     # `ScrollArea`'s constructors; it has no `Default`.

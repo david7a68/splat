@@ -2030,7 +2030,10 @@ impl Lookup {
         response
     }
 
-    #[allow(clippy::disallowed_methods)]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn panel(&mut self, ui: &mut egui::Ui, trackers: &mut crate::trackers::Trackers) {
         // With the margin, so a press anywhere on the panel counts as here.
         let panel = ui.max_rect().expand(PANEL_MARGIN);
@@ -2579,7 +2582,10 @@ impl Lookup {
 
     /// A note or an event, with the lines that have the words first: a long note must not
     /// make the DM hunt for the sentence that answers the table's question.
-    #[allow(clippy::disallowed_methods)]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn written_reader(&mut self, ui: &mut egui::Ui, at: usize, query: &str) {
         let Some(written) = self.written.get(at) else {
             self.reading_written = None;

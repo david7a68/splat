@@ -573,7 +573,10 @@ mod tests {
     }
 
     /// Press on these words in an editor of `text`, with or without Ctrl.
-    #[allow(clippy::disallowed_methods)]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn press_in_editor(text: &str, words: &str, ctrl: bool) -> (Option<String>, Vec<String>) {
         let context = egui::Context::default();
         design::theme::install(&context);
@@ -650,7 +653,10 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::disallowed_methods)]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn the_first_letter_of_a_wrapped_row_is_part_of_its_link() {
         let text = format!("[[Hobb|{}]]\n", "the miller ".repeat(20));
         let context = egui::Context::default();

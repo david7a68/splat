@@ -554,6 +554,10 @@ impl Draft {
     /// the footer is drawn.
     /// `identity` is the creature search's separation result, if any: its stamp, words and
     /// Undo. It takes its place among the draft's results by when it was made (FF8).
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn results_into<'a>(
         &mut self,
         footer: &mut design::Footer<'a>,
@@ -1919,7 +1923,10 @@ fn missing_creature_mark(
 
 /// A DM's notes in an editor. Every notes field has the same inner margin, and its frame ends at
 /// the right edge of the column it is in.
-#[allow(clippy::disallowed_methods)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn notes_field(text: &mut String, rows: usize) -> egui::TextEdit<'_> {
     egui::TextEdit::multiline(text)
         .desired_rows(rows)
@@ -2668,6 +2675,10 @@ struct DraftUndo {
 
 /// When a result was made: the footer's own order, issued when the action is done, so the
 /// newest result comes first.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 pub(super) fn result_stamp() -> design::ResultOrder {
     design::ResultOrder::issue()
 }
@@ -3799,6 +3810,10 @@ impl Encounters {
             }
         }
     }
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn save_draft(&mut self, ctx: &egui::Context, active: &Campaign, modules: &[Module]) {
         let Some(draft) = self.draft.as_mut() else {
             return;
@@ -3981,7 +3996,10 @@ impl Encounters {
     }
     /// Beside the roster, in place of the search. It says what this creature is, and only the
     /// numbers a DM most often changes have fields of their own.
-    #[allow(clippy::disallowed_methods)]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
+    )]
     fn creature_pane(ui: &mut egui::Ui, editor: &mut CreatureEditor) -> Option<CreatureStep> {
         if editor.recovery.change.is_some() {
             if let Some(keep) =
@@ -4465,6 +4483,10 @@ impl Encounters {
     }
 
     /// A kept result of `kind` was just made: it is now the newest.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn stamp_kept(&mut self, kind: KeptResult) {
         self.kept_orders.insert(kind, design::ResultOrder::issue());
     }
@@ -4578,6 +4600,10 @@ impl Encounters {
 
     /// Put each kept result in a pane's footer, with its live Undo. A pressed Undo is recorded
     /// in `pressed` and applied by `undo_kept` after the footer is drawn.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn kept_into_footer<'a>(
         &self,
         footer: &mut design::Footer<'a>,
@@ -4686,7 +4712,10 @@ impl Encounters {
         });
     }
 
-    #[allow(clippy::disallowed_methods)]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
+    )]
     fn ledger_view(
         &mut self,
         ui: &mut egui::Ui,
@@ -5099,7 +5128,10 @@ impl Encounters {
         }
     }
 
-    #[allow(clippy::disallowed_methods)]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn editor_view(
         &mut self,
         ui: &mut egui::Ui,
@@ -5780,7 +5812,10 @@ impl Encounters {
         Self::creature_search_with_summary(ui, creatures, search, focus_search, peek, roster, "")
     }
 
-    #[allow(clippy::disallowed_methods)]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn creature_search_with_summary<'a>(
         ui: &mut egui::Ui,
         creatures: impl Iterator<Item = &'a Creature>,
@@ -5970,7 +6005,10 @@ impl Encounters {
     }
 
     #[allow(clippy::too_many_arguments)]
-    #[allow(clippy::disallowed_methods)]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn roster_pane(
         ui: &mut egui::Ui,
         draft: &mut Draft,
@@ -6091,7 +6129,10 @@ impl Encounters {
         }
     }
 
-    #[allow(clippy::disallowed_methods)]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn roster(
         ui: &mut egui::Ui,
         draft: &mut Draft,
@@ -6565,7 +6606,10 @@ impl Encounters {
     }
 
     /// Run folder and initiative rule. These belong to the campaign, not to one encounter.
-    #[allow(clippy::disallowed_methods)]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
+    )]
     pub fn run_settings(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns) {
         self.poll(ui.ctx(), campaigns);
         let Some(active) = campaigns.active_campaign() else {
@@ -7245,6 +7289,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn i20_w1_search_finds_a_hidden_duplicate_and_repairs_it_with_undo() {
         use egui_kittest::kittest::Queryable;
         let dir = tempfile::tempdir().unwrap();

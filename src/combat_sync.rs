@@ -840,6 +840,10 @@ enum ActionNotice {
 }
 
 /// A new action notice, with the order of the action that made it.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 fn noticed(notice: ActionNotice) -> Option<(ActionNotice, crate::design::ResultOrder)> {
     Some((notice, crate::design::ResultOrder::issue()))
 }
@@ -1638,6 +1642,10 @@ impl CombatSync {
     /// Round 26: a sync action's result (a rest taken, or why it failed), in the footer of the
     /// sheet pane. It lives until its dismiss, the next action or another character; the
     /// dismiss is the close icon at the message end, in the one Party form.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     pub fn footer_messages<'a>(&'a mut self, footer: &mut crate::design::Footer<'a>) {
         use crate::design::{self, Tone};
         let Some((tone, words, order)) =
@@ -3111,7 +3119,10 @@ mod tests {
         );
     }
     #[test]
-    #[allow(clippy::disallowed_methods)]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn render_every_editable_group_at_minimum_size() {
         let remote = full_remote(true);
         let mut sync = CombatSync::default();

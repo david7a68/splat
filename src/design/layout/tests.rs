@@ -457,6 +457,10 @@ fn inline_create_moves_nothing_while_the_dm_types() {
 /// is the caller's duty; the lint counts `RowIndex(` and `TextKey::` per file, so a review sees
 /// each new one.
 #[test]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
 fn a_field_id_keeps_focus_across_a_layout_branch() {
     const NAME: FieldId = crate::field_id!("test_branch_name");
     let ctx = context();

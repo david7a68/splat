@@ -74,7 +74,10 @@ impl CopyDialog {
             add_to_draft: None,
         }
     }
-    #[allow(clippy::disallowed_methods)]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     pub fn show(&mut self, ctx: &egui::Context, campaigns: &Campaigns) -> bool {
         if let Some(rx) = &self.pending {
             match rx.try_recv() {
