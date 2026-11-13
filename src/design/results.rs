@@ -246,14 +246,16 @@ impl<'a, T> Shown<'a, T> {
     pub fn value(&self) -> &'a T {
         self.value
     }
-    /// This result as an owned, typed footer line, made from its own value and bound to its own
-    /// order (package M). The call takes the view, so the store's borrow ends here: the pane's
-    /// body may then change the store or its owner. Give the line to `Messages::kept`.
-    pub fn outcome<A>(
+    /// This result as a typed footer line for this frame's pane (package M), made from its own
+    /// value and carrying this entry's [`Ticket`]. The call takes the view, so the store's
+    /// borrow ends here: the pane's body may change the store or its owner. The line borrows the
+    /// pane's local `frame`, so it cannot be kept past this frame. Give it to `Messages::kept`.
+    pub fn outcome<'f, A>(
         self,
+        frame: &'f super::outcome::PaneFrame,
         make: impl FnOnce(&T) -> super::outcome::KeptOutcome<A>,
-    ) -> super::outcome::KeptLine<A> {
-        super::outcome::KeptLine::new(self.order, make(self.value))
+    ) -> super::outcome::KeptLine<'f, A> {
+        super::outcome::KeptLine::new(frame, Ticket { order: self.order }, make(self.value))
     }
 
     /// This result's footer line: its words, made from its own value, with its own order.
@@ -263,6 +265,36 @@ impl<'a, T> Shown<'a, T> {
             words: words(self.value),
         }
     }
+}
+
+/// Names one kept entry of a store: the order its action issued, which no other entry of any
+/// store has. Only a store's view makes one (`Shown::outcome`); it is not `Clone`, and its order
+/// cannot be read. A press on a kept line comes back with it, and the store acts by it
+/// ([`Results::undo_by`], [`Results::use_press_by`]): a replaced or ended entry is [`ByTicket::Gone`]
+/// and nothing changes.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Ticket {
+    order: ResultOrder,
+}
+
+impl Ticket {
+    /// For the staged path (`Messages::outcome_at`) and the footer's control ids.
+    pub(in crate::design) fn of(order: ResultOrder) -> Self {
+        Self { order }
+    }
+
+    pub(in crate::design) fn order(&self) -> ResultOrder {
+        self.order
+    }
+}
+
+/// What a store did with a ticket.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ByTicket<E> {
+    /// The entry it named was replaced or ended: nothing changed.
+    Gone,
+    /// The entry is there, and its action failed: it stays.
+    Failed(E),
 }
 
 /// One kept result's words and its order, bound together. It is not `Clone`, and its order is
@@ -438,6 +470,46 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
         };
         let at = self.position(owner)?;
         Some(run(&self.entries[at].value).map(|done| (self.entries.remove(at).value, done)))
+    }
+
+    /// The Undo of the entry `ticket` names, as `undo` does by owner: it leaves only when `run`
+    /// works. An entry replaced or ended since the ticket was made is `Gone`, and `run` does not
+    /// run.
+    pub fn undo_by<R, E>(
+        &mut self,
+        ticket: Ticket,
+        run: impl FnOnce(&T) -> Result<R, E>,
+    ) -> Result<(T, R), ByTicket<E>> {
+        const {
+            assert!(
+                matches!(T::ENDS.press, Press::Undo),
+                "this kind has no Undo: its press is not `Press::Undo`"
+            )
+        };
+        let at = self
+            .entries
+            .iter()
+            .position(|entry| entry.order == ticket.order)
+            .ok_or(ByTicket::Gone)?;
+        match run(&self.entries[at].value) {
+            Ok(done) => Ok((self.entries.remove(at).value, done)),
+            Err(error) => Err(ByTicket::Failed(error)),
+        }
+    }
+
+    /// The offer `ticket` names, used up by its press; `None` when it was replaced or ended.
+    pub fn use_press_by(&mut self, ticket: Ticket) -> Option<T> {
+        const {
+            assert!(
+                matches!(T::ENDS.press, Press::Use),
+                "this kind is not used up by its press: its press is not `Press::Use`"
+            )
+        };
+        let at = self
+            .entries
+            .iter()
+            .position(|entry| entry.order == ticket.order)?;
+        Some(self.entries.remove(at).value)
     }
 
     /// The owner's offer, used up by its press whatever the action's outcome.
@@ -904,11 +976,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Layout(1)],
         ),
         ("src/trackers/view.rs", "amount_field", &[Ban::Layout(1)]),
-        (
-            "src/trackers/view.rs",
-            "show",
-            &[Ban::Layout(1), Ban::Pane(1)],
-        ),
         ("src/world.rs", "add_form", &[Ban::Layout(2)]),
         ("src/world.rs", "make_entry_control", &[Ban::Layout(1)]),
         ("src/world.rs", "pick", &[Ban::Layout(1)]),

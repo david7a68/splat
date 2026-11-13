@@ -5,11 +5,12 @@ use super::{
     Rules, Says, State, TrackerFault, Trackers, Unrecorded, ledger::Entry, ledger::NoticeRef,
     mark_of,
 };
+use crate::design::outcome::PaneFrame;
 use crate::design::outcome::{
     Banner, Choice, Fault, FaultMessage, KeptOutcome, MessageChoice, Messages, Outcome,
     PagePlaceholder, Said, Sentence, UndoStep, Verb,
 };
-use crate::design::pane::{Body, Fills, FillsReason};
+use crate::design::pane::{Body, ContentScroll, held_seen, hold_press};
 use crate::design::{self, Action, Density, Type, colors, icons};
 use eframe::egui;
 use std::collections::HashSet;
@@ -25,11 +26,6 @@ pub(crate) struct ViewState {
     /// The act pressed in this frame. The shell applies it after Lookup drew, once it has read
     /// the day count again, so an act uses the day at the click.
     pressed: Option<Act>,
-    /// The quick action pressed last, and where it was, for a few passes after the press.
-    keep: Option<Keep>,
-    /// Blank room after the trackers, so the scroll can hold a pressed action in its place
-    /// near the end of the view. It shrinks as the DM scrolls back up.
-    room: f32,
     /// A name wider than its column, as shortened for that width, so a frame with no change
     /// does not shorten it again.
     fitted: std::collections::HashMap<(String, u32), String>,
@@ -141,20 +137,6 @@ fn columns(
     }
 }
 
-/// How many passes after a press the view still holds the pressed action in place. The Due
-/// list can settle over more than one: a scroll bar that comes with it narrows the words.
-const KEEP_PASSES: u64 = 6;
-
-/// A pressed quick action: its line and label, its top on screen at the press, the pass of the
-/// press, its top as drawn in the pass now, and the height of the view's content at the press.
-struct Keep {
-    place: (String, Option<String>, String),
-    top: f32,
-    pass: u64,
-    now: Option<f32>,
-    content: Option<f32>,
-}
-
 impl ViewState {
     /// The amount field again, with the number typed for an act that recorded nothing.
     pub(super) fn ask_again(
@@ -171,17 +153,6 @@ impl ViewState {
             amount.to_string(),
         ));
         self.focus_asking = true;
-    }
-
-    /// Hold this quick action in place on screen for the passes after its press.
-    fn hold(&mut self, ui: &egui::Ui, key: &str, instance: &Option<String>, label: &str, top: f32) {
-        self.keep = Some(Keep {
-            place: (key.to_owned(), instance.clone(), label.to_owned()),
-            top,
-            pass: ui.ctx().cumulative_pass_nr(),
-            now: None,
-            content: None,
-        });
     }
 
     /// The words in the amount field, while it is open.
@@ -254,15 +225,15 @@ enum TrackerPress {
     ShowFile,
 }
 
-/// The view as one pane: the empty state, a file that cannot be read, or the trackers, then the
-/// message footer, whose messages are made before the body runs.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS); the Trackers list holds a pressed action under the pointer by steering its own scroll (`FillsReason::HeldPlace`)"
-)]
+/// The view as one pane: the empty state, a file that cannot be read, or the trackers, as the
+/// pane's scroll column, then the message footer, whose messages are made before the body runs.
+/// A press that raises or ends a Due row above a quick action holds that action under the
+/// pointer (`ContentScroll::holds_presses`), so a second press of a still pointer presses it
+/// again; the view opens at its top.
 pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, from_top: bool) {
     let mut act = None;
-    let messages = messages(trackers, ui.available_width());
+    let frame = PaneFrame::new(ui);
+    let messages = messages(&frame, trackers, ui.available_width());
     if !trackers.in_play() {
         let paned = messages.pane(ui, Body::Content, |ui| {
             ui.add_space(design::S);
@@ -279,66 +250,14 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, from_top: bool) {
                 },
             );
         });
-        footer_press(trackers, paned.pressed, &mut act);
+        footer_press(trackers, paned.pressed.map(|press| press.id), &mut act);
         trackers.view.pressed = act;
         return;
     }
-    let held = Body::Fills(Fills::because(FillsReason::HeldPlace));
-    let paned = messages.pane(ui, held, |ui| {
-        // What is due is in view when the view opens.
-        let mut area = egui::ScrollArea::vertical()
-            .id_salt("trackers_view")
-            .auto_shrink([false, false]);
-        if from_top {
-            area = area.vertical_scroll_offset(0.0);
-            trackers.view.keep = None;
-        }
-        let room = trackers.view.room;
-        let output = area.show(ui, |ui| {
-            body(ui, trackers, &mut act);
-            ui.add_space(room);
-        });
-        hold_pressed_place(ui, &mut trackers.view, output);
-    });
-    footer_press(trackers, paned.pressed, &mut act);
+    let scroll = ContentScroll::default().from_top(from_top).holds_presses();
+    let paned = messages.pane_content(ui, scroll, |ui| body(ui, trackers, &mut act));
+    footer_press(trackers, paned.pressed.map(|press| press.id), &mut act);
     trackers.view.pressed = act;
-}
-
-/// A press that raises or ends a Due row changes the list's height above the trackers. In the
-/// passes after the press the view scrolls by as much, so the pressed action is where it was and
-/// a second press of a still pointer presses it again. It acts only while the content's height
-/// differs from the press's; the DM's own wheel or drag, or a view opened again, ends it. The
-/// room after the trackers is only what the scroll needs to hold it there.
-fn hold_pressed_place(
-    ui: &egui::Ui,
-    view: &mut ViewState,
-    output: egui::scroll_area::ScrollAreaOutput<()>,
-) {
-    let mut state = output.state;
-    let pass = ui.ctx().cumulative_pass_nr();
-    let content = output.content_size.y - view.room;
-    let scrolled = ui.input(|i| {
-        i.raw_scroll_delta != egui::Vec2::ZERO
-            || i.smooth_scroll_delta != egui::Vec2::ZERO
-            || i.pointer.is_decidedly_dragging()
-    });
-    view.keep
-        .take_if(|keep| scrolled || pass > keep.pass + KEEP_PASSES);
-    if let Some(keep) = view.keep.as_mut()
-        && (*keep.content.get_or_insert(content) - content).abs() > 0.5
-        && let Some(now) = keep.now.take()
-        && (now - keep.top).abs() > 0.5
-    {
-        let offset = (state.offset.y + now - keep.top).max(0.0);
-        let end = output.content_size.y - output.inner_rect.height();
-        view.room += (offset - end).max(0.0);
-        state.offset.y = offset;
-        state.store(ui.ctx(), output.id);
-        ui.ctx()
-            .request_discard("a press moved the Due list above it");
-        return;
-    }
-    view.room = (state.offset.y + output.inner_rect.height() - content).max(0.0);
 }
 
 fn apply(trackers: &mut Trackers, act: Act) {
@@ -804,13 +723,10 @@ fn quick_actions(
                 None => quick.label.clone(),
             })
             .show(ui);
-        if let Some(keep) = view.keep.as_mut().filter(|keep| {
-            (&keep.place.0, &keep.place.1, &keep.place.2) == (&place.0, &place.1, &quick.label)
-        }) {
-            keep.now = Some(response.rect.top());
-        }
+        let control = (&place.0, &place.1, &quick.label);
+        held_seen(ui, control, response.rect.top());
         if response.clicked() {
-            view.hold(ui, &place.0, &place.1, &quick.label, response.rect.top());
+            hold_press(ui, control, response.rect.top());
             // Read on the click only: a dice amount is parsed to tell it from `ask`.
             if quick.asks() {
                 view.asking = Some((
@@ -908,7 +824,7 @@ fn amount_field(
         if enter && let Ok(amount) = typed.trim().parse::<i64>() {
             let (key, instance) = (key.clone(), instance.clone());
             // Enter is the press: the action keeps its place as a click's does.
-            view.hold(ui, &key, &instance, label, response.rect.top());
+            hold_press(ui, (&key, &instance, label), response.rect.top());
             *act = Some(Act::Press {
                 key,
                 instance,
@@ -928,8 +844,12 @@ fn amount_field(
     clippy::disallowed_methods,
     reason = "a refusal carries the ledger’s words"
 )]
-fn messages(trackers: &Trackers, width: f32) -> Messages<TrackerPress> {
-    let mut messages = Messages::new("trackers_footer", width);
+fn messages<'f>(
+    frame: &'f PaneFrame,
+    trackers: &Trackers,
+    width: f32,
+) -> Messages<'f, TrackerPress> {
+    let mut messages = Messages::new(frame, "trackers_footer", width);
     if trackers.unreadable.is_some() {
         return messages;
     }
@@ -959,7 +879,7 @@ fn messages(trackers: &Trackers, width: f32) -> Messages<TrackerPress> {
     else {
         return messages;
     };
-    let line = shown.outcome(|_| match added {
+    let line = shown.outcome(frame, |_| match added {
         // The event waits in the Timeline's draft when its save failed: say so, not success.
         Some(added) => match &added.not_saved {
             Some(words) => KeptOutcome::Fault(

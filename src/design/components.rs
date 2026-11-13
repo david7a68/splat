@@ -3184,9 +3184,22 @@ pub(super) fn undo_message_capped(
     action: &str,
     name: Option<&str>,
 ) -> bool {
+    undo_message_blocked(ui, tone, text, action, name, None)
+}
+
+/// `undo_message_capped` with Undo blocked for `blocked`'s reason: only Undo greys, and the line
+/// keeps its layout, so blocking moves nothing on it. The caller paints the reason.
+pub(super) fn undo_message_blocked(
+    ui: &mut Ui,
+    tone: Tone,
+    text: &str,
+    action: &str,
+    name: Option<&str>,
+    blocked: Option<&str>,
+) -> bool {
     ui.scope(|ui| {
         ui.set_max_width(ui.available_width().min(LIST_MEASURE));
-        undo_message_inside(ui, tone, text, action, name)
+        undo_message_inside(ui, tone, text, action, name, blocked)
     })
     .inner
 }
@@ -3197,10 +3210,12 @@ fn undo_message_inside(
     text: &str,
     action: &str,
     name: Option<&str>,
+    blocked: Option<&str>,
 ) -> bool {
     let button = Action::quiet(action)
         .icon(icons::UNDO)
-        .density(Density::Read);
+        .density(Density::Read)
+        .blocked(blocked);
     let button = match name {
         Some(name) => button.name(name),
         None => button,

@@ -163,9 +163,97 @@ pub enum FillsReason {
     LiveRoster,
     /// Several columns side by side, each with its own scroll (Party's list and sheet).
     Columns,
-    /// A list that steers its own scroll so a pressed action stays under the pointer when a
-    /// press adds or ends a row above it (Trackers' Due list).
-    HeldPlace,
+}
+
+/// How a `Body::Content` pane's scroll column behaves beyond the default, for `Footer::pane_content`.
+/// The content stays the pane's scroll column, and the footer follows short content as for
+/// `Body::Content`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ContentScroll {
+    from_top: bool,
+    holds: bool,
+}
+
+impl ContentScroll {
+    /// Open at the top in this frame (a view shown again); a hold ends.
+    pub fn from_top(mut self, from_top: bool) -> Self {
+        self.from_top = from_top;
+        self
+    }
+
+    /// Hold a pressed control under the pointer while its press changes the content above it:
+    /// the body calls [`hold_press`] at the press and [`held_seen`] where it draws that control.
+    /// In the passes after the press the pane scrolls by as much as the control moved, adding
+    /// blank room after the content only while that needs it. The DM's own wheel or drag, or
+    /// `from_top`, ends the hold.
+    pub fn holds_presses(mut self) -> Self {
+        self.holds = true;
+        self
+    }
+}
+
+/// A held press, kept by the pane (one owner: the pane's id).
+#[derive(Clone, Copy, Debug, Default)]
+struct Held {
+    keep: Option<Keep>,
+    /// Blank room after the content, for the hold.
+    room: f32,
+}
+
+/// The pressed control, its top at the press, the pass of the press, its top now, and the
+/// content's height at the press.
+#[derive(Clone, Copy, Debug)]
+struct Keep {
+    control: Id,
+    top: f32,
+    pass: u64,
+    now: Option<f32>,
+    content: Option<f32>,
+}
+
+/// How many passes after a press the pane still moves its scroll to hold the control.
+const KEEP_PASSES: u64 = 6;
+
+fn holding_id() -> Id {
+    Id::new("design_pane_holding")
+}
+
+/// The held press of the pane whose body is being drawn, if that pane holds presses.
+fn with_held(ui: &Ui, change: impl FnOnce(&mut Held, u64)) {
+    let pass = ui.ctx().cumulative_pass_nr();
+    let Some(pane) = ui
+        .ctx()
+        .data(|data| data.get_temp::<Option<Id>>(holding_id()))
+        .flatten()
+    else {
+        return;
+    };
+    ui.ctx()
+        .data_mut(|data| change(data.get_temp_mut_or_default::<Held>(pane), pass));
+}
+
+/// The body pressed `control` (any stable key of it), whose top is `top`: hold it in place.
+pub fn hold_press(ui: &Ui, control: impl std::hash::Hash, top: f32) {
+    let control = Id::new(control);
+    with_held(ui, |held, pass| {
+        held.keep = Some(Keep {
+            control,
+            top,
+            pass,
+            now: None,
+            content: None,
+        });
+    });
+}
+
+/// The body drew `control` with its top at `top` in this pass.
+pub fn held_seen(ui: &Ui, control: impl std::hash::Hash, top: f32) {
+    let control = Id::new(control);
+    with_held(ui, |held, _| {
+        if let Some(keep) = held.keep.as_mut().filter(|keep| keep.control == control) {
+            keep.now = Some(top);
+        }
+    });
 }
 
 /// Where a pane's footer stands.
@@ -281,6 +369,40 @@ fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>) {
     if let Some(rect) = rect {
         ui.scroll_to_rect(rect, None);
     }
+}
+
+/// A press that changes the content's height above its control: in the passes after it the
+/// column scrolls by as much as the control moved, so it stays under the pointer and a second
+/// press of a still pointer presses it again. It acts only while the content's height differs
+/// from the press's; the DM's own wheel or drag ends it. The blank room after the content is
+/// only what the scroll needs to hold it there.
+fn hold_place<R>(ui: &Ui, mut held: Held, output: &egui::scroll_area::ScrollAreaOutput<R>) -> Held {
+    let mut state = output.state;
+    let pass = ui.ctx().cumulative_pass_nr();
+    let content = output.content_size.y - held.room;
+    let scrolled = ui.input(|i| {
+        i.raw_scroll_delta != egui::Vec2::ZERO
+            || i.smooth_scroll_delta != egui::Vec2::ZERO
+            || i.pointer.is_decidedly_dragging()
+    });
+    held.keep
+        .take_if(|keep| scrolled || pass > keep.pass + KEEP_PASSES);
+    if let Some(keep) = held.keep.as_mut()
+        && (*keep.content.get_or_insert(content) - content).abs() > 0.5
+        && let Some(now) = keep.now.take()
+        && (now - keep.top).abs() > 0.5
+    {
+        let offset = (state.offset.y + now - keep.top).max(0.0);
+        let end = output.content_size.y - output.inner_rect.height();
+        held.room += (offset - end).max(0.0);
+        state.offset.y = offset;
+        state.store(ui.ctx(), output.id);
+        ui.ctx()
+            .request_discard("a press moved the content above its control");
+        return held;
+    }
+    held.room = (state.offset.y + output.inner_rect.height() - content).max(0.0);
+    held
 }
 
 /// The scroll facts of a `Body::Content` pane: its viewport, its content's height, its offset.
@@ -483,7 +605,27 @@ impl Footer<'_> {
     /// the same with or without messages; only its room's bottom comes up by the footer's
     /// height (and `S`) while the footer holds a message. The pane takes the rest of `ui`. `ui`
     /// lays out top down. Returns what `add` returns.
-    pub fn pane<R>(mut self, ui: &mut Ui, body: Body, add: impl FnOnce(&mut Ui) -> R) -> R {
+    pub fn pane<R>(self, ui: &mut Ui, body: Body, add: impl FnOnce(&mut Ui) -> R) -> R {
+        self.place(ui, body, ContentScroll::default(), add)
+    }
+
+    /// `pane` with `Body::Content`, whose scroll column behaves as `scroll` says.
+    pub fn pane_content<R>(
+        self,
+        ui: &mut Ui,
+        scroll: ContentScroll,
+        add: impl FnOnce(&mut Ui) -> R,
+    ) -> R {
+        self.place(ui, Body::Content, scroll, add)
+    }
+
+    fn place<R>(
+        mut self,
+        ui: &mut Ui,
+        body: Body,
+        options: ContentScroll,
+        add: impl FnOnce(&mut Ui) -> R,
+    ) -> R {
         debug_assert!(
             ui.layout().main_dir() == egui::Direction::TopDown,
             "a pane's message footer ends a top-down Ui"
@@ -530,21 +672,55 @@ impl Footer<'_> {
                 // The viewport is the real room, however small: egui's own 64 px minimum would
                 // leave the last rows of a small room out of reach under the clip.
                 let room_height = body_room.height();
-                let output = ScrollColumn::new(id.with("column"))
+                let held_key = id.with("held");
+                let mut held = ui
+                    .ctx()
+                    .data(|data| data.get_temp::<Held>(held_key))
+                    .unwrap_or_default();
+                if !options.holds || options.from_top {
+                    held = Held::default();
+                }
+                let mut column = ScrollColumn::new(id.with("column"))
                     .max_height(room_height)
-                    .min_scrolled_height(room_height)
-                    .show(&mut body_ui, |ui| {
-                        open(ui, Some(true));
-                        let first = widget_count(ui);
-                        let inner = add(ui);
-                        let last = widget_count(ui);
-                        open(ui, None);
-                        reveal_focus(ui, id, first..last);
-                        inner
+                    .min_scrolled_height(room_height);
+                if options.from_top {
+                    column = column.vertical_scroll_offset(0.0);
+                }
+                if options.holds {
+                    ui.ctx().data_mut(|data| {
+                        data.insert_temp(held_key, held);
+                        data.insert_temp(holding_id(), Some(held_key));
                     });
+                }
+                let output = column.show(&mut body_ui, |ui| {
+                    open(ui, Some(true));
+                    let first = widget_count(ui);
+                    let inner = add(ui);
+                    let last = widget_count(ui);
+                    open(ui, None);
+                    reveal_focus(ui, id, first..last);
+                    if options.holds {
+                        ui.add_space(held.room);
+                    }
+                    inner
+                });
+                let room = if options.holds {
+                    ui.ctx()
+                        .data_mut(|data| data.insert_temp(holding_id(), None::<Id>));
+                    let held = ui
+                        .ctx()
+                        .data(|data| data.get_temp::<Held>(held_key))
+                        .unwrap_or_default();
+                    let room = held.room;
+                    let held = hold_place(ui, held, &output);
+                    ui.ctx().data_mut(|data| data.insert_temp(held_key, held));
+                    room
+                } else {
+                    0.0
+                };
                 let scroll = Scroll {
                     viewport: output.inner_rect,
-                    height: output.content_size.y,
+                    height: output.content_size.y - room,
                     offset: output.state.offset.y,
                 };
                 (output.inner, Some(scroll))

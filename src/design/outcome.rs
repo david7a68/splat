@@ -22,9 +22,11 @@
 //! just before it that differs only in the forbidden part and compiles: the failure can only come
 //! from that part.
 use super::components::{
-    Action, FooterRank, link, number_width, small_tone_message, tone_message, undo_message_capped,
+    Action, FooterRank, blocked_reason, link, message_choice_row, number_width, small_tone_message,
+    tone_message, undo_message_blocked,
 };
 pub use super::components::{Footer, ResultOrder, Tone};
+pub use super::results::{ByTicket, Ticket};
 use super::{icons, tokens::*};
 use eframe::egui::{Rect, Response, Ui};
 use std::borrow::Cow;
@@ -933,128 +935,212 @@ impl<A> KeptOutcome<A> {
     }
 }
 
-/// One kept result as a footer line: what it says, bound to the order its store issued at the
-/// action. Only `Shown::outcome` makes one, from a store's view, and that call ends the store's
-/// borrow: the line is owned. It is not `Clone`, and its order cannot be read.
+/// This frame's token for one pane: a local value that every kept line and the pane's
+/// [`Messages`] borrow. A line therefore cannot outlive the frame it was made in: it cannot be
+/// kept in app state and shown after its result was replaced or ended. The body may still take
+/// `&mut` of the store's owner, because the store's borrow ends when the line is made.
 ///
-/// ```
-/// # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
-/// # #[derive(Clone, PartialEq, Eq)] struct Link;
-/// # impl Owner for Link { type Scope = str; fn scope(&self) -> &str { "c" } }
-/// # struct Saved;
-/// # impl Kept for Saved { type Owner = Link; const ENDS: Ends = Ends { owner_changed: OwnerChanged::Ends, disk_changed: DiskChanged::Stays, press: Press::Nothing }; fn owner(&self) -> Link { Link } }
-/// use splat::outcome::{KeptLine, NoPress, Said};
-/// let mut store = Results::new();
-/// store.record(Saved);
-/// let line: KeptLine<NoPress> = store
-///     .get(&Link)
-///     .unwrap()
-///     .outcome(|_| Said::new(splat::sentence!("Campaign link saved.")).into());
-/// // The store is free again while the line lives.
-/// store.record(Saved);
-/// let _ = line;
-/// ```
-///
-/// Not without a store, not cloned, and its order is not read:
-///
-/// ```compile_fail
-/// use splat::outcome::{KeptLine, NoPress};
-/// let _ = KeptLine::<NoPress> { order: Default::default(), typed: todo!() };
-/// ```
-/// ```compile_fail
-/// # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
-/// # #[derive(Clone, PartialEq, Eq)] struct Link;
-/// # impl Owner for Link { type Scope = str; fn scope(&self) -> &str { "c" } }
-/// # struct Saved;
-/// # impl Kept for Saved { type Owner = Link; const ENDS: Ends = Ends { owner_changed: OwnerChanged::Ends, disk_changed: DiskChanged::Stays, press: Press::Nothing }; fn owner(&self) -> Link { Link } }
-/// use splat::outcome::{KeptLine, NoPress, Said};
-/// let mut store = Results::new();
-/// store.record(Saved);
-/// let line: KeptLine<NoPress> = store
-///     .get(&Link)
-///     .unwrap()
-///     .outcome(|_| Said::new(splat::sentence!("Campaign link saved.")).into());
-/// let _twice = line.clone();
-/// ```
-/// ```compile_fail
-/// # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
-/// # #[derive(Clone, PartialEq, Eq)] struct Link;
-/// # impl Owner for Link { type Scope = str; fn scope(&self) -> &str { "c" } }
-/// # struct Saved;
-/// # impl Kept for Saved { type Owner = Link; const ENDS: Ends = Ends { owner_changed: OwnerChanged::Ends, disk_changed: DiskChanged::Stays, press: Press::Nothing }; fn owner(&self) -> Link { Link } }
-/// use splat::outcome::{KeptLine, NoPress, Said};
-/// let mut store = Results::new();
-/// store.record(Saved);
-/// let line: KeptLine<NoPress> = store
-///     .get(&Link)
-///     .unwrap()
-///     .outcome(|_| Said::new(splat::sentence!("Campaign link saved.")).into());
-/// let _order = line.order;
-/// ```
-#[must_use = "give it to `Messages::kept`"]
-pub struct KeptLine<A> {
-    order: ResultOrder,
-    typed: Typed<A>,
+/// The one way around it is to leak a token (`Box::leak`), which a reviewer sees.
+pub struct PaneFrame {
+    _not_static: std::marker::PhantomData<*const ()>,
 }
 
-impl<A> KeptLine<A> {
-    /// For `Shown::outcome` (in `results`), which holds the order.
-    pub(in crate::design) fn new(order: ResultOrder, outcome: KeptOutcome<A>) -> Self {
+impl PaneFrame {
+    /// The token for a pane drawn in this frame, on `ui`.
+    pub fn new(ui: &Ui) -> Self {
+        let _ = ui;
         Self {
-            order,
-            typed: outcome.typed(),
+            _not_static: std::marker::PhantomData,
         }
     }
 }
 
-/// What a pane's body returned, and the one footer action the DM pressed in this frame, as the
-/// caller's own id.
+/// One kept result as a footer line for this frame: what it says, and the store's [`Ticket`]
+/// for that entry, which binds its order and its presses to it. Only `Shown::outcome` makes
+/// one, from a store's view; that call ends the store's borrow, and the line borrows the pane's
+/// [`PaneFrame`] instead. It is not `Clone`, its ticket cannot be read, and it cannot be kept
+/// past its frame.
+///
+/// ```
+/// # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
+/// # #[derive(Clone, PartialEq, Eq)] struct Link;
+/// # impl Owner for Link { type Scope = str; fn scope(&self) -> &str { "c" } }
+/// # struct Saved;
+/// # impl Kept for Saved { type Owner = Link; const ENDS: Ends = Ends { owner_changed: OwnerChanged::Ends, disk_changed: DiskChanged::Stays, press: Press::Nothing }; fn owner(&self) -> Link { Link } }
+/// use splat::outcome::{KeptLine, NoPress, PaneFrame, Said};
+/// fn frame(ui: &mut eframe::egui::Ui) {
+///     let mut store = Results::new();
+///     store.record(Saved);
+///     let frame = PaneFrame::new(ui);
+///     let line: KeptLine<NoPress> = store
+///         .get(&Link)
+///         .unwrap()
+///         .outcome(&frame, |_| Said::new(splat::sentence!("Campaign link saved.")).into());
+///     // The store is free again while the line lives.
+///     store.record(Saved);
+///     let _ = line;
+/// }
+/// ```
+///
+/// Not without a store, not cloned, its ticket not read, and not kept in app state:
+///
+/// ```compile_fail
+/// use splat::outcome::{KeptLine, NoPress};
+/// let _ = KeptLine::<NoPress> { ticket: todo!(), typed: todo!(), frame: todo!() };
+/// ```
+/// ```compile_fail
+/// # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
+/// # #[derive(Clone, PartialEq, Eq)] struct Link;
+/// # impl Owner for Link { type Scope = str; fn scope(&self) -> &str { "c" } }
+/// # struct Saved;
+/// # impl Kept for Saved { type Owner = Link; const ENDS: Ends = Ends { owner_changed: OwnerChanged::Ends, disk_changed: DiskChanged::Stays, press: Press::Nothing }; fn owner(&self) -> Link { Link } }
+/// use splat::outcome::{KeptLine, NoPress, PaneFrame, Said};
+/// fn frame(ui: &mut eframe::egui::Ui) {
+///     let mut store = Results::new();
+///     store.record(Saved);
+///     let frame = PaneFrame::new(ui);
+///     let line: KeptLine<NoPress> = store
+///         .get(&Link)
+///         .unwrap()
+///         .outcome(&frame, |_| Said::new(splat::sentence!("Campaign link saved.")).into());
+///     let _twice = line.clone();
+/// }
+/// ```
+/// ```compile_fail
+/// # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
+/// # #[derive(Clone, PartialEq, Eq)] struct Link;
+/// # impl Owner for Link { type Scope = str; fn scope(&self) -> &str { "c" } }
+/// # struct Saved;
+/// # impl Kept for Saved { type Owner = Link; const ENDS: Ends = Ends { owner_changed: OwnerChanged::Ends, disk_changed: DiskChanged::Stays, press: Press::Nothing }; fn owner(&self) -> Link { Link } }
+/// use splat::outcome::{KeptLine, NoPress, PaneFrame, Said};
+/// fn frame(ui: &mut eframe::egui::Ui) {
+///     let mut store = Results::new();
+///     store.record(Saved);
+///     let frame = PaneFrame::new(ui);
+///     let line: KeptLine<NoPress> = store
+///         .get(&Link)
+///         .unwrap()
+///         .outcome(&frame, |_| Said::new(splat::sentence!("Campaign link saved.")).into());
+///     let _ticket = line.ticket;
+/// }
+/// ```
+///
+/// A line kept in app state across frames (the review's counterexample) does not compile; the
+/// same line used in its frame does (the first example):
+///
+/// ```compile_fail
+/// # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
+/// # #[derive(Clone, PartialEq, Eq)] struct Link;
+/// # impl Owner for Link { type Scope = str; fn scope(&self) -> &str { "c" } }
+/// # struct Saved;
+/// # impl Kept for Saved { type Owner = Link; const ENDS: Ends = Ends { owner_changed: OwnerChanged::Ends, disk_changed: DiskChanged::Stays, press: Press::Nothing }; fn owner(&self) -> Link { Link } }
+/// use splat::outcome::{KeptLine, NoPress, PaneFrame, Said};
+/// struct App { store: Results<Link, Saved>, kept: Option<KeptLine<'static, NoPress>> }
+/// fn frame(ui: &mut eframe::egui::Ui, app: &mut App) {
+///     let frame = PaneFrame::new(ui);
+///     app.kept = app
+///         .store
+///         .get(&Link)
+///         .map(|shown| shown.outcome(&frame, |_| Said::new(splat::sentence!("Saved.")).into()));
+/// }
+/// ```
+#[must_use = "give it to `Messages::kept`"]
+pub struct KeptLine<'f, A> {
+    ticket: Ticket,
+    typed: Typed<A>,
+    frame: std::marker::PhantomData<&'f PaneFrame>,
+}
+
+impl<'f, A> KeptLine<'f, A> {
+    /// For `Shown::outcome` (in `results`), which holds the entry's ticket.
+    pub(in crate::design) fn new(
+        _frame: &'f PaneFrame,
+        ticket: Ticket,
+        outcome: KeptOutcome<A>,
+    ) -> Self {
+        Self {
+            ticket,
+            typed: outcome.typed(),
+            frame: std::marker::PhantomData,
+        }
+    }
+}
+
+/// What the DM pressed in a pane's footer: the kind of action, as the caller's own id, and for
+/// a kept result the store's [`Ticket`] of that entry. The store acts by the ticket
+/// (`Results::undo_by`, `use_press_by`), so a press can only reach the entry its line showed;
+/// the id names only the kind, and two results with one id cannot be confused.
+#[must_use = "act on the press"]
+pub struct Press<A> {
+    pub id: A,
+    pub ticket: Option<Ticket>,
+}
+
+/// What a pane's body returned, and the one footer press of this frame. At most one press
+/// comes back per pane and frame: the first in the footer's drawing order (newest result first,
+/// then reasons, then notices) wins, and a second in the same frame is dropped.
 #[must_use = "act on `pressed`"]
 pub struct Paned<R, A> {
     pub body: R,
-    pub pressed: Option<A>,
+    pub pressed: Option<Press<A>>,
 }
 
-/// A pane's footer messages, owned and typed: built before the body runs, from values that
-/// hold no borrow of the app (`'static` words, ids and sentences; a kept result as a
-/// [`KeptLine`]). So the body may change any of the app, also the store a result came from.
-/// `pane` draws the body, then the footer (`Footer::pane`'s placement), and gives back the
-/// body's value with the press as the caller's id `A` (an enum of the pane's actions; `NoPress`
-/// for a footer with nothing to press). No message needs a slot for its press.
+/// The pane's one press slot: the first press of the frame wins.
+struct PressSink<A>(std::rc::Rc<std::cell::RefCell<Option<Press<A>>>>);
+
+impl<A> PressSink<A> {
+    fn press(&self, press: Press<A>) {
+        let mut slot = self.0.borrow_mut();
+        if slot.is_none() {
+            *slot = Some(press);
+        }
+    }
+}
+
+/// A pane's footer messages for this frame, owned and typed: built before the body runs, from
+/// values that hold no borrow of the app (`'static` words, ids and sentences; a kept result as a
+/// [`KeptLine`] of this frame). So the body may change any of the app, also the store a result
+/// came from. `pane` draws the body, then the footer (`Footer::pane`'s placement), and gives
+/// back the body's value with the press. No message needs a slot for its press. Each kept
+/// line's controls take their egui ids from its ticket, so a result added or removed above it
+/// moves no focus or pending press onto another result's control.
 ///
 /// A footer entry that borrows the app does not compile:
 ///
 /// ```
-/// use splat::outcome::{Choice, MessageChoice, Messages, Notice};
+/// use splat::outcome::{Choice, MessageChoice, Messages, Notice, PaneFrame};
 /// #[derive(Clone, Copy)] enum Act { Again }
 /// fn f(ui: &mut eframe::egui::Ui) -> Option<Act> {
-///     let mut messages = Messages::new("f", 400.0);
+///     let frame = PaneFrame::new(ui);
+///     let mut messages = Messages::new(&frame, "f", 400.0);
 ///     messages.outcome(
 ///         Notice::new(splat::sentence!("Sync is off."))
 ///             .choice(Choice::new(MessageChoice::Choice("Try again"), Act::Again)),
 ///     );
-///     messages.pane(ui, splat::pane::Body::Content, |_| ()).pressed
+///     messages.pane(ui, splat::pane::Body::Content, |_| ()).pressed.map(|press| press.id)
 /// }
 /// ```
 /// ```compile_fail
-/// use splat::outcome::{Choice, MessageChoice, Messages, Notice};
+/// use splat::outcome::{Choice, MessageChoice, Messages, Notice, PaneFrame};
 /// #[derive(Clone, Copy)] enum Act { Again }
 /// fn f(ui: &mut eframe::egui::Ui, name: String) -> Option<Act> {
-///     let mut messages = Messages::new("f", 400.0);
+///     let frame = PaneFrame::new(ui);
+///     let mut messages = Messages::new(&frame, "f", 400.0);
 ///     messages.outcome(
 ///         Notice::new(splat::sentence!("Sync is off."))
 ///             .choice(Choice::new(MessageChoice::Choice(&name), Act::Again)),
 ///     );
-///     messages.pane(ui, splat::pane::Body::Content, |_| ()).pressed
+///     messages.pane(ui, splat::pane::Body::Content, |_| ()).pressed.map(|press| press.id)
 /// }
 /// ```
 ///
 /// Nor an id that borrows:
 ///
 /// ```compile_fail
-/// use splat::outcome::{Choice, MessageChoice, Messages, Notice};
+/// use splat::outcome::{Choice, MessageChoice, Messages, Notice, PaneFrame};
 /// fn f<'a>(ui: &mut eframe::egui::Ui, app: &'a mut u8) {
-///     let mut messages = Messages::new("f", 400.0);
+///     let frame = PaneFrame::new(ui);
+///     let mut messages = Messages::new(&frame, "f", 400.0);
 ///     messages.outcome(
 ///         Notice::new(splat::sentence!("Sync is off."))
 ///             .choice(Choice::new(MessageChoice::Choice("Try again"), &*app)),
@@ -1062,28 +1148,42 @@ pub struct Paned<R, A> {
 ///     let _ = messages.pane(ui, splat::pane::Body::Content, |_| ());
 /// }
 /// ```
-pub struct Messages<A: Copy + 'static> {
+pub struct Messages<'f, A: 'static> {
     footer: Footer<'static>,
-    pressed: std::rc::Rc<std::cell::Cell<Option<A>>>,
+    sink: PressSink<A>,
+    frame: std::marker::PhantomData<&'f PaneFrame>,
 }
 
-impl<A: Copy + 'static> Messages<A> {
-    /// No messages yet, for a footer `width` wide. `id` keeps its height, scroll and focus.
-    pub fn new(id: impl std::hash::Hash, width: f32) -> Self {
+impl<'f, A: 'static> Messages<'f, A> {
+    /// No messages yet, for this frame's pane, with a footer `width` wide. `id` keeps its
+    /// height, scroll and focus.
+    pub fn new(frame: &'f PaneFrame, id: impl std::hash::Hash, width: f32) -> Self {
+        let _ = frame;
         Self {
             footer: Footer::new(id, width),
-            pressed: std::rc::Rc::default(),
+            sink: PressSink(std::rc::Rc::default()),
+            frame: std::marker::PhantomData,
         }
     }
 
-    /// The draw of one typed message: its press, if any, goes to the pane's one return.
-    fn draw(&self, typed: Typed<A>) -> impl FnOnce(&mut Ui) + 'static {
-        let sink = self.pressed.clone();
+    /// The draw of one typed message: its press, if any, goes to the pane's one return, with
+    /// the kept entry's ticket. A kept line's controls are scoped by its ticket.
+    fn draw(&self, typed: Typed<A>, ticket: Option<Ticket>) -> impl FnOnce(&mut Ui) + 'static {
+        let sink = PressSink(self.sink.0.clone());
         move |ui| {
-            if let Some(pressed) = typed.body.draw(ui, MessagePlace::Footer)
+            let pressed = match &ticket {
+                Some(ticket) => {
+                    ui.push_id(("kept_line", ticket.order()), |ui| {
+                        typed.body.draw(ui, MessagePlace::Footer)
+                    })
+                    .inner
+                }
+                None => typed.body.draw(ui, MessagePlace::Footer),
+            };
+            if let Some(pressed) = pressed
                 && let Some(id) = typed.id(pressed)
             {
-                sink.set(Some(id));
+                sink.press(Press { id, ticket });
             }
         }
     }
@@ -1092,20 +1192,21 @@ impl<A: Copy + 'static> Messages<A> {
     pub fn outcome(&mut self, outcome: impl Into<Outcome<A>>) -> &mut Self {
         let (rank, typed) = outcome.into().parts();
         let words = Cow::Owned(typed.body.words.as_str().to_owned());
-        let draw = self.draw(typed);
+        let draw = self.draw(typed, None);
         self.footer.push(rank, None, words, draw);
         self
     }
 
-    /// A kept result, newest first by the order its store issued.
-    pub fn kept(&mut self, line: KeptLine<A>) -> &mut Self {
-        self.kept_at(line.order, line.typed)
+    /// A kept result of this frame, newest first by the order its store issued.
+    pub fn kept(&mut self, line: KeptLine<'f, A>) -> &mut Self {
+        self.kept_at(line.ticket, line.typed)
     }
 
-    fn kept_at(&mut self, order: ResultOrder, typed: Typed<A>) -> &mut Self {
+    fn kept_at(&mut self, ticket: Ticket, typed: Typed<A>) -> &mut Self {
         let has_undo = typed.body.undo.is_some();
         let words = Cow::Owned(typed.body.words.as_str().to_owned());
-        let draw = self.draw(typed);
+        let order = ticket.order();
+        let draw = self.draw(typed, Some(ticket));
         self.footer.add_kept(order, words, has_undo, draw);
         self
     }
@@ -1117,22 +1218,38 @@ impl<A: Copy + 'static> Messages<A> {
         order: ResultOrder,
         outcome: impl Into<KeptOutcome<A>>,
     ) -> &mut Self {
-        self.kept_at(order, outcome.into().typed())
+        self.kept_at(Ticket::of(order), outcome.into().typed())
     }
 
     /// The pane: the body (`add`, which may change any of the app), then the footer, placed by
-    /// `Footer::pane`. The body's value, and the press as the caller's id.
+    /// `Footer::pane`. The body's value, and the press.
     pub fn pane<R>(
         self,
         ui: &mut Ui,
         body: super::pane::Body,
         add: impl FnOnce(&mut Ui) -> R,
     ) -> Paned<R, A> {
-        let Self { footer, pressed } = self;
+        let Self { footer, sink, .. } = self;
         let body = footer.pane(ui, body, add);
         Paned {
             body,
-            pressed: pressed.take(),
+            pressed: sink.0.borrow_mut().take(),
+        }
+    }
+
+    /// `pane` with a `Body::Content` scroll column that behaves as `scroll` says (opens at the
+    /// top, holds a pressed control in place: `pane::ContentScroll`).
+    pub fn pane_content<R>(
+        self,
+        ui: &mut Ui,
+        scroll: super::pane::ContentScroll,
+        add: impl FnOnce(&mut Ui) -> R,
+    ) -> Paned<R, A> {
+        let Self { footer, sink, .. } = self;
+        let body = footer.pane_content(ui, scroll, add);
+        Paned {
+            body,
+            pressed: sink.0.borrow_mut().take(),
         }
     }
 }
@@ -1148,7 +1265,7 @@ impl Body {
             .scope(|ui| {
                 ui.set_max_width(ui.available_width().min(LIST_MEASURE));
                 let words = self.words.as_str();
-                if self.choices.is_empty() && self.undo_lock.is_none() {
+                if self.choices.is_empty() {
                     match &self.undo {
                         None => {
                             tone_message(ui, self.tone, words);
@@ -1157,11 +1274,13 @@ impl Body {
                             let label = step.label();
                             let shown = self.undo_words(ui, step);
                             let name = (shown != label).then_some(label.as_str());
-                            if undo_message_capped(ui, self.tone, words, &shown, name) {
+                            let lock = self.undo_lock.as_ref().map(Sentence::as_str);
+                            if undo_message_blocked(ui, self.tone, words, &shown, name, lock) {
                                 pressed = Some(Pressed::Undo);
                             }
                         }
                     }
+                    self.reasons(ui);
                     return;
                 }
                 let message = tone_message(ui, self.tone, words);
@@ -1219,10 +1338,27 @@ impl Body {
                         });
                     });
                 }
+                self.reasons(ui);
             })
             .response;
         register(ui, response.rect, place, self.tone);
         pressed
+    }
+
+    /// Why its Undo or a choice is locked, each reason once, in `Small` muted words on a line of
+    /// its own at the message words, as every blocked action in the app says why: never only on
+    /// hover.
+    fn reasons(&self, ui: &mut Ui) {
+        let mut said: Vec<&str> = Vec::new();
+        let locks = std::iter::once(&self.undo_lock)
+            .filter(|_| self.undo.is_some())
+            .chain(&self.locks);
+        for reason in locks.flatten().map(Sentence::as_str) {
+            if !said.contains(&reason) {
+                said.push(reason);
+                message_choice_row(ui, self.tone, |ui| blocked_reason(ui, Some(reason)));
+            }
+        }
     }
 
     /// A choice's whole width, with the `L` before a red one.
@@ -1658,7 +1794,9 @@ mod tests {
                 banner(ui, Banner::Fault(&fault));
                 row_fault(ui, &fault);
                 let _ = PagePlaceholder::<NoPress>::new(&fault).show(ui);
-                let mut messages = Messages::<NoPress>::new("one_fault", ui.available_width());
+                let frame = PaneFrame::new(ui);
+                let mut messages =
+                    Messages::<NoPress>::new(&frame, "one_fault", ui.available_width());
                 messages.outcome(FaultMessage::new(&fault));
                 let _ = messages.pane(ui, crate::design::Body::Content, |_| ());
             });
@@ -1722,31 +1860,51 @@ mod tests {
         });
     }
 
-    /// A store's kept result, and the pilot's pane (package C, Campaign → Link and folder): the
-    /// footer shows the store's `Campaign link saved.` while the body changes the store's owner
-    /// through `&mut`. Two results go newest first by the store's order; a press comes back as
-    /// the caller's id, after `pane`, with no slot per message: the older one's Undo gives the
-    /// older one's id. A locked choice and a locked Undo do nothing when pressed, and say why.
+    /// The pane's one press: the first in the footer's drawing order wins, and a second press
+    /// in the same frame is dropped.
     #[test]
-    fn owned_messages_give_presses_back_as_ids_beside_a_body_that_changes_the_app() {
+    fn a_pane_gives_back_at_most_one_press_the_first() {
+        let sink = PressSink::<u8>(std::rc::Rc::default());
+        sink.press(Press {
+            id: 1,
+            ticket: None,
+        });
+        sink.press(Press {
+            id: 2,
+            ticket: None,
+        });
+        assert_eq!(sink.0.borrow_mut().take().map(|press| press.id), Some(1));
+    }
+
+    /// The pilot's pane (package C, Campaign → Link and folder), as a fixture: the footer shows
+    /// the store's kept results while the body changes the store's owner through `&mut`. Each
+    /// press comes back with the store's ticket of the line pressed, and the store acts by it.
+    mod pilot {
+        use super::super::*;
         use crate::design::results::{
-            DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results,
+            DiskChanged, Ends, Kept, Owner, OwnerChanged, Press as Kind, Results,
         };
+        use eframe::egui;
+        use egui_kittest::{
+            Harness,
+            kittest::{NodeT, Queryable},
+        };
+
         #[derive(Clone, PartialEq, Eq, Debug)]
-        struct Campaign(&'static str);
+        pub(super) struct Campaign(pub &'static str);
         impl Owner for Campaign {
             type Scope = str;
             fn scope(&self) -> &str {
                 "root"
             }
         }
-        struct Saved(Campaign, &'static str);
+        pub(super) struct Saved(pub Campaign, pub &'static str);
         impl Kept for Saved {
             type Owner = Campaign;
             const ENDS: Ends = Ends {
                 owner_changed: OwnerChanged::Ends,
                 disk_changed: DiskChanged::Stays,
-                press: Press::Undo,
+                press: Kind::Undo,
             };
             fn owner(&self) -> Campaign {
                 self.0.clone()
@@ -1754,79 +1912,159 @@ mod tests {
         }
         /// The pilot's `DndBeyond`: the store's owner, which the body changes.
         #[derive(Default)]
-        struct DndBeyond {
-            results: Results<Campaign, Saved>,
-            edits: usize,
+        pub(super) struct DndBeyond {
+            pub results: Results<Campaign, Saved>,
+            pub edits: usize,
         }
+        /// Only the kind of action: which result it is, the ticket says.
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-        enum Act {
-            Undo(&'static str),
+        pub(super) enum Act {
+            Undo,
             Register,
         }
-        #[derive(Default)]
-        struct App {
-            dndbeyond: DndBeyond,
-            run_live: bool,
-            pressed: Vec<Act>,
+        /// What a change inside the body does in the next frame drawn.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub(super) enum InBody {
+            Nothing,
+            Replace(&'static str),
+            End(&'static str),
+            Add(&'static str),
         }
+        #[derive(Default)]
+        pub(super) struct App {
+            pub dndbeyond: DndBeyond,
+            pub run_live: bool,
+            pub in_body: Option<InBody>,
+            /// What each Undo press did to the store: the words it took back, or `Gone`.
+            pub acted: Vec<Result<&'static str, &'static str>>,
+            pub registered: usize,
+        }
+
         /// The pilot's `show_active`: it needs the owner by `&mut`.
-        fn show_active(ui: &mut Ui, dndbeyond: &mut DndBeyond) {
+        fn show_active(ui: &mut Ui, dndbeyond: &mut DndBeyond, change: InBody) {
             dndbeyond.edits += 1;
+            match change {
+                InBody::Nothing => {}
+                InBody::Replace(owner) => dndbeyond
+                    .results
+                    .record(Saved(Campaign(owner), "Campaign link saved again")),
+                InBody::End(owner) => dndbeyond.results.owner_changed(&Campaign(owner)),
+                InBody::Add(owner) => dndbeyond
+                    .results
+                    .record(Saved(Campaign(owner), "Folder chosen")),
+            }
             ui.label("Link and folder");
         }
-        let mut app = App::default();
-        // Recorded at the action: the older link first.
-        app.dndbeyond
-            .results
-            .record(Saved(Campaign("older"), "Campaign link saved"));
-        app.dndbeyond
-            .results
-            .record(Saved(Campaign("newer"), "Folder saved"));
-        let mut h = Harness::builder()
-            .with_size(egui::vec2(700.0, 500.0))
-            .build_ui_state(
-                |ui, app: &mut App| {
-                    let lock = app.run_live.then(|| crate::sentence!("End the run first."));
-                    let mut messages = Messages::new("pilot", ui.available_width());
-                    for owner in ["older", "newer"] {
-                        if let Some(shown) = app.dndbeyond.results.get(&Campaign(owner)) {
-                            let line = shown.outcome(|saved| {
-                                Said::new(crate::sentence!("{}.", saved.1))
-                                    .undo(
-                                        UndoStep::verb(Verb::Change)
-                                            .pressed_as(Act::Undo(owner))
-                                            .blocked(lock.clone()),
-                                    )
-                                    .into()
-                            });
-                            messages.kept(line);
+
+        pub(super) fn frame(ui: &mut Ui, app: &mut App) {
+            let lock = app.run_live.then(|| crate::sentence!("End the run first."));
+            let frame = PaneFrame::new(ui);
+            let mut messages = Messages::new(&frame, "pilot", ui.available_width());
+            for owner in ["older", "newer", "third"] {
+                if let Some(shown) = app.dndbeyond.results.get(&Campaign(owner)) {
+                    let line = shown.outcome(&frame, |saved| {
+                        let mut said = Said::new(crate::sentence!("{}.", saved.1)).undo(
+                            UndoStep::verb(Verb::Change)
+                                .tell_apart(owner)
+                                .pressed_as(Act::Undo)
+                                .blocked(lock.clone()),
+                        );
+                        if owner == "older" {
+                            // A choice attached to a kept result.
+                            said = said.choice(
+                                Choice::new(
+                                    MessageChoice::Choice("Register as a new campaign"),
+                                    Act::Register,
+                                )
+                                .blocked(lock.clone()),
+                            );
                         }
-                    }
-                    messages.outcome(
-                        Notice::new(crate::sentence!("This folder is not a campaign yet.")).choice(
-                            Choice::new(
-                                MessageChoice::Choice("Register as a new campaign"),
-                                Act::Register,
-                            )
-                            .blocked(lock),
-                        ),
-                    );
-                    // The body changes the store's owner by `&mut` while the footer holds its
-                    // lines: the gap the pilot found (E0502 with a borrowing entry).
-                    let paned = messages.pane(ui, crate::design::Body::Content, |ui| {
-                        show_active(ui, &mut app.dndbeyond);
-                        7
+                        said.into()
                     });
-                    assert_eq!(paned.body, 7);
-                    app.pressed.extend(paned.pressed);
-                },
-                App::default(),
-            );
-        *h.state_mut() = app;
-        crate::design::theme::install(&h.ctx);
-        h.run_steps(4);
+                    messages.kept(line);
+                }
+            }
+            let change = app.in_body.take().unwrap_or(InBody::Nothing);
+            // The body changes the store's owner by `&mut` while the footer holds its lines:
+            // the gap the pilot found (E0502 with a borrowing entry).
+            let paned = messages.pane(ui, crate::design::Body::Content, |ui| {
+                show_active(ui, &mut app.dndbeyond, change);
+                7
+            });
+            assert_eq!(paned.body, 7);
+            if let Some(press) = paned.pressed {
+                match press.id {
+                    Act::Undo => {
+                        let ticket = press.ticket.expect("a kept line's press has its ticket");
+                        app.acted.push(
+                            match app.dndbeyond.results.undo_by(ticket, |_| Ok::<_, ()>(())) {
+                                Ok((saved, ())) => Ok(saved.1),
+                                Err(ByTicket::Gone) => Err("gone"),
+                                Err(ByTicket::Failed(())) => Err("failed"),
+                            },
+                        );
+                    }
+                    Act::Register => app.registered += 1,
+                }
+            }
+        }
+
+        pub(super) fn harness(app: App) -> Harness<'static, App> {
+            let mut h = Harness::builder()
+                .with_size(egui::vec2(700.0, 500.0))
+                .build_ui_state(frame, app);
+            crate::design::theme::install(&h.ctx);
+            h.run_steps(4);
+            h
+        }
+
+        pub(super) fn label_left(h: &Harness<'_, App>, words: &str) -> f32 {
+            h.get_by_role_and_label(egui::accesskit::Role::Label, words)
+                .rect()
+                .left()
+        }
+
+        pub(super) fn undo<'h>(
+            h: &'h Harness<'_, App>,
+            owner: &'static str,
+        ) -> egui_kittest::Node<'h> {
+            h.get_by_label(match owner {
+                "older" => "Undo change older",
+                "newer" => "Undo change newer",
+                _ => "Undo change third",
+            })
+        }
+
+        pub(super) fn disabled(node: &egui_kittest::Node<'_>) -> bool {
+            node.accesskit_node().is_disabled()
+        }
+
+        pub(super) fn description(node: &egui_kittest::Node<'_>) -> Option<String> {
+            node.accesskit_node().description()
+        }
+
+        pub(super) fn two() -> App {
+            let mut app = App::default();
+            // Recorded at the action: the older link first.
+            app.dndbeyond
+                .results
+                .record(Saved(Campaign("older"), "Campaign link saved"));
+            app.dndbeyond
+                .results
+                .record(Saved(Campaign("newer"), "Folder saved"));
+            app
+        }
+    }
+
+    /// Two kept results newest first; each Undo, and a choice on a kept result, come back with
+    /// their own ticket, and the store acts on the entry each line showed. Undo starts under its
+    /// message's words and stays inside its message.
+    #[test]
+    fn owned_messages_give_presses_back_by_ticket_beside_a_body_that_changes_the_app() {
+        use pilot::*;
+        let mut h = harness(two());
         assert!(h.state().dndbeyond.edits > 0, "the body changed the owner");
-        let top = |h: &Harness<'_, App>, words: &str| {
+        let top = |h: &egui_kittest::Harness<'_, App>, words: &str| {
             h.get_by_role_and_label(egui::accesskit::Role::Label, words)
                 .rect()
                 .top()
@@ -1837,38 +2075,145 @@ mod tests {
         );
         let rects = message_rects(&h.ctx);
         assert!(
-            rects.len() == 3
+            rects.len() == 2
                 && rects
                     .iter()
                     .all(|(_, place, _)| *place == MessagePlace::Footer),
             "{rects:?}"
         );
-        // The older one's Undo is drawn second, after the newer one's.
-        h.get_all_by_label("Undo change").nth(1).unwrap().click();
-        h.run_steps(2);
-        h.get_by_label("Register as a new campaign").click();
-        h.run_steps(2);
-        assert_eq!(h.state().pressed, [Act::Undo("older"), Act::Register]);
-        // With a live run, both are locked: a press does nothing, and each says why.
-        h.state_mut().pressed.clear();
-        h.state_mut().run_live = true;
-        h.run_steps(4);
-        use egui_kittest::kittest::NodeT;
-        let register = h.get_by_label("Register as a new campaign");
-        let undo = h.get_all_by_label("Undo change").nth(1).unwrap();
-        for node in [&register, &undo] {
-            assert!(node.accesskit_node().is_disabled(), "it is locked");
-            assert_eq!(
-                node.accesskit_node().description().as_deref(),
-                Some("End the run first.")
-            );
-        }
-        h.get_all_by_label("Undo change").nth(1).unwrap().click();
-        h.get_by_label("Register as a new campaign").click();
-        h.run_steps(2);
+        // The older line has a choice, so its Undo stands under its words, from them, inside it.
+        let older = undo(&h, "older").rect();
+        let words = label_left(&h, "Campaign link saved.");
         assert!(
-            h.state().pressed.is_empty(),
-            "a locked choice gives nothing back"
+            older.left() < words && older.right() > words && rects[1].0.contains_rect(older),
+            "Undo starts its line under the words, inside the message: {older:?} {words} {rects:?}"
         );
+        undo(&h, "older").click();
+        h.run_steps(2);
+        assert_eq!(h.state().acted, [Ok("Campaign link saved")]);
+        undo(&h, "newer").click();
+        h.run_steps(2);
+        assert_eq!(
+            h.state().acted,
+            [Ok("Campaign link saved"), Ok("Folder saved")]
+        );
+        assert!(h.state().dndbeyond.results.is_empty());
+        let mut h = harness(two());
+        h.get_by_label("Register as a new campaign").click();
+        h.run_steps(2);
+        assert_eq!((h.state().registered, h.state().acted.len()), (1, 0));
+    }
+
+    /// A line made before the body replaced or ended its result: its press reaches nothing, the
+    /// other result stays, and the next frame shows no old words.
+    #[test]
+    fn a_press_on_a_replaced_or_ended_result_reaches_nothing() {
+        use pilot::*;
+        for change in [InBody::Replace("older"), InBody::End("older")] {
+            let mut h = harness(two());
+            // In the frame of the press, the body replaces or ends the result first, then the
+            // footer draws the line it was given and takes the press.
+            h.state_mut().in_body = Some(change);
+            undo(&h, "older").click();
+            h.run_steps(1);
+            assert_eq!(h.state().acted, [Err("gone")], "{change:?}");
+            h.run_steps(3);
+            let results = &h.state().dndbeyond.results;
+            assert!(results.get(&Campaign("newer")).is_some(), "B stays");
+            match change {
+                InBody::Replace(_) => assert!(
+                    results.get(&Campaign("older")).is_some()
+                        && h.query_by_label("Campaign link saved again.").is_some()
+                        && h.query_by_label("Campaign link saved.").is_none(),
+                    "the replacement shows, and the old words do not"
+                ),
+                _ => assert!(
+                    results.get(&Campaign("older")).is_none()
+                        && h.query_by_label("Campaign link saved.").is_none()
+                ),
+            }
+        }
+    }
+
+    /// Each line's controls are keyed by its ticket: a result added above moves neither the
+    /// keyboard focus nor a pending pointer press onto another result's Undo.
+    #[test]
+    fn focus_and_a_pending_press_stay_with_their_result() {
+        use pilot::*;
+        // Focus on the older Undo, then a newer result comes above it: Enter takes back the
+        // older one.
+        let mut h = harness(two());
+        undo(&h, "older").focus();
+        h.run_steps(2);
+        h.state_mut().in_body = Some(InBody::Add("third"));
+        h.run_steps(4);
+        assert!(h.query_by_label("Folder chosen.").is_some());
+        h.key_press(egui::Key::Enter);
+        h.run_steps(2);
+        assert_eq!(h.state().acted, [Ok("Campaign link saved")]);
+        // A press held on the older Undo while a newer result comes above it: the release acts on
+        // the older one or on nothing, never on another result.
+        let mut h = harness(two());
+        let at = undo(&h, "older").rect().center();
+        h.event(egui::Event::PointerMoved(at));
+        h.event(egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
+        });
+        h.run_steps(1);
+        h.state_mut().in_body = Some(InBody::Add("third"));
+        h.run_steps(3);
+        h.event(egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        });
+        h.run_steps(2);
+        let acted = &h.state().acted;
+        assert!(
+            acted.is_empty() || acted == &[Ok("Campaign link saved")],
+            "{acted:?}"
+        );
+        assert!(
+            h.state()
+                .dndbeyond
+                .results
+                .get(&Campaign("third"))
+                .is_some()
+                && h.state()
+                    .dndbeyond
+                    .results
+                    .get(&Campaign("newer"))
+                    .is_some(),
+            "no other result was taken back"
+        );
+    }
+
+    /// A locked Undo and a locked choice are disabled, say why in painted words (no hover
+    /// needed) and in their description, and give nothing back.
+    #[test]
+    fn a_locked_undo_or_choice_paints_why_and_gives_nothing_back() {
+        use pilot::*;
+        let mut app = two();
+        app.run_live = true;
+        let mut h = harness(app);
+        let register = h.get_by_label("Register as a new campaign");
+        for node in [&register, &undo(&h, "older"), &undo(&h, "newer")] {
+            assert!(disabled(node), "it is locked");
+            assert_eq!(description(node).as_deref(), Some("End the run first."));
+        }
+        assert!(
+            h.query_all_by_role_and_label(egui::accesskit::Role::Label, "End the run first.")
+                .count()
+                >= 2,
+            "each locked message paints its reason"
+        );
+        undo(&h, "older").click();
+        h.get_by_label("Register as a new campaign").click();
+        h.run_steps(2);
+        assert!(h.state().acted.is_empty() && h.state().registered == 0);
     }
 }
