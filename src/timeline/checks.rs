@@ -14,6 +14,20 @@ const MOST_CHECKS: usize = 31;
 /// The most `Plan “…”` offers under one result.
 const MOST_OFFERS: usize = 3;
 
+/// The "How long" field of an open event. Both of its forms (with checks to follow and without)
+/// use this id, so the focus and the cursor stay when the event gains or loses its checks.
+const LENGTH: design::FieldId = crate::field_id!("event_length");
+
+/// The "How long" field of this event. egui keeps a field's cursor and text Undo under its id, so
+/// each event has its own id: another event's length never gets this one's history.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
+pub(super) fn length_field(event: &Event) -> design::FieldId {
+    LENGTH.with(design::TextKey::from_data(event.id.as_str()))
+}
+
 /// What the DM asked for in a journey's checks. One press in a frame.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Act {
@@ -536,7 +550,7 @@ fn table_line(ui: &mut egui::Ui, view: &View<'_>, table: Option<&Table>, act: &m
         names.sort_by(|a, b| a.name().cmp(b.name()).then(a.key.cmp(&b.key)));
         for option in names {
             let selected = table.is_some_and(|table| table.key == option.key);
-            if ui.selectable_label(selected, option.name()).clicked() {
+            if design::choice(ui, selected, option.name()).clicked() {
                 *act = Some(Act::Choose(Some(option.key.clone())));
                 ui.close();
             }
@@ -583,10 +597,6 @@ pub fn span(start: Option<u64>, length: &str) -> Option<String> {
 }
 
 /// One line for each check, then `Roll all`, then results that are no longer on a line.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Act> {
     state.follow(&view.event.id);
     let c = colors();
@@ -746,7 +756,7 @@ pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Ac
         .map(|(_, _, at)| *at)
         .collect();
     if waiting.len() > 1 {
-        ui.add_space(design::XS);
+        design::gap(ui, design::Gap::XS);
         if Action::secondary(&format!("Roll all {}", waiting.len()))
             .icon(icons::DICE)
             .density(Density::Read)
@@ -758,7 +768,7 @@ pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Ac
         }
     }
     if !outside.is_empty() {
-        ui.add_space(design::XS);
+        design::gap(ui, design::Gap::XS);
         ui.label(
             Type::Small
                 .rich(ui, "Outside this journey now")
@@ -903,10 +913,6 @@ pub fn note_taken(book: &mut Book, taken: Taken) {
 /// **How long**, the Timeline's field. The file takes the words on Enter or when the field
 /// loses focus; until then the page shows what was typed. Returns the words in view, and what
 /// reached the event.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub fn length_input(
     ui: &mut egui::Ui,
     draft: &mut LengthDraft,
@@ -915,7 +921,8 @@ pub fn length_input(
     focus: bool,
 ) -> (String, Taken) {
     let mut words = draft.words(event);
-    let response = design::text_input(ui, "How long", &mut words, hint, ui.available_width());
+    let width = ui.available_width();
+    let response = design::line_field(ui, length_field(event), "How long", &mut words, hint, width);
     if focus {
         response.request_focus();
     }
