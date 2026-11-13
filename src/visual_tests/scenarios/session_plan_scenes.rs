@@ -68,18 +68,26 @@ fn fold_shown(d: &Driver<'_>) -> bool {
     })
 }
 
-/// Round 27 FL4: a scene's box and a fight's caret against their title line's centre.
+/// The baseline of the first line of the painted text with exactly these words.
+fn first_baseline(d: &Driver<'_>, words: &str) -> Option<f32> {
+    let mut found = None;
+    d.each_painted_text(|text, _| {
+        if text.galley.job.text == words
+            && let Some(row) = text.galley.rows.first()
+            && let Some(glyph) = row.glyphs.first()
+        {
+            found.get_or_insert(text.pos.y + row.pos.y + glyph.pos.y);
+        }
+    });
+    found
+}
+
+/// Round 27 FL4: a fight's caret is centred on its title's target, and a scene's box sits on
+/// its words as the caret sits on its title (each measured from its title's baseline).
 fn lead_centred(d: &Driver<'_>) -> (bool, String) {
     let line = crate::design::Type::Body.line();
-    let one_line = |title: &str| {
-        painted(d, title)
-            .first()
-            .map(|(rect, _)| rect.top() + line.min(rect.height()) / 2.0)
-    };
-    let scene = one_line(VARRA);
     let scene_box = d.place_of(&format!("Open: {VARRA}")).map(|rect| rect.center().y);
-    let fight = painted(d, SHRINE).first().map(|(rect, _)| *rect);
-    let fight_centre = one_line(SHRINE);
+    let fight = d.place_of(SHRINE);
     let caret = fight.and_then(|fight| {
         let area = egui::Rect::from_x_y_ranges(
             fight.left() - 2.0 * crate::design::XL..=fight.left(),
@@ -88,11 +96,18 @@ fn lead_centred(d: &Driver<'_>) -> (bool, String) {
         d.painted_word_rect(crate::design::icons::NEXT, area)
             .map(|rect| rect.center().y)
     });
-    let near = |a: Option<f32>, b: Option<f32>| a.zip(b).is_some_and(|(a, b)| (a - b).abs() <= 1.0);
+    let (scene_line, title_line) = (first_baseline(d, VARRA), first_baseline(d, SHRINE));
+    let centred = fight
+        .zip(caret)
+        .is_some_and(|(fight, caret)| (fight.center().y - caret).abs() <= 1.0);
+    let same = scene_box
+        .zip(scene_line)
+        .zip(caret.zip(title_line))
+        .is_some_and(|((lead, words), (caret, title))| ((words - lead) - (title - caret)).abs() <= 1.0);
     (
-        near(scene, scene_box) && near(fight_centre, caret),
+        centred && same,
         format!(
-            "scene words {scene:?}, box {scene_box:?}; fight title {fight_centre:?}, caret {caret:?}"
+            "fight target {fight:?}, caret {caret:?}, title baseline {title_line:?}; box {scene_box:?}, scene baseline {scene_line:?}"
         ),
     )
 }

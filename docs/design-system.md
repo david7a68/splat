@@ -1124,7 +1124,8 @@ the tab's bottom: the discard's result, the reasons (an error, the unread choice
 the folder move's warning. Faults that belong to one row, member or field stay there.
 
 Encounters uses one column, at most `LIST_MEASURE` (880 px), with IN PROGRESS, READY TO RUN, GROUPS and
-HISTORY in that order. Groups and History start closed when they have rows. The list keeps the scroll bar's lane
+HISTORY in that order. The counts are in those headings (`IN PROGRESS 2`), so the page header's context stays
+empty once the campaign is read (`Reading encounters…` before). Groups and History start closed when they have rows. The list keeps the scroll bar's lane
 whether or not the bar shows, so opening Groups moves no row action; the creature results and the encounter
 roster keep it too, so `Add` and the row menus stay put as a list grows or shrinks. When the run folder cannot be
 read (a folder that held runs is gone, or cannot be listed), In progress and History say so (`Splat cannot read the
@@ -2117,7 +2118,9 @@ A Travel event's checks are lines of the event: `- Checks table: road` (no key w
 them keeps each as one string. A check's identity is its offset in hours, never a day's name. A fight begun from a
 plan line with that mark carries `journey=<event> at=<hours>` in its `%% splat … %%` line: it follows the
 journey, and the clock starts it at the check while the journey still covers it (W5-D1). Its planned row ends
-its second line with `· Day 2 of <journey>`; the journey's name goes, then the day, so the row keeps its lines. The mark is one whole
+its second line with `· Day 2 of <journey>`; the journey's name goes, then the day, so the row keeps its lines. Its
+Timeline row, once played, ends its second line with the same words (`Fight · Round 1 · Session 1 · Day 2 of
+Travel`), read again only when the Timeline changes. The mark is one whole
 comment; the words before and after it are the line's own. The clock places the fight while it is a fight and its
 journey covers the check (`checks::covers`), and the clock after the journey is the later of the journey's end and
 each such fight's end. A road fight's removal takes the line break its insertion wrote, so its Undo gives back the
@@ -2154,7 +2157,8 @@ the tabs, the plan's rows and the recording row never move when one comes: `Reco
 deleted.`, `Added to the notes.`, `<file> is now a separate session.`, where an open run stays or moved, `No entry
 is named …`, `Draft discarded.` or `Reloaded from disk.` with their Undo, the warning that this is not the session
 being played or that its date has passed, the chosen input that is not connected, and another session's
-recording state (`⊘ Not saving audio 0:00 in Session 1: …`). The line below the title holds only this session's
+recording state (`● Recording 12:04 in Session 1: …`); while the bottom banner says that recording stopped saving
+audio, the footer does not say it again. The line below the title holds only this session's
 recording state, which keeps one height from Record to Stop, and the Record step. The plan has its own message
 footer below its rows for its Add, Remove, ruling and deleted-run results with their Undo, the file's notices, the
 group being assembled elsewhere and a rename problem, and each fight's `Add rewards` result and fault, naming the
@@ -2336,8 +2340,10 @@ selected. Combat sync help uses muted Small text. Help on this tab keeps READER_
 and says what a choice does, not how it works (`It cannot change your campaign files.`). The second service
 keeps one name: `Transcript and summary instructions`, `Transcript and summary API key`, and accessible names
 `Transcript and summary service`, `… address` and `… model`. A value that blocks processing says so below its
-own field in the notice's tone (`Enter the address.`, `Enter the model’s name.`). When the DM chooses a
-service that leaves such a field empty, the notice and that reason scroll into view together, once; a key
+own field (`Enter the address.`, `Enter the model’s name.`), `XS` below the field, with `M` before the next
+label; help under a field has `L` before the next label. The tab's notices (`You cannot process yet. …`, a
+settings file that cannot be read or saved) sit in its message footer, so the form never moves when one comes or
+goes. When the DM chooses a service that leaves such a field empty, that reason scrolls into view, once; a key
 problem keeps its reason at the key row, so the view stays. A saved key says `Saved on this computer.`;
 `keyring` stays in warnings about the keyring itself.
 

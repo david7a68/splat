@@ -11268,8 +11268,23 @@ pub mod session_notes {
         d.click("Place this event after");
         d.click("Start of the timeline");
         d.state("timeline-day-added", Sizes::All);
+        // Round 27 FL1: the detail form keeps the scroll bar's lane, so a Day's form (no bar)
+        // and a Long rest's (with a bar) end their fields and `Copy link` at one x.
+        let edges = |d: &Driver<'_>| {
+            [d.place_of("Title"), d.place_of("Copy link")].map(|at| at.map(|at| at.right()))
+        };
+        let day_edges = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, edges));
         d.click_containing("Long rest · Session 1");
         d.expect("Link text");
+        let rest_edges = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, edges));
+        d.observe(
+            "iter-27-S-FL1",
+            day_edges.iter().flatten().all(Option::is_some)
+                && day_edges.iter().flatten().zip(rest_edges.iter().flatten()).all(
+                    |(day, rest)| day.zip(*rest).is_some_and(|(day, rest)| (day - rest).abs() <= 1.0),
+                ),
+            format!("A Day's and a Long rest's form end at one x: {day_edges:?} {rest_edges:?}"),
+        );
         d.replace_text_in("Title", "Rest at the mill");
         d.type_into("Where", "Old mill");
         d.press_ctrl(Key::S);
@@ -11657,7 +11672,30 @@ pub mod session_notes {
         d.state("templates-own", Sizes::Default);
         d.type_into_editor("Edited in the template.\n");
         d.click("New template");
+        // Round 27 FL2, SL1: Create template follows the name field on its line, and Cancel
+        // starts the kept line below it at the field's left; typing moves neither.
+        let form = |d: &Driver<'_>| {
+            [
+                d.place_of("Template name"),
+                d.place_of("Create template"),
+                d.place_of("Cancel"),
+            ]
+        };
+        let empty = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, form));
         d.type_into("Template name", "Downtime");
+        let filled = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, form));
+        d.observe(
+            "iter-27-S-FL2",
+            empty == filled
+                && filled.iter().all(|[field, create, cancel]| {
+                    matches!((field, create, cancel), (Some(field), Some(create), Some(cancel))
+                        if field.y_range().contains(create.center().y)
+                            && create.left() > field.right()
+                            && cancel.top() > field.bottom()
+                            && cancel.left() <= field.left() + 1.0)
+                }),
+            format!("Create on the field's line, Cancel below at its start, same empty and filled: {filled:?}"),
+        );
         d.observe(
             "iter-13-S1",
             !d.has("New template") && d.has("Cancel"),
@@ -11669,6 +11707,21 @@ pub mod session_notes {
         d.click("More actions for Downtime");
         d.click("Delete this template");
         d.expect("Undo delete");
+        // Round 27 FI4: the result is in the template page's footer, not under the list.
+        let result = d.place_of("Deleted “Downtime”.");
+        let last_row = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name.starts_with("Short notes") || node.name.starts_with("Standard session"))
+            .map(|node| node.rect)
+            .reduce(|a, b| if a.bottom() > b.bottom() { a } else { b });
+        d.observe(
+            "iter-27-S-FI4",
+            result
+                .zip(last_row)
+                .is_some_and(|(result, row)| result.top() > row.bottom() + crate::design::XL),
+            format!("The delete result {result:?} is in the footer, below the list {last_row:?}"),
+        );
         d.state("templates-deleted", Sizes::Default);
         d.click("Undo delete");
         d.expect("Downtime");
@@ -12999,22 +13052,14 @@ pub mod session_recording {
         d.settle();
         d.click("Record this session");
         d.click("Start recording");
-        d.app_mut()
-            .sessions
-            .simulate_recorder_health(Health::Stalled);
         d.app_mut().sessions.open(second);
         d.settle();
-        d.state_prepared("stalled-elsewhere-with-unprocessed-row", Sizes::All, |d| {
-            d.expect("Session 2: Unprocessed recording");
-            d.expect("Not processed");
-            d.expect("The recording of “Session 1: Failed processing” stopped saving audio.");
-            // Round 24 FC7: on the line below the session title, only the icon and `Not saving
-            // audio` are red; the other session's time and title are muted.
+        // The other session's recording state, in this session's footer.
+        let other_line = |d: &Driver<'_>, state: &str| {
             let mut parts = Vec::new();
             d.each_painted_text(|text, _| {
                 let job = &text.galley.job;
-                if job.text.contains("Not saving audio")
-                    && job.text.contains(" in Session 1: Failed processing")
+                if job.text.contains(state) && job.text.contains(" in Session 1: Failed processing")
                 {
                     parts.extend(job.sections.iter().map(|section| {
                         (
@@ -13024,21 +13069,42 @@ pub mod session_recording {
                     }));
                 }
             });
-            let c = crate::design::colors();
+            parts
+        };
+        // Round 24 FC7 (moved by round 27 FE8 to the recording that still saves, where the line
+        // stays): only the icon and the state word have the state's colour; the other
+        // session's time and title are muted.
+        let parts = other_line(d, "Recording");
+        let c = crate::design::colors();
+        d.observe(
+            "iter-24-S-FC7",
+            parts
+                .iter()
+                .any(|(words, _)| words.contains("in Session 1"))
+                && parts.iter().all(|(words, color)| {
+                    *color
+                        == if words.contains("in Session 1") {
+                            c.muted
+                        } else {
+                            c.recording
+                        }
+                }),
+            format!("Only the state has its colour on the other session's line: {parts:?}"),
+        );
+        d.app_mut()
+            .sessions
+            .simulate_recorder_health(Health::Stalled);
+        d.settle();
+        d.state_prepared("stalled-elsewhere-with-unprocessed-row", Sizes::All, |d| {
+            d.expect("Session 2: Unprocessed recording");
+            d.expect("Not processed");
+            d.expect("The recording of “Session 1: Failed processing” stopped saving audio.");
+            // Round 27 FE8: the banner says it, so the footer does not say it again.
+            let parts = other_line(d, "Not saving audio");
             d.observe(
-                "iter-24-S-FC7",
-                parts
-                    .iter()
-                    .any(|(words, _)| words.contains("in Session 1"))
-                    && parts.iter().all(|(words, color)| {
-                        *color
-                            == if words.contains("in Session 1") {
-                                c.muted
-                            } else {
-                                c.result.error
-                            }
-                    }),
-                format!("Only the state is red on the other session's line: {parts:?}"),
+                "iter-27-S-FE8",
+                parts.is_empty(),
+                format!("The footer does not repeat the banner's stopped recording: {parts:?}"),
             );
             assert!(
                 d.nodes()
@@ -13955,6 +14021,8 @@ pub mod session_recording {
             d.place_of("2026-01-01 19:00").unwrap().top() - tabs_top(d).unwrap(),
             recording_top
         );
+        // Round 27 AN1: Cancel's place, to compare with a later stage's longer words.
+        let cancel_speech = d.place_of("Cancel processing");
         d.state("processing-speech", Sizes::Default);
         d.request_close();
         d.expect("Continue processing goes on from there");
@@ -14003,6 +14071,13 @@ pub mod session_recording {
             !d.has_containing("Cancelled at part")
                 && !d.has_containing("Processing it again goes on"),
             "A new processing pass hides the old cancellation reason",
+        );
+        let cancel_second = d.place_of("Cancel processing");
+        d.observe(
+            "iter-27-S-AN1",
+            cancel_speech.is_some()
+                && cancel_speech.map(|at| at.left_top()) == cancel_second.map(|at| at.left_top()),
+            format!("Cancel keeps its place through the stages: {cancel_speech:?} {cancel_second:?}"),
         );
         d.state("processing-second-pass", Sizes::Default);
         d.observe(
@@ -14107,8 +14182,28 @@ pub mod session_recording {
             "Markers do not reach the timeline by themselves",
         );
         d.click(NAV_SESSIONS);
+        // Round 27 FI3: the result is in the session's footer, so the next marker's Add keeps
+        // its place at every size.
+        let next_add = |d: &Driver<'_>| {
+            d.place_of("Add to timeline: Wolves at the bridge (0)")
+                .map(|at| at.top())
+        };
+        let next_before = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, next_add));
         d.click_containing("Add to timeline: Rest at the mill");
         d.expect("On the timeline");
+        let next_after = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, next_add));
+        let footer = d.place_of("Rest at the mill added to Session 1.");
+        d.observe(
+            "iter-27-S-FI3",
+            next_before.iter().all(Option::is_some)
+                && next_before == next_after
+                && footer
+                    .zip(next_after[1])
+                    .is_some_and(|(footer, next)| footer.top() > next),
+            format!(
+                "The marker's Add result is in the footer {footer:?} and the next Add keeps its y: {next_before:?} {next_after:?}"
+            ),
+        );
         d.observe_both("H1 recording add", "The recording row owns one Undo", |d| {
             d.has("Undo add")
                 && d.nodes()
@@ -14173,6 +14268,21 @@ pub mod session_recording {
             d.visible_text("Long rest: Rest at the mill")
                 && d.in_view_containing("On the timeline"),
             "The marker heading and its timeline state are visible together in the transcript",
+        );
+        // Round 27 FN2: in the transcript the result is not between the marker's line and the
+        // words after it: it is in the session's footer, below the reading.
+        let result = d.place_of("Rest at the mill added to Session 1.");
+        let state = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name.contains("On the timeline") && node.in_view())
+            .map(|node| node.rect);
+        d.observe(
+            "iter-27-S-FN2",
+            result
+                .zip(state)
+                .is_some_and(|(result, state)| result.top() > state.bottom() + crate::design::XL),
+            format!("The Add result {result:?} is in the footer, not under the marker {state:?}"),
         );
         d.state("marked-transcript", Sizes::All);
         d.click("On the timeline");
@@ -14298,6 +14408,24 @@ pub mod session_recording {
             "Opening a warned session keeps the processed warning in the rail",
         );
         d.state_prepared("recording-warned", Sizes::All, |d| {
+            // Round 27 FO1: the row's `⋯` is an `L` gap after its date-time title, on its line.
+            let size = d.window_size();
+            let menu = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("More actions for 2026-01-01") && node.in_view())
+                .map(|node| node.rect);
+            let title = menu.and_then(|menu| {
+                d.painted_word_rect("2026-01-01 19:00", menu.expand2(egui::vec2(2000.0, 0.0)))
+            });
+            d.observe(
+                "iter-27-S-FO1",
+                menu.zip(title).is_some_and(|(menu, title)| {
+                    let gap = menu.left() - title.right();
+                    gap >= crate::design::S && gap <= crate::design::L + 1.0
+                }),
+                format!("At {size:?}, the row menu {menu:?} follows its title {title:?}"),
+            );
             check_result_row(d);
             check_warned_row(d);
             check_empty_check_once(d, "iter-16-C-FT3");
@@ -14384,6 +14512,13 @@ pub mod session_recording {
         d.click_containing("Delete recording:");
         d.expect("Keep the recording");
         assert_eq!(d.focused_name().as_deref(), Some("Keep the recording"));
+        // Round 27 FO3: the dialog names what it deletes, with the menu's verb.
+        d.observe(
+            "iter-27-S-FO3",
+            d.has_containing("This deletes the recording of 2026-01-01 19:00")
+                && d.has_containing(", its transcripts and its summary. You cannot undo this."),
+            "The delete dialog says it deletes the recording, its transcripts and its summary",
+        );
         d.state("recording-delete", Sizes::Standard);
         d.click("Delete recording");
         d.expect("Recording deleted.");
@@ -14758,6 +14893,45 @@ pub mod session_recording {
             ),
         );
         d.expect("The saved key is for OpenAI, so Splat will not send it to this service. Save a key for it.");
+        // Round 27 FI7: a reason is `XS` below its field and `M` above the next label, and the
+        // notice is in the tab's footer, below the form, so it never moves the form.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (spaced, detail) = d.at_size(size, |d| {
+                let address = d.place_of("Speech address");
+                let reason = d.place_of("Enter the address.");
+                let model = d.place_of("Speech model");
+                let label = model.and_then(|model| {
+                    let above = egui::Rect::from_x_y_ranges(
+                        model.left() - 1.0..=model.right(),
+                        model.top() - crate::design::XL..=model.top(),
+                    );
+                    d.painted_word_rect("Model", above)
+                });
+                let notice = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name.contains(notice) && node.in_view())
+                    .map(|node| node.rect);
+                let near = |a: f32, b: f32| (a - b).abs() <= 1.0;
+                (
+                    address.zip(reason).is_some_and(|(address, reason)| {
+                        near(reason.top() - address.bottom(), crate::design::XS)
+                    }) && reason.zip(label).is_some_and(|(reason, label)| {
+                        near(label.top() - reason.bottom(), crate::design::M)
+                    }) && notice
+                        .zip(address)
+                        .is_some_and(|(notice, address)| notice.top() > address.bottom()),
+                    format!(
+                        "Address {address:?}, reason {reason:?}, Model label {label:?}, notice {notice:?}"
+                    ),
+                )
+            });
+            d.observe(
+                "iter-27-S-FI7",
+                spaced,
+                format!("At {size:?}, the reason belongs to its field and the notice is in the footer: {detail}"),
+            );
+        }
         d.state("processing-custom-speech-service", Sizes::All);
 
         // FT2: return to the original session. Saving the missing note made a new identity.
@@ -19256,7 +19430,7 @@ pub mod session_plan {
         // Must stay true: the row keeps its own state word.
         d.observe(
             "iter-27-S-FN1-row",
-            d.has("In notes") && !d.has(&action),
+            d.has_containing("In notes") && !d.has(&action),
             "The played row says In notes after Add rewards",
         );
         d.state("rewards-added", Sizes::All);
@@ -20717,6 +20891,17 @@ pub mod session_plan {
         let before = d.has_containing(&delete);
         delete_saved_run(d, SECOND);
         d.expect("Undo delete run");
+        // Round 27 FM3: the counts are in the list headings only; the header says none of them.
+        // Must stay true: the IN PROGRESS heading still counts its rows.
+        d.observe(
+            "iter-27-S-FM3",
+            !d.nodes().iter().any(|node| {
+                node.name.starts_with(|c: char| c.is_ascii_digit())
+                    && (node.name.ends_with(" in progress") || node.name.ends_with(" ready"))
+                    || node.name.contains(" ready · ")
+            }) && d.has_containing("IN PROGRESS"),
+            "The Encounters header does not repeat the headings' counts",
+        );
         d.state("run-removed", Sizes::Default);
         d.click("Undo delete run");
         d.observe(

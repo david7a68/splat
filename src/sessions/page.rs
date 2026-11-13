@@ -5705,8 +5705,11 @@ impl Sessions {
         }
         // Another session's recording: its state, time and title, as a notice. As on the
         // recording row, the state's colour is only on its icon and word.
+        // Round 27 FE8: while the bottom banner says this recording stopped saving audio (with
+        // what was kept), the footer does not say it again.
         if let (Some(live), Some((icon, word, color))) = (&self.live, self.recording_status())
             && Some(live.session) != self.selected
+            && self.stalled_elsewhere().is_none()
         {
             let detail = format!(" {} in {}", clock(live.recorder.seconds()), live.label);
             let (icon, word) = (icon.to_owned(), word.to_owned());
@@ -6182,7 +6185,14 @@ impl Sessions {
                 body_above(ui, bottom, |ui| {
                     // One thing at a time, so that the DM does not type into another template.
                     if self.new_template.is_some() {
-                        self.new_template_form(ui);
+                        // Round 27: `Cancel` starts its line, and its target reaches into the
+                        // gutter: an `L` gutter keeps it clear of the column's splitter.
+                        egui::Frame::new()
+                            .inner_margin(egui::Margin {
+                                left: (design::L - design::S) as i8,
+                                ..Default::default()
+                            })
+                            .show(ui, |ui| self.new_template_form(ui));
                     } else {
                         self.template_editor(ui);
                     }

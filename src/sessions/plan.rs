@@ -473,22 +473,14 @@ fn plan_row_with(
 ) {
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = design::S;
-        // Round 27 FL4: the lead is centred on the title's first line. It is drawn first, so
-        // it keeps its place in the Tab order; the centre is the one the title had in the last
-        // pass, and a change draws the pass again before it shows.
-        let centre_key = ui.id().with("plan_row_lead_centre");
-        let centre = ui
-            .ctx()
-            .data(|data| data.get_temp::<f32>(centre_key))
-            .unwrap_or(design::XL / 2.0);
+        // Round 27 FL4: the lead is centred in its `XL` slot, which is where a title's first
+        // line is centred: a fight's link in its `XL` target, a scene's line in its `XL` band
+        // (`scene_words`). A caret at the slot's top sat 2 px above its title's centre.
         let (_, slot) = ui.allocate_space(egui::vec2(lead_width(), design::XL));
         lead(
             &mut ui.new_child(
                 egui::UiBuilder::new()
-                    .max_rect(egui::Rect::from_min_size(
-                        egui::pos2(slot.left(), slot.top() + centre - design::XL / 2.0),
-                        slot.size(),
-                    ))
+                    .max_rect(slot)
                     .layout(egui::Layout::left_to_right(egui::Align::Center)),
             ),
         );
@@ -504,18 +496,6 @@ fn plan_row_with(
                     words(ui);
                 },
             );
-            // One line (a link one target high, or a line of words) has its words at its
-            // centre; more lines start at the top, so the first line's centre is half a line.
-            let words_rect = title.response.rect;
-            let measured = if words_rect.height() <= design::XL + 0.5 {
-                words_rect.center().y - slot.top()
-            } else {
-                words_rect.top() - slot.top() + Type::Body.line() / 2.0
-            };
-            if (measured - centre).abs() > 0.25 {
-                ui.ctx().data_mut(|data| data.insert_temp(centre_key, measured));
-                ui.ctx().request_discard("a plan row's lead moved to its title's centre");
-            }
             let action_rect = egui::Rect::from_min_size(
                 egui::pos2(ui.max_rect().right() - widths[1], left.y),
                 egui::vec2(widths[1], Density::Read.control()),

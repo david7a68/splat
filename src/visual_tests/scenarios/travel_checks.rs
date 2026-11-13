@@ -336,7 +336,11 @@ pub fn run(d: &mut Driver<'_>) {
     d.goal_within("T11.10", "plan a result as a fight", 1);
     // Round 27 FE7: the message and its Undo are in the plan's footer; `In the plan` takes the
     // offer's place, so nothing below the checks moves.
-    let in_plan = from_label(d, "In the plan");
+    let in_plan = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name.contains("In the plan"))
+        .and_then(|node| Some(node.rect.translate(-d.place_of("Encounter checks")?.min.to_vec2())));
     let after = below_checks(d);
     let message = from_label(d, "“Bridge Ambush” is in tonight’s plan.");
     d.observe(
@@ -705,6 +709,17 @@ fn road_fight_keeps_its_day(d: &mut Driver<'_>, dir: &Path) {
         format!("The road fight starts at Day 2, 00:00, inside the journey, which keeps its days: {placed:?}"),
     );
     d.click(NAV_TIMELINE);
+    // Round 27 FE10: the fight's Timeline row says its day of the journey, in the plan row's
+    // words; Must stay true: the journey's own row does not say it.
+    let row = d.name_starting("Shrine of Cinders ·");
+    let travel_row = d.name_starting("Travel ·");
+    d.observe(
+        "iter-27-S-FE10",
+        row.ends_with(" · Day 2 of Travel")
+            && travel_row.starts_with("Travel ·")
+            && !travel_row.contains("of Travel"),
+        format!("The road fight's row says Day 2 of Travel: {row:?}; the journey's: {travel_row:?}"),
+    );
     d.click_starting("Shrine of Cinders ·");
     d.observe(
         "W5-D1",
