@@ -4771,7 +4771,8 @@ pub mod encounter_run {
         );
 
         // The label keeps the action and direction; accessibility keeps the full target.
-        let undo_text = format!("{UNDO}{CONDITION} on {TARGET}");
+        // iter-27-R FK4: the step names its verb.
+        let undo_text = format!("{UNDO}add {CONDITION} on {TARGET}");
         d.observe(
             "T1.6",
             d.in_view(&undo_text) && d.visible_passage(&format!("{CONDITION} on")),
@@ -4929,6 +4930,31 @@ pub mod encounter_run {
 
         d.click("Roll NPC initiative another way");
         d.state("npc-roll-menu", Sizes::Default);
+        // iter-27-R FJ4: the choice that plain `Roll NPCs` uses has a check, the others keep
+        // its slot empty, so each choice's words start at one x.
+        let mut checked = Vec::new();
+        let mut starts = Vec::new();
+        d.each_painted_text(|text, _| {
+            let job = &text.galley.job;
+            if job
+                .text
+                .starts_with(&format!("{} ", crate::design::icons::OK))
+                && job.sections.len() == 2
+            {
+                if job.sections[0].format.color.a() > 0 {
+                    checked.push(job.text.clone());
+                }
+                starts.push(text.pos.x.round());
+            }
+        });
+        d.observe(
+            "iter-27-R-FJ4",
+            starts.len() == 3
+                && starts.windows(2).all(|pair| pair[0] == pair[1])
+                && checked.len() == 1
+                && checked[0].ends_with("(D&D default)"),
+            format!("Checked {checked:?}; choices start at {starts:?}"),
+        );
         d.check_tab_order("NPC roll menu");
         d.click("Individually");
         d.expect_same(
@@ -6348,13 +6374,24 @@ pub mod run_long_names {
         d.click_row(ENEMY);
         d.type_text("5");
         d.press(Key::Enter);
+        // iter-27-R FK1: the slot does not follow the roster's names, so Conditions has the
+        // same x before the long name joins the fight.
+        let conditions_left = |d: &Driver<'_>| {
+            d.place_of("Conditions for this participant")
+                .map(|rect| rect.left().round())
+        };
+        d.click_row(ENEMY);
+        let short_fight: Vec<_> = [SMALL, DEFAULT, LARGE]
+            .into_iter()
+            .map(|size| d.at_size(size, conditions_left))
+            .collect();
         d.app_mut().encounters.simulate_rename(RENAMED, LONG_NAME);
         d.settle();
         d.click_row(LONG_NAME);
         // iter-26-R FK1: the dock's name slot has one width for the fight, so Conditions keeps
         // one x whichever row is selected: a long name, a short one, a party name.
-        for size in [SMALL, DEFAULT, LARGE] {
-            let mut lefts = Vec::new();
+        for (size, short_fight) in [SMALL, DEFAULT, LARGE].into_iter().zip(short_fight) {
+            let mut lefts = vec![short_fight];
             for row in [LONG_NAME, ENEMY, "Kestrel Dunmoor"] {
                 d.click_row(row);
                 lefts.push(d.at_size(size, |d| {
@@ -6393,7 +6430,10 @@ pub mod run_long_names {
             });
             d.observe(
                 "X9",
-                effect && name.starts_with(FIRST_NAME) && name.ends_with("… Bell"),
+                // iter-27-R FK1: the name wraps to two lines and keeps its first words.
+                effect
+                    && name.starts_with(&format!("{FIRST_NAME} "))
+                    && name.split_whitespace().count() >= 2,
                 format!("At {size:?}: Effect {effect} beside the dock's name {name:?}"),
             );
         }
@@ -6546,6 +6586,7 @@ pub mod run_long_names {
             "The changed-file notice says the stat block is the copy from the start of the fight",
         );
         // FJ8: the changed-on-disk state has its icon and colour; the words keep the text colour.
+        // iter-27-R: the message form's warning icon, `XS` before the words.
         let sentence = "This stat block uses the copy from the start of the fight.";
         let mut icon = None;
         let mut words = None;
@@ -6565,7 +6606,9 @@ pub mod run_long_names {
                 if icon.right() <= words.left()
                     && words.left() - icon.right() <= crate::design::XS + 2.0
                     && (icon.top() - words.top()).abs() < 4.0
-                    && color == Some(crate::design::colors().document.external)
+                    // iter-27-R FD5: the notice is a message in the panel's footer now, in the
+                    // warning tone (the file changed; it can still be read).
+                    && color == Some(crate::design::colors().result.warning)
                     && text == Some(crate::design::colors().text)),
             format!("The notice starts with the changed-on-disk icon: {icon:?} before {words:?}"),
         );
@@ -6852,6 +6895,22 @@ pub mod prep_to_table {
         );
         d.click("Correct…");
         d.state("correct-in-setup", Sizes::All);
+        // iter-27-R FJ8: in setup the bonus has its own heading, as live play's total has.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (heading, hp, bonus) = d.at_size(size, |d| {
+                (
+                    d.painted_rect_in("CORRECT INITIATIVE", egui::Rect::EVERYTHING),
+                    d.painted_rect_in("CORRECT HP", egui::Rect::EVERYTHING),
+                    d.place_of("Initiative bonus"),
+                )
+            });
+            d.observe(
+                "iter-27-R-FJ8",
+                matches!((heading, hp, bonus), (Some(heading), Some(hp), Some(bonus))
+                    if hp.bottom() < heading.top() && heading.bottom() <= bonus.top()),
+                format!("At {size:?}: CORRECT HP {hp:?}, CORRECT INITIATIVE {heading:?}, bonus {bonus:?}"),
+            );
+        }
         // Labels share one column: each value, and its Mark unknown, starts at one x.
         for size in [SMALL, DEFAULT, LARGE] {
             let lefts = d.at_size(size, |d| {
@@ -8026,8 +8085,24 @@ pub mod party_from_run {
         d.state("zero-hp-selected", Sizes::Default);
         d.click("Correct");
         d.expect("DEATH SAVES");
+        // iter-27-R FJ1: the counts have a fixed slot, so a press moves neither action.
+        let save_xs = |d: &Driver<'_>| {
+            [
+                d.place_of("Add a death save success"),
+                d.place_of("Add a death save failure"),
+            ]
+            .map(|rect| rect.map(|rect| rect.left().round()))
+        };
+        let before = save_xs(d);
+        d.expect("0 successes · 0 failures");
         d.click("Add a death save success");
         d.expect("1 success · 0 failures");
+        let after = save_xs(d);
+        d.observe(
+            "iter-27-R-FJ1",
+            before.iter().all(Option::is_some) && before == after,
+            format!("+ Success and + Failure x before {before:?}, after a press {after:?}"),
+        );
         d.observe(
             "Death saves",
             !d.has("DEATH SAVES (MANUAL)"),
@@ -9048,9 +9123,15 @@ pub mod run_edge_states {
         d.click(CONDITIONS);
         d.type_into(OTHER_EFFECT, LONG_EFFECT);
         d.click(ADD_EFFECT);
-        d.expect(&format!("Undo: {LONG_EFFECT} on {TARGET}"));
+        // iter-27-R FK4: the Undo names its verb, so the DM can tell an add from a removal.
+        d.expect(&format!("Undo: add {LONG_EFFECT} on {TARGET}"));
+        d.observe(
+            "iter-27-R-FK4",
+            !d.has(&format!("Undo: {LONG_EFFECT} on {TARGET}")),
+            "The added words' Undo starts with its verb",
+        );
         d.state_prepared("long-effect-text", Sizes::All, |d| {
-            undo_keeps_its_word(d, &format!("Undo: {LONG_EFFECT} on {TARGET}"));
+            undo_keeps_its_word(d, &format!("Undo: add {LONG_EFFECT} on {TARGET}"));
         });
         d.observe(
             "Long effects",
@@ -9209,6 +9290,12 @@ pub mod run_edge_states {
                 && d.has("Close and lose changes")
                 && d.visible_text("Closing loses this change:"),
             "Close says what it will lose, in place of \"The run stays saved\"",
+        );
+        // iter-27-R FK7: the run's footer line stays behind the dialog, with its save state.
+        d.observe(
+            "iter-27-R-FK7",
+            d.in_view("End encounter…") && d.in_view("Keyboard commands"),
+            "The run's footer line keeps End encounter… and Keys while the close dialog is open",
         );
         d.state("close-while-not-saved", Sizes::Default);
         d.press(Key::Escape);
@@ -9801,6 +9888,11 @@ pub mod run_roster_conflict {
                     if (button.left() - words.left()).abs() <= 1.0
                         && button.top() >= words.bottom() - 0.5
                         && close.top() < words.bottom()
+                        // iter-27-R AI1 closure: the cross is centred on the first line.
+                        && (close.center().y
+                            - (words.top() + crate::design::Type::Body.line() / 2.0))
+                            .abs()
+                            <= 1.0
                         && button.right() <= next.right() + 1.0),
                 format!("At {size:?}, error words, repair, close and Next turn: {places:?}"),
             );
@@ -10712,7 +10804,7 @@ pub mod signed_in {
         // iter11-B2: only a step the sheet made gives up `D&D Beyond`. A DM's own effect with
         // those words keeps them, or Undo shows its word alone.
         const DM_EFFECT: &str = "D&D Beyond boon";
-        let dm_undo = format!("Undo: {DM_EFFECT} on {MEMBER}");
+        let dm_undo = format!("Undo: add {DM_EFFECT} on {MEMBER}");
         d.click(CONDITIONS);
         d.type_into("Other effect", DM_EFFECT);
         d.click("Add");
@@ -16458,6 +16550,24 @@ pub mod encounter_groups {
         );
         for size in [SMALL, DEFAULT] {
             d.at_size_mut(size, |d| undo_paints_a_form(d, "Undo: move", "Rival", "2"));
+            // iter-27-R SJ1 closure: the key letter gives way before a word does, so a
+            // shortened Undo shows no `U`.
+            d.at_size_mut(size, |d| {
+                let undo = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.in_view() && node.name.starts_with("Undo: move"));
+                let painted = undo
+                    .as_ref()
+                    .map_or_else(String::new, |node| d.painted_in(node.rect));
+                let whole = painted.contains("(Rival Captain 2) before Rival Team");
+                let keyed = painted.split_whitespace().last() == Some("U");
+                d.observe(
+                    "iter-27-R-SJ1-key",
+                    painted.contains('2') && (whole || !keyed),
+                    format!("At {size:?}, Undo paints {painted:?}"),
+                );
+            });
         }
         d.state("tied-arrival-moved-before", Sizes::All);
         d.click_containing("Undo: move Rival Team (Rival Captain 2) before Rival Team");
@@ -16486,8 +16596,25 @@ pub mod encounter_groups {
             })
         };
         let setup_before = setup_rows(d);
+        // iter-27-R SJ1: the roster reserves its scroll bar's lane, so the row menus keep their
+        // x when the added arrivals make the roster scroll.
+        let menu_x = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    d.place_of("More actions for Brannoch Vale")
+                        .map(|rect| rect.right().round())
+                })
+            })
+        };
+        let menu_before = menu_x(d);
         d.click(&add_group(GROUP_GOBLINS));
         d.expect(FIRST_GOBLIN);
+        let menu_after = menu_x(d);
+        d.observe(
+            "iter-27-R-SJ1-lane",
+            menu_before.iter().all(Option::is_some) && menu_before == menu_after,
+            format!("Row menu right edges before {menu_before:?}, after the join {menu_after:?}"),
+        );
         let setup_added = setup_rows(d);
         d.state("group-added-in-setup", Sizes::All);
         let overflow = d.at_size((960.0, 640.0), |d| {
@@ -17810,6 +17937,24 @@ pub mod run_overrides {
         d.click(&format!("More actions for {RUN_ARENA}"));
         d.click("Start another fight");
         d.expect(&format!("{RUN_HEADING}{RUN_ARENA}"));
+        // iter-27-R FK6: the changed row starts with its side like every other setup row, and
+        // `Changed` follows its numbers, as in the editor.
+        let changed: Vec<String> = d
+            .nodes()
+            .into_iter()
+            .map(|node| node.name)
+            .filter(|name| name.contains(&format!("{} Changed", crate::design::icons::CHANGED)))
+            .collect();
+        d.observe(
+            "iter-27-R-FK6",
+            !changed.is_empty()
+                && changed.iter().all(|name| {
+                    name.find(" · AC ")
+                        .zip(name.find(crate::design::icons::CHANGED))
+                        .is_some_and(|(ac, mark)| ac < mark)
+                }),
+            format!("Setup rows with changes: {changed:?}"),
+        );
         d.state("setup-with-a-changed-row", Sizes::Default);
         d.observe(
             "T13.3",
@@ -18500,14 +18645,73 @@ pub mod run_add_creature {
         d.begin_task();
         d.type_into(FIELD, "wolf");
         d.expect("Choose Wolf");
-        // Show all lists every match in place: the words, the chosen match and the list stay.
         let choices = |d: &Driver<'_>| {
             d.nodes()
                 .into_iter()
                 .filter(|node| node.name.starts_with("Choose ") && node.in_view())
                 .count()
         };
-        let show_all = d
+        // iter-27-R FJ2 (Arrivals): six matches, one more than the short list, show as rows,
+        // not as five rows and a `Show all 6` line of about the same height that costs a click.
+        d.observe(
+            "iter-27-R-FJ2",
+            choices(d) == 6
+                && !d.has_containing("Show all")
+                && d.in_view(FIELD)
+                && d.in_view("Choose Wolf")
+                && d.in_view("Choose Winter Wolf")
+                && d.row_node("Wolf 2").is_some_and(|row| row.in_view()),
+            format!("`wolf` lists {} matches and no Show all", choices(d)),
+        );
+        // Must stay true: the button still adds the whole name typed.
+        d.observe(
+            "iter-14-B-AT1-add",
+            d.has("Add Wolf to the initiative list"),
+            "With every match listed, the button still adds the whole name typed",
+        );
+        d.state("arrivals-found-all", Sizes::All);
+        // The sixth match can be chosen and added, with its own values.
+        let listed = d.in_view("Choose Winter Wolf");
+        if listed {
+            d.click("Choose Winter Wolf");
+        }
+        let picked = listed
+            && d.has("Choose another creature")
+            && d.has_label("Winter Wolf")
+            && d.nodes().iter().any(|node| {
+                node.role == egui::accesskit::Role::Label
+                    && node.name.contains("HP 75")
+                    && node.name.contains("AC 13")
+            })
+            && d.has("Add Winter Wolf to the initiative list");
+        d.observe(
+            "iter-14-B-AT1-pick",
+            picked,
+            "Winter Wolf, the sixth match, can be chosen, and the form shows its HP 75 and AC 13",
+        );
+        if picked {
+            d.click("Add Winter Wolf to the initiative list");
+        }
+        let row = d.nodes().into_iter().find(|node| {
+            node.role == egui::accesskit::Role::Button
+                && node.name.starts_with("Winter Wolf")
+                && node.name.contains("HP 75/75")
+                && node.name.contains("AC 13")
+        });
+        d.observe(
+            "iter-14-B-AT1-added",
+            picked && row.is_some(),
+            format!(
+                "Winter Wolf joins the roster with HP 75 and AC 13: {:?}",
+                row.map(|row| row.name)
+            ),
+        );
+
+        // A broad search: rows below the list's edge are reached by Tab, and the list follows.
+        // iter-27-R: the Show all checks that `wolf` held (six matches now show as rows) are
+        // made on this search.
+        d.replace_text_in(FIELD, "dragon");
+        let broad = d
             .nodes()
             .into_iter()
             .find_map(|node| {
@@ -18515,14 +18719,20 @@ pub mod run_add_creature {
                     .strip_prefix("Show all ")
                     .and_then(|count| count.parse::<usize>().ok())
             })
-            .expect("Show all names how many creatures match");
+            .expect("a broad search offers Show all");
         let before = choices(d);
+        let first_choice = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name.starts_with("Choose ") && node.in_view())
+            .map(|node| node.name)
+            .unwrap_or_default();
         // FT2: Show all starts a line, so its words start at the result rows' words, and its
         // press area reaches into the gutter, never into the fight panel's splitter.
-        let label = format!("Show all {show_all}");
+        let label = format!("Show all {broad}");
         for size in [SMALL, DEFAULT, LARGE] {
             let (words, rows, target, splitter) = d.at_size(size, |d| {
-                let row = d.place_of("Choose Wolf");
+                let row = d.place_of(&first_choice);
                 let mut rows = None::<f32>;
                 d.each_painted_text(|text, _| {
                     let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
@@ -18556,88 +18766,27 @@ pub mod run_add_creature {
                 ),
             );
         }
-        d.click(&format!("Show all {show_all}"));
+        // New words start a short list again, and the same words do not bring the long one back.
+        d.click(&label);
+        d.replace_text_in(FIELD, "drago");
+        d.replace_text_in(FIELD, "dragon");
+        d.observe(
+            "iter-14-B-AT1-reset",
+            before == 5 && choices(d) == 5 && d.has(&label),
+            "Changed words close Show all",
+        );
+        d.click(&label);
         d.observe(
             "iter-14-B-AT1",
-            before == 5
-                && show_all > before
-                && choices(d) == show_all
+            broad > before
                 && !d.has_containing("Show all")
                 && !d.has_containing("Keep typing")
                 && d.in_view(FIELD)
-                && d.in_view("Choose Wolf")
-                && d.row_node("Wolf 2").is_some_and(|row| row.in_view()),
+                && d.in_view(&first_choice),
             format!(
-                "Show all {show_all} lists every match ({before} before, {} after), with the \
-                 words, the chosen match and the roster in view",
-                choices(d)
+                "Show all {broad} lists every match, with the words and the first match in view"
             ),
         );
-        // Must stay true: the button still adds the whole name typed.
-        d.observe(
-            "iter-14-B-AT1-add",
-            d.has("Add Wolf to the initiative list"),
-            "With every match listed, the button still adds the whole name typed",
-        );
-        d.state("arrivals-found-all", Sizes::All);
-        // New words start a short list again, and the same words do not bring the long one back.
-        d.replace_text_in(FIELD, "wol");
-        d.replace_text_in(FIELD, "wolf");
-        d.observe(
-            "iter-14-B-AT1-reset",
-            choices(d) == 5 && d.has(&format!("Show all {show_all}")),
-            "Changed words close Show all",
-        );
-        // A match that only Show all lists can be chosen and added, with its own values.
-        d.click(&format!("Show all {show_all}"));
-        let listed = d.in_view("Choose Winter Wolf");
-        if listed {
-            d.click("Choose Winter Wolf");
-        }
-        let picked = listed
-            && d.has("Choose another creature")
-            && d.has_label("Winter Wolf")
-            && d.nodes().iter().any(|node| {
-                node.role == egui::accesskit::Role::Label
-                    && node.name.contains("HP 75")
-                    && node.name.contains("AC 13")
-            })
-            && d.has("Add Winter Wolf to the initiative list");
-        d.observe(
-            "iter-14-B-AT1-pick",
-            picked,
-            "Winter Wolf, listed only by Show all, can be chosen, and the form shows its HP 75 and AC 13",
-        );
-        if picked {
-            d.click("Add Winter Wolf to the initiative list");
-        }
-        let row = d.nodes().into_iter().find(|node| {
-            node.role == egui::accesskit::Role::Button
-                && node.name.starts_with("Winter Wolf")
-                && node.name.contains("HP 75/75")
-                && node.name.contains("AC 13")
-        });
-        d.observe(
-            "iter-14-B-AT1-added",
-            picked && row.is_some(),
-            format!(
-                "Winter Wolf joins the roster with HP 75 and AC 13: {:?}",
-                row.map(|row| row.name)
-            ),
-        );
-
-        // A broad search: rows below the list's edge are reached by Tab, and the list follows.
-        d.replace_text_in(FIELD, "dragon");
-        let broad = d
-            .nodes()
-            .into_iter()
-            .find_map(|node| {
-                node.name
-                    .strip_prefix("Show all ")
-                    .and_then(|count| count.parse::<usize>().ok())
-            })
-            .expect("a broad search offers Show all");
-        d.click(&format!("Show all {broad}"));
         let rows: Vec<_> = d
             .nodes()
             .into_iter()
@@ -20561,6 +20710,25 @@ pub mod session_plan {
         d.click_row("Ember Cultist");
         d.click("Correct");
         d.state("correct-initiative", Sizes::Default);
+        // iter-27-R FM2: the help is `S` below its field's line, with no empty line between.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (field, set, help) = d.at_size(size, |d| {
+                (
+                    d.place_of("Initiative for Ember Cultist"),
+                    d.place_of("Set initiative"),
+                    d.painted_rect_in(
+                        "This row moves. The current turn stays.",
+                        egui::Rect::EVERYTHING,
+                    ),
+                )
+            });
+            d.observe(
+                "iter-27-R-FM2",
+                matches!((field, set, help), (Some(field), Some(set), Some(help))
+                    if (help.top() - field.bottom().max(set.bottom()) - crate::design::S).abs() <= 1.0),
+                format!("At {size:?}: field {field:?}, Set initiative {set:?}, help {help:?}"),
+            );
+        }
         d.type_into("Initiative for Ember Cultist", "30");
         d.click("Set initiative");
         d.observe(
@@ -22542,7 +22710,24 @@ pub mod run_rolls {
             "A save tile shows its area and what a success does",
             |d| d.visible_text("10-ft emanation · half on a success"),
         );
-        action_at_text(d, "iter-19-R-AT5", BURST, "Roll damage");
+        // iter-27-R FI9: `Roll damage` continues the task, so it has the secondary border, and
+        // its border (not its words, as for a quiet action) starts at the tiles' edge; `Stop`
+        // stays quiet. This replaces iter-19-R-AT5's words check for this one action.
+        let tile_left = tile(d, BURST).map(|tile| tile.rect.left());
+        let roll = d.place_of("Roll damage");
+        d.observe(
+            "iter-27-R-FI9",
+            d.control_frame("Roll damage")
+                .is_some_and(|frame| frame.stroke.width > 0.0)
+                && d.control_frame("Stop")
+                    .is_none_or(|frame| frame.stroke.width == 0.0)
+                && tile_left
+                    .zip(roll)
+                    .is_some_and(|(tile, roll)| (tile - roll.left()).abs() < 1.0),
+            format!(
+                "Roll damage {roll:?} is bordered at the tiles' edge {tile_left:?}; Stop is quiet"
+            ),
+        );
         // iter-26-R FK5: the dock shows the mark that the rows paint, and leaves the count to
         // the panel's hint, so `2 targets.` shows once.
         d.observe_both(
@@ -22657,9 +22842,11 @@ pub mod run_rolls {
             shown == (true, false) && d.has("Undo: 3 damage to 2 participants, half for 1"),
             format!("At 960 the save's Undo says `Undo: 3 damage × 2` (compact, whole): {shown:?}"),
         );
-        // iter-25-R SJ1: a save's result keeps its `(half)` at every size; a row whose
-        // conditions leave no room for it gives it a line of its own.
-        for size in [SMALL, DEFAULT, LARGE] {
+        // iter-25-R SJ1: a save's result keeps its `(half)` where the row has room for it.
+        // iter-27-R FI2 changes this on purpose at 960: a result never adds a line to its row,
+        // so where its whole words do not fit after the conditions they are cut by whole words
+        // (the hover and the Log keep them whole), and every row keeps one pitch.
+        for size in [DEFAULT, LARGE] {
             let whole = d.at_size(size, |d| {
                 (d.visible_text("damage (half)"), d.visible_text("damage…"))
             });
@@ -22669,6 +22856,14 @@ pub mod run_rolls {
                 format!("At {size:?} the saved result shows whole, `(half)` included: {whole:?}"),
             );
         }
+        let pitch = d.at_size(SMALL, |d| {
+            [ATTACKER, TARGET].map(|row| d.row_node(row).map(|node| node.rect.height().round()))
+        });
+        d.observe(
+            "iter-27-R-FI2",
+            pitch.iter().all(Option::is_some) && pitch[0] == pitch[1],
+            format!("At 960 the row with the save result keeps the pitch of a row without one: {pitch:?}"),
+        );
         d.state("save-applied", Sizes::Default);
         // Undo gives each target back its own HP.
         d.press(Key::U);

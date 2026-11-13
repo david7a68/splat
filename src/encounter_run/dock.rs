@@ -3,8 +3,8 @@
 use super::{
     Command, Run,
     view::{
-        AMOUNT, DOCK_ALL_WORDS_FROM, DOCK_HEIGHT, dock_name_shown, presence_action, toggle,
-        toggle_width,
+        AMOUNT, DOCK_ALL_WORDS_FROM, DOCK_HEIGHT, DOCK_NAME_WIDTH, dock_name_shown,
+        presence_action, toggle, toggle_width,
     },
 };
 use crate::design::{self, Action, Density, Type, colors, icons};
@@ -97,7 +97,6 @@ impl Run {
                     command = self.effect_line(ui, index);
                     return;
                 }
-                let widest = self.widest_name(ui);
                 let p = &self.state.participants[index];
                 let conditions_key = if self.lookup_open { "" } else { "C" };
                 // The selected name, `L`, then its controls: one block after the creature.
@@ -134,24 +133,22 @@ impl Run {
                 } else {
                     0.0
                 };
-                // FK1: the name slot has one width for the whole fight: the widest roster name
-                // in `Heading` (`widest_name`), at most `12 × L`, so Conditions, Conc and Absent
-                // keep one x whichever row is selected.
+                // FK1 (iter-27-R): the name slot has one width, `DOCK_NAME_WIDTH`, in every fight
+                // and for every row, so Conditions, Conc and Absent keep one x whichever row is
+                // selected. A longer name wraps to two lines before it ends in `…`.
                 // Left to right: the name slot, then exactly `L`, then its controls. The
                 // controls' width only limits how wide the slot may be.
                 ui.horizontal(|ui| {
                     ui.set_min_height(height);
                     let room = ui.available_width() - controls - design::L - result_slot;
-                    let slot = widest.min(12.0 * design::L).min(room).max(0.0);
-                    let (role, shown) = dock_name_shown(ui, &p.name, slot);
+                    let slot = DOCK_NAME_WIDTH.min(room).max(0.0);
+                    let shown = dock_name_shown(ui, &p.name, slot);
                     ui.allocate_ui_with_layout(
                         vec2(slot, height),
                         Layout::left_to_right(Align::Center),
                         |ui| {
                             ui.set_width(slot);
-                            let response = ui
-                                .label(role.rich(ui, shown).color(c.text))
-                                .on_hover_text(&p.name);
+                            let response = ui.add(egui::Label::new(shown)).on_hover_text(&p.name);
                             design::named(ui, &response, &format!("Selected: {}", p.name));
                         },
                     );
@@ -373,34 +370,6 @@ impl Run {
         }
     }
 
-    /// The widest roster name in the dock's `Heading` (FK1). Measured again only after a step
-    /// or an Undo (`revision`, which a rename is), a roster of another size, or another type
-    /// size; an unchanged frame reads the kept width.
-    fn widest_name(&mut self, ui: &egui::Ui) -> f32 {
-        let heading = Type::Heading.font(ui);
-        let key = (
-            self.revision,
-            self.state.participants.len(),
-            heading.size.to_bits(),
-        );
-        if let Some((_, width)) = self.widest_name.filter(|(at, _)| *at == key) {
-            return width;
-        }
-        #[cfg(test)]
-        {
-            let (a, b, c) = super::view::PREPARED.with(std::cell::Cell::get);
-            super::view::PREPARED.with(|count| count.set((a, b, c + 1)));
-        }
-        let width = self
-            .state
-            .participants
-            .iter()
-            .map(|p| design::number_width(ui, &p.name, &heading))
-            .fold(0.0_f32, f32::max);
-        self.widest_name = Some((key, width));
-        width
-    }
-
     /// The dice field's last roll: its total and its Log line.
     /// The last roll beside the dice, as its total, its hover and its accessible name: a
     /// recharge's while its act is the newest (X4), named by its participant and effect; else
@@ -508,8 +477,6 @@ mod tests {
                 egui::CentralPanel::default().show(ctx, |ui| shown.borrow_mut().dock(ui));
             });
         design::theme::install(&harness.ctx);
-        // The name slot's width is kept from the first frame, which had no theme fonts yet.
-        run.borrow_mut().widest_name = None;
         harness.run_steps(2);
         (run, harness)
     }
@@ -712,8 +679,8 @@ mod tests {
                 .is_some(),
             "the recharge's total is named by its source"
         );
-        // X9: the room after Absent alone decides. Beside a name that its slot cut, `Effect`
-        // shows with its word, and the cut name keeps its telling last word (X53).
+        // X9: the room after Absent alone decides. Beside a name that wraps, `Effect` shows
+        // with its word. iter-27-R FK1: the long name wraps to two lines and keeps its words.
         let long = "Seraphina Thornwood-Ashgrave of the Ninth Bell";
         let (_, harness) = dock(long, 1200.0);
         let (shown, _) = name_shown(&harness, long).unwrap();
@@ -723,74 +690,39 @@ mod tests {
                 .is_some(),
             "Effect beside {shown:?}"
         );
-        assert!(shown.ends_with("… Bell"), "{shown}");
-        // X53, review of PR 292: in each dock, beside Lookup or not, the cut name keeps its
-        // last word wherever its slot holds the first word, `…` and the last word; else it is
-        // its first word's start. The slot is from the name's left to `L` before Conditions.
+        assert!(
+            shown.starts_with("Seraphina Thornwood"),
+            "iter-27-R-FK1: {shown}"
+        );
+        // iter-27-R FK1: in each dock, beside Lookup or not, Conditions has one x for every
+        // name: the slot does not follow the roster's names. The name keeps to the slot.
         for width in [442.0, 596.0, 800.0, 1040.0, 1200.0] {
-            for name in [
-                long,
-                "Ashfang, Eldest Wolf of the Southern Ridge",
-                "Ember Cultist of the Southern Watch 12",
-            ] {
-                let (run, mut harness) = dock(name, width);
-                for lookup in [false, true] {
+            for lookup in [false, true] {
+                let mut lefts = Vec::new();
+                for name in [
+                    long,
+                    "Ashfang, Eldest Wolf of the Southern Ridge",
+                    "Ember Cultist of the Southern Watch 12",
+                    "Guard",
+                ] {
+                    let (run, mut harness) = dock(name, width);
                     run.borrow_mut().lookup_open = lookup;
                     run.borrow_mut().hide_panel = lookup;
                     harness.run_steps(2);
                     let label = selected_label(&harness, name).expect("the dock's name");
-                    let (shown, font) = harness
-                        .output()
-                        .shapes
-                        .iter()
-                        .find_map(|shape| match &shape.shape {
-                            egui::Shape::Text(text)
-                                if label.contains(text.visual_bounding_rect().center()) =>
-                            {
-                                Some((
-                                    text.galley.text().to_owned(),
-                                    text.galley.job.sections[0].format.font_id.clone(),
-                                ))
-                            }
-                            _ => None,
-                        })
-                        .unwrap();
                     let conditions = harness
                         .get_by_label("Conditions for this participant")
                         .rect();
-                    let slot = conditions.left() - design::L - label.left();
-                    let first = name.split(' ').next().unwrap().trim_end_matches(',');
-                    let last = name.rsplit(' ').next().unwrap();
-                    let ends = harness.ctx.fonts_mut(|fonts| {
-                        fonts
-                            .layout_no_wrap(
-                                format!("{first}… {last}"),
-                                font.clone(),
-                                egui::Color32::WHITE,
-                            )
-                            .size()
-                            .x
-                    });
-                    println!(
-                        "X53 dock {width} Lookup {lookup}: slot {slot:.1}, {first}… {last} {ends:.1}: {shown}"
+                    assert!(
+                        label.right() <= conditions.left() - design::L + 0.5,
+                        "{width} {lookup} {name}: {label:?} {conditions:?}"
                     );
-                    if shown == name {
-                        continue;
-                    }
-                    if ends <= slot + 0.5 {
-                        assert!(
-                            shown.ends_with(&format!("… {last}")),
-                            "{width} {lookup}: {shown}"
-                        );
-                    } else {
-                        let start = shown.trim_end_matches('…');
-                        let first = name.split(' ').next().unwrap();
-                        assert!(
-                            shown.ends_with('…') && first.starts_with(start),
-                            "{width} {lookup}: {shown}"
-                        );
-                    }
+                    lefts.push(conditions.left());
                 }
+                assert!(
+                    lefts.windows(2).all(|pair| (pair[0] - pair[1]).abs() < 0.5),
+                    "iter-27-R-FK1 {width} {lookup}: {lefts:?}"
+                );
             }
         }
     }
@@ -815,7 +747,7 @@ mod tests {
                     .iter()
                     .any(|c| c == "Bless 10")
             );
-            assert_eq!(run.undo_label(), "Undo: effect Bless on Guard");
+            assert_eq!(run.undo_label(), "Undo: add effect Bless on Guard");
             assert!(run.effect_open.is_none() && run.effect_fields.is_empty());
         }
         assert!(harness.query_by_label(field).is_none(), "the field closed");
