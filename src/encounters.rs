@@ -2149,10 +2149,6 @@ pub(crate) fn identity_copies() -> usize {
 }
 
 /// A copied note is still a search result, with the same repair used by Lookup.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn duplicate_creature_results(ui: &mut egui::Ui, query: &str) -> bool {
     let Some(index) = ui.ctx().data(|data| {
         data.get_temp::<Arc<crate::lookup::ContentIndex>>(egui::Id::new("reader_link_index"))
@@ -2222,7 +2218,7 @@ fn duplicate_creature_results(ui: &mut egui::Ui, query: &str) -> bool {
                         position == 0,
                     );
                 }
-                ui.add_space(design::XS);
+                design::gap(ui, design::Gap::XS);
             }
         });
     }
@@ -2853,6 +2849,10 @@ const RELOAD: &str = "Reload from disk";
 const RELOAD_HINT: &str = "Read encounters and runs from disk again";
 const NAME_FIELD: &str = "Encounter name";
 const SEARCH_FIELD: &str = "Find a creature or party member";
+const ENCOUNTER_NAME: design::FieldId = crate::field_id!("encounter_name");
+const CREATURE_NAME: design::FieldId = crate::field_id!("encounter_creature_name");
+const INITIATIVE_GROUP: design::FieldId = crate::field_id!("roster_initiative_group");
+const RUN_FOLDER: design::FieldId = crate::field_id!("run_folder");
 const SYNC_OPTION: &str = "Sync party with D&D Beyond";
 const REPEATABLE_OPTION: &str = "Keep in Ready during a run";
 const REPEATABLE_HELP: &str = "Lists this encounter under Ready to run while a fight from it is unfinished. Start fight waits until no fight is open.";
@@ -4099,7 +4099,14 @@ impl Encounters {
         // AK2, FK3: `text_input` takes the frame's width, so the field ends where Save does.
         design::field(ui, "Name", None, None, |ui| {
             let width = ui.available_width();
-            design::text_input(ui, "Name", &mut editor.fields.name, "Name", width)
+            design::line_field(
+                ui,
+                CREATURE_NAME,
+                "Name",
+                &mut editor.fields.name,
+                "Name",
+                width,
+            )
         });
         let focus_hp = std::mem::take(&mut editor.focus);
         ui.horizontal(|ui| {
@@ -4940,7 +4947,7 @@ impl Encounters {
                             .name("Create a first encounter")
                             .show(ui)
                             .clicked();
-                        ui.add_space(design::L);
+                        design::gap(ui, design::Gap::L);
                         create_group = Action::quiet("New group")
                             .icon(icons::ADD)
                             .blocked(group_blocked)
@@ -4995,7 +5002,6 @@ impl Encounters {
                     &mut action,
                 );
                 ready_list(ui, &page, live.as_ref(), start_blocked, &mut action);
-                ui.add_space(design::L);
                 group_list(ui, snapshot, group_blocked, &mut action);
                 history_list(
                     ui,
@@ -5300,14 +5306,13 @@ impl Encounters {
             .min(
                 (roster_right - ui.cursor().left() - 2.0 * design::S).max(Density::Scan.control()),
             );
-            let response = ui.add(
-                egui::TextEdit::singleline(&mut draft_ref.name)
-                    .id(design::focus_id(NAME_FIELD))
-                    .desired_width(width)
+            let font = Type::Heading.font(ui);
+            let response = ENCOUNTER_NAME.single_line(ui, &mut draft_ref.name, |edit| {
+                edit.desired_width(width)
                     .min_size(egui::vec2(0.0, Density::Scan.control()))
                     .margin(egui::vec2(design::S, design::XS))
-                    .font(Type::Heading.font(ui)),
-            );
+                    .font(font)
+            });
             design::named(ui, &response, &format!("{NAME_FIELD}: {}", draft_ref.name));
             if std::mem::take(focus_name) {
                 design::focus_and_select(ui, response.id, &draft_ref.name);
@@ -5370,7 +5375,7 @@ impl Encounters {
                     .clicked();
                     if has_run {
                         blocked_reason(ui, Some(BLOCKED_BY_RUN));
-                        ui.add_space(design::L);
+                        design::gap(ui, design::Gap::L);
                     }
                     save = if dirty && !has_run && refusal.is_none() {
                         Action::primary("Save encounter")
@@ -6062,23 +6067,23 @@ impl Encounters {
                 // Without a link there is no sheet to sync with, whatever the note says.
                 let live = linked_party.filter(|_| draft.setup.combat_sync);
                 if draft.setup.roster.is_empty() {
-                    ui.add_space(design::S);
+                    design::gap(ui, design::Gap::S);
                     blocked_reason(ui, Some("No participants yet. Add the party and creatures from Add participants."));
                 }
                 Self::roster(ui, draft, snapshot, focus_search, expanded, live, make_yours);
                 // The header's name field ends where the roster's rows and rules end (FA9, FI9).
                 let right = ui.available_rect_before_wrap().right();
                 ui.ctx().data_mut(|data| data.insert_temp(pane_right_id(draft.id, ROSTER_PANE), right));
-                ui.add_space(design::M);
+                design::gap(ui, design::Gap::M);
                 if let Some(party) = linked_party {
                     Self::sync_option(ui, draft, snapshot, party);
                 }
                 ui.checkbox(&mut draft.setup.repeatable, REPEATABLE_OPTION);
                 // FI7: what the option changes, in the form the sync option's help uses.
                 design::help(ui, REPEATABLE_HELP);
-                ui.add_space(design::M);
+                design::gap(ui, design::Gap::M);
                 Self::loot_field(ui, draft);
-                ui.add_space(design::M);
+                design::gap(ui, design::Gap::M);
                 design::field(ui, "Read-aloud and notes", None, None, |ui| {
                 let output = notes_field(&mut draft.body, 5)
                     .id(egui::Id::new(("encounter_notes", draft.id)))
@@ -6355,7 +6360,7 @@ impl Encounters {
                                 Some(slot.key.clone())
                             };
                         }
-                        ui.add_space(design::XS);
+                        design::gap(ui, design::Gap::XS);
                         ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
                             ui.spacing_mut().item_spacing.y = 0.0;
                             ui.add(
@@ -6503,8 +6508,9 @@ impl Encounters {
                             .and_then(Value::as_str)
                             .unwrap_or("")
                             .to_owned();
-                        let response = design::text_input(
+                        let response = design::line_field(
                             ui,
+                            INITIATIVE_GROUP.with(std::path::Path::new(&slot.key)),
                             "Initiative group (optional)",
                             &mut group,
                             "Initiative group",
@@ -6644,7 +6650,7 @@ impl Encounters {
             crate::design::spinner(ui);
             return;
         };
-        ui.add_space(design::S);
+        design::gap(ui, design::Gap::S);
         let rule_flags: Vec<_> = snapshot
             .catalogue
             .entries
@@ -6664,8 +6670,9 @@ impl Encounters {
         ui.scope_builder(egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(
             ui.cursor().min, egui::vec2(ui.available_width().min(design::FORM_WIDTH), ui.available_height()))), |ui| {
         design::locked(ui, closed_while, |ui| {
-            design::small_text_field(
+            design::labelled_field(
                 ui,
+                RUN_FOLDER,
                 "Run folder",
                 &mut snapshot.options.folder,
                 Some("Relative to the campaign folder, or an absolute path."),
@@ -6679,7 +6686,8 @@ impl Encounters {
                     .selected_text(snapshot.options.initiative.grouping.label())
                     .show_ui(ui, |ui| {
                         for mode in crate::encounter_settings::Grouping::ALL {
-                            ui.selectable_value(
+                            design::choice_value(
+                                ui,
                                 &mut snapshot.options.initiative.grouping,
                                 mode,
                                 mode.label(),
@@ -6713,10 +6721,11 @@ impl Encounters {
                         .selected_text(selected)
                         .show_ui(ui, |ui| {
                             for rule in &rules {
-                                ui.selectable_value(
+                                design::choice_value(
+                                    ui,
                                     &mut snapshot.options.inspiration_choice,
                                     Some(rule.id),
-                                    line(rule),
+                                    &line(rule),
                                 );
                             }
                         });

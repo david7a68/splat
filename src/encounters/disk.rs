@@ -147,7 +147,7 @@ impl Recovery {
                     lines
                 });
             if !lines.is_empty() {
-                ui.add_space(design::S);
+                design::gap(ui, design::Gap::S);
             }
             for (label, words) in &lines {
                 ui.horizontal_top(|ui| {

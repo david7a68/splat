@@ -556,7 +556,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters/groups.rs",
             "group_editor_view",
-            &[Ban::Results, Ban::Layout(1), Ban::Extras(1), Ban::Pane(1)],
+            &[Ban::Results, Ban::Extras(1), Ban::Pane(1)],
         ),
         (
             "src/encounters/groups.rs",
@@ -571,7 +571,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters.rs",
             "creature_pane",
-            &[Ban::Results, Ban::Layout(3), Ban::Pane(1)],
+            &[Ban::Results, Ban::Layout(2), Ban::Pane(1)],
         ),
         (
             "src/encounters.rs",
@@ -582,14 +582,14 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters.rs",
             "ledger_view",
-            &[Ban::Results, Ban::Layout(1), Ban::Extras(2), Ban::Pane(1)],
+            &[Ban::Results, Ban::Layout(1), Ban::Pane(1)],
         ),
         ("src/encounters.rs", "results_into", &[Ban::Results]),
         ("src/encounters.rs", "result_stamp", &[Ban::Results]),
         (
             "src/encounters.rs",
             "run_settings",
-            &[Ban::Results, Ban::Layout(3), Ban::Extras(3), Ban::Pane(1)],
+            &[Ban::Results, Ban::Layout(2), Ban::Pane(1)],
         ),
         ("src/encounters.rs", "save_draft", &[Ban::Results]),
         ("src/encounters.rs", "stamp_kept", &[Ban::Results]),
@@ -835,28 +835,16 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters.rs",
             "editor_view",
-            &[Ban::Layout(1), Ban::Pane(1), Ban::Extras(2)],
+            &[Ban::Pane(1), Ban::Extras(1)],
         ),
         ("src/encounters.rs", "notes_field", &[Ban::Layout(1)]),
-        (
-            "src/encounters.rs",
-            "roster",
-            &[Ban::Layout(2), Ban::Extras(1)],
-        ),
-        (
-            "src/encounters.rs",
-            "roster_pane",
-            &[Ban::Layout(1), Ban::Extras(4)],
-        ),
-        (
-            "src/encounters/groups.rs",
-            "belongs_to",
-            &[Ban::Layout(1), Ban::Extras(2)],
-        ),
+        ("src/encounters.rs", "roster", &[Ban::Layout(1)]),
+        ("src/encounters.rs", "roster_pane", &[Ban::Layout(1)]),
+        ("src/encounters/groups.rs", "belongs_to", &[Ban::Layout(1)]),
         (
             "src/encounters/groups.rs",
             "change_row",
-            &[Ban::Layout(3), Ban::Extras(4)],
+            &[Ban::Layout(3), Ban::Extras(1)],
         ),
         ("src/encounters/groups.rs", "members", &[Ban::Layout(1)]),
         (
@@ -864,18 +852,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "members_pane",
             &[Ban::Layout(1)],
         ),
-        (
-            "src/encounters/groups.rs",
-            "of_encounter",
-            &[Ban::Layout(1), Ban::Extras(4)],
-        ),
-        ("src/encounters/groups.rs", "text_row", &[Ban::Layout(1)]),
         ("src/encounters/list.rs", "row_menu", &[Ban::Layout(1)]),
-        (
-            "src/encounters/list.rs",
-            "side_control",
-            &[Ban::Layout(2), Ban::Extras(2)],
-        ),
+        ("src/encounters/list.rs", "side_control", &[Ban::Layout(2)]),
         ("src/lib.rs", "page", &[Ban::Extras(6)]),
         ("src/library.rs", "above_footer", &[Ban::Layout(1)]),
         (
@@ -1195,21 +1173,15 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/sessions/plan.rs", "word_link", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "plan_row_with", &[Ban::Extras(1)]),
-        ("src/encounters.rs", "add_pane", &[Ban::Extras(1)]),
         ("src/encounters.rs", "detail_columns", &[Ban::Extras(2)]),
-        (
-            "src/encounters.rs",
-            "duplicate_creature_results",
-            &[Ban::Extras(1)],
-        ),
-        ("src/encounters.rs", "loot_field", &[Ban::Extras(1)]),
         (
             "src/encounters.rs",
             "replace_missing_creature",
             &[Ban::Extras(1)],
         ),
-        ("src/encounters/disk.rs", "show", &[Ban::Extras(2)]),
-        ("src/encounters/groups.rs", "add_pane", &[Ban::Extras(1)]),
+        ("src/encounters.rs", "add_pane", &[Ban::Extras(1)]),
+        ("src/encounters.rs", "loot_field", &[Ban::Extras(1)]),
+        ("src/encounters/disk.rs", "show", &[Ban::Extras(1)]),
         (
             "src/encounters/groups.rs",
             "choice_label",
@@ -1217,19 +1189,13 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         (
             "src/encounters/groups.rs",
-            "conditions_row",
-            &[Ban::Extras(1)],
-        ),
-        (
-            "src/encounters/groups.rs",
             "group_fields",
-            &[Ban::Extras(4)],
+            &[Ban::Extras(2)],
         ),
-        ("src/encounters/groups.rs", "list", &[Ban::Extras(2)]),
         (
             "src/encounters/groups.rs",
             "overrides_form",
-            &[Ban::Extras(3)],
+            &[Ban::Extras(1)],
         ),
         (
             "src/encounters/groups.rs",
@@ -1237,20 +1203,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Extras(1)],
         ),
         ("src/encounters/list.rs", "choice_note", &[Ban::Extras(2)]),
-        ("src/encounters/list.rs", "heading", &[Ban::Extras(1)]),
-        ("src/encounters/list.rs", "history_list", &[Ban::Extras(4)]),
+        ("src/encounters/list.rs", "history_list", &[Ban::Extras(2)]),
         (
             "src/encounters/list.rs",
             "history_summary",
             &[Ban::Extras(6)],
         ),
-        (
-            "src/encounters/list.rs",
-            "in_progress_list",
-            &[Ban::Extras(1)],
-        ),
-        ("src/encounters/list.rs", "list_row", &[Ban::Extras(1)]),
-        ("src/encounters/list.rs", "ready_list", &[Ban::Extras(1)]),
         ("src/lib.rs", "close_prompt", &[Ban::Extras(1)]),
         ("src/lib.rs", "rail", &[Ban::Extras(4)]),
         ("src/library.rs", "duplicate_choices", &[Ban::Extras(2)]),
