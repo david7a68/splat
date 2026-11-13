@@ -1527,6 +1527,8 @@ impl Sessions {
         let mut record_again = None;
         let mut open = None;
         let mut stop = false;
+        // A pane above the banner ends its body at a whole row, as at a footer (N12).
+        design::pane::note_bottom_banner(ctx);
         egui::TopBottomPanel::bottom("session_banner")
             .frame(
                 egui::Frame::new()

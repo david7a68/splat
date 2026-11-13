@@ -2450,12 +2450,11 @@ pub(super) fn actions_message<R>(
 /// Where test builds keep the labels that `row_detail` marked in the last pass.
 #[cfg(test)]
 pub const ROW_DETAILS: &str = "design_row_details";
-/// Where test builds keep the rects that `register_row` registered in the last pass.
-#[cfg(test)]
+/// Where `register_row` keeps the rects it registered in this pass: the pane's whole-row cut
+/// (N12) and the gate's `help-measure` check read them.
 pub const ROW_RECTS: &str = "design_row_rects";
 
 /// Keep `item` under `key` for this pass only: a new pass starts a new list.
-#[cfg(test)]
 pub(super) fn keep_for_pass<T: Clone + Send + std::marker::Sync + 'static>(
     ui: &Ui,
     key: &str,
@@ -2471,13 +2470,20 @@ pub(super) fn keep_for_pass<T: Clone + Send + std::marker::Sync + 'static>(
     });
 }
 
-/// A row component registers its whole rect, so that the gate's `help-measure` check can tell a
-/// row's own detail line from help. Only test builds keep it.
+/// A row component registers its whole rect: a pane's footer and the session banner then never
+/// cut through it (N12, ruling R4), and the gate's `help-measure` check can tell a row's own
+/// detail line from help.
 pub fn register_row(ui: &Ui, rect: Rect) {
-    #[cfg(test)]
     keep_for_pass(ui, ROW_RECTS, rect);
-    #[cfg(not(test))]
-    let _ = (ui, rect);
+}
+
+/// The rects `register_row` registered so far in this pass.
+pub(super) fn rows_this_pass(ctx: &egui::Context) -> Vec<Rect> {
+    let pass = ctx.cumulative_pass_nr();
+    ctx.data(|data| data.get_temp::<(u64, Vec<Rect>)>(Id::new(ROW_RECTS)))
+        .filter(|(kept, _)| *kept == pass)
+        .map(|(_, rows)| rows)
+        .unwrap_or_default()
 }
 
 /// Marks a label as its row's own detail line (its second line), not help. The gate's
