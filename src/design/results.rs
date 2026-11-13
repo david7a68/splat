@@ -625,16 +625,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Results],
         ),
         ("src/sessions/page.rs", "banner_notices", &[Ban::Results]),
-        (
-            "src/sessions/page.rs",
-            "folder_fields",
-            &[Ban::Layout(1), Ban::Extras(1)],
-        ),
+        ("src/sessions/page.rs", "folder_fields", &[Ban::Layout(1)]),
         ("src/sessions/page.rs", "folder_messages", &[Ban::Results]),
         (
             "src/sessions/page.rs",
             "folder_save_row",
-            &[Ban::Results, Ban::Extras(2)],
+            &[Ban::Results, Ban::Extras(3)],
         ),
         (
             "src/sessions/page.rs",
