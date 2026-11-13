@@ -1329,7 +1329,8 @@ struct LineStart<'a> {
 /// Left out: actions and texts in a popup or menu (`popups`, their bodies), and an action row that
 /// a title line draws under its title (`design::TitleLine`, `world::title_line_actions`): there the
 /// first action keeps its icon at the text edge (round 27 ruling). That row is told from paint:
-/// the nearest line above it is the title, `TITLE_SIZE` times larger than the action's words.
+/// a line within `3 × L` above it is the title, `TITLE_SIZE` times larger than the action's words.
+/// `popups` are the bounds of the foreground and tooltip layers, where egui draws menus.
 pub fn line_starts(
     items: &[Item],
     quiet: &[egui::Rect],
@@ -1422,8 +1423,11 @@ pub fn line_starts(
                 .min_by(|a, b| a.1.total_cmp(&b.1))
                 .map(|(line, _)| line)
         };
-        // A title line's action row under its title.
-        if near(true, f32::INFINITY).is_some_and(|line| line.size >= TITLE_SIZE * words.size) {
+        // A title line's action row under its title (and the title's context line).
+        if starts.iter().any(|line| {
+            let gap = item.rect.top() - line.rect.bottom();
+            (0.0..=3.0 * L).contains(&gap) && line.size >= TITLE_SIZE * words.size
+        }) {
             continue;
         }
         let edges: Vec<&LineStart<'_>> = [near(true, 3.0 * L), near(false, 3.0 * L)]
@@ -2773,6 +2777,25 @@ mod tests {
             ..text("Rook Ambry", 372.0, 226.0, 120.0)
         };
         let edit_words = text("Edit", 392.0, 271.0, 30.0);
+        // With the title's context line between them, it is still the title's row.
+        let context = text("NPC · Campaign", 372.0, 246.0, 100.0);
+        assert!(
+            line_starts(
+                std::slice::from_ref(&edit),
+                &row,
+                &[
+                    Placed {
+                        size: 26.0,
+                        rect: at(372.0, 214.0, 120.0, 28.0),
+                        ..text("Rook Ambry", 372.0, 214.0, 120.0)
+                    },
+                    context,
+                    edit_words.clone()
+                ],
+                &[]
+            )
+            .is_empty()
+        );
         assert!(
             line_starts(
                 std::slice::from_ref(&edit),
