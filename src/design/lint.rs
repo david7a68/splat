@@ -333,8 +333,7 @@ fn message_rules(path: &str, code: &str) -> Vec<&'static str> {
             let last = arguments
                 .lines()
                 .flat_map(string_literals)
-                .filter(|words| !words.is_empty())
-                .next_back();
+                .rfind(|words| !words.is_empty());
             if last.is_some_and(|words| {
                 !words
                     .trim_end_matches(['”', '’', ')'])
@@ -391,7 +390,11 @@ fn design_internals(folder: &Path, counts: &mut BTreeMap<String, usize>) {
     for item in fs::read_dir(folder).expect("read design folder") {
         let path = item.expect("read design entry").path();
         let relative = path.to_string_lossy().replace('\\', "/");
-        if relative.ends_with(".rs") && !relative.ends_with("src/design/outcome.rs") {
+        // `outcome.rs` owns the helpers; this file names them as the rule's own text.
+        if relative.ends_with(".rs")
+            && !relative.ends_with("src/design/outcome.rs")
+            && !relative.ends_with("src/design/lint.rs")
+        {
             let text = fs::read_to_string(&path).expect("read design file");
             let hits = text
                 .lines()

@@ -3,8 +3,10 @@
 src/encounter_settings.rs straight-apostrophe 1
 src/npc_generator.rs straight-apostrophe 3
 # Messages (round 28, package M). Each file that still calls an old message function holds one
-# `#![allow(deprecated)]` and counts its calls; Wave 2 moves each file to `design::outcome` and
-# deletes its lines. When none is left, the old functions become private.
+# `#![allow(deprecated)]`; a child module of such a file writes its own `#![warn(deprecated)]`, so
+# the compiler finds every call, import and alias. Wave 2 moves each file to `design::outcome` and
+# deletes its line. When none is left, the old functions become private. A count raised together
+# with its allowance passes this test: a reviewer reads every raised line.
 src/campaign_content.rs allow-deprecated 1
 src/campaigns.rs allow-deprecated 1
 src/combat_sync.rs allow-deprecated 1
@@ -34,35 +36,6 @@ src/world.rs allow-deprecated 1
 src/world/edit.rs allow-deprecated 1
 src/world/page.rs allow-deprecated 1
 src/world/repair.rs allow-deprecated 1
-src/campaign_content.rs old-message 19
-src/campaigns.rs old-message 3
-src/combat_sync.rs old-message 1
-src/copy_dialog.rs old-message 2
-src/dndbeyond.rs old-message 2
-src/encounter_run/notice.rs old-message 1
-src/encounter_run/view.rs old-message 19
-src/encounters.rs old-message 20
-src/encounters/disk.rs old-message 2
-src/encounters/groups.rs old-message 17
-src/lib.rs old-message 1
-src/library.rs old-message 37
-src/library/view.rs old-message 1
-src/lookup.rs old-message 4
-src/loot_editor.rs old-message 1
-src/party.rs old-message 7
-src/processing/settings.rs old-message 7
-src/roll_table.rs old-message 2
-src/sessions/carry.rs old-message 3
-src/sessions/page.rs old-message 36
-src/sessions/plan.rs old-message 24
-src/sessions/slash.rs old-message 2
-src/settings.rs old-message 3
-src/timeline/checks.rs old-message 4
-src/timeline/page.rs old-message 25
-src/world.rs old-message 10
-src/world/edit.rs old-message 4
-src/world/page.rs old-message 4
-src/world/repair.rs old-message 3
 # Phrases outside their owner: the stat block's printed XP (core) is the creature's, not an
 # encounter's; the others move to their owner in Wave 2.
 crates/core/src/content/stat_blocks.rs phrase-owner 2
@@ -72,3 +45,9 @@ src/encounter_run/loot.rs phrase-owner 2
 src/encounters.rs phrase-owner 1
 src/library.rs phrase-owner 1
 src/sessions/plan.rs phrase-owner 1
+# Words from outside the app (`Sentence::outside`): each use is a reviewed escape.
+src/trackers.rs outside-words 3
+src/trackers/view.rs outside-words 1
+# Body places (`banner`, `row_fault`, `PagePlaceholder`): each use is a reviewed choice.
+src/trackers/history.rs body-message 3
+src/trackers/view.rs body-message 4
