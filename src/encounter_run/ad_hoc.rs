@@ -232,10 +232,6 @@ const FIRST_FIELD_WIDTH: f32 = 56.0;
     clippy::too_many_arguments,
     reason = "each field differs in each of these"
 )]
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn short_field(
     ui: &mut egui::Ui,
     word: &str,
@@ -263,7 +259,7 @@ fn short_field(
             ui.label(words);
         }
     }
-    ui.add_space(design::XS);
+    design::gap(ui, design::Gap::XS);
     let response = design::number_field(ui, name, text, hint, width, Density::Read.control());
     if focus {
         response.request_focus();
@@ -541,7 +537,7 @@ impl Run {
                 FIRST_FIELD_WIDTH,
                 false,
             );
-            ui.add_space(design::M);
+            design::gap(ui, design::Gap::M);
             enter |= short_field(
                 ui,
                 "HP",
@@ -552,7 +548,7 @@ impl Run {
                 64.0,
                 std::mem::take(&mut form.focus_hp),
             );
-            ui.add_space(design::M);
+            design::gap(ui, design::Gap::M);
             enter |= short_field(
                 ui,
                 "AC",
@@ -577,7 +573,7 @@ impl Run {
                 FIRST_FIELD_WIDTH,
                 false,
             );
-            ui.add_space(design::M);
+            design::gap(ui, design::Gap::M);
             ui.label(Type::Small.rich(ui, "Side").color(c.muted));
             let chosen = self.ad_hoc.side().to_owned();
             let combo = egui::ComboBox::from_id_salt("ad_hoc_side")
@@ -586,9 +582,13 @@ impl Run {
                 .selected_text(design::reader::human_label(&chosen))
                 .show_ui(ui, |ui| {
                     for side in &sides {
-                        if ui
-                            .selectable_label(*side == chosen, design::reader::human_label(side))
-                            .clicked()
+                        if design::extras::choice_wrapped(
+                            ui,
+                            *side == chosen,
+                            &design::reader::human_label(side),
+                            None,
+                        )
+                        .clicked()
                         {
                             self.ad_hoc.side = Some(side.clone());
                         }

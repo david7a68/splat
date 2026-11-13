@@ -112,7 +112,6 @@
     ["G3/far-action","14-group-removed","1920x1080","Button \"Resume\"",2],
     ["G3/far-action","14-group-removed","1920x1080","Button \"Start fight\"",1],
     ["G6/footer-far-below-body","16-invalid-arrival-total","960x640","Label \"\\u{e3b2}\\u{a0}Changed\\n1\\u{a0}×\\u{a0}Rival\\u{a0}Captain (as\\u{a0}Ember\\u{a0}Cultist), 2\\u{a0}×\\u{a0}Cinder\\u{a0}Wolf\"",1],
-    ["G6/footer-far-below-body","25-tied-arrival-moved-before","960x640","Button \"Edit group\"",1],
     ["G6/footer-far-below-body","27-group-added-in-setup","960x640","Button \"Edit group\"",1],
     ["N4/quiet-action-line-start","02-group-editor","1200x800","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","02-group-editor","1920x1080","Button \"Filter creatures\"",1],
@@ -735,7 +734,6 @@
   ],
   "run-overrides": [
     ["G1b/pressed-control-moved","03-slot-changes-open","960x640","Button \"Options: starting HP, temporary HP, initiative group and changes\"",1],
-    ["N2/icon-off-text-centre","03-slot-changes-open","960x640","Button \"More actions for Blessed\"",1],
     ["N4/quiet-action-line-start","02-slot-with-changes","1200x800","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","02-slot-with-changes","1920x1080","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","02-slot-with-changes","960x640","Button \"Filter creatures\"",1],
