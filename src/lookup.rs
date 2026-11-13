@@ -2016,6 +2016,10 @@ impl Lookup {
     /// The search field while Trackers is the view: empty, with its placeholder, so it does not
     /// read as a filter of the trackers. Lookup keeps its words for its own view. Words typed
     /// here are a new search, which leaves Trackers for its results.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn search_over_trackers(&mut self, ui: &mut egui::Ui, width: f32) -> egui::Response {
         let mut typed = String::new();
         let response = ui
@@ -2832,6 +2836,10 @@ pub(crate) fn generated_card(
 }
 
 /// What the generator rolled, with its choices and the names help for this place.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(crate) fn generator_card(
     ui: &mut egui::Ui,
     npc: &crate::npc_generator::Generated,

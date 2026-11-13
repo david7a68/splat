@@ -25,6 +25,7 @@ mod credentials;
 mod design;
 // The layout parts are public only so that their `compile_fail` doc tests can name them.
 #[doc(hidden)]
+pub use design::extras;
 pub use design::layout;
 // The pane is public only so that its `compile_fail` doc tests can name it.
 #[doc(hidden)]
@@ -669,6 +670,10 @@ impl Splat {
         items
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn close_prompt(&mut self, ctx: &egui::Context) {
         let items = self.unsaved_items();
         // Sync finished, or a draft was saved, while the prompt was open.
@@ -844,6 +849,10 @@ impl Splat {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn rail(&mut self, ctx: &egui::Context, connection: Connection) {
         let c = colors();
         let at_table = self.visible_page() == Some(Page::Run);
@@ -1842,6 +1851,10 @@ impl Splat {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn page(&mut self, ui: &mut egui::Ui) {
         let active = self.campaigns.active_campaign();
         let (_, session) = self.settings.campaign_session();
@@ -1881,7 +1894,7 @@ impl Splat {
                 }
                 if self.settings_tab == SettingsTab::Recording {
                     // Keep scrolled text below a clear margin under the tab rule.
-                    ui.add_space(design::L);
+                    design::gap(ui, design::Gap::L);
                     // Line-start quiet actions use the gutter for their hit area.
                     // Keep fields at the usual column edge inside the wider pane.
                     let mut viewport = ui.available_rect_before_wrap();
@@ -2212,7 +2225,7 @@ impl Splat {
                                     );
                                 });
                             });
-                            ui.add_space(design::S);
+                            design::gap(ui, design::Gap::S);
                             let sessions = &mut self.sessions;
                             let dndbeyond = &mut self.dndbeyond;
                             footer.pane(ui, design::Body::Content, |ui| {

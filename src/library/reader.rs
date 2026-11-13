@@ -230,6 +230,10 @@ fn blank(value: &serde_yaml_ng::Value) -> bool {
     }
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn structured_value(ui: &mut egui::Ui, value: &serde_yaml_ng::Value) {
     if let Some(fields) = value.as_mapping() {
         for (key, value) in fields {
@@ -327,6 +331,10 @@ fn represented_item_source(entry: &Entry, source: &str) -> bool {
             .is_some_and(|value| Some(value) == entry.fields.get("splat_item"))
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(super) fn show(
     ui: &mut egui::Ui,
     entry: Option<&Entry>,

@@ -473,6 +473,10 @@ impl EditDraft {
     }
 
     /// The note changed on disk under the draft. The DM keeps it, or reloads with an Undo.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn conflict(&mut self, ui: &mut egui::Ui, index: &ContentIndex) -> Conflict {
         let Some((disk, theirs)) = self.disk.take() else {
             return Conflict::None;
@@ -588,6 +592,10 @@ fn reason_line(ui: &egui::Ui) -> f32 {
 /// The choices of a message about words that have no place now: quiet `Copy text` with its
 /// icon, then, an `L` gap after it, `let_go` with the secondary border, which lets the words go.
 /// A lost draft and a gone entry's Log line both use it. Returns whether each was pressed.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(super) fn copy_or_let_go(
     ui: &mut egui::Ui,
     copy_name: &str,

@@ -1781,6 +1781,10 @@ impl CombatSync {
         }
     }
     /// HP, temporary HP, the maximum HP modifier, death saves and inspiration.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn life(&mut self, ui: &mut egui::Ui, max_hp: i64, wells: Wells) {
         use crate::design;
         ui.add_space(design::XS);
@@ -1833,6 +1837,10 @@ impl CombatSync {
         });
     }
     /// Short rest, long rest and restore to life. D&D Beyond applies each one itself.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn rests(&mut self, ui: &mut egui::Ui, max_hp: i64) {
         use crate::design::{self, Action, Density, Type, colors, icons};
         ui.add_space(design::S);
@@ -2044,6 +2052,10 @@ impl CombatSync {
         });
     }
     /// Each item's quantity, and the charges spent where it has charges.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn inventory(&mut self, ui: &mut egui::Ui, wells: Wells) {
         use crate::design;
         let Some(remote) = &self.remote else {
@@ -2100,6 +2112,10 @@ impl CombatSync {
         );
     }
     /// Companion and summon HP, as damage taken: the sheet works their maximum out itself.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn companions(&mut self, ui: &mut egui::Ui, wells: Wells) {
         use crate::design;
         let Some(remote) = &self.remote else {
@@ -2143,6 +2159,10 @@ impl CombatSync {
     }
 }
 /// A small label, the value's stepper and an optional note, kept together on one line.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn labelled_stepper(
     ui: &mut egui::Ui,
     column: Column,

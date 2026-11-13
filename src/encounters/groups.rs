@@ -1043,6 +1043,10 @@ fn list_row(
 }
 
 /// One flat set of group headings inside the ledger's Groups section.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(super) fn list(
     ui: &mut egui::Ui,
     snapshot: &Snapshot,
@@ -1831,6 +1835,10 @@ pub(super) struct FormEnd {
     pub(super) changed: bool,
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(super) fn overrides_form(
     ui: &mut egui::Ui,
     id: &str,
@@ -2027,6 +2035,10 @@ pub(super) fn overrides_form(
 }
 
 /// The same official names and local Other effect as the run.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn conditions_row(ui: &mut egui::Ui, conditions: &mut Vec<String>) {
     design::group_label(ui, "Starting conditions");
     // The run's grid: fixed columns, `S` apart.
@@ -2565,6 +2577,10 @@ fn draft_member_summary(draft: &GroupDraft, snapshot: &Snapshot) -> String {
         .join(", ")
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn add_pane(
     ui: &mut egui::Ui,
     draft: &mut GroupDraft,
@@ -2695,6 +2711,10 @@ fn members_pane(
 
 /// FB4: `Default side` and `Belongs to` share one label column, the wider label plus `S`, so
 /// their controls start at one x.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn choice_label(ui: &mut egui::Ui, text: &str) {
     let font = Type::Small.font(ui);
     let widest = [SIDE_FIELD, BELONGS_TO]
@@ -2763,6 +2783,10 @@ fn next_revision() -> u64 {
 
 /// What a group is, in its own editor and in the frame an encounter's editor gives it. There,
 /// `open` is that encounter, and the frame needs less weight and room.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn group_fields(
     ui: &mut egui::Ui,
     draft: &mut GroupDraft,
@@ -3139,6 +3163,10 @@ fn members(
     }
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn unread_member(
     ui: &mut egui::Ui,
     member: &splat::content::list_formats::UnreadGroupMember,

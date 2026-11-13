@@ -380,6 +380,10 @@ impl Run {
 
     /// One holder's loot: words as the note has them, then each roll, with its button until it
     /// has a result, and then the result in its place. Returns the line the DM asked to roll.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     pub(super) fn loot_list(&self, ui: &mut egui::Ui, holder: &Holder) -> Option<usize> {
         let c = colors();
         let mut request = None;
@@ -470,6 +474,10 @@ impl Run {
     }
 
     /// The card's loot. One quiet line while the creature stands, and all of it at 0 HP.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     pub(super) fn card_loot(&mut self, ui: &mut egui::Ui, index: usize) {
         let p = &self.state.participants[index];
         let lines = p.loot_lines();
@@ -508,6 +516,10 @@ impl Run {
 
     /// The ended view's loot: the encounter's and each downed creature's, with what is left to
     /// roll, Roll all and Copy loot. Loot on creatures still standing waits behind one line.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     pub(super) fn loot_section(&mut self, ui: &mut egui::Ui) {
         let holders = self.holders();
         if holders.is_empty() {

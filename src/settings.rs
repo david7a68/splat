@@ -385,6 +385,10 @@ impl Settings {
         Status { icon, word, color }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     pub fn show_compact(&mut self, ui: &mut egui::Ui) {
         let id = egui::Id::new("compact_account_open");
         let mut open = ui
@@ -490,6 +494,10 @@ impl Settings {
 
     /// `status`: draw the account's status line (a caret section under the compact status line
     /// does not say it again).
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn show_account(&mut self, ui: &mut egui::Ui, heading: bool, status: bool) {
         if heading {
             ui.allocate_ui_with_layout(
