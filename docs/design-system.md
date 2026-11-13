@@ -193,6 +193,7 @@ eye during long sessions.
 | Row menu | `row_menu` | Quiet `⋯` at the right end of the row's content, never at the pane's edge when the row is narrower than the pane, named `More actions for <name>`; holds Remove and Delete. Opens under the `⋯`, and ends at its right edge when it would cross the pane's splitter or scroll bar |
 | Add strip | `hanging_add_strip` | `Add` in its own Label column; one line of quiet icon-and-word buttons. Show all seven actions when they fit. Otherwise keep Fight, Group (plan only) and Long rest visible; put Day, Short rest, Travel and Major event in one compact `⋯⌄` menu named `More Add actions`; hover text names its actions. A line of More alone (the plan's `Scene`) comes last there and takes no part in the fit, so no action moves for it, and a strip with no More has none. Keep the strip on one line |
 | Message | `message`, `small_message`, `message_with_action`, `Tone` | Inline icon and bar; `message`, `message_with_action` and `undo_message` start the words `XS` after the icon whatever the caller's spacing; `message`'s words end at their last painted word, not at the space a wrapped row broke at; cap the notice at `LIST_MEASURE`; actions follow text after an `L` gap or wrap below, aligned with the text; measure the whole action with padding; move it below and align it with the text if it cannot fit; actions without icons use a secondary border. `message_with_actions` puts several choices below the words: the first starts at the text edge, wrapped lines start there too, and a red or dismissing choice keeps exactly `L` from the one before it (subtract the row's item spacing) |
+| Message footer | `Footer` (`new`, `result`, `reason`, `notice`, `show`) | One per pane. Results, reasons and notices that come and go, in a pane with a scroll area or an editor, sit in a footer pinned at the bottom of the pane, below its scroll area. The pane's content ends `S` above the footer: the footer takes its room from the pane's layout and never lies over a row. The content keeps its top, and only its visible height shrinks: after a footer comes, an action below the view is reached by scrolling, as on any page (there is no automatic reveal). A list ends at a whole row above the footer, or scrolls; it never shows half a row, and a row it does not draw has no target, no hover and no keyboard stop. The footer is absent when it holds nothing, as tall as what it holds up to one third of the pane, and `S` below the content. Beyond a third its words scroll inside it, beside a lane kept for its scroll bar: it is one focusable group named with every message in its order. Tab reaches each control in it, scrolled into view, and then the group; arrows and Page Up or Page Down scroll it while it has focus, and the wheel scrolls it. Its words sit `PART_INSET` (the ring's width and a hairline) inside its edge, so the focus ring never crosses a letter. Each result is its own message with its own Undo. Its order: results with a live Undo first, newest first; then reasons (Save's reason, a parse error, a disk failure); then other notices, and results with no Undo. The result says whether its Undo is live (`has_undo`); the footer chooses the order. A state word stays on the save row; a fault that belongs to one row stays on the row |
 | Message footer | `Footer` (`new`, `result`, `reason`, `notice`, `show`), `ResultOrder` | One per pane. Every result, reason and notice that comes and goes sits in its pane's footer; no body place remains (a reserved reason slot beside a control is not a body place). The footer sits `S` below the last line of the body when the body is shorter than the pane, and is pinned at the bottom of the pane when the body fills it. In both cases the body never moves: its top stays, and only its visible height shrinks. When the footer cuts the body, a hairline marks the footer's top edge, so a cut line reads as a list that goes on; a footer below a short body has no hairline. The footer measures where the body ended in the last frame, so the first frame with a new message already has its place. A page whose body cannot show draws its message as the page's content at the empty-state place, not in a footer. The footer is absent when it holds nothing, and as tall as what it holds up to one third of the pane. Beyond a third its words scroll inside it, beside a lane kept for its scroll bar: it is one focusable group named with every message in its order. Tab reaches each control in it, scrolled into view, and then the group; arrows and Page Up or Page Down scroll it while it has focus, and the wheel scrolls it. Its words sit `PART_INSET` (the ring's width and a hairline) inside its edge, so the focus ring never crosses a letter. Each result is its own message with its own Undo, and its own `ResultOrder`, issued when its action is done (an Undo and then the same action again issue a new one; a redraw, changed words, or another result that hides or goes never do). Its order: results with a live Undo first, newest first by that order; then reasons (Save's reason, a parse error, a disk failure); then other notices, and then results with no Undo, newest first. The result says whether its Undo is live (`has_undo`); the footer chooses the order. A state word stays on the save row; a fault that belongs to one row stays on the row |
 | Message space (being replaced) | `MessageSpace`, `fixed_part` | The two-line space below a save row, for callers not yet moved to `Footer`; removed when none use it. Its part keeps its words `PART_INSET` inside its edge, as the footer does |
 | Side panel | `side_panel_width`, `panel_header` | One width rule for Lookup, Notes and the run; separate participant and fight tabs |
@@ -594,7 +595,7 @@ or `Show N results` opens it again. One result that is the entry on screen has n
 such line. An action that shows hidden items starts with a verb; a bare count reads as a
 label. Its accessible name stays `Show the results`. `Show all N` is quiet and lists every match in place,
 in Lookup and in Arrivals: a scroll list at most eight rows tall that follows Tab and the arrow keys. New words
-return to five. Clear sits beside nonempty search only. Back, Open in Library (Open in World for every World note,
+return to five. Lookup's `Show all` line is as tall as a row, so six matches show as six rows, with no `Show all`. Clear sits beside nonempty search only. Back, Open in Library (Open in World for every World note,
 typed or plain; a session note has neither) and the close icon share the title line. Creation actions follow results with the proposed name, only without an exact
 match. Generate NPC appears only for empty search. When no creation action shows, their row takes no room: the rule
 above the entry follows the results or `Show N results` at the normal gap. While Lookup holds an unsaved generated
@@ -948,10 +949,13 @@ never move when a result comes or goes (round 26). That holds for `<file> is now
 already in the note.`), a name or file rename, and every value change. In the edit form and with no note open, the
 result is in the same footer. A later result on the same note replaces `Note repaired.`. Results with a live Undo come
 first, then the error. An older Undo whose file a newer result wrote refuses and leaves the bytes; the newer Undo goes
-first. The note's own faults (unread values, a place loop, a duplicate's repair, a lost draft) are the note's state, not
-results: they stay below the file line.
+first. The note's own faults (unread values, a place loop, a duplicate's repair) are the note's state, not
+results: they stay below the file line. A draft whose note is gone is no note's state: its warning, with `Copy text`
+and `Discard draft`, and then its `<name> draft discarded.` with `Undo discard`, sit in the pane's footer of the
+campaign that owns the draft, whatever note is open, also above an edit form.
 A finished change has the success tone, as Library's results have: `Changes saved.`, a value change
-(`Stat block set to Guard.`, `In set to North Gate. It was Watch House.`, `In cleared. It was Ashfall Keep.`; Status and
+(`Stat block set to Guard.`, `Place set to North Gate. It was Watch House.`, `Place cleared. It was Ashfall Keep.`: the
+place is named as its Undo, `Undo place change`, names it, not by the label `In`; Status and
 Part of alike), `Name changed to <name>.`, `Note repaired.` and
 `<file> is now a separate note.` (`world::CHANGED`). Encounters' finished changes have it too: a replacement
 (`Replaced Unknown creature with Ember Cultist.`, `2 Cinder Wolf rows replaced with Guard.`), a removed member or
@@ -963,7 +967,7 @@ reader with no file line.
 Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. A full NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader (Lookup) keeps status on the kind line, as the plain evening's contract keeps every text of today, and shows a campaign entry's Status row with its Change below it, so the DM changes a status where the entry is read, with the same write, Log line and `Undo status change` in Lookup's footer. `Change` puts the keyboard in the field with its words selected, in both readers. A compact reader has no file line: while a duplicate-note repair message shows, its kind line drops the fault and names the open file instead (`NPC · Campaign · NPCs/Rook Ambry copy.md`). The result rows keep the fault. Use a fixed label column, aligned
 values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
 gap, capped at the value measure. Values wrap within their column, with Change level with the value's first line (a missing link's name line, not
-`Not found` below it). Read mode hides empty relationship and status values. An NPC keeps its empty Stat block row and Change action, so assigning its first stat block still takes three interactions from the reader. This row says `not set`. A set value is `Body` in the text colour, as a set link is, so a value and its absence differ at a glance; only `not set` and `not read` stay muted `Small`. Edit on the title line opens all fields, including empty ones. A typed page with no set values shows its prose directly, except for this NPC Stat block row: with no row, the value block adds no gap, so the prose starts as far below the file line as a plain note's does. Missing links retain names and keep `Not found` on one line beside a label column. A missing link's icon and name
+`Not found` below it). Read mode hides empty relationship and status values. An NPC keeps its empty Stat block row and Change action, so assigning its first stat block still takes three interactions from the reader. This row says `not set`. A set value is `Body` in the text colour, as a set link is, so a value and its absence differ at a glance; only `not set` (muted) and `not read` (warning) stay `Small`. The edit form draws its values the same way, groups included. Edit on the title line opens all fields, including empty ones. A typed page with no set values shows its prose directly, except for this NPC Stat block row: with no row, the value block adds no gap, so the prose starts as far below the file line as a plain note's does. Missing links retain names and keep `Not found` on one line beside a label column. A missing link's icon and name
 are in `Body` in the warning tone, as large as a set link; only ` · Not found` is `Small`. In a narrow pane (Lookup beside World), each label stands
 above its value with an `S` gap above the label. The value then keeps the label column's room, and only Change and its
 `L` gap come off its width; there a missing link's name keeps its line, wrapping by whole words only when it must, and
@@ -997,9 +1001,9 @@ bordered `Always use this one` action on each row; the link centres on the actio
 widest value or file link in the block plus an `L` gap. A saved choice changes only its key and has Undo,
 which checks the file before writing. Always use this one saves a path with Undo. Change messages are
 sentences that name both values as the rows show them: the name of the note a link opens, else the words in the file
-(`In cleared. It was Ashfall Keep.`, not the alias written in the file). Only the note's Log lines keep the arrow form
+(`Place cleared. It was Ashfall Keep.`, not the alias written in the file). Only the note's Log lines keep the arrow form
 (`In Ashfall Keep → not set.`). When another World note has the same name, a result and a picker name the folder too
-(`In set to Watch House (Locations). It was Watch House.`), so the DM can tell which file the change chose. They sit in the pane's footer, as every World result does. A cleared value's row goes with the value. A place that matches more than one
+(`Place set to Watch House (Locations). It was Watch House.`), so the DM can tell which file the change chose. They sit in the pane's footer, as every World result does. A cleared value's row goes with the value. A place that matches more than one
 note is the link `⚠ <name> · N matches`: the warning icon is its own glyph in the warning colour before the link
 words, so the underline covers only the words, as in `status_link`. Its accessible name keeps the icon. Different file and
 stored names offer two safe choices below the warning's words, `L` apart: `Rename the note to <file name>`, with a
@@ -1011,22 +1015,32 @@ old name cannot be removed, the new one goes again and nothing moved; if neither
 says to delete the new one by hand. Where the file system offers neither move, the choice says `Splat cannot rename
 files safely in this folder, so nothing was moved.`; its result `The file is now
 <name>.md.` has `Undo file rename`, which checks the same before it moves the file back, and only in the campaign that made the move. The file choice is left out
-while the note's edit form is open, or when the name cannot be a file name. New NPCs show their
-future path below the name. A compact NPC reader puts Fights as and In on one read-only line; both open
+while the note's edit form is open, or when the name cannot be a file name. World's New note, New NPC and New
+location are inline creation forms: the named Create action follows the last field on its line, and the kept line
+below holds quiet `Cancel`, then `Type a name first.` or, for an NPC, its future path (`Will create
+NPCs/Watchkeeper.md`), so typing moves nothing. A compact NPC reader puts Fights as and In on one read-only line; both open
 Lookup. A missing link there reads as its other values: the muted label, then `⚠ <name> · Not found` in the warning
 tone (`In` `⚠ Watch House · Not found`).
 
-A campaign world entry has a quiet Edit action, with a pencil icon and the word Edit, on its title line in Lookup and World. Its icon sits one `L` after the measured title at every title width, so a kind line wider than a short title does not push it away; a title with art keeps Edit after the art. With no run open, a creature's or an NPC's reader (a campaign
+A campaign world entry has a quiet Edit action, with a pencil icon and the word Edit, on its title line in Lookup and World. Its icon sits one `L` after the measured title at every title width, so a kind line wider than a short title does not push it away; beside a portrait, the actions stay left of it. With no run open, a creature's or an NPC's reader (a campaign
 entry, or a package creature, whose header has no Edit) has a quiet `Start fight` with the run icon after Edit,
 `XS` apart (after the measured title, one `L` on, when there is no Edit), named `Start a fight with <name>` and
 blocked as the encounter editor's `Start fight` is. While the encounter editor is the page, Lookup's reader has
-no `Start fight`: the editor's own primary `Start fight` is the one there. A campaign world entry also has a quiet `Add to Log`
+no `Start fight`: the editor's own primary `Start fight` is the one there. While a run is open, a creature's reader has a
+quiet `Add to fight` (`icons::ADD`, named `Add <name> to the fight`) in that place: one press adds one of it on the
+enemies' side with its initiative rolled, through the run's own add, and the run header's `Undo: add <name>` takes it
+away; when the run refuses (an ended fight, no maximum HP), the reason is the reader's error in its footer. An NPC keeps
+its own `Add to fight` form, which asks for its stat block and side. A campaign world entry also has a quiet `Add to Log`
 (`icons::ADD_TO_LOG`, a list with a plus, so it is not the bare `+` of `Add to fight`) `XS` after `Start fight`, or after Edit when there is no `Start fight`, so `Start fight` keeps
-its place whether or not the DM ever adds to a Log. They take only the room after the
-title on the title's line: the title keeps its width and the row gains no line and no menu. The header shows
-the first of these that fits: both words; `Start fight` and `Add to Log` as its icon (`icon_button`, its name
-on hover); `Start fight` alone; the icon alone; neither. `Start fight` is never an icon, so when the room does
-not hold its word it does not show. Beside a portrait there is no such room. `Start fight`
+its place whether or not the DM ever adds to a Log. Title-line actions never go away and never lose their word
+(round 27, `world::title_line_actions`, one rule for World, Lookup and the encounter editor's header): when the
+measured title, the `L` gap and every action with its icon and word fit on the title's line, they follow the title
+there; else all of them move together, in order and `XS` apart, to one row under the kind line, the first target at
+the text edge (Lookup's reader clips at it). Only when that one row does not fit the pane does it wrap, at whole actions,
+each row filled from the left with as many as fit, each action with its icon and word: never an icon-only action and
+never a hidden one (World beside Lookup at 960 has `Add to Log` on a second row). The pane is not widened for it. The
+test is the measured width, not a fixed threshold. Both layouts
+take the same widget IDs, so a field below keeps the keyboard when a resize moves the actions. `Start fight`
 saves `Fight with <name>` with the party and the creature and starts its run; an encounter of that name (or of
 that name with a number) that was never run and holds the same roster starts instead. An NPC with no stat block
 opens the run's made-up form in Arrivals, with the name filled in and the keyboard in HP. `Add to Log` opens one
@@ -1045,8 +1059,8 @@ campaign change, and the campaign switch's guard and the close warning count the
 (deleted, or another note took its ID), its draft waits for nothing, and the pane's footer says
 `“<name>” was deleted. The Log line was not added: “<words>”` with `Copy text` and, an `L` gap after it, `Dismiss`
 (the choices of a lost draft), whatever the reader shows and also while Lookup shows no entry, until the DM copies
-or dismisses it. While the entry's edit form is open the field waits
-under `Save or discard your edit first.` A package's entry has no `Add to Log`. Edit replaces the rows and
+or dismisses it. While the entry's edit form is open, here or in the other reader, the field waits with its words
+and takes no room; the reason `Save or discard your edit first.` is in the pane's footer, so the form never moves. A package's entry has no `Add to Log`. Edit replaces the rows and
 the text with one form. Read and Edit show Stat block, In, Part of, then Status, so a value keeps its place when the DM
 presses Edit; conflict lines after Overwrite use the same order. Text follows in the reader's prose type,
 without the title line. The Text field ends at the same `FORM_WIDTH` edge as Status. One frame holds
@@ -1058,7 +1072,8 @@ then it is secondary. Cancel closes the form. Discard closes the form and offers
 A draft whose note is gone (deleted, or another note took its place outside Splat) warns below the open note's file line, with
 `Copy text` (quiet, with its icon) and, an `L` gap after it, `Discard draft` with the secondary border, as every
 message action without an icon has. Discard draft lets the words go with `<name> draft discarded.`
-and `Undo discard` in the same place, until the next Edit, the next Discard or the Undo.
+and `Undo discard`, a result of the pane: it sits in the pane's message footer, whatever entry is open, first among
+its messages while its Undo is live, until the next Edit, the next Discard or the Undo.
 The rail shows World draft while an edit is unsaved. If a repair is also unsaved, it shows World repair draft once.
 One save writes every change with one Undo. If the note on disk already reads as the save would write it
 (for example, Overwrite adds a group that Obsidian added too), write nothing, add no Undo, and close the
@@ -1146,8 +1161,9 @@ sources below attributes. Every card's `Will save <path>` is the path Save NPC w
 the campaign's NPCs, or `NPCs/` when it has none. Without a names table, the World page's card says `Built-in names. To
 use your own, add a table of names to a note. Paste the marker on the line above the table.` with a quiet `Copy the
 marker` action drawn with `line_start` and no icon, so its words start at the card's text edge. It copies the exact marker line,
-and then a success message in its place says `Copied. Change 1d6 to the number of names.` until the card shows another
-NPC. The message keeps the action's height (a Read control), so `Will save …` and the save row below do not move. No card shows the marker as text. Lookup's card says `Built-in names.` with a quiet
+and then the World page's footer says `Copied. Change 1d6 to the number of names.` while that NPC's card is the view;
+another NPC on the card, its save or discard, or a campaign change ends it. The action stays, so the DM can copy again,
+and nothing on the card moves. No card shows the marker as text. Lookup's card says `Built-in names.` with a quiet
 `Use your own names` link, which moves the same NPC to the World page's card. A session note's card says
 `Built-in names.` only, so the note keeps the keyboard. Table warnings use the words name, look, manner and
 want; hover keeps the marker key.
@@ -1793,8 +1809,9 @@ The run has one message footer, pinned below the roster in the live, setup and e
 notices that come by themselves sit in it: the changed-on-disk choices, an error, and the warning that the saved Undo
 steps cannot be read; in setup also the carry-over warning and the long-rest offer, whose result (`Party HP set to the
 saved values.` with `Undo use saved HP`) leads the footer while its step is the newest. The roster sizes its rows from
-its whole room, so the footer moves no row when it comes or goes: it only covers the bottom of the list, and the
-overflow line counts the rows behind it, which scroll into view. A stat-block error keeps its one-line band below the
+its whole room, so the footer moves no row when it comes or goes. The visible list ends at a whole row above it: a
+row the footer would cut is not drawn, and the overflow line counts it with the rows behind the footer, which scroll
+into view. A stat-block error keeps its one-line band below the
 roster. A run whose saved Undo steps cannot be read says so once, as a warning `message` with a Dismiss button. The
 Log keeps the line.
 

@@ -1490,7 +1490,11 @@ impl Run {
                     let whole_row = row_top >= original_clip.top() - design::HAIRLINE_WIDTH
                         && row_top + layout.height(scale)
                             <= original_clip.bottom() + design::HAIRLINE_WIDTH;
-                    if overflow && !whole_row {
+                    // A row cut by the list's edge or by the message footer is not drawn: the
+                    // list ends at a whole row, and `1 below` counts the rest. It keeps its place,
+                    // and neither it nor any control of it is a target, a hover or a Tab stop.
+                    let hidden = (overflow || behind) && !whole_row;
+                    if hidden {
                         ui.set_clip_rect(Rect::NOTHING);
                     }
                     let selected = self.selected == index || self.also.contains(&index);
@@ -1513,6 +1517,9 @@ impl Run {
                         name.push_str(&format!(", {badge}"));
                     }
                     let response = ui.push_id(&p.key, |ui| {
+                        if hidden {
+                            ui.set_invisible();
+                        }
                         if self.live_initiative == Some(index) {
                             let (rect, _) = ui.allocate_exact_size(
                                 vec2(ui.available_width(), layout.height(scale)),
@@ -1602,6 +1609,19 @@ impl Run {
                         response.on_hover_text(side)
                     };
                     ui.set_clip_rect(original_clip);
+                    // Every other control of a hidden row (initiative, conditions, effects, the
+                    // half-damage mark) is built in one part that is not shown, takes no press or
+                    // hover, and is no Tab stop: one decision for the whole row.
+                    let mut hidden_part = hidden.then(|| {
+                        let mut part = ui
+                            .new_child(egui::UiBuilder::new().max_rect(ui.max_rect()).invisible());
+                        part.set_clip_rect(Rect::NOTHING);
+                        part
+                    });
+                    let ui = match hidden_part.as_mut() {
+                        Some(part) => part,
+                        None => &mut *ui,
+                    };
                     spans.push((rect.top() - origin, rect.bottom() - origin, index));
                     if response.clicked() {
                         clicked = Some((index, ui.input(|i| i.modifiers.command)));
