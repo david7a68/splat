@@ -2855,7 +2855,7 @@ pub fn round_trip(d: &mut Driver<'_>) {
         &rook_path,
         format!(
             "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: world\nsplat_name: Rook\nsplat_type: npc\nsplat_status: alive\n---\n",
-            Uuid::new_v4()
+            crate::hermetic::new_uuid()
         ),
     )
     .unwrap();
