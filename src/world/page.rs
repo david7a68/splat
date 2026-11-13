@@ -411,6 +411,7 @@ impl WorldPage {
         }
     }
 
+    #[allow(clippy::disallowed_methods)]
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
@@ -943,6 +944,7 @@ impl WorldPage {
         }
     }
 
+    #[allow(clippy::disallowed_methods)]
     fn creation_form(&mut self, ui: &mut egui::Ui, index: &ContentIndex, campaign: &Campaign) {
         let mut made = None;
         if let Some(kind) = self.new_kind {
@@ -1500,6 +1502,7 @@ impl WorldPage {
 }
 
 /// The same next step in the header and in an empty reader.
+#[allow(clippy::disallowed_methods)]
 fn new_menu(ui: &mut egui::Ui) -> Option<&'static str> {
     let mut choice = None;
     let label = format!("New {}", icons::DOWN);

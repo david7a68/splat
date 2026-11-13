@@ -9,6 +9,7 @@ pub(super) fn blocked_reason(ui: &mut egui::Ui, reason: Option<&str>) {
     }
 }
 
+#[allow(clippy::disallowed_methods)]
 pub(super) fn row_menu(ui: &mut egui::Ui, name: &str, add: impl FnOnce(&mut egui::Ui)) {
     let name = format!("More actions for {name}");
     // The pane the menu opens from: the menu stays inside it, as its submenus do.
@@ -121,6 +122,7 @@ pub(super) fn menu_action(ui: &mut egui::Ui, word: &str, blocked: Option<&str>) 
 }
 
 /// The same named side picker serves roster slots and groups. Other opens a text field.
+#[allow(clippy::disallowed_methods)]
 pub(super) fn side_control(ui: &mut egui::Ui, name: &str, side: &mut String, choices: &[String]) {
     let id = ui.make_persistent_id((name, "other_side"));
     let custom = !matches!(side.as_str(), "party" | "enemies")

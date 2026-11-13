@@ -483,6 +483,7 @@ fn set_caret(ctx: &egui::Context, editor: egui::Id, at: usize) {
 }
 
 /// Under the `/`, or above it when the note has no room below.
+#[allow(clippy::disallowed_methods)]
 fn popup_at(ui: &egui::Ui, id: egui::Id, anchor: egui::Rect, shown: bool) -> egui::Popup<'static> {
     egui::Popup::new(id, ui.ctx().clone(), anchor, ui.layer_id())
         .open_memory((!shown).then_some(egui::SetOpenCommand::Bool(true)))
@@ -707,6 +708,7 @@ mod tests {
         _dir: tempfile::TempDir,
     }
 
+    #[allow(clippy::disallowed_methods)]
     fn note(body: &str) -> Harness<'static, Note> {
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(dir.path().join("Powers")).unwrap();

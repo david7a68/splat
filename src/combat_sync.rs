@@ -3111,6 +3111,7 @@ mod tests {
         );
     }
     #[test]
+    #[allow(clippy::disallowed_methods)]
     fn render_every_editable_group_at_minimum_size() {
         let remote = full_remote(true);
         let mut sync = CombatSync::default();

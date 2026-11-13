@@ -1132,6 +1132,7 @@ pub(super) fn add_target(ui: &mut egui::Ui, draft: &mut Draft, _snapshot: &Snaps
 
 /// The groups that belong to an encounter, each in a frame of its own, built here and saved
 /// with it. Returns true when the DM chooses to add creatures to one.
+#[allow(clippy::disallowed_methods)]
 pub(super) fn of_encounter(
     ui: &mut egui::Ui,
     draft: &mut Draft,
@@ -1683,6 +1684,7 @@ fn single_change(label: &str, value: Option<Change>) -> Overrides {
 }
 
 /// One line of words, or nothing. Blank means no change.
+#[allow(clippy::disallowed_methods)]
 fn text_row(ui: &mut egui::Ui, label: &str, value: &mut Option<String>, hint: &str) {
     ui.horizontal(|ui| {
         let (rect, _) = ui.allocate_exact_size(
@@ -2063,6 +2065,7 @@ impl Encounters {
         self.message = None;
     }
 
+    #[allow(clippy::disallowed_methods)]
     pub(super) fn group_editor_view(
         &mut self,
         ui: &mut egui::Ui,
@@ -2471,6 +2474,7 @@ fn member_result_into<'a>(
     }
 }
 
+#[allow(clippy::disallowed_methods)]
 fn members_pane(
     ui: &mut egui::Ui,
     draft: &mut GroupDraft,

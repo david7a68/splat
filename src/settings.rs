@@ -65,6 +65,21 @@ pub enum Account {
     RefreshFailing,
 }
 
+impl Account {
+    const ALL: [Self; 6] = [
+        Self::Busy,
+        Self::Connected,
+        Self::NotConnected,
+        Self::Failed,
+        Self::KeyringWarning,
+        Self::RefreshFailing,
+    ];
+}
+
+/// The cookie field keeps its id when Settings changes between one and two columns, so a DM who
+/// is pasting keeps the focus and the cursor.
+const SESSION_COOKIE: design::FieldId = crate::field_id!("session_cookie");
+
 const SESSION_ENDED: &str = "Your sign-in ended. Select Connect to sign in again.";
 
 /// 5, 10, 20, 40, then 60 seconds. Renewal starts a minute before the token ends at most,
@@ -321,10 +336,16 @@ impl Settings {
     }
 
     pub fn connection_status(&self) -> Status<'static> {
+        Self::status_of((self.account(), self.signed_out()))
+    }
+
+    /// The account's status word for each state: the one function that names them, so the
+    /// compact line's slot is as wide as the widest of them.
+    fn status_of((account, signed_out): (Account, bool)) -> Status<'static> {
         let c = colors();
-        let (icon, word, color) = match self.account() {
+        let (icon, word, color) = match account {
             Account::NotConnected => (icons::OFFLINE, "Not connected", c.connection.offline),
-            Account::Failed if self.error.as_deref() == Some(SESSION_ENDED) => (
+            Account::Failed if signed_out => (
                 icons::OFFLINE,
                 "Signed out of D&D Beyond",
                 c.connection.offline,
@@ -342,7 +363,6 @@ impl Settings {
     }
 
     pub fn show_compact(&mut self, ui: &mut egui::Ui) {
-        let state = self.connection_status();
         let id = egui::Id::new("compact_account_open");
         let mut open = ui
             .ctx()
@@ -362,7 +382,18 @@ impl Settings {
             self.show_account(ui, false);
         } else {
             ui.horizontal(|ui| {
-                design::status(ui, state);
+                // A fixed slot: the action after the status stays in place when the state
+                // changes (family F8).
+                let every: Vec<_> = Account::ALL
+                    .into_iter()
+                    .flat_map(|account| [(account, false), (account, true)])
+                    .collect();
+                design::status_slot(
+                    ui,
+                    &every,
+                    (self.account(), self.signed_out()),
+                    Self::status_of,
+                );
                 if self.account() == Account::RefreshFailing {
                     ui.label(
                         Type::Small
@@ -503,7 +534,8 @@ impl Settings {
             });
             let cookie_width = design::small_field(ui, "Session cookie", None, None, |ui| {
                 let response = ui.add(
-                    egui::TextEdit::singleline(&mut self.cookie_input)
+                    SESSION_COOKIE
+                        .single_line(&mut self.cookie_input)
                         .password(true)
                         .hint_text(design::placeholder(ui, "Paste session cookie"))
                         .min_size(egui::vec2(0.0, Density::Read.control()))

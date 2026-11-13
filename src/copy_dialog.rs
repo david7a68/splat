@@ -74,6 +74,7 @@ impl CopyDialog {
             add_to_draft: None,
         }
     }
+    #[allow(clippy::disallowed_methods)]
     pub fn show(&mut self, ctx: &egui::Context, campaigns: &Campaigns) -> bool {
         if let Some(rx) = &self.pending {
             match rx.try_recv() {

@@ -360,6 +360,7 @@ impl ProcessingSettings {
             .map(|error| format!("These settings were not saved. {error}"));
     }
 
+    #[allow(clippy::disallowed_methods)]
     fn key_row(&mut self, ui: &mut egui::Ui, slot: KeySlot, label: &str) {
         let (tx, ctx) = (
             self.replies.as_ref().map(|(tx, _)| tx.clone()),
@@ -633,6 +634,7 @@ impl ProcessingSettings {
         }
     }
 
+    #[allow(clippy::disallowed_methods)]
     fn speech_section(&mut self, ui: &mut egui::Ui) {
         design::group_heading(ui, "Speech service", 0);
         design::help(
@@ -703,6 +705,7 @@ impl ProcessingSettings {
         self.key_row(ui, KeySlot::Speech, "Speech API key");
     }
 
+    #[allow(clippy::disallowed_methods)]
     fn llm_section(&mut self, ui: &mut egui::Ui) {
         design::group_heading(ui, "Transcript and summary", 0);
         design::help(

@@ -234,6 +234,7 @@ impl Trackers {
 }
 
 /// The result line, then the empty state, a file that cannot be read, or the trackers.
+#[allow(clippy::disallowed_methods)]
 pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, from_top: bool) {
     let mut act = None;
     // The result line comes first: why an act recorded nothing stays in view, also when the
@@ -853,6 +854,7 @@ fn name_cell(ui: &mut egui::Ui, view: &mut ViewState, name: &str, size: egui::Ve
 }
 
 /// `add: ask` puts a number field in the action's place. It holds focus until Enter or Escape.
+#[allow(clippy::disallowed_methods)]
 fn amount_field(
     ui: &mut egui::Ui,
     view: &mut ViewState,

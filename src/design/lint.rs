@@ -1,6 +1,11 @@
 //! No raw colours or text sizes outside the design system, and no straight apostrophe in UI
 //! words. The allowlist can only shrink: a count above it fails, and a count below it asks
 //! you to lower it.
+//!
+//! The same allowlist counts the functions that may still make a raw egui call that
+//! `clippy.toml` disallows (`#[allow(clippy::disallowed_methods)]`, rule
+//! `disallowed-methods-allow`). An allow for a whole module or for a Clippy group would let a
+//! new file or a new function through, so it is never allowed (`broad-clippy-allow`).
 use std::{collections::BTreeMap, fs, path::Path};
 
 const ALLOWLIST: &str = include_str!("lint_allowlist.txt");
@@ -114,6 +119,28 @@ fn violations(line: &str) -> Vec<&'static str> {
     found
 }
 
+/// The Clippy allows on one line of code, by the rule that counts them. Each item-level
+/// `allow(clippy::disallowed_methods)` counts once; one for a whole module (`#![…]`) or for a
+/// group that holds the lint (`clippy::style`, `clippy::all`) is a fault of its own.
+fn clippy_allows(line: &str) -> Vec<&'static str> {
+    let code = line.split("//").next().unwrap_or("");
+    let attribute = code.contains("allow(") || code.contains("expect(");
+    let mut found = Vec::new();
+    if !attribute {
+        return found;
+    }
+    if code.contains("clippy::disallowed_methods") {
+        found.push("disallowed-methods-allow");
+        if code.contains("#![") {
+            found.push("broad-clippy-allow");
+        }
+    }
+    if code.contains("clippy::style") || code.contains("clippy::all") {
+        found.push("broad-clippy-allow");
+    }
+    found
+}
+
 fn scan(folder: &Path, counts: &mut BTreeMap<String, usize>) {
     for item in fs::read_dir(folder).expect("read source folder") {
         let path = item.expect("read source entry").path();
@@ -127,6 +154,14 @@ fn scan(folder: &Path, counts: &mut BTreeMap<String, usize>) {
             && !relative.ends_with("tests.rs")
         {
             let text = fs::read_to_string(&path).expect("read source file");
+            let root = concat!(env!("CARGO_MANIFEST_DIR"), "/");
+            let key = relative.strip_prefix(root).unwrap_or(&relative);
+            // Every allow counts, in tests too: a test's raw call is still a raw call.
+            for line in text.lines() {
+                for rule in clippy_allows(line) {
+                    *counts.entry(format!("{key} {rule}")).or_default() += 1;
+                }
+            }
             // Unit tests may name colours and sizes. They do not ship.
             // `mod tests;` near the top names a file of its own, so only an inline module ends it.
             let code = text.split("#[cfg(test)]\nmod tests {").next().unwrap_or("");
@@ -165,6 +200,10 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
         if *count > limit {
             let fix = if key.ends_with("straight-apostrophe") {
                 "Use ’ in UI words"
+            } else if key.ends_with("disallowed-methods-allow") {
+                "Use the design part that clippy.toml names, not a raw egui call"
+            } else if key.ends_with("broad-clippy-allow") {
+                "Allow `clippy::disallowed_methods` on one function, never on a module or a group"
             } else {
                 "Use design tokens"
             };
@@ -180,6 +219,78 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
         }
     }
     assert!(problems.is_empty(), "{}", problems.join("\n"));
+}
+
+/// Every `field_id!` name in `src/`, with where it is. Comments and doc examples do not count.
+fn field_ids(folder: &Path, found: &mut BTreeMap<String, Vec<String>>) {
+    for item in fs::read_dir(folder).expect("read source folder") {
+        let path = item.expect("read source entry").path();
+        if path.is_dir() {
+            field_ids(&path, found);
+        } else if path.extension().is_some_and(|e| e == "rs") {
+            let text = fs::read_to_string(&path).expect("read source file");
+            for (at, line) in text.lines().enumerate() {
+                let code = line.split("//").next().unwrap_or("");
+                for (start, _) in code.match_indices("field_id!(\"") {
+                    let rest = &code[start + "field_id!(\"".len()..];
+                    if let Some(name) = rest.split('"').next() {
+                        found.entry(name.to_owned()).or_default().push(format!(
+                            "{}:{}",
+                            path.display(),
+                            at + 1
+                        ));
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Two fields with one `FieldId` would share focus and text state: each name is used once.
+/// A field shown once per row adds the row's key with `FieldId::with`.
+#[test]
+fn each_field_id_name_is_used_once() {
+    let mut found = BTreeMap::new();
+    field_ids(
+        Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/src")),
+        &mut found,
+    );
+    assert!(
+        found.contains_key("campaign_name"),
+        "the scan finds field ids"
+    );
+    let twice: Vec<_> = found
+        .iter()
+        .filter(|(_, places)| places.len() > 1)
+        .map(|(name, places)| format!("{name}: {}", places.join(", ")))
+        .collect();
+    assert!(
+        twice.is_empty(),
+        "One name per field id:\n{}",
+        twice.join("\n")
+    );
+}
+
+#[test]
+fn the_lint_finds_clippy_allows() {
+    assert_eq!(
+        clippy_allows("    #[allow(clippy::disallowed_methods)]"),
+        ["disallowed-methods-allow"]
+    );
+    assert_eq!(
+        clippy_allows("#![allow(clippy::disallowed_methods)]"),
+        ["disallowed-methods-allow", "broad-clippy-allow"]
+    );
+    assert_eq!(
+        clippy_allows("#[allow(clippy::style)]"),
+        ["broad-clippy-allow"]
+    );
+    assert_eq!(
+        clippy_allows("#[expect(clippy::all, reason = \"x\")]"),
+        ["broad-clippy-allow"]
+    );
+    assert!(clippy_allows("// #[allow(clippy::disallowed_methods)] in a comment").is_empty());
+    assert!(clippy_allows("let lint = \"clippy::disallowed_methods\";").is_empty());
 }
 
 #[test]
