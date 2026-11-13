@@ -1173,7 +1173,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/sessions/plan.rs", "word_link", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "plan_row_with", &[Ban::Extras(1)]),
-        ("src/encounters.rs", "detail_columns", &[Ban::Extras(2)]),
         (
             "src/encounters.rs",
             "replace_missing_creature",

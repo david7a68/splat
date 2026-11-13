@@ -1208,10 +1208,6 @@ const RESULT_ROW: f32 = design::XL + design::L + design::S;
 /// first place holds a party copy's word, which has no challenge rating. The package follows
 /// if the row has room for it.
 /// `hp_missing` comes from the creature's stats: the HP fault is data, never found in the words.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub(crate) fn detail_columns(
     ui: &mut egui::Ui,
     detail: &str,
@@ -1269,7 +1265,7 @@ pub(crate) fn detail_columns(
             );
         }
         if detail.starts_with("NPC · as ") {
-            ui.add_space(design::M - design::S);
+            design::gap(ui, design::Gap::XS);
             ui.label(
                 Type::Small
                     .rich(ui, parts[..2].join(" · "))
@@ -1281,7 +1277,7 @@ pub(crate) fn detail_columns(
             && design::number_width(ui, source, &Type::Small.font(ui)) + design::M - design::S
                 <= ui.available_width()
         {
-            ui.add_space(design::M - design::S);
+            design::gap(ui, design::Gap::XS);
             ui.label(Type::Small.rich(ui, source).color(colors().muted));
         }
     });
