@@ -2824,9 +2824,11 @@ impl<'a> Footer<'a> {
         // The body is drawn after the footer, so it would take a press on the footer, and paint
         // over it, where it reaches under it: a scroll area as tall as its room below short
         // content, or a line typed this frame before the footer moves down. Nothing drawn next
-        // in `ui` shows or takes a press below the footer's top.
+        // in `ui` shows or takes a press below the body's room, `S` above the footer: egui gives
+        // a press to a widget a few points away, so a body clipped at the footer's very top would
+        // still take a press on the footer's top edge.
         let mut clip = ui.clip_rect();
-        clip.max.y = clip.max.y.min(rect.top());
+        clip.max.y = clip.max.y.min(rect.top() - S);
         ui.set_clip_rect(clip);
         limit
     }
@@ -5269,9 +5271,17 @@ mod tests {
     /// editor's top is the same in every frame, at 960, 1200 and 1920. Presses: the footer's
     /// Undo takes a press where it follows, and where it is pinned; a press on the hairline goes
     /// to the footer, never to the cut line under it; once the footer empties, a press where it
-    /// was goes to the body line now shown there.
+    /// was goes to the body line now shown there. Review of PR 298, item 3: the last body action
+    /// above the footer takes its press while the footer follows, while it is pinned, and while
+    /// its content grows; the pane's own press area, which lies under a following footer, never
+    /// takes the footer's press; a click on an outside field moves focus there and typing goes
+    /// there; Tab reaches the last Undo of an overflowing footer, in view.
     fn iter27_a_the_footer_follows_a_short_body() {
-        use std::{cell::Cell, rc::Rc};
+        use egui_kittest::kittest::{NodeT, Queryable};
+        use std::{
+            cell::{Cell, RefCell},
+            rc::Rc,
+        };
         const SAVE_ROW: &str = "Save repaired note";
         const REASON: &str = "Line 3 opens a list with [ that never closes.";
         let click = |harness: &mut egui_kittest::Harness<'_>, pos: egui::Pos2| {
@@ -5297,13 +5307,35 @@ mod tests {
             let reason = Rc::new(Cell::new(false));
             // Presses: the footer's Undo, and the last body line pressed.
             let (undone, line_pressed) = (Rc::new(Cell::new(0)), Rc::new(Cell::new(None)));
+            // More results that come into the footer (each with its Undo), presses on the pane's
+            // own press area, and the outside field's words.
+            let (extra, background) = (Rc::new(Cell::new(0_usize)), Rc::new(Cell::new(0)));
+            let outside = Rc::new(RefCell::new(String::new()));
             let (lines_in, reason_in) = (lines.clone(), reason.clone());
             let (undone_in, line_in) = (undone.clone(), line_pressed.clone());
+            let (extra_in, background_in, outside_in) =
+                (extra.clone(), background.clone(), outside.clone());
+            // The extra results' actions came first, oldest to newest, then the discard.
+            let extra_orders: Vec<ResultOrder> = (0..30).map(|_| ResultOrder::issue()).collect();
             let order = ResultOrder::issue();
             let mut harness =
                 egui_kittest::Harness::builder()
                     .with_size(size)
                     .build_ui(move |ui| {
+                        // The outside field in a column of its own, beside the pane.
+                        let (left, right) = ui.max_rect().split_left_right_at_fraction(0.7);
+                        let mut column = ui.new_child(egui::UiBuilder::new().max_rect(right));
+                        column.add(
+                            egui::TextEdit::singleline(&mut *outside_in.borrow_mut())
+                                .id(Id::new("outside_field")),
+                        );
+                        let mut pane = ui.new_child(
+                            egui::UiBuilder::new()
+                                .max_rect(left)
+                                .layout(Layout::top_down(Align::Min)),
+                        );
+                        let ui = &mut pane;
+                        let whole = ui.max_rect();
                         ui.label("Title");
                         let mut footer = Footer::new("follow_footer", ui.available_width());
                         if reason_in.get() {
@@ -5313,11 +5345,25 @@ mod tests {
                                     undone.set(undone.get() + 1);
                                 }
                             });
+                            for (at, order) in extra_orders.iter().enumerate().take(extra_in.get())
+                            {
+                                footer.result(*order, format!("Extra {at}."), true, move |ui| {
+                                    let _ = ui.button(format!("Undo extra {at}"));
+                                });
+                            }
                             footer.reason(REASON, |ui| {
                                 message(ui, Tone::Error, REASON);
                             });
                         }
                         let bottom = footer.show(ui);
+                        // The pane's own press area, as a pane that ends a selection on a press
+                        // has: it holds the whole pane, so it lies under a following footer.
+                        if ui
+                            .interact(whole, Id::new("pane_background"), Sense::click())
+                            .clicked()
+                        {
+                            background_in.set(background_in.get() + 1);
+                        }
                         // The editor leaves room for its save row above `bottom`, as World's does.
                         let row = Type::Body.line() + ui.spacing().item_spacing.y;
                         egui::ScrollArea::vertical()
@@ -5353,7 +5399,7 @@ mod tests {
                     .ctx
                     .read_response(Id::new("follow_footer").with("focus"))
                     .map(|response| response.rect)
-                    .filter(|_| text(harness, REASON).is_some())
+                    .filter(|_| reason.get())
             };
             let hairline = |harness: &egui_kittest::Harness<'_>, at: Rect| {
                 harness.output().shapes.iter().any(|shape| {
@@ -5363,13 +5409,40 @@ mod tests {
                             && (points[0].x - at.left()).abs() <= 1.0)
                 })
             };
+            // The last body action whole in the editor's view (which ends at the save row, `S` or
+            // more above the footer), by its laid-out place, clipped or not: its index and centre.
+            // Places by the accessibility tree, as laid out whether painted or clipped: a fault
+            // that hides a control fails at its press, not at a missing paint.
+            let place = |harness: &egui_kittest::Harness<'_>, name: &str| {
+                harness.query_by_label(name).map(|node| node.rect())
+            };
+            // The last body action whole in the editor's view (which ends at the save row, `S` or
+            // more above the footer): its index and its centre.
+            let last_line = |harness: &egui_kittest::Harness<'_>, at: Rect| {
+                let save = place(harness, SAVE_ROW)?;
+                assert!(
+                    save.bottom() <= at.top() - S + 0.5,
+                    "the save row is above the footer"
+                );
+                (0..lines.get()).rev().find_map(|line| {
+                    place(harness, &format!("Editor line {line}"))
+                        .filter(|rect| rect.bottom() <= save.top())
+                        .map(|rect| (line, rect.center()))
+                })
+            };
+            let focused = |harness: &egui_kittest::Harness<'_>| {
+                harness
+                    .ctx
+                    .memory(|memory| memory.focused())
+                    .map(|id| egui::accesskit::NodeId(id.value()))
+            };
             let top = text(&harness, "Editor line 0")
                 .expect("the editor shows")
                 .top();
             // The first frame with the reason: no pass after it to settle.
             reason.set(true);
             harness.step();
-            let (save, at) = (text(&harness, SAVE_ROW).unwrap(), footer(&harness));
+            let (save, at) = (place(&harness, SAVE_ROW).unwrap(), footer(&harness));
             assert!(
                 at.is_some_and(|at| (at.top() - (save.bottom() + S)).abs() <= 1.0
                     && at.bottom() < size.y - L
@@ -5377,7 +5450,7 @@ mod tests {
                 "At {size:?} the first frame's footer {at:?} is `S` below the save row {save:?}, with no hairline"
             );
             harness.run_steps(3);
-            let (save, at) = (text(&harness, SAVE_ROW).unwrap(), footer(&harness));
+            let (save, at) = (place(&harness, SAVE_ROW).unwrap(), footer(&harness));
             assert!(
                 at.is_some_and(|at| (at.top() - (save.bottom() + S)).abs() <= 1.0),
                 "At {size:?} the footer {at:?} stays `S` below the save row {save:?}"
@@ -5386,10 +5459,28 @@ mod tests {
             let undo = text(&harness, "Undo it").expect("the Undo shows").center();
             click(&mut harness, undo);
             assert_eq!(
-                (undone.get(), line_pressed.get()),
-                (1, None),
-                "At {size:?} the following footer's Undo takes the press"
+                (undone.get(), line_pressed.get(), background.get()),
+                (1, None, 0),
+                "At {size:?} the following footer's Undo takes the press, not the pane's press area under it"
             );
+            // The last body action takes its press while the footer follows, and again once three
+            // more results have grown the footer.
+            for grown in [0, 3] {
+                extra.set(grown);
+                harness.run_steps(3);
+                let at = footer(&harness).expect("the footer shows");
+                let (line, centre) = last_line(&harness, at).expect("a body line shows");
+                line_pressed.set(None);
+                click(&mut harness, centre);
+                assert_eq!(
+                    (line_pressed.get(), background.get()),
+                    (Some(line), 0),
+                    "At {size:?} with {grown} more results, the last body action (line {line}) above the following footer {at:?} takes its press"
+                );
+            }
+            extra.set(0);
+            harness.run_steps(3);
+            line_pressed.set(None);
             // Typed lines, one at a time, past the pane (40 of these label rows still fit at
             // 1920): the editor's top never moves, and at the end the footer is pinned at the
             // pane's bottom with a hairline at its top.
@@ -5404,7 +5495,7 @@ mod tests {
             }
             harness.run_steps(3);
             let at = footer(&harness).expect("the footer shows");
-            let save = text(&harness, SAVE_ROW).unwrap();
+            let save = place(&harness, SAVE_ROW).unwrap();
             assert!(
                 at.bottom() >= size.y - L
                     && save.bottom() <= at.top() - S + 0.5
@@ -5416,50 +5507,143 @@ mod tests {
                 Some(top),
                 "At {size:?} the editor's top stays with 60 lines"
             );
-            // On the hairline, over the cut line: the footer has the press (egui gives it to the
-            // nearest control there, the footer's Undo), never the cut line under it.
+            // On the hairline, over the cut line: the footer has the press, never the cut line
+            // under it nor the pane's press area.
             click(&mut harness, pos2(at.left() + 40.0, at.top() + 0.5));
             assert_eq!(
-                (line_pressed.get(), undone.get()),
-                (None, 2),
+                (line_pressed.get(), background.get()),
+                (None, 0),
                 "At {size:?} a press on the hairline reaches the footer, not a cut body line"
             );
+            let before = undone.get();
             let undo = text(&harness, "Undo it").expect("the Undo shows").center();
             click(&mut harness, undo);
             assert_eq!(
-                undone.get(),
-                3,
+                (undone.get(), background.get()),
+                (before + 1, 0),
                 "At {size:?} the pinned footer's Undo takes the press"
             );
+            // The last body action whole above the pinned footer takes its press, also after the
+            // footer grows by six results.
+            for grown in [0, 6] {
+                extra.set(grown);
+                harness.run_steps(3);
+                let at = footer(&harness).expect("the footer shows");
+                let (line, centre) = last_line(&harness, at).expect("a body line shows");
+                line_pressed.set(None);
+                click(&mut harness, centre);
+                assert_eq!(
+                    (line_pressed.get(), background.get()),
+                    (Some(line), 0),
+                    "At {size:?} with {grown} more results, the last body action (line {line}) above the pinned footer {at:?} takes its press"
+                );
+            }
+            extra.set(0);
+            line_pressed.set(None);
             // Back to 4 lines: the footer follows the body up again, without its hairline. The
             // pointer leaves first: egui keeps a scroll area's height while the pointer is on it.
             harness.event(egui::Event::PointerGone);
             lines.set(4);
             harness.run_steps(3);
-            let (save, at) = (text(&harness, SAVE_ROW).unwrap(), footer(&harness));
+            let (save, at) = (place(&harness, SAVE_ROW).unwrap(), footer(&harness));
             assert!(
                 at.is_some_and(
                     |at| (at.top() - (save.bottom() + S)).abs() <= 1.0 && !hairline(&harness, at)
                 ),
                 "At {size:?} back at 4 lines the footer {at:?} follows the save row {save:?}"
             );
+            // Focus in the footer, then a click on the outside field: focus goes there, and the
+            // typed words too.
+            let undo_id = harness
+                .query_by_label("Undo it")
+                .map(|undo| undo.accesskit_node().id());
+            for _ in 0..12 {
+                if undo_id.is_some() && focused(&harness) == undo_id {
+                    break;
+                }
+                harness.key_press(egui::Key::Tab);
+                harness.run_steps(2);
+            }
+            assert!(
+                undo_id.is_some() && focused(&harness) == undo_id,
+                "At {size:?} Tab reaches the footer's Undo"
+            );
+            let field = harness
+                .ctx
+                .read_response(Id::new("outside_field"))
+                .expect("the outside field shows")
+                .rect;
+            click(&mut harness, field.center());
+            harness.event(egui::Event::Text("abc".into()));
+            harness.run_steps(2);
+            assert!(
+                harness
+                    .ctx
+                    .memory(|memory| memory.has_focus(Id::new("outside_field")))
+                    && *outside.borrow() == "abc",
+                "At {size:?} a click on the outside field takes the focus from the footer, and the typed words go there: {:?}",
+                outside.borrow()
+            );
+            // Twenty more results overflow the footer: Tab from the field reaches the last Undo,
+            // which scrolls into the footer's view.
+            extra.set(20);
+            harness.run_steps(3);
+            let last_undo = harness
+                .query_by_label("Undo extra 0")
+                .map(|undo| undo.accesskit_node().id());
+            for _ in 0..48 {
+                if last_undo.is_some() && focused(&harness) == last_undo {
+                    break;
+                }
+                harness.key_press(egui::Key::Tab);
+                harness.run_steps(2);
+            }
+            let at = footer(&harness).expect("the footer shows");
+            let shown = text(&harness, "Undo extra 0");
+            assert!(
+                last_undo.is_some()
+                    && focused(&harness) == last_undo
+                    && at.height() <= size.y / 3.0 + 1.0
+                    && shown.is_some_and(|undo| undo.is_positive() && at.contains_rect(undo)),
+                "At {size:?} Tab reaches the last Undo of the overflowing footer {at:?}, in view: {shown:?}"
+            );
+            extra.set(0);
+            harness.run_steps(3);
             // 60 lines again, then the footer empties: a press where it was reaches the body
             // line shown there now.
             lines.set(60);
             harness.run_steps(3);
             let at = footer(&harness).expect("the footer shows");
-            let was = pos2(at.left() + 40.0, at.center().y);
             reason.set(false);
             harness.run_steps(3);
             assert!(footer(&harness).is_none(), "At {size:?} the footer empties");
-            click(&mut harness, was);
-            let pressed = line_pressed
-                .get()
-                .and_then(|line| text(&harness, &format!("Editor line {line}")));
-            assert!(
-                // The line's words, with its button padding and egui's press radius around them.
-                pressed.is_some_and(|line| line.expand2(vec2(0.0, S)).contains(was)),
-                "At {size:?} the body line now at {was:?} takes the press: {pressed:?}"
+            // The body line now shown whole inside the footer's old place.
+            let there = harness
+                .output()
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) => {
+                        let line = text
+                            .galley
+                            .job
+                            .text
+                            .strip_prefix("Editor line ")?
+                            .parse::<usize>()
+                            .ok()?;
+                        let rect = Rect::from_min_size(text.pos, text.galley.size());
+                        (at.contains_rect(rect) && shape.clip_rect.contains_rect(rect))
+                            .then_some((line, rect.center()))
+                    }
+                    _ => None,
+                });
+            let (line, centre) = there.expect("a body line shows where the footer was");
+            line_pressed.set(None);
+            click(&mut harness, centre);
+            assert_eq!(
+                (line_pressed.get(), background.get()),
+                (Some(line), 0),
+                "At {size:?} the body line {line} now where the footer was {at:?} takes the press"
             );
         }
     }

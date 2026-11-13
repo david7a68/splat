@@ -186,6 +186,8 @@ struct Added {
     label: String,
     at: Instant,
     count: usize,
+    /// When the add was done: its result's footer order.
+    order: design::ResultOrder,
 }
 
 /// Something failed where the DM may not be looking. It stays until they dismiss it.
@@ -298,9 +300,13 @@ pub struct Sessions {
     pub(super) row_reveal: Option<(String, u8, u64)>,
     /// When the link update's result was made.
     link_order: Option<design::ResultOrder>,
-    /// When each kept result in this page's footers was made, so live Undo results go newest
-    /// first whatever their kind (review of PR 274, item 2).
-    pub(super) result_orders: crate::timeline::page::ResultOrder,
+    /// When the separate-session result in `identity_undo` was made: its footer order. Each
+    /// result keeps its own order, issued by its action (review of PR 298).
+    identity_order: design::ResultOrder,
+    /// When the group removal in `removed_group` was done.
+    pub(super) removed_group_order: design::ResultOrder,
+    /// When the run deletion in `deleted_run` was done.
+    pub(super) deleted_run_order: design::ResultOrder,
     folder_text: String,
     folder_notice: Option<String>,
     /// When the folder move that made `folder_notice` was done, for its footer order.
@@ -478,6 +484,8 @@ struct MovedRun {
     body: String,
     events: Vec<timeline::Event>,
     words: String,
+    /// When the move was done: its result's footer order.
+    order: design::ResultOrder,
 }
 
 fn processing_llm(settings: &ProcessingSettings) -> String {
@@ -1420,7 +1428,7 @@ impl Sessions {
                 ) {
                     match super::new_identity(copy) {
                         Ok(undo) => {
-                            self.result_orders.renew("identity");
+                            self.identity_order = design::ResultOrder::issue();
                             self.identity_undo = Some(undo);
                             self.refresh();
                         }
@@ -3443,8 +3451,8 @@ impl Sessions {
         let words = format!("{name} moved to Session {number}.");
         self.notice = new_notice(&mut self.notice_order, (Tone::Success, words.clone()));
         self.notice_session = Some(session);
-        self.result_orders.renew("move");
         self.moved_run = Some(MovedRun {
+            order: design::ResultOrder::issue(),
             before,
             open_run,
             body: self
@@ -5627,7 +5635,11 @@ impl Sessions {
                     }
                 });
             } else if self.moved_run.is_some() {
-                let order = self.result_orders.of("move", &words);
+                let order = self
+                    .moved_run
+                    .as_ref()
+                    .map(|moved| moved.order)
+                    .unwrap_or_default();
                 undos.push(order, words.clone(), move |ui| {
                     if design::undo_message(ui, tone, &words, "Undo move") {
                         act.set(Some(SessionAct::UndoMove));
@@ -5666,7 +5678,7 @@ impl Sessions {
             let filename = undo.path.file_name().unwrap_or_default().to_string_lossy();
             let words = format!("{filename} is now a separate session.");
             let act = &act;
-            let order = self.result_orders.of("identity", &undo.path);
+            let order = self.identity_order;
             undos.push(order, words.clone(), move |ui| {
                 if design::undo_message(ui, Tone::Success, &words, "Undo separate session") {
                     act.set(Some(SessionAct::UndoIdentity));

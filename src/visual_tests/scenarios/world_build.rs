@@ -4952,6 +4952,8 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.click("Update 1 link");
     d.wait_for_text("Undo link update");
     assert!(fs::read_to_string(&path).unwrap().contains("[[Ash Wolf]]"));
+    // Review of PR 298, item 2: A's link result keeps the order its own update issued.
+    let a_order = d.app().library.open_link_result_order();
     // AD3: the update's result is a message, and its Undo follows it with its icon. The result
     // takes the offer's place, so nothing below it moves.
     undo_follows_message(
@@ -5034,6 +5036,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.click("Update 1 link");
     d.settle();
     let b_result_shown = d.has_containing(&format!("Links now say “{LAMP}”."));
+    let b_order = d.app().library.open_link_result_order();
     let b_result_alone = !d.has_containing("Links now say “Ash Wolf”");
     let b_with_result = editor_below_read(d);
     // Astra re-check 2: B's long result is reached by keyboard and by wheel, and its Undo keeps
@@ -5086,6 +5089,16 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.click_starting("Ash Wolf · ");
     d.settle();
     let a_back = d.visible_text("Links now say “Ash Wolf”.") && !d.has_containing("Veilglass");
+    let a_order_back = d.app().library.open_link_result_order();
+    d.observe(
+        "review-298-2-link-order",
+        a_order.is_some()
+            && a_order_back == a_order
+            && b_order.zip(a_order).is_some_and(|(b, a)| b > a),
+        format!(
+            "Each link result keeps its own update's order: A {a_order:?}, B {b_order:?}, A again {a_order_back:?}"
+        ),
+    );
     d.observe(
         "iter-24-L-link-owner",
         a_hidden_in_b && b_offer_alone && b_result_alone && b_saved && a_back,

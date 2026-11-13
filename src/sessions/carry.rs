@@ -486,6 +486,8 @@ enum Outcome {
 #[derive(Default)]
 pub(super) struct Carries {
     results: BTreeMap<Uuid, Outcome>,
+    /// When each session's carry-over act was done: its result's footer order.
+    orders: BTreeMap<Uuid, design::ResultOrder>,
     /// Read's words, for what they were made from. A folder scan prepares them again, as the
     /// notes that embeds show can change.
     read: Option<(ReadKey, Arc<Prepared>)>,
@@ -500,6 +502,18 @@ pub(super) struct Carries {
 type PreparingKey = (Uuid, Option<Uuid>, Option<Uuid>, Option<Uuid>, usize);
 
 impl Carries {
+    /// The act on `session` made `outcome`: it replaces that session's earlier result, with a new
+    /// order of its own. Other sessions' results keep theirs.
+    fn record(&mut self, session: Uuid, outcome: Outcome) {
+        self.results.insert(session, outcome);
+        self.orders.insert(session, design::ResultOrder::issue());
+    }
+
+    /// The footer order of `session`'s result, issued by the act that made it.
+    pub(super) fn order(&self, session: Uuid) -> design::ResultOrder {
+        self.orders.get(&session).copied().unwrap_or_default()
+    }
+
     /// The folder was scanned: an embed's note can have changed or gone, and an event can have
     /// moved to another session.
     pub(super) fn scanned(&mut self) {
@@ -717,7 +731,7 @@ impl Sessions {
         let source = match (&now, &shown) {
             (Some(Ok(now)), Some(Ok(shown))) if now == shown => now.clone(),
             (Some(Err(words)), _) => {
-                self.carries.results.insert(
+                self.carries.record(
                     session,
                     Outcome::Refused {
                         words: words.clone(),
@@ -734,8 +748,7 @@ impl Sessions {
                 );
                 self.last_time = None;
                 self.carries
-                    .results
-                    .insert(session, Outcome::Refused { words, seen });
+                    .record(session, Outcome::Refused { words, seen });
                 return;
             }
             (None, _) => return,
@@ -761,8 +774,7 @@ impl Sessions {
                 seen,
             },
         };
-        self.carries.results.insert(session, outcome);
-        self.result_orders.renew("carry");
+        self.carries.record(session, outcome);
     }
 
     /// The result of the open session's act, in the Session page's message footer, so that the
@@ -780,8 +792,8 @@ impl Sessions {
         };
         match self.carries.results.get(&session) {
             Some(Outcome::Refused { words, .. }) => {
-                // The act's order, issued when it was done (`renew("carry")`).
-                let order = self.result_orders.of("carry", session);
+                // The act's order, issued when it was done (`Carries::record`).
+                let order = self.carries.order(session);
                 footer.result(order, words.as_str(), false, move |ui| {
                     design::message(ui, Tone::Warning, words);
                 });
@@ -792,7 +804,7 @@ impl Sessions {
                 } else {
                     (Tone::Warning, crate::sessions::NOT_SAVED)
                 };
-                let order = self.result_orders.of("carry", session);
+                let order = self.carries.order(session);
                 undos.push(order, words.to_owned(), move |ui| {
                     if design::undo_message(ui, tone, words, "Undo carry over") {
                         act.set(Some(super::SessionAct::UndoCarry(session)));
@@ -821,7 +833,8 @@ impl Sessions {
         };
         if let Err(fault) = undo.undo(draft) {
             let seen = draft.revision();
-            self.carries.results.insert(
+            // A refused Undo is an act of its own: its result takes a new order.
+            self.carries.record(
                 session,
                 Outcome::Refused {
                     words: fault.words().to_owned(),
@@ -1519,6 +1532,29 @@ mod tests {
                 .is_some()
         );
         assert!(harness.query_all_by_label("Carry over").next().is_none());
+
+        // Review of PR 298, item 2: A's result (tonight's) keeps the order its act issued. B's act
+        // on another session comes after it, through the one path every act takes, then the DM
+        // goes to B and back to A: A's order is unchanged, and older than B's.
+        let a_order = harness.state().0.carries.order(tonight.id);
+        harness.state_mut().0.carries.record(
+            last.id,
+            Outcome::Refused {
+                words: "B's act.".into(),
+                seen: 0,
+            },
+        );
+        let b_order = harness.state().0.carries.order(last.id);
+        harness.state_mut().0.select(Some(last.id));
+        harness.run_steps(2);
+        harness.state_mut().0.select(Some(tonight.id));
+        harness.run_steps(2);
+        let a_again = harness.state().0.carries.order(tonight.id);
+        assert!(
+            a_again == a_order && b_order > a_order,
+            "A's order {a_order:?} stays {a_again:?} after B's act {b_order:?}"
+        );
+        harness.state_mut().0.carries.results.remove(&last.id);
 
         // An act on another session, then back: the Undo is this session's, and it still works.
         let page = &mut harness.state_mut().0;

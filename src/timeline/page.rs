@@ -48,8 +48,6 @@ pub struct SessionLink {
 
 #[derive(Default)]
 pub struct TimelinePage {
-    /// When each kept result in the list's footer was made, so live Undo results go newest first.
-    orders: ResultOrder,
     removed_mentions: usize,
     filter: Filter,
     search: String,
@@ -62,7 +60,8 @@ pub struct TimelinePage {
     /// The Place after list just opened, so it shows the event's own place.
     show_place: bool,
     /// An event just added with the buttons, with one step of undo.
-    just_added: Option<(String, Instant)>,
+    /// The event just added, when, and the add's footer order.
+    just_added: Option<(String, Instant, design::ResultOrder)>,
     /// The list opens where the story is now, at its end.
     opened: bool,
     /// One column: the detail hides the list, so the open event's results end its form.
@@ -149,59 +148,6 @@ pub fn quick_add_with(
             book.add(kind, session)
         })
     })
-}
-
-/// When each kept result's action was done, by its identity (its kind and what makes this one
-/// result), so a footer lists its results newest first, whatever their kind (review of PR 274,
-/// item 2). The action calls `renew` for its kind when it is done, which issues the order; the
-/// result's identity takes that order the first time it is asked, and keeps it. A result that
-/// ends and comes back with the same identity keeps its place.
-#[derive(Default)]
-pub(crate) struct ResultOrder {
-    seen: std::cell::RefCell<std::collections::HashMap<(String, u64), design::ResultOrder>>,
-    /// The order `renew` issued for each kind's newest action.
-    renewed: std::cell::RefCell<std::collections::HashMap<String, design::ResultOrder>>,
-}
-
-/// How many results a `ResultOrder` remembers; the oldest go first.
-const KEPT_ORDERS: usize = 64;
-
-impl ResultOrder {
-    /// The order of the result `kind` with identity `of`: the order its kind's newest action
-    /// was given (`renew`), kept from the first time it is asked.
-    pub(crate) fn of(&self, kind: &str, of: impl std::hash::Hash) -> design::ResultOrder {
-        use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher};
-        let key = (
-            kind.to_owned(),
-            BuildHasherDefault::<DefaultHasher>::default().hash_one(of),
-        );
-        let mut seen = self.seen.borrow_mut();
-        if seen.len() >= KEPT_ORDERS && !seen.contains_key(&key) {
-            let oldest = seen
-                .iter()
-                .min_by_key(|(_, order)| **order)
-                .map(|(key, _)| key.clone());
-            if let Some(oldest) = oldest {
-                seen.remove(&oldest);
-            }
-        }
-        let renewed = self.renewed.borrow().get(kind).copied();
-        // A kind whose action is on another page (a removal on the Timeline page, read by the
-        // plan; a rename's link offer) has no `renew` here: it is older than every renewed
-        // result. A draw never issues an order.
-        *seen
-            .entry(key)
-            .or_insert_with(|| renewed.unwrap_or_default())
-    }
-
-    /// A new result of `kind` was just made: it gets a new, newest order, even when it looks like
-    /// the one before (the same words added again after an Undo).
-    pub(crate) fn renew(&self, kind: &str) {
-        self.seen.borrow_mut().retain(|(seen, _), _| seen != kind);
-        self.renewed
-            .borrow_mut()
-            .insert(kind.to_owned(), design::ResultOrder::issue());
-    }
 }
 
 /// A footer's results with a live Undo, gathered with their order; the footer lists them newest
@@ -955,9 +901,11 @@ impl TimelinePage {
         if let Some(offer) = &offer {
             let (words, action) = (offer.words.clone(), offer.action.clone());
             let act = &act;
-            // The rename that made the offer is Book's (`renamed_links`), which does not renew
-            // this kind: the offer takes its order the first time it shows.
-            let order = self.orders.of("link offer", (open, &offer.words));
+            // The rename that made the offer is Book's, which keeps its order by event.
+            let order = open
+                .and_then(|id| book.renamed_orders.get(id))
+                .copied()
+                .unwrap_or_default();
             footer.result(order, words.clone(), false, move |ui| {
                 if design::message_with_action(ui, Tone::Info, &words, &action) {
                     act.set(Some(ListAct::UpdateLinks));
@@ -1000,7 +948,8 @@ impl TimelinePage {
                 Tone::Success
             };
             let act = &act;
-            let order = self.orders.of("remove", book.removal_action());
+            // The removal's own order, kept with it in Book, as the plan reads it too.
+            let order = book.removal_order().unwrap_or_default();
             undos.push(order, words.clone(), move |ui| {
                 if design::undo_message(ui, tone, &words, "Undo remove") {
                     act.set(Some(ListAct::UndoRemove));
@@ -1008,11 +957,10 @@ impl TimelinePage {
             });
         }
         // It goes when the DM moves on, or soon, so that it cannot undo the wrong event.
-        self.just_added = self
-            .just_added
-            .take()
-            .filter(|(id, at)| at.elapsed() < UNDO_ADD_FOR && self.selected.as_ref() == Some(id));
-        if let Some((id, _)) = self.just_added.clone() {
+        self.just_added = self.just_added.take().filter(|(id, at, _)| {
+            at.elapsed() < UNDO_ADD_FOR && self.selected.as_ref() == Some(id)
+        });
+        if let Some((id, _, order)) = self.just_added.clone() {
             ui.ctx().request_repaint_after(UNDO_ADD_FOR);
             let days = day_numbers(&book.events);
             let label = book
@@ -1029,7 +977,6 @@ impl TimelinePage {
             // Timeline lists every session, so its result names only the event.
             let words = added_message(&label, None, restores);
             let act = &act;
-            let order = self.orders.of("add", &id);
             undos.push(order, words.clone(), move |ui| {
                 if design::undo_message(ui, Tone::Success, &words, "Undo add") {
                     act.set(Some(ListAct::UndoAdd(id)));
@@ -1641,7 +1588,6 @@ impl TimelinePage {
                 .filter(|session| session.mentions.contains(&id))
                 .count();
             book.remove(&id);
-            self.orders.renew("remove");
             self.selected = None;
         }
     }
@@ -1728,8 +1674,7 @@ impl TimelinePage {
         ) {
             self.reveal(&id, book);
             self.focus_title = true;
-            self.orders.renew("add");
-            self.just_added = Some((id, Instant::now()));
+            self.just_added = Some((id, Instant::now(), design::ResultOrder::issue()));
         }
         if let Some(words) = self.dated.clone()
             && design::message_with_action(ui, Tone::Warning, &words, "Play this one")
@@ -1762,8 +1707,7 @@ impl TimelinePage {
                 let id = book.add(Kind::Day, current);
                 self.reveal(&id, book);
                 self.focus_title = true;
-                self.orders.renew("add");
-                self.just_added = Some((id, Instant::now()));
+                self.just_added = Some((id, Instant::now(), design::ResultOrder::issue()));
             }
             return;
         }

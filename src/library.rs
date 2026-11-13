@@ -428,7 +428,13 @@ fn add_results<'a>(
     out: &'a std::cell::Cell<ResultPress>,
 ) {
     for (kind, words, undo) in results.items() {
-        let order = order_of(orders, OrderKey::Reader(kind));
+        // A link offer and a link result each belong to one renamed entry, and carry their own
+        // order; the other kinds hold one result at a time.
+        let order = match kind {
+            ResultKind::LinkOffer => results.page.link_orders.0,
+            ResultKind::Links => results.page.link_orders.1,
+            kind => order_of(orders, OrderKey::Reader(kind)),
+        };
         footer.result(order, words, undo, move |ui| {
             let mut pressed = out.get();
             show_result(ui, results, kind, &mut pressed);
@@ -2033,6 +2039,9 @@ struct LinkOffer {
     source: OfferSource,
     old: String,
     new: String,
+    /// When the rename (or the Undo that gave the offer back) made this offer: its place in the
+    /// footer. Each offer has its own.
+    order: design::ResultOrder,
 }
 
 /// The renamed entry's file as the rename saved it.
@@ -2055,6 +2064,8 @@ struct LinkResult {
     edits: crate::content_workspace::ContentEdits,
     old: String,
     new: String,
+    /// When this link update was done: its place in the footer. Each result has its own.
+    order: design::ResultOrder,
 }
 
 /// The page's results that are not about the open entry: the offer to change links after a rename
@@ -2066,6 +2077,9 @@ struct PageResults {
     link_offer: Option<(String, String)>,
     /// The link update's result.
     links: Option<String>,
+    /// The shown offer's and the shown link result's own orders (`LinkOffer::order`,
+    /// `LinkResult::order`).
+    link_orders: (design::ResultOrder, design::ResultOrder),
     /// The registration's result, and why its Undo waits.
     registration: Option<(String, Option<&'static str>)>,
     /// `Use the copy in encounters` shows, with why it waits.
@@ -3650,6 +3664,16 @@ impl Place {
     }
 }
 impl Library {
+    /// The footer order of the open entry's link result, as its footer reads it: a check reads
+    /// it to prove that each result keeps the order its own update issued (review of PR 298).
+    #[cfg(test)]
+    pub(crate) fn open_link_result_order(&self) -> Option<design::ResultOrder> {
+        self.page_results
+            .links
+            .as_ref()
+            .map(|_| self.page_results.link_orders.1)
+    }
+
     pub fn refocus_draft(&mut self) {
         self.focus_markdown = true;
     }
@@ -4675,6 +4699,18 @@ impl Library {
                 .iter()
                 .find(|result| owns(result.owner, &result.source))
                 .map(|result| format!("Links now say “{}”.", result.new)),
+            link_orders: (
+                self.renamed_links
+                    .iter()
+                    .find(|offer| owns(offer.owner, &offer.source))
+                    .map(|offer| offer.order)
+                    .unwrap_or_default(),
+                self.link_edits
+                    .iter()
+                    .find(|result| owns(result.owner, &result.source))
+                    .map(|result| result.order)
+                    .unwrap_or_default(),
+            ),
             registration: self.package_copy.as_ref().map(|copy| {
                 (
                     package_registered(&copy.module.name, self.copy_campaign_before.is_some()),
@@ -5438,21 +5474,19 @@ impl Library {
                     source,
                     old,
                     new,
+                    ..
                 } = offer;
                 match written {
                     Ok(edits) => {
                         // The owner's new update ends its earlier result.
                         self.link_edits.retain(|result| result.owner != owner);
-                        self.result_orders.insert(
-                            OrderKey::Reader(ResultKind::Links),
-                            design::ResultOrder::issue(),
-                        );
                         self.link_edits.push(LinkResult {
                             owner,
                             source,
                             edits,
                             old,
                             new,
+                            order: design::ResultOrder::issue(),
                         });
                         self.stale = true;
                         self.content_changed =
@@ -5484,15 +5518,12 @@ impl Library {
                         ..
                     } = self.link_edits.remove(at);
                     self.renamed_links.retain(|offer| offer.owner != owner);
-                    self.result_orders.insert(
-                        OrderKey::Reader(ResultKind::LinkOffer),
-                        design::ResultOrder::issue(),
-                    );
                     self.renamed_links.push(LinkOffer {
                         owner,
                         source,
                         old,
                         new,
+                        order: design::ResultOrder::issue(),
                     });
                     self.stale = true;
                     self.content_changed =
@@ -6599,11 +6630,8 @@ impl Library {
                     && entry.kind != "package"
                     && l.can_rename_links(i, &old.name, &entry.name)
                 {
-                    self.result_orders.insert(
-                        OrderKey::Reader(ResultKind::LinkOffer),
-                        design::ResultOrder::issue(),
-                    );
                     self.renamed_links.push(LinkOffer {
+                        order: design::ResultOrder::issue(),
                         owner: entry.id,
                         source: OfferSource {
                             root: root.clone(),
@@ -11257,6 +11285,7 @@ mod tests {
             edits: edit("links"),
             old: "Cinder Wolf".into(),
             new: "Ash Wolf".into(),
+            order: design::ResultOrder::issue(),
         }];
         library.forget_changed_undos();
         assert!(!library.link_edits.is_empty());
