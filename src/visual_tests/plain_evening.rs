@@ -1012,6 +1012,19 @@ fn play(d: &mut Driver<'_>) -> (Evening, Bytes, Bytes) {
     ev.hovers(d, "run-twelve");
     ev.act(d, "open Keys", |d| d.click("Keyboard commands"));
     ev.page(d, "run-keys");
+    // iter-27-R FE14: the panel's title names the keys, not the selected row, and the list
+    // has no second label saying the same.
+    d.observe(
+        "iter-27-R-FE14",
+        d.visible_text("Keyboard commands")
+            && !d.visible_text("KEYBOARD COMMANDS")
+            && !d.nodes().iter().any(|node| {
+                node.role == egui::accesskit::Role::Label
+                    && node.name.contains("Ashfang")
+                    && node.rect.left() > 700.0
+            }),
+        "With Keys on, the panel's title is Keyboard commands",
+    );
     ev.act(d, "close Keys", |d| d.click("Keyboard commands"));
     ev.act(d, "select Brannoch", |d| d.click_row("Brannoch Vale"));
     ev.held(d, "run-twelve: Brannoch selected");

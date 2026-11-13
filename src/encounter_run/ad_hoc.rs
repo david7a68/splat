@@ -290,6 +290,71 @@ impl Run {
         self.show_arrivals();
     }
 
+    /// FJ5 (iter-27-R), for Lookup's `Add to fight`: why `stat_block` cannot join this fight now,
+    /// or None. The same reasons as Arrivals' Add, for a creature that has no typed values.
+    #[allow(
+        dead_code,
+        reason = "package D of iter-27 draws Add to fight in Lookup with it"
+    )]
+    pub(crate) fn add_to_fight_reason(&self, stat_block: &Entry) -> Option<String> {
+        if !self.takes_arrivals() {
+            return Some("This encounter has ended. Undo the ending to continue.".to_owned());
+        }
+        let base = Base::of(stat_block, DEFAULT_SIDE);
+        if base.max_hp.is_none() {
+            return Some(format!(
+                "{} has no maximum HP. Add it in Arrivals with its HP.",
+                base.name
+            ));
+        }
+        base.initiative_bonus.is_none().then(|| {
+            format!(
+                "{} has no initiative bonus. Add it in Arrivals with a total.",
+                base.name
+            )
+        })
+    }
+
+    /// FJ5 (iter-27-R), Lookup's `Add to fight` while a run is open: one of `stat_block` joins
+    /// on the enemies' side with its initiative rolled, by the run's own add steps: a creature
+    /// as Arrivals adds it (`Command::AddCreature`), an NPC (`npc`) under its own name with this
+    /// stat block, as World's form adds it (`Command::AddGroup`). Each is one step, and the
+    /// header's Undo (`Undo: add Guard`) takes it away. The run's page is not opened. Returns why
+    /// it did not join (`add_to_fight_reason`, or the step's refusal).
+    #[allow(
+        dead_code,
+        reason = "package D of iter-27 draws Add to fight in Lookup with it"
+    )]
+    pub(crate) fn add_entry_to_fight(
+        &mut self,
+        stat_block: Arc<Entry>,
+        npc: Option<&Entry>,
+    ) -> Result<(), String> {
+        if let Some(reason) = self.add_to_fight_reason(&stat_block) {
+            return Err(reason);
+        }
+        let command = match npc {
+            Some(npc) => Command::AddGroup(
+                crate::world::npc_group(npc, &stat_block, DEFAULT_SIDE),
+                None,
+            ),
+            None => {
+                let base = Base::of(&stat_block, DEFAULT_SIDE);
+                let checked = Checked {
+                    entry: Some(stat_block),
+                    name: base.name,
+                    count: 1,
+                    hp: None,
+                    ac: None,
+                    overrides: Overrides::default(),
+                    bonus: base.initiative_bonus,
+                };
+                Command::AddCreature(AdHoc::default().group(checked), None)
+            }
+        };
+        self.apply(command)
+    }
+
     /// The name in the made-up form, while Arrivals shows it.
     #[cfg(test)]
     pub(crate) fn made_up_name(&self) -> Option<&str> {
@@ -348,7 +413,14 @@ impl Run {
             }
             let matches = matches_for(&known, &typed);
             let all = self.ad_hoc.show_all.is_some();
-            let shown = if all { matches.len() } else { MATCHES_SHOWN };
+            // FJ2 (iter-27-R): one match more than the short list shows as a row, not as a
+            // `Show all` line of about the same height that costs a click.
+            let one_more = matches.len() == MATCHES_SHOWN + 1;
+            let shown = if all || one_more {
+                matches.len()
+            } else {
+                MATCHES_SHOWN
+            };
             let mut chosen = None;
             let mut rows = |ui: &mut egui::Ui| {
                 for creature in matches.iter().take(shown) {
@@ -409,7 +481,7 @@ impl Run {
             } else {
                 rows(ui);
             }
-            if !all && matches.len() > MATCHES_SHOWN {
+            if !all && matches.len() > MATCHES_SHOWN + 1 {
                 let label = format!("Show all {}", matches.len());
                 // The rows put their words `S` in, as a quiet action's padding does. So the plain
                 // action already starts its words at the rows' words, and its target at their edge.
