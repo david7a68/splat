@@ -184,8 +184,10 @@ impl ContentScroll {
     /// Hold a pressed control under the pointer while its press changes the content above it:
     /// the body calls [`hold_press`] at the press and [`held_seen`] where it draws that control.
     /// In the passes after the press the pane scrolls by as much as the control moved, adding
-    /// blank room after the content only while that needs it. The DM's own wheel or drag, or
-    /// `from_top`, ends the hold.
+    /// blank room after the content only while that needs it. The DM's own wheel or drag, a move
+    /// of keyboard focus (so the hold never takes back a scroll that brought a focused control
+    /// into view), or `from_top`, ends the hold. A footer that comes with the press's result does
+    /// not: the hold keeps the control under the pointer through it.
     pub fn holds_presses(mut self) -> Self {
         self.holds = true;
         self
@@ -216,10 +218,6 @@ struct Keep {
     /// The control pressed: focus that comes to it (egui focuses a clicked control a pass later)
     /// is not a move.
     pressed: Id,
-    /// The frame of the press.
-    frame: u64,
-    /// The room's height at the press: a footer that comes or goes ends the hold.
-    room: Option<f32>,
 }
 
 /// How many passes after a press the pane still moves its scroll to hold the control.
@@ -249,7 +247,6 @@ pub fn hold_press(ui: &Ui, control: impl std::hash::Hash, pressed: &egui::Respon
     let control = Id::new(control);
     let (top, pressed_id) = (pressed.rect.top(), pressed.id);
     let focus = ui.ctx().memory(|memory| memory.focused());
-    let frame = ui.ctx().cumulative_frame_nr();
     with_held(ui, |held, pass| {
         held.keep = Some(Keep {
             control,
@@ -259,8 +256,6 @@ pub fn hold_press(ui: &Ui, control: impl std::hash::Hash, pressed: &egui::Respon
             content: None,
             focus,
             pressed: pressed_id,
-            frame,
-            room: None,
         });
     });
 }
@@ -440,24 +435,13 @@ fn hold_place<R>(ui: &Ui, mut held: Held, output: &egui::scroll_area::ScrollArea
             || i.pointer.is_decidedly_dragging()
     });
     let focus = ui.ctx().memory(|memory| memory.focused());
-    let room = output.inner_rect.height();
-    let content_now = output.content_size.y - held.room;
-    let frame = ui.ctx().cumulative_frame_nr();
     let ended = held.keep.as_mut().and_then(|keep| {
-        let room_changed = (*keep.room.get_or_insert(room) - room).abs() > 0.5;
-        // The press's own change (a row raised above it, its result in the footer) comes in its
-        // frame or the next: a room change then does not end the hold; a later one does.
-        let _ = content_now;
-        let pending = frame <= keep.frame + 1;
         if scrolled {
             Some("scrolled")
         } else if pass > keep.pass + KEEP_PASSES {
             Some("passes")
         } else if focus != keep.focus && focus != Some(keep.pressed) {
             Some("focus moved")
-        } else if room_changed && !pending {
-            keep.room = Some(room);
-            Some("room changed")
         } else {
             None
         }
@@ -1002,11 +986,12 @@ mod hold_tests {
             .data(|data| data.get_temp::<&'static str>(Id::new("design_pane_hold_ended")))
     }
 
-    /// A hold ends when keyboard focus moves (the focused control then comes whole into view
-    /// above the footer, and the hold does not take that scroll back) and when a footer comes
-    /// (the room changed).
+    /// A hold ends when keyboard focus moves: the focused control then comes whole into view
+    /// above the footer, and the hold does not take that scroll back. A footer that comes after
+    /// the press does not end it: the pressed control stays in place (G1b; journey j4 moved it
+    /// by 16 px when a room change ended the hold).
     #[test]
-    fn a_focus_move_or_a_new_footer_ends_the_hold() {
+    fn a_focus_move_ends_the_hold_and_a_new_footer_keeps_it() {
         // Focus moves to a control far below, with a footer present.
         let mut h = Harness::builder()
             .with_size(egui::vec2(400.0, 300.0))
@@ -1055,7 +1040,7 @@ mod hold_tests {
             far.top() >= viewport.top() - 0.5 && far.bottom() <= footer.top() + 0.5,
             "the focused control is whole above the footer: {far:?}, footer {footer:?}"
         );
-        // A footer that comes after the press.
+        // A footer that comes after the press: the hold keeps the pressed control in place.
         let mut h = Harness::builder()
             .with_size(egui::vec2(400.0, 300.0))
             .build_ui_state(
@@ -1068,11 +1053,21 @@ mod hold_tests {
             );
         crate::design::theme::install(&h.ctx);
         h.run_steps(4);
+        let before = h.get_by_label("Add a row above").rect().top();
         h.get_by_label("Add a row above").click();
         h.run_steps(1);
         h.state_mut().message = true;
         h.run_steps(8);
-        assert_eq!(ended(&h), Some("room changed"));
+        assert!(
+            pane_records(&h.ctx)
+                .iter()
+                .any(|record| record.footer().is_some())
+        );
+        let after = h.get_by_label("Add a row above").rect().top();
+        assert!(
+            (after - before).abs() < 0.5,
+            "held through the footer that came: {before} then {after}"
+        );
     }
 
     /// `ContentScroll::holds_presses`: a press that adds rows above its control keeps the
