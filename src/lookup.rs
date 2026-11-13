@@ -23,6 +23,16 @@ use crate::matching::{self, Rank, Typed, names_lower_word};
 const RESULT_ROW: f32 = design::XXL;
 /// Result rows before `Show all`, and the most rows its list shows before it scrolls.
 const RESULTS_SHOWN: usize = 5;
+
+/// How many result rows the list shows. `Show all` takes a line as tall as a row, so one match
+/// more than `RESULTS_SHOWN` shows as a row in that room, not behind a click (round 27 FJ2).
+fn rows_shown(matches: usize, show_all: bool) -> usize {
+    if show_all || matches <= RESULTS_SHOWN + 1 {
+        matches
+    } else {
+        RESULTS_SHOWN
+    }
+}
 pub(crate) const RESULTS_LISTED: usize = 8;
 const PANEL_MARGIN: f32 = design::M;
 
@@ -2264,11 +2274,7 @@ impl Lookup {
             }
             // The reader stays the larger part of the panel, even at the minimum window.
             // `Show all` names every match, in a list that scrolls past eight rows.
-            let rows = if self.show_all {
-                matches.len()
-            } else {
-                matches.len().min(RESULTS_SHOWN)
-            };
+            let rows = rows_shown(matches.len(), self.show_all);
             let results: Vec<_> = matches
                 .iter()
                 .take(rows)
@@ -2359,8 +2365,7 @@ impl Lookup {
             ui.spacing_mut().item_spacing.y = design::XS;
             // The same quiet action as Arrivals: it lists every match in place. It starts a
             // line, so its words start at the result rows' text.
-            if !self.show_all
-                && matches.len() > RESULTS_SHOWN
+            if rows < matches.len()
                 && Action::quiet(&format!("Show all {}", matches.len()))
                     .density(Density::Read)
                     .hint("List every match, without more typing")
@@ -2532,7 +2537,9 @@ impl Lookup {
             Some(world::FooterAct::Trackers) => trackers.undo_remove(),
             Some(act) => {
                 if let Some(campaign) = campaign {
-                    nav = nav.take().or(reader.footer_act(act, current, campaign));
+                    nav = nav
+                        .take()
+                        .or(reader.footer_act(ui.ctx(), act, current, campaign));
                 }
             }
             None => {}
@@ -2789,6 +2796,8 @@ pub(crate) struct CardChoice {
     pub discard: bool,
     /// Lookup's `Use your own names`: show this NPC on the World page with the full help.
     pub own_names: bool,
+    /// `Copy the marker` copied the names marker: the page's footer says what to change.
+    pub copied_marker: bool,
 }
 
 /// What the generator rolled, with its choices. Returns save, reroll and discard. A session
@@ -2842,36 +2851,18 @@ pub(crate) fn generator_card(
                 // Help keeps the reader measure, so it wraps above Copy the marker (round 25
                 // AE1, FE2, AD2).
                 design::help(ui, OWN_NAMES_HELP);
-                // The result lasts until the card shows another NPC. It says what to change
-                // in the pasted line, in the one message form.
-                let id = ui.id().with("names_marker_copied");
-                let copied = ui
-                    .data(|data| data.get_temp::<String>(id))
-                    .is_some_and(|name| name == npc.name);
-                if copied {
-                    // As tall as the action it replaces, so the save row below keeps its place.
-                    let height = Density::Read.control();
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(ui.available_width(), height),
-                        egui::Layout::top_down(egui::Align::Min),
-                        |ui| {
-                            ui.set_min_height(height);
-                            ui.add_space(((height - Type::Body.line()) / 2.0).max(0.0));
-                            design::message(ui, Tone::Success, MARKER_COPIED);
-                        },
-                    );
-                } else {
-                    // A quiet action that starts a line, outside a message, has no icon: its
-                    // words start at the card's text edge.
-                    let response = Action::quiet(COPY_MARKER)
-                        .density(Density::Read)
-                        .line_start()
-                        .show(ui)
-                        .on_hover_text(NAMES_MARKER);
-                    if response.clicked() {
-                        ui.ctx().copy_text(NAMES_MARKER.to_owned());
-                        ui.data_mut(|data| data.insert_temp(id, npc.name.clone()));
-                    }
+                // The action stays, so the DM can copy again. Its result, which says what to
+                // change in the pasted line, is in the page's footer (round 27 FG2).
+                // A quiet action that starts a line, outside a message, has no icon: its words
+                // start at the card's text edge.
+                let response = Action::quiet(COPY_MARKER)
+                    .density(Density::Read)
+                    .line_start()
+                    .show(ui)
+                    .on_hover_text(NAMES_MARKER);
+                if response.clicked() {
+                    ui.ctx().copy_text(NAMES_MARKER.to_owned());
+                    choice.copied_marker = true;
                 }
             }
             NamesHelp::Plain => {
@@ -3057,8 +3048,8 @@ mod tests {
         ] {
             let npc = npc.clone();
             let mut harness = egui_kittest::Harness::new_ui_state(
-                move |ui, pressed: &mut bool| {
-                    *pressed |= generator_card(
+                move |ui, pressed: &mut (bool, bool)| {
+                    let choice = generator_card(
                         ui,
                         &npc,
                         &[],
@@ -3066,10 +3057,11 @@ mod tests {
                         false,
                         help,
                         "People/Wren Hallam.md",
-                    )
-                    .own_names;
+                    );
+                    pressed.0 |= choice.own_names;
+                    pressed.1 |= choice.copied_marker;
                 },
-                false,
+                (false, false),
             );
             design::theme::install(&harness.ctx);
             harness.run_steps(2);
@@ -3091,10 +3083,10 @@ mod tests {
                 "{case}"
             );
             if link {
-                assert!(!*harness.state());
+                assert!(!harness.state().0);
                 harness.get_by_label(USE_OWN_NAMES).click();
                 harness.run_steps(2);
-                assert!(*harness.state(), "{case}: the link reports its press");
+                assert!(harness.state().0, "{case}: the link reports its press");
             }
             // AD2: every card names the path it was given, which is the path the save writes.
             assert!(
@@ -3126,12 +3118,15 @@ mod tests {
                     "iter-15-D-FD3-copy: the action copies the exact marker"
                 );
                 harness.run_steps(2);
+                // Round 27 FG2: the card reports the copy to its page, whose footer says which
+                // dice to change; the card keeps `Copy the marker`, so the DM can copy again.
                 assert!(
-                    harness.query_by_label(MARKER_COPIED).is_some()
-                        && harness.query_by_label(COPY_MARKER).is_none(),
-                    "iter-16-D-FD3-copied: the card says the marker was copied and which dice to change"
+                    harness.state().1
+                        && harness.query_by_label(MARKER_COPIED).is_none()
+                        && harness.query_by_label(COPY_MARKER).is_some(),
+                    "iter-27-D-FG2-card: the card reports the copy and keeps its action"
                 );
-                // Round 23 FC4: the result keeps the action's height, so the save row stays.
+                // Round 23 FC4: the save row stays.
                 let save_after = harness.get_by_label(will_save).rect();
                 assert!(
                     (save_after.top() - save_before.top()).abs() < 0.5,

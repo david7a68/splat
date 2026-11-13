@@ -1233,8 +1233,8 @@ fn log_words(index: &ContentIndex, key: &str, before: Option<&Value>, after: &Va
     )
 }
 
-/// A value change's result as a sentence (round 26 FE3): `Stat block set to Guard.`, `In set to
-/// North Gate. It was Watch House.`, `In cleared. It was Ashfall Keep.` The arrow form stays in
+/// A value change's result as a sentence (round 26 FE3): `Stat block set to Guard.`, `Place set
+/// to North Gate. It was Watch House.`, `Place cleared. It was Ashfall Keep.` The arrow form stays in
 /// the note's Log lines only (`log_words`). `None` is a value that is not set.
 fn change_words(label: &str, before: Option<&str>, after: Option<&str>) -> String {
     match (before, after) {
@@ -1891,8 +1891,9 @@ pub struct Reader {
     status_drafts: HashMap<Uuid, String>,
     /// Edit forms by entry. A form with changes stays while the DM reads other entries.
     edits: HashMap<Uuid, edit::EditDraft>,
-    /// What Discard dropped, until the DM undoes it or edits again.
-    discarded: Option<(Uuid, edit::EditDraft)>,
+    /// What Discard dropped, until the DM undoes it or edits again, with the order its Discard
+    /// issued: the `Undo discard` result's own place in the footer (round 27).
+    discarded: Option<(Uuid, edit::EditDraft, design::ResultOrder)>,
     /// A field of the form had the keyboard when it last drew.
     form_focused: bool,
     pub compact: bool,
@@ -1924,6 +1925,16 @@ pub struct Reader {
     pub join: Option<Join>,
     /// `Start fight` in the header, for the app to take after this reader draws.
     pub start_fight: Option<StartFight>,
+    /// `Add to fight` in the header of a creature's reader while a run is open (round 27 FJ5),
+    /// for the app to take after this reader draws, through the run's own add.
+    pub add_to_fight: Option<StartFight>,
+    /// The campaign and the run that are open now, which the app sets each frame. A refusal
+    /// of `Add to fight` belongs to them.
+    pub run_owner: Option<(Uuid, Uuid)>,
+    /// Why the run refused `Add to fight` for one entry, with its owner. It shows in the footer
+    /// while that entry is open; a successful retry, the run's close and a campaign change end
+    /// it (review of PR 300).
+    add_refusal: Option<Refusal>,
     /// Why no fight can start now, as the encounter editor's `Start fight` says it.
     pub start_blocked: Option<&'static str>,
     /// The encounter editor is the page beside this reader: its own primary `Start fight` is the
@@ -1948,6 +1959,16 @@ pub struct Reader {
     /// The entries whose edit form is open in the other reader (Lookup's, or the World
     /// page's). Their Log field waits too, so Splat never makes its own disk conflict.
     pub edited_elsewhere: Vec<Uuid>,
+}
+
+/// Why the run refused a reader's `Add to fight`, and whose refusal it is.
+#[derive(Clone, Debug, PartialEq)]
+struct Refusal {
+    /// The campaign and the run that refused.
+    owner: (Uuid, Uuid),
+    /// The entry whose `Add to fight` was refused.
+    entry: Uuid,
+    words: String,
 }
 
 /// A result that the World page owns, drawn by the reader in the one place for results.
@@ -2007,63 +2028,133 @@ struct LogField {
     select: bool,
 }
 
+/// Why an open `Add to Log` field waits: an edit form of its entry is open.
+pub(crate) const LOG_WAITS: &str = "Save or discard your edit first.";
+
 /// The least room that `Add to Log`'s field keeps for a sentence when its stamp shares its line.
 /// It also keeps the words it holds whole, with the field's margins.
 const LOG_FIELD_BESIDE: f32 = design::XXL * 7.0;
 
-/// How `Add to Log` shows in a reader's header.
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum LogAction {
-    /// With its word, this wide.
-    Word(f32),
-    /// As its icon, with its name on hover.
-    Icon,
-}
-
-/// The header's quiet actions after Edit, in `room`, by section 1.2 of the session-cycle
-/// design: the first of these that fits. Both with their words; `Start fight` with its word and
-/// `Add to Log` as its icon; `Start fight` alone; `Add to Log` as its icon; neither. An entry
-/// with only `Add to Log` shows its word, then its icon, then nothing. `Start fight` is never an
-/// icon. Each action after the first has `XS` before it. Returns how `Add to Log` shows and
-/// `Start fight`'s width when it shows.
-fn header_actions(
+/// Where a reader's title-line actions go (round 27, one rule for World, Lookup and the
+/// encounter editor's header): `None` when the measured title, the `L` gap and every action
+/// with its word fit in `room`, so they follow the title on its line, `XS` apart. Else the row,
+/// under the title, of each action: all of them move together, in order, on one row when that
+/// row fits in `line`, the width under the title. Only when it does not fit does it wrap, at
+/// whole actions, each row filled from the left with as many as fit. An action never goes
+/// away and never loses its word, whatever the length of the name. `title` is the title's measured width, `widths`
+/// each action's own.
+pub(crate) fn title_line_rows(
     room: f32,
-    log: Option<f32>,
-    start: Option<f32>,
-) -> (Option<LogAction>, Option<f32>) {
-    let icon = Density::Read.control();
-    let fits = |widths: &[f32]| {
-        widths.iter().sum::<f32>() + design::XS * widths.len().saturating_sub(1) as f32 <= room
-    };
-    let choices = [
-        (log.map(LogAction::Word), start),
-        (log.map(|_| LogAction::Icon), start),
-        (None, start),
-        (log.map(|_| LogAction::Icon), None),
-        (None, None),
-    ];
-    choices
-        .into_iter()
-        // An entry with one of the two meets its choices in the same order.
-        .find(|(shown, width)| {
-            let shown = shown.map(|shown| match shown {
-                LogAction::Word(width) => width,
-                LogAction::Icon => icon,
-            });
-            fits(&[shown, *width].into_iter().flatten().collect::<Vec<_>>())
-        })
-        .unwrap_or((None, None))
+    line: f32,
+    title: f32,
+    widths: &[f32],
+) -> Option<Vec<usize>> {
+    let all = widths.iter().sum::<f32>() + design::XS * widths.len().saturating_sub(1) as f32;
+    // The first target starts `S` before its icon, which sits `L` after the title.
+    if widths.is_empty() || title + design::L - design::S + all <= room {
+        return None;
+    }
+    let mut rows = Vec::with_capacity(widths.len());
+    let mut row = 0;
+    let mut used: Option<f32> = None;
+    for width in widths {
+        // The first target of a row starts at the text edge: Lookup's reader clips at it.
+        let next = used.map_or(*width, |used| used + design::XS + width);
+        if used.is_some() && next > line {
+            row += 1;
+            used = Some(*width);
+        } else {
+            used = Some(next);
+        }
+        rows.push(row);
+    }
+    Some(rows)
 }
 
-/// Draw one header action in its target.
-fn in_rect(ui: &mut egui::Ui, rect: egui::Rect, add: impl FnOnce(&mut egui::Ui) -> bool) -> bool {
-    ui.scope_builder(
+/// Draw a reader's title-line actions by `title_line_rows`, just after `cell`, which holds the
+/// title and its kind line; `title` is the title's measured width and `room` the width from the
+/// cell's left edge that the actions may use beside the title (less a portrait). Under the
+/// title, the first action's target starts at the text edge, so no part of it is clipped where
+/// a pane clips at its text edge (Lookup). Returns which actions were pressed, in order.
+pub(crate) fn title_line_actions(
+    ui: &mut egui::Ui,
+    cell: egui::Rect,
+    title: f32,
+    room: f32,
+    actions: Vec<Action<'_>>,
+) -> Vec<bool> {
+    let widths: Vec<f32> = actions
+        .iter()
+        .map(|action| action.natural_width(ui))
+        .collect();
+    let height = Density::Read.control();
+    // The cell's rect is as wide as its words; the line under it has the pane's width.
+    let line_width = ui.available_width();
+    let rows = title_line_rows(room, line_width, title, &widths);
+    let mut places = Vec::with_capacity(widths.len());
+    match &rows {
+        None => {
+            // The line under the title takes one auto ID; so does this layout, so the field
+            // and form IDs below stay the same when a resize moves the actions, and the
+            // keyboard stays in the field the DM types in.
+            ui.skip_ahead_auto_ids(1);
+            let mut next = cell.left() + title + design::L - design::S;
+            for width in &widths {
+                places.push(egui::pos2(next, cell.top()));
+                next += width + design::XS;
+            }
+        }
+        Some(rows) => {
+            let count = rows.last().map_or(0, |row| row + 1);
+            let (line, _) = ui.allocate_exact_size(
+                egui::vec2(
+                    line_width,
+                    height * count as f32 + design::XS * count.saturating_sub(1) as f32,
+                ),
+                egui::Sense::hover(),
+            );
+            let mut next = line.left();
+            let mut last = 0;
+            for (width, row) in widths.iter().zip(rows) {
+                if *row != last {
+                    next = line.left();
+                    last = *row;
+                }
+                places.push(egui::pos2(
+                    next,
+                    line.top() + *row as f32 * (height + design::XS),
+                ));
+                next += width + design::XS;
+            }
+        }
+    }
+    actions
+        .into_iter()
+        .zip(places.into_iter().zip(widths))
+        .map(|(action, (at, width))| {
+            in_rect(
+                ui,
+                egui::Rect::from_min_size(at, egui::vec2(width, height)),
+                |ui| action.show(ui).clicked(),
+            )
+        })
+        .collect()
+}
+
+/// Draw one action in its target, which the caller has already allocated or which lies on a
+/// line already allocated: a child that takes no room from `ui`, so a top-down layout never
+/// moves its cursor back up to the target.
+pub(crate) fn in_rect(
+    ui: &mut egui::Ui,
+    rect: egui::Rect,
+    add: impl FnOnce(&mut egui::Ui) -> bool,
+) -> bool {
+    let mut child = ui.new_child(
         egui::UiBuilder::new()
             .max_rect(rect)
             .layout(egui::Layout::left_to_right(egui::Align::Center)),
-        add,
-    )
-    .inner
+    );
+    add(&mut child)
 }
 
 /// Where a footer line stands: a result with a live Undo, a reason, or another notice.
@@ -2088,6 +2179,10 @@ pub(crate) enum FooterAct {
     Page,
     /// The DM copied or dismissed the words of a Log line whose entry is gone, by its notice.
     GoneLog(u64),
+    /// `Copy text` of a draft whose note is gone, by the note's ID.
+    LostCopy(Uuid),
+    /// `Discard draft` of a draft whose note is gone, by the note's ID.
+    LostDiscard(Uuid),
     /// `Undo tick` of an open question, by its note and its line: the World page's.
     Untick(Uuid, usize),
     /// `Undo remove` of a row of a tracker's history: the trackers own it, and the pane takes it.
@@ -2112,6 +2207,11 @@ pub(crate) enum FooterKind {
     },
     /// A Log line whose entry is gone, with `Copy text` and `Dismiss`.
     GoneLog(GoneLog),
+    /// A draft whose note is gone, with `Copy text` and `Discard draft`.
+    LostDraft {
+        id: Uuid,
+        name: String,
+    },
 }
 
 /// One World or Lookup message for its pane's footer (round 26): a result, reason or notice
@@ -2168,6 +2268,9 @@ impl FooterLine {
                 design::draft_discarded(ui, name).then_some(*act)
             }
             FooterKind::GoneLog(gone) => gone.draw(ui, &self.words, self.tone),
+            FooterKind::LostDraft { id, name } => {
+                edit::lost_draft(ui, &self.words, self.tone, *id, name)
+            }
             FooterKind::Error { editor } => {
                 ui.horizontal_wrapped(|ui| {
                     design::message(ui, self.tone, &self.words);
@@ -2221,6 +2324,43 @@ pub(crate) fn draw_footer(
 }
 
 impl Reader {
+    /// The run refused `Add to fight` for `entry`: its reason waits in the footer, owned by the
+    /// campaign and run open now (`run_owner`). No other error changes.
+    pub(crate) fn refuse(&mut self, entry: Uuid, reason: String) {
+        self.add_refusal = self.run_owner.map(|owner| Refusal {
+            owner,
+            entry,
+            words: reason,
+        });
+    }
+
+    /// `Add to fight` for `entry` succeeded: its refusal, if any, is over.
+    pub(crate) fn added_to_fight(&mut self, entry: Uuid) {
+        if self
+            .add_refusal
+            .as_ref()
+            .is_some_and(|refusal| refusal.entry == entry)
+        {
+            self.add_refusal = None;
+        }
+    }
+
+    /// The refusal of `Add to fight` for `entry`, while its campaign and run are still the open
+    /// ones. A closed run or another campaign ends it here.
+    fn refusal_for(&mut self, entry: Uuid) -> Option<&str> {
+        if self
+            .add_refusal
+            .as_ref()
+            .is_some_and(|refusal| Some(refusal.owner) != self.run_owner)
+        {
+            self.add_refusal = None;
+        }
+        self.add_refusal
+            .as_ref()
+            .filter(|refusal| refusal.entry == entry)
+            .map(|refusal| refusal.words.as_str())
+    }
+
     /// The stamp that a change's Log line begins with: the session being played and the day,
     /// `[[Session 1]], Day 1`. With no session, a change writes no Log line.
     fn log_as(&self) -> Option<String> {
@@ -2447,13 +2587,16 @@ impl Reader {
             && !campaign.is_some_and(|c| self.editing(id, c)))
         .then(|| start_fight(item, index))
         .flatten();
-        ui.horizontal_top(|ui| {
-            let edit_action = Action::quiet("Edit")
-                .icon(design::icons::EDIT)
-                .density(Density::Read);
-            let room = edit.map_or(0.0, |_| edit_action.natural_width(ui) + design::L);
-            let right = ui.max_rect().right();
-            let width = ui.available_width() - room;
+        // While a run is open, a creature joins it from its reader in one press (FJ5). An NPC
+        // keeps its own `Add to fight` form below, which asks for its stat block and side.
+        let add = self
+            .sides
+            .is_some()
+            .then(|| start_fight(item, index))
+            .flatten()
+            .filter(|fight| !fight.npc);
+        {
+            let width = ui.available_width();
             let cell = ui
                 .allocate_ui_with_layout(
                     egui::vec2(width, 0.0),
@@ -2480,81 +2623,82 @@ impl Reader {
                 )
                 .size()
                 .x;
-            // Where the header's next action's target starts: one `L` after the measured title,
-            // less the `S` before its icon. Art beside the title keeps Edit after the art.
-            let mut next = cell.left() + title_width + design::L - design::S;
-            let mut top = cell.top();
-            if let Some(campaign) = edit {
-                // Edit's icon sits one `L` after the measured title, so a kind line wider than
-                // a short title never pushes it away. Its target starts `S` before the icon.
-                if !art {
-                    ui.add_space(next - ui.cursor().left());
-                }
-                let response = edit_action
-                    .name(&format!("Edit {}", item.entry.name))
-                    .show(ui);
-                if response.clicked() {
-                    self.begin_edit(campaign, item);
-                }
-                next = response.rect.right() + design::XS;
-                top = response.rect.top();
-            }
-            // The header's quiet actions follow Edit, `XS` apart, in the room that is spare: the
-            // title keeps its width and the row its line (section 1.2 of the session-cycle
-            // design): `Start fight` next to Edit, where it is for a DM who never adds to a Log,
-            // then `Add to Log`, which gives way first: to its icon, then away. `Start fight`
-            // keeps its word, or does not show.
-            // Its own glyph, a list with a plus, so it is not a bare `+` above `Add to fight`.
-            let log_action = Action::quiet("Add to Log")
-                .icon(design::icons::ADD_TO_LOG)
-                .density(Density::Read);
+            // The title line's actions, each with its icon and its word (round 27): Edit, then
+            // `Start fight`, where it is for a DM who never adds to a Log, then `Add to Log`. Edit's
+            // icon sits one `L` after the measured title, so a kind line wider than a short title
+            // never pushes it away. When the title and all of them do not fit on one line, all
+            // of them move together to a line under the title: none goes away or loses its word.
+            let edit_name = format!("Edit {}", item.entry.name);
             let start_name = start
                 .as_ref()
                 .map(|start| format!("Start a fight with {}", start.name));
-            let start_action = start_name.as_deref().map(|name| {
-                Action::quiet("Start fight")
-                    .icon(design::icons::RUN)
-                    .density(Density::Read)
-                    .name(name)
-                    .blocked(self.start_blocked)
-            });
-            let limit = if art && edit.is_none() {
-                cell.right() - art_width
-            } else {
-                right
-            };
-            let (log, start_width) = header_actions(
-                limit - next,
-                edit.map(|_| log_action.natural_width(ui)),
-                start_action.as_ref().map(|action| action.natural_width(ui)),
-            );
-            // Each shown action's target, in order from `next`.
-            let mut at = |width: f32| {
-                let rect = egui::Rect::from_min_size(
-                    egui::pos2(next, top),
-                    egui::vec2(width, Density::Read.control()),
+            let add_name = add
+                .as_ref()
+                .map(|add| format!("Add {} to the fight", add.name));
+            let mut actions = Vec::with_capacity(3);
+            if edit.is_some() {
+                actions.push(
+                    Action::quiet("Edit")
+                        .icon(design::icons::EDIT)
+                        .density(Density::Read)
+                        .name(&edit_name),
                 );
-                next = rect.right() + design::XS;
-                rect
+            }
+            if let Some(name) = start_name.as_deref() {
+                actions.push(
+                    Action::quiet("Start fight")
+                        .icon(design::icons::RUN)
+                        .density(Density::Read)
+                        .name(name)
+                        .blocked(self.start_blocked),
+                );
+            }
+            if let Some(name) = add_name.as_deref() {
+                actions.push(
+                    Action::quiet("Add to fight")
+                        .icon(design::icons::ADD)
+                        .density(Density::Read)
+                        .name(name),
+                );
+            }
+            if edit.is_some() {
+                // Its own glyph, a list with a plus, so it is not a bare `+` above `Add to fight`.
+                actions.push(
+                    Action::quiet("Add to Log")
+                        .icon(design::icons::ADD_TO_LOG)
+                        .density(Density::Read),
+                );
+            }
+            // A portrait keeps the right of the title's line. It sits after the title cell's words,
+            // which can end well before the pane's edge, so the room ends at its measured left.
+            let room = if art {
+                cell.right() - art_width - cell.left()
+            } else {
+                width
             };
-            if let (Some(start), Some(action), Some(width)) = (start, start_action, start_width)
-                && in_rect(ui, at(width), |ui| action.show(ui).clicked())
+            let pressed = title_line_actions(ui, cell, title_width, room, actions);
+            let mut pressed = pressed.into_iter();
+            if let Some(campaign) = edit
+                && pressed.next() == Some(true)
+            {
+                self.begin_edit(campaign, item);
+            }
+            if let Some(start) = start
+                && pressed.next() == Some(true)
             {
                 self.start_fight = Some(start);
             }
-            let log_pressed = match log {
-                Some(LogAction::Word(width)) => {
-                    in_rect(ui, at(width), |ui| log_action.show(ui).clicked())
-                }
-                Some(LogAction::Icon) => in_rect(ui, at(Density::Read.control()), |ui| {
-                    design::icon_button(ui, design::icons::ADD_TO_LOG, "Add to Log").clicked()
-                }),
-                None => false,
-            };
-            if log_pressed && let Some(campaign) = edit {
+            if let Some(add) = add
+                && pressed.next() == Some(true)
+            {
+                self.add_to_fight = Some(add);
+            }
+            if let Some(campaign) = edit
+                && pressed.next() == Some(true)
+            {
                 self.open_log(campaign.id, id, &item.entry.name, "");
             }
-        });
+        }
         self.form_focused = false;
         let editing = campaign.is_some_and(|campaign| self.editing(id, campaign));
         if let Some(campaign) = campaign
@@ -2582,9 +2726,6 @@ impl Reader {
         if let Some(campaign) = campaign
             && editing
         {
-            if self.has_lost_edits(index) {
-                design::reader::measure(ui, |ui| self.lost_edits(ui, index));
-            }
             return self.edit_form(ui, item, index, campaign);
         }
 
@@ -2599,8 +2740,6 @@ impl Reader {
         // Every warning sits below the file line, so the file line keeps its place. Each wraps
         // at the reader measure, the right edge of the rows below.
         design::reader::measure(ui, |ui| {
-            // A draft whose note is gone, whatever note is open.
-            self.lost_edits(ui, index);
             let fault = self.group_fault.as_ref().filter(|fault| fault.id == id);
             if let Some(unread) = fault
                 .filter(|_| !editing)
@@ -2912,6 +3051,9 @@ impl Reader {
         let campaign = campaign?;
         let mut chosen = None;
         ui.add_space(design::M);
+        // The edit form's fields end at `FORM_WIDTH` from the reader's edge; the section's
+        // indent must not move this field's right edge past them (round 27 FF7).
+        let form_edge = ui.max_rect().left() + design::FORM_WIDTH;
         design::quiet_section(ui, "Give this note a type", |ui| {
             // The help says what the choice does for the DM; how Splat stores it waits in
             // Technical details at the end of the section.
@@ -2928,13 +3070,16 @@ impl Reader {
                     }
                 }
             });
-            design::text_field(
-                ui,
-                "Another type",
-                &mut self.other_type,
-                Some("A word of your own, such as faction or quest."),
-                None,
-            );
+            ui.scope(|ui| {
+                ui.set_max_width((form_edge - ui.max_rect().left()).min(ui.available_width()));
+                design::text_field(
+                    ui,
+                    "Another type",
+                    &mut self.other_type,
+                    Some("A word of your own, such as faction or quest."),
+                    None,
+                );
+            });
             let other = self.other_type.trim().to_lowercase();
             if !other.is_empty()
                 && Action::quiet(&format!("Make {other}"))
@@ -3097,8 +3242,10 @@ impl Reader {
             self.place_choices_open = false;
             return None;
         }
+        // The result names the place as the Undo (`Undo place change`) and the list (`Place not
+        // found`) do; the field's label `In` is not a noun (round 27 FA5).
         let words = change_words(
-            label,
+            if key == "in" { "Place" } else { label },
             world_field(current_entry, key).and_then(name).as_deref(),
             name(&value).as_deref(),
         );
@@ -3151,25 +3298,19 @@ impl Reader {
         campaign: &Campaign,
         editing: bool,
     ) -> Option<Go> {
-        // With no field open, no scope: an empty one still takes an item gap.
-        if !self.log_fields.contains_key(&(campaign.id, item.entry.id)) {
+        // With no field open, or a field that waits for an edit form, no scope: an empty one
+        // still takes an item gap, and would move the form (round 27 FC2).
+        if !self.log_fields.contains_key(&(campaign.id, item.entry.id))
+            || editing
+            || self.edited_elsewhere.contains(&item.entry.id)
+        {
             return None;
         }
-        design::reader::measure(ui, |ui| self.log_field_in(ui, item, campaign, editing))
+        design::reader::measure(ui, |ui| self.log_field_in(ui, item, campaign))
     }
 
-    fn log_field_in(
-        &mut self,
-        ui: &mut egui::Ui,
-        item: &Item,
-        campaign: &Campaign,
-        editing: bool,
-    ) -> Option<Go> {
+    fn log_field_in(&mut self, ui: &mut egui::Ui, item: &Item, campaign: &Campaign) -> Option<Go> {
         let key = (campaign.id, item.entry.id);
-        if editing || self.edited_elsewhere.contains(&item.entry.id) {
-            design::message(ui, Tone::Info, "Save or discard your edit first.");
-            return None;
-        }
         let stamp = self
             .line_stamp()
             .map(|stamp| format!("{}:", sessions::plain_links(&stamp)));
@@ -3177,17 +3318,29 @@ impl Reader {
         let select = std::mem::take(&mut open.select);
         let field = &mut open.field;
         let name = format!("Log line for {}", item.entry.name);
+        // The field ends at the reader's measure, also when the stamp shares its line: a row of
+        // a wrapping layout does not hold a nested row to its parent's width (round 27 AF2, FF1).
+        let edge = ui.max_rect().right();
         let draw = |ui: &mut egui::Ui, field: &mut design::AddField| {
-            design::add_field(
-                ui,
-                field,
-                &name,
-                "What happened?",
-                0.0,
-                |_| None::<()>,
-                |_| Vec::new(),
+            let width = (edge - ui.cursor().left()).max(design::XXL);
+            ui.allocate_ui_with_layout(
+                egui::vec2(width, 0.0),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    ui.set_max_width(width);
+                    design::add_field(
+                        ui,
+                        field,
+                        &name,
+                        "What happened?",
+                        0.0,
+                        |_| None::<()>,
+                        |_| Vec::new(),
+                    )
+                    .field
+                },
             )
-            .field
+            .inner
         };
         let response = match &stamp {
             None => draw(ui, field),
@@ -3699,6 +3852,32 @@ impl Reader {
         let id = item.entry.id;
         let editing = campaign.is_some_and(|campaign| self.editing(id, campaign));
         let mut lines = self.gone_log_notices(campaign.map(|campaign| campaign.id));
+        // A draft whose note is gone, and its Undo, whatever note is open, also in an edit form.
+        lines.extend(self.lost_lines(index));
+        // Why the open run refused this entry's `Add to fight`.
+        if let Some(words) = self.refusal_for(id) {
+            lines.push(FooterLine::new(
+                FooterRank::Reason,
+                Tone::Error,
+                words,
+                FooterKind::Error { editor: None },
+            ));
+        }
+        // An open `Add to Log` field waits while an edit form of its entry is open, here or in
+        // the other reader. It ends when the form closes (Save, Discard) or the reader shows
+        // another entry.
+        if let Some(campaign) = campaign
+            && takes_log(item, index)
+            && self.log_fields.contains_key(&(campaign.id, id))
+            && (self.editing(id, campaign) || self.edited_elsewhere.contains(&id))
+        {
+            lines.push(FooterLine::new(
+                FooterRank::Reason,
+                Tone::Info,
+                LOG_WAITS,
+                FooterKind::Plain,
+            ));
+        }
         let has_unread = self
             .group_fault
             .as_ref()
@@ -3815,6 +3994,11 @@ impl Reader {
             .into_iter()
             .map(|line| {
                 let order = match &line.kind {
+                    // `Undo discard` carries the order its Discard issued (`discarded`).
+                    FooterKind::Discarded {
+                        act: FooterAct::Discarded,
+                        ..
+                    } => line.order,
                     FooterKind::Undo { act, .. } | FooterKind::Discarded { act, .. } => match act {
                         FooterAct::Page => page,
                         act => self.orders.get(act).copied().unwrap_or_default(),
@@ -3832,6 +4016,7 @@ impl Reader {
     /// Take a footer line's action on the open note. `FooterAct::Page` is the page's.
     pub(crate) fn footer_act(
         &mut self,
+        ctx: &egui::Context,
         act: FooterAct,
         item: &Item,
         campaign: &Campaign,
@@ -3876,7 +4061,7 @@ impl Reader {
                 }
             }
             FooterAct::Discarded => {
-                if let Some((id, draft)) = self.discarded.take() {
+                if let Some((id, draft, _)) = self.discarded.take() {
                     self.edits.insert(id, draft);
                 }
                 None
@@ -3885,6 +4070,14 @@ impl Reader {
             FooterAct::Page | FooterAct::Trackers => None,
             FooterAct::GoneLog(id) => {
                 self.end_gone_log(id);
+                None
+            }
+            FooterAct::LostCopy(id) => {
+                self.copy_lost(ctx, id);
+                None
+            }
+            FooterAct::LostDiscard(id) => {
+                self.discard_lost(id);
                 None
             }
             // The World page takes a tick's Undo.
@@ -5022,7 +5215,7 @@ mod tests {
                 let line = FooterLine::new(
                     FooterRank::Undo,
                     CHANGED,
-                    "In set to North Gate. It was Watch House.",
+                    "Place set to North Gate. It was Watch House.",
                     FooterKind::Undo {
                         label: ChangeKind::Place.undo_label(),
                         act: FooterAct::Change,
@@ -5512,7 +5705,7 @@ mod tests {
         );
         // Round 26 FE3: a result is a sentence; only the Log keeps the arrow form.
         assert_eq!(status.word, "Status set to dead. It was alive.");
-        assert_eq!(place.word, "In set to The Arena.");
+        assert_eq!(place.word, "Place set to The Arena.");
         assert_eq!(group.word, "Part of set to Harvest Cart.");
         assert_eq!(group.kind, ChangeKind::PartOf);
 
@@ -5852,51 +6045,79 @@ mod tests {
                 .all(|line| !matches!(line.kind, FooterKind::GoneLog(_)))
         );
         let first = gone.iter().find(|gone| gone.words == "Kept.").unwrap().id;
-        lookup.footer_act(FooterAct::GoneLog(first), item, &campaign);
+        lookup.footer_act(
+            &egui::Context::default(),
+            FooterAct::GoneLog(first),
+            item,
+            &campaign,
+        );
         assert_eq!(notices(&mut lookup), 1);
     }
 
     #[test]
-    fn the_header_shows_the_first_choice_that_fits() {
-        let (log, start, icon) = (108.0, 100.0, Density::Read.control());
-        let both = log + design::XS + start;
-        let cases = [
-            (both, Some(LogAction::Word(log)), Some(start)),
-            (both - 1.0, Some(LogAction::Icon), Some(start)),
-            (
-                icon + design::XS + start,
-                Some(LogAction::Icon),
-                Some(start),
-            ),
-            (icon + design::XS + start - 1.0, None, Some(start)),
-            (start, None, Some(start)),
-            (start - 1.0, Some(LogAction::Icon), None),
-            (icon, Some(LogAction::Icon), None),
-            (icon - 1.0, None, None),
-        ];
-        for (room, shown, started) in cases {
-            assert_eq!(
-                header_actions(room, Some(log), Some(start)),
-                (shown, started),
-                "{room}"
-            );
+    fn an_add_to_fight_refusal_belongs_to_its_campaign_and_run() {
+        let (campaign, run, entry) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+        let mut reader = Reader {
+            run_owner: Some((campaign, run)),
+            error: Some("An older action's error.".into()),
+            ..Default::default()
+        };
+        reader.refuse(entry, "This encounter has ended.".into());
+        assert_eq!(reader.refusal_for(entry), Some("This encounter has ended."));
+        // Another entry has none; the refusal waits for its own.
+        assert_eq!(reader.refusal_for(Uuid::new_v4()), None);
+        // A successful retry ends it, and no other error.
+        reader.added_to_fight(entry);
+        assert_eq!(reader.refusal_for(entry), None, "retry");
+        assert_eq!(reader.error.as_deref(), Some("An older action's error."));
+        // Another campaign, or no run, ends it for good: coming back does not bring it back.
+        for owner in [
+            Some((Uuid::new_v4(), run)),
+            Some((campaign, Uuid::new_v4())),
+            None,
+        ] {
+            reader.run_owner = Some((campaign, run));
+            reader.refuse(entry, "This encounter has ended.".into());
+            reader.run_owner = owner;
+            assert_eq!(reader.refusal_for(entry), None, "{owner:?}");
+            reader.run_owner = Some((campaign, run));
+            assert_eq!(reader.refusal_for(entry), None, "back {owner:?}");
         }
-        // An entry with only `Add to Log`: its word, then its icon, then nothing. One with only
-        // `Start fight`: its word, or nothing.
+        assert_eq!(reader.error.as_deref(), Some("An older action's error."));
+    }
+
+    #[test]
+    fn title_line_actions_keep_their_words_beside_or_under_the_title() {
+        // Edit, Start fight and Add to Log with their words (round 27 FC4, FJ3, FM5, FF5).
+        let widths = [60.0, 100.0, 108.0];
+        let title = 150.0;
+        let all = 60.0 + 100.0 + 108.0 + 2.0 * design::XS;
+        let fits = title + design::L - design::S + all;
+        // All of them fit after the title: they share its line.
+        assert_eq!(title_line_rows(fits, fits, title, &widths), None);
+        // One pixel short: all of them move together under the title, none goes away, in one
+        // row while the line holds them.
         assert_eq!(
-            header_actions(log, Some(log), None),
-            (Some(LogAction::Word(log)), None)
+            title_line_rows(fits - 1.0, fits - 1.0, title, &widths),
+            Some(vec![0, 0, 0])
+        );
+        // A line too narrow for all three takes as many as fit, in order, on more rows.
+        let two = 60.0 + design::XS + 100.0;
+        assert_eq!(
+            title_line_rows(two, two, title, &widths),
+            Some(vec![0, 0, 1])
         );
         assert_eq!(
-            header_actions(log - 1.0, Some(log), None),
-            (Some(LogAction::Icon), None)
+            title_line_rows(two - 1.0, two - 1.0, title, &widths),
+            Some(vec![0, 1, 2])
         );
-        assert_eq!(header_actions(icon - 1.0, Some(log), None), (None, None));
+        // A long title alone sends them under it, with room to spare under the title.
         assert_eq!(
-            header_actions(start, None, Some(start)),
-            (None, Some(start))
+            title_line_rows(600.0, 600.0, 600.0, &widths),
+            Some(vec![0, 0, 0])
         );
-        assert_eq!(header_actions(start - 1.0, None, Some(start)), (None, None));
+        // No actions: nothing to place.
+        assert_eq!(title_line_rows(10.0, 10.0, 600.0, &[]), None);
     }
 
     #[test]

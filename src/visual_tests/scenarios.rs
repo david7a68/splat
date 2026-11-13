@@ -11411,8 +11411,48 @@ pub mod world {
         d.state("world-new-menu", Sizes::Default);
         d.click("NPC…");
         d.expect("Type a name first.");
+        // Round 27 FH5, AH1, SH1: inline creation has one layout. Create NPC follows the Name
+        // field on its line, and the kept line below holds Cancel and the reason or the file:
+        // typing moves neither action.
+        let places = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    let field = d
+                        .nodes()
+                        .into_iter()
+                        .find(|node| node.name == "Name" && node.role == Role::TextInput)
+                        .map(|node| node.rect);
+                    (d.place_of("Create NPC"), d.place_of("Cancel"), field)
+                })
+            })
+        };
+        let empty = places(d);
         d.type_into("Name", "Watchkeeper");
         d.wait_for_text("Will create NPCs/Watchkeeper.md");
+        let filled = places(d);
+        for (size, ((create, cancel, name), (create_after, cancel_after, _))) in
+            [SMALL, DEFAULT, LARGE]
+                .into_iter()
+                .zip(empty.into_iter().zip(filled))
+        {
+            let same = |a: Option<egui::Rect>, b: Option<egui::Rect>| {
+                a.zip(b)
+                    .is_some_and(|(a, b)| (a.min - b.min).length() < 0.5)
+            };
+            d.observe(
+                "iter-27-D-FH5",
+                same(create, create_after)
+                    && same(cancel, cancel_after)
+                    && create.zip(name).is_some_and(|(create, name)| {
+                        create.left() > name.right()
+                            && (create.center().y - name.center().y).abs() <= 0.5
+                    })
+                    && cancel.zip(name).is_some_and(|(cancel, name)| cancel.top() > name.bottom()),
+                format!(
+                    "At {size:?}, Create NPC {create:?} → {create_after:?} sits on the Name field's line {name:?}; Cancel {cancel:?} → {cancel_after:?} starts the line below"
+                ),
+            );
+        }
         d.state("world-new-npc-form", Sizes::All);
         d.click("Create NPC");
         d.expect("Watchkeeper");
@@ -24119,7 +24159,24 @@ fn icon_link_parts(d: &Driver<'_>, icon: &str, words: &str) -> Option<(bool, boo
 
 /// FT1: Lookup's `Show all N` is quiet, lists every match in place in a list of at most eight
 /// rows, and the list follows Tab and the arrow keys. Ends with `words` typed again.
-fn lookup_show_all(d: &mut Driver<'_>, words: &str) {
+fn lookup_show_all(d: &mut Driver<'_>, six: &str) {
+    // Round 27 FJ2: `Show all` takes a line as tall as a row, so six matches show as six rows
+    // in that room, with no `Show all` and every row in view.
+    let rows = lookup_results(d);
+    d.observe(
+        "iter-27-D-FJ2",
+        rows.len() == 6
+            && show_all_count(d).is_none()
+            && rows.iter().all(|row| row.fully_in_view()),
+        format!(
+            "Six matches for {six} show as six rows with no Show all: {} rows, Show all {:?}",
+            rows.len(),
+            show_all_count(d)
+        ),
+    );
+    // The Show all proof needs more than six matches, all in view once listed: `iron` has seven.
+    let words = "iron";
+    d.replace_text_in(SEARCH_LOOKUP, words);
     let before = lookup_results(d).len();
     let count = show_all_count(d);
     let label = format!("Show all {}", count.unwrap_or_default());

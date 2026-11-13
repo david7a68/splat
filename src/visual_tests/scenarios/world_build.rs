@@ -96,6 +96,35 @@ pub fn broken(d: &mut Driver<'_>) {
             format!("The unreadable group uses the folder heading gap at {size:?}"),
         );
     }
+    // Round 27 FH3, FF4: the wrapped cause starts its second line at its first word, right of
+    // the error icon, not under it.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (icon, words) = d.at_size(size, |d| {
+            let words = d.painted_rect_in(
+                "Line 3 opens a list with [ that never closes.",
+                egui::Rect::EVERYTHING,
+            );
+            // The icon on the cause's first line, just left of it.
+            let icon = words.and_then(|words| {
+                d.painted_rect_in(
+                    design::icons::ERROR,
+                    egui::Rect::from_min_max(
+                        egui::pos2(words.left() - design::XL, words.top() - design::XS),
+                        egui::pos2(words.left() + design::XS, words.top() + design::XL),
+                    ),
+                )
+            });
+            (icon, words)
+        });
+        d.observe(
+            "iter-27-D-FH3",
+            icon.zip(words)
+                .is_some_and(|(icon, words)| words.left() >= icon.right() - 0.5),
+            format!(
+                "At {size:?}, the cause {words:?} starts right of the icon {icon:?} on every line"
+            ),
+        );
+    }
     d.state("broken-note-listed", Sizes::All);
     d.click("1 note cannot be read");
     d.expect("Save repaired note");
@@ -601,15 +630,32 @@ pub fn broken(d: &mut Driver<'_>) {
     d.type_into("Status", "lost words");
     // Round 23 FF3: the warning sits below the file line, so the file line keeps its place.
     d.click("Setting · ");
+    // Round 27 FE6: the warning is about another note's draft, so it is in the footer and
+    // Setting's own text keeps its place too.
+    let prose = "A cold war around an inner sea.";
+    let everywhere = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(f32::MAX, f32::MAX));
     let file_line: Vec<_> = [SMALL, DEFAULT, LARGE]
-        .map(|size| d.at_size(size, |d| d.place_of("Show file")))
+        .map(|size| {
+            d.at_size(size, |d| {
+                (
+                    d.place_of("Show file"),
+                    d.painted_rect_in(prose, everywhere),
+                )
+            })
+        })
         .into();
     fs::remove_file(&path).unwrap();
     reload(d);
     d.click("Setting · ");
     let lost = "The note for your unsaved changes to Repaired watchkeeper is gone.";
-    for (size, before) in [SMALL, DEFAULT, LARGE].into_iter().zip(file_line) {
-        let (after, warning) = d.at_size(size, |d| (d.place_of("Show file"), d.painted_left(lost)));
+    for (size, (before, text_before)) in [SMALL, DEFAULT, LARGE].into_iter().zip(file_line) {
+        let (after, warning, text_after) = d.at_size(size, |d| {
+            (
+                d.place_of("Show file"),
+                d.painted_rect_in(lost, everywhere),
+                d.painted_rect_in(prose, everywhere),
+            )
+        });
         d.observe(
             "iter-23-D-FF3",
             warning.is_some()
@@ -618,8 +664,36 @@ pub fn broken(d: &mut Driver<'_>) {
                     .is_some_and(|(before, after)| (before.top() - after.top()).abs() < 0.5),
             format!("The file line stays at {before:?} → {after:?} with the lost-draft warning at {size:?}"),
         );
+        d.observe(
+            "iter-27-D-FE6",
+            text_before
+                .zip(text_after)
+                .is_some_and(|(before, after)| (before.top() - after.top()).abs() < 0.5)
+                && warning
+                    .zip(text_after)
+                    .is_some_and(|(warning, text)| warning.top() > text.bottom()),
+            format!(
+                "Setting's text stays at {text_before:?} → {text_after:?}; the warning {warning:?} is in the footer below it at {size:?}"
+            ),
+        );
     }
     d.expect("Copy the text of Repaired watchkeeper");
+    // Revision 19: with the warning in the footer at 960, the last body action still takes the
+    // press, and only it: the type section opens, and the warning and its choices stay.
+    let base = d.window_size();
+    d.set_base(SMALL);
+    d.click("Give this note a type");
+    let opened = d.has_label(crate::world::TYPE_HELP)
+        && d.has("Copy the text of Repaired watchkeeper")
+        && d.has("Discard the draft of Repaired watchkeeper");
+    d.click("Give this note a type");
+    let opened = opened && !d.has_label(crate::world::TYPE_HELP);
+    d.set_base(base);
+    d.observe(
+        "iter-27-D-FE6-press",
+        opened,
+        "At 960 the body's last action opens and closes its section under the footer's warning",
+    );
     action_at_text_edge(
         d,
         "iter-17-D-copy-text",
@@ -1682,6 +1756,39 @@ pub fn facts(d: &mut Driver<'_>) {
         |d| d.painted_left(help),
     );
     d.type_into("Another type", "faction");
+    // Round 27 FF7: the field ends at the edit form's edge, `FORM_WIDTH` from the reader's text
+    // edge (the note's title), not `L` further for the section's indent.
+    for size in [DEFAULT, LARGE] {
+        let (field, title) = d.at_size(size, |d| {
+            let field = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name == "Another type" && node.role == Role::TextInput)
+                .map(|node| node.rect);
+            // The title, right of the notes column (the list has a row of the same name).
+            let title = d
+                .place_of("Resize World notes column")
+                .and_then(|splitter| {
+                    d.painted_word_rect(
+                        "Setting",
+                        egui::Rect::from_min_max(
+                            egui::pos2(splitter.right(), 0.0),
+                            egui::pos2(f32::MAX, f32::MAX),
+                        ),
+                    )
+                });
+            (field, title)
+        });
+        d.observe(
+            "iter-27-D-FF7",
+            field.zip(title).is_some_and(|(field, title)| {
+                (field.right() - (title.left() + design::FORM_WIDTH)).abs() <= 1.0
+            }),
+            format!(
+                "At {size:?}, Another type {field:?} ends at the form edge from the title {title:?}"
+            ),
+        );
+    }
     action_at_text_edge(
         d,
         "iter-17-D-make-type",
@@ -1829,6 +1936,26 @@ pub fn facts(d: &mut Driver<'_>) {
         "iter-8-D-FD11-undo",
         d.has("Save changes") && d.visible_text("Unsaved") && d.visible_text("World draft"),
         "Undo discard restores the form and draft state",
+    );
+    // Round 27 FF2, FF3: the edit form draws values as Read does. A set group is `Body` in the
+    // text colour; `not set` is muted `Small`.
+    let style = |d: &Driver<'_>, words: &str| {
+        let mut found = None;
+        d.each_painted_text(|text, _| {
+            if text.galley.job.text == words
+                && let Some(section) = text.galley.job.sections.first()
+            {
+                found = Some((section.format.color, section.format.font_id.size));
+            }
+        });
+        found
+    };
+    let (group, unset) = (style(d, "Arena Guild, The Arena"), style(d, "not set"));
+    d.observe(
+        "iter-27-D-FF2-FF3",
+        group == Some((design::colors().text, design::Type::Body.size()))
+            && unset == Some((design::colors().muted, design::Type::Small.size())),
+        format!("The set group draws as {group:?}, `not set` as {unset:?}"),
     );
     d.state("group-draft-restored", Sizes::All);
     d.click("Status");
@@ -2403,7 +2530,7 @@ pub fn places(d: &mut Driver<'_>) {
     // in the file (`The Keep`).
     d.observe(
         "iter-23-D-FG3-cleared",
-        d.visible_text("In cleared. It was Ashfall Keep.") && !d.visible_text("The Keep"),
+        d.visible_text("Place cleared. It was Ashfall Keep.") && !d.visible_text("The Keep"),
         "The cleared place's message names the note the In row showed",
     );
     d.observe(
@@ -2451,8 +2578,9 @@ pub fn places(d: &mut Driver<'_>) {
     d.click("New location…");
     d.type_into("Location name", "Watch House");
     d.click("Create location here");
-    d.expect("In set to Watch House. It was Ashfall Keep.");
-    let (success, detail) = finished_change_tone(d, "In set to Watch House. It was Ashfall Keep.");
+    d.expect("Place set to Watch House. It was Ashfall Keep.");
+    let (success, detail) =
+        finished_change_tone(d, "Place set to Watch House. It was Ashfall Keep.");
     d.observe("iter-20-D-FD5-place", success, detail);
     d.state("npc-new-place", Sizes::All);
     d.click("Undo place change");
@@ -3267,14 +3395,32 @@ pub fn generator(d: &mut Driver<'_>) {
         );
     }
     d.state("generator-own-names-on-world", Sizes::Default);
-    // FD3: after the copy, the card says where the line goes and which dice to change.
+    // FD3: after the copy, the page says which dice to change, and the card where the line goes.
+    // Round 27 FG2: the result is in World's footer, below the card, and `Copy the marker`
+    // stays, so the DM can copy again; the card's Save row keeps its place.
+    let save_before = d.place_of("Save NPC");
     d.click(crate::lookup::COPY_MARKER);
+    let everywhere = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(f32::MAX, f32::MAX));
+    let copied = d.painted_rect_in(crate::lookup::MARKER_COPIED, everywhere);
+    let save_after = d.place_of("Save NPC");
     d.observe(
         "iter-16-D-FD3-copied",
         d.visible_text(crate::lookup::MARKER_COPIED)
             && d.visible_text("Paste the marker on the line above the table.")
-            && !d.has(crate::lookup::COPY_MARKER),
-        "The card says Copied, which dice to change, and where the marker goes",
+            && d.in_view(crate::lookup::COPY_MARKER),
+        "The page says Copied and which dice to change, the card where the marker goes, and Copy the marker stays",
+    );
+    d.observe(
+        "iter-27-D-FG2",
+        save_before
+            .zip(save_after)
+            .is_some_and(|(before, after)| (before.top() - after.top()).abs() < 0.5)
+            && copied
+                .zip(save_after)
+                .is_some_and(|(copied, save)| copied.top() > save.bottom()),
+        format!(
+            "The result {copied:?} is in the footer below Save NPC {save_before:?} → {save_after:?}"
+        ),
     );
     d.state("generator-marker-copied", Sizes::Default);
     // Must stay true: the NPC moved, so Lookup cannot save it twice, and World still saves it.
@@ -3292,6 +3438,12 @@ pub fn generator(d: &mut Driver<'_>) {
         "iter-14-D-FD5-saved",
         file.exists() && !d.has("Save NPC"),
         "Save NPC on the World page writes the NPC that Lookup rolled",
+    );
+    // The copy's result belongs to the NPC on the card: the save ends it.
+    d.observe(
+        "iter-27-D-FG2-ends",
+        !d.visible_text(crate::lookup::MARKER_COPIED),
+        "Saving the NPC ends the marker's result",
     );
 
     // An unsaved NPC on the World page is never replaced by Lookup's. The link opens World,
@@ -4191,18 +4343,46 @@ pub(super) fn lookup_prose_gap(d: &Driver<'_>, title: &str, kind: &str) -> Optio
             egui::pos2(width, title.bottom() + design::XL),
         ),
     )?;
+    // Round 27: when the title-line actions do not fit beside the title, they take one line
+    // under the kind line, and the head ends at that line.
+    let head = d
+        .nodes()
+        .into_iter()
+        .filter(|node| {
+            pane.contains(node.rect.center())
+                && node.rect.top() >= kind.bottom()
+                && node.rect.top() <= kind.bottom() + design::XL
+                && (node.name.starts_with("Edit ")
+                    || node.name == "Add to Log"
+                    || node.name.starts_with("Start a fight with "))
+        })
+        .map(|node| node.rect.bottom())
+        .fold(kind.bottom(), f32::max);
     let mut first: Option<f32> = None;
     d.each_painted_text(|text, clip| {
         let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
         if pane.contains(rect.center())
             && clip.intersects(rect)
-            && rect.top() >= kind.bottom()
+            && rect.top() >= head
             && !text.galley.job.text.trim().is_empty()
         {
             first = Some(first.map_or(rect.top(), |top| top.min(rect.top())));
         }
     });
-    Some(first? - kind.bottom())
+    Some(first? - head)
+}
+
+/// The run's words when an ended fight refuses `Add to fight` (`Run::add_to_fight_reason`).
+const ADD_REFUSED: &str = "This encounter has ended. Undo the ending to continue.";
+
+/// End the open fight from the run's footer, with no outcome.
+fn end_fight(d: &mut Driver<'_>) {
+    if !d.has("End encounter…") && d.has("Close menu") {
+        d.click("Close menu");
+    }
+    d.click("End encounter…");
+    d.click("End encounter");
+    d.expect("Outcome: Undecided");
 }
 
 /// The NPC keeps both reference links beside a live fight.
@@ -4272,6 +4452,64 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         );
     }
     d.state("npc-stat-block-link", Sizes::All);
+    // Round 27 FJ5: during a run, a creature's reader has `Add to fight` with its word, as an
+    // NPC's has. One press adds one Guard through the run's own add; the run's Undo takes it
+    // away again.
+    let add = "Add Guard to the fight";
+    let shown: Vec<_> = [SMALL, DEFAULT, LARGE]
+        .map(|size| {
+            d.at_size(size, |d| {
+                d.place_of(add).is_some_and(|rect| {
+                    rect.width() > design::Density::Read.control() + 0.5 && d.in_view(add)
+                })
+            })
+        })
+        .into();
+    let guards = |d: &Driver<'_>| {
+        roster_places(d)
+            .iter()
+            .filter(|(name, _)| name.starts_with("Guard"))
+            .count()
+    };
+    let before = guards(d);
+    d.click(add);
+    let after = guards(d);
+    d.observe(
+        "iter-27-D-FJ5",
+        shown.iter().all(|shown| *shown)
+            && after == before + 1
+            && d.has_containing("Undo: add Guard")
+            && d.has("Back"),
+        format!("Add to fight shows with its word at {shown:?}; Guards {before} → {after}, and Lookup keeps Guard"),
+    );
+    d.click_containing("Undo: add Guard");
+    d.observe(
+        "iter-27-D-FJ5-undo",
+        guards(d) == before,
+        format!("Undo: add Guard takes the Guard back: {} Guards", guards(d)),
+    );
+    // Review of PR 300: the run's refusal belongs to that run. An ended fight refuses; after
+    // `Undo: end encounter` the same press adds the Guard, and the refusal is gone.
+    end_fight(d);
+    d.click(add);
+    let refused = d.visible_text(ADD_REFUSED) && guards(d) == before;
+    d.click_containing("Undo: end encounter");
+    d.click(add);
+    let joined = guards(d);
+    d.observe(
+        "iter-27-D-FJ5-refusal",
+        refused && joined == before + 1 && !d.visible_text(ADD_REFUSED),
+        format!(
+            "Refused while ended {refused}; after Undo of the ending, Guards {before} → {joined}, refusal shown {}",
+            d.visible_text(ADD_REFUSED)
+        ),
+    );
+    d.click_containing("Undo: add Guard");
+    d.observe(
+        "iter-27-D-FJ5-refusal-undo",
+        guards(d) == before && !d.visible_text(ADD_REFUSED) && d.in_view(add),
+        "The run's Undo takes the Guard back, and no refusal comes back",
+    );
     d.click("Back");
     d.click("Watch House");
     d.wait_for_text("Rook Ambry");
@@ -4580,7 +4818,26 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         if !d.has(CLOSE_RUN) {
             d.click(BACK_TO_RUN);
         }
+        // Review of PR 300: a refusal ends with its run. Lookup keeps Guard open while the
+        // ended run refuses it and then closes.
+        if !d.has(SEARCH_LOOKUP) {
+            d.click(NAV_LOOKUP);
+        }
+        look_up_again(d, "Guard");
+        d.click("Guard · Creature · CR 1/8");
+        d.wait_for_text("ARMOR CLASS");
+        end_fight(d);
+        d.click("Add Guard to the fight");
+        let refused = d.visible_text(ADD_REFUSED);
         close_run(d);
+        d.observe(
+            "iter-27-D-FJ5-refusal-close",
+            refused
+                && !d.visible_text(ADD_REFUSED)
+                && d.visible_text("ARMOR CLASS")
+                && d.has("Start a fight with Guard"),
+            format!("The ended run refused ({refused}); Close run ends the refusal while Lookup keeps Guard"),
+        );
     }
     let start = "Start a fight with Rook Ambry";
     let show = |d: &mut Driver<'_>, name: &str| {
@@ -4594,8 +4851,9 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     for size in [SMALL, DEFAULT, LARGE] {
         let (placed, detail) = d.at_size(size, |d| {
             let (log, start, order) = reader_header(d, "Rook Ambry");
+            // Round 27 FC4, FJ3: at every size, also 960, every action shows with its word.
             (
-                (size == SMALL || (start.is_some() && log.is_some())) && order,
+                start.is_some() && log.is_some() && order,
                 format!("Add to Log {log:?}, Start fight {start:?}"),
             )
         });
@@ -8246,7 +8504,7 @@ pub fn world_note_moved(d: &mut Driver<'_>) {
     // folder as the list shows it. The other folder is not named.
     d.observe(
         "iter-24-D-AD2",
-        d.has_containing("In set to Watch House (Locations). It was Watch House.")
+        d.has_containing("Place set to Watch House (Locations). It was Watch House.")
             && !d.has_containing("Watch House (Other)"),
         "The place result names the folder of the file the DM chose",
     );
@@ -8593,6 +8851,87 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
             "iter-24-D-FA4",
             named,
             format!("The file line keeps Watchkeeper.md whole at {size:?}: {detail}"),
+        );
+    }
+    // Round 27 FF5 and the lead's ruling on PR 300: with Lookup beside it, World's header keeps
+    // every action with its word, as Lookup's does. Per reader: exactly one Edit, Start fight
+    // and Add to Log, each with its word and inside its own pane. They share one row (equal
+    // centres) when the measured row fits the pane; only when it does not, the row wraps at a
+    // whole action, and the first row holds as many as fit.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (fine, detail) = d.at_size(size, |d| {
+            let Some(splitter) = d.place_of("Resize Lookup column") else {
+                return (false, "no Lookup splitter".to_owned());
+            };
+            let lookup_right = d
+                .place_of("Close Lookup")
+                .map_or(d.window_size().0, |close| close.right());
+            let names = [
+                "Edit Watchkeeper",
+                "Start a fight with Watchkeeper",
+                "Add to Log",
+            ];
+            let mut fine = true;
+            let mut detail = Vec::new();
+            for (pane, left, right) in [
+                ("World", 0.0, splitter.left()),
+                ("Lookup", splitter.right(), lookup_right),
+            ] {
+                let found: Vec<Vec<egui::Rect>> = names
+                    .iter()
+                    .map(|name| {
+                        d.nodes()
+                            .into_iter()
+                            .filter(|node| {
+                                node.name == *name
+                                    && node.in_view()
+                                    && node.rect.width() > design::Density::Read.control() + 0.5
+                                    && node.rect.left() >= left
+                                    && node.rect.right() <= right
+                            })
+                            .map(|node| node.rect)
+                            .collect()
+                    })
+                    .collect();
+                if found.iter().any(|rects| rects.len() != 1) {
+                    fine = false;
+                    detail.push(format!(
+                        "{pane}: counts {:?}",
+                        found.iter().map(Vec::len).collect::<Vec<_>>()
+                    ));
+                    continue;
+                }
+                let rects: Vec<egui::Rect> = found.into_iter().map(|rects| rects[0]).collect();
+                let same =
+                    |a: egui::Rect, b: egui::Rect| (a.center().y - b.center().y).abs() <= 0.5;
+                let row = rects.iter().map(egui::Rect::width).sum::<f32>()
+                    + design::XS * (rects.len() - 1) as f32;
+                let fits = rects[0].left() + row <= right + 0.5;
+                let first = rects
+                    .iter()
+                    .take_while(|rect| same(**rect, rects[0]))
+                    .count();
+                let pane_fine = if fits {
+                    first == rects.len()
+                } else {
+                    // A wrap at a whole action, after as many as fit: the next one would not.
+                    (1..rects.len()).contains(&first)
+                        && rects[first].top() >= rects[0].bottom() - 0.5
+                        && rects[first - 1].right() + design::XS + rects[first].width()
+                            > right + 0.5
+                };
+                fine &= pane_fine;
+                detail.push(format!(
+                    "{pane}: right {right}, row fits {fits}, first row {first} of {}, {rects:?}",
+                    rects.len()
+                ));
+            }
+            (fine, detail.join("; "))
+        });
+        d.observe(
+            "iter-27-D-FF5",
+            fine,
+            format!("At {size:?}, each reader's three actions: {detail}"),
         );
     }
     d.state("npc-stat-block-deleted-in-lookup", Sizes::All);
