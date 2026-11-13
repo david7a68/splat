@@ -126,7 +126,10 @@ fn levels_of(meta: &syn::Meta, out: &mut Vec<(Level, Vec<String>)>) {
 }
 
 /// The lint attributes among `attrs`.
-fn lint_attrs(attrs: &[syn::Attribute]) -> Vec<(bool, usize, Vec<(Level, Vec<String>)>)> {
+/// An attribute's style (inner), its line and its levels.
+type LintAttr = (bool, usize, Vec<(Level, Vec<String>)>);
+
+fn lint_attrs(attrs: &[syn::Attribute]) -> Vec<LintAttr> {
     attrs
         .iter()
         .filter_map(|attr| {

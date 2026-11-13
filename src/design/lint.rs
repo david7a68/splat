@@ -464,7 +464,7 @@ fn the_message_rules_find_what_they_should() {
         ["reason-end-mark"]
     );
     assert!(reason("Action::quiet(\"Save\").blocked(Some(\"Stop recording first.\"));").is_empty());
-    assert_eq!(reason(".blocked_if(busy, \"Wait\");"), ["reason-end-mark"]);
+    assert_eq!(reason("x.blocked_if(busy, \"Wait\");"), ["reason-end-mark"]);
     // A reason on the line after the call, and a call through a qualified path.
     assert_eq!(
         reason("x.blocked_if(\n    name == \"\",\n    \"Name it first\",\n);"),

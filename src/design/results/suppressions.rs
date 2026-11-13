@@ -338,5 +338,12 @@ mod tests {
             "#[allow(clippy::disallowed_methods, reason = \"staged: ]\")]\nfn order() {{\n    let _ = \"}}\"; // }}\n{call}}}\nfn other() {{}}\n"
         );
         assert!(check(&file(&quoted), &[("src/new.rs", "order", STAGED)]).is_empty());
+        // Package M's bans: a listed suppression whose function still calls its escape passes;
+        // a list across lines is read whole.
+        let order = "#[allow(\n    clippy::disallowed_methods,\n    reason = \"staged\"\n)]\nfn draw() {\n    footer.outcome_at(order, done, &mut pressed);\n}\n";
+        assert_eq!(check(&file(order), &[]).len(), 1, "{order}");
+        assert!(check(&file(order), &[("src/new.rs", "draw", &[Ban::Order])]).is_empty());
+        let words = "#[allow(clippy::disallowed_methods)]\nfn cause() {\n    let f = Sentence::outside;\n}\n";
+        assert!(check(&file(words), &[("src/new.rs", "cause", &[Ban::Words])]).is_empty());
     }
 }
