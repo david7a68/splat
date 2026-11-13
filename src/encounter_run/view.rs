@@ -110,18 +110,23 @@ fn other_effect_add() -> Action<'static> {
 pub(crate) fn other_effect_field(
     ui: &mut egui::Ui,
     text: &mut String,
+    size_and_hint: (f32, &str),
+    focus: bool,
+) -> (bool, egui::Response) {
+    other_effect_field_for(ui, OTHER_EFFECT_FIELD, text, size_and_hint, focus)
+}
+
+/// `other_effect_field` for one object's draft: `id` carries the object's key, so the field's
+/// cursor and its text Undo belong to that object.
+pub(crate) fn other_effect_field_for(
+    ui: &mut egui::Ui,
+    id: design::FieldId,
+    text: &mut String,
     (width, placeholder): (f32, &str),
     focus: bool,
 ) -> (bool, egui::Response) {
     ui.horizontal(|ui| {
-        let response = design::line_field(
-            ui,
-            OTHER_EFFECT_FIELD,
-            "Other effect",
-            text,
-            placeholder,
-            width,
-        );
+        let response = design::line_field(ui, id, "Other effect", text, placeholder, width);
         if focus {
             response.request_focus();
         }
@@ -2174,8 +2179,10 @@ impl Run {
                 } else {
                     "Other effect…"
                 };
+                // The draft is this participant's: its field keeps its own cursor and Undo.
+                let id = OTHER_EFFECT_FIELD.with(design::TextKey::from_data(p.key.clone()));
                 let (add, field) =
-                    other_effect_field(ui, &mut draft.words, (width, placeholder), focus);
+                    other_effect_field_for(ui, id, &mut draft.words, (width, placeholder), focus);
                 // Escape clears the participant's draft, as in the dock's field.
                 if field.lost_focus() && ui.input(|i| i.key_pressed(Key::Escape)) {
                     draft.words.clear();
@@ -4778,7 +4785,10 @@ impl Run {
                                             // FJ4 (iter-27-R): the selected choice has a check,
                                             // not only its fill; every word keeps one x.
                                             let selected = *mode == default_roll;
-                                            let item = design::choice(ui, selected, mode.label());
+                                            let item = ui.selectable_label(
+                                                selected,
+                                                checked_choice(ui, selected, mode.label()),
+                                            );
                                             design::named(ui, &item, mode.label());
                                             if item.clicked() {
                                                 command = Some(Command::RollNpcs(*mode));
@@ -7016,6 +7026,36 @@ pub(super) fn presence_action(present: bool) -> (&'static str, &'static str) {
 
 fn hp_word(p: &Participant) -> Option<(&'static str, &'static str, egui::Color32)> {
     design::hp_word(p.hp, p.max_hp)
+}
+
+/// A menu choice's words after a check slot: the check shows on the selected choice, and the
+/// slot is kept on the others, so every choice's words start at one x (FJ4).
+fn checked_choice(ui: &egui::Ui, selected: bool, words: &str) -> egui::text::LayoutJob {
+    let font = Type::Body.font(ui);
+    let c = colors();
+    let mut job = egui::text::LayoutJob::default();
+    for (text, color) in [
+        (
+            format!("{} ", icons::OK),
+            if selected {
+                c.text
+            } else {
+                egui::Color32::TRANSPARENT
+            },
+        ),
+        (words.to_owned(), c.text),
+    ] {
+        job.append(
+            &text,
+            0.0,
+            egui::TextFormat {
+                font_id: font.clone(),
+                color,
+                ..Default::default()
+            },
+        );
+    }
+    job
 }
 
 /// The death-save counts in words: `1 success · 0 failures`.
@@ -12147,8 +12187,10 @@ mod tests {
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(560.0, 640.0))
             .build(move |ctx| {
-                egui::CentralPanel::default()
-                    .show(ctx, |ui| shown.borrow_mut().conditions_tab(ui, 0));
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let at = shown.borrow().selected;
+                    shown.borrow_mut().conditions_tab(ui, at);
+                });
             });
         design::theme::install(&harness.ctx);
         harness.run_steps(2);
@@ -12395,6 +12437,39 @@ mod tests {
                 .as_deref(),
             Some("Haste")
         );
+        // The draft belongs to the participant: edit A, switch to B, focus the field, Ctrl+Z.
+        // B keeps its own (empty) draft and A's text is unchanged.
+        // A has two undo states: time passes between its two edits.
+        harness.run_steps(16);
+        harness.get_by_label("Other effect").type_text("!");
+        harness.run_steps(1);
+        let other = run.borrow().state.participants[1].key.clone();
+        run.borrow_mut().selected = 1;
+        harness.run_steps(2);
+        harness.get_by_label("Other effect").click();
+        harness.run_steps(1);
+        harness.key_press_modifiers(egui::Modifiers::COMMAND, Key::Z);
+        harness.run_steps(2);
+        assert!(
+            run.borrow()
+                .effect_fields
+                .get(&other)
+                .is_none_or(|f| f.words.is_empty()),
+            "Ctrl+Z in B's field gave B the history of A"
+        );
+        assert_eq!(
+            run.borrow()
+                .effect_fields
+                .get(&key)
+                .map(|f| f.words.clone())
+                .as_deref(),
+            Some("Haste!"),
+            "Ctrl+Z in B's field changed A"
+        );
+        run.borrow_mut().selected = 0;
+        harness.run_steps(2);
+        harness.get_by_label("Other effect").click();
+        harness.run_steps(1);
         harness.key_press(Key::Escape);
         harness.run_steps(2);
         assert!(

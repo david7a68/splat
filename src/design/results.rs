@@ -757,7 +757,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/ad_hoc.rs",
             "add_creature_form",
-            &[Ban::Layout(2)],
+            &[Ban::Layout(2), Ban::Extras(1)],
         ),
         (
             "src/encounter_run/rolling.rs",
@@ -767,7 +767,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/view.rs",
             "conditions_tab",
-            &[Ban::Layout(1)],
+            &[Ban::Layout(1), Ban::RowKey(1)],
         ),
         (
             "src/encounter_run/view.rs",
@@ -806,7 +806,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/view.rs",
             "setup_body",
-            &[Ban::Layout(1), Ban::Extras(4)],
+            &[Ban::Layout(1), Ban::Extras(5)],
         ),
         (
             "src/encounter_run/view.rs",

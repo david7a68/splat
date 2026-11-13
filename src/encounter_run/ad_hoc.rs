@@ -13,7 +13,6 @@ use splat::content::{
 use std::sync::Arc;
 
 const FIELD: &str = "Find or name a creature";
-const CREATURE_SEARCH: design::FieldId = crate::field_id!("add_creature_search");
 const DEFAULT_SIDE: &str = "enemies";
 const MATCHES_SHOWN: usize = 5;
 /// How many matches Show all lists before it scrolls.
@@ -393,8 +392,7 @@ impl Run {
             // As wide as the group block below, so the panel has one right edge.
             let width = block
                 .unwrap_or_else(|| (ui.available_width() - design::M).min(design::LIST_MEASURE));
-            // Clear empties the query; nothing else here was chosen by it.
-            let _ = CREATURE_SEARCH.search(
+            design::search_field(
                 ui,
                 FIELD,
                 &mut self.ad_hoc.query,
@@ -584,8 +582,13 @@ impl Run {
                 .selected_text(design::reader::human_label(&chosen))
                 .show_ui(ui, |ui| {
                     for side in &sides {
-                        if design::choice(ui, *side == chosen, &design::reader::human_label(side))
-                            .clicked()
+                        if design::extras::choice_wrapped(
+                            ui,
+                            *side == chosen,
+                            &design::reader::human_label(side),
+                            None,
+                        )
+                        .clicked()
                         {
                             self.ad_hoc.side = Some(side.clone());
                         }
