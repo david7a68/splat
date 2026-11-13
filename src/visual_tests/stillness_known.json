@@ -9,13 +9,7 @@
     ["G1b/pressed-control-moved","15-missing-campaign-manifest-needs-explicit-write","960x640","Button \"Save repaired note\"",2],
     ["G1b/pressed-control-moved","15-missing-campaign-manifest-needs-explicit-write","960x640","CheckBox \"Use Ash Wraith\"",2],
     ["G1b/pressed-control-moved","15-missing-campaign-manifest-needs-explicit-write","960x640","MultilineTextInput \"Note text: Notes/Cracked.md\"",4],
-    ["G1b/pressed-control-moved","17-campaign-manifest-write-undone","960x640","Button \"Undo write Campaign.md\"",1],
-    ["G6/footer-far-below-body","11-repair-needed","960x640","CheckBox \"Use Veilglass Lantern\"",1],
-    ["G6/footer-far-below-body","13-repair-dirty","1200x800","CheckBox \"Use Veilglass Lantern\"",1],
-    ["G6/footer-far-below-body","13-repair-dirty","1920x1080","CheckBox \"Use Veilglass Lantern\"",1],
-    ["G6/footer-far-below-body","16-campaign-manifest-written-with-undo","1200x800","CheckBox \"Use Veilglass Lantern\"",1],
-    ["G6/footer-far-below-body","16-campaign-manifest-written-with-undo","1920x1080","CheckBox \"Use Veilglass Lantern\"",1],
-    ["G6/footer-far-below-body","16-campaign-manifest-written-with-undo","960x640","CheckBox \"Use Veilglass Lantern\"",1]
+    ["G1b/pressed-control-moved","17-campaign-manifest-write-undone","960x640","Button \"Undo write Campaign.md\"",1]
   ],
   "campaign-copy-registered": [
     ["G1b/pressed-control-moved","01-copy-registered","960x640","Button \"Add campaign\"",1],
@@ -451,10 +445,6 @@
     ["G6/footer-far-below-body","18-event-link-update-offered","960x640","Button \"Major event · Session 1\"",1],
     ["G6/footer-far-below-body","19-event-links-updated","960x640","Button \"Major event · Session 1\"",1],
     ["G6/footer-far-below-body","21-timeline-removed","960x640","Button \"Major event · Session 1\"",1],
-    ["G6/footer-far-below-body","33-session-folder-move-offered","1200x800","Button \"Save without moving\"",1],
-    ["G6/footer-far-below-body","33-session-folder-move-offered","1920x1080","Button \"Save without moving\"",1],
-    ["G6/footer-far-below-body","34-session-folder-moved","1200x800","Button \"Save folder\"",1],
-    ["G6/footer-far-below-body","34-session-folder-moved","1920x1080","Button \"Save folder\"",1],
     ["G6/footer-far-below-body","35-session-events-older","960x640","Button \"Add to notes: Major event\"",1],
     ["G6/footer-far-below-body","48-timeline-disk-conflict","1200x800","Button \"Bridge Ambush · Fight · Round 2 · Paused · Session 2\"",1],
     ["G6/footer-far-below-body","48-timeline-disk-conflict","1920x1080","Button \"Bridge Ambush · Fight · Round 2 · Paused · Session 2\"",1],

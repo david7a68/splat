@@ -1976,7 +1976,10 @@ impl Splat {
                                 }
                             }
                             // After a failed Connect, Connect comes into view above the footer.
-                            if let Some(connect) = settings.take_reveal() {
+                            if let Some(connect) = settings
+                                .take_reveal()
+                                .filter(|connect| connect.bottom() > ui.clip_rect().bottom())
+                            {
                                 ui.scroll_to_rect(
                                     connect.expand2(egui::vec2(0.0, design::S)),
                                     None,

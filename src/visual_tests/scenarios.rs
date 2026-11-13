@@ -12914,6 +12914,9 @@ pub mod session_notes {
                     })
             },
         );
+        // Round 28: Edit details scrolls its form and Save into view once, because the session
+        // folder's save row above the pane takes room at 960 (campaigns.rs `reveal_details`).
+        d.expect_moves("Edit details brings its form and its Save into view");
         d.state("session-folder-moved", Sizes::All);
         d.click(NAV_SESSIONS);
         d.expect(&format!("Session 1: {TITLE}"));
