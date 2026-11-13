@@ -2913,13 +2913,14 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
     let room = FooterRooms::this_pass(ctx).into_iter().find(|room| {
         !room.footer.contains_rect(clip) && room.band.x_range().intersects(rect.x_range())
     });
-    // The scroll area's viewport (egui widens its clip by a margin). The pane's own area ends
-    // exactly at the footer's room, whatever clip a part inside it (a collapsing body) has.
+    // The scroll area's viewport (egui widens its clip by a margin), ending above the footer.
     let margin = ui.visuals().clip_rect_margin;
-    let bottom = room.map_or(clip.bottom() - margin, |room| room.band.top());
     let view = Rect::from_min_max(
         pos2(clip.left(), clip.top() + margin),
-        pos2(clip.right(), bottom),
+        pos2(
+            clip.right(),
+            (clip.bottom() - margin).min(room.map_or(f32::INFINITY, |room| room.band.top())),
+        ),
     );
     let whole_at = |top: f32| top >= view.top() - 0.5 && top + rect.height() <= view.bottom() + 0.5;
     let key = response.id.with("next_action");
@@ -2996,9 +2997,8 @@ pub fn keep_above_footer(ui: &Ui, response: &Response) {
     } else {
         // A target, not a delta: a scroll area nested in the pane saves a target made before it
         // and hands it back, so only the pane's own area takes it. egui moves the content by the
-        // target's end less the content clip's bottom (the viewport's and its margin), plus the
-        // content's item spacing (the app's own; parts inside may change theirs).
-        let end = bottom + margin - ctx.style().spacing.item_spacing.y + by;
+        // target's end less the content clip's bottom, plus its item spacing.
+        let end = clip.bottom() - ui.spacing().item_spacing.y + by;
         let target = Rect::from_x_y_ranges(rect.x_range(), (end - 1.0)..=end);
         ui.scroll_to_rect_animation(target, None, egui::style::ScrollAnimation::none());
         ctx.request_discard("a next action came back into view above its footer");
