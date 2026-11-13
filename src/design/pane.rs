@@ -34,7 +34,7 @@
 //!
 //! ```compile_fail,E0308
 //! use splat::pane::{Body, Footer};
-//! fn body_end(ui: &mut egui::Ui) {
+//! fn body_end(ui: &mut eframe::egui::Ui) {
 //!     let footer = Footer::new("pane", 400.0);
 //!     let bottom: f32 = footer.pane(ui, Body::Content, |ui| {
 //!         ui.label("A row");
@@ -46,7 +46,7 @@
 //!
 //! ```
 //! use splat::pane::{Body, Footer};
-//! fn rows(ui: &mut egui::Ui) -> usize {
+//! fn rows(ui: &mut eframe::egui::Ui) -> usize {
 //!     let footer = Footer::new("pane", 400.0);
 //!     footer.pane(ui, Body::Content, |ui| {
 //!         ui.label("A row");
@@ -59,7 +59,7 @@
 //!
 //! ```compile_fail,E0382
 //! use splat::pane::{Body, Footer};
-//! fn twice(ui: &mut egui::Ui) {
+//! fn twice(ui: &mut eframe::egui::Ui) {
 //!     let footer = Footer::new("pane", 400.0);
 //!     footer.pane(ui, Body::Content, |ui| ui.label("Body"));
 //!     footer.pane(ui, Body::Content, |ui| ui.label("A second body"));
@@ -68,7 +68,7 @@
 //!
 //! ```
 //! use splat::pane::{Body, Footer};
-//! fn once(ui: &mut egui::Ui) {
+//! fn once(ui: &mut eframe::egui::Ui) {
 //!     Footer::new("pane", 400.0).pane(ui, Body::Content, |ui| ui.label("Body"));
 //! }
 //! ```
@@ -77,30 +77,34 @@
 //!
 //! ```compile_fail,E0308
 //! use splat::pane::{Body, Footer};
-//! fn editor(ui: &mut egui::Ui) {
+//! fn editor(ui: &mut eframe::egui::Ui) {
 //!     Footer::new("pane", 400.0).pane(ui, Body::Fills("an editor"), |_| ());
 //! }
 //! ```
 //!
 //! ```
 //! use splat::pane::{Body, FillsReason, Footer};
-//! fn editor(ui: &mut egui::Ui) {
+//! fn editor(ui: &mut eframe::egui::Ui) {
 //!     Footer::new("pane", 400.0).pane(ui, Body::Fills(FillsReason::MarkdownEditor), |_| ());
 //! }
 //! ```
 //!
-//! A caller cannot make up a column's end or a pane's record: the registry has no public
-//! constructor.
+//! A caller cannot change what a pane measured: the record's fields are private, read only.
 //!
-//! ```compile_fail,E0451
-//! let _ = splat::pane::PaneRecord { content_end: 0.0 };
-//! ```
-//!
-//! ```
-//! fn ends(records: &[splat::pane::PaneRecord]) -> Vec<f32> {
-//!     records.iter().map(|record| record.content_end()).collect()
+//! ```compile_fail,E0616
+//! fn move_end(record: &mut splat::pane::PaneRecord) {
+//!     record.content_end = 0.0;
 //! }
 //! ```
+//!
+//! ```
+//! fn read_end(record: &mut splat::pane::PaneRecord) {
+//!     let _ = record.content_end();
+//! }
+//! ```
+//!
+//! Stable rustdoc does not check the error codes above, so each failing case differs from the
+//! compiling case after it only by the rule it shows.
 
 pub use super::components::Footer;
 use super::tokens::S;
