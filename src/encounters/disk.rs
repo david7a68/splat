@@ -89,6 +89,10 @@ impl Recovery {
         self.change.take()
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     pub fn show(&self, ui: &mut egui::Ui, draft: &str, what: &str) -> Option<bool> {
         let change = self.change.as_ref()?;
         let mut messages = vec![changed_on_disk(what)];

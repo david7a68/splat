@@ -543,6 +543,10 @@ fn missing_width(ui: &egui::Ui, name: &str, stacked: bool) -> f32 {
 /// (`stacked`, Lookup beside World), the name wraps by whole words and `Not found` takes its own
 /// line below it, whole. The name's first line is as tall as a row's control and centred in it,
 /// so a `Change` beside the value lines up with the name, not between the two lines.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn missing_link(ui: &mut egui::Ui, name: &str, stacked: bool) {
     let warning = colors().result.warning;
     let words = missing_name(name);
@@ -653,6 +657,10 @@ fn empty_optional(value: &Value) -> bool {
 }
 
 /// The message's action starts at its words, below them, as every message action does.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn unread_groups_message(
     ui: &mut egui::Ui,
     campaign: &Campaign,
@@ -2530,6 +2538,10 @@ impl Reader {
         go.and_then(|go| self.settle(go))
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn draw(
         &mut self,
         ui: &mut egui::Ui,
@@ -3765,6 +3777,10 @@ impl Reader {
 
     /// A labelled value row. With no `change`, the value is read only: the row keeps its label
     /// and value column, and leaves out Change.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn value_row(
         ui: &mut egui::Ui,
         label: &str,

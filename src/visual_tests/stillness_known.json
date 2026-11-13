@@ -20,20 +20,10 @@
     ["G1b/pressed-control-moved","15-missing-campaign-manifest-needs-explicit-write","960x640","Button \"Save repaired note\"",2],
     ["G1b/pressed-control-moved","15-missing-campaign-manifest-needs-explicit-write","960x640","CheckBox \"Use Ash Wraith\"",2],
     ["G1b/pressed-control-moved","15-missing-campaign-manifest-needs-explicit-write","960x640","MultilineTextInput \"Note text: Notes/Cracked.md\"",4],
-    ["G1b/pressed-control-moved","17-campaign-manifest-write-undone","960x640","Button \"Undo write Campaign.md\"",1],
-    ["G6/footer-far-below-body","11-repair-needed","960x640","CheckBox \"Use Veilglass Lantern\"",1],
-    ["G6/footer-far-below-body","13-repair-dirty","1200x800","CheckBox \"Use Veilglass Lantern\"",1],
-    ["G6/footer-far-below-body","13-repair-dirty","1920x1080","CheckBox \"Use Veilglass Lantern\"",1],
-    ["G6/footer-far-below-body","16-campaign-manifest-written-with-undo","1200x800","CheckBox \"Use Veilglass Lantern\"",1],
-    ["G6/footer-far-below-body","16-campaign-manifest-written-with-undo","1920x1080","CheckBox \"Use Veilglass Lantern\"",1],
-    ["G6/footer-far-below-body","16-campaign-manifest-written-with-undo","960x640","CheckBox \"Use Veilglass Lantern\"",1]
+    ["G1b/pressed-control-moved","17-campaign-manifest-write-undone","960x640","Button \"Undo write Campaign.md\"",1]
   ],
   "campaign-copy-registered": [
-    ["G1b/pressed-control-moved","01-copy-registered","960x640","Button \"Add campaign\"",1],
-    ["G6/footer-far-below-body","01-copy-registered","1200x800","Label \"Splat keeps this campaign’s notes, encounters and runs here. A folder in your Obsidian vault works.\"",1],
-    ["G6/footer-far-below-body","01-copy-registered","1920x1080","Label \"Splat keeps this campaign’s notes, encounters and runs here. A folder in your Obsidian vault works.\"",1],
-    ["G6/footer-far-below-body","02-copy-registered-after-build","1200x800","Label \"Splat keeps this campaign’s notes, encounters and runs here. A folder in your Obsidian vault works.\"",1],
-    ["G6/footer-far-below-body","02-copy-registered-after-build","1920x1080","Label \"Splat keeps this campaign’s notes, encounters and runs here. A folder in your Obsidian vault works.\"",1]
+    ["G1b/pressed-control-moved","01-copy-registered","960x640","Button \"Add campaign\"",1]
   ],
   "column-resize": [
     ["G1b/pressed-control-moved","06-run-rail-keeps-roster-room","1200x800","Button \"Next turn\"",1],
@@ -66,8 +56,7 @@
     ["G1b/pressed-control-moved","(after the last state)","1200x800","Button \"Save encounter\"",3]
   ],
   "empty": [
-    ["G1b/pressed-control-moved","07-campaign-added","960x640","Button \"Add campaign\"",1],
-    ["G6/footer-far-below-body","07-campaign-added","960x640","Button \"Connect…\"",1]
+    ["G1b/pressed-control-moved","07-campaign-added","960x640","Button \"Add campaign\"",1]
   ],
   "encounter-build": [
     ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Next turn\"",1],
@@ -371,7 +360,6 @@
     ["N4/quiet-action-line-start","08-encounters-returned","960x640","Button \"Filter creatures\"",1]
   ],
   "nav-table": [
-    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Conditions\"",1]
   ],
   "npc-in-encounter": [
     ["G1b/pressed-control-moved","03-npc-in-setup","960x640","Button \"Save encounter\"",1],
@@ -793,7 +781,6 @@
   "session-notes": [
     ["G1b/pressed-control-moved","22-timeline-time-not-counted","960x640","Button \"Travel · Session 1\"",1],
     ["G1b/pressed-control-moved","27-session-long-title","960x640","Button \"Save details\"",1],
-    ["G1b/pressed-control-moved","32-session-folder-in-campaign","960x640","Button \"Link and folder\"",1],
     ["G1b/pressed-control-moved","38-sessions-with-notes","960x640","Button \"Conditions for this participant\"",1],
     ["G6/footer-far-below-body","10-session-event-added","960x640","Label \"\\u{e182}\\u{a0}Everyone\\u{a0}at\\u{a0}full\"",1],
     ["G6/footer-far-below-body","11-plan-event-title","960x640","Link \"Timeline\"",1],
@@ -809,10 +796,6 @@
     ["G6/footer-far-below-body","18-event-link-update-offered","960x640","Button \"Major event · Session 1\"",1],
     ["G6/footer-far-below-body","19-event-links-updated","960x640","Button \"Major event · Session 1\"",1],
     ["G6/footer-far-below-body","21-timeline-removed","960x640","Button \"Major event · Session 1\"",1],
-    ["G6/footer-far-below-body","33-session-folder-move-offered","1200x800","Button \"Save without moving\"",1],
-    ["G6/footer-far-below-body","33-session-folder-move-offered","1920x1080","Button \"Save without moving\"",1],
-    ["G6/footer-far-below-body","34-session-folder-moved","1200x800","Button \"Save folder\"",1],
-    ["G6/footer-far-below-body","34-session-folder-moved","1920x1080","Button \"Save folder\"",1],
     ["G6/footer-far-below-body","35-session-events-older","960x640","Button \"Add to notes: Major event\"",1],
     ["G6/footer-far-below-body","48-timeline-disk-conflict","1200x800","Button \"Bridge Ambush · Fight · Round 2 · Paused · Session 2\"",1],
     ["G6/footer-far-below-body","48-timeline-disk-conflict","1920x1080","Button \"Bridge Ambush · Fight · Round 2 · Paused · Session 2\"",1],
@@ -824,8 +807,6 @@
   ],
   "session-plan": [
     ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Save encounter\"",1],
-    ["G1b/pressed-control-moved","12-rule-from-the-row","960x640","Button \"Log\"",1],
-    ["G1b/pressed-control-moved","14-correct-initiative","960x640","Button \"Correct\"",1],
     ["G3/far-action","38-saved-runs-history","1920x1080","Button \"Resume\"",3],
     ["G6/footer-far-below-body","19-rewards-added","1200x800","Label \"5\\u{a0}party ·\\u{a0}2\\u{a0}×\\u{a0}Ember\\u{a0}Cultist ·\\u{a0}XP\\u{a0}400\\u{a0}·\\u{a0}Low\"",1],
     ["G6/footer-far-below-body","19-rewards-added","1920x1080","Label \"5\\u{a0}party ·\\u{a0}2\\u{a0}×\\u{a0}Ember\\u{a0}Cultist ·\\u{a0}XP\\u{a0}400\\u{a0}·\\u{a0}Low\\u{a0}(up\\u{a0}to\\u{a0}2,800)\"",1],
@@ -883,15 +864,8 @@
   "session-recording": [
     ["G1b/pressed-control-moved","04-recording-listed","960x640","Button \"Recordings, 1 recording\"",1],
     ["G1b/pressed-control-moved","05-run-silent","960x640","Button \"Note\"",1],
-    ["G1b/pressed-control-moved","15-key-for-another-service","960x640","Button \"Account and campaigns\"",1],
-    ["G1b/pressed-control-moved","15-key-for-another-service","960x640","Button \"Recording and processing\"",1],
-    ["G1b/pressed-control-moved","16-recording-ready","960x640","Button \"Account and campaigns\"",1],
-    ["G1b/pressed-control-moved","27-second-pass-review","960x640","Button \"What the check changed\"",1],
     ["G1b/pressed-control-moved","37-input-during-recording","960x640","Button \"Record again\"",1],
-    ["G1b/pressed-control-moved","37-input-during-recording","960x640","Button \"Recording and processing\"",1],
     ["G6/footer-far-below-body","11-recording-saved-no-key","960x640","Button \"Process: 2026-01-01 19-00\"",1],
-    ["G6/footer-far-below-body","12-processing-settings","1920x1080","Button \"Transcript and summary instructions\"",1],
-    ["G6/footer-far-below-body","14-processing-settings-anthropic","1920x1080","Button \"Transcript and summary instructions\"",1],
     ["G6/footer-far-below-body","16-recording-ready","1200x800","Label \"Process sends the audio and the session and campaign names to api.openai.com for a transcript. Then the transcript, this session’s name, notes and events go to Codex (gpt-6.1-sol) twice: once to clean them, and once to check that work against the raw words.\"",1],
     ["G6/footer-far-below-body","16-recording-ready","1920x1080","Label \"Process sends the audio and the session and campaign names to api.openai.com for a transcript. Then the transcript, this session’s name, notes and events go to Codex (gpt-6.1-sol) twice: once to clean them, and once to check that work against the raw words.\"",1],
     ["G6/footer-far-below-body","16-recording-ready","960x640","Label \"Process sends the audio and the session and campaign names to api.openai.com for a transcript. Then the transcript, this session’s name, notes and events go to Codex (gpt-6.1-sol) twice: once to clean them, and once to check that work against the raw words.\"",1],
@@ -904,7 +878,6 @@
     ["G6/footer-far-below-body","40-recording-summary-narrow","1200x800","Label \"The party held the bridge against the cinder wolves.\"",1],
     ["G6/footer-far-below-body","40-recording-summary-narrow","1920x1080","Label \"The party held the bridge against the cinder wolves.\"",1],
     ["G6/footer-far-below-body","40-recording-summary-narrow","960x640","Label \"The party held the bridge against the cinder wolves.\"",1],
-    ["G6/footer-far-below-body","41-processing-custom-speech-service","1920x1080","Button \"Transcript and summary instructions\"",1],
     ["G6/footer-far-below-body","44-processing-with-no-run","1200x800","Button \"Process: 2026-01-01 19-00\"",1],
     ["G6/footer-far-below-body","44-processing-with-no-run","1920x1080","Button \"Process: 2026-01-01 19-00\"",1],
     ["G6/footer-far-below-body","44-processing-with-no-run","960x640","Button \"Process: 2026-01-01 19-00\"",1],
@@ -1022,10 +995,8 @@
     ["N4/quiet-action-line-start","40-recording-summary-narrow","960x640","Button \"Back to recordings\"",1]
   ],
   "settings": [
-    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Account and campaigns\"",1],
     ["G1b/pressed-control-moved","09-edit-campaign","960x640","Button \"Edit details\"",1],
     ["G1b/pressed-control-moved","11-campaign-details-discarded","960x640","Button \"Edit details\"",1],
-    ["G1b/pressed-control-moved","16-touchpad-settings","960x640","Button \"Touchpad\"",1],
     ["N2/icon-off-text-centre","15-sync-stopped-recovery","1200x800","Button \"Dismiss this message\"",1],
     ["N2/icon-off-text-centre","15-sync-stopped-recovery","1920x1080","Button \"Dismiss this message\"",1],
     ["N2/icon-off-text-centre","15-sync-stopped-recovery","960x640","Button \"Dismiss this message\"",1],
@@ -1036,8 +1007,7 @@
     ["N4/quiet-action-line-start","04-shared-entry-ready","1920x1080","Button \"Filter creatures\"",1]
   ],
   "signed-in": [
-    ["G1b/pressed-control-moved","15-link-tab-during-run","960x640","Button \"Add\"",1],
-    ["G1b/pressed-control-moved","15-link-tab-during-run","960x640","Button \"Link and folder\"",1]
+    ["G1b/pressed-control-moved","15-link-tab-during-run","960x640","Button \"Add\"",1]
   ],
   "stat-formats": [
     ["N4/quiet-action-line-start","01-schema-2-creature-library","1200x800","Button \"Filter creatures\"",1],

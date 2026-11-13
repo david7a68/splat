@@ -1696,6 +1696,10 @@ fn line_start_actions(ui: &mut egui::Ui, actions: &[(&str, ArmedAction)]) -> Opt
 /// crosshair stays on the first line when the words wrap, centred on it. The words keep the
 /// lines that `reserve` would take at this width, so what follows does not move when the
 /// roll mode or the action changes the words (FK4).
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn armed_hint(ui: &mut egui::Ui, status: &str, reserve: &str) {
     let icon_row = ui.fonts_mut(|fonts| fonts.row_height(&Type::Body.font(ui)));
     let text_row = ui.fonts_mut(|fonts| fonts.row_height(&Type::Small.font(ui)));
@@ -1732,6 +1736,10 @@ fn armed_hint(ui: &mut egui::Ui, status: &str, reserve: &str) {
 ///
 /// Each tile comes with its place in the entry's whole list of actions, if it has one: the
 /// number it shows is the number that arms it.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[(Option<usize>, Chip)]) {
     if chips.is_empty() {
         return;
@@ -1852,6 +1860,10 @@ pub(crate) const BAR_BUTTONS: f32 = 28.0;
 /// The run's actions on one line above the dock while Lookup or Notes hide the panel: a
 /// quiet button for each tile, the armed one marked, with a run's changes in its numbers.
 /// The first button starts at the dock's content edge.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(crate) fn compact_tiles(ui: &mut egui::Ui, chips: &[Chip]) {
     let ctx = ui.ctx().clone();
     let armed = ctx.data(|data| data.get_temp::<ArmedView>(armed_id()));

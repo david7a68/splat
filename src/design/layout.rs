@@ -23,8 +23,8 @@ use eframe::egui::{
 };
 
 use super::{
-    Action, Density, FORM_WIDTH, L, M, PANEL_MIN_WIDTH, S, Status, Type, XS, colors, field, named,
-    number_width, placeholder, theme,
+    Action, Density, FORM_WIDTH, L, M, PANEL_MIN_WIDTH, S, Status, Type, XS, colors, extras::space,
+    field, named, number_width, placeholder, theme,
 };
 
 /// The longest word an action may have, in characters. With this limit and an icon, the widest
@@ -284,6 +284,64 @@ impl FieldId {
         response
     }
 
+    /// A search field with this id: the search icon, the hint (what can be searched) and, while
+    /// it holds text, a quiet `Clear` after it on its line, inside `width`. `Clear` empties the
+    /// text and gives the field its focus back; `cleared` says so, for a caller that resets more
+    /// (the selected result). A search field has no form without its `Clear` (N10).
+    ///
+    /// ```
+    /// fn f(ui: &mut eframe::egui::Ui, query: &mut String) {
+    ///     const SEARCH: splat::layout::FieldId = splat::field_id!("doc_search");
+    ///     let search = SEARCH.search(ui, "Search", query, "Search by name…", 240.0);
+    ///     let _ = (search.field, search.cleared);
+    /// }
+    /// ```
+    ///
+    /// `Clear` is not the caller's to leave out:
+    ///
+    /// ```compile_fail,E0599
+    /// fn f(ui: &mut eframe::egui::Ui, query: &mut String) {
+    ///     const SEARCH: splat::layout::FieldId = splat::field_id!("doc_search");
+    ///     let _ = SEARCH.search(ui, "Search", query, "Search by name…", 240.0).without_clear();
+    /// }
+    /// ```
+    pub fn search(
+        self,
+        ui: &mut Ui,
+        name: &str,
+        text: &mut String,
+        hint: &str,
+        width: f32,
+    ) -> Search {
+        let clear = || Action::quiet("Clear").density(Density::Scan);
+        let mut cleared = false;
+        let field = ui
+            .horizontal(|ui| {
+                let room = if text.is_empty() {
+                    0.0
+                } else {
+                    clear().natural_width(ui) + ui.spacing().item_spacing.x
+                };
+                let field = super::components::search_box(
+                    ui,
+                    self.id(),
+                    name,
+                    text,
+                    hint,
+                    (width - room).max(Density::Scan.control()),
+                );
+                record_field(ui, &field);
+                if !text.is_empty() && clear().show(ui).clicked() {
+                    text.clear();
+                    field.request_focus();
+                    cleared = true;
+                }
+                field
+            })
+            .inner;
+        Search { field, cleared }
+    }
+
     /// A multi-line field with this id that no shared part draws.
     #[allow(
         clippy::disallowed_methods,
@@ -299,6 +357,13 @@ impl FieldId {
         record_field(ui, &response);
         response
     }
+}
+
+/// What [`FieldId::search`] drew: the field, and whether `Clear` emptied it this frame.
+#[must_use = "read `field` for focus and `cleared` to reset what the search chose"]
+pub struct Search {
+    pub field: Response,
+    pub cleared: bool,
 }
 
 /// The text fields the design drew in one pass.
@@ -1536,16 +1601,15 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
                 CreatePart::Choice(choice) => {
                     ui.checkbox(choice.value, choice.label);
                     if let Some(help) = choice.help {
-                        super::help(ui, help);
-                        ui.add_space(L - XS);
+                        // `L` from the help's last line to the next label, as a field's help has.
+                        let bottom = super::help(ui, help).rect.bottom();
+                        space(ui, bottom + L - ui.cursor().top());
                     }
                 }
                 CreatePart::Text(part) if !last => {
+                    // The field adds `L` after its help.
                     let response =
                         labelled_field(ui, part.id, part.label, part.text, part.help, None);
-                    if part.help.is_some() {
-                        ui.add_space(L - XS);
-                    }
                     if part.focus {
                         response.request_focus();
                     }
@@ -1600,7 +1664,7 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
         kept.spacing_mut().item_spacing.x = 0.0;
         if let Some((word, true)) = self.kept.cancel {
             out.cancel = cancel_action(word).line_start().show(&mut kept).clicked();
-            kept.add_space(L);
+            space(&mut kept, L);
         }
         if let Some(reason) = create.blocked {
             let words = Type::Small

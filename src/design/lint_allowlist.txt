@@ -45,6 +45,13 @@ src/encounter_run/loot.rs phrase-owner 2
 src/encounters.rs phrase-owner 1
 src/library.rs phrase-owner 1
 src/sessions/plan.rs phrase-owner 1
+# A close icon named by hand (round 28, package X, N6). Wave 2 moves each to
+# `MessageChoice::Dismiss`, which names it and centres it on the message's first line.
+src/encounter_run/notice.rs phrase-owner 1
+src/encounter_run/view.rs phrase-owner 4
+src/party.rs phrase-owner 1
+src/sessions/page.rs phrase-owner 1
+src/world/edit.rs phrase-owner 1
 # A layer built by hand (`LayerId { order: … }`, `Order::…`), which Clippy's method list cannot see
 # (package K). Wave 2 moves the drag ghost to a design part.
 src/encounter_run/view.rs foreground-layer 1

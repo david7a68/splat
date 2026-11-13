@@ -444,6 +444,10 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
 
 /// A Due row: its words, its rolls with their results, its proposed changes, and `Done` with
 /// the row's menu at the end.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn notice_row(
     ui: &mut egui::Ui,
     rules: &Rules,
@@ -680,6 +684,10 @@ fn finish(
 /// A tracker's lines: one line, or a heading and one line for each instance. Every line stands
 /// in the panel's columns.
 #[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn tracker_lines(
     ui: &mut egui::Ui,
     rules: &Rules,

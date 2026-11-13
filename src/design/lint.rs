@@ -266,6 +266,11 @@ fn phrase_owner(path: &str, words: &str) -> bool {
             words.contains("} of {") && words.ends_with("chosen"),
             "src/design/outcome.rs",
         ),
+        // A message's close icon (N6): `MessageChoice::Dismiss` names and places it.
+        (
+            words.starts_with("Dismiss this ") || words.starts_with("Dismiss the "),
+            "src/design/outcome.rs",
+        ),
     ];
     owned
         .iter()
@@ -400,7 +405,7 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
                     "Name a banned owner or function as clippy.toml names it: an alias (`use … as …`, `type … =`) hides it from the counts"
                 }
                 "phrase-owner" => {
-                    "Call the phrase's owner: `XP {` in src/difficulty.rs, `· line {` in `fault_words`, `N of M chosen` in `chosen_count`"
+                    "Call the phrase's owner: `XP {` in src/difficulty.rs, `· line {` in `fault_words`, `N of M chosen` in `chosen_count`, a close icon's `Dismiss this …` in `MessageChoice::Dismiss`"
                 }
                 _ => "Use design tokens",
             };
@@ -491,6 +496,15 @@ fn the_message_rules_find_what_they_should() {
         ["phrase-owner"]
     );
     assert!(rules("src/difficulty.rs", "const A: &str = \"XP {xp}\";").is_empty());
+    // N6: a close icon named by hand, outside `MessageChoice::Dismiss`.
+    assert_eq!(
+        rules(
+            "src/a.rs",
+            "fn f() { icon_button(ui, icons::CLOSE, \"Dismiss this message\"); }"
+        ),
+        ["phrase-owner"]
+    );
+    assert!(rules("src/a.rs", "const A: &str = \"Dismiss\";").is_empty());
     assert_eq!(
         rules(
             "src/a.rs",

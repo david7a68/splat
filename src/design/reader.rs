@@ -1,5 +1,5 @@
 //! Typographic parts of the one Reader. `library::view` composes them.
-use super::{components::rule, tokens::*};
+use super::{components::rule, extras::space, tokens::*};
 use eframe::egui::{self, Ui, vec2};
 
 /// Prose in a side panel is one step smaller than prose at full width.
@@ -39,11 +39,11 @@ pub fn subtitle(ui: &mut Ui, text: &str) {
 }
 
 pub fn section_heading(ui: &mut Ui, text: &str) {
-    ui.add_space(M);
+    space(ui, M);
     ui.add(egui::Label::new(Type::Section.rich(ui, text).color(colors().text)).wrap());
-    ui.add_space(2.0);
+    space(ui, 2.0);
     rule(ui);
-    ui.add_space(XS);
+    space(ui, XS);
 }
 
 /// A heavy rule that opens and closes a stat block.
@@ -158,12 +158,12 @@ pub fn facts(ui: &mut Ui, facts: &[(String, String)]) {
     for (label, value) in facts {
         detail(ui, label, value);
     }
-    ui.add_space(S);
+    space(ui, S);
 }
 
 pub fn identity(ui: &mut Ui, text: &str) {
     ui.add(egui::Label::new(Type::ProseItalic.rich(ui, text).color(colors().muted)).wrap());
-    ui.add_space(S);
+    space(ui, S);
 }
 
 /// Scoped to readers: editors and other workspaces keep their own colours.
@@ -333,7 +333,7 @@ mod tests {
             |ui| {
                 linked_detail(ui, "Skills", |ui| {
                     ui.vertical(|ui| {
-                        ui.add_space(Density::Read.control() * 3.0);
+                        space(ui, Density::Read.control() * 3.0);
                         ui.label(Type::Stat.rich(ui, "Perception +11"));
                     });
                 });

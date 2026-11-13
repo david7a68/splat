@@ -20,11 +20,12 @@
 //! just before it that differs only in the forbidden part and compiles: the failure can only come
 //! from that part.
 use super::components::{
-    Action, FooterRank, link, number_width, small_tone_message, tone_message, undo_message_capped,
+    Action, FooterRank, first_line_centre, icon_button, link, number_width, small_tone_message,
+    tone_message, undo_message_line,
 };
 pub use super::components::{Footer, ResultOrder, Tone};
-use super::{icons, tokens::*};
-use eframe::egui::{Rect, Response, Ui};
+use super::{extras::space, icons, tokens::*};
+use eframe::egui::{self, Rect, Response, Ui};
 use std::borrow::Cow;
 
 // ------------------------------------------------------------------------------------------------
@@ -472,6 +473,22 @@ impl UndoStep {
 /// a `Choice` is bordered, a `Lose` is red with exactly `L` before it, a `Link` is a link. An
 /// Undo is not a choice: it is the message's `UndoStep`, always quiet with its icon, and first.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+///
+/// `Dismiss` is the close icon. The part puts it at the right end of the message's first line,
+/// centred on that line, whatever its place in the list (N6); a caller gives no icon, name or
+/// place. It says what goes with the message ([`Lost`]), so the choice is made on purpose.
+///
+/// ```
+/// use splat::outcome::{Lost, MessageChoice, Notice};
+/// let _ = Notice::new(splat::sentence!("Sync is off.")).choice(MessageChoice::Dismiss(Lost::Nothing));
+/// ```
+///
+/// What goes is said, never left out:
+///
+/// ```compile_fail,E0308
+/// use splat::outcome::{MessageChoice, Notice};
+/// let _ = Notice::new(splat::sentence!("Sync is off.")).choice(MessageChoice::Dismiss);
+/// ```
 pub enum MessageChoice<'a> {
     Choice(&'a str),
     Lose(&'a str),
@@ -479,6 +496,21 @@ pub enum MessageChoice<'a> {
         word: &'a str,
         hover: Option<&'a str>,
     },
+    Dismiss(Lost),
+}
+
+/// The close icon's accessible name and hover words.
+pub const DISMISS_NAME: &str = "Dismiss this message";
+
+/// What a `Dismiss` lets go with the message (ruling R3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Lost {
+    /// Only the app's words: the message can come again from its cause.
+    Nothing,
+    /// Words the DM typed (a Log line whose entry is gone). The press records
+    /// `Done::new(Verb::Dismiss, …).undo()` in the pane's `Results` store, so its Undo brings the
+    /// words back; nothing is lost without an Undo.
+    TypedWords,
 }
 
 /// What the DM pressed in a message: its Undo, or its choice at this index.
@@ -898,32 +930,82 @@ impl<'a> Footer<'a> {
 }
 
 impl Body<'_> {
+    /// With a `Dismiss`, the close icon at the right end of the first line, centred on that
+    /// line; the words and the other choices keep the room to its left.
+    fn draw(&self, ui: &mut Ui, place: MessagePlace) -> Option<Pressed> {
+        let Some(at) = self
+            .choices
+            .iter()
+            .position(|choice| matches!(choice, MessageChoice::Dismiss(_)))
+        else {
+            return self.draw_words(ui, place).0;
+        };
+        let size = Density::Read.control();
+        let mut pressed = None;
+        let words = ui
+            .scope(|ui| {
+                ui.set_max_width(ui.available_width().min(LIST_MEASURE));
+                let right = ui.max_rect().right();
+                let (words, line) = ui
+                    .scope(|ui| {
+                        ui.set_max_width(ui.available_width() - size - S);
+                        self.draw_words(ui, place)
+                    })
+                    .inner;
+                let centre = egui::pos2(right - size / 2.0, line);
+                let icon = ui.put(
+                    Rect::from_center_size(centre, egui::Vec2::splat(size)),
+                    |ui: &mut Ui| icon_button(ui, icons::CLOSE, DISMISS_NAME),
+                );
+                if icon.clicked() {
+                    pressed = Some(Pressed::Choice(at));
+                }
+                words
+            })
+            .inner;
+        pressed.or(words)
+    }
+
+    /// The choices that sit on rows under the words: all but `Dismiss`.
+    fn row_choices(&self) -> impl Iterator<Item = (usize, MessageChoice<'_>)> {
+        self.choices
+            .iter()
+            .copied()
+            .enumerate()
+            .filter(|(_, choice)| !matches!(choice, MessageChoice::Dismiss(_)))
+    }
+
     /// The words, capped at `LIST_MEASURE`; an Undo alone beside them when it fits, else under
     /// them at their first letter; with choices, the Undo and then the choices on rows under the
-    /// words, from their first letter.
-    fn draw(&self, ui: &mut Ui, place: MessagePlace) -> Option<Pressed> {
+    /// words, from their first letter. Also the y of the centre of the words' first line.
+    fn draw_words(&self, ui: &mut Ui, place: MessagePlace) -> (Option<Pressed>, f32) {
         let mut pressed = None;
+        let mut line = ui.cursor().top() + Type::Body.line() / 2.0;
         let response = ui
             .scope(|ui| {
                 ui.set_max_width(ui.available_width().min(LIST_MEASURE));
                 let words = self.words.as_str();
-                if self.choices.is_empty() {
+                if self.row_choices().next().is_none() {
                     match &self.undo {
                         None => {
-                            tone_message(ui, self.tone, words);
+                            line = first_line_centre(&tone_message(ui, self.tone, words));
                         }
                         Some(step) => {
                             let label = step.label();
                             let shown = self.undo_words(ui, step);
                             let name = (shown != label).then_some(label.as_str());
-                            if undo_message_capped(ui, self.tone, words, &shown, name) {
+                            let (undo, centre) =
+                                undo_message_line(ui, self.tone, words, &shown, name);
+                            if undo {
                                 pressed = Some(Pressed::Undo);
                             }
+                            line = centre;
                         }
                     }
                     return;
                 }
                 let message = tone_message(ui, self.tone, words);
+                line = first_line_centre(&message);
                 let inset = message.rect.left() - ui.cursor().left();
                 let gap = ui.spacing().item_spacing.x;
                 let undo = self.undo.as_ref().map(|step| {
@@ -937,16 +1019,15 @@ impl Body<'_> {
                 // Undo, then the choices `L` after it, on one line from the words when they fit;
                 // else Undo on its line and the choices on the lines under it, from the words.
                 let choices: f32 = self
-                    .choices
-                    .iter()
-                    .map(|choice| self.choice_width(ui, *choice) + gap)
+                    .row_choices()
+                    .map(|(_, choice)| self.choice_width(ui, choice) + gap)
                     .sum();
                 let one_line =
                     inset + undo.as_ref().map_or(0.0, |(_, _, width)| width + L) + choices
                         <= ui.available_width();
                 if undo.is_some() || one_line {
                     ui.horizontal(|ui| {
-                        ui.add_space(inset);
+                        space(ui, inset);
                         if let Some((label, shown, _)) = &undo {
                             // Its words start at the message's words, its icon in the message's
                             // icon column.
@@ -960,7 +1041,7 @@ impl Body<'_> {
                             if action.show(ui).clicked() {
                                 pressed = Some(Pressed::Undo);
                             }
-                            ui.add_space((L - gap).max(0.0));
+                            space(ui, (L - gap).max(0.0));
                         }
                         if one_line && let Some(at) = self.draw_choices(ui) {
                             pressed = Some(Pressed::Choice(at));
@@ -969,7 +1050,7 @@ impl Body<'_> {
                 }
                 if !one_line {
                     ui.horizontal_top(|ui| {
-                        ui.add_space(inset);
+                        space(ui, inset);
                         ui.horizontal_wrapped(|ui| {
                             if let Some(at) = self.draw_choices(ui) {
                                 pressed = Some(Pressed::Choice(at));
@@ -980,7 +1061,7 @@ impl Body<'_> {
             })
             .response;
         register(ui, response.rect, place, self.tone);
-        pressed
+        (pressed, line)
     }
 
     /// A choice's whole width, with the `L` before a red one.
@@ -998,6 +1079,7 @@ impl Body<'_> {
             MessageChoice::Link { word, .. } => {
                 number_width(ui, word, &Type::Body.font(ui)).max(XL)
             }
+            MessageChoice::Dismiss(_) => 0.0,
         }
     }
 
@@ -1006,15 +1088,15 @@ impl Body<'_> {
     fn draw_choices(&self, ui: &mut Ui) -> Option<usize> {
         let gap = ui.spacing().item_spacing.x;
         let mut pressed = None;
-        for (at, choice) in self.choices.iter().enumerate() {
-            let clicked = match *choice {
+        for (at, choice) in self.row_choices() {
+            let clicked = match choice {
                 MessageChoice::Choice(word) => Action::secondary(word)
                     .density(Density::Read)
                     .show(ui)
                     .clicked(),
                 MessageChoice::Lose(word) => {
                     if at > 0 {
-                        ui.add_space((L - gap).max(0.0));
+                        space(ui, (L - gap).max(0.0));
                     }
                     Action::destructive(word)
                         .density(Density::Read)
@@ -1029,6 +1111,7 @@ impl Body<'_> {
                     }
                     .clicked()
                 }
+                MessageChoice::Dismiss(_) => false,
             };
             if clicked {
                 pressed = Some(at);
@@ -1520,6 +1603,9 @@ mod tests {
                                     if took.0.0 == "party" {
                                         said =
                                             said.choice(MessageChoice::Choice("Add to Timeline"));
+                                    } else {
+                                        // N6: the part places the close icon.
+                                        said = said.choice(MessageChoice::Dismiss(Lost::Nothing));
                                     }
                                     said.into()
                                 },
@@ -1564,6 +1650,23 @@ mod tests {
             undo.left() < words && rects[1].0.contains_rect(undo),
             "Undo starts its line under the words, inside the message: {undo:?} {words} {rects:?}"
         );
+        // N6: the close icon sits at the right end of the message's first line, centred on it,
+        // inside the message's measure; its press is the message's own choice.
+        let dismiss = h.get_by_label(DISMISS_NAME).rect();
+        let line = h
+            .get_by_role_and_label(
+                egui::accesskit::Role::Label,
+                "Seals for Keyring changed to 2.",
+            )
+            .rect();
+        assert!(
+            (dismiss.center().y - line.center().y).abs() <= 1.0
+                && dismiss.left() > line.right()
+                && dismiss.height() >= 24.0,
+            "n6: icon {dismiss:?}, first line {line:?}"
+        );
+        h.get_by_label(DISMISS_NAME).click();
+        h.run_steps(2);
         h.get_all_by_label("Undo: Take seal")
             .nth(1)
             .unwrap()
@@ -1579,6 +1682,7 @@ mod tests {
         assert_eq!(
             h.state().pressed,
             [
+                ("keyring", Pressed::Choice(0)),
                 ("party", Pressed::Undo),
                 ("party", Pressed::Choice(0)),
                 ("keyring", Pressed::Undo)
