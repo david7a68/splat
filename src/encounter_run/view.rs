@@ -1,6 +1,7 @@
 //! The run's three views: setup, live and ended. Prominence follows the brief:
 //! round and current turn, then every row's HP and conditions, then the actions.
 //! Rows never move when the selection changes: the entry controls have a fixed dock.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{
     Command, END_STEP, MAX_FROM_SHEET, Panel, Participant, PartySync, Phase, Run, SAVED_HP_USED,
     SHEET_SOURCE, Unend, display, effect::Time, mode_label,
@@ -103,6 +104,10 @@ fn other_effect_add() -> Action<'static> {
 
 /// The field that adds an other effect, and its Add. True when the DM adds the typed words;
 /// then the field's response.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(crate) fn other_effect_field(
     ui: &mut egui::Ui,
     text: &mut String,
@@ -831,6 +836,10 @@ impl Run {
     /// never moves when one comes or goes. It is drawn in a child of `ui` over `rect`, at its
     /// bottom, and the y where the body above it ends is returned. A stat-block error is one
     /// of them: its whole fault wraps there, with its repair place under its words.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn message_footer(
         &mut self,
         ui: &mut egui::Ui,
@@ -987,7 +996,7 @@ impl Run {
                 }
             });
         }
-        let bottom = footer.show(&mut child);
+        let bottom = footer.show_by_hand(&mut child);
         let outcome = if save_new.get() {
             Some(self.save_as_new_run())
         } else if replace.get() {
@@ -1376,6 +1385,10 @@ impl Run {
     /// `hidden` is the room the message footer covers (FI2): the rows are sized as if it were
     /// free, so a footer that comes or goes moves no row; only the list's visible height
     /// shrinks, and the rows behind the footer scroll into view.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn roster(&mut self, ui: &mut egui::Ui, visible: f32, lent: f32, hidden: f32) {
         let room = visible + hidden;
         let current = self.current();
@@ -2028,6 +2041,10 @@ impl Run {
 
     /// The official conditions, one click each. A second click removes one. This sits
     /// beside the roster and needs no typing, so a mistyped name cannot lose its sync.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn conditions_tab(&mut self, ui: &mut egui::Ui, index: usize) {
         let mut command = None;
         let mut added = false;
@@ -2180,6 +2197,10 @@ impl Run {
     }
 
     /// Sync and the closing controls. These are kept far from Next turn.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn live_footer(&mut self, ui: &mut egui::Ui) -> bool {
         let mut closed = false;
         ui.add_space(design::XS);
@@ -2833,6 +2854,10 @@ impl Run {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn panel_tabs(&mut self, ui: &mut egui::Ui, reference: Option<&str>, conditions: bool) {
         let mut participant = Vec::new();
         if let Some(reference) = reference {
@@ -2909,6 +2934,10 @@ impl Run {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn notes_tab(&self, ui: &mut egui::Ui) {
         let (prep, technical) = self.prep();
         egui::ScrollArea::vertical()
@@ -2957,6 +2986,10 @@ impl Run {
     /// The campaign's encounter groups. A group is dragged to the initiative list, or added
     /// with its button, by the rule the campaign chose for initiative.
     /// Whatever joins a fight after it starts: one creature, or a prepared group.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
+    )]
     fn groups_tab(&mut self, ui: &mut egui::Ui) {
         let mut add = None;
         // FB1: the newest arrival's result, and a tie's Move button, sit in a footer pinned
@@ -2987,7 +3020,7 @@ impl Run {
                 design::small_message(ui, Tone::Warning, reason);
             });
         }
-        let body_bottom = footer.show(ui);
+        let body_bottom = footer.show_by_hand(ui);
         // FJ1: the list keeps the scroll bar's lane whether or not the bar shows, as the
         // Encounters list does, so a list that grows long moves no field and no Add.
         let lane = (ui.available_width() - ui.spacing().scroll.allocated_width()).max(0.0);
@@ -3551,6 +3584,10 @@ impl Run {
     }
 
     /// Returns true when the DM chooses to add this group.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn group_row(
         &mut self,
         ui: &mut egui::Ui,
@@ -4136,6 +4173,10 @@ impl Run {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn reference_tab(&mut self, ui: &mut egui::Ui, index: usize) {
         self.card_loot(ui, index);
         let p = &self.state.participants[index];
@@ -4315,7 +4356,7 @@ impl Run {
                 }
             });
         }
-        let body_bottom = footer.show(ui);
+        let body_bottom = footer.show_by_hand(ui);
         if let Some(at) = read.get() {
             self.lookup_request = Some(at);
         }
@@ -4392,6 +4433,10 @@ impl Run {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn record_tab(&mut self, ui: &mut egui::Ui, index: usize) {
         let mut command = None;
         egui::ScrollArea::vertical()
@@ -4551,6 +4596,10 @@ impl Run {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn log_tab(&mut self, ui: &mut egui::Ui) {
         let c = colors();
         egui::ScrollArea::vertical()
@@ -4595,6 +4644,10 @@ impl Run {
         closed
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn setup_body(&mut self, ui: &mut egui::Ui) -> bool {
         self.refresh_roster_faults();
         let mut closed = false;
@@ -5029,6 +5082,10 @@ impl Run {
 
     /// Controls share the name line. Ties reserve a column only while tied rows exist.
     /// Enter moves to the next missing total; rare controls wait in the row menu.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn setup_row(&mut self, ui: &mut egui::Ui, index: usize) -> Option<Command> {
         let mut command = None;
         let p = self.state.participants[index].clone();
@@ -5524,6 +5581,10 @@ impl Run {
 
     // ---- Ended ------------------------------------------------------------------
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn ended_view(&mut self, ui: &mut egui::Ui) -> bool {
         self.back_out_on_escape(ui);
         let c = colors();
@@ -8763,6 +8824,10 @@ fn parse_bonus(text: &str) -> Option<f64> {
     text.trim().replace('−', "-").parse().ok()
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn optional_number(
     ui: &mut egui::Ui,
     label: &str,

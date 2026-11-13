@@ -1,5 +1,6 @@
 //! The one entry reader. The Library, Lookup, the run's side panel, and campaign
 //! entries all call `show`, so an entry looks the same everywhere (T6.4).
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{class, creature, presentation, reader};
 use crate::design::{self, Type, colors, reader as style};
 use eframe::egui::{self, Align, Layout, vec2};

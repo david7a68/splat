@@ -366,6 +366,10 @@ pub(crate) fn menu_heading(link: &RollLink) -> Option<String> {
 /// stays in view, headed in muted Small with what it rolls, and its choices start at the
 /// heading's words. It stays inside its pane, whose right edge is `right`. Returns how to
 /// roll it, when one was chosen.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn mode_menu(response: &egui::Response, link: &RollLink, right: f32) -> Option<(Mode, bool)> {
     let heading = menu_heading(link)?;
     let inspired = response
@@ -1590,6 +1594,10 @@ fn tile(
 
 /// A tile's rules text, and its printed numbers and keys, on hover and on keyboard focus (a
 /// click gives no focus), and as the control's accessible description.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn rules_on_hover_and_focus(
     ui: &egui::Ui,
     response: egui::Response,
@@ -1801,6 +1809,10 @@ pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[(Option<usize>, Chi
 /// The totals of an outcome in Strong, with their dice in hover. A muted `·` comes between
 /// the parts, as in a run's `11 vs AC 13 · 10 damage`; it never ends a line, so it wraps with
 /// the part after it.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(crate) fn outcome_line(ui: &mut egui::Ui, outcome: &Outcome) {
     let c = colors();
     let mut first = true;
@@ -1877,6 +1889,10 @@ pub(crate) fn compact_tiles(ui: &mut egui::Ui, chips: &[Chip]) {
 
 /// The strip's actions from `from` on, which have no room on its line: a menu that lists each
 /// by name and its Ctrl number, and arms the one the DM chooses.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn more_actions(ui: &mut egui::Ui, word: &str, chips: &[Chip], from: usize, changes: (i64, i64)) {
     let response = design::menu_button(ui, word, false).on_hover_text(format!(
         "{}. Choose one to arm it.",

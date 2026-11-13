@@ -1,5 +1,6 @@
 //! Roll tables: a one-line marker above a table in any note makes it rollable. A row has no
 //! effect by itself. The Markdown reader draws the control, and the app decides whose dice roll.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use crate::design::{self, Action, Density, Tone, Type, colors};
 use eframe::egui;
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};

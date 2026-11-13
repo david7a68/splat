@@ -24,6 +24,10 @@ fn range_words((low, high): (Option<f64>, Option<f64>)) -> String {
 
 /// The Filter menu and the chips. `creatures` gives the creatures that the menu counts;
 /// it runs only while the menu is open. Returns true when the filter changed.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub fn filter_bar<'a>(
     ui: &mut egui::Ui,
     filter: &mut Filter,
@@ -73,6 +77,10 @@ fn chip(ui: &mut egui::Ui, label: &str) -> bool {
         .clicked()
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn menu(
     ui: &mut egui::Ui,
     filter: &mut Filter,

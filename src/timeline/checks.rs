@@ -1,6 +1,7 @@
 //! A journey's encounter checks: one roll on a marked table for each day or watch of a Travel
 //! event, kept in that event's lines of `Timeline.md` by its offset from the journey's start.
 //! The plan's Travel row and Timeline's detail column draw the same block from here.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{Book, Check, DAY, Event, HOUR, Kind, clock_words, read_duration};
 use crate::design::{self, Action, Density, Status, Tone, Type, colors, icons};
 use crate::roll_table::{Per, Table};
@@ -517,6 +518,10 @@ pub fn header(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<A
 
 /// The table menu, then `· 1d20 each day`. Dice words that move to a line of their own start
 /// with the words, not with `·`.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn table_line(ui: &mut egui::Ui, view: &View<'_>, table: Option<&Table>, act: &mut Option<Act>) {
     let c = colors();
     ui.spacing_mut().item_spacing.x = design::S;
@@ -890,6 +895,10 @@ pub fn note_taken(book: &mut Book, taken: Taken) {
 /// **How long**, the Timeline's field. The file takes the words on Enter or when the field
 /// loses focus; until then the page shows what was typed. Returns the words in view, and what
 /// reached the event.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub fn length_input(
     ui: &mut egui::Ui,
     draft: &mut LengthDraft,

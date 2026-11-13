@@ -772,6 +772,10 @@ fn table_room(ui: &egui::Ui) -> Option<f32> {
 
 /// The row label has its own column. Only the remaining cells belong to the
 /// horizontal scroll area, so its real viewport also supplies the cell padding.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn reader_table(
     ui: &mut egui::Ui,
     rows: &[Vec<String>],
@@ -2163,7 +2167,23 @@ mod tests {
         );
     }
 
+    fn shown_text(
+        shape: &egui::epaint::ClippedShape,
+    ) -> Option<(&egui::epaint::TextShape, egui::Rect)> {
+        match &shape.shape {
+            egui::Shape::Text(text) => Some((
+                text,
+                egui::Rect::from_min_size(text.pos, text.galley.size()).intersect(shape.clip_rect),
+            )),
+            _ => None,
+        }
+    }
+
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn wide_tables_keep_whole_words_and_can_scroll_to_the_last_column() {
         let markdown = "| Level | Proficiency Bonus | Features | Cantrips | Prepared Spells | 1st | 2nd | 3rd | 4th | 5th | 6th | 7th | 8th | 9th |\n\
                         | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n\
@@ -2282,23 +2302,11 @@ mod tests {
             ));
         }
         let output = output.unwrap();
-        fn shown(
-            shape: &egui::epaint::ClippedShape,
-        ) -> Option<(&egui::epaint::TextShape, egui::Rect)> {
-            match &shape.shape {
-                egui::Shape::Text(text) => Some((
-                    text,
-                    egui::Rect::from_min_size(text.pos, text.galley.size())
-                        .intersect(shape.clip_rect),
-                )),
-                _ => None,
-            }
-        }
         // The floating header: the `Notes` heading whose words are in view.
         let header = output
             .shapes
             .iter()
-            .filter_map(shown)
+            .filter_map(shown_text)
             .find(|(text, visible)| text.galley.job.text == "Notes" && visible.is_positive())
             .map(|(text, _)| egui::Rect::from_min_size(text.pos, text.galley.size()))
             .expect("the header is in view");
@@ -2306,7 +2314,7 @@ mod tests {
         let cell = output
             .shapes
             .iter()
-            .filter_map(shown)
+            .filter_map(shown_text)
             .find(|(text, _)| text.galley.job.text.ends_with("Endmark"));
         let (text, visible) = cell.expect("the tall cell is painted");
         let lines: Vec<_> = text

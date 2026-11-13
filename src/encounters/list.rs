@@ -1,4 +1,5 @@
 //! The encounter ledger and its local editor controls.
+#![warn(deprecated)] // Its parent allows old message functions; this file does not.
 use super::*;
 use crate::encounter_run::{FightSummary, SavedRunInfo};
 use std::path::Path;
@@ -13,6 +14,10 @@ pub(super) fn blocked_reason(ui: &mut egui::Ui, reason: Option<&str>) {
     }
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(super) fn row_menu(ui: &mut egui::Ui, name: &str, add: impl FnOnce(&mut egui::Ui)) {
     let name = format!("More actions for {name}");
     // The pane the menu opens from: the menu stays inside it, as its submenus do.
@@ -143,6 +148,10 @@ fn menu_slot_icon(ui: &egui::Ui, word: &str) -> Option<&'static str> {
 }
 
 /// The same named side picker serves roster slots and groups. Other opens a text field.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(super) fn side_control(ui: &mut egui::Ui, name: &str, side: &mut String, choices: &[String]) {
     let id = ui.make_persistent_id((name, "other_side"));
     let custom = !matches!(side.as_str(), "party" | "enemies")

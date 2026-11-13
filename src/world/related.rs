@@ -1,6 +1,7 @@
 //! What other pages say about the one on show. A fact has one home, and these lists bring it
 //! here: what is in this place, what is part of this group, the events that concern it, and
 //! each line elsewhere that names it. See `docs/design/world-data.md`.
+#![warn(deprecated)] // Its parent allows old message functions; this file does not.
 use super::{Go, Role, date_words, lines::Line, type_group, type_label, world_type};
 use crate::{
     design::{self, Type, colors, reader as style},

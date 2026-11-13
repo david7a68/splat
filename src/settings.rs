@@ -1,3 +1,4 @@
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use crate::{
     auth::Session,
     credentials::{Action, Worker},
@@ -64,6 +65,21 @@ pub enum Account {
     /// Still connected, because the token has not expired, but renewing it failed.
     RefreshFailing,
 }
+
+impl Account {
+    const ALL: [Self; 6] = [
+        Self::Busy,
+        Self::Connected,
+        Self::NotConnected,
+        Self::Failed,
+        Self::KeyringWarning,
+        Self::RefreshFailing,
+    ];
+}
+
+/// The cookie field keeps its id when Settings changes between one and two columns, so a DM who
+/// is pasting keeps the focus and the cursor.
+const SESSION_COOKIE: design::FieldId = crate::field_id!("session_cookie");
 
 const SESSION_ENDED: &str = "Your sign-in ended. Select Connect to sign in again.";
 
@@ -321,10 +337,16 @@ impl Settings {
     }
 
     pub fn connection_status(&self) -> Status<'static> {
+        Self::status_of((self.account(), self.signed_out()))
+    }
+
+    /// The account's status word for each state: the one function that names them, so the
+    /// compact line's slot is as wide as the widest of them.
+    fn status_of((account, signed_out): (Account, bool)) -> Status<'static> {
         let c = colors();
-        let (icon, word, color) = match self.account() {
+        let (icon, word, color) = match account {
             Account::NotConnected => (icons::OFFLINE, "Not connected", c.connection.offline),
-            Account::Failed if self.error.as_deref() == Some(SESSION_ENDED) => (
+            Account::Failed if signed_out => (
                 icons::OFFLINE,
                 "Signed out of D&D Beyond",
                 c.connection.offline,
@@ -342,7 +364,6 @@ impl Settings {
     }
 
     pub fn show_compact(&mut self, ui: &mut egui::Ui) {
-        let state = self.connection_status();
         let id = egui::Id::new("compact_account_open");
         let mut open = ui
             .ctx()
@@ -362,7 +383,18 @@ impl Settings {
             self.show_account(ui, false);
         } else {
             ui.horizontal(|ui| {
-                design::status(ui, state);
+                // A fixed slot: the action after the status stays in place when the state
+                // changes (family F8).
+                let every: Vec<_> = Account::ALL
+                    .into_iter()
+                    .flat_map(|account| [(account, false), (account, true)])
+                    .collect();
+                design::status_slot(
+                    ui,
+                    &every,
+                    (self.account(), self.signed_out()),
+                    Self::status_of,
+                );
                 if self.account() == Account::RefreshFailing {
                     ui.label(
                         Type::Small
@@ -502,14 +534,15 @@ impl Settings {
                 });
             });
             let cookie_width = design::small_field(ui, "Session cookie", None, None, |ui| {
-                let response = ui.add(
-                    egui::TextEdit::singleline(&mut self.cookie_input)
-                        .password(true)
-                        .hint_text(design::placeholder(ui, "Paste session cookie"))
+                let hint = design::placeholder(ui, "Paste session cookie");
+                let width = 420.0_f32.min(ui.available_width() - 2.0 * design::S);
+                let response = SESSION_COOKIE.single_line(ui, &mut self.cookie_input, |edit| {
+                    edit.password(true)
+                        .hint_text(hint)
                         .min_size(egui::vec2(0.0, Density::Read.control()))
                         .margin(egui::vec2(design::S, 5.0))
-                        .desired_width(420.0_f32.min(ui.available_width() - 2.0 * design::S)),
-                );
+                        .desired_width(width)
+                });
                 design::named(ui, &response, "Paste session cookie");
                 self.focus_cookie |= ui
                     .ctx()
@@ -636,6 +669,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::disallowed_methods)]
     fn a_failed_removal_keeps_disconnect_until_it_works() {
         let ctx = egui::Context::default();
         let (worker, commands, results) = Worker::test_channels();
@@ -665,7 +699,7 @@ mod tests {
                 |ui, settings: &mut Settings| {
                     let mut footer = design::Footer::new("settings_footer", 600.0);
                     settings.footer_messages(&mut footer);
-                    let _ = footer.show(ui);
+                    let _ = footer.show_by_hand(ui);
                     settings.show(ui);
                 },
                 std::mem::take(&mut settings),

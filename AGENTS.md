@@ -39,9 +39,13 @@ Past reviews found the same kinds of fault again and again. Check your own chang
 - **A rule fixed for one caller is not fixed.** Grep the shared helper and local copies of it, and fix every
   caller in the same change. Another screen that shows the same thing is also a caller: a list row and its
   pane, a preview and the live view.
+- **A ban is a list, not a proof.** `clippy.toml` holds the egui paths that a design part replaces. An egui helper that opens a layer or makes a text field and is not listed is found by review: add its path in the same PR.
 - **Layout rules that keep getting broken:** every target at least 24 px and clear of splitters; a quiet action
   that starts a line uses `line_start`; choices after a message start at its text, safe first, with exactly
   16 px (`L`) before a destructive one; nothing that grows with the content runs every frame.
+- **A raised lint count is a decision.** `src/design/lint_allowlist.txt` counts can only shrink on their own, but a
+  change that raises a count and its allowance together passes the test. Say in the PR why each raised line is
+  needed (a new `allow(deprecated)`, a `Sentence::outside`, a body message place), or remove the use.
 - **The audit's counts (G6) run in every gate.** When your change makes a task of `artifacts/dm-audit/` cost
   more or fewer acts on purpose, run `devenv shell -- audit-freeze counts` and say in the pull request why; add
   a new task with `devenv shell -- audit-freeze add`.

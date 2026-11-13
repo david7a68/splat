@@ -578,6 +578,10 @@ impl Run {
 
     /// The right-click menu of a run row, and the question that waits on it. Shows nothing
     /// when the row has nothing to offer.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     pub(super) fn row_menu(&self, response: &egui::Response, row: usize) -> Option<RowChoice> {
         // Before any early return: a row whose last choice went away still owns its menu.
         rolls::keep_menu_owner(response);

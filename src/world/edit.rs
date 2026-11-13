@@ -1,5 +1,6 @@
 //! Edit, for the DM's own world entries: one form for the status, the stat block, the place and
 //! the text. Save writes them together, with one Undo. Lookup and World show the same form.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{
     Change, ChangeKind, Go, Picker, Reader, link_name, reference, status, stored_link, world_field,
 };
@@ -849,6 +850,10 @@ impl Reader {
 
     /// `Discard draft` of a lost draft: it waits in `discarded`, with the order this press
     /// issues, for `Undo discard`.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     pub(super) fn discard_lost(&mut self, id: Uuid) {
         if let Some(draft) = self.edits.remove(&id) {
             self.discarded = Some((id, draft, design::ResultOrder::issue()));
@@ -871,6 +876,10 @@ impl Reader {
     }
 
     /// The form, in place of the entry's rows and text.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
+    )]
     pub(super) fn edit_form(
         &mut self,
         ui: &mut egui::Ui,
@@ -2137,6 +2146,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn lead_review_a_discarded_draft_belongs_to_its_campaign() {
         // Lookup keeps its reader across a campaign change. A draft let go in one campaign
         // offers its Undo discard (and its lost-note warning) only there.

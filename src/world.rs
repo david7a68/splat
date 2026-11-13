@@ -2,6 +2,7 @@
 //! made from them. Obsidian stays a plain note's editor; an entry also has Edit here. A plain
 //! note becomes a Lookup item, not an entry, so nothing depends on it.
 //! See `docs/design/world-and-house-rules.md`.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 mod checks;
 pub(crate) mod edit;
 mod fields;
@@ -2049,26 +2050,17 @@ pub(crate) fn title_line_rows(
     title: f32,
     widths: &[f32],
 ) -> Option<Vec<usize>> {
-    let all = widths.iter().sum::<f32>() + design::XS * widths.len().saturating_sub(1) as f32;
-    // The first target starts `S` before its icon, which sits `L` after the title.
-    if widths.is_empty() || title + design::L - design::S + all <= room {
-        return None;
+    // The one decision lives in the design system (`design::title_placement`); the reader's
+    // first action is quiet, so its icon sits `L` after the title.
+    match design::title_placement(title, design::title_lead_in(true), widths, room, line) {
+        design::TitlePlacement::OnTitle => None,
+        design::TitlePlacement::Under(rows) => Some(
+            rows.iter()
+                .enumerate()
+                .flat_map(|(row, range)| range.clone().map(move |_| row))
+                .collect(),
+        ),
     }
-    let mut rows = Vec::with_capacity(widths.len());
-    let mut row = 0;
-    let mut used: Option<f32> = None;
-    for width in widths {
-        // The first target of a row starts at the text edge: Lookup's reader clips at it.
-        let next = used.map_or(*width, |used| used + design::XS + width);
-        if used.is_some() && next > line {
-            row += 1;
-            used = Some(*width);
-        } else {
-            used = Some(next);
-        }
-        rows.push(row);
-    }
-    Some(rows)
 }
 
 /// Draw a reader's title-line actions by `title_line_rows`, just after `cell`, which holds the
@@ -2299,6 +2291,10 @@ pub(crate) fn with_lines(mut lines: Vec<FooterLine>, more: Vec<FooterLine>) -> V
 /// what is left of `ui`, in the footer's order: results with a live Undo, then reasons, then
 /// notices. `id` is the pane instance's own. Returns the action pressed and the y where the body
 /// drawn next ends.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 pub(crate) fn draw_footer(
     ui: &mut egui::Ui,
     id: impl std::hash::Hash,
@@ -2319,7 +2315,7 @@ pub(crate) fn draw_footer(
             FooterRank::Notice => footer.notice(line.words.as_str(), draw),
         };
     }
-    let bottom = footer.show(ui);
+    let bottom = footer.show_by_hand(ui);
     (pressed.get(), bottom)
 }
 
@@ -3042,6 +3038,10 @@ impl Reader {
         go
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn make_entry_control(
         &mut self,
         ui: &mut egui::Ui,
@@ -3983,6 +3983,10 @@ impl Reader {
     }
 
     /// A kept result was made now: it goes first among the results with a live Undo.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     pub(super) fn stamp(&mut self, act: FooterAct) {
         self.orders.insert(act, design::ResultOrder::issue());
     }
@@ -4219,6 +4223,10 @@ impl Reader {
     }
 
     /// The open picker. Returns the value the DM chose, or `Value::Null` to clear it.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn pick(
         &mut self,
         ui: &mut egui::Ui,
@@ -4336,6 +4344,10 @@ impl Reader {
         chosen
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
+    )]
     fn entry_controls(
         &mut self,
         ui: &mut egui::Ui,
@@ -4589,6 +4601,10 @@ impl Reader {
 }
 
 /// Choose the stat block, side and initiative. Returns how the form ended, if it did.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn add_form(
     ui: &mut egui::Ui,
     item: &Item,

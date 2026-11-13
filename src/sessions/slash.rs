@@ -1,5 +1,6 @@
 //! `/` in a session note opens a short menu of commands. Each command ends with a link
 //! where the `/` was typed, so the DM keeps writing and never leaves the note.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use crate::{
     design::{self, Density, Tone, Type, colors, icons},
     lookup::{self, ContentIndex},
@@ -483,6 +484,10 @@ fn set_caret(ctx: &egui::Context, editor: egui::Id, at: usize) {
 }
 
 /// Under the `/`, or above it when the note has no room below.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn popup_at(ui: &egui::Ui, id: egui::Id, anchor: egui::Rect, shown: bool) -> egui::Popup<'static> {
     egui::Popup::new(id, ui.ctx().clone(), anchor, ui.layer_id())
         .open_memory((!shown).then_some(egui::SetOpenCommand::Bool(true)))
@@ -707,6 +712,10 @@ mod tests {
         _dir: tempfile::TempDir,
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn note(body: &str) -> Harness<'static, Note> {
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(dir.path().join("Powers")).unwrap();

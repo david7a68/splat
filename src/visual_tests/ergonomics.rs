@@ -1370,6 +1370,10 @@ mod tests {
 
     /// A real control can never count as egui chrome, however small it is.
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+    )]
     fn a_small_control_without_a_name_is_not_chrome() {
         let app = crate::Splat {
             campaigns: crate::campaigns::Campaigns::default(),
@@ -1403,6 +1407,10 @@ mod tests {
     /// Even with no role and no name, a thin control in scroll content is not a scroll
     /// bar, wherever it lies. The real bar beside it still is.
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+    )]
     fn only_the_real_scroll_bar_is_chrome() {
         let harness = Harness::builder().build_state(
             |ctx, _: &mut crate::Splat| {
@@ -1449,6 +1457,10 @@ mod tests {
 
     /// An unnamed control in a popup is a control, not the popup's background.
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+    )]
     fn a_control_in_a_popup_is_not_its_background() {
         let mut harness = Harness::builder().build_state(
             |ctx, _: &mut crate::Splat| {
@@ -1792,6 +1804,10 @@ mod tests {
     /// The same menu in a modal dialog over the column is clear too: the dialog blocks
     /// the splitter.
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+    )]
     fn a_menu_over_a_column_splitter_is_an_app_fault() {
         // In a modal dialog over the column, the menu crosses a splitter the dialog blocks.
         let checks = |choice: &'static str, note: &'static str, modal: bool| {
@@ -1957,6 +1973,10 @@ mod tests {
     /// Egui's own hit test: a press anywhere on a menu item reaches the item, not the
     /// popup's background behind it, so the pair stays egui's count.
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+    )]
     fn a_press_on_a_menu_item_reaches_the_item_and_the_pair_stays_chrome() {
         let clicks = std::rc::Rc::new(std::cell::Cell::new(0));
         let counted = clicks.clone();
@@ -2023,6 +2043,10 @@ mod tests {
     /// Egui's own hit test: a nested horizontal bar that floats over a row takes the press
     /// there, so the row's overlap with it is an app fault. Away from the bar the row works.
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+    )]
     fn a_press_where_a_scroll_bar_lies_on_a_row_reaches_the_bar_and_is_an_app_fault() {
         let clicks = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
         let counted = clicks.clone();
@@ -2342,6 +2366,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+    )]
     fn horizontal_clipping_is_allowed_only_where_a_real_scroll_bar_can_reveal_it() {
         let mut harness = Harness::builder()
             .with_size(egui::vec2(300.0, 240.0))
@@ -2414,6 +2442,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+    )]
     fn a_thin_unnamed_control_inside_horizontal_content_is_not_chrome() {
         let mut harness = Harness::builder()
             .with_size(egui::vec2(300.0, 240.0))
@@ -2443,6 +2475,10 @@ mod tests {
     /// A long scrolled note passes behind a smaller scroll area above it. Its own area clips
     /// it, so what shows of it does not touch the other area's content.
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+    )]
     fn scrolled_content_is_clipped_by_its_own_area_and_not_one_it_passes_behind() {
         let mut harness = Harness::builder()
             .with_size(egui::vec2(400.0, 400.0))

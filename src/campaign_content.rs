@@ -1,5 +1,6 @@
 //! What a campaign uses: package selections, and the repair of invalid notes. This is
 //! a rare setup task, so it stays calm, with one scrolling list at 2,000+ rows.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use crate::{
     campaigns::Campaigns,
     content_workspace::{
@@ -158,6 +159,10 @@ macro_rules! new_result {
             .retain(|(kind, _): &(PageResult, design::ResultOrder)| {
                 *kind != $kind && kind.has_undo()
             });
+        #[allow(
+            clippy::disallowed_methods,
+            reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+        )]
         $page
             .result_order
             .insert(0, ($kind, design::ResultOrder::issue()));
@@ -750,6 +755,10 @@ impl CampaignContent {
         self.message = None;
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     pub fn show(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns) {
         let scope = (self.module, self.dependencies);
         if self.notice_scope.is_some_and(|previous| previous != scope) {
@@ -946,6 +955,10 @@ impl CampaignContent {
     /// or refusal, then the page's errors), then the plain results and the package warnings.
     /// Each message keeps its owner and end event: a repair's messages name its file and end with
     /// that repair's state, as before.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn page_footer(
         &mut self,
         ui: &mut egui::Ui,
@@ -1037,7 +1050,7 @@ impl CampaignContent {
                         .package_warnings(ui, campaigns, active, warnings.unavailable);
                 });
             }
-            footer.show(ui)
+            footer.show_by_hand(ui)
         };
         let this = me.into_inner();
         this.press_result(press.take());
@@ -1361,6 +1374,10 @@ impl CampaignContent {
     }
 
     /// Each change waits for the DM. A blocked one says what they must decide first.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn reconcile_section(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
         let reconcile = &mut self.reconcile;
         if reconcile.applying {
@@ -1454,6 +1471,10 @@ impl CampaignContent {
         });
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn repair_section_content(
         &mut self,
         ui: &mut egui::Ui,
@@ -1676,6 +1697,10 @@ impl CampaignContent {
         });
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn selection_bar_content(
         &mut self,
         ui: &mut egui::Ui,
@@ -2121,6 +2146,10 @@ impl CampaignContent {
         });
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn packages_content(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
         // Review round 26: egui panels set their own clip to the panel's rect, so their rows would
         // paint and take clicks below the page's viewport, under the footer. Each column clips

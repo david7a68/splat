@@ -1,6 +1,7 @@
 //! Carry-over (F5 of `docs/design/session-cycle.md`): what the last session left, added to this
 //! session's note in one act with its exact Undo; and an embed of a session note's heading,
 //! which Read draws by its target.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{Plan, Sessions, prose};
 use crate::{
     content_workspace::patch_fields,
@@ -504,6 +505,10 @@ type PreparingKey = (Uuid, Option<Uuid>, Option<Uuid>, Option<Uuid>, usize);
 impl Carries {
     /// The act on `session` made `outcome`: it replaces that session's earlier result, with a new
     /// order of its own. Other sessions' results keep theirs.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn record(&mut self, session: Uuid, outcome: Outcome) {
         self.results.insert(session, outcome);
         self.orders.insert(session, design::ResultOrder::issue());
@@ -781,6 +786,10 @@ impl Sessions {
     /// Last time line, the tabs and the plan never move when it comes or goes: its words and
     /// `Undo carry over`, or why it wrote nothing. It is that note's, so it shows also when the
     /// last session can no longer be found. A save that failed says so, and the Undo still works.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     pub(super) fn carry_in_footer<'a>(
         &'a self,
         undos: &mut crate::timeline::page::LiveUndos<'a>,
@@ -1408,6 +1417,7 @@ mod tests {
         assert_eq!(fs::read_to_string(&tonight.path).unwrap(), drafted);
     }
 
+    #[allow(clippy::disallowed_methods)]
     fn harness(
         dir: &Path,
         selected: Uuid,
@@ -1442,7 +1452,7 @@ mod tests {
                             let mut undos = crate::timeline::page::LiveUndos::new();
                             page.carry_in_footer(&mut undos, &mut footer, &act);
                             undos.into_footer(&mut footer);
-                            let _bottom = footer.show(ui);
+                            let _bottom = footer.show_by_hand(ui);
                             if let Some(super::super::SessionAct::UndoCarry(session)) = act.take() {
                                 page.undo_carry(session);
                             }

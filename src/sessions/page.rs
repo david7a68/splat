@@ -1,5 +1,6 @@
 //! The Sessions page: notes, templates and recordings, one campaign at a time. The
 //! recorder and the processing job live here, and keep going while the DM uses other pages.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{
     Apply, DEFAULT_FOLDER, Draft, DraftState, Dropped, NewNote, Note, NoteUndo, Recording,
     Template, body_of, create_note, create_template, delete_recording, folder_setting,
@@ -284,6 +285,10 @@ struct LinkUndoState {
 
 /// A notice the page just made: it takes a new footer order in `order`, so it lists as the
 /// newest result.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+)]
 fn new_notice(
     order: &mut Option<design::ResultOrder>,
     notice: (Tone, String),
@@ -1401,6 +1406,10 @@ impl Sessions {
     /// a file changed, moved or copied elsewhere, a save that failed) sits in the bottom banner,
     /// so it never moves the tabs or the note the DM types in. The result of the DM's own
     /// action keeps its place above the tabs. Each one wraps at `LIST_MEASURE`.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn banner_notices(&mut self, ui: &mut egui::Ui) {
         let notes = self.on_page && self.view == View::Notes && self.form.is_none();
         let width = ui.available_width().min(design::LIST_MEASURE);
@@ -1486,6 +1495,10 @@ impl Sessions {
     /// What cannot wait, on every page. It sits at the bottom, so that it never moves `Next
     /// turn` under a pointer parked on it. A silence takes no banner: it is often only a quiet
     /// table, and it shows in the rail and on the run's own line.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     pub fn banner(
         &mut self,
         ctx: &egui::Context,
@@ -2290,6 +2303,10 @@ impl Sessions {
     }
 
     /// The DM took the link offer: write the notes, and keep what Undo needs.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     pub fn accept_event_link_offer(&mut self, offer: LinkOffer, book: &Book) {
         self.update_event_link_notes(offer.changes);
         self.link_order = Some(design::ResultOrder::issue());
@@ -3171,6 +3188,10 @@ impl Sessions {
     /// The message footer of a pane whose body is one draft's editor: the draft's own result
     /// with its Undo, and for a template, the template action's error. Returns where the body
     /// ends.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `Footer::show_by_hand` (design::results::STAGED_ALLOWS)"
+    )]
     fn draft_footer(&mut self, ui: &mut egui::Ui, id: &str, template: bool) -> f32 {
         let undo = std::cell::Cell::new(false);
         let undo_delete = std::cell::Cell::new(false);
@@ -3193,7 +3214,7 @@ impl Sessions {
                 design::message(ui, Tone::Error, &error);
             });
         }
-        let bottom = footer.show(ui);
+        let bottom = footer.show_by_hand(ui);
         if undo_delete.get() {
             self.undo_delete_template();
         }
@@ -3329,6 +3350,10 @@ impl Sessions {
         });
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn show_form(&mut self, ui: &mut egui::Ui) {
         let Some(mut form) = self.form.take() else {
             return;
@@ -3454,6 +3479,10 @@ impl Sessions {
         self.move_run_here = self.notice.as_ref().map(|(_, words)| (new, words.clone()));
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn move_run_to_session(&mut self, book: &mut Book, run: Uuid, session: Uuid) {
         let Some(event) = book.events.iter_mut().find(|event| event.run == Some(run)) else {
             return;
@@ -3582,6 +3611,10 @@ impl Sessions {
         Ok(note.id)
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn list_pane(&mut self, ui: &mut egui::Ui) {
         let locked = self.draft.as_ref().is_some_and(Draft::needs_attention);
         let mut choose = None;
@@ -3711,6 +3744,10 @@ impl Sessions {
     }
 
     /// The one editor of a session's note, on the page and in the panel beside any page.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn note_editor(&mut self, ui: &mut egui::Ui, in_panel: bool) {
         let Some(draft) = &mut self.draft else {
             design::message(ui, Tone::Error, "This note could not be opened.");
@@ -4057,6 +4094,10 @@ impl Sessions {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `Footer::show_by_hand` (design::results::STAGED_ALLOWS)"
+    )]
     pub fn notes_panel(&mut self, ctx: &egui::Context) {
         let width = design::side_panel_width(ctx.content_rect().width());
         design::Column::panel("session_notes", width)
@@ -4136,7 +4177,7 @@ impl Sessions {
                         });
                     });
                 }
-                let bottom = footer.show(ui);
+                let bottom = footer.show_by_hand(ui);
                 let (play, start) = choice.get();
                 if undo.get()
                     && let Some(draft) = &mut self.draft
@@ -4166,6 +4207,10 @@ impl Sessions {
         )
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn read_tab(&mut self, ui: &mut egui::Ui, book: &Book, plan: &Plan<'_>, beside: bool) {
         if self.draft.is_none() {
             return;
@@ -4998,6 +5043,10 @@ impl Sessions {
         });
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn markers(&mut self, ui: &mut egui::Ui, recording: &Recording, book: &mut Book) {
         if recording.markers.is_empty() {
             return;
@@ -5184,6 +5233,10 @@ impl Sessions {
 
     /// One text from a recording, in the whole pane, one part at a time. A 5-hour transcript
     /// is about 30 parts of a size the Reader handles.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
+    )]
     fn reading_view(&mut self, ui: &mut egui::Ui, book: &mut Book) {
         let c = colors();
         let session = self.selected;
@@ -5458,6 +5511,10 @@ impl Sessions {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn recordings_tab(
         &mut self,
         ui: &mut egui::Ui,
@@ -5627,6 +5684,10 @@ impl Sessions {
     /// Round 26 FM4, FD3: the session page's results and notices that come and go sit in its
     /// message footer, pinned at the pane's bottom, so the title's line, Last time, the tabs and
     /// the recordings never move when one comes. Returns where the body ends.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn session_footer(
         &mut self,
         ui: &mut egui::Ui,
@@ -5829,7 +5890,7 @@ impl Sessions {
         }
         self.carry_in_footer(&mut undos, &mut footer, &act);
         undos.into_footer(&mut footer);
-        let bottom = footer.show(ui);
+        let bottom = footer.show_by_hand(ui);
         if undo_dropped.get()
             && let Some(draft) = &mut self.draft
         {
@@ -6088,6 +6149,10 @@ impl Sessions {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn notes_view(
         &mut self,
         ui: &mut egui::Ui,
@@ -6194,6 +6259,10 @@ impl Sessions {
             .and_then(|path| Draft::open(path).ok());
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `Footer::show_by_hand` (design::results::STAGED_ALLOWS)"
+    )]
     fn templates_view(&mut self, ui: &mut egui::Ui) {
         if self.template.is_none()
             && let Some(first) = self.templates.first().map(|t| t.name.clone())
@@ -6210,7 +6279,7 @@ impl Sessions {
             let mut undos = LiveUndos::new();
             self.deleted_template_in(&mut undos, &undo_delete);
             undos.into_footer(&mut footer);
-            let bottom = footer.show(ui);
+            let bottom = footer.show_by_hand(ui);
             if undo_delete.get() {
                 self.undo_delete_template();
             }
@@ -6273,6 +6342,10 @@ impl Sessions {
             });
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn template_list(&mut self, ui: &mut egui::Ui, choose: &mut Option<String>) {
         if Action::quiet("Sessions")
             .icon(icons::BACK)
@@ -6340,6 +6413,10 @@ impl Sessions {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn new_template_form(&mut self, ui: &mut egui::Ui) {
         let Some(mut name) = self.new_template.take() else {
             return;
@@ -6413,6 +6490,10 @@ impl Sessions {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
+    )]
     fn template_editor(&mut self, ui: &mut egui::Ui) {
         let c = colors();
         let Some(template) = self
@@ -6569,6 +6650,10 @@ impl Sessions {
         });
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
+    )]
     fn folder_form(
         &mut self,
         ui: &mut egui::Ui,
@@ -6782,6 +6867,10 @@ impl Sessions {
 
     /// Round 26 FN2, FN5: the Session folder form's messages, in the message footer of the pane
     /// that holds the form, so a typed letter, a refusal or a result never moves its save row.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     pub fn folder_messages<'a>(&mut self, footer: &mut design::Footer<'a>, book: &Book) {
         let files = self.scan_folder_files();
         let counts = self.folder_move_counts(book, &files);

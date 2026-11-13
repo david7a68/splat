@@ -1,4 +1,8 @@
 //! Desktop application and shared content APIs.
+/// Typed messages (`design::outcome`). Public so that `sentence!` works and its compile-fail
+/// proofs can name the types; screens use them through `design`.
+#[doc(hidden)]
+pub use design::outcome;
 pub use splat_core::{character, content, execution, memo};
 extern crate self as splat;
 
@@ -19,6 +23,24 @@ mod copy_dialog;
 mod creature_filter;
 mod credentials;
 mod design;
+// The layout parts are public only so that their `compile_fail` doc tests can name them.
+#[doc(hidden)]
+pub use design::layout;
+// The pane is public only so that its `compile_fail` doc tests can name it.
+#[doc(hidden)]
+pub use design::pane;
+/// The ownership and cost parts of `design` (kept results, the save row, per-change caches),
+/// public only so that their compile-fail doc tests can name them. The app uses them through
+/// `design`.
+#[doc(hidden)]
+pub mod ownership {
+    pub use crate::design::components::{Footer, ResultOrder};
+    pub use crate::design::memo::{Changed, Key, Memo, Revised, Revision};
+    pub use crate::design::results::{
+        DiskChanged, Ends, FooterResult, Kept, Owner, OwnerChanged, Press, Results, Shown,
+    };
+    pub use crate::design::save_row::{DraftState, Primary, SaveWeight, SaveWord};
+}
 mod difficulty;
 mod dndbeyond;
 mod encounter_run;
@@ -1811,6 +1833,11 @@ impl Splat {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
+    #[allow(deprecated)] // Old message functions; Wave 2 moves this page to `design::outcome`.
     fn page(&mut self, ui: &mut egui::Ui) {
         let active = self.campaigns.active_campaign();
         let (_, session) = self.settings.campaign_session();
@@ -1863,7 +1890,7 @@ impl Splat {
                             let mut footer =
                                 design::Footer::new("recording_settings_footer", width);
                             self.processing.footer_messages(&mut footer);
-                            footer.show(ui)
+                            footer.show_by_hand(ui)
                         };
                         egui::ScrollArea::vertical()
                             .id_salt("recording_settings")
@@ -1901,7 +1928,7 @@ impl Splat {
                         );
                         self.settings.footer_messages(&mut footer);
                         self.dndbeyond.footer_messages(&mut footer, false);
-                        footer.show(ui)
+                        footer.show_by_hand(ui)
                     };
                     let page = egui::ScrollArea::vertical()
                         .id_salt("settings_page")
@@ -2185,7 +2212,7 @@ impl Splat {
                                 // move result share this one footer; its scan is shared with
                                 // the form below.
                                 self.sessions.folder_messages(&mut footer, &self.timeline);
-                                footer.show(ui)
+                                footer.show_by_hand(ui)
                             };
                             egui::ScrollArea::vertical()
                                 .id_salt("campaign_link")

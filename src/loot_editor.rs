@@ -2,6 +2,7 @@
 //! The add field takes the typed words with Enter, and offers the campaign's roll tables and
 //! Library items while the DM types. A roll names its table from a list, so a key that no
 //! table has shows on its row before play.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use crate::design::{self, Density, Status, Tone, Type, colors, icons};
 use crate::roll_table::{Table, TableRoll};
 use eframe::egui;
@@ -254,6 +255,10 @@ pub fn show(
 }
 
 /// One line. Returns its place when the DM removes it.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn line_row(
     ui: &mut egui::Ui,
     name: &str,
@@ -400,6 +405,10 @@ fn line_row(
 }
 
 /// The quiet menu of the campaign's tables, with the caret after the word. Returns a choice.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn table_menu(
     ui: &mut egui::Ui,
     word: &str,

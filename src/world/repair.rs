@@ -1,4 +1,5 @@
 //! The same source editor for broken notes in Campaign and World.
+#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::file_fault::FileFault;
 use crate::{
     design::{self, colors},
@@ -15,6 +16,10 @@ pub(crate) fn editor_name(path: &str) -> String {
 
 /// The source editor, with its two events apart: the DM changed the text, and focus moved into
 /// it. A caller that keeps a result for one draft ends it on a change, not on focus.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(crate) fn editor_events(
     ui: &mut egui::Ui,
     path: &str,
@@ -273,6 +278,10 @@ impl Repair {
 
     /// The DM's choice after the file changed on disk under a changed draft. True when an
     /// Overwrite saved. `refused`: Save's own check refuses the draft.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn choose(
         &mut self,
         campaign: &Campaign,
@@ -303,6 +312,10 @@ impl Repair {
     /// or Undo reload), then Save's reason. It sits at the bottom of the pane, as tall as what it
     /// holds, so the editor never moves and both messages show whole. Returns whether Undo is
     /// pressed, and the y where the body ends.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn footer(&self, ui: &mut egui::Ui, problem: Option<&str>) -> (bool, f32) {
         let name = self.path.rsplit('/').next().unwrap_or(&self.path);
         let undo = if self.discarded.is_some() {
@@ -336,11 +349,15 @@ impl Repair {
                 design::message(ui, design::Tone::Error, reason);
             });
         }
-        let bottom = footer.show(ui);
+        let bottom = footer.show_by_hand(ui);
         (pressed.get(), bottom)
     }
 
     /// The editor and its save row.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn edit(
         &mut self,
         ui: &mut egui::Ui,

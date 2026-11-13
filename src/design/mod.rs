@@ -4,10 +4,18 @@ pub mod column;
 mod comparison;
 pub mod components;
 pub mod icons;
+pub mod layout;
+pub mod memo;
+pub mod outcome;
+pub mod pane;
 pub mod reader;
+pub mod results;
+pub mod save_row;
 pub mod theme;
 pub mod tokens;
 
+#[cfg(test)]
+pub(crate) mod attributes;
 #[cfg(test)]
 pub mod gallery;
 #[cfg(test)]
@@ -15,4 +23,17 @@ mod lint;
 
 pub use column::*;
 pub use components::*;
+// Wave 2 callers name the layout parts through `design`, as they name the components.
+#[allow(unused_imports)]
+pub use layout::{
+    ACTION_GAP, Create, CreateChoice, CreateField, CreateReasons, FieldId, InlineCreate, KeptLine,
+    MAX_WORD_CHARS, NARROWEST_PANE, NoReason, RowIndex, RowKey, ScrollColumn, Slot, SlotType,
+    TextKey, TitleAction, TitleLine, TitlePlacement, TitleType, Word, labelled_field, lane_width,
+    line_field, menu_popup, sideways_scroll, status_slot, title_lead_in, title_placement,
+};
+// Wave 2 callers name the pane's escape through `design`.
+#[allow(unused_imports)]
+pub use pane::{Body, Fills, FillsReason, Placement};
+pub use results::Results;
+pub use save_row::{DraftState, save_row};
 pub use tokens::*;

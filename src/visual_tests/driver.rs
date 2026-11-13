@@ -1097,6 +1097,37 @@ impl<'a> Driver<'a> {
             .collect()
     }
 
+    /// What each `Footer::pane` did in the last completed pass (package P's registry, in points):
+    /// its id, room, body kind, the scroll output of a `Content` body (viewport, content height,
+    /// offset), its footer's rect and its placement.
+    pub fn pane_records(&self) -> Vec<crate::design::pane::PaneRecord> {
+        crate::design::pane::pane_records(&self.harness.ctx)
+    }
+
+    /// G6, "a footer below a short body", from this driver's own accessibility rects: for each
+    /// pane that is not `Body::Fills` and whose scroll output says its content fits, a gap of
+    /// more than `2 × L` from the last body widget to its footer is a finding.
+    pub fn short_body_gaps(&self) -> Vec<String> {
+        let scale = self.harness.ctx.pixels_per_point();
+        let nodes = self.nodes();
+        self.pane_records()
+            .iter()
+            .filter_map(|record| {
+                let focus = accesskit::NodeId(record.id().with("focus").value());
+                let footer = nodes.iter().find(|node| node.id == focus)?.rect;
+                let body = nodes
+                    .iter()
+                    .filter(|node| node.id != focus)
+                    .map(|node| node.rect);
+                let gap = crate::design::pane::short_body_gap(record, scale, footer, body)?;
+                Some(format!(
+                    "{:?}: footer {footer:?}, {gap} px below the body",
+                    record.id()
+                ))
+            })
+            .collect()
+    }
+
     /// Can a person see this text or control right now?
     pub fn in_view(&self, name: &str) -> bool {
         self.nodes()
@@ -2899,6 +2930,22 @@ impl<'a> Driver<'a> {
             self.stillness.time += started.elapsed();
         }
         self.check_footer_room(state);
+        // Two live widgets with one id, two text fields with one `FieldId` and key among them:
+        // egui's clash warnings from every painted shape, and the design's record of the text
+        // fields drawn (package K, rung 4 for `FieldId`). Every state of every scenario.
+        let shapes = &self.harness.output().shapes;
+        for words in crate::design::layout::widget_id_clashes(&self.harness.ctx, shapes) {
+            self.outcome.violations.push(ergonomics::Violation {
+                check: "widget-id-clash".into(),
+                scenario: self.scenario.into(),
+                state: state.into(),
+                window: format!("{}x{}", size.0, size.1),
+                node: words,
+                role: String::new(),
+                rect: [0.0; 4],
+                detail: "Two live widgets share one id: give each its own FieldId key".into(),
+            });
+        }
     }
 
     /// G1a, G1c, G3 and G4 at one size, and what G2 needs from it.

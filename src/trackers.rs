@@ -8,6 +8,7 @@ pub mod history;
 pub mod ledger;
 pub mod view;
 
+use crate::design::outcome::Sentence;
 use crate::{
     content_workspace::CampaignDocument, lookup::ContentIndex, loot_editor::Sources,
     persistence::Campaign,
@@ -1148,7 +1149,7 @@ fn rolled(text: &str) -> String {
 
 /// The result line's words for one act, from the entries alone, so they read the same after a
 /// restart.
-pub fn result_words(rules: &Rules, ledger: &Ledger, state: &State, entries: &[Entry]) -> String {
+pub fn result_words(rules: &Rules, ledger: &Ledger, state: &State, entries: &[Entry]) -> Sentence {
     let mut words = act_words(rules, ledger, state, entries);
     // Every way a notice leaves the Due list by a fall says so once: a press, a linked change,
     // or a ticked change of `Done`.
@@ -1160,14 +1161,18 @@ pub fn result_words(rules: &Rules, ledger: &Ledger, state: &State, entries: &[En
                 entry.instance.as_deref(),
                 *at,
             );
-            words.push_str(&format!(" {name} is no longer due."));
+            words = words.then(crate::sentence!("{} is no longer due.", name));
         }
     }
     words
 }
 
 /// The act's own words: the notice it ended or rolled on, or the values it left.
-fn act_words(rules: &Rules, ledger: &Ledger, state: &State, entries: &[Entry]) -> String {
+#[allow(
+    clippy::disallowed_methods,
+    reason = "a roll table’s row is the DM’s own words"
+)]
+fn act_words(rules: &Rules, ledger: &Ledger, state: &State, entries: &[Entry]) -> Sentence {
     let label = label(rules, ledger, entries);
     // An act on a notice says what happened in a sentence; `Undo: <label>` keeps the label.
     if let Some(entry) = head(entries).filter(|e| e.notice.is_some())
@@ -1176,54 +1181,50 @@ fn act_words(rules: &Rules, ledger: &Ledger, state: &State, entries: &[Entry]) -
         let short = notice_name(rules, ledger, notice);
         let ends = entries.iter().filter(|e| e.dismissed).count();
         if let (NoticeRef::Day { mark, .. }, true) = (notice, entry.dismissed && ends > 1) {
-            return format!("{} is dismissed for {ends} days.", rules.day_title(mark));
+            return crate::sentence!("{} is dismissed for {ends} days.", rules.day_title(mark));
         }
         if entry.done {
-            return format!("{short} is done.");
+            return crate::sentence!("{} is done.", short);
         }
         if entry.dismissed {
-            return format!("{short} is dismissed.");
+            return crate::sentence!("{} is dismissed.", short);
         }
         if let Some(Roll::Table(roll)) = &entry.roll {
             let name = roll
                 .name
                 .as_ref()
                 .map_or(String::new(), |n| format!(" for {n}"));
-            let mut words = format!(
-                "Rolled {} on {}{name}: {}",
+            // The row's words are the DM's own table text.
+            let table = rules.table_name(&roll.table);
+            return Sentence::outside(format!(
+                "Rolled {} on {table}{name}: {}",
                 roll.value,
-                rules.table_name(&roll.table),
                 roll.row.trim()
-            );
-            if !words.ends_with(['.', '!', '?']) {
-                words.push('.');
-            }
-            return words;
+            ))
+            .unwrap_or_else(|| crate::sentence!("Rolled {} on {table}{name}.", roll.value));
         }
     }
     // Each value it left is a sentence of its own; `Undo: <label>` below names the act.
-    let values: Vec<String> = entries
+    let values = entries
         .iter()
         .filter(|entry| entry.notice.is_none())
         .filter_map(|entry| {
             let after = state.after.get(&entry.id)?;
-            Some(format!(
+            Some(crate::sentence!(
                 "{} changed to {after}.",
                 line_name(rules, entry.tracker.as_deref()?, entry.instance.as_deref())
             ))
         })
-        .collect();
-    let mut words = if values.is_empty() {
-        format!("{label}.")
-    } else {
-        values.join(" ")
-    };
+        .reduce(Sentence::then);
+    let mut words = values.unwrap_or_else(|| crate::sentence!("{}.", label));
     for entry in entries {
         if let Some(Roll::Dice(text)) = &entry.roll {
-            match &entry.row {
-                Some(row) => words.push_str(&format!(" {}: {row}", rolled(text))),
-                None => words.push_str(&format!(" {}.", rolled(text))),
-            }
+            words = words.then(match &entry.row {
+                // The row's words are the DM's own table text.
+                Some(row) => Sentence::outside(format!("{}: {row}", rolled(text)))
+                    .unwrap_or_else(|| crate::sentence!("{}.", rolled(text))),
+                None => crate::sentence!("{}.", rolled(text)),
+            });
         }
     }
     let raised: Vec<(String, i64)> = entries
@@ -1253,9 +1254,9 @@ fn act_words(rules: &Rules, ledger: &Ledger, state: &State, entries: &[Entry]) -
         .collect();
     match due.as_slice() {
         [] => {}
-        [one] => words.push_str(&format!(" {one} is due.")),
+        [one] => words = words.then(crate::sentence!("{} is due.", one)),
         [many @ .., last] => {
-            words.push_str(&format!(" {} and {last} are due.", many.join(", ")));
+            words = words.then(crate::sentence!("{} and {last} are due.", many.join(", ")));
         }
     }
     words
@@ -1434,6 +1435,115 @@ fn press_op(
     Ok(stamp(entries, session))
 }
 
+/// The campaign and the session being played, which own the newest act's result. A campaign
+/// switch hides the result; switching back shows it again.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Played {
+    root: PathBuf,
+    session: Option<Uuid>,
+}
+
+impl crate::design::results::Owner for Played {
+    type Scope = std::path::Path;
+    fn scope(&self) -> &std::path::Path {
+        &self.root
+    }
+}
+
+/// The newest act of the played session, kept for its footer order: its owner, and the ids of
+/// its entries, which tell one act from another. Its words are worked out with the ledger
+/// (`Trackers::result`).
+pub(crate) struct NewestAct(Played, Vec<String>);
+
+impl crate::design::results::Kept for NewestAct {
+    type Owner = Played;
+    const ENDS: crate::design::results::Ends = crate::design::results::Ends {
+        // No newest act left (all undone): it ends.
+        owner_changed: crate::design::results::OwnerChanged::Ends,
+        // A read of the ledger works the newest act out again (`settle_result`).
+        disk_changed: crate::design::results::DiskChanged::Stays,
+        // Undo takes the act out of the ledger; the next act, if any, is recorded then.
+        press: crate::design::results::Press::Undo,
+    };
+    fn owner(&self) -> Played {
+        self.0.clone()
+    }
+}
+
+/// A fault of the trackers' files or of a write, by kind. The kind decides its severity in one
+/// `match` (`Fault::severity`), and its words in one place, so every view that draws it (the
+/// Trackers view, a house rule note's reader, the footer) gives it one tone and one wording.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum TrackerFault {
+    /// `Trackers.md` cannot be read: the system's words.
+    LedgerUnreadable(String),
+    /// `Campaign.md` or a house rule note in play cannot be read: the reader's words.
+    NotesUnreadable(String),
+    /// The day count is not known: the Timeline's words.
+    ClockNotRead(String),
+    /// A write of `Trackers.md` failed: the system's words.
+    NotSaved(String),
+    /// The Timeline did not save the event that `Add to Timeline` made: its words.
+    TimelineNotSaved(String),
+    /// A problem of the problems list: a member or a note the DM must fix before it counts.
+    Problem(String),
+}
+
+impl crate::design::outcome::Fault for TrackerFault {
+    fn severity(&self) -> crate::design::outcome::Severity {
+        use crate::design::outcome::Severity;
+        match self {
+            Self::LedgerUnreadable(_) | Self::NotesUnreadable(_) | Self::ClockNotRead(_) => {
+                Severity::CannotRead
+            }
+            Self::NotSaved(_) | Self::TimelineNotSaved(_) => Severity::NotSaved,
+            Self::Problem(_) => Severity::NeedsFixing,
+        }
+    }
+
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the faults carry the system’s and the Timeline’s words"
+    )]
+    fn cause(&self) -> Sentence {
+        use crate::sentence;
+        // Each kind's words come from outside the app; blank words fall back to the app's own.
+        let outside = |words: String, blank: Sentence| Sentence::outside(words).unwrap_or(blank);
+        match self {
+            Self::LedgerUnreadable(error) => outside(
+                format!("{} cannot be read: {error}", ledger::FILE),
+                sentence!("{} cannot be read.", ledger::FILE),
+            )
+            .then(sentence!(
+                "The history in the file is safe. Splat writes nothing to it until it can be read."
+            )),
+            Self::NotesUnreadable(error) => outside(
+                error.clone(),
+                sentence!("A house rule note cannot be read."),
+            )
+            .then(sentence!(
+                "Splat shows no tracker and records nothing until it can be read. It reads the notes again when its window gets focus."
+            )),
+            Self::ClockNotRead(why) => outside(
+                why.clone(),
+                sentence!("The Timeline cannot be read."),
+            )
+            .then(view::DAY_MARKS_WAIT),
+            Self::NotSaved(error) => outside(
+                format!("{} was not saved: {}", ledger::FILE, error.trim_end_matches('.')),
+                sentence!("{} was not saved.", ledger::FILE),
+            )
+            .then(sentence!("Nothing was recorded.")),
+            Self::TimelineNotSaved(words) => {
+                outside(words.clone(), sentence!("The timeline was not saved."))
+            }
+            Self::Problem(problem) => {
+                outside(problem.clone(), sentence!("A tracker cannot be used."))
+            }
+        }
+    }
+}
+
 /// Why the last act wrote nothing. It shows on the result line, at the bottom edge of the view,
 /// until the next act or until the ledger is read again: never beside a row that can go away.
 #[derive(Clone, Debug, PartialEq)]
@@ -1473,7 +1583,10 @@ pub struct Trackers {
     /// The entries that `Undo` takes back now: worked out when the ledger or the session changes.
     newest: Vec<Entry>,
     /// The newest act's label and the result line's words, worked out with `newest`.
-    pub(crate) result: Option<(String, String)>,
+    pub(crate) result: Option<(String, Sentence)>,
+    /// The newest act as a kept result, for the footer's order: recorded when `newest` changes,
+    /// so the store issues its order then and never at a draw.
+    pub(crate) results: crate::design::Results<Played, NewestAct>,
     last_check: Option<Instant>,
     /// Why the last act wrote nothing.
     pub reason: Option<Unrecorded>,
@@ -1525,6 +1638,9 @@ impl Trackers {
             *self = Self {
                 campaign: campaign.cloned(),
                 played,
+                // The kept acts are scoped by campaign: another campaign does not see them, and
+                // switching back finds each with its order.
+                results: std::mem::take(&mut self.results),
                 ..Self::default()
             };
         }
@@ -1657,6 +1773,33 @@ impl Trackers {
                 result_words(&self.rules, &self.ledger, &self.state, &self.newest),
             )
         });
+        let Some(owner) = self.played_owner() else {
+            return;
+        };
+        // Only a new act records, which issues its order. Selecting a session or a campaign again
+        // finds its act kept, with the order it had.
+        let act: Vec<String> = self.newest.iter().map(|entry| entry.id.clone()).collect();
+        if self.result.is_none() {
+            // Only a ledger as read can say the session has no act left; before the first read
+            // (a campaign switched back) the kept act stays.
+            if self.baseline.is_some() {
+                self.results.owner_changed(&owner);
+            }
+        } else if self
+            .results
+            .get(&owner)
+            .is_none_or(|shown| shown.value().1 != act)
+        {
+            self.results.record(NewestAct(owner, act));
+        }
+    }
+
+    /// The campaign and the session being played: the owner of the newest act's result.
+    pub(crate) fn played_owner(&self) -> Option<Played> {
+        self.campaign.as_ref().map(|campaign| Played {
+            root: campaign.path.clone(),
+            session: self.played,
+        })
     }
 
     /// An act built from the values and notices of the file on disk. Why it wrote nothing
@@ -2154,7 +2297,7 @@ mod tests {
         let t = &mut race.trackers;
         t.press("favor", None, "Crowd loves it", None);
         t.press("favor", None, "Throw a gift", None);
-        let words = result_words(&t.rules, &t.ledger, &t.state, t.newest());
+        let words = result_words(&t.rules, &t.ledger, &t.state, t.newest()).to_string();
         assert!(
             words.starts_with("Crowd Favor changed to 0. Rolled ")
                 && words.ends_with(": A healing potion."),
@@ -3051,13 +3194,51 @@ mod tests {
         let t = &mut race.trackers;
         t.press("favor", None, "Crowd loves it", None);
         let a = t.newest().to_vec();
+        // Each session's newest act keeps the order its act issued: switching sessions records
+        // nothing, and a second act gets a newer order.
+        let order = |t: &Trackers| {
+            let owner = t.played_owner().unwrap();
+            t.results.get(&owner).map(|shown| shown.order())
+        };
+        let a_order = order(t).expect("act A is kept");
         t.played = Some(Uuid::from_u128(2));
         t.press("souls", None, "Crowd loves it", None);
         assert!(t.reason.is_some(), "souls has no such action");
         t.press("race_clock", None, "Enter room", None);
+        let b_order = order(t).expect("act B is kept");
+        assert!(b_order > a_order, "a second act gets a newer order");
         t.played = Some(TONIGHT);
         t.settle();
         assert_eq!(t.newest(), a.as_slice());
+        assert_eq!(
+            order(t),
+            Some(a_order),
+            "back in A's session, A keeps its order"
+        );
+        t.played = Some(Uuid::from_u128(2));
+        t.settle();
+        assert_eq!(
+            order(t),
+            Some(b_order),
+            "back in B's session, B keeps its order"
+        );
+        t.played = Some(TONIGHT);
+        t.settle();
+        // A campaign switch hides the kept acts; switching back finds A with its order.
+        let index = Some(race.index.clone());
+        race.trackers
+            .poll(None, None, Some(TONIGHT), &race.timeline);
+        assert!(race.trackers.played_owner().is_none());
+        race.trackers
+            .poll(index, Some(&race.campaign), Some(TONIGHT), &race.timeline);
+        let t = &mut race.trackers;
+        t.read_disk();
+        assert_eq!(t.newest(), a.as_slice());
+        assert_eq!(
+            order(t),
+            Some(a_order),
+            "after a campaign switch, A keeps its order"
+        );
         t.undo(&a);
         assert_eq!(value(&race, "favor", None), 1);
         assert_eq!(value(&race, "race_clock", None), 10, "B’s change stays");
@@ -3176,7 +3357,7 @@ mod tests {
         let Some(Unrecorded::NotSaved(error)) = &t.reason else {
             panic!("the result line says the save failed: {:?}", t.reason);
         };
-        let words = view::not_saved(error);
+        let words = view::not_saved(error).to_string();
         assert!(
             words.starts_with("Trackers.md was not saved: ")
                 && words.ends_with(". Nothing was recorded."),
@@ -3184,6 +3365,24 @@ mod tests {
         );
         assert_eq!(t.result, shown);
         assert_eq!(value(&race, "favor", None), 1);
+        // A failed Undo keeps the act's entry and its order.
+        let t = &mut race.trackers;
+        let owner = t.played_owner().unwrap();
+        let kept = t
+            .results
+            .get(&owner)
+            .map(|shown| (shown.order(), shown.value().1.clone()));
+        assert!(kept.is_some(), "the newest act is kept");
+        let newest = t.newest().to_vec();
+        t.undo(&newest);
+        assert!(matches!(t.reason, Some(Unrecorded::NotSaved(_))));
+        assert_eq!(
+            t.results
+                .get(&owner)
+                .map(|shown| (shown.order(), shown.value().1.clone())),
+            kept,
+            "a failed Undo keeps the entry and its order"
+        );
         // A `Remove` whose save fails records nothing, and nothing waits.
         let t = &mut race.trackers;
         t.remove(note, &older);
@@ -3340,6 +3539,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn an_open_history_prepares_its_rows_once_and_draws_only_those_in_view() {
         use crate::test_support::{CachedWork, Counts};
         use egui_kittest::{Harness, kittest::Queryable};
