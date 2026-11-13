@@ -1110,8 +1110,8 @@ encounter checks roll the table; a word that Splat cannot read adds the warning 
 check (“per fortnight”). It rolls one check each day. Use day, watch or hours such as 4h.` under that table, which
 still rolls. Every warning under a table is a `Body` message, the interval warning and a fault in the rows alike.
 `Cannot roll` stays the words for a fault in the dice or the rows. Fixed headers cover passing rows with page fill
-and a hairline; a row whose text would start under the header shows no text until it clears the hairline, so no cut
-line of text shows below the header. Generator cards name their table
+and a hairline; a cell whose first lines pass under the header shows from its first whole line below the hairline,
+so no cut line of text shows there and a tall wrapped cell still reads to its end. Generator cards name their table
 sources below attributes. Every card's `Will save <path>` is the path Save NPC writes: the folder that holds most of
 the campaign's NPCs, or `NPCs/` when it has none. Without a names table, the World page's card says `Built-in names. To
 use your own, add a table of names to a note. Paste the marker on the line above the table.` with a quiet `Copy the

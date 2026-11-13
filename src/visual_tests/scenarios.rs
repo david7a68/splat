@@ -1037,23 +1037,29 @@ pub mod library_browse {
         );
 
         d.scroll_at(READER, 12);
-        // Round 27 FC3: the floating header covers its band. No row text is painted inside it,
-        // not even under the header's fill: a row whose text starts under the header shows none.
+        // Round 27 FC3: the floating header covers its band. No visible part of a row's text is
+        // inside it: a cell under the header shows from its first whole line below the hairline.
+        // Rows below the hairline still read, so an empty band alone is not the proof.
         let header = d.painted_word_rect("Class Features", egui::Rect::EVERYTHING);
         let table_left = d.painted_word_rect("Level", egui::Rect::EVERYTHING);
-        let mut in_band = Vec::new();
+        let (mut in_band, mut below) = (Vec::new(), Vec::new());
         if let (Some(header), Some(table_left)) = (header, table_left) {
             let band = header.top() - crate::design::XS..header.bottom() + crate::design::XS;
             d.each_painted_text(|text, clip| {
-                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
-                if clip.intersects(rect)
-                    && rect.left() >= table_left.left() - 1.0
-                    && rect.top() < band.end
-                    && rect.bottom() > band.start
-                    // The header's own cells start at its words' top.
-                    && (rect.top() - header.top()).abs() > 1.0
+                let shown = egui::Rect::from_min_size(text.pos, text.galley.size()).intersect(clip);
+                // The header's own cells start at its words' top.
+                if !shown.is_positive()
+                    || shown.left() < table_left.left() - 1.0
+                    || (text.pos.y - header.top()).abs() <= 1.0
                 {
+                    return;
+                }
+                if shown.top() < band.end - 0.5 && shown.bottom() > band.start {
                     in_band.push(text.galley.job.text.clone());
+                } else if shown.top() >= band.end - 0.5
+                    && shown.top() < band.end + crate::design::XXL * 2.0
+                {
+                    below.push(text.galley.job.text.clone());
                 }
             });
         }
@@ -1064,9 +1070,10 @@ pub mod library_browse {
                 .zip(d.place_of("Class Features"))
                 .is_some_and(|(header, natural)| natural.top() < header.top() - 1.0)
                 && table_left.is_some()
-                && in_band.is_empty(),
+                && in_band.is_empty()
+                && !below.is_empty(),
             format!(
-                "The scrolled class table's header floats, and no row text is painted in its band: header {header:?}, text in the band {in_band:?}"
+                "The scrolled class table's header floats, no row text shows in its band, and rows below it read: header {header:?}, text in the band {in_band:?}, text below {below:?}"
             ),
         );
         d.state("class-scrolled", Sizes::Default);

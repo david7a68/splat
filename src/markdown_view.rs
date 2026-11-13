@@ -1041,8 +1041,8 @@ fn table_part(
             painter.rect_filled(fill, egui::CornerRadius::ZERO, colors().selected);
         }
         let mut x = rect.left();
-        // `cover`: the floating header's bottom. A row whose text starts above it is under the
-        // header: no text of it is drawn, and its cells are not controls (row 0 is the header).
+        // `cover`: the floating header's bottom, while it floats. A row whose first line starts
+        // above it has lines under the header (row 0 is the header itself).
         let under_header = row > 0 && cover.is_some_and(|cover| rect.top() + design::XS < cover);
         // The rolled row's mark sits in the slot; every row's range starts after it.
         if let Some((slot, dice)) = mark {
@@ -1060,14 +1060,39 @@ fn table_part(
                 egui::pos2(x, rect.top() + design::XS),
                 cells[column].size(),
             );
-            if under_header {
-                // Under the header: nothing to draw.
-            } else if cut
-                .is_some_and(|(lane_top, bottom)| cell.bottom() > lane_top && cell.top() < bottom)
-            {
-                painter.galley(cell.min, cells[column].clone(), colors().text);
+            // Round 27 FC3: under the header, the cell shows from its first whole line below the
+            // header's bottom, so no cut line shows and the lines below it stay readable. A
+            // cell with no whole line below the header shows nothing.
+            let shown_from = if under_header {
+                let cover = cover.unwrap_or(f32::NEG_INFINITY);
+                cells[column]
+                    .rows
+                    .iter()
+                    .map(|line| cell.top() + line.rect().top())
+                    .find(|top| *top >= cover - 0.5)
             } else {
-                ui.place(cell, egui::Label::new(cells[column].clone()));
+                Some(f32::NEG_INFINITY)
+            };
+            if let Some(shown_from) = shown_from {
+                let below = egui::Rect::everything_below(shown_from);
+                if cut.is_some_and(|(lane_top, bottom)| {
+                    cell.bottom() > lane_top && cell.top() < bottom
+                }) {
+                    painter
+                        .with_clip_rect(painter.clip_rect().intersect(below))
+                        .galley(cell.min, cells[column].clone(), colors().text);
+                } else if under_header {
+                    // A child Ui keeps the cell a label, clipped above its first whole line.
+                    let mut shown = ui.new_child(
+                        egui::UiBuilder::new()
+                            .max_rect(cell)
+                            .layout(egui::Layout::top_down(egui::Align::Min)),
+                    );
+                    shown.set_clip_rect(shown.clip_rect().intersect(below));
+                    shown.add(egui::Label::new(cells[column].clone()));
+                } else {
+                    ui.place(cell, egui::Label::new(cells[column].clone()));
+                }
             }
             x += widths[column] + TABLE_GAP;
         }
@@ -2216,6 +2241,92 @@ mod tests {
                 "the last column must be readable after horizontal scrolling at {width}px: {last_column:?}"
             );
         }
+        // Round 27 FC3 (review repair): a cell that wraps taller than the reader, scrolled until
+        // its first line is under the floating header. The lines below the header still read
+        // to the cell's end, and no visible line runs through the header's band.
+        let tall = format!(
+            "| Level | Notes |\n| --- | --- |\n| 1 | {} Endmark |\n| 2 | Short |\n",
+            "The road climbs through ash and the watch fires burn low.".repeat(12)
+        );
+        let context = egui::Context::default();
+        design::theme::install(&context);
+        let mut output = None;
+        for frame in 0..30 {
+            let events = if frame == 2 {
+                vec![
+                    egui::Event::PointerMoved(egui::pos2(100.0, 200.0)),
+                    egui::Event::MouseWheel {
+                        unit: egui::MouseWheelUnit::Point,
+                        delta: egui::vec2(0.0, -150.0),
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ]
+            } else {
+                vec![]
+            };
+            output = Some(context.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(360.0, 300.0),
+                    )),
+                    time: Some(f64::from(frame) / 60.0),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        egui::ScrollArea::vertical().show(ui, |ui| show(ui, &tall));
+                    });
+                },
+            ));
+        }
+        let output = output.unwrap();
+        fn shown(
+            shape: &egui::epaint::ClippedShape,
+        ) -> Option<(&egui::epaint::TextShape, egui::Rect)> {
+            match &shape.shape {
+                egui::Shape::Text(text) => Some((
+                    text,
+                    egui::Rect::from_min_size(text.pos, text.galley.size())
+                        .intersect(shape.clip_rect),
+                )),
+                _ => None,
+            }
+        }
+        // The floating header: the `Notes` heading whose words are in view.
+        let header = output
+            .shapes
+            .iter()
+            .filter_map(shown)
+            .find(|(text, visible)| text.galley.job.text == "Notes" && visible.is_positive())
+            .map(|(text, _)| egui::Rect::from_min_size(text.pos, text.galley.size()))
+            .expect("the header is in view");
+        let band = header.top() - design::XS..header.bottom() + design::XS;
+        let cell = output
+            .shapes
+            .iter()
+            .filter_map(shown)
+            .find(|(text, _)| text.galley.job.text.ends_with("Endmark"));
+        let (text, visible) = cell.expect("the tall cell is painted");
+        let lines: Vec<_> = text
+            .galley
+            .rows
+            .iter()
+            .map(|line| line.rect().translate(text.pos.to_vec2()))
+            .collect();
+        let first_crossed = lines[0].top() < band.end;
+        let last_shown = lines
+            .last()
+            .is_some_and(|line| visible.contains_rect(*line) && line.top() >= band.end - 0.5);
+        let through_band = lines.iter().any(|line| {
+            let line = line.intersect(visible);
+            line.is_positive() && line.top() < band.end - 0.5 && line.bottom() > band.start
+        });
+        assert!(
+            first_crossed && last_shown && !through_band,
+            "tall cell under the header: first line crossed {first_crossed}, last line shown {last_shown}, a line through the header {through_band}; header {header:?}, visible {visible:?}"
+        );
     }
 
     #[test]
