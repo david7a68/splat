@@ -20,6 +20,7 @@ enum EffectFit {
 
 /// A roll's result has its place before there is one, so that nothing moves when it comes.
 const DICE_RESULT_WIDTH: f32 = 32.0;
+const DICE_FIELD: design::FieldId = crate::field_id!("dock_dice");
 
 impl Run {
     /// The entry controls have one fixed home, labelled with the row they act on, so
@@ -62,7 +63,14 @@ impl Run {
                     {
                         command = value.map(|n| self.amount_command(n, Command::Damage));
                     }
-                    ui.add_space(if narrow { design::XS } else { design::M });
+                    design::gap(
+                        ui,
+                        if narrow {
+                            design::Gap::XS
+                        } else {
+                            design::Gap::M
+                        },
+                    );
                     if Action::quiet("Heal")
                         .density(Density::Glance)
                         .hint("Heal (Shift+Enter)")
@@ -179,7 +187,7 @@ impl Run {
                     {
                         command = Some(Command::Concentration(index, !p.concentration));
                     }
-                    ui.add_space(design::S);
+                    design::gap(ui, design::Gap::S);
                     if toggle(
                         ui,
                         presence,
@@ -332,10 +340,6 @@ impl Run {
 
     /// Beside the amount, so the stat block that asks for the roll stays in view. Laid out
     /// right to left: the result, then the button, then the field.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn dice(&mut self, ui: &mut egui::Ui, narrow: bool) {
         ui.spacing_mut().item_spacing.x = design::XS;
         if !narrow {
@@ -358,7 +362,7 @@ impl Run {
             .show(ui)
             .clicked();
         let width = if narrow { 60.0 } else { 72.0 };
-        let field = design::text_input(ui, "Dice", &mut self.dice, "1d20", width);
+        let field = design::line_field(ui, DICE_FIELD, "Dice", &mut self.dice, "1d20", width);
         if field.gained_focus() {
             design::focus_and_select(ui, field.id, &self.dice);
         }

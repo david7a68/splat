@@ -394,6 +394,7 @@ fn line_row(
             });
         });
     });
+    design::register_row(ui, row.response.rect);
     // Below the row, under the key it is about, so the row stays one line.
     if let Some(reason) = reason {
         ui.horizontal(|ui| {
