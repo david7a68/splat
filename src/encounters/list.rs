@@ -200,18 +200,19 @@ pub(super) fn side_control(ui: &mut egui::Ui, name: &str, side: &mut String, cho
                         .map(String::as_str)
                         .filter(|choice| !matches!(*choice, "party" | "enemies")),
                 ) {
-                    if ui
-                        .selectable_label(
-                            side == choice && !other,
-                            design::reader::human_label(choice),
-                        )
-                        .clicked()
+                    if design::extras::choice_wrapped(
+                        ui,
+                        side == choice && !other,
+                        &design::reader::human_label(choice),
+                        None,
+                    )
+                    .clicked()
                     {
                         *side = choice.to_owned();
                         other = false;
                     }
                 }
-                if ui.selectable_label(other, "Other…").clicked() {
+                if design::extras::choice_wrapped(ui, other, "Other…", None).clicked() {
                     other = true;
                 }
             });
@@ -247,10 +248,6 @@ fn section(
     }
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub(super) fn list_row(
     ui: &mut egui::Ui,
     id: impl std::hash::Hash,
@@ -267,7 +264,7 @@ pub(super) fn list_row(
             |ui| {
                 ui.set_min_height(Density::Scan.row() + design::S);
                 ui.scope(actions);
-                ui.add_space(design::L);
+                design::gap(ui, design::Gap::L);
                 let room = ui.available_width().max(0.0);
                 ui.allocate_ui_with_layout(
                     egui::vec2(room, Type::Strong.line() + Type::Small.line()),
@@ -534,10 +531,6 @@ pub(crate) const UNFINISHED_UNREAD: &str =
 pub(crate) const ENDED_UNREAD: &str =
     "Splat cannot read the run folder, so it cannot show ended fights.";
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub(super) fn in_progress_list(
     ui: &mut egui::Ui,
     page: &history::Arranged<'_>,
@@ -611,7 +604,7 @@ pub(super) fn in_progress_list(
             }
         });
     }
-    ui.add_space(design::L);
+    design::gap(ui, design::Gap::L);
 }
 
 /// Whether a run of this encounter is saved: unfinished, ended, or in a file that cannot be read
@@ -632,10 +625,6 @@ fn has_saved_run(page: &history::Arranged<'_>, row: &history::ReadyRow<'_>) -> b
         })
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub(super) fn ready_list(
     ui: &mut egui::Ui,
     page: &history::Arranged<'_>,
@@ -727,7 +716,7 @@ pub(super) fn ready_list(
                         egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted))
                             .extend(),
                     );
-                    ui.add_space(design::L);
+                    design::gap(ui, design::Gap::L);
                 }
             },
         );
@@ -778,7 +767,7 @@ pub(super) fn history_list(
     read: Option<Reading<'_>>,
     action: &mut Option<ListAction>,
 ) -> Option<f32> {
-    ui.add_space(design::L);
+    design::gap(ui, design::Gap::L);
     if page.runs_unread {
         heading(ui, "HISTORY", 0);
         blocked_reason(ui, Some(ENDED_UNREAD));
@@ -881,7 +870,10 @@ pub(super) fn history_list(
                 }
             }
             if !page.unreadable.is_empty() {
-                design::group_label(ui, &format!("Unreadable {}", page.unreadable.len()));
+                design::heading(
+                    ui,
+                    design::Heading::Label(&format!("Unreadable {}", page.unreadable.len())),
+                );
                 for run in &page.unreadable {
                     blocked_reason(ui, Some(&run.label));
                 }
