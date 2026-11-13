@@ -331,9 +331,9 @@ mod tests {
             .count();
         assert_eq!(checks, 1, "one check, on the selected choice");
 
-        // Changing the selection moves no word and keeps the menu's width: in a menu that takes
-        // its width from its choices (a shrinking area), each word's x and the menu's width are
-        // the same whichever choice is selected.
+        // Changing the selection moves no word and keeps the menu's width. On a line each choice
+        // takes its own width (a menu that sizes itself to its choices measures the same widths),
+        // so each word's x and the line's width are the same whichever choice is selected.
         let menu = |selected: usize| {
             let ctx = Context::default();
             let mut width = 0.0;
@@ -342,7 +342,7 @@ mod tests {
                 let out = ctx.run(egui::RawInput::default(), |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         ui.horizontal_top(|ui| {
-                            let column = ui.vertical(|ui| {
+                            let column = ui.horizontal(|ui| {
                                 for (at, word) in
                                     ["This campaign", "Built in", "All"].iter().enumerate()
                                 {
