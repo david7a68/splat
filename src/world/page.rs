@@ -174,7 +174,7 @@ pub struct WorldPage {
     /// The NPC that Discard let go, with its table facts, for one `Undo discard`.
     discarded_npc: Option<Held>,
     /// When the page's result (`Note repaired.` or the NPC's discard) was made.
-    result_order: u64,
+    result_order: crate::design::ResultOrder,
     generator_problems: Vec<crate::npc_generator::TableProblem>,
     generator_sources: Vec<String>,
     error: Option<PageError>,
@@ -650,7 +650,7 @@ impl WorldPage {
                         self.view = View::Reader;
                         self.selected = repair.entry_id();
                         self.repaired = self.selected;
-                        self.result_order = super::next_order();
+                        self.result_order = crate::design::ResultOrder::issue();
                         // The repair is the newer result. A change result kept from before the
                         // note broke has nothing left to undo, and would hide `Note repaired.`.
                         // Another note's rename keeps its Undo.
@@ -836,8 +836,11 @@ impl WorldPage {
     }
 
     /// The result this page shows in the footer: the NPC Discard let go, or the repair that made
-    /// the open note readable, with when it was made (`world::next_order`).
-    fn result(&self, open: Option<Uuid>) -> Option<(super::PageResult, u64)> {
+    /// the open note readable, with when it was made.
+    fn result(
+        &self,
+        open: Option<Uuid>,
+    ) -> Option<(super::PageResult, crate::design::ResultOrder)> {
         if let Some((npc, _, _)) = self.discarded_npc.as_ref()
             && self.generated.is_none()
         {
@@ -1031,7 +1034,7 @@ impl WorldPage {
             if choice.discard
                 && let Some(npc) = self.generated.take()
             {
-                self.result_order = super::next_order();
+                self.result_order = crate::design::ResultOrder::issue();
                 self.discarded_npc = Some((
                     npc,
                     std::mem::take(&mut self.generator_problems),

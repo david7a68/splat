@@ -1870,8 +1870,8 @@ impl GroupFault {
     }
 }
 
-/// When a result was made: one count for every World and Lookup result, so a footer lists its
-/// results with a live Undo newest first, whatever their kind (round 26 review 3).
+/// A new id for a lost Log draft's notice, so two notices from one entry stay apart. A
+/// result's place in a footer is its `design::ResultOrder`.
 pub(crate) fn next_order() -> u64 {
     static ORDER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     ORDER.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1
@@ -1880,8 +1880,8 @@ pub(crate) fn next_order() -> u64 {
 /// Lookup's and the World page's reader, and its controls for the item on show.
 #[derive(Default)]
 pub struct Reader {
-    /// When each kept result was made (`next_order`), by the action its Undo takes.
-    orders: HashMap<FooterAct, u64>,
+    /// When each kept result was made, by the action its Undo takes.
+    orders: HashMap<FooterAct, design::ResultOrder>,
     showing: Option<Uuid>,
     status: String,
     status_editing: bool,
@@ -2118,8 +2118,8 @@ pub(crate) enum FooterKind {
 /// that comes and goes. It sits below the pane's scroll area, so it never moves the note.
 #[derive(Clone)]
 pub(crate) struct FooterLine {
-    /// When its result was made (`next_order`): newer results come first within a rank.
-    pub order: u64,
+    /// When its result was made: newer results come first within a rank.
+    pub order: design::ResultOrder,
     pub rank: FooterRank,
     pub tone: Tone,
     pub words: String,
@@ -2129,7 +2129,7 @@ pub(crate) struct FooterLine {
 impl FooterLine {
     pub(crate) fn new(rank: FooterRank, tone: Tone, words: &str, kind: FooterKind) -> Self {
         Self {
-            order: 0,
+            order: design::ResultOrder::default(),
             rank,
             tone,
             words: words.to_owned(),
@@ -2138,7 +2138,7 @@ impl FooterLine {
     }
 
     /// The line, made at `order`.
-    pub(crate) fn at(mut self, order: u64) -> Self {
+    pub(crate) fn at(mut self, order: design::ResultOrder) -> Self {
         self.order = order;
         self
     }
@@ -2211,7 +2211,7 @@ pub(crate) fn draw_footer(
             }
         };
         match line.rank {
-            FooterRank::Undo => footer.result(line.words.as_str(), true, draw),
+            FooterRank::Undo => footer.result(line.order, line.words.as_str(), true, draw),
             FooterRank::Reason => footer.reason(line.words.as_str(), draw),
             FooterRank::Notice => footer.notice(line.words.as_str(), draw),
         };
@@ -3693,7 +3693,7 @@ impl Reader {
         item: &Item,
         index: &ContentIndex,
         campaign: Option<&Campaign>,
-        page: Option<(&PageResult, u64)>,
+        page: Option<(&PageResult, design::ResultOrder)>,
     ) -> Vec<FooterLine> {
         self.prepare(item);
         let id = item.entry.id;
@@ -3729,7 +3729,7 @@ impl Reader {
         {
             self.identity_undo = None;
         }
-        let page_order = page.map_or(0, |(_, order)| order);
+        let page_order = page.map_or_else(design::ResultOrder::default, |(_, order)| order);
         let page = page.map(|(page, _)| page);
         if editing {
             // A draft let go whose note is gone keeps its Undo while another entry is edited
@@ -3805,22 +3805,22 @@ impl Reader {
 
     /// A kept result was made now: it goes first among the results with a live Undo.
     pub(super) fn stamp(&mut self, act: FooterAct) {
-        self.orders.insert(act, next_order());
+        self.orders.insert(act, design::ResultOrder::issue());
     }
 
     /// Each line with the order its action was made at; then the footer's order: results with
     /// a live Undo newest first, then reasons, then notices.
-    fn newest_first(&self, lines: Vec<FooterLine>, page: u64) -> Vec<FooterLine> {
+    fn newest_first(&self, lines: Vec<FooterLine>, page: design::ResultOrder) -> Vec<FooterLine> {
         let mut lines: Vec<_> = lines
             .into_iter()
             .map(|line| {
                 let order = match &line.kind {
                     FooterKind::Undo { act, .. } | FooterKind::Discarded { act, .. } => match act {
                         FooterAct::Page => page,
-                        act => self.orders.get(act).copied().unwrap_or(0),
+                        act => self.orders.get(act).copied().unwrap_or_default(),
                     },
                     _ if line.rank == FooterRank::Notice => page,
-                    _ => 0,
+                    _ => design::ResultOrder::default(),
                 };
                 line.at(order)
             })
@@ -4375,7 +4375,8 @@ impl Reader {
                             change.word = change_words("Stat block", None, Some(&stat_block.name));
                             self.undo = Some(change);
                             // A field of its own: `adding` still borrows the form.
-                            self.orders.insert(FooterAct::Change, next_order());
+                            self.orders
+                                .insert(FooterAct::Change, design::ResultOrder::issue());
                             self.kept = None;
                         }
                         Err(error) => self.error = Some(error),

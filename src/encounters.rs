@@ -115,9 +115,9 @@ mod groups;
 mod history;
 // The one member-fault form and its row, for Arrivals in the run (Contract B, R).
 use groups::GroupDraft;
-#[cfg(test)]
-pub(crate) use groups::member_comparisons;
 pub(crate) use groups::{ENCOUNTER_DELETED, NO_MAX_HP_CAUSE, member_fault, member_fault_row};
+#[cfg(test)]
+pub(crate) use groups::{change_copies, group_checks, member_comparisons};
 pub(crate) use history::{Template, template_of};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -445,7 +445,7 @@ struct Draft {
     groups_written: bool,
     /// One group detached from this draft, until the next save.
     /// Its place, the group, whether it is deleted, and when (`result_stamp`).
-    removed_group: Option<(usize, GroupDraft, bool, u64)>,
+    removed_group: Option<(usize, GroupDraft, bool, design::ResultOrder)>,
     /// The last replacement of missing roster rows, for its result and Undo. A later edit of
     /// those rows, or a Save (a start that saves too), ends it (FC3): after a Save its Undo
     /// would make a draft that differs from the file while it looks like it.
@@ -552,7 +552,14 @@ impl Draft {
     /// rows ends the replacement's result. A pressed Undo is recorded in `pressed` (made by
     /// `DraftUndo::for_draft` for this draft); `apply_undo` sends it to the result's owner after
     /// the footer is drawn.
-    fn results_into<'a>(&mut self, footer: &mut design::Footer<'a>, pressed: &'a DraftUndo) {
+    /// `identity` is the creature search's separation result, if any: its stamp, words and
+    /// Undo. It takes its place among the draft's results by when it was made (FF8).
+    fn results_into<'a>(
+        &mut self,
+        footer: &mut design::Footer<'a>,
+        pressed: &'a DraftUndo,
+        identity: Option<(design::ResultOrder, String, &'static str)>,
+    ) {
         if self
             .replacement
             .as_ref()
@@ -560,8 +567,9 @@ impl Draft {
         {
             self.replacement = None;
         }
-        // (when, tone, words, Undo, which)
-        let mut results: Vec<(u64, Tone, String, &'static str, DraftResult)> = Vec::new();
+        // (when, tone, words, Undo, which); the footer puts them newest first by `when`.
+        let mut results: Vec<(design::ResultOrder, Tone, String, &'static str, DraftResult)> =
+            Vec::new();
         if let Some((words, undo)) = self.removed_group_result()
             && let Some((.., stamp)) = self.removed_group
         {
@@ -587,9 +595,11 @@ impl Draft {
                 ));
             }
         }
-        results.sort_by_key(|(stamp, ..)| std::cmp::Reverse(*stamp));
-        for (_, tone, words, undo, which) in results {
-            footer.result(words.clone(), true, move |ui| {
+        if let Some((stamp, words, undo)) = identity {
+            results.push((stamp, Tone::Success, words, undo, DraftResult::Identity));
+        }
+        for (stamp, tone, words, undo, which) in results {
+            footer.result(stamp, words.clone(), true, move |ui| {
                 // A result is a message, so its Undo keeps the undo icon as every other Undo
                 // does.
                 if design::undo_message(ui, tone, &words, undo) {
@@ -613,7 +623,8 @@ impl Draft {
                     group.undo_member_result();
                 }
             }
-            None => return false,
+            // The campaign owns it; `undo_identity` applies it.
+            Some(DraftResult::Identity) | None => return false,
         }
         true
     }
@@ -1356,6 +1367,15 @@ pub(super) fn scroll_lane(ui: &egui::Ui) -> f32 {
     (ui.available_width() - ui.spacing().scroll.allocated_width()).max(0.0)
 }
 
+/// Help above a list that can gain a scroll bar: it wraps at the bar's lane, as the list's
+/// rows end there (FL3).
+pub(super) fn lane_help(ui: &mut egui::Ui, text: &str) {
+    ui.scope(|ui| {
+        ui.set_max_width(scroll_lane(ui));
+        design::help(ui, text);
+    });
+}
+
 /// The run folder is known not to be there. A folder that cannot be looked for (a parent
 /// without permission) is not "missing": it cannot be read.
 fn folder_missing(directory: &std::path::Path) -> bool {
@@ -1455,9 +1475,9 @@ fn slot_sheet<'a>(
     let creature = snapshot.creatures.iter().find(|c| c.id == id)?;
     party.sheet(creature.character.as_deref()?)
 }
-/// `ROSTER 8 · XP 1,050 of 1,125 · Moderate`: the editor's roster heading, with the difficulty
-/// at its end while the line has room for it (F1). A fight with no word because an input is
-/// not known says whose (X2).
+/// `ROSTER 8 · XP 1,050 · Moderate (up to 1,125)`: the editor's roster heading, with the
+/// difficulty in its one form at its end (F1, FB6). With no room for the limit, the XP and the
+/// word stay. A fight with no word because an input is not known says whose (X2, FB4).
 fn roster_heading(
     ui: &mut egui::Ui,
     count: usize,
@@ -1473,21 +1493,24 @@ fn roster_heading(
         }
         return;
     };
-    let plain = job.clone();
-    let c = colors();
-    let numbers = format!(" · {} · ", rating.numbers());
-    crate::difficulty::append(&mut job, ui, Type::Label, &numbers, c.muted);
-    crate::difficulty::append(&mut job, ui, Type::Label, rating.word.text(), c.text);
-    if crate::difficulty::width(ui, &job) > ui.available_width() {
-        ui.label(plain);
-        return;
+    crate::difficulty::append(&mut job, ui, Type::Label, " · ", colors().muted);
+    let whole = {
+        let mut whole = job.clone();
+        crate::difficulty::append_form(&mut whole, ui, Type::Label, &rating.parts(true));
+        whole
+    };
+    if crate::difficulty::width(ui, &whole) <= ui.available_width() {
+        job = whole;
+    } else {
+        crate::difficulty::append_form(&mut job, ui, Type::Label, &rating.parts(false));
     }
     let response = ui.label(job);
     crate::difficulty::describe(ui, response, rating);
 }
 
-/// `Moderate · XP 1,050 of 1,125` at the right of the narrow editor's tab row, while the row has
-/// room for it (F1). A fight with no word because an input is not known says whose (X2).
+/// `XP 1,050 · Moderate (up to 1,125)` at the right of the narrow editor's tab row, in the one
+/// form (F1, FB6); with less room, `XP 1,050 · Moderate`. A fight with no word because an input
+/// is not known says whose (X2).
 fn narrow_difficulty(ui: &mut egui::Ui, difficulty: &crate::difficulty::Difficulty) {
     let Some(rating) = &difficulty.rating else {
         if let Some(missing) = &difficulty.missing {
@@ -1495,20 +1518,18 @@ fn narrow_difficulty(ui: &mut egui::Ui, difficulty: &crate::difficulty::Difficul
         }
         return;
     };
-    let c = colors();
-    let mut job = egui::text::LayoutJob::default();
-    crate::difficulty::append(&mut job, ui, Type::Small, rating.word.text(), c.text);
-    crate::difficulty::append(
-        &mut job,
-        ui,
-        Type::Small,
-        &format!(" · {}", rating.numbers()),
-        c.muted,
-    );
-    let width = crate::difficulty::width(ui, &job);
-    if width + design::L > ui.available_width() {
+    let form = |limit: bool| {
+        let mut job = egui::text::LayoutJob::default();
+        crate::difficulty::append_form(&mut job, ui, Type::Small, &rating.parts(limit));
+        job
+    };
+    let fits = |job: &egui::text::LayoutJob| {
+        crate::difficulty::width(ui, job) + design::L <= ui.available_width()
+    };
+    let job = [form(true), form(false)].into_iter().find(fits);
+    let Some(job) = job else {
         return;
-    }
+    };
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         let response = ui.label(job);
         crate::difficulty::describe(ui, response, rating);
@@ -2014,6 +2035,106 @@ fn creature_result_row(
     (chosen, read)
 }
 
+/// FF8: the creature search's separation of a copied note (`Rook Ambry copy.md is now a
+/// separate note.`) with its Undo, and why the last separation or Undo failed. Its owner is the
+/// campaign it changed (kept by campaign id, so a switch and back keeps it); it shows in the
+/// footer of the editor whose search made it. The change stays until its Undo succeeds or a new
+/// separation replaces it, so a failed Undo can be tried again (review of PR 299). The change's
+/// note text is behind an `Arc`: a draw copies none of it.
+#[derive(Clone, Default)]
+struct IdentityResult {
+    done: Option<(Arc<IdentityChange>, design::ResultOrder)>,
+    error: Option<String>,
+}
+
+/// A separation's change, with the note's text before and after it.
+struct IdentityChange(crate::world::Change);
+
+impl Clone for IdentityChange {
+    fn clone(&self) -> Self {
+        #[cfg(test)]
+        IDENTITY_COPIES.with(|copies| copies.set(copies.get() + 1));
+        Self(self.0.clone())
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How often a separation's change, with its note text, was copied.
+    static IDENTITY_COPIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+fn identity_key(campaign: Uuid) -> egui::Id {
+    egui::Id::new(("encounter_identity_undo", campaign))
+}
+
+/// The creature search's campaign, by id, from its index.
+fn identity_campaign(ctx: &egui::Context) -> Option<Arc<crate::lookup::ContentIndex>> {
+    ctx.data(|data| {
+        data.get_temp::<Arc<crate::lookup::ContentIndex>>(egui::Id::new("reader_link_index"))
+    })
+    .filter(|index| index.campaign.is_some())
+}
+
+/// The separation result of the creature search's campaign.
+fn identity_result(ctx: &egui::Context) -> Option<IdentityResult> {
+    let id = identity_campaign(ctx)?.campaign.as_ref()?.id;
+    ctx.data(|data| data.get_temp::<IdentityResult>(identity_key(id)))
+}
+
+/// The separation result's place among an editor's results: its stamp, words and Undo.
+fn identity_line(ctx: &egui::Context) -> Option<(design::ResultOrder, String, &'static str)> {
+    let (change, stamp) = identity_result(ctx)?.done?;
+    Some((
+        stamp,
+        change.0.message().to_owned(),
+        change.0.identity_undo_label(),
+    ))
+}
+
+/// A failed separation, or its failed Undo, as a reason in an editor's footer.
+fn identity_failure_into(ctx: &egui::Context, footer: &mut design::Footer<'_>) {
+    if let Some(error) = identity_result(ctx).and_then(|result| result.error) {
+        footer.reason(error.clone(), move |ui| {
+            design::message(ui, Tone::Warning, &error);
+        });
+    }
+}
+
+/// Undo the separation, after its Undo was pressed in a footer. A failure keeps the change, so
+/// its Undo stays offered with the reason.
+fn undo_identity(ctx: &egui::Context) {
+    let Some(index) = identity_campaign(ctx) else {
+        return;
+    };
+    let Some(campaign) = index.campaign.as_ref() else {
+        return;
+    };
+    let key = identity_key(campaign.id);
+    let Some(mut result) = ctx.data(|data| data.get_temp::<IdentityResult>(key)) else {
+        return;
+    };
+    let Some((change, _)) = &result.done else {
+        return;
+    };
+    match change.0.undo(campaign) {
+        Ok(()) => ctx.data_mut(|data| {
+            data.remove::<IdentityResult>(key);
+            data.insert_temp(egui::Id::new("encounter_identity_changed"), true);
+        }),
+        Err(error) => {
+            result.error = Some(error);
+            ctx.data_mut(|data| data.insert_temp(key, result));
+        }
+    }
+}
+
+/// How often a separation's change was copied, for its test.
+#[cfg(test)]
+pub(crate) fn identity_copies() -> usize {
+    IDENTITY_COPIES.with(std::cell::Cell::get)
+}
+
 /// A copied note is still a search result, with the same repair used by Lookup.
 fn duplicate_creature_results(ui: &mut egui::Ui, query: &str) -> bool {
     let Some(index) = ui.ctx().data(|data| {
@@ -2024,28 +2145,6 @@ fn duplicate_creature_results(ui: &mut egui::Ui, query: &str) -> bool {
     let Some(campaign) = &index.campaign else {
         return false;
     };
-    let undo_key = egui::Id::new(("encounter_identity_undo", campaign.id));
-    let undo = ui.data(|data| data.get_temp::<crate::world::Change>(undo_key));
-    if let Some(undo) = undo
-        && design::undo_message(
-            ui,
-            Tone::Success,
-            undo.message(),
-            undo.identity_undo_label(),
-        )
-    {
-        match undo.undo(campaign) {
-            Ok(()) => {
-                ui.data_mut(|data| {
-                    data.remove::<crate::world::Change>(undo_key);
-                    data.insert_temp(egui::Id::new("encounter_identity_changed"), true);
-                });
-            }
-            Err(error) => {
-                design::message(ui, Tone::Warning, &error);
-            }
-        }
-    }
     let mut seen = BTreeSet::new();
     for item in &index.items {
         if !item.entry.name.to_lowercase().contains(query)
@@ -2077,15 +2176,26 @@ fn duplicate_creature_results(ui: &mut egui::Ui, query: &str) -> bool {
                 let filename = path.rsplit('/').next().unwrap_or(path);
                 let action = noun.action(filename);
                 if Action::secondary(&action).hint(&action).show(ui).clicked() {
+                    // FF8: the result, its Undo or the failure goes to the editor's footer. A
+                    // new separation replaces the result; a failed one keeps the last change
+                    // and its Undo.
+                    let key = identity_key(campaign.id);
+                    let mut result = ui
+                        .data(|data| data.get_temp::<IdentityResult>(key))
+                        .unwrap_or_default();
                     match crate::world::new_identity(campaign, path) {
-                        Ok((undo, _)) => ui.data_mut(|data| {
-                            data.insert_temp(undo_key, undo);
-                            data.insert_temp(egui::Id::new("encounter_identity_changed"), true);
-                        }),
-                        Err(error) => {
-                            design::message(ui, Tone::Warning, &error);
+                        Ok((change, _)) => {
+                            ui.data_mut(|data| {
+                                data.insert_temp(egui::Id::new("encounter_identity_changed"), true)
+                            });
+                            result = IdentityResult {
+                                done: Some((Arc::new(IdentityChange(change)), result_stamp())),
+                                error: None,
+                            };
                         }
+                        Err(error) => result.error = Some(error),
                     }
+                    ui.data_mut(|data| data.insert_temp(key, result));
                 }
                 if let Some(remaining) = paths.iter().find(|other| *other != path) {
                     crate::library::duplicate_repair_consequence(
@@ -2168,7 +2278,7 @@ struct ReplacementUndo {
     before: Vec<Slot>,
     after: Vec<Slot>,
     /// When the replacement was made (`result_stamp`).
-    stamp: u64,
+    stamp: design::ResultOrder,
     /// The result in words, such as `2 Cinder Wolf rows replaced with Guard.`
     words: String,
 }
@@ -2545,6 +2655,8 @@ enum DraftResult {
     Replacement,
     /// The newest member result of the group at this index in `Draft::groups`.
     Member(usize),
+    /// The creature search's separation result (`IdentityResult`), which the campaign owns.
+    Identity,
 }
 
 /// Which of a draft's own results had its Undo pressed in the editor's footer this frame.
@@ -2553,16 +2665,17 @@ struct DraftUndo {
     which: std::cell::Cell<Option<DraftResult>>,
 }
 
-/// When a result was made: a number that only grows, so the newest result can come first.
-pub(super) fn result_stamp() -> u64 {
-    static CLOCK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-    CLOCK.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+/// When a result was made: the footer's own order, issued when the action is done, so the
+/// newest result comes first.
+pub(super) fn result_stamp() -> design::ResultOrder {
+    design::ResultOrder::issue()
 }
 
 /// A kept result with its own Undo, on the Encounters page or in an editor's footer. Each is
 /// owned by the state that holds its data (`discarded`, `discarded_group`, `deleted_run`,
-/// `removed_saved_group`, `removed_encounter`) and ends with it (FI1, FJ4).
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+/// `removed_saved_group`, `removed_encounter`) and ends with it (FI1, FJ4). Its footer order is
+/// issued when its action is done (`stamp_kept`).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 enum KeptResult {
     Discarded,
     GroupDiscarded,
@@ -2600,6 +2713,9 @@ pub struct Encounters {
     /// How often frames reached that key's guard.
     #[cfg(test)]
     validation_reached: usize,
+    /// Save's check of the open group draft (FN5, AI2), with the snapshot revision and the
+    /// draft's own revision it was made for. A frame with no change does not check again.
+    group_check: Option<((Uuid, u64), Option<groups::Refusal>)>,
     /// The open draft's difficulty, with the snapshot revision, edit epoch and draft it was
     /// worked out for.
     difficulty: Option<((Uuid, u64, Uuid), Arc<crate::difficulty::Difficulty>)>,
@@ -2607,9 +2723,13 @@ pub struct Encounters {
     #[cfg(test)]
     difficulty_counts: (usize, usize),
     message: Option<String>,
+    /// When `message`'s save was done, for the footer's order.
+    message_order: Option<design::ResultOrder>,
     /// The draft `Discard changes` last dropped, for one step of undo.
     discarded: Option<Draft>,
     discarded_options: Option<crate::encounter_settings::Options>,
+    /// When `discarded_options` was discarded, for the footer's order.
+    discarded_options_order: Option<design::ResultOrder>,
     pub saved: bool,
     run: Option<crate::encounter_run::Run>,
     /// The encounter editor's last frame found that Save would refuse its changed draft, so
@@ -2637,8 +2757,8 @@ pub struct Encounters {
     group_draft: Option<GroupDraft>,
     /// The group draft `Discard changes` last dropped, for one step of undo.
     discarded_group: Option<GroupDraft>,
-    /// When that discard was made (`timeline::next_result_order`), for the plan's footer order.
-    discarded_group_order: u64,
+    /// When that discard was made, for the plan's footer order.
+    discarded_group_order: Option<design::ResultOrder>,
     /// A creature made the campaign's own, with its text open beside the roster.
     creature: Option<CreatureEditor>,
 
@@ -2665,8 +2785,9 @@ pub struct Encounters {
     removed_saved_group: Option<groups::RemovedNote>,
     /// The encounter `Remove…` last removed, for `Undo remove encounter`.
     removed_encounter: Option<groups::RemovedNote>,
-    /// The kept results shown last frame, newest first (`kept_results`).
-    result_order: Vec<KeptResult>,
+    /// When each kept result's action was done (`stamp_kept`), for the footer's newest-first
+    /// order. An entry outlives its result; the next action of that kind replaces it.
+    kept_orders: std::collections::HashMap<KeptResult, design::ResultOrder>,
 }
 /// One encounter, as a session's plan offers it.
 pub struct PlanFight {
@@ -3252,7 +3373,7 @@ impl Encounters {
         self.group_in_plan && self.group_draft.is_none() && self.discarded_group.is_some()
     }
     /// When the discard the plan shows was made, for its footer's newest-first order.
-    pub fn discarded_group_order(&self) -> u64 {
+    pub fn discarded_group_order(&self) -> Option<design::ResultOrder> {
         self.discarded_group_order
     }
     pub fn discarded_group_name(&self) -> String {
@@ -3704,6 +3825,7 @@ impl Encounters {
                 self.saved = true;
                 self.error = None;
                 self.message = Some("Encounter saved.".into());
+                self.message_order = Some(design::ResultOrder::issue());
                 // AB1, FB1: the open fight from this encounter keeps its own copy of the Prep
                 // text. The same Save gives it the new words; its combat state stays.
                 if let (Some(run), Ok(entry)) =
@@ -4321,6 +4443,7 @@ impl Encounters {
         self.validated = None;
         self.discarded = Some(draft);
         self.discarded_group = None;
+        self.stamp_kept(KeptResult::Discarded);
     }
     /// The undo of `discard_draft`.
     fn undo_discard(&mut self) {
@@ -4339,10 +4462,15 @@ impl Encounters {
         }
     }
 
-    /// The kept results that show now, newest first: one that was not shown before goes ahead
-    /// of the others. `page` is the Encounters list, which shows every kind; an editor shows only
-    /// the discard of its own kind, as before. Each result is owned by the state that holds its
-    /// data and ends with it.
+    /// A kept result of `kind` was just made: it is now the newest.
+    fn stamp_kept(&mut self, kind: KeptResult) {
+        self.kept_orders.insert(kind, design::ResultOrder::issue());
+    }
+
+    /// The kept results that show now; the footer puts them newest first by `stamp_kept`.
+    /// `page` is the Encounters list, which shows every kind; an editor shows only the discard
+    /// of its own kind, as before. Each result is owned by the state that holds its data and
+    /// ends with it.
     fn kept_results(&mut self, page: bool) -> Vec<KeptResult> {
         self.expire_discards();
         // Every result whose data is still held, and whether this view shows it.
@@ -4369,32 +4497,10 @@ impl Encounters {
                 page,
             ),
         ];
-        let held: Vec<KeptResult> = alive
+        alive
             .iter()
-            .filter(|(_, held, _)| *held)
+            .filter(|(_, held, here)| *held && *here)
             .map(|(kind, ..)| *kind)
-            .collect();
-        // A result new since the last frame goes first; one whose data is gone leaves the
-        // order. One that this view does not show keeps its place for the views that do.
-        let mut order: Vec<KeptResult> = held
-            .iter()
-            .filter(|kind| !self.result_order.contains(kind))
-            .copied()
-            .collect();
-        order.extend(
-            self.result_order
-                .iter()
-                .filter(|kind| held.contains(kind))
-                .copied(),
-        );
-        self.result_order = order.clone();
-        order
-            .into_iter()
-            .filter(|kind| {
-                alive
-                    .iter()
-                    .any(|(shown, held, here)| shown == kind && *held && *here)
-            })
             .collect()
     }
 
@@ -4478,7 +4584,10 @@ impl Encounters {
     ) {
         for &kind in kinds {
             let (tone, words, undo, name) = self.kept_words(kind);
-            footer.result(words.clone(), true, move |ui| {
+            // Every place that makes a kept result stamps it (`stamp_kept`); one made elsewhere
+            // without a stamp is older than every stamped one: a draw never issues an order.
+            let order = self.kept_orders.get(&kind).copied().unwrap_or_default();
+            footer.result(order, words.clone(), true, move |ui| {
                 if design::undo_message_named(ui, tone, &words, undo, name.as_deref()) {
                     pressed.set(Some(kind));
                 }
@@ -4666,7 +4775,15 @@ impl Encounters {
             });
         }
         let used = header.min_rect();
-        ui.advance_cursor_after_rect(used.with_min_x(room.min.x));
+        // FG3: the empty state starts where every page's empty state starts, `L` below the
+        // header's hairline, so the step past the header leaves out its item spacing.
+        let bare = empty && self.snapshot.as_ref().is_some_and(|s| s.issues.is_empty());
+        let step = if bare {
+            used.with_max_y(used.max.y - ui.spacing().item_spacing.y)
+        } else {
+            used
+        };
+        ui.advance_cursor_after_rect(step.with_min_x(room.min.x));
         if new {
             self.start_new_draft();
             return;
@@ -4709,8 +4826,8 @@ impl Encounters {
                 }
             });
         }
-        if let Some(message) = self.message.clone() {
-            footer.result(message.clone(), false, move |ui| {
+        if let (Some(message), Some(order)) = (self.message.clone(), self.message_order) {
+            footer.result(order, message.clone(), false, move |ui| {
                 design::message(ui, Tone::Success, &message);
             });
         }
@@ -4873,6 +4990,7 @@ impl Encounters {
                     Ok(removed) => {
                         self.removed_saved_group = Some(removed);
                         self.removed_encounter = None;
+                        self.stamp_kept(KeptResult::GroupRemoved);
                         self.reload_snapshot(active, campaigns.modules());
                         self.saved = true;
                     }
@@ -4884,6 +5002,7 @@ impl Encounters {
                     Ok(removed) => {
                         self.removed_encounter = Some(removed);
                         self.removed_saved_group = None;
+                        self.stamp_kept(KeptResult::EncounterRemoved);
                         self.reload_snapshot(active, campaigns.modules());
                         self.saved = true;
                     }
@@ -4921,6 +5040,7 @@ impl Encounters {
                 match deleted {
                     Some(Ok(deleted)) => {
                         self.deleted_run = Some(deleted);
+                        self.stamp_kept(KeptResult::RunDeleted);
                         self.error = None;
                         self.read_runs_again(active);
                     }
@@ -5078,17 +5198,49 @@ impl Encounters {
                 )
                 .show(ui)
                 .clicked();
-            // X51: Save and Start keep their width on line one, and the name field takes the
-            // rest. They take a line of their own only when no field fits beside them.
-            let rest = ui.available_rect_before_wrap().width()
-                - design::S * if unfinished.is_some() { 38.0 } else { 33.0 }
-                - if has_run {
-                    design::number_width(ui, "Close the open run first", &Type::Small.font(ui))
+            // X51, SB1: Save and Start keep their width on line one, and the name field takes
+            // the rest. The actions are measured, as they are drawn. They take a line of their
+            // own only when the saved name does not fit beside them: the saved name, not the
+            // typed one, so nothing moves while the DM types.
+            let gap = ui.spacing().item_spacing.x;
+            let start_word = if unfinished.is_some() {
+                "Resume"
+            } else {
+                START_FIGHT
+            };
+            // Each button is measured in its wider form, primary or secondary (the weight
+            // changes with the draft), and rounded up to the pixel: a button given exactly its
+            // natural width can lose its last letter to rounding.
+            let button = |word: &str| {
+                Action::primary(word)
+                    .natural_width(ui)
+                    .max(Action::secondary(word).natural_width(ui))
+                    .ceil()
+            };
+            let actions = button("Save encounter")
+                + gap
+                + button(start_word)
+                + if unfinished.is_some() {
+                    Action::quiet(icons::EXPAND)
+                        .density(Density::Read)
+                        .natural_width(ui)
+                        .ceil()
+                        + gap
+                } else {
+                    0.0
+                }
+                + if has_run {
+                    design::number_width(ui, BLOCKED_BY_RUN, &Type::Small.font(ui)).ceil()
                         + design::L
+                        + gap
                 } else {
                     0.0
                 };
-            let stack_actions = rest < Density::Scan.control();
+            // The field's margins are outside its desired width.
+            let rest = ui.available_rect_before_wrap().width() - actions - 2.0 * design::S - gap;
+            let saved_name =
+                design::number_width(ui, &draft_ref.saved_name, &Type::Heading.font(ui));
+            let stack_actions = rest < saved_name.max(Density::Scan.control());
             let width = if stack_actions {
                 (ui.available_rect_before_wrap().width() - 2.0 * design::S)
                     .max(Density::Scan.control())
@@ -5138,17 +5290,13 @@ impl Encounters {
                                     .setup
                                     .roster
                                     .is_empty()
-                                    .then_some("Add participants first")));
+                                    .then_some("Add participants first.")));
                     if unfinished.is_some() {
                         row_menu(ui, &draft_ref.name, |ui| {
                             start_another = menu_action(ui, "Start another fight", start_blocked);
                         });
                     }
-                    let word = if unfinished.is_some() {
-                        "Resume"
-                    } else {
-                        START_FIGHT
-                    };
+                    let word = start_word;
                     // Unsaved changes own the primary: Resume waits until they are saved or
                     // discarded.
                     run_it = if has_run || dirty {
@@ -5172,7 +5320,7 @@ impl Encounters {
                     .show(ui)
                     .clicked();
                     if has_run {
-                        blocked_reason(ui, Some("Close the open run first"));
+                        blocked_reason(ui, Some(BLOCKED_BY_RUN));
                         ui.add_space(design::L);
                     }
                     save = if dirty && !has_run && refusal.is_none() {
@@ -5251,7 +5399,7 @@ impl Encounters {
                     .or(loading.then_some("Still reading this campaign."))
                     .or(
                         (!has_run && unfinished.is_none() && draft_ref.setup.roster.is_empty())
-                            .then_some("Add participants first"),
+                            .then_some("Add participants first."),
                     ),
             );
         });
@@ -5334,9 +5482,10 @@ impl Encounters {
         // The draft's own results are newer than a discard's: they were made on the draft that
         // the discard left open.
         if let Some(draft) = self.draft.as_mut() {
-            draft.results_into(&mut footer, draft_undo_ref);
+            draft.results_into(&mut footer, draft_undo_ref, identity_line(ui.ctx()));
         }
         self.kept_into_footer(&mut footer, &kinds, pressed_ref);
+        identity_failure_into(ui.ctx(), &mut footer);
         if let Some(e) = self.error.clone() {
             // A deleted entry and an unreadable file are stated in the rows' tone too.
             let tone = self.error_tone();
@@ -5360,6 +5509,9 @@ impl Encounters {
         let bottom = footer.show(ui);
         if let Some(kind) = pressed.get() {
             self.undo_kept(kind, Some((active, campaigns.modules())));
+        }
+        if draft_undo.which.get() == Some(DraftResult::Identity) {
+            undo_identity(ui.ctx());
         }
         if let Some(draft) = self.draft.as_mut()
             && draft.apply_undo(&draft_undo)
@@ -5530,7 +5682,7 @@ impl Encounters {
         // FB2: the party lines stay whatever the search adds to (the party always joins the
         // roster), and `Adding to …` has one place directly above the search, so a change of
         // target moves neither the search nor its results.
-        design::help(ui, PARTY_SOURCE);
+        lane_help(ui, PARTY_SOURCE);
         // Who is still to come: a party member belongs on a roster once.
         let on_roster = |draft: &Draft, id: Uuid| {
             draft
@@ -5634,12 +5786,14 @@ impl Encounters {
         summary: &str,
     ) -> Option<(Uuid, bool)> {
         let mut chosen = None;
+        // FL3: the field ends at the results' scroll lane, where each row's Add ends, whether or
+        // not the bar shows.
         let response = design::search_field(
             ui,
             SEARCH_FIELD,
             search,
             "Find a creature by name or detail…",
-            ui.available_width(),
+            scroll_lane(ui),
         );
         if std::mem::take(focus_search) {
             design::focus_and_select(ui, response.id, search);
@@ -5654,8 +5808,7 @@ impl Encounters {
             ui.data_mut(|data| data.insert_temp(filter_id, filter.clone()));
         }
         if !summary.is_empty() {
-            let shown =
-                design::words_that_fit(ui, summary, &Type::Small.font(ui), ui.available_width());
+            let shown = design::words_that_fit(ui, summary, &Type::Small.font(ui), scroll_lane(ui));
             ui.label(Type::Small.rich(ui, shown).color(colors().muted))
                 .on_hover_text(summary);
         }
@@ -5685,7 +5838,8 @@ impl Encounters {
         // after every name match as typed, and a typo in the name comes last. The sort is
         // stable, so the list's order stays inside each rank.
         if !parsed.words.is_empty() {
-            ranked.sort_by_key(|&(rank, c)| (rank, c.origin));
+            // FI5: the one creature order, as Arrivals sorts its names.
+            ranked.sort_by_key(|&(rank, c)| (rank.creature(), c.origin));
         }
         let as_typed = ranked.iter().take_while(|(rank, _)| !rank.typo).count();
         let matches: Vec<&Creature> = ranked.into_iter().map(|(_, c)| c).collect();
@@ -6339,7 +6493,8 @@ impl Encounters {
                             entry,
                             &slot.side,
                             Some(&sides),
-                        );
+                        )
+                        .done;
                         if done {
                             *expanded = None;
                             ui.scroll_to_rect(member_row, Some(egui::Align::Min));
@@ -6561,6 +6716,7 @@ impl Encounters {
                             &mut snapshot.options,
                             snapshot.saved_options.clone(),
                         ));
+                        self.discarded_options_order = Some(design::ResultOrder::issue());
                     }
                 }
                 if !changed && !rule_flags.is_empty() {
@@ -6667,9 +6823,9 @@ impl Encounters {
         let undo = &undo_discard;
         let mut footer =
             design::Footer::new(("run_settings_footer", active.id), design::FORM_WIDTH);
-        if discard_shown {
+        if discard_shown && let Some(order) = self.discarded_options_order {
             let words = "Rules and runs draft discarded.";
-            footer.result(words, true, move |ui| {
+            footer.result(order, words, true, move |ui| {
                 if design::draft_discarded(ui, "Rules and runs") {
                     undo.set(true);
                 }
@@ -6721,7 +6877,7 @@ use crate::design::LIST_MEASURE;
 mod list;
 pub(crate) use list::run_state_word;
 #[cfg(test)]
-pub(crate) use list::{ENDED_UNREAD, UNFINISHED_UNREAD};
+pub(crate) use list::{ENDED_UNREAD, FIGHT_OPEN, GO_TO_RUN, UNFINISHED_UNREAD};
 use list::{
     blocked_reason, choice_note, group_list, history_list, in_progress_list, menu_action,
     ready_list, row_menu, side_control,
@@ -7089,13 +7245,37 @@ mod tests {
         let original = fs::read_to_string(dir.path().join("Rook.md")).unwrap();
         fs::write(dir.path().join("Rook copy.md"), &original).unwrap();
         let index = Arc::new(crate::lookup::ContentIndex::load(&[], Some(&active)).unwrap());
+        // The search can be hidden (a compact editor's roster tab); the footer stays.
+        let search_shown = Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let shown = Arc::clone(&search_shown);
         let mut harness = egui_kittest::Harness::new(move |ctx| {
             ctx.data_mut(|data| {
                 data.insert_temp(egui::Id::new("reader_link_index"), index.clone())
             });
             egui::CentralPanel::default().show(ctx, |ui| {
+                // FF8: the result and its Undo are in the editor's footer, as the editor
+                // draws them.
+                let pressed = std::cell::Cell::new(false);
+                let mut footer = design::Footer::new("identity_test_footer", ui.available_width());
+                if let Some((order, words, undo)) = identity_line(ui.ctx()) {
+                    let pressed = &pressed;
+                    footer.result(order, words.clone(), true, move |ui| {
+                        if design::undo_message(ui, Tone::Success, &words, undo) {
+                            pressed.set(true);
+                        }
+                    });
+                }
+                identity_failure_into(ui.ctx(), &mut footer);
+                let bottom = footer.show(ui);
+                if pressed.get() {
+                    undo_identity(ui.ctx());
+                }
+                let mut body = body_above(ui, bottom);
+                if !shown.load(std::sync::atomic::Ordering::Relaxed) {
+                    return;
+                }
                 Encounters::creature_search(
-                    ui,
+                    &mut body,
                     std::iter::empty(),
                     &mut "Rook".to_owned(),
                     &mut false,
@@ -7123,12 +7303,64 @@ mod tests {
                 .count(),
             2
         );
-        harness.get_by_label("Rook copy.md is now a separate entry.");
+        assert!(
+            harness
+                .query_all_by_label("Rook copy.md is now a separate entry.")
+                .next()
+                .is_some()
+        );
+        // Review of PR 299: unchanged redraws copy none of the change's note text, also with
+        // the search hidden.
+        let copies = identity_copies();
+        harness.run_steps(4);
+        search_shown.store(false, std::sync::atomic::Ordering::Relaxed);
+        harness.run_steps(4);
+        assert!(harness.query_by_label("Undo separate entry").is_some());
+        search_shown.store(true, std::sync::atomic::Ordering::Relaxed);
+        harness.run_steps(2);
+        assert_eq!(identity_copies(), copies, "redraws copied the change");
+        // Review of PR 299: an Undo that fails (the file moved away) keeps the change and its
+        // Undo, says why, and works once the file is back.
+        let separated = fs::read_to_string(dir.path().join("Rook copy.md")).unwrap();
+        fs::rename(
+            dir.path().join("Rook copy.md"),
+            dir.path().join("Rook copy.away"),
+        )
+        .unwrap();
+        harness.get_by_label("Undo separate entry").click();
+        harness.run_steps(2);
+        assert!(!dir.path().join("Rook copy.md").exists());
+        assert!(
+            harness.query_by_label("Undo separate entry").is_some(),
+            "a failed Undo keeps its Undo"
+        );
+        assert!(
+            harness
+                .query_all_by_label("Rook copy.md is now a separate entry.")
+                .next()
+                .is_some()
+        );
+        fs::rename(
+            dir.path().join("Rook copy.away"),
+            dir.path().join("Rook copy.md"),
+        )
+        .unwrap();
+        assert_eq!(
+            fs::read_to_string(dir.path().join("Rook copy.md")).unwrap(),
+            separated
+        );
         harness.get_by_label("Undo separate entry").click();
         harness.run_steps(2);
         assert_eq!(
             fs::read_to_string(dir.path().join("Rook copy.md")).unwrap(),
             original
+        );
+        // Its Undo ends the result.
+        assert!(
+            harness
+                .query_all_by_label("Rook copy.md is now a separate entry.")
+                .next()
+                .is_none()
         );
     }
 

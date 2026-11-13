@@ -31,6 +31,10 @@ pub mod world_build;
 /// The middle of the reading pane and of the entry list, at the minimum window.
 const READER: Pos2 = pos2(720.0, 400.0);
 const ENTRY_LIST: Pos2 = pos2(400.0, 400.0);
+/// Lost Patrol's second member in the one member-fault form (FJ6): its name, its line and its
+/// cause, as every view says it.
+const CINDER_WOLF_FAULT: &str =
+    "Cinder Wolf · line\u{a0}14: Maximum HP would become −28. It must be 1 or more.";
 
 /// Message choices start at the message text, never at its bar. `choices` are in order and must
 /// all show. `gap` names the choice that keeps exactly an `L` gap from the one before it (the red
@@ -545,7 +549,11 @@ fn words_left_in(d: &Driver<'_>, area: egui::Rect) -> Option<f32> {
     let mut left = None::<f32>;
     d.each_painted_text(|text, _| {
         let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
-        if area.contains(rect.center()) && !is_icon(&text.galley.job.text) {
+        // An empty icon slot (iter-27-B FM1) paints no glyph.
+        if area.contains(rect.center())
+            && !is_icon(&text.galley.job.text)
+            && !text.galley.job.text.trim().is_empty()
+        {
             left = Some(left.map_or(rect.left(), |left| left.min(rect.left())));
         }
     });
@@ -4243,8 +4251,8 @@ pub mod encounter_build {
             let words = d.at_size(size, |d| d.painted_in(eframe::egui::Rect::EVERYTHING));
             d.observe(
                 "T5.7",
-                words.contains("ROSTER 8 · XP 125 of 2,800 · Low")
-                    || words.contains("Low · XP 125 of 2,800"),
+                words.contains("ROSTER 8 · XP 125 · Low (up to 2,800)")
+                    || words.contains("XP 125 · Low"),
                 format!("At {size:?} the saved roster says its XP and word: {words}"),
             );
         }
@@ -4306,6 +4314,28 @@ pub mod encounter_build {
                 format!(
                     "At {size:?}, beside the editor the reader offers no Start fight: {detail}"
                 ),
+            );
+        }
+        // iter-27-B SB1: beside Lookup the actions are measured, so a short name and both
+        // actions, each with its word, share the name's line at every size.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let line = d.at_size(size, |d| {
+                let field = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with("Encounter name"))?
+                    .rect;
+                let on_line = |name: &str| {
+                    d.place_of(name).map(|action| {
+                        field.y_range().contains(action.center().y) && action.left() > field.right()
+                    })
+                };
+                Some((on_line(SAVE_ENCOUNTER)?, on_line(RUN_ENCOUNTER)?))
+            });
+            d.observe(
+                "iter-27-B-SB1",
+                line == Some((true, true)),
+                format!("At {size:?} beside Lookup, Save encounter and Start fight after the name: {line:?}"),
             );
         }
         d.state("stat-block-beside-editor", Sizes::All);
@@ -5841,6 +5871,10 @@ pub mod empty {
             d.has_containing(NO_CAMPAIGN) && d.has(NAME_FIELD) && d.has(ADD_CAMPAIGN);
         go_encounters(d);
         let encounters_says = d.has_containing(NO_CAMPAIGN_ENCOUNTERS) && d.has(OPEN_SETTINGS);
+        // iter-27-B FG3: the empty state's title y here, for the page's other empty state.
+        let no_campaign_title = d
+            .painted_rect_in(NO_CAMPAIGN_ENCOUNTERS, egui::Rect::EVERYTHING)
+            .map(|title| title.top());
         d.state("encounters-no-campaign", Sizes::Default);
         go_party(d);
         let party_says = d.has_containing(NO_CAMPAIGN_PARTY) && d.has(OPEN_SETTINGS);
@@ -5993,6 +6027,19 @@ pub mod empty {
                         && group.left() - encounter.right() >= crate::design::L
                 })
         });
+        let no_encounters_title = d
+            .painted_rect_in("No encounters yet", egui::Rect::EVERYTHING)
+            .map(|title| title.top());
+        d.observe(
+            "iter-27-B-FG3",
+            no_campaign_title.is_some()
+                && no_encounters_title.is_some_and(|y| {
+                    no_campaign_title.is_some_and(|other| (y - other).abs() <= 0.5)
+                }),
+            format!(
+                "The empty states' titles: no encounters {no_encounters_title:?}, no campaign {no_campaign_title:?}"
+            ),
+        );
         d.state("no-encounters", Sizes::Default);
         go_party(d);
         d.expect(NOT_LINKED);
@@ -8525,6 +8572,18 @@ pub mod gallery {
                     .zip(edges.1)
                     .is_some_and(|(a, b)| (a - b).abs() < 1.0),
                 format!("The submenu and quiet menu action share a text edge: {edges:?}"),
+            );
+            // iter-27-A FG1: the submenu row ends with the icon set's caret, as sections and
+            // dropdowns do, not egui's solid triangle.
+            let row = d.place_of("Move to…");
+            let caret = row.and_then(|row| d.painted_rect_in(crate::design::icons::NEXT, row));
+            let solid = row.and_then(|row| {
+                d.painted_rect_in(egui::containers::menu::SubMenuButton::RIGHT_ARROW, row)
+            });
+            d.observe(
+                "iter-27-A-FG1",
+                caret.is_some() && solid.is_none(),
+                format!("Move to… ends with the icon set's caret: row {row:?}, caret {caret:?}, solid {solid:?}"),
             );
         });
         // SD2/AD1, the other caller: with room on the right, the gallery's submenu still opens
@@ -16120,6 +16179,19 @@ pub mod encounter_groups {
                 ),
             );
         }
+        // iter-27-B FJ6 closure (FI6): both member faults have a name and a line.
+        d.observe(
+            "iter-27-B-FJ6-editor",
+            d.has(CINDER_WOLF_FAULT),
+            "The group editor names Cinder Wolf and its line on its invalid change",
+        );
+        // iter-27-B FN5, SN1: an unchanged group that Save would refuse says Invalid, not
+        // `No changes` with a check mark.
+        d.observe(
+            "iter-27-B-FN5",
+            d.visible_text("Invalid") && !d.visible_text("No changes"),
+            "The unchanged group with a member fault says Invalid",
+        );
         d.state("group-unavailable-creature", Sizes::All);
         d.click("Changes for Cinder Wolf");
         let in_view = d.at_size(SMALL, |d| d.in_view_containing("would become −28"));
@@ -16172,7 +16244,7 @@ pub mod encounter_groups {
         d.click(NEW_GROUP);
         d.type_text("Ash Pack");
         assert!(d.is_disabled(SAVE_GROUP));
-        d.expect("Add a creature first");
+        d.expect("Add a creature first.");
         // AH1: Save refuses the empty group, so the state says Invalid, not Unsaved.
         d.observe(
             "iter-25-B-AH1-list",
@@ -16212,6 +16284,26 @@ pub mod encounter_groups {
             format!("Add right edges and scroll bar, tall then short: {lanes:?}"),
         );
         d.type_into(FIND, "wolf");
+        // iter-27-B FI5: the one creature order, as Arrivals sorts it: the exact name first, then
+        // every name that holds the search in the list's order (Werewolf before Winter Wolf).
+        let order = {
+            let mut found: Vec<(f32, String)> = Vec::new();
+            d.each_painted_text(|text, clip| {
+                let words = &text.galley.job.text;
+                if ["Wolf", "Werewolf", "Winter Wolf"].contains(&words.as_str())
+                    && clip.intersects(text.visual_bounding_rect())
+                {
+                    found.push((text.pos.y, words.clone()));
+                }
+            });
+            found.sort_by(|a, b| a.0.total_cmp(&b.0));
+            found.into_iter().map(|(_, name)| name).collect::<Vec<_>>()
+        };
+        d.observe(
+            "iter-27-B-FI5",
+            order == ["Wolf", "Werewolf", "Winter Wolf"],
+            format!("The group editor's search for wolf: {order:?}"),
+        );
         d.state("group-find-creature", Sizes::Default);
         d.click_beside_exact("Wolf", ADD);
         d.click(SAVE_GROUP);
@@ -16253,23 +16345,32 @@ pub mod encounter_groups {
             );
         }
         // iter-24-B AK1, AB2: Save group ends at the members column's right edge (the member
-        // menu's), on the save row with Unsaved and Discard, not across the Add creatures pane.
+        // menu's), not across the Add creatures pane. iter-27-B FB7: it is on the title line,
+        // after the name, as Save encounter is; the save row below keeps Unsaved and Discard.
         for size in [SMALL, DEFAULT, LARGE] {
-            let (save, column, unsaved) = d.at_size(size, |d| {
+            let (save, column, name, unsaved) = d.at_size(size, |d| {
                 (
                     d.place_of(SAVE_GROUP),
                     d.place_of("More actions for Cinder Wolf"),
+                    d.place_of(&d.name_starting("Group name: ")),
                     d.painted_rect_in("Unsaved", egui::Rect::EVERYTHING),
                 )
             });
             d.observe(
                 "iter-24-B-AK1",
-                save.zip(column).zip(unsaved).is_some_and(|((save, column), unsaved)| {
-                    (save.right() - column.right()).abs() <= 0.5
-                        && save.top() < unsaved.bottom()
-                        && unsaved.top() < save.bottom()
+                save.zip(column)
+                    .is_some_and(|(save, column)| (save.right() - column.right()).abs() <= 0.5),
+                format!("At {size:?}: Save group {save:?}, column's menu {column:?}"),
+            );
+            d.observe(
+                "iter-27-B-FB7",
+                save.zip(name).zip(unsaved).is_some_and(|((save, name), unsaved)| {
+                    save.left() > name.right()
+                        && save.top() < name.bottom()
+                        && name.top() < save.bottom()
+                        && unsaved.top() >= save.bottom() - 0.5
                 }),
-                format!("At {size:?}: Save group {save:?}, column's menu {column:?}, Unsaved {unsaved:?}"),
+                format!("At {size:?}: Save group {save:?} on the name's line {name:?}, above Unsaved {unsaved:?}"),
             );
         }
         d.state("group-member-removed-with-undo", Sizes::All);
@@ -16336,6 +16437,19 @@ pub mod encounter_groups {
             replaced
                 .is_some_and(|words| d.has_tone_bar(words, crate::design::colors().result.success)),
             format!("The replacement result {replaced:?} has the success bar"),
+        );
+        // iter-27-B AI2: Cinder Wolf's change still cannot stand, so Save would refuse the
+        // replaced group: it says Invalid, and Save group is not primary.
+        let filled = super::session_recording::accent_filled(d);
+        d.observe(
+            "iter-27-B-AI2",
+            // The members changed, so the fault names no line.
+            d.has("Cinder Wolf: Maximum HP would become −28. It must be 1 or more.")
+                && d.visible_text("Invalid")
+                && !d.visible_text("Unsaved")
+                && d.in_view("Save group")
+                && !filled.iter().any(|name| name == "Save group"),
+            format!("The replaced group with a fault left says Invalid; filled: {filled:?}"),
         );
         d.state("group-member-replaced", Sizes::Default);
         // An unrelated edit keeps the result; Undo puts back only the creature, and its words
@@ -16521,18 +16635,28 @@ pub mod encounter_groups {
         );
         // T5.7 in Arrivals: after a group's XP, what the fight becomes when it joins. Bridge
         // Ambush's three creatures and the goblins are far below the party's Low 2,800.
-        let joins = d.at_size(DEFAULT, |d| {
+        // iter-27-B FI10: in the one form, named as the fight after: ` · Fight after: XP 450 ·
+        // Low`.
+        let fight_after = |d: &Driver<'_>| {
             let mut words = Vec::new();
             d.each_painted_text(|text, _| {
-                if text.galley.job.text.starts_with(" → ") {
+                if text.galley.job.text.starts_with(" · Fight after: ") {
                     words.push(text.galley.job.text.clone());
                 }
             });
             words
-        });
+        };
+        let joins = d.at_size(DEFAULT, |d| fight_after(d));
         d.observe(
             "T5.7-arrivals",
-            !joins.is_empty() && joins.iter().all(|word| word == " → Low"),
+            !joins.is_empty()
+                && joins.iter().all(|word| {
+                    word.strip_prefix(" · Fight after: XP ")
+                        .and_then(|rest| rest.strip_suffix(" · Low"))
+                        .is_some_and(|xp| {
+                            !xp.is_empty() && xp.chars().all(|c| c.is_ascii_digit() || c == ',')
+                        })
+                }),
             format!("Each group heading with room says what the fight becomes: {joins:?}"),
         );
         // The words are worked out after a step, not on each frame of the panel.
@@ -16548,7 +16672,8 @@ pub mod encounter_groups {
             d.settle();
             d.at_size(LARGE, |_| ());
             d.settle();
-            d.visible_text(" → Low")
+            // At 960 the heading has no room for it; the default size does.
+            !d.at_size(DEFAULT, |d| fight_after(d)).is_empty()
         });
         d.observe(
             "F1-arrivals-cache",
@@ -16940,6 +17065,12 @@ pub mod encounter_groups {
             let (reached, work) = crate::encounters::member_comparisons();
             crate::test_support::Counts { reached, work }
         });
+        // iter-27-B FN5, AI2: Save's check of the group runs after a change, never on an
+        // unchanged frame. The count is inside the check.
+        let checks = crate::test_support::CachedWork::start("Group check", d, |_| {
+            let (reached, work) = crate::encounters::group_checks();
+            crate::test_support::Counts { reached, work }
+        });
         d.click("Edit group");
         d.expect("Group name: Lost Patrol");
         let run_open = d.app_mut().encounters.has_run();
@@ -16957,26 +17088,141 @@ pub mod encounter_groups {
                 && !d.has_containing("Unknown creature: not in this campaign’s packages."),
             "The group editor names a saved missing member with its line, in the one fault form",
         );
+        // iter-27-B FJ6 closure (AI3, SI2): a member's invalid change is in the same form, with
+        // its name and line, as the Encounters list and Arrivals say it.
+        d.observe(
+            "iter-27-B-FJ6-change",
+            d.has(CINDER_WOLF_FAULT)
+                && !d.has("Maximum HP would become −28. It must be 1 or more."),
+            "The group editor names Cinder Wolf and its line on its invalid change",
+        );
         d.state("broken-group-open-for-repair", Sizes::All);
         let warm = compare.warm(d, d.has("Replace Unknown creature"), 1);
+        let checks_warm = checks.warm(d, d.visible_text("Invalid"), 1);
         let steady = compare.steady(d, |d| {
             d.settle();
             d.at_size(LARGE, |_| ());
             d.settle();
             d.has("Replace Unknown creature")
         });
+        let checks_steady = checks.steady(d, |d| {
+            d.settle();
+            d.at_size(LARGE, |_| ());
+            d.settle();
+            d.visible_text("Invalid")
+        });
+        // Review of PR 299: a held pointer (pressed on a control, carried away, let go elsewhere)
+        // and a wheel scroll change no draft, so they run no check.
+        let checks_idle = checks.steady(d, |d| {
+            let Some(away) = d.place_of(&format!("Group notes for {GROUP_LOST}")) else {
+                return false;
+            };
+            d.drag_hold("Changes for Cinder Wolf", away);
+            d.drag_release(away);
+            d.scroll_at(away.center(), 1);
+            d.scroll_up_at(away.center(), 1);
+            d.settle();
+            d.visible_text("Invalid") && !d.has("Discard")
+        });
+        // An outside file change and a creature change each run it again: a new note, then the
+        // missing member's creature written into the campaign (its member then resolves).
+        let campaign_root = d.root.join("campaigns/emberfall");
+        let reread = |d: &mut Driver<'_>| {
+            d.focus_window(false);
+            d.focus_window(true);
+            d.settle();
+        };
+        let creature_note = |name: &str, id: uuid::Uuid| {
+            splat::content::formats::fixture(
+                "Fixture.md",
+                &format!("splat_id: {id}\nsplat_kind: creature\nsplat_name: {name}\nsplat_creature: {{cr_text: '1/4 (XP 50; PB +2)'}}\nsplat_stats:\n  max_hp: {{value: 10}}\n  armor_class: {{value: 15}}\n  initiative: {{value: 2}}\n  speed: {{value: 30}}\n"),
+                "",
+            )
+            .expect("schema-2 fixture")
+        };
+        std::fs::create_dir_all(campaign_root.join("Creatures")).unwrap();
+        let outside = campaign_root.join("Creatures/Outside Watcher.md");
+        let checks_outside = checks.refresh(d, 1, |d| {
+            std::fs::write(
+                &outside,
+                creature_note(
+                    "Outside Watcher",
+                    splat::character::stable_id("visual:outside"),
+                ),
+            )
+            .unwrap();
+            reread(d);
+            d.visible_text("Invalid") && d.has("Replace Unknown creature")
+        });
+        let found = campaign_root.join("Creatures/Lost Scout.md");
+        let checks_creature = checks.refresh(d, 1, |d| {
+            std::fs::write(
+                &found,
+                creature_note(
+                    "Lost Scout",
+                    splat::character::stable_id("visual:group:lost:creature"),
+                ),
+            )
+            .unwrap();
+            reread(d);
+            d.visible_text("Invalid") && !d.has("Replace Unknown creature")
+        });
+        // Both notes go again, and the group is as it was.
+        std::fs::remove_file(&outside).unwrap();
+        std::fs::remove_file(&found).unwrap();
+        reread(d);
+        d.expect("Replace Unknown creature");
+        // Review of PR 299: a populated Changes form, open and unchanged, copies no change map
+        // and runs no check on a redraw; an edit in it runs the check again.
+        d.click("Changes for Cinder Wolf");
+        d.expect("Display name");
+        let copies = crate::encounters::change_copies();
+        let checks_form = checks.steady(d, |d| {
+            d.settle();
+            d.at_size(LARGE, |_| ());
+            d.settle();
+            d.has("Display name") && d.has_containing("would become −28")
+        });
+        let copied = crate::encounters::change_copies() - copies;
+        let checks_edit = checks.refresh(d, 1, |d| {
+            d.type_into("Display name", "Ash Wolf");
+            d.has("Discard")
+        });
+        d.click("Discard");
+        if d.has("Display name") {
+            d.click("Changes for Cinder Wolf");
+        }
+        d.expect("Replace Unknown creature");
         // Outside the rule's scope: once the members change, a line may no longer be the
         // member's, so the fault names none, as Save's check does. Discard brings the line back.
+        let before = crate::encounters::group_checks();
         let refresh = compare.refresh(d, 1, |d| {
             d.click("More actions for Unknown creature");
             d.click("Move down");
-            d.expect("Unsaved");
+            // FN5: the moved group still has its faults, so it says Invalid, not Unsaved.
+            d.expect("Invalid");
             d.has("Unknown creature: not in this campaign’s packages.")
         });
+        let checked = crate::encounters::group_checks().1 > before.1;
         d.observe(
             "iter-26-B-FJ6-cache",
             warm.is_ok() && steady.is_ok() && refresh.is_ok(),
             format!("Member comparison: warm {warm:?}, steady {steady:?}, refresh {refresh:?}"),
+        );
+        d.observe(
+            "iter-27-B-FN5-cache",
+            checks_warm.is_ok()
+                && checks_steady.is_ok()
+                && checks_idle.is_ok()
+                && checks_outside.is_ok()
+                && checks_creature.is_ok()
+                && checks_form.is_ok()
+                && copied == 0
+                && checks_edit.is_ok()
+                && checked,
+            format!(
+                "Group check: warm {checks_warm:?}, steady {checks_steady:?}, held pointer and scroll {checks_idle:?}, outside file {checks_outside:?}, creature {checks_creature:?}, open form {checks_form:?} with {copied} change map copies, edit in the form {checks_edit:?}, ran again after the move {checked}"
+            ),
         );
         let changed = refresh.is_ok();
         d.click("Discard");
@@ -16994,12 +17240,14 @@ pub mod encounter_groups {
         d.press_ctrl(Key::A);
         d.type_text("2");
         d.press(Key::Enter);
-        let edited = d.visible_text("Unsaved") && d.has(SHORT);
+        // iter-27-B FN5: the changed group still has its faults, so it says Invalid; Discard
+        // shows that it is changed.
+        let edited = d.visible_text("Invalid") && d.has("Discard") && d.has(SHORT);
         d.tab_to("How many of Cinder Wolf");
         d.press_ctrl(Key::A);
         d.type_text("1");
         d.press(Key::Enter);
-        let restored = !d.has(SHORT) && !d.visible_text("Unsaved");
+        let restored = !d.has(SHORT) && !d.has("Discard");
         let idle = compare.steady(d, |d| {
             d.settle();
             d.at_size(SMALL, |_| ());
@@ -17240,10 +17488,19 @@ pub mod encounter_history {
                     == 1
                 && !d.has(RESUME)
                 && d.is_disabled(RUN_ENCOUNTER)
-                && d.visible_text("Go back to the run"),
-            "Keep in Ready adds only a blocked Start fight with a reason, never a second run link",
+                && d.visible_text(crate::encounters::FIGHT_OPEN),
+            "Keep in Ready adds only a blocked Start fight with a reason, never a second Round 2 link",
         );
         d.state("keep-in-ready-blocked", Sizes::All);
+        // iter-27-B FJ7: the reason says why Start is blocked, and its link goes to the run.
+        let on_list = d.has(NEW_ENCOUNTER) && d.has(BACK_TO_RUN);
+        d.click(crate::encounters::GO_TO_RUN);
+        d.observe(
+            "iter-27-B-FJ7",
+            on_list && !d.has(NEW_ENCOUNTER) && !d.has(BACK_TO_RUN),
+            format!("The Ready reason's link opens the run (list shown before: {on_list})"),
+        );
+        go_encounters(d);
         d.click(NEW_ENCOUNTER);
         d.expect("Encounter name");
         d.observe(
@@ -17276,8 +17533,14 @@ pub mod encounter_history {
 
 /// iter-19-B FD3, FT9: the right edges of a group editor's name field, `Belongs to` and
 /// `Group notes`, which ends at the members column's right edge.
+/// The title line's end (iter-27-B FB7: Save group, after the name), `Belongs to`'s and the notes
+/// field's right edges.
 fn group_field_edges(d: &Driver<'_>, group: &str) -> Option<(f32, f32, f32)> {
-    let name = d.place_of(&format!("Group name: {group}"))?.right();
+    let field = d.place_of(&format!("Group name: {group}"))?;
+    let name = d
+        .place_of("Save group")
+        .filter(|save| save.left() > field.right() && save.top() < field.bottom())?
+        .right();
     let belongs = d
         .nodes()
         .into_iter()
@@ -17425,6 +17688,28 @@ pub mod encounter_owned_groups {
             "Groups opens one flat list, with headings for each encounter and deleted encounters last",
         );
         d.expect(&edit_group(GROUP_SHRINE));
+        // iter-27-B FB8: a sub-heading has more room above it (from the group before) than
+        // below it (to its own first group).
+        let gaps = d.at_size(LARGE, |d| {
+            let all = egui::Rect::EVERYTHING;
+            let heading = d.painted_rect_in("FOR ARENA FINAL", all);
+            let above = d.painted_rect_in("1 × Captain Varra", all);
+            let below = d.painted_rect_in("Arena Beasts", all);
+            heading
+                .zip(above)
+                .zip(below)
+                .map(|((heading, above), below)| {
+                    (
+                        heading.top() - above.bottom(),
+                        below.top() - heading.bottom(),
+                    )
+                })
+        });
+        d.observe(
+            "iter-27-B-FB8",
+            gaps.is_some_and(|(above, below)| above >= below + crate::design::M - 0.5),
+            format!("FOR ARENA FINAL: gap above and below {gaps:?}"),
+        );
         d.state("groups-for-encounters-open", Sizes::All);
         d.observe(
             "T13.5",
@@ -19229,7 +19514,7 @@ pub mod session_plan_groups {
             "iter-25-B-AH1",
             d.visible_text("Invalid")
                 && !d.visible_text("Unsaved")
-                && d.has("Add a creature first")
+                && d.has("Add a creature first.")
                 && d.visible_text(crate::encounters::blocked_draft_switch_reason())
                 && !d.visible_text(crate::encounters::draft_switch_reason()),
             "An empty new group says Invalid beside its blocked Save, and Discard is the way to switch (FB6)",
@@ -19241,7 +19526,7 @@ pub mod session_plan_groups {
             sizes.map(|size| d.at_size(size, |d| d.place_of(FIND_CREATURE).map(|r| r.top())));
         d.observe(
             "iter-25-B-AK1",
-            !d.has("Add a creature first")
+            !d.has("Add a creature first.")
                 && empty.iter().all(Option::is_some)
                 && empty == assembled
                 && d.visible_text("Unsaved")
@@ -19249,6 +19534,29 @@ pub mod session_plan_groups {
             format!("Find a creature top, empty {empty:?}, with members {assembled:?}"),
         );
         d.state("plan-group-assembled", Sizes::All);
+        // iter-27-B FL3: the search field ends where each result's Add ends, at the scroll
+        // lane, with or without the bar.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let edges = d.at_size(size, |d| {
+                let search = d.place_of(FIND_CREATURE)?;
+                let adds: Vec<f32> = d
+                    .nodes()
+                    .into_iter()
+                    .filter(|node| {
+                        node.name == ADD && node.in_view() && node.rect.left() > search.left()
+                    })
+                    .map(|node| node.rect.right())
+                    .collect();
+                Some((search.right(), adds))
+            });
+            d.observe(
+                "iter-27-B-FL3",
+                edges.as_ref().is_some_and(|(search, adds)| {
+                    !adds.is_empty() && adds.iter().all(|add| (add - search).abs() <= 0.5)
+                }),
+                format!("At {size:?}, the search's right edge and each Add's: {edges:?}"),
+            );
+        }
         for size in [DEFAULT, LARGE] {
             let edges = d.at_size(size, |d| group_field_edges(d, "Ash Pack"));
             d.observe(
@@ -19260,9 +19568,9 @@ pub mod session_plan_groups {
             );
         }
         // Must stay true: when the compact editor shows only Add creatures, the name keeps no
-        // column edge from the wider layout; it runs on to the edge Save group ends at, on the
-        // save row below it (iter-24-B AK1). That edge is the compact pane's own: the search
-        // field's right edge, which no stored column edge sets (iter-24-B review).
+        // column edge from the wider layout; it runs on to Save group, on its line (iter-27-B
+        // FB7). Save ends at the compact pane's own edge: the search field's right edge, which
+        // no stored column edge sets (iter-24-B review).
         let gap = d.at_size(SMALL, |d| {
             let compact = d.has("Back to the plan") && !d.has("Group notes for Ash Pack");
             let gap = d
@@ -19271,8 +19579,8 @@ pub mod session_plan_groups {
                 .zip(d.place_of(FIND_CREATURE))
                 .map(|((name, save), search)| {
                     (
-                        save.right() - name.right(),
-                        save.top() - name.bottom(),
+                        save.left() - name.right(),
+                        (save.center().y - name.center().y).abs(),
                         save.right() - search.right(),
                     )
                 });
@@ -19281,13 +19589,13 @@ pub mod session_plan_groups {
         d.observe(
             "iter-19-B-FT9-compact",
             gap.0
-                && gap.1.is_some_and(|(edge, below, pane)| {
+                && gap.1.is_some_and(|(edge, line, pane)| {
                     (0.0..=crate::design::XL).contains(&edge)
-                        && below >= -0.5
-                        && pane.abs() <= 1.0
+                        && line <= 1.0
+                        && (-0.5..=crate::design::M + 0.5).contains(&pane)
                 }),
             format!(
-                "The compact name field ends near Save group's edge, above it, and Save ends at the pane's edge (Save minus name, Save top minus name bottom, Save minus search): {gap:?}"
+                "The compact name field runs on to Save group on its line, and Save ends at the pane's edge, the search at its scroll lane (iter-27-B FL3) (Save left minus name right, centre gap, Save minus search): {gap:?}"
             ),
         );
         let summary_visible = d.at_size(SMALL, |d| d.visible_text("2 × Wolf"));
@@ -21891,6 +22199,36 @@ pub mod session_plan {
                 "iter-21-B-FT2",
                 notes.iter().all(Result::is_ok),
                 format!("At {size:?}, the roster row menu's notes: {notes:?}"),
+            );
+            // iter-27-B FM1: every choice's words start at one x, with or without an icon.
+            let lefts = d.at_size(size, |d| {
+                let first = d.place_of("Move up")?;
+                let last = d.place_of("Remove")?;
+                let menu = egui::Rect::from_min_max(
+                    egui::pos2(
+                        first.left() - crate::design::L,
+                        first.top() - crate::design::XXL - crate::design::L,
+                    ),
+                    egui::pos2(last.right() + crate::design::XXL, last.bottom()),
+                );
+                [
+                    "Edit",
+                    "Move up",
+                    "Move down",
+                    "Duplicate",
+                    "Make it yours",
+                    "Remove",
+                ]
+                .map(|word| d.painted_word_rect(word, menu).map(|rect| rect.left()))
+                .into_iter()
+                .collect::<Option<Vec<f32>>>()
+            });
+            d.observe(
+                "iter-27-B-FM1",
+                lefts
+                    .as_ref()
+                    .is_some_and(|xs| xs.iter().all(|x| (x - xs[0]).abs() <= 0.5)),
+                format!("At {size:?}, the roster row menu's word x: {lefts:?}"),
             );
         }
         d.click("Make it yours");

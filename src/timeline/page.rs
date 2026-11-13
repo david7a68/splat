@@ -48,8 +48,6 @@ pub struct SessionLink {
 
 #[derive(Default)]
 pub struct TimelinePage {
-    /// When each kept result in the list's footer was made, so live Undo results go newest first.
-    orders: ResultOrder,
     /// Each road fight's day on its journey (round 27 FE10), for the Timeline's count of changes.
     road: Option<(u64, std::rc::Rc<std::collections::HashMap<String, String>>)>,
     removed_mentions: usize,
@@ -64,7 +62,8 @@ pub struct TimelinePage {
     /// The Place after list just opened, so it shows the event's own place.
     show_place: bool,
     /// An event just added with the buttons, with one step of undo.
-    just_added: Option<(String, Instant)>,
+    /// The event just added, when, and the add's footer order.
+    just_added: Option<(String, Instant, design::ResultOrder)>,
     /// The list opens where the story is now, at its end.
     opened: bool,
     /// One column: the detail hides the list, so the open event's results end its form.
@@ -153,53 +152,18 @@ pub fn quick_add_with(
     })
 }
 
-/// When a kept result was first shown, by its identity (its kind and what makes this one
-/// result), so a footer lists its results with a live Undo newest first, whatever their kind
-/// (review of PR 274, item 2). The first show is the draw after its action, so it gives the
-/// action's order. A result that ends and comes back with the same identity keeps its place.
-#[derive(Default)]
-pub(crate) struct ResultOrder {
-    seen: std::cell::RefCell<std::collections::HashMap<(String, u64), u64>>,
-}
-
-/// How many results a `ResultOrder` remembers; the oldest go first.
-const KEPT_ORDERS: usize = 64;
-
-impl ResultOrder {
-    /// The order of the result `kind` with identity `of`, given the first time it is asked.
-    pub(crate) fn of(&self, kind: &str, of: impl std::hash::Hash) -> u64 {
-        use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher};
-        let key = (
-            kind.to_owned(),
-            BuildHasherDefault::<DefaultHasher>::default().hash_one(of),
-        );
-        let mut seen = self.seen.borrow_mut();
-        if seen.len() >= KEPT_ORDERS && !seen.contains_key(&key) {
-            let oldest = seen
-                .iter()
-                .min_by_key(|(_, order)| **order)
-                .map(|(key, _)| key.clone());
-            if let Some(oldest) = oldest {
-                seen.remove(&oldest);
-            }
-        }
-        *seen.entry(key).or_insert_with(super::next_result_order)
-    }
-
-    /// A new result of `kind` was just made: its next `of` gives it a new, newest order, even
-    /// when it looks like the one before (the same words added again after an Undo).
-    pub(crate) fn renew(&self, kind: &str) {
-        self.seen.borrow_mut().retain(|(seen, _), _| seen != kind);
-    }
-}
-
-/// A footer's results with a live Undo, gathered with their order and added newest first.
+/// A footer's results with a live Undo, gathered with their order; the footer lists them newest
+/// first.
 pub(crate) struct LiveUndos<'a> {
     items: Vec<LiveUndo<'a>>,
 }
 
 /// One result with a live Undo: its order, its words and how to draw it.
-type LiveUndo<'a> = (u64, String, Box<dyn FnOnce(&mut egui::Ui) + 'a>);
+type LiveUndo<'a> = (
+    design::ResultOrder,
+    String,
+    Box<dyn FnOnce(&mut egui::Ui) + 'a>,
+);
 
 impl<'a> LiveUndos<'a> {
     pub(crate) fn new() -> Self {
@@ -208,18 +172,17 @@ impl<'a> LiveUndos<'a> {
 
     pub(crate) fn push(
         &mut self,
-        order: u64,
+        order: design::ResultOrder,
         words: String,
         draw: impl FnOnce(&mut egui::Ui) + 'a,
     ) {
         self.items.push((order, words, Box::new(draw)));
     }
 
-    /// Add them to `footer`, newest first.
-    pub(crate) fn into_footer(mut self, footer: &mut design::Footer<'a>) {
-        self.items.sort_by_key(|item| std::cmp::Reverse(item.0));
-        for (_, words, draw) in self.items {
-            footer.result(words, true, draw);
+    /// Add them to `footer`, which puts them newest first.
+    pub(crate) fn into_footer(self, footer: &mut design::Footer<'a>) {
+        for (order, words, draw) in self.items {
+            footer.result(order, words, true, draw);
         }
     }
 }
@@ -934,9 +897,9 @@ impl TimelinePage {
         let file = std::cell::Cell::new(None);
         let mut footer = design::Footer::new("timeline_list_footer", ui.available_width());
         let mut undos = LiveUndos::new();
-        if let Some(words) = notes.event_link_result() {
+        if let (Some(words), Some(order)) = (notes.event_link_result(), notes.event_link_order()) {
             let act = &act;
-            undos.push(notes.event_link_order(), words.clone(), move |ui| {
+            undos.push(order, words.clone(), move |ui| {
                 if design::undo_message(ui, Tone::Success, &words, "Undo link update") {
                     act.set(Some(ListAct::UndoLinks));
                 }
@@ -948,7 +911,12 @@ impl TimelinePage {
         if let Some(offer) = &offer {
             let (words, action) = (offer.words.clone(), offer.action.clone());
             let act = &act;
-            footer.result(words.clone(), false, move |ui| {
+            // The rename that made the offer is Book's, which keeps its order by event.
+            let order = open
+                .and_then(|id| book.renamed_orders.get(id))
+                .copied()
+                .unwrap_or_default();
+            footer.result(order, words.clone(), false, move |ui| {
                 if design::message_with_action(ui, Tone::Info, &words, &action) {
                     act.set(Some(ListAct::UpdateLinks));
                 }
@@ -990,7 +958,8 @@ impl TimelinePage {
                 Tone::Success
             };
             let act = &act;
-            let order = self.orders.of("remove", book.removal_action());
+            // The removal's own order, kept with it in Book, as the plan reads it too.
+            let order = book.removal_order().unwrap_or_default();
             undos.push(order, words.clone(), move |ui| {
                 if design::undo_message(ui, tone, &words, "Undo remove") {
                     act.set(Some(ListAct::UndoRemove));
@@ -998,11 +967,10 @@ impl TimelinePage {
             });
         }
         // It goes when the DM moves on, or soon, so that it cannot undo the wrong event.
-        self.just_added = self
-            .just_added
-            .take()
-            .filter(|(id, at)| at.elapsed() < UNDO_ADD_FOR && self.selected.as_ref() == Some(id));
-        if let Some((id, _)) = self.just_added.clone() {
+        self.just_added = self.just_added.take().filter(|(id, at, _)| {
+            at.elapsed() < UNDO_ADD_FOR && self.selected.as_ref() == Some(id)
+        });
+        if let Some((id, _, order)) = self.just_added.clone() {
             ui.ctx().request_repaint_after(UNDO_ADD_FOR);
             let days = day_numbers(&book.events);
             let label = book
@@ -1019,7 +987,6 @@ impl TimelinePage {
             // Timeline lists every session, so its result names only the event.
             let words = added_message(&label, None, restores);
             let act = &act;
-            let order = self.orders.of("add", &id);
             undos.push(order, words.clone(), move |ui| {
                 if design::undo_message(ui, Tone::Success, &words, "Undo add") {
                     act.set(Some(ListAct::UndoAdd(id)));
@@ -1732,8 +1699,7 @@ impl TimelinePage {
         ) {
             self.reveal(&id, book);
             self.focus_title = true;
-            self.orders.renew("add");
-            self.just_added = Some((id, Instant::now()));
+            self.just_added = Some((id, Instant::now(), design::ResultOrder::issue()));
         }
         if let Some(words) = self.dated.clone()
             && design::message_with_action(ui, Tone::Warning, &words, "Play this one")
@@ -1766,8 +1732,7 @@ impl TimelinePage {
                 let id = book.add(Kind::Day, current);
                 self.reveal(&id, book);
                 self.focus_title = true;
-                self.orders.renew("add");
-                self.just_added = Some((id, Instant::now()));
+                self.just_added = Some((id, Instant::now(), design::ResultOrder::issue()));
             }
             return;
         }
