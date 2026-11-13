@@ -1932,6 +1932,9 @@ pub struct Reader {
     pub join: Option<Join>,
     /// `Start fight` in the header, for the app to take after this reader draws.
     pub start_fight: Option<StartFight>,
+    /// `Add to fight` in the header of a creature's reader while a run is open (round 27 FJ5),
+    /// for the app to take after this reader draws, through the run's own add.
+    pub add_to_fight: Option<StartFight>,
     /// Why no fight can start now, as the encounter editor's `Start fight` says it.
     pub start_blocked: Option<&'static str>,
     /// The encounter editor is the page beside this reader: its own primary `Start fight` is the
@@ -2307,6 +2310,12 @@ pub(crate) fn draw_footer(
 }
 
 impl Reader {
+    /// Why the run refused the reader's `Add to fight`: the error of the last action, in the
+    /// pane's footer, until another entry opens or another action replaces it.
+    pub(crate) fn refuse(&mut self, reason: String) {
+        self.error = Some(reason);
+    }
+
     /// The stamp that a change's Log line begins with: the session being played and the day,
     /// `[[Session 1]], Day 1`. With no session, a change writes no Log line.
     fn log_as(&self) -> Option<String> {
@@ -2533,6 +2542,14 @@ impl Reader {
             && !campaign.is_some_and(|c| self.editing(id, c)))
         .then(|| start_fight(item, index))
         .flatten();
+        // While a run is open, a creature joins it from its reader in one press (FJ5). An NPC
+        // keeps its own `Add to fight` form below, which asks for its stat block and side.
+        let add = self
+            .sides
+            .is_some()
+            .then(|| start_fight(item, index))
+            .flatten()
+            .filter(|fight| !fight.npc);
         {
             let width = ui.available_width();
             let cell = ui
@@ -2570,6 +2587,9 @@ impl Reader {
             let start_name = start
                 .as_ref()
                 .map(|start| format!("Start a fight with {}", start.name));
+            let add_name = add
+                .as_ref()
+                .map(|add| format!("Add {} to the fight", add.name));
             let mut actions = Vec::with_capacity(3);
             if edit.is_some() {
                 actions.push(
@@ -2586,6 +2606,14 @@ impl Reader {
                         .density(Density::Read)
                         .name(name)
                         .blocked(self.start_blocked),
+                );
+            }
+            if let Some(name) = add_name.as_deref() {
+                actions.push(
+                    Action::quiet("Add to fight")
+                        .icon(design::icons::ADD)
+                        .density(Density::Read)
+                        .name(name),
                 );
             }
             if edit.is_some() {
@@ -2608,6 +2636,11 @@ impl Reader {
                 && pressed.next() == Some(true)
             {
                 self.start_fight = Some(start);
+            }
+            if let Some(add) = add
+                && pressed.next() == Some(true)
+            {
+                self.add_to_fight = Some(add);
             }
             if let Some(campaign) = edit
                 && pressed.next() == Some(true)
