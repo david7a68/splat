@@ -70,16 +70,12 @@ impl Links for NoLinks {
     }
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn reading_view(ui: &mut egui::Ui, reading: &Reading, links: &dyn Links) -> Option<usize> {
-    ui.add_space(design::M);
     let mut selected = None;
-    if !reading.related.is_empty() {
-        ui.add_space(design::S);
-        style::section_heading(ui, &reading.related_heading);
+    if reading.related.is_empty() {
+        design::gap(ui, design::Gap::M);
+    } else {
+        design::heading(ui, design::Heading::Section(&reading.related_heading));
         for (target, label) in &reading.related {
             let reference = Uuid::parse_str(target)
                 .map_or_else(|_| Reference::Key(target.clone()), Reference::Id);
@@ -221,10 +217,6 @@ pub(crate) fn show_run(
 }
 
 #[allow(clippy::too_many_arguments)]
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn show_inner(
     ui: &mut egui::Ui,
     name: &str,
@@ -290,7 +282,7 @@ fn show_inner(
         );
         let open_link = open_link.or(related(ui));
         if entry.is_some() {
-            ui.add_space(design::L);
+            design::gap(ui, design::Gap::L);
             design::rule(ui);
             reference(ui, entry, &sections, styled.is_some(), origin);
         }
@@ -305,10 +297,6 @@ pub(crate) const WIDE_READER: f32 = design::READER_MEASURE + design::XL + REFERE
 /// What the entry says. `styled` is the entry when it reads as a styled stat block.
 /// `lead_gap` is false when nothing above needs a gap before the first prose.
 #[allow(clippy::too_many_arguments)]
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn content(
     ui: &mut egui::Ui,
     entry: Option<&Entry>,
@@ -323,7 +311,7 @@ fn content(
     let mut open_link = None;
     if let Some(reading) = reading {
         if lead_gap {
-            ui.add_space(design::L);
+            design::gap(ui, design::Gap::L);
         }
         style::markdown(ui, &reading.summary);
     }
@@ -353,10 +341,6 @@ fn content(
 }
 
 /// What is rarely wanted: where the entry comes from, and how it is built.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn reference(
     ui: &mut egui::Ui,
     entry: Option<&Entry>,
@@ -364,7 +348,7 @@ fn reference(
     styled: bool,
     origin: &Origin<'_>,
 ) {
-    ui.add_space(design::M);
+    design::gap(ui, design::Gap::M);
     if entry.is_some_and(|entry| entry.reading().ok().flatten().is_some())
         && let Some(source) = sections
             .iter()

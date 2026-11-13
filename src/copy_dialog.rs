@@ -10,6 +10,8 @@ use splat::content::Entry;
 use std::{path::PathBuf, sync::mpsc};
 use uuid::Uuid;
 
+const COPY_FOLDER: design::FieldId = crate::field_id!("copy_folder");
+
 pub struct CopyDialog {
     source: CopySource,
     destination: Option<(bool, Uuid)>,
@@ -140,7 +142,7 @@ impl CopyDialog {
                             self.completed = None;
                             self.plan = None;
                         }
-                        ui.add_space(design::L);
+                        design::gap(ui, design::Gap::L);
                         if Action::quiet("Close").show(ui).clicked() {
                             close = true;
                         }
@@ -201,7 +203,8 @@ impl CopyDialog {
                         )
                         .show_ui(ui, |ui| {
                             for (campaign, id, label, ..) in &destinations {
-                                ui.selectable_value(
+                                design::choice_value(
+                                    ui,
                                     &mut self.destination,
                                     Some((*campaign, *id)),
                                     label,
@@ -221,7 +224,14 @@ impl CopyDialog {
                 .iter()
                 .find(|(c, id, ..)| Some((*c, *id)) == self.destination)
             {
-                crate::library::folder_field(ui, "Folder", &mut self.folder, &destination.3, None);
+                crate::library::folder_field(
+                    ui,
+                    COPY_FOLDER,
+                    "Folder",
+                    &mut self.folder,
+                    &destination.3,
+                    None,
+                );
                 if !destination.0 && campaigns.active_campaign().is_some() {
                     crate::library::use_checkbox(
                         ui,
