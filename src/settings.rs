@@ -86,7 +86,8 @@ impl Account {
 
 /// The cookie field keeps its id when Settings changes between one and two columns, so a DM who
 /// is pasting keeps the focus and the cursor.
-const SESSION_COOKIE: design::FieldId = crate::field_id!("session_cookie");
+const SESSION_COOKIE: design::FieldId =
+    crate::field_id!("session_cookie").once(design::Once::Settings);
 
 const SESSION_ENDED: &str = "Your sign-in ended. Select Connect to sign in again.";
 

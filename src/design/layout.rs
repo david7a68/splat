@@ -224,7 +224,7 @@ macro_rules! row_keys {
         impl RowKey for $key {}
     )*};
 }
-row_keys!(uuid::Uuid, RowIndex, TextKey, std::path::Path);
+row_keys!(uuid::Uuid, RowIndex, TextKey);
 impl<K: RowKey + ?Sized> sealed::Sealed for &K {}
 impl<K: RowKey + ?Sized> RowKey for &K {}
 impl<K: RowKey> sealed::Sealed for Option<K> {}
@@ -294,6 +294,22 @@ pub enum Once {
 ///     let _ = splat::field_id!("doc_name").of(ui.cursor().min.y as usize);
 /// }
 /// ```
+///
+/// A path or a name is not an identity: a save or a rename changes it while the DM types, and
+/// the field loses its focus, cursor and Undo. Neither is a key (a path can only be the counted
+/// escape `TextKey::from_data`):
+///
+/// ```compile_fail,E0277
+/// let _ = splat::field_id!("doc_name").of(std::path::Path::new("Groups/Wolves.md"));
+/// ```
+///
+/// ```compile_fail,E0277
+/// let _ = splat::field_id!("doc_name").of(std::path::PathBuf::from("Groups/Wolves.md"));
+/// ```
+///
+/// ```compile_fail,E0277
+/// let _ = splat::field_id!("doc_name").of("Wolves");
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FieldName {
     name: &'static str,
@@ -316,8 +332,9 @@ impl FieldName {
         Self { name }
     }
 
-    /// The field of one object: `key` comes from the object whose text the field edits (its id,
-    /// its path), never from the layout.
+    /// The field of one object: `key` is the identity of the object whose text the field edits
+    /// (a `Uuid`, a [`TextOwner`]'s id), never something the field or a save changes (a path, a
+    /// name) and never a place in the layout or a list.
     pub fn of(self, key: impl RowKey) -> FieldId {
         FieldId {
             name: self.name,

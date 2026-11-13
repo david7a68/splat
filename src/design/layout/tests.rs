@@ -622,7 +622,10 @@ fn a_field_id_keeps_focus_across_a_layout_branch() {
     edit(&mut other, Vec::new());
     assert!(ctx.memory(|memory| memory.has_focus(second_id)));
     edit(&mut other, vec![ctrl_z()]);
-    assert_eq!(other, "Brine", "k3-rebind: another object's text keeps its words");
+    assert_eq!(
+        other, "Brine",
+        "k3-rebind: another object's text keeps its words"
+    );
     // Must stay true: the field's own history still works after the guard dropped the old one.
     edit(&mut other, vec![egui::Event::Text("s".into())]);
     assert_eq!(other, "Brines");
@@ -637,7 +640,11 @@ fn a_field_id_keeps_focus_across_a_layout_branch() {
     let before = hashes();
     edit(&mut long, Vec::new());
     edit(&mut long, Vec::new());
-    assert_eq!(hashes(), before, "k3-cost: no work for a field with no focus");
+    assert_eq!(
+        hashes(),
+        before,
+        "k3-cost: no work for a field with no focus"
+    );
 
     // Focus by a click, with a third object's text bound while the field had no focus: egui
     // feeds the old history in the click's frame, so the guard also runs when focus comes.
@@ -664,11 +671,66 @@ fn a_field_id_keeps_focus_across_a_layout_branch() {
             modifiers: egui::Modifiers::NONE,
         }],
     );
-    assert!(ctx.memory(|memory| memory.has_focus(second_id)), "the click gives focus");
+    assert!(
+        ctx.memory(|memory| memory.has_focus(second_id)),
+        "the click gives focus"
+    );
     let focused = hashes();
     edit(&mut gull, vec![ctrl_z()]);
-    assert_eq!(gull, "Gull", "k3-click: the clicked field gets no other object's history");
-    assert!(hashes() - focused <= 2, "k3-cost: at most two hashes a frame with focus");
+    assert_eq!(
+        gull, "Gull",
+        "k3-click: the clicked field gets no other object's history"
+    );
+    assert!(
+        hashes() - focused <= 2,
+        "k3-cost: at most two hashes a frame with focus"
+    );
+
+    // A key that is a place (lead note b): two members keyed by their index in the list. The DM
+    // types in member A's field, presses "Move down", and B now sits at A's index, under A's id
+    // and A's history. Ctrl+Z must leave both members' words as they are, with focus kept
+    // (the program swaps in the same frame) and with focus given back after the press.
+    const MEMBER: FieldName = crate::field_id!("test_member_note");
+    for refocus in [false, true] {
+        let mut members = [String::from("Alpha"), String::from("Beta")];
+        let first = MEMBER.of(RowIndex(0)).named_id("Member note");
+        let draw = |members: &mut [String; 2], events: Vec<egui::Event>| {
+            frame_with(&ctx, vec2(800.0, 400.0), events, |ui| {
+                for (index, text) in members.iter_mut().enumerate() {
+                    let _ = line_field(
+                        ui,
+                        MEMBER.of(RowIndex(index)),
+                        "Member note",
+                        text,
+                        "",
+                        200.0,
+                    );
+                }
+            });
+        };
+        ctx.memory_mut(|memory| memory.request_focus(first));
+        draw(&mut members, Vec::new());
+        draw(&mut members, vec![egui::Event::Text("x".into())]);
+        assert_eq!(members[0], "Alphax", "the DM typed in A");
+        if refocus {
+            // The press of "Move down" takes the focus; the DM clicks back into the first row.
+            ctx.memory_mut(|memory| memory.surrender_focus(first));
+            draw(&mut members, Vec::new());
+        }
+        members.swap(0, 1);
+        if refocus {
+            ctx.memory_mut(|memory| memory.request_focus(first));
+        }
+        draw(&mut members, Vec::new());
+        assert!(ctx.memory(|memory| memory.has_focus(first)));
+        draw(&mut members, vec![ctrl_z()]);
+        assert_eq!(
+            members,
+            [String::from("Beta"), String::from("Alphax")],
+            "k3-swap (refocus {refocus}): B keeps its words, and A keeps the DM's typing"
+        );
+        ctx.memory_mut(|memory| memory.surrender_focus(first));
+    }
 }
 
 /// Rung 4 for `FieldId`, through the gate's own `widget-id-clash` function: two live fields with
@@ -791,7 +853,8 @@ fn a_search_field_always_draws_its_clear() {
     h.run_steps(2);
     assert!(h.state().query.is_empty() && h.state().cleared == 1);
     assert!(
-        h.ctx.memory(|memory| memory.has_focus(SEARCH.named_id("Search"))),
+        h.ctx
+            .memory(|memory| memory.has_focus(SEARCH.named_id("Search"))),
         "n10-focus: the field has its focus back"
     );
     assert!(h.query_by_label("Clear").is_none(), "n10-empty: no Clear");

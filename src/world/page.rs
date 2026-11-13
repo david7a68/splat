@@ -11,9 +11,11 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 const ROW: f32 = 40.0;
-const WORLD_SEARCH: design::FieldId = crate::field_id!("world_search");
-const NEW_NAME: design::FieldId = crate::field_id!("world_new_name");
-const NEW_NOTE_TYPE: design::FieldId = crate::field_id!("world_new_note_type");
+const WORLD_SEARCH: design::FieldId =
+    crate::field_id!("world_search").once(design::Once::PageSearch);
+const NEW_NAME: design::FieldId = crate::field_id!("world_new_name").once(design::Once::CreateForm);
+const NEW_NOTE_TYPE: design::FieldId =
+    crate::field_id!("world_new_note_type").once(design::Once::CreateForm);
 const LIST_WIDTH: f32 = 260.0;
 /// More rows than this in one check are counted, not shown.
 const CHECK_ROWS: usize = 40;
