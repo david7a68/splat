@@ -2813,10 +2813,18 @@ impl<'a> Driver<'a> {
         let margin = self.harness.ctx.style().visuals.clip_rect_margin + 0.5;
         // Nodes are in AccessKit's pixels, painted texts in points.
         let points = crate::design::footer_bands(&self.harness.ctx);
-        let into = |bands: &[egui::Rect], shown: egui::Rect, top: f32| {
+        // A part of the content begins above the band and is painted into it, past egui's clip
+        // margin. A container that holds the whole band (the pane itself) is not a part of it.
+        let into = |bands: &[egui::Rect], rect: egui::Rect, shown: egui::Rect| {
             bands
                 .iter()
-                .find(|band| top < band.top() - 0.5 && shown.intersect(**band).height() > margin)
+                .find(|band| {
+                    let inside = shown.intersect(**band);
+                    rect.top() < band.top() - 0.5
+                        && !rect.contains_rect(**band)
+                        && inside.is_positive()
+                        && inside.height() > margin
+                })
                 .copied()
         };
         let mut over: Vec<String> = self
@@ -2828,13 +2836,13 @@ impl<'a> Driver<'a> {
                     && node.shown.is_positive()
             })
             .filter_map(|node| {
-                into(&bands, node.shown, node.rect.top())
+                into(&bands, node.rect, node.shown)
                     .map(|band| format!("{} {:?} into {band:?}", node.name, node.shown))
             })
             .collect();
         self.each_painted_text(|text, clip| {
             let bounds = text.visual_bounding_rect();
-            if let Some(band) = into(&points, bounds.intersect(clip), bounds.top()) {
+            if let Some(band) = into(&points, bounds, bounds.intersect(clip)) {
                 over.push(format!(
                     "text {:?} {bounds:?} into {band:?}",
                     text.galley.job.text
