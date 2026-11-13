@@ -4622,7 +4622,15 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
             format!("Every Change in the Lookup edit form starts at one x at {size:?}: {detail}"),
         );
     }
-    d.state("npc-edit-form-in-lookup", Sizes::All);
+    // R3f X50: the save row and the reason under it end inside the pane, whole.
+    d.state_prepared("npc-edit-form-in-lookup", Sizes::All, |d| {
+        let reason = crate::encounters::draft_switch_reason();
+        d.observe(
+            "r3f-X50-reason-whole",
+            d.visible_text(reason),
+            format!("`{reason}` is painted whole under the save row"),
+        );
+    });
     for size in [SMALL, DEFAULT, LARGE] {
         let one_primary = d.at_size(size, |d| {
             d.expect("Save changes");

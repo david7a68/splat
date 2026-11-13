@@ -400,6 +400,50 @@ fn click_by_focus(d: &mut Driver<'_>, name: &str) {
 }
 
 /// Round 26: the pane footer whose words hold `words`: the smallest named group that holds them.
+/// R3f X43, X44: a footer's button below a message starts at the message's words and is whole
+/// inside the footer. Its label is the name shortened, if at all, by whole words (the whole name
+/// is its hover and accessible name).
+fn move_at_words(d: &mut Driver<'_>, words: &str, name: &str) {
+    let text = d.painted_rect_in(words, egui::Rect::EVERYTHING);
+    let footer = d
+        .footer_bands()
+        .into_iter()
+        .find(|band| text.is_some_and(|text| band.contains_rect(text)));
+    let button = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name == name && node.role == egui::accesskit::Role::Button);
+    let label = button
+        .as_ref()
+        .map(|button| d.painted_in(button.rect))
+        .unwrap_or_default();
+    // Each word of the label, less a closing `…`, is a whole word of the name, in its order: the
+    // label shortens by whole words wherever it shortens (main's form shortens the arrival).
+    let mut of_name = name.split(' ');
+    let whole_words = !label.is_empty()
+        && label.split(' ').all(|shown| {
+            let shown = shown.strip_suffix('…').unwrap_or(shown);
+            of_name.any(|word| word == shown)
+        });
+    d.observe(
+        "r3f-X43-X44-move-at-words",
+        whole_words
+            && text
+                .zip(footer)
+                .zip(button.as_ref())
+                .is_some_and(|((text, footer), button)| {
+                    (button.rect.left() - text.left()).abs() < 1.0
+                        && button.fully_in_view()
+                        && footer.contains_rect(button.rect)
+                }),
+        format!(
+            "{name} {:?} reads `{label}`, starts at \"{words}\" {text:?}, whole in the footer's \
+             room {footer:?}",
+            button.as_ref().map(|button| (button.rect, button.shown))
+        ),
+    );
+}
+
 fn footer_with(d: &Driver<'_>, words: &str) -> Option<egui::Rect> {
     d.nodes()
         .into_iter()
@@ -16788,7 +16832,14 @@ pub mod encounter_groups {
             roster_places(d).len() == before + 1,
             "The valid member joins while the two unavailable members stay out",
         );
-        d.state("available-member-added", Sizes::All);
+        // R3f X43, X44: the footer's Move button starts at the message's words and is whole.
+        d.state_prepared("available-member-added", Sizes::All, |d| {
+            move_at_words(
+                d,
+                "Lost Patrol joined at",
+                "Move Lost Patrol before Ember Cultist",
+            );
+        });
         // FH1: a tied arrival is a finished change, so its message has the success bar.
         // FH6: its Move button names the group, as the message does, not one member.
         let tied = painted_paragraph(d, "Lost Patrol joined at");
@@ -16883,7 +16934,13 @@ pub mod encounter_groups {
             words.contains(" more") && counted,
             format!("{RIVAL_NAME}'s row at 1200: {words}"),
         );
-        d.state("group-added-with-a-total", Sizes::All);
+        d.state_prepared("group-added-with-a-total", Sizes::All, |d| {
+            move_at_words(
+                d,
+                "Rival Team joined at",
+                "Move Rival Team before Kestrel Dunmoor",
+            );
+        });
         d.observe(
             "T13.2",
             d.has_containing("Undo: add Rival Team")

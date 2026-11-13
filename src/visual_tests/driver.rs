@@ -1073,6 +1073,16 @@ impl<'a> Driver<'a> {
         self.nodes().iter().any(|node| node.name.contains(name))
     }
 
+    /// The room each message footer takes from its pane now (the footer and the `S` above it,
+    /// across the pane), in AccessKit's pixels like `nodes`.
+    pub fn footer_bands(&self) -> Vec<egui::Rect> {
+        let scale = self.harness.ctx.pixels_per_point();
+        crate::design::footer_bands(&self.harness.ctx)
+            .into_iter()
+            .map(|band| band * scale)
+            .collect()
+    }
+
     /// Can a person see this text or control right now?
     pub fn in_view(&self, name: &str) -> bool {
         self.nodes()
@@ -1120,7 +1130,7 @@ impl<'a> Driver<'a> {
         }
     }
 
-    fn click_rect(&mut self, rect: egui::Rect, caption: &str) {
+    pub(super) fn click_rect(&mut self, rect: egui::Rect, caption: &str) {
         let pos = rect.center();
         self.film_aim(rect, caption);
         self.harness.hover_at(pos);
@@ -1449,6 +1459,22 @@ impl<'a> Driver<'a> {
             }
         });
         out.join(" ")
+    }
+
+    /// Each text painted across `area` that its pane's clip cuts: part of its letters show and
+    /// part do not. A list that ends at a whole row has none.
+    pub fn cut_texts_in(&self, area: egui::Rect) -> Vec<String> {
+        let mut out = Vec::new();
+        self.each_painted_text(|text, clip| {
+            let bounds = text.visual_bounding_rect();
+            if area.intersects(bounds)
+                && clip.intersects(bounds)
+                && !clip.expand(1.0).contains_rect(bounds)
+            {
+                out.push(text.galley.job.text.clone());
+            }
+        });
+        out
     }
 
     /// Visible laid-out lines inside an AccessKit control's pixel bounds.
@@ -2770,6 +2796,96 @@ impl<'a> Driver<'a> {
             state,
             &window,
         ));
+        self.check_footer_room(state);
+    }
+
+    /// R3f, the shared footer check, on every captured state: a pane's content ends above its
+    /// message footer, so no control and no text of the content is painted into a footer's band
+    /// (the footer and the `S` above it). Content is what begins above the band; egui paints a
+    /// scroll area's content up to its clip margin past its edge, so that much is allowed. It does
+    /// not ask that an action is in view: the DM scrolls to it.
+    pub(super) fn check_footer_room(&mut self, state: &str) {
+        let bands = self.footer_bands();
+        if bands.is_empty() {
+            return;
+        }
+        let window = format!("{}x{}", self.window.0, self.window.1);
+        let margin = self.harness.ctx.style().visuals.clip_rect_margin + 0.5;
+        // Nodes are in AccessKit's pixels, painted texts in points.
+        let points = crate::design::footer_bands(&self.harness.ctx);
+        // A part of the content begins above the band and is painted into it, past egui's clip
+        // margin. What runs to the pane's bottom (the pane's frame, a column splitter at its edge)
+        // is not a part of it.
+        let into = |bands: &[egui::Rect], rect: egui::Rect, shown: egui::Rect| {
+            bands
+                .iter()
+                .find(|band| {
+                    let inside = shown.intersect(**band);
+                    rect.top() < band.top() - 0.5
+                        && rect.bottom() < band.bottom() - 0.5
+                        && inside.is_positive()
+                        && inside.height() > margin
+                })
+                .copied()
+        };
+        let mut over: Vec<String> = self
+            .nodes()
+            .into_iter()
+            .filter(|node| {
+                node.role != Role::Label
+                    && node.role != Role::GenericContainer
+                    && node.shown.is_positive()
+            })
+            .filter_map(|node| {
+                into(&bands, node.rect, node.shown)
+                    .map(|band| format!("{} {:?} into {band:?}", node.name, node.shown))
+            })
+            .collect();
+        self.each_painted_text(|text, clip| {
+            let bounds = text.visual_bounding_rect();
+            if let Some(band) = into(&points, bounds, bounds.intersect(clip)) {
+                over.push(format!(
+                    "text {:?} {bounds:?} into {band:?}",
+                    text.galley.job.text
+                ));
+            }
+        });
+        self.observe(
+            &format!("r3f-footer-room {state}"),
+            over.is_empty(),
+            format!("{window}: content painted into a footer's band {bands:?}: {over:?}"),
+        );
+    }
+
+    /// The AccessKit IDs among `ids` that Tab reaches in `presses` presses.
+    pub(super) fn tab_reaches(&mut self, ids: &[accesskit::NodeId], presses: usize) -> Vec<u64> {
+        let mut hit = Vec::new();
+        for _ in 0..presses {
+            self.harness.key_press(egui::Key::Tab);
+            self.harness.run_steps(4);
+            let focus = self
+                .harness
+                .root()
+                .children_recursive()
+                .find(|node| node.accesskit_node().is_focused())
+                .map(|node| node.accesskit_node().id());
+            if let Some(id) = focus.filter(|id| ids.contains(id)) {
+                hit.push(id.0);
+            }
+        }
+        self.harness.key_press(egui::Key::Escape);
+        self.settle();
+        hit
+    }
+
+    /// Rest the pointer at `at` long enough for a tooltip, and say whether `words` show.
+    pub(super) fn hover_shows(&mut self, at: egui::Pos2, words: &str) -> bool {
+        self.harness.hover_at(at);
+        self.harness.run_steps(100);
+        let shown = self.has(words);
+        self.harness.remove_cursor();
+        self.settle();
+        shown
     }
 
     fn capture(

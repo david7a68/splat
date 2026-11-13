@@ -1096,6 +1096,25 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         )),
         "A deleted entry's typed Log words block nothing, and the footer says them",
     );
+    // R3f X42: the discard of the lost draft is a result of the pane, so it and its Undo sit in
+    // Lookup's footer, first, before the warning; the open entry's text keeps its place.
+    let undo = d.place_of(&format!("Undo discard of {VARRA_BLACK}"));
+    let footer = footer_with(d, &format!("{VARRA_BLACK} draft discarded."));
+    let warning = d.painted_rect_in(
+        &format!("“{VARRA_BLACK}” was deleted."),
+        egui::Rect::EVERYTHING,
+    );
+    d.observe(
+        "r3f-X42-discard-in-footer",
+        undo.zip(footer)
+            .is_some_and(|(undo, footer)| footer.contains_rect(undo))
+            && undo
+                .zip(warning)
+                .is_some_and(|(undo, warning)| undo.top() < warning.top()),
+        format!(
+            "Undo discard {undo:?} in Lookup's footer {footer:?}, above the warning {warning:?}"
+        ),
+    );
     // App round 2, X14: the scene whose entry is gone says `Not found`, in the warning tone, on
     // its second line at the words' column, as Lookup and World say it.
     for size in [SMALL, DEFAULT] {
