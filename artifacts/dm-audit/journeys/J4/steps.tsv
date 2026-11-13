@@ -12,9 +12,9 @@ between fights	The bell: roll each rival and the wandering table	Do	Roll Rival T
 between fights	The bell: roll each rival and the wandering table	Do	Roll Rival Track	1	Session		false
 between fights	The bell: roll each rival and the wandering table	Do	Roll Rival Track	1	Session		false
 between fights	The bell: roll each rival and the wandering table	Do	Roll Wandering, 0:40 to 1:19	1	Session		false
-between fights	The Old Guard takes its first seal	Do	Take seal: Old Guard	1	Session		false
+between fights	The Old Guard takes its first seal	Do	Take seal: Old Guard	2	Session		false
 between fights	Put the seal on the Timeline	Do	Add to Timeline	1	Session		false
-between fights	Finish the bell	Do	Done: Bell	1	Session		false
+between fights	Finish the bell	Do	Done: Bell	2	Session		false
 between fights	The party enters the arena	Do	Enter room	1	Session		false
 the fight	Start the arena fight	Nav	Start fight: Shrine of Cinders	1	Session	Run	false
 the fight	Start the arena fight	Panel	Ctrl+T, to see the fight's panel	1	Run		false

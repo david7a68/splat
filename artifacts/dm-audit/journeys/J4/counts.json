@@ -26,7 +26,7 @@
       "phase": "between fights",
       "task": "The Old Guard takes its first seal",
       "transitions": 0,
-      "interactions": 1,
+      "interactions": 2,
       "path": "Session"
     },
     {
@@ -40,7 +40,7 @@
       "phase": "between fights",
       "task": "Finish the bell",
       "transitions": 0,
-      "interactions": 1,
+      "interactions": 2,
       "path": "Session"
     },
     {

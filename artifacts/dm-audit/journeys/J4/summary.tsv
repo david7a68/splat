@@ -1,19 +1,19 @@
 Phase totals
 phase	tasks	transitions	interactions	nav	sub	panel	find	do
-between fights	8	0	11	0	0	1	0	10
+between fights	8	0	13	0	0	1	0	12
 the fight	8	2	47	2	0	3	1	41
 after the fight	6	0	17	0	0	1	0	16
 between sessions	1	1	5	1	0	2	0	2
-total	23	3	80	3	0	7	1	69
+total	23	3	82	3	0	7	1	71
 
 Tasks
 phase	task	transitions	interactions	overhead	nav	sub	panel	find	do	path
 between fights	Open the numbers	0	1	1	0	0	1	0	0	Session
 between fights	The party enters a room: the clock reaches 40, and a bell is due	0	1	0	0	0	0	0	1	Session
 between fights	The bell: roll each rival and the wandering table	0	5	0	0	0	0	0	5	Session
-between fights	The Old Guard takes its first seal	0	1	0	0	0	0	0	1	Session
+between fights	The Old Guard takes its first seal	0	2	0	0	0	0	0	2	Session
 between fights	Put the seal on the Timeline	0	1	0	0	0	0	0	1	Session
-between fights	Finish the bell	0	1	0	0	0	0	0	1	Session
+between fights	Finish the bell	0	2	0	0	0	0	0	2	Session
 between fights	Keep the seal's notice in mind for the next fight	0	0	0	0	0	0	0	0	Session
 between fights	The party enters the arena	0	1	0	0	0	0	0	1	Session
 the fight	Start the arena fight	1	2	2	1	0	1	0	0	Session > Run

@@ -8,6 +8,8 @@ merge of `main` at `bd7ff4b0` (pull request 280), frozen again after review roun
 merge of `main` at `19cec3d2` (pull request 282), and were frozen again after the merge of `main` at `53bb0156`
 (pull requests 284, 285 and 288), where J4 costs 2 more (J4-2). The last merge, of `main` at `4d0c799b`
 (pull requests 286, 287, 290, 291 and 292), repaired J6-2 and J6-3; J4-2 stays.
+At the landing, `main` had moved to `2358c56f` (pull requests 293 to 295 and 297, of another work
+stream): there J4 costs 2 more again (J4-3), and the journeys were frozen once more.
 
 Each entry is one of three kinds:
 
@@ -30,6 +32,17 @@ Every outcome that a journey states is an assertion on the saved file, read afte
 - **The driver's words:** `J4/steps.tsv`: the first `Roll Rival Track` of each bell takes 2 interactions.
 - **Route measured:** 5 against 4 for step 3, and 6 against 5 for step 13: steps 1 to 13 cost 27 against the
   design's 25 and paper's 25. The design counts a scroll only at case D (section 2.4).
+
+## J4-3. Two presses between fights are below the view (app fault, since pull request 297)
+
+- **Journey and step:** J4 steps 4 and 6, at 1200x800, Trackers open beside the Session page.
+- **What I did:** after the bell's rolls, `Take seal: Old Guard`, and after `Add to Timeline`,
+  `Done: Bell`.
+- **What I saw:** since pull request 297 (Trackers line up their values in one column and say results in
+  sentences) each of the two buttons is below the view when the DM needs it. The driver scrolls it into
+  view: 1 more act for each. On `4d0c799b` each cost 1.
+- **The driver's words:** `J4/steps.tsv`: `Take seal: Old Guard` and `Done: Bell` take 2 interactions.
+- **Route measured:** steps 1 to 13 cost 29 against the design's 25; the whole journey costs 82.
 
 ## J3-3. With unsaved words and a changed file, the comparison takes the note's place on the Session page (not walked by the design as measured)
 
