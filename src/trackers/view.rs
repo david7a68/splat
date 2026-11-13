@@ -9,7 +9,7 @@ use crate::design::outcome::{
     Banner, Fault, FaultMessage, KeptOutcome, MessageChoice, Outcome, PagePlaceholder, Pressed,
     Said, Sentence, UndoStep, Verb,
 };
-use crate::design::{self, Action, Density, Type, colors, icons};
+use crate::design::{self, Action, Density, Gap, Heading, TextKey, Type, colors, icons};
 use eframe::egui;
 use std::collections::HashSet;
 
@@ -252,7 +252,7 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, from_top: bool) {
     // was pressed on went away.
     let bottom = footer(ui, trackers, &mut act);
     if !trackers.in_play() {
-        ui.add_space(design::S);
+        design::gap(ui, Gap::S);
         design::empty_state(
             ui,
             icons::BELL,
@@ -400,13 +400,6 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
     if let Some(why) = &state.clock_not_read {
         design::outcome::banner(ui, Banner::Fault(&TrackerFault::ClockNotRead(why.clone())));
     }
-    if !state.due.is_empty() {
-        design::group_heading(ui, "Due", state.due.len());
-        for notice in &state.due {
-            notice_row(ui, rules, view, notice, act);
-        }
-        ui.add_space(design::S);
-    }
     let usable = |pin: bool| {
         rules
             .trackers
@@ -414,16 +407,40 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
             .filter_map(move |t| t.def.as_ref().ok().map(|def| (t.key.as_str(), def)))
             .filter(move |(_, def)| def.pin == pin)
     };
+    if !state.due.is_empty() {
+        design::heading(
+            ui,
+            Heading::Group {
+                title: "Due",
+                count: state.due.len(),
+            },
+        );
+        for notice in &state.due {
+            let top = ui.cursor().top();
+            notice_row(ui, rules, view, notice, act);
+            register_block(ui, top);
+        }
+        // A heading adds its own space above it, so a `Pinned` heading needs none here.
+        if usable(true).next().is_none() {
+            design::gap(ui, Gap::S);
+        }
+    }
     let columns = columns(ui, rules, state, view, *revision);
     if usable(true).next().is_some() {
-        design::group_heading(ui, "Pinned", 0);
+        design::heading(
+            ui,
+            Heading::Group {
+                title: "Pinned",
+                count: 0,
+            },
+        );
         for (key, def) in usable(true) {
             tracker_lines(ui, rules, state, view, columns, key, def, act);
         }
     }
     let more = usable(false).count();
     if more > 0 {
-        ui.add_space(design::S);
+        design::gap(ui, Gap::S);
         design::section_with_id(
             ui,
             "trackers_more",
@@ -444,10 +461,6 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
 
 /// A Due row: its words, its rolls with their results, its proposed changes, and `Done` with
 /// the row's menu at the end.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn notice_row(
     ui: &mut egui::Ui,
     rules: &Rules,
@@ -538,7 +551,7 @@ fn notice_row(
     if !ends_words {
         right_line(ui, |ui| finish(ui, &short, notice, mark, view, act));
     }
-    ui.add_space(design::XS);
+    design::gap(ui, Gap::XS);
 }
 
 /// A Due row's words. A mark at a value names its line: `Old Guard: First seal.` A day mark
@@ -681,13 +694,24 @@ fn finish(
     }
 }
 
+/// Registers the rows drawn since `top` as one list row, so the pane's footer never cuts through
+/// them (N12).
+fn register_block(ui: &egui::Ui, top: f32) {
+    let (area, bottom) = (ui.max_rect(), ui.min_rect().bottom());
+    if bottom > top {
+        design::register_row(
+            ui,
+            egui::Rect::from_min_max(
+                egui::pos2(area.left(), top),
+                egui::pos2(area.right(), bottom),
+            ),
+        );
+    }
+}
+
 /// A tracker's lines: one line, or a heading and one line for each instance. Every line stands
 /// in the panel's columns.
 #[allow(clippy::too_many_arguments)]
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn tracker_lines(
     ui: &mut egui::Ui,
     rules: &Rules,
@@ -705,23 +729,27 @@ fn tracker_lines(
             None => value.to_string(),
         }
     };
-    let indent = if def.per.is_empty() {
-        0.0
-    } else {
+    let indented = !def.per.is_empty();
+    let indent = if indented {
         ui.label(Type::Body.rich(ui, &def.name));
         design::L
+    } else {
+        0.0
     };
     // Names and values stand in the panel's columns, so the values read down one edge and the
     // first actions start at one edge. A long name is cut at a whole word, and its hover keeps it.
     let name_width = (columns.name - indent).max(0.0);
     let top = egui::Layout::left_to_right(egui::Align::Min);
     for instance in def.instances() {
+        let line_top = ui.cursor().top();
         let head = |ui: &mut egui::Ui, view: &mut ViewState| {
-            ui.add_space(indent);
+            if indented {
+                design::gap(ui, Gap::L);
+            }
             let height = Density::Read.control();
             let name = instance.unwrap_or(&def.name);
             name_cell(ui, view, name, egui::vec2(name_width, height));
-            ui.add_space(design::S);
+            design::gap(ui, Gap::S);
             let (rect, _) =
                 ui.allocate_exact_size(egui::vec2(columns.value, height), egui::Sense::hover());
             design::number(
@@ -738,7 +766,7 @@ fn tracker_lines(
             // start, so a wrapped row holds as many as the panel's width allows.
             ui.horizontal_wrapped(|ui| {
                 head(ui, view);
-                ui.add_space(design::S);
+                design::gap(ui, Gap::S);
                 quick_actions(ui, view, key, def, instance, act);
             });
         } else {
@@ -747,13 +775,16 @@ fn tracker_lines(
             ui.with_layout(top, |ui| head(ui, view));
             if !def.quick.is_empty() {
                 ui.with_layout(top, |ui| {
-                    ui.add_space(indent);
+                    if indented {
+                        design::gap(ui, Gap::L);
+                    }
                     ui.horizontal_wrapped(|ui| quick_actions(ui, view, key, def, instance, act));
                 });
             }
         }
+        register_block(ui, line_top);
     }
-    ui.add_space(design::XS);
+    design::gap(ui, Gap::XS);
 }
 
 /// A line's quick actions, or the amount field in the place of the one that asks.
@@ -855,6 +886,8 @@ fn name_cell(ui: &mut egui::Ui, view: &mut ViewState, name: &str, size: egui::Ve
     }
 }
 
+const AMOUNT: design::FieldId = crate::field_id!("trackers_amount");
+
 /// `add: ask` puts a number field in the action's place. It holds focus until Enter or Escape.
 #[allow(
     clippy::disallowed_methods,
@@ -873,13 +906,18 @@ fn amount_field(
     // One id for the field, from its tracker, line and action, whatever layout holds it: the
     // panel's two layouts nest it in different `Ui`s, and an automatic id would lose focus and
     // the typed amount when the width crosses between them.
-    let id = egui::Id::new(("trackers_amount", key.as_str(), instance.as_deref(), label));
+    let id = AMOUNT
+        .with(TextKey::from_data(key.as_str()))
+        .with(instance.as_deref().map(TextKey::from_data))
+        .with(TextKey::from_data(label));
     let response = ui.add_sized(
         egui::vec2(width, Density::Read.control()),
-        egui::TextEdit::singleline(typed)
-            .id(id)
-            .min_size(egui::vec2(0.0, Density::Read.control()))
-            .hint_text("Amount"),
+        |ui: &mut egui::Ui| {
+            id.single_line(ui, &mut *typed, |edit| {
+                edit.min_size(egui::vec2(0.0, Density::Read.control()))
+                    .hint_text("Amount")
+            })
+        },
     );
     design::named(ui, &response, label);
     if std::mem::take(&mut view.focus_asking) {
