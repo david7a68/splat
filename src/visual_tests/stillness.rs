@@ -1319,14 +1319,19 @@ pub fn line_starts(items: &[Item], quiet: &[egui::Rect], texts: &[Placed]) -> Ve
             continue;
         };
         let clip = words.clip;
-        let line = item.rect.y_range();
+        // On its line: the heights overlap by at least half the smaller one (a tall title beside
+        // a button is on the button's line).
+        let on_line = |rect: egui::Rect| {
+            let overlap = rect.bottom().min(item.rect.bottom()) - rect.top().max(item.rect.top());
+            overlap >= 0.5 * rect.height().min(item.rect.height())
+        };
         let outside = |text: &&Placed| {
             text.clip == clip && !item.rect.expand(1.0).contains(text.rect.center())
         };
         let before: Vec<&Placed> = texts
             .iter()
             .filter(outside)
-            .filter(|text| line.contains(text.rect.center().y) && text.rect.right() <= words.start)
+            .filter(|text| on_line(text.rect) && text.rect.right() <= words.start)
             .collect();
         if let Some(neighbour) = before
             .iter()
@@ -1354,6 +1359,7 @@ pub fn line_starts(items: &[Item], quiet: &[egui::Rect], texts: &[Placed]) -> Ve
                 .filter(outside)
                 .filter(|text| !icon_only(&text.words))
                 .filter(|text| (text.start - words.start).abs() <= 3.0 * L)
+                .filter(|text| !on_line(text.rect))
                 .filter_map(|text| {
                     let gap = if above {
                         item.rect.top() - text.rect.bottom()
@@ -2607,6 +2613,24 @@ mod tests {
                 &[cancel(364.0)],
                 &[at(364.0, 226.0, 64.0, 28.0)],
                 &[progress.clone(), words(372.0), status,]
+            )
+            .is_empty()
+        );
+        // A tall title on its line comes before it: the action is not first.
+        let title = Placed {
+            rect: at(372.0, 220.0, 120.0, 40.0),
+            ..text("Rook Ambry", 372.0, 220.0, 120.0)
+        };
+        let edit = item(Role::Button, "Edit", at(500.0, 226.0, 64.0, 28.0), None);
+        assert!(
+            line_starts(
+                &[edit],
+                &[at(500.0, 226.0, 64.0, 28.0)],
+                &[
+                    title,
+                    text("Edit", 508.0, 231.0, 30.0),
+                    text("NPC · Campaign", 372.0, 266.0, 100.0),
+                ]
             )
             .is_empty()
         );
