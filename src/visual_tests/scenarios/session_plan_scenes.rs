@@ -68,6 +68,54 @@ fn fold_shown(d: &Driver<'_>) -> bool {
     })
 }
 
+/// The baseline of the first line of the painted text with exactly these words.
+fn first_baseline(d: &Driver<'_>, words: &str) -> Option<f32> {
+    let mut found = None;
+    d.each_painted_text(|text, _| {
+        if text.galley.job.text == words
+            && let Some(row) = text.galley.rows.first()
+            && let Some(glyph) = row.glyphs.first()
+        {
+            found.get_or_insert(text.pos.y + row.pos.y + glyph.pos.y);
+        }
+    });
+    found
+}
+
+/// Round 27 FL4: a fight's caret is centred on its title's target, and a scene's box sits on
+/// its words as the caret sits on its title (each measured from its title's baseline).
+fn lead_centred(d: &Driver<'_>) -> (bool, String) {
+    let line = crate::design::Type::Body.line();
+    let scene_box = d
+        .place_of(&format!("Open: {VARRA}"))
+        .map(|rect| rect.center().y);
+    let fight = d.place_of(SHRINE);
+    let caret = fight.and_then(|fight| {
+        let area = egui::Rect::from_x_y_ranges(
+            fight.left() - 2.0 * crate::design::XL..=fight.left(),
+            fight.top() - crate::design::S..=fight.top() + line + crate::design::S,
+        );
+        d.painted_word_rect(crate::design::icons::NEXT, area)
+            .map(|rect| rect.center().y)
+    });
+    let (scene_line, title_line) = (first_baseline(d, VARRA), first_baseline(d, SHRINE));
+    let centred = fight
+        .zip(caret)
+        .is_some_and(|(fight, caret)| (fight.center().y - caret).abs() <= 1.0);
+    let same = scene_box
+        .zip(scene_line)
+        .zip(caret.zip(title_line))
+        .is_some_and(|((lead, words), (caret, title))| {
+            ((words - lead) - (title - caret)).abs() <= 1.0
+        });
+    (
+        centred && same,
+        format!(
+            "fight target {fight:?}, caret {caret:?}, title baseline {title_line:?}; box {scene_box:?}, scene baseline {scene_line:?}"
+        ),
+    )
+}
+
 /// App round 1, V2 and V8: a scene's words start at the fights' title column, at a plan row
 /// title's size, and its second line sits at a fight row's pitch.
 fn scene_matches_fight(d: &Driver<'_>) -> (bool, String) {
@@ -222,6 +270,16 @@ pub fn run(d: &mut Driver<'_>) {
             format!(
                 "At {size:?}, a scene's words start at the fights' title column, at a plan row title's size, with its second line at a fight row's pitch: {detail}"
             ),
+        );
+    }
+    // Round 27 FL4: the leading slot sits on its title line's centre: a scene's box and a
+    // fight's caret, each within 1 px.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (centred, detail) = d.at_size(size, lead_centred);
+        d.observe(
+            "iter-27-S-FL4",
+            centred,
+            format!("At {size:?}, the box and the caret are centred on their titles: {detail}"),
         );
     }
     d.state("scenes-in-the-plan", Sizes::All);
