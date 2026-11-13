@@ -428,13 +428,7 @@ fn add_results<'a>(
     out: &'a std::cell::Cell<ResultPress>,
 ) {
     for (kind, words, undo) in results.items() {
-        // A link offer and a link result each belong to one renamed entry, and carry their own
-        // order; the other kinds hold one result at a time.
-        let order = match kind {
-            ResultKind::LinkOffer => results.page.link_orders.0,
-            ResultKind::Links => results.page.link_orders.1,
-            kind => order_of(orders, OrderKey::Reader(kind)),
-        };
+        let order = reader_order(results, orders, kind);
         footer.result(order, words, undo, move |ui| {
             let mut pressed = out.get();
             show_result(ui, results, kind, &mut pressed);
@@ -3539,6 +3533,21 @@ enum OrderKey {
 }
 
 type ResultOrders = std::collections::HashMap<OrderKey, design::ResultOrder>;
+
+/// The footer order of the reader's result `kind`, in Read and in Edit Markdown alike. A link
+/// offer and a link result each belong to one renamed entry and carry their own order; the other
+/// kinds hold one result at a time, so their kind's slot is that result's.
+fn reader_order(
+    results: &ReaderResults,
+    orders: &ResultOrders,
+    kind: ResultKind,
+) -> design::ResultOrder {
+    match kind {
+        ResultKind::LinkOffer => results.page.link_orders.0,
+        ResultKind::Links => results.page.link_orders.1,
+        kind => order_of(orders, OrderKey::Reader(kind)),
+    }
+}
 
 /// The order of the result `key`, issued when its action was done.
 fn order_of(orders: &ResultOrders, key: OrderKey) -> design::ResultOrder {
@@ -7726,7 +7735,7 @@ impl Library {
             }
             if results_shown {
                 kept.extend(results.items().into_iter().map(|(kind, words, undo)| {
-                    let order = order_of(orders, OrderKey::Reader(kind));
+                    let order = reader_order(&results, orders, kind);
                     (Kept::Reader(kind), words, undo, order)
                 }));
             }

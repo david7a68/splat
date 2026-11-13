@@ -5177,6 +5177,39 @@ pub fn package_rename(d: &mut Driver<'_>) {
             && d.has("Update 1 link"),
         format!("The offer writes again ({again}), its Undo restores A's links and gives the offer back, and B's links stay"),
     );
+    // Review of PR 298 (re-check): an older discard result is kept, then the links are updated:
+    // the newer `Undo link update` is above the older `Undo discard`, in Edit Markdown and in
+    // Read, as each result keeps the order its own action issued.
+    const DISCARD_A: &str = "Undo discard of Ash Wolf";
+    d.click(EDIT_MARKDOWN);
+    d.type_into_editor("A line to let go.\n");
+    d.click("Discard");
+    d.expect(DISCARD_A);
+    d.click("Update 1 link");
+    d.wait_for_text("Undo link update");
+    let newest_first = |d: &mut Driver<'_>| {
+        let (links, discard) = (d.place_of("Undo link update"), d.place_of(DISCARD_A));
+        (
+            d.in_view("Undo link update")
+                && d.in_view(DISCARD_A)
+                && links
+                    .zip(discard)
+                    .is_some_and(|(links, discard)| links.top() < discard.top()),
+            format!("Undo link update {links:?}, Undo discard {discard:?}"),
+        )
+    };
+    let (edit, edit_detail) = newest_first(d);
+    d.click("Read");
+    let (read, read_detail) = newest_first(d);
+    d.observe(
+        "review-298-3-link-above-discard",
+        edit && read,
+        format!("The newer link update leads the older discard: Edit Markdown {edit_detail}; Read {read_detail}"),
+    );
+    // Back to the offer, as before this check.
+    d.click("Undo link update");
+    d.settle();
+    d.expect("Update 1 link");
     // Round 26 re-check: in Read with an unsaved draft, the save row's footer holds the result;
     // its Undo restores the links, keeps the draft and ends the result. The Library reads the
     // files again once the draft ends, and then the offer shows again.

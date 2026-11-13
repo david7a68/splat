@@ -5516,6 +5516,35 @@ mod tests {
                     "At {size:?} with {grown} more results, the last body action (line {line}) above the pinned footer {at:?} takes its press"
                 );
             }
+            // Still pinned and grown: the wheel scrolls the editor to its end, and its very last
+            // line (59) comes whole into view above the footer and takes its press.
+            let at = footer(&harness).expect("the footer shows");
+            let over = pos2(at.left() + 40.0, top + 40.0);
+            harness.event(egui::Event::PointerMoved(over));
+            for _ in 0..80 {
+                if last_line(&harness, at).is_some_and(|(line, _)| line == 59) {
+                    break;
+                }
+                harness.event(egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: vec2(0.0, -3.0 * Type::Body.line()),
+                    modifiers: egui::Modifiers::NONE,
+                });
+                harness.run_steps(2);
+            }
+            let end = last_line(&harness, at);
+            assert!(
+                end.is_some_and(|(line, _)| line == 59),
+                "At {size:?} the wheel brings line 59 whole into view above the pinned footer {at:?}: {end:?}"
+            );
+            let (_, centre) = end.unwrap();
+            line_pressed.set(None);
+            click(&mut harness, centre);
+            assert_eq!(
+                (line_pressed.get(), background.get()),
+                (Some(59), 0),
+                "At {size:?} the last body line, scrolled to above the pinned and grown footer {at:?}, takes its press"
+            );
             extra.set(0);
             line_pressed.set(None);
             // Back to 4 lines: the footer follows the body up again, without its hairline. The
