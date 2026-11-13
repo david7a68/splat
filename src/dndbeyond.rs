@@ -309,9 +309,13 @@ impl DndBeyond {
                     ui.horizontal(|ui| {
                         let left = ui.cursor().left();
                         ui.label(crate::design::Type::Strong.rich(ui, &remote.name));
-                        // The cursor is already one item gap past the name.
+                        // The cursor is already one item gap past the name. A name so long that
+                        // the column would push Add past the pane's edge gives up the gap first.
+                        let action = crate::design::Action::secondary("Add…").natural_width(ui);
+                        let room = (ui.available_width() - action).max(0.0);
                         ui.add_space(
-                            (left + column + crate::design::L - ui.cursor().left()).max(0.0),
+                            (left + column + crate::design::L - ui.cursor().left())
+                                .clamp(0.0, room),
                         );
                         ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                             if added {
