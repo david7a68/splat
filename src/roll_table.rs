@@ -71,8 +71,13 @@ pub enum Per {
     NotRead(String),
 }
 
-/// The warning on a table whose `per` word Splat cannot read.
-pub const PER_NOT_READ: &str = "Interval not read; using one check each day.";
+/// The warning on a table whose `per` word Splat cannot read: it quotes the word the DM wrote,
+/// says what a journey does instead, and names the words that work (round 27 FE13).
+pub fn per_not_read(word: &str) -> String {
+    format!(
+        "Splat cannot read how often to check (“per {word}”). It rolls one check each day. Use day, watch or hours such as 4h."
+    )
+}
 
 impl Per {
     pub fn read(word: &str) -> Self {
@@ -83,6 +88,14 @@ impl Per {
                 Some(hours) if hours > 0 => Self::Hours(hours),
                 _ => Self::NotRead(word.to_owned()),
             },
+        }
+    }
+
+    /// The warning for a word Splat cannot read; none for a word it reads.
+    pub fn warning(&self) -> Option<String> {
+        match self {
+            Self::NotRead(word) => Some(per_not_read(word)),
+            _ => None,
         }
     }
 
@@ -520,9 +533,10 @@ pub fn roll_control(
         );
         slot.add(egui::Label::new(Type::Body.rich(&slot, result).color(colors().text)).truncate());
     }
-    // The table still rolls; only a journey's checks need the word.
-    if matches!(per, Per::NotRead(_)) {
-        design::small_message(ui, Tone::Warning, PER_NOT_READ);
+    // The table still rolls; only a journey's checks need the word. Round 27 FE4: every warning
+    // under a table has one form, `design::message`, as a fault in its dice or rows has.
+    if let Some(warning) = per.warning() {
+        design::message(ui, Tone::Warning, &warning);
     }
     ui.data_mut(|data| data.insert_temp(id, state));
 }
