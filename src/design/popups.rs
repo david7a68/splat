@@ -10,7 +10,7 @@
 //!
 //! Each part's tests (`popups/tests.rs`) prove its rule once. A caller that uses a part, with no
 //! layer, `Area` or raw interaction of its own, has no duty left for that rule.
-use std::{any::Any, borrow::Cow, marker::PhantomData};
+use std::{any::Any, borrow::Cow, marker::PhantomData, sync::Arc};
 
 use eframe::egui::{
     self, Align, Align2, Id, Layout, Rect, RectAlign, Response, Sense, Ui, Vec2, WidgetInfo,
@@ -18,8 +18,9 @@ use eframe::egui::{
 };
 
 use super::{
-    Action, Density, FORM_WIDTH, FieldId, ICON_SLOT, M, RADIUS_CONTROL, S, ScrollColumn, Type,
-    Word, XS, XXL, colors, combo_icon, focus_ring, icons, one_line, rule,
+    Action, Density, FORM_WIDTH, FieldId, HAIRLINE_WIDTH, ICON_SLOT, M, RADIUS_CONTROL, S,
+    ScrollColumn, Type, Word, XS, XXL, colors, combo_icon, focus_ring, icons, lane_width, one_line,
+    rule,
 };
 
 /// Typestate of a [`Dropdown`]: no choice yet.
@@ -27,12 +28,18 @@ pub struct NoChoice;
 /// Typestate of a [`Dropdown`]: at least one choice; it can show.
 pub struct HasChoices;
 
-/// One choice from a list: the control shows the chosen label, and a list opens under it, as
-/// wide as the control, so it stays inside the control's pane: clear of the pane's splitter and
-/// of a scroll column's lane. If the list does not fit below, it opens above. The keyboard opens
-/// it (Enter or Space on the control), moves through it (arrow keys, Tab), chooses (Enter or
-/// Space) and closes it (Escape); then focus goes back to the control. The chosen choice has a
-/// check mark. The control's id comes from a [`FieldId`], so a layout change keeps its focus.
+/// One choice from a list. The control shows the chosen label, cut at its end, with the whole
+/// label on hover and in its accessible name. Its list opens under it (above it when it does not
+/// fit below), as wide as the control, and inside the body that owns the control: a pane's body
+/// room above its footer when there is one ([`pane::body_room`](super::pane::body_room)), else
+/// the visible part of the control's `Ui`. A list taller than its room scrolls inside itself.
+/// Each row wraps its words inside the list's width, so two names that differ at their end stay
+/// apart. The keyboard opens the list (Enter or Space on the control) on the chosen row, moves
+/// through it (arrow keys, Tab), chooses (Enter or Space) and closes it (Escape); the focused row
+/// is always scrolled into view, and focus goes back to the control when the list closes. The
+/// chosen row has a check mark. A blocked choice shows its reason on its row and takes no
+/// selection. A blocked or disabled drop-down closes its list and takes no selection and no
+/// command. The control's id comes from a [`FieldId`], so a layout change keeps its focus.
 ///
 /// Duties left to the caller: the choices and their words, and what a choice does.
 ///
@@ -41,7 +48,7 @@ pub struct HasChoices;
 /// fn pick(ui: &mut eframe::egui::Ui, side: &mut u8) {
 ///     let _ = Dropdown::new(splat::field_id!("doc_side"), "Side")
 ///         .choice(0, "Allies")
-///         .choice(1, "Enemies")
+///         .blocked_choice(1, "Enemies", "Close the run first.")
 ///         .show(ui, side);
 /// }
 /// ```
@@ -66,6 +73,12 @@ pub struct HasChoices;
 /// let _ = splat::layout::Dropdown::new(splat::field_id!("doc_side"), "Side").choice(0_u8);
 /// ```
 ///
+/// A blocked choice says why:
+///
+/// ```compile_fail,E0061
+/// let _ = splat::layout::Dropdown::new(splat::field_id!("doc_side"), "Side").blocked_choice(0_u8, "Allies");
+/// ```
+///
 /// The current value is of the choices' type:
 ///
 /// ```compile_fail,E0308
@@ -79,11 +92,18 @@ pub struct HasChoices;
 pub struct Dropdown<'a, T, State = NoChoice> {
     id: FieldId,
     name: &'a str,
-    choices: Vec<(T, Cow<'a, str>)>,
+    choices: Vec<Entry<'a, T>>,
     width: Option<f32>,
     blocked: Option<&'a str>,
     command: Option<Word>,
     state: PhantomData<State>,
+}
+
+/// One choice: its value, its words, and why it cannot be chosen now.
+struct Entry<'a, T> {
+    value: T,
+    label: Cow<'a, str>,
+    blocked: Option<&'a str>,
 }
 
 /// What the DM did with a [`Dropdown`] this frame.
@@ -97,7 +117,7 @@ pub struct DropdownResponse {
 }
 
 impl<'a, T> Dropdown<'a, T, NoChoice> {
-    /// `name` is the control's accessible name (`Linked campaign`); the chosen label is its value.
+    /// `name` is the control's accessible name (`Linked campaign`); the chosen label follows it.
     pub fn new(id: FieldId, name: &'a str) -> Self {
         Self {
             id,
@@ -112,12 +132,8 @@ impl<'a, T> Dropdown<'a, T, NoChoice> {
 }
 
 impl<'a, T, State> Dropdown<'a, T, State> {
-    pub fn choice(
-        mut self,
-        value: T,
-        label: impl Into<Cow<'a, str>>,
-    ) -> Dropdown<'a, T, HasChoices> {
-        self.choices.push((value, label.into()));
+    fn push(mut self, entry: Entry<'a, T>) -> Dropdown<'a, T, HasChoices> {
+        self.choices.push(entry);
         Dropdown {
             id: self.id,
             name: self.name,
@@ -129,6 +145,28 @@ impl<'a, T, State> Dropdown<'a, T, State> {
         }
     }
 
+    pub fn choice(self, value: T, label: impl Into<Cow<'a, str>>) -> Dropdown<'a, T, HasChoices> {
+        self.push(Entry {
+            value,
+            label: label.into(),
+            blocked: None,
+        })
+    }
+
+    /// A choice that cannot be chosen now, with its reason on its row (`Linked to Salt Road`).
+    pub fn blocked_choice(
+        self,
+        value: T,
+        label: impl Into<Cow<'a, str>>,
+        reason: &'a str,
+    ) -> Dropdown<'a, T, HasChoices> {
+        self.push(Entry {
+            value,
+            label: label.into(),
+            blocked: Some(reason),
+        })
+    }
+
     /// The control's width; the list has the same. Without it, the available width up to
     /// `FORM_WIDTH`.
     pub fn width(mut self, width: f32) -> Self {
@@ -137,7 +175,7 @@ impl<'a, T, State> Dropdown<'a, T, State> {
     }
 
     /// The control cannot open now, and why: a lock instead of the caret, and the reason on
-    /// hover and as its accessible description.
+    /// hover and as its accessible description. An open list closes.
     pub fn blocked(mut self, reason: Option<&'a str>) -> Self {
         self.blocked = reason;
         self
@@ -157,7 +195,11 @@ impl<'a, T> Dropdown<'a, T, HasChoices> {
         more: impl IntoIterator<Item = (T, L)>,
     ) -> Self {
         self.choices
-            .extend(more.into_iter().map(|(value, label)| (value, label.into())));
+            .extend(more.into_iter().map(|(value, label)| Entry {
+                value,
+                label: label.into(),
+                blocked: None,
+            }));
         self
     }
 }
@@ -167,11 +209,39 @@ fn list_frame(ui: &Ui) -> egui::Frame {
     egui::Frame::popup(ui.style()).inner_margin(0.0)
 }
 
+/// The space above and below a row's words, so a one-line row is a `Read` control.
+fn row_pad() -> f32 {
+    ((Density::Read.control() - Type::Body.line()) / 2.0).max(XS)
+}
+
+/// A row's words, wrapped inside `width`: the label in `Body`, and a blocked choice's reason in
+/// `Small` below it.
+fn row_galleys(
+    ui: &Ui,
+    label: &str,
+    reason: Option<&str>,
+    width: f32,
+    color: egui::Color32,
+) -> (Arc<egui::Galley>, Option<Arc<egui::Galley>>) {
+    let c = colors();
+    let room = (width - 2.0 * S - ICON_SLOT).max(1.0);
+    let wrap = |words: &str, font: egui::FontId, color| {
+        ui.fonts_mut(|fonts| fonts.layout(words.to_owned(), font, color, room))
+    };
+    (
+        wrap(label, Type::Body.font(ui), color),
+        reason.map(|reason| wrap(reason, Type::Small.font(ui), c.muted)),
+    )
+}
+
+/// A row's height in `width`: a `Read` control, or its wrapped words and pad.
+fn row_height(ui: &Ui, label: &str, reason: Option<&str>, width: f32) -> f32 {
+    let (label, reason) = row_galleys(ui, label, reason, width, colors().text);
+    let words = label.size().y + reason.map_or(0.0, |reason| reason.size().y);
+    (words + 2.0 * row_pad()).max(Density::Read.control())
+}
+
 impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
-    )]
     pub fn show(self, ui: &mut Ui, current: &mut T) -> DropdownResponse {
         let c = colors();
         let width = self
@@ -181,6 +251,7 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
         let enabled = self.blocked.is_none() && ui.is_enabled();
         let control = self.id.id();
         let list = control.with("list");
+        let was_open_id = list.with("was_open");
         let (_, rect) = ui.allocate_space(vec2(width, height));
         let sense = if enabled {
             Sense::click()
@@ -191,8 +262,14 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
         let chosen = self
             .choices
             .iter()
-            .find(|(value, _)| value == current)
-            .map(|(_, label)| label.as_ref());
+            .find(|entry| entry.value == *current)
+            .map(|entry| entry.label.as_ref());
+        // A blocked or disabled drop-down has no open list: it takes no selection or command.
+        if !enabled {
+            egui::Popup::close_id(ui.ctx(), list);
+            ui.ctx()
+                .data_mut(|data| data.insert_temp(was_open_id, false));
+        }
         let open = egui::Popup::is_id_open(ui.ctx(), list);
         if ui.is_rect_visible(rect) {
             let fill = if response.hovered() && enabled {
@@ -241,10 +318,14 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
                 focus_ring(ui, rect);
             }
         }
+        // The accessible name says the whole chosen label, which the control may cut.
+        let named = match chosen {
+            Some(label) => format!("{}: {label}", self.name),
+            None => self.name.to_owned(),
+        };
         let value = chosen.unwrap_or_default().to_owned();
-        let name = self.name.to_owned();
         response.widget_info(|| {
-            let mut info = WidgetInfo::labeled(WidgetType::ComboBox, enabled, &name);
+            let mut info = WidgetInfo::labeled(WidgetType::ComboBox, enabled, &named);
             info.current_text_value = Some(value.clone());
             info
         });
@@ -253,53 +334,137 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
                 .accesskit_node_builder(control, |node| node.set_description(reason));
             response = response.on_hover_text(reason);
         }
+        let mut picked = None;
+        let mut command = false;
+        if enabled {
+            (picked, command) = self.list(ui, &response, current, rect, width);
+        }
+        let changed = picked.as_ref().is_some_and(|value| value != current);
+        if let Some(value) = picked {
+            *current = value;
+        }
+        if changed {
+            response.mark_changed();
+        }
+        DropdownResponse {
+            response,
+            changed,
+            command,
+        }
+    }
 
-        // The list: under the control, as wide as it; above it when it does not fit below.
+    /// The open list, placed inside the owning body's usable rect. Returns the value the DM
+    /// chose and whether the DM chose the command.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+    )]
+    fn list(
+        &self,
+        ui: &mut Ui,
+        response: &Response,
+        current: &T,
+        rect: Rect,
+        width: f32,
+    ) -> (Option<T>, bool) {
+        let list = self.id.id().with("list");
+        let was_open_id = list.with("was_open");
         let rows_id = list.with("rows");
+        let revealed_id = list.with("revealed");
+        let revealed = ui
+            .ctx()
+            .data(|data| data.get_temp::<Option<Id>>(revealed_id))
+            .flatten();
+        let mut reveal = None;
         let was_open = ui
             .ctx()
-            .data(|data| data.get_temp::<bool>(list.with("was_open")))
+            .data(|data| data.get_temp::<bool>(was_open_id))
             .unwrap_or(false);
+        // The list's frame draws its stroke outside its content: the content is that much
+        // smaller, so the list is exactly as wide as its control.
+        let stroke = ui.style().visuals.window_stroke.width;
+        let inner = width - 2.0 * stroke;
+        // Its room: the owning pane's body above its footer, or the visible part of `ui`.
+        let bounds = super::pane::body_room(ui)
+            .unwrap_or_else(|| ui.clip_rect())
+            .intersect(ui.ctx().content_rect());
+        let rows_width = inner - lane_width();
+        // Each row's top and height in the list, the command's after its rule.
+        let mut places = Vec::with_capacity(self.choices.len() + 1);
+        let mut top = 0.0;
+        for entry in &self.choices {
+            let height = row_height(ui, &entry.label, entry.blocked, rows_width);
+            places.push((top, height));
+            top += height;
+        }
+        if let Some(word) = self.command {
+            top += HAIRLINE_WIDTH;
+            let height = row_height(ui, word.as_str(), None, rows_width);
+            places.push((top, height));
+            top += height;
+        }
+        let natural = top + 2.0 * stroke;
+        let natural = natural.min(ui.style().spacing.combo_height);
+        let below = bounds.bottom() - rect.bottom() - XS;
+        let above = rect.top() - bounds.top() - XS;
+        let (align, room) = if natural <= below || below >= above {
+            (RectAlign::BOTTOM_START, below)
+        } else {
+            (RectAlign::TOP_START, above)
+        };
+        let max = (natural.min(room) - 2.0 * stroke).max(Density::Read.control());
+        // A row that gained keyboard focus last pass comes into the list's view, centred: the
+        // list opens at that offset, at once, so the next key sees the row.
+        let reveal_index = list.with("reveal_index");
+        let pending = ui
+            .ctx()
+            .data(|data| data.get_temp::<Option<usize>>(reveal_index))
+            .flatten();
+        let mut column = ScrollColumn::new(list.with("scroll"))
+            .max_height(max)
+            .fit_height();
+        if let Some((top, height)) = pending.and_then(|at| places.get(at).copied()) {
+            column = column.vertical_scroll_offset((top - (max - height) / 2.0).max(0.0));
+        }
         let mut picked = None;
         let mut command = false;
         let mut rows = Vec::new();
-        let max = ui.style().spacing.combo_height;
-        // The list's frame draws its stroke outside its content: the content is that much
-        // narrower, so the list is exactly as wide as its control.
-        let inner = width - 2.0 * ui.style().visuals.window_stroke.width;
-        let shown = egui::Popup::from_toggle_button_response(&response)
+        let shown = egui::Popup::from_toggle_button_response(response)
             .id(list)
             .width(inner)
             .frame(list_frame(ui))
-            .align(RectAlign::BOTTOM_START)
-            .align_alternatives(&[RectAlign::TOP_START])
+            .align(align)
+            .align_alternatives(&[])
             .gap(XS)
             .show(|ui| {
                 ui.set_width(inner);
                 ui.spacing_mut().item_spacing.y = 0.0;
-                ScrollColumn::new(list.with("scroll"))
-                    .max_height(max)
-                    .fit_height()
-                    .show(ui, |ui| {
-                        for (value, label) in &self.choices {
-                            let selected = value == current;
-                            let row = choice_row(ui, selected, label);
-                            // The list opens with the keyboard on the chosen row.
-                            if !was_open && selected {
-                                row.request_focus();
-                            }
-                            if row.clicked() {
-                                picked = Some(value.clone());
-                            }
-                            rows.push(row.id);
+                column.show(ui, |ui| {
+                    for (at, entry) in self.choices.iter().enumerate() {
+                        let selected = entry.value == *current;
+                        let row = choice_row(ui, selected, &entry.label, entry.blocked);
+                        // The list opens with the keyboard on the chosen row.
+                        if !was_open && selected && entry.blocked.is_none() {
+                            row.request_focus();
                         }
-                        if let Some(word) = self.command {
-                            rule(ui);
-                            let row = choice_row(ui, false, word.as_str());
-                            command = row.clicked();
-                            rows.push(row.id);
+                        if newly_focused(ui, &row, revealed) {
+                            reveal = Some((row.id, at));
                         }
-                    });
+                        if row.clicked() && entry.blocked.is_none() {
+                            picked = Some(entry.value.clone());
+                        }
+                        rows.push(row.id);
+                    }
+                    if let Some(word) = self.command {
+                        rule(ui);
+                        let row = choice_row(ui, false, word.as_str(), None);
+                        if newly_focused(ui, &row, revealed) {
+                            reveal = Some((row.id, self.choices.len()));
+                        }
+                        command = row.clicked();
+                        rows.push(row.id);
+                    }
+                });
             });
         // A choice or the command closes the list, also from the keyboard (egui closes a popup
         // on a pointer click only).
@@ -320,46 +485,63 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
             }
         }
         ui.ctx().data_mut(|data| {
-            data.insert_temp(list.with("was_open"), open_now);
+            data.insert_temp(reveal_index, reveal.map(|(_, at)| at));
+            if let Some((row, _)) = reveal {
+                data.insert_temp(revealed_id, Some(row));
+            }
+            if !open_now {
+                data.insert_temp(revealed_id, None::<Id>);
+            }
+            data.insert_temp(was_open_id, open_now);
             if open_now {
                 data.insert_temp(rows_id, rows);
             }
         });
-        let changed = picked.as_ref().is_some_and(|value| value != current);
-        if let Some(value) = picked {
-            *current = value;
-        }
-        if changed {
-            response.mark_changed();
-        }
-        DropdownResponse {
-            response,
-            changed,
-            command,
-        }
+        (picked, command)
     }
 }
 
-/// One row of a list: a check mark when it is the chosen one, then its words.
+/// Whether `row` gained keyboard focus since the list last revealed a row, on a visible pass
+/// (a popup's first pass only sizes it).
+fn newly_focused(ui: &Ui, row: &Response, revealed: Option<Id>) -> bool {
+    row.has_focus() && revealed != Some(row.id) && !ui.is_sizing_pass()
+}
+
+/// One row of a list: a check mark when it is the chosen one, then its words, wrapped inside
+/// the row (never cut), and a blocked choice's reason below them; a blocked row takes no press
+/// and no keyboard focus.
 ///
-/// Seam: package X's `design::choice` (branch `iter-28-X-extras`, not on main yet) draws a
-/// selected choice with its check mark. When it lands, this function becomes a call of it; it
-/// has the same signature and look on purpose.
-fn choice_row(ui: &mut Ui, selected: bool, label: &str) -> Response {
+/// Package X's `design::choice` (branch `iter-28-X-extras`) draws a selected choice with its
+/// check mark too, but cuts its words. The test `one_choice_row` fails when both exist, so
+/// whoever lands second makes them one part.
+fn choice_row(ui: &mut Ui, selected: bool, label: &str, blocked: Option<&str>) -> Response {
     let c = colors();
     let width = ui.available_width();
-    let height = Density::Read.control();
-    let (rect, response) = ui.allocate_exact_size(vec2(width, height), Sense::click());
+    let color = if blocked.is_some() { c.muted } else { c.text };
+    let (words, reason) = row_galleys(ui, label, blocked, width, color);
+    let height = row_height(ui, label, blocked, width);
+    let sense = if blocked.is_some() {
+        Sense::hover()
+    } else {
+        Sense::click()
+    };
+    let (rect, response) = ui.allocate_exact_size(vec2(width, height), sense);
     response.widget_info(|| {
         WidgetInfo::selected(
             WidgetType::SelectableLabel,
-            ui.is_enabled(),
+            blocked.is_none() && ui.is_enabled(),
             selected,
             label,
         )
     });
+    if let Some(reason) = blocked {
+        ui.ctx()
+            .accesskit_node_builder(response.id, |node| node.set_description(reason));
+    }
     if ui.is_rect_visible(rect) {
-        let fill = if response.is_pointer_button_down_on() {
+        let fill = if blocked.is_some() {
+            None
+        } else if response.is_pointer_button_down_on() {
             Some(c.selected)
         } else if response.hovered() {
             Some(c.hover)
@@ -370,25 +552,23 @@ fn choice_row(ui: &mut Ui, selected: bool, label: &str) -> Response {
             ui.painter()
                 .rect_filled(rect, egui::CornerRadius::same(RADIUS_CONTROL as u8), fill);
         }
+        let top = rect.top() + row_pad();
         if selected {
             ui.painter().text(
-                pos2(rect.left() + S, rect.center().y),
+                pos2(rect.left() + S, top + Type::Body.line() / 2.0),
                 Align2::LEFT_CENTER,
                 icons::OK,
                 Type::Body.font(ui),
                 c.accent,
             );
         }
-        let room = (rect.width() - 2.0 * S - ICON_SLOT).max(1.0);
-        let galley = one_line(ui, label, Type::Body.font(ui), c.text, room);
-        ui.painter().galley(
-            pos2(
-                rect.left() + S + ICON_SLOT,
-                rect.center().y - galley.size().y / 2.0,
-            ),
-            galley,
-            c.text,
-        );
+        let left = rect.left() + S + ICON_SLOT;
+        let below = words.size().y;
+        ui.painter().galley(pos2(left, top), words, color);
+        if let Some(reason) = reason {
+            ui.painter()
+                .galley(pos2(left, top + below), reason, c.muted);
+        }
         if response.has_focus() {
             focus_ring(ui, rect);
         }

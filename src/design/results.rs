@@ -1113,10 +1113,15 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Layout(2)],
         ),
         // Package K2: the popup parts.
-        ("src/design/popups.rs", "show", &[Ban::Layout(1)]),
+        ("src/design/popups.rs", "list", &[Ban::Layout(1)]),
         ("src/design/popups.rs", "rich_tip", &[Ban::Layout(2)]),
         ("src/design/popups.rs", "drag_source", &[Ban::Layout(3)]),
         ("src/design/popups.rs", "image_viewer", &[Ban::Layout(1)]),
+        (
+            "src/design/popups/tests.rs",
+            "a_submenu_in_a_narrow_pane_keeps_its_parent_reachable",
+            &[Ban::Layout(1)],
+        ),
     ]
 };
 

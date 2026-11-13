@@ -12,6 +12,7 @@ pub mod popups;
 pub mod reader;
 pub mod results;
 pub mod save_row;
+pub mod status;
 pub mod theme;
 pub mod tokens;
 
@@ -40,4 +41,6 @@ pub use pane::{Body, Fills, FillsReason, Placement};
 pub use popups::{Dropdown, DropdownResponse, Ghost, ImageSize, TipLine, drag_source, rich_tip};
 pub use results::Results;
 pub use save_row::{DraftState, save_row};
+#[allow(unused_imports)]
+pub use status::{KindStatus, StatusKind, Tinted};
 pub use tokens::*;

@@ -140,6 +140,35 @@ fn scroll_column_keeps_the_lane_with_and_without_the_bar() {
         assert_eq!(short, tall, "the content ends at one edge (style {style})");
         assert_eq!(short, given - lane_width(), "the lane is kept");
     }
+    // K2 (gap K-6): the column gives its width as the most its content may take. A form that
+    // narrows itself keeps its own width; `full_width` makes the content fill the column.
+    let ctx = context();
+    let (mut narrowed, mut filled, mut column) = (0.0, 0.0, 0.0);
+    frame(&ctx, vec2(600.0, 300.0), |ui| {
+        column = ui.available_width() - lane_width();
+        ScrollColumn::new("narrows")
+            .max_height(100.0)
+            .show(ui, |ui| {
+                ui.set_max_width(200.0);
+                narrowed = ui.available_width();
+                ui.label("A form");
+            });
+        ScrollColumn::new("fills")
+            .max_height(100.0)
+            .full_width()
+            .show(ui, |ui| {
+                ui.label("A row");
+                filled = ui.min_rect().width();
+            });
+    });
+    assert_eq!(
+        narrowed, 200.0,
+        "a form that narrows itself keeps its width"
+    );
+    assert!(
+        (filled - column).abs() < 1.0,
+        "full_width fills the column: {filled} vs {column}"
+    );
 }
 
 /// F8: a value that changes in place keeps the next control still.
@@ -390,14 +419,19 @@ fn inline_create_moves_nothing_while_the_dm_types() {
                     long.rect.height() > Density::Read.control(),
                     "taller than a control"
                 );
-                // It fits its kept line: it ends above the help under that line.
+                // It fits its kept line: it ends above what follows the form.
+                assert!(
+                    long.rect.bottom() <= rects[3].top(),
+                    "the reason has its room"
+                );
+                // K2 (gap K-5): the last field's help is under its field, above the kept line.
                 let help = painted
                     .iter()
                     .find(|text| text.text == "Splat keeps the notes here.")
                     .expect("the help is painted");
                 assert!(
-                    long.rect.bottom() <= help.rect.top(),
-                    "the reason has its room"
+                    help.rect.bottom() <= long.rect.top() && help.rect.top() >= rects[0].bottom(),
+                    "the help is between its field and the kept line"
                 );
             }
             if reason.is_none() {

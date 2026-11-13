@@ -1,5 +1,5 @@
 //! Shared UI parts. Screens compose these instead of styling widgets themselves.
-use super::{comparison::Comparison, icons, tokens::*};
+use super::{comparison::Comparison, icons, status::Tinted, tokens::*};
 use eframe::egui::{
     self, Align, Align2, Color32, CornerRadius, FontId, Id, Layout, Rect, Response, Sense, Stroke,
     StrokeKind, Ui, Vec2, WidgetInfo, WidgetType, pos2, text::LayoutJob, vec2,
@@ -1565,7 +1565,8 @@ pub fn add_field<T>(
     }
 }
 
-/// A state as an icon, a word and a colour. Colour is never the only signal.
+/// A state as an icon, a word and a colour. Colour is never the only signal. A status whose
+/// icon and word differ in colour is a `KindStatus` (`design::status`).
 #[derive(Clone, Copy)]
 pub struct Status<'a> {
     pub icon: &'a str,
@@ -1573,8 +1574,8 @@ pub struct Status<'a> {
     pub color: Color32,
 }
 
-pub fn status(ui: &mut Ui, state: Status<'_>) -> Response {
-    status_label(ui, state)
+pub fn status<'a>(ui: &mut Ui, state: impl Into<Tinted<'a>>) -> Response {
+    status_label(ui, state.into())
 }
 
 /// A painted row keeps its status word in the shared status colour.
@@ -1612,14 +1613,15 @@ pub fn status_in_text(
 
 /// Rail notices wrap so their cause stays visible in a narrow column. A second line starts at
 /// the word, not under the icon, as in every other status that wraps.
-pub fn wrapped_status(ui: &mut Ui, state: Status<'_>) -> Response {
+pub fn wrapped_status<'a>(ui: &mut Ui, state: impl Into<Tinted<'a>>) -> Response {
+    let state = state.into();
     if status_fits(ui, state) {
         return status_label(ui, state);
     }
     let status = ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
         status_icon_column(ui, state);
-        ui.add(egui::Label::new(Type::Small.rich(ui, state.word).color(state.color)).wrap())
+        ui.add(egui::Label::new(Type::Small.rich(ui, state.word).color(state.word_color)).wrap())
     });
     // The whole status, icon included, as one label's rect was before it wrapped at the word.
     status
@@ -1630,7 +1632,7 @@ pub fn wrapped_status(ui: &mut Ui, state: Status<'_>) -> Response {
 
 /// Whether a status's icon, a space and its word fit on one line in what is left of `ui`. Then
 /// it is one text, as a one-line status always was; otherwise its lines start at the word.
-fn status_fits(ui: &Ui, state: Status<'_>) -> bool {
+fn status_fits(ui: &Ui, state: Tinted<'_>) -> bool {
     let width = ui.fonts_mut(|fonts| {
         fonts
             .layout_no_wrap(
@@ -1646,7 +1648,7 @@ fn status_fits(ui: &Ui, state: Status<'_>) -> bool {
 
 /// Where a one-line status starts its word: the glyph after the icon and one space. A galley's
 /// size rounds up to whole pixels, so the glyph's own position is the measure.
-fn status_word_x(ui: &Ui, state: Status<'_>) -> f32 {
+fn status_word_x(ui: &Ui, state: Tinted<'_>) -> f32 {
     ui.fonts_mut(|fonts| {
         let galley = fonts.layout_no_wrap(
             format!("{} {}", state.icon, state.word),
@@ -1663,14 +1665,14 @@ fn status_word_x(ui: &Ui, state: Status<'_>) -> f32 {
 
 /// The icon of a status in its own column, as wide as the icon and one space, so the words
 /// after it start where a one-line status starts them and every line of them starts there.
-fn status_icon_column(ui: &mut Ui, state: Status<'_>) {
+fn status_icon_column(ui: &mut Ui, state: Tinted<'_>) {
     let column = status_word_x(ui, state);
     ui.allocate_ui_with_layout(
         vec2(column, Type::Small.line()),
         Layout::left_to_right(Align::Min),
         |ui| {
             ui.set_min_width(column);
-            ui.label(Type::Small.rich(ui, state.icon).color(state.color))
+            ui.label(Type::Small.rich(ui, state.icon).color(state.icon_color))
         },
     );
 }
@@ -1678,16 +1680,21 @@ fn status_icon_column(ui: &mut Ui, state: Status<'_>) {
 /// Two rail lines share the word's left edge, leaving the icon in its own column. The icon and
 /// the word start where a one-line `status` starts them: the icon at the left edge, the word
 /// after the icon and one space. Returns the whole status, and the rect of its first line's word.
-pub fn rail_status_detail(ui: &mut Ui, state: Status<'_>, detail: &str) -> (Response, Rect) {
+pub fn rail_status_detail<'a>(
+    ui: &mut Ui,
+    state: impl Into<Tinted<'a>>,
+    detail: &str,
+) -> (Response, Rect) {
+    let state = state.into();
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
         status_icon_column(ui, state);
         ui.vertical(|ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
-            let response = ui.label(Type::Small.rich(ui, state.word).color(state.color));
+            let response = ui.label(Type::Small.rich(ui, state.word).color(state.word_color));
             let word = response.rect;
             (
-                response.union(ui.label(Type::Small.rich(ui, detail).color(state.color))),
+                response.union(ui.label(Type::Small.rich(ui, detail).color(state.word_color))),
                 word,
             )
         })
@@ -1696,14 +1703,21 @@ pub fn rail_status_detail(ui: &mut Ui, state: Status<'_>, detail: &str) -> (Resp
     .inner
 }
 
-fn status_label(ui: &mut Ui, state: Status<'_>) -> Response {
+fn status_label(ui: &mut Ui, state: Tinted<'_>) -> Response {
     let mut job = LayoutJob::default();
     let format = egui::TextFormat {
         font_id: Type::Small.font(ui),
-        color: state.color,
+        color: state.word_color,
         ..Default::default()
     };
-    job.append(state.icon, 0.0, format.clone());
+    job.append(
+        state.icon,
+        0.0,
+        egui::TextFormat {
+            color: state.icon_color,
+            ..format.clone()
+        },
+    );
     job.append(" ", 0.0, format.clone());
     job.append(state.word, 0.0, format);
     ui.add(egui::Label::new(job).truncate())
@@ -1713,10 +1727,11 @@ fn status_label(ui: &mut Ui, state: Status<'_>) -> Response {
 /// A status that also leads to where the DM can act on it. The line wraps, because the
 /// words are a warning and must not be cut. A second line starts at the word, not under the
 /// icon, as in every other status that wraps.
-pub fn status_link(ui: &mut Ui, state: Status<'_>) -> Response {
+pub fn status_link<'a>(ui: &mut Ui, state: impl Into<Tinted<'a>>) -> Response {
+    let state = state.into();
     let format = egui::TextFormat {
         font_id: Type::Small.font(ui),
-        color: state.color,
+        color: state.word_color,
         ..Default::default()
     };
     // On one line the icon and the word are one text; when it wraps, the word gets its own
@@ -1725,20 +1740,31 @@ pub fn status_link(ui: &mut Ui, state: Status<'_>) -> Response {
         (0.0, None)
     } else {
         let icon = ui.fonts_mut(|fonts| {
-            fonts.layout_no_wrap(state.icon.to_owned(), format.font_id.clone(), state.color)
+            fonts.layout_no_wrap(
+                state.icon.to_owned(),
+                format.font_id.clone(),
+                state.icon_color,
+            )
         });
         (status_word_x(ui, state), Some(icon))
     };
     let mut job = LayoutJob::default();
     if icon.is_none() {
-        job.append(state.icon, 0.0, format.clone());
+        job.append(
+            state.icon,
+            0.0,
+            egui::TextFormat {
+                color: state.icon_color,
+                ..format.clone()
+            },
+        );
         job.append(" ", 0.0, format.clone());
     }
     job.append(
         state.word,
         0.0,
         egui::TextFormat {
-            underline: egui::Stroke::new(1.0, state.color),
+            underline: egui::Stroke::new(1.0, state.word_color),
             ..format
         },
     );
@@ -1753,10 +1779,10 @@ pub fn status_link(ui: &mut Ui, state: Status<'_>) -> Response {
         let top = rect.center().y - galley.size().y / 2.0;
         if let Some(icon) = icon {
             ui.painter()
-                .galley(pos2(rect.left(), top), icon, state.color);
+                .galley(pos2(rect.left(), top), icon, state.icon_color);
         }
         ui.painter()
-            .galley(pos2(rect.left() + column, top), galley, state.color);
+            .galley(pos2(rect.left() + column, top), galley, state.word_color);
         if response.has_focus() {
             focus_ring(ui, rect);
         }
@@ -1765,20 +1791,28 @@ pub fn status_link(ui: &mut Ui, state: Status<'_>) -> Response {
 }
 
 /// A status link whose 24 px hit target does not add height to its text line.
-pub fn inline_status_link(ui: &mut Ui, state: Status<'_>) -> Response {
+pub fn inline_status_link<'a>(ui: &mut Ui, state: impl Into<Tinted<'a>>) -> Response {
+    let state = state.into();
     let format = egui::TextFormat {
         font_id: Type::Small.font(ui),
-        color: state.color,
+        color: state.word_color,
         ..Default::default()
     };
     let mut job = LayoutJob::default();
-    job.append(state.icon, 0.0, format.clone());
+    job.append(
+        state.icon,
+        0.0,
+        egui::TextFormat {
+            color: state.icon_color,
+            ..format.clone()
+        },
+    );
     job.append(" ", 0.0, format.clone());
     job.append(
         state.word,
         0.0,
         egui::TextFormat {
-            underline: egui::Stroke::new(1.0, state.color),
+            underline: egui::Stroke::new(1.0, state.word_color),
             ..format
         },
     );
@@ -1794,7 +1828,7 @@ pub fn inline_status_link(ui: &mut Ui, state: Status<'_>) -> Response {
     if ui.is_rect_visible(rect) {
         let top = rect.center().y - galley.size().y / 2.0;
         ui.painter()
-            .galley(pos2(rect.left(), top), galley, state.color);
+            .galley(pos2(rect.left(), top), galley, state.word_color);
         if response.has_focus() {
             focus_ring(ui, rect);
         }
@@ -3488,9 +3522,11 @@ pub fn hanging_add_strip(
 }
 
 /// A submenu with the same left inset, type and height as a quiet Read action. It opens to the
-/// right of its menu when it fits there inside `inside` with `S` to spare, else to the left, else
-/// as far right as fits. `inside` is the usable area of the pane that opened the menu: without
-/// its splitter and scroll bar, so the submenu and its choices never lie over either.
+/// right of its menu when it fits there inside `inside` with `S` to spare, else to the left;
+/// in a pane too narrow for either (a 316 px column), it opens below its own row (above it when
+/// it does not fit below), so it never covers the row that opened it and the parent menu stays
+/// reachable. `inside` is the usable area of the pane that opened the menu: without its
+/// splitter and scroll bar, so the submenu and its choices never lie over either.
 #[allow(
     clippy::disallowed_methods,
     reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
@@ -3526,10 +3562,11 @@ pub fn menu_submenu<R>(
         let gap = egui::Frame::menu(ui.style()).total_margin().sum().x / 2.0 + 2.0;
         let mut anchor = button.clone();
         if let Some(size) = egui::AreaState::load(ui.ctx(), id).and_then(|state| state.size) {
-            let left = submenu_left(button.interact_rect, size.x, gap, inside);
-            anchor.interact_rect = anchor
-                .interact_rect
-                .translate(vec2(left - (button.interact_rect.right() + gap), 0.0));
+            let place = submenu_place(button.interact_rect, size, gap, inside);
+            anchor.interact_rect = anchor.interact_rect.translate(vec2(
+                place.x - (button.interact_rect.right() + gap),
+                place.y - button.interact_rect.top(),
+            ));
         }
         let inner = SubMenu::new().show(ui, &anchor, contents);
         egui::InnerResponse::new(inner.map(|inner| inner.inner), button)
@@ -3537,17 +3574,28 @@ pub fn menu_submenu<R>(
     .inner
 }
 
-/// Where a submenu `width` wide starts: right of its button, else left of it, else as far right
-/// as fits. It stays `S` inside `inside` whenever `inside` is wide enough to hold it.
-fn submenu_left(button: Rect, width: f32, gap: f32, inside: Rect) -> f32 {
+/// Where a submenu of `size` starts (its top left): right of its button, else left of it, each
+/// level with the button; else below the button's row, or above it when it does not fit below,
+/// as far left as the button and inside `inside`. It never covers the button, and it stays `S`
+/// inside `inside` whenever `inside` is wide enough to hold it.
+fn submenu_place(button: Rect, size: Vec2, gap: f32, inside: Rect) -> egui::Pos2 {
     let right = button.right() + gap;
-    let left = button.left() - gap - width;
-    if right + width <= inside.right() - S {
-        right
+    let left = button.left() - gap - size.x;
+    if right + size.x <= inside.right() - S {
+        pos2(right, button.top())
     } else if left >= inside.left() + S {
-        left
+        pos2(left, button.top())
     } else {
-        (inside.right() - S - width).max(inside.left() + S)
+        let x = button
+            .left()
+            .min(inside.right() - S - size.x)
+            .max(inside.left() + S);
+        let y = if button.bottom() + size.y <= inside.bottom() - S {
+            button.bottom()
+        } else {
+            (button.top() - size.y).max(inside.top())
+        };
+        pos2(x, y)
     }
 }
 
@@ -4201,25 +4249,28 @@ mod tests {
     #[test]
     fn iter22_b_submenu_opens_right_then_left_then_inward() {
         let button = Rect::from_min_max(pos2(500.0, 100.0), pos2(720.0, 128.0));
-        let (gap, width) = (8.0, 126.0);
+        let (gap, size) = (8.0, vec2(126.0, 90.0));
         let pane = |right: f32| Rect::from_min_max(pos2(150.0, 0.0), pos2(right, 800.0));
-        // Room on the right: unchanged.
-        assert_eq!(submenu_left(button, width, gap, pane(1200.0)), 728.0);
+        let place = |inside| submenu_place(button, size, gap, inside);
+        // Room on the right: unchanged, level with the button.
+        assert_eq!(place(pane(1200.0)), pos2(728.0, 100.0));
         // Exactly `S` to spare still opens right; one point less opens left.
+        assert_eq!(place(pane(728.0 + size.x + S)), pos2(728.0, 100.0));
         assert_eq!(
-            submenu_left(button, width, gap, pane(728.0 + width + S)),
-            728.0
-        );
-        assert_eq!(
-            submenu_left(button, width, gap, pane(727.0 + width + S)),
-            500.0 - gap - width
+            place(pane(727.0 + size.x + S)),
+            pos2(500.0 - gap - size.x, 100.0)
         );
         // The pane of the encounter editor at 1200: left of the menu, inside the pane.
-        let left = submenu_left(button, width, gap, pane(735.0));
-        assert!(left + width <= 735.0 - S && left >= 150.0 + S, "{left}");
-        // No room on either side: as far right as fits.
+        let left = place(pane(735.0)).x;
+        assert!(left + size.x <= 735.0 - S && left >= 150.0 + S, "{left}");
+        // K2 (gap K-4): no room on either side: below the button's row, never over it.
         let narrow = Rect::from_min_max(pos2(400.0, 0.0), pos2(760.0, 800.0));
-        assert_eq!(submenu_left(button, width, gap, narrow), 760.0 - S - width);
+        let below = place(narrow);
+        assert_eq!(below.y, button.bottom(), "below the row that opened it");
+        assert!(below.x >= 400.0 + S && below.x + size.x <= 760.0 - S);
+        // No room below either: above it.
+        let low = Rect::from_min_max(pos2(400.0, 0.0), pos2(760.0, 200.0));
+        assert_eq!(place(low).y, button.top() - size.y, "above the row");
     }
 
     #[test]

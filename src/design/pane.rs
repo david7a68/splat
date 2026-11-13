@@ -175,19 +175,19 @@ pub enum Placement {
     Pinned,
 }
 
-/// What kind of pane is open now, innermost last, per layer.
+/// What kind of pane is open now, innermost last, per layer, with its body's usable rect.
 #[derive(Clone, Default)]
 struct Open {
     pass: u64,
-    panes: Vec<(LayerId, bool)>,
+    panes: Vec<(LayerId, bool, Rect)>,
 }
 
 fn open_id() -> Id {
     Id::new("design_open_panes")
 }
 
-/// Open (`Some(content)`) or close (`None`) the innermost pane on `ui`'s layer.
-fn open(ui: &Ui, content: Option<bool>) {
+/// Open (`Some((content, usable))`) or close (`None`) the innermost pane on `ui`'s layer.
+fn open(ui: &Ui, content: Option<(bool, Rect)>) {
     let (layer, pass) = (ui.layer_id(), ui.ctx().cumulative_pass_nr());
     ui.ctx().data_mut(|data| {
         let open = data.get_temp_mut_or_default::<Open>(open_id());
@@ -198,7 +198,7 @@ fn open(ui: &Ui, content: Option<bool>) {
             };
         }
         match content {
-            Some(content) => open.panes.push((layer, content)),
+            Some((content, usable)) => open.panes.push((layer, content, usable)),
             None => {
                 open.panes.pop();
             }
@@ -213,8 +213,13 @@ fn open(ui: &Ui, content: Option<bool>) {
 pub(super) fn column_in_content(ui: &Ui) -> bool {
     let (layer, pass) = (ui.layer_id(), ui.ctx().cumulative_pass_nr());
     let inside = ui.ctx().data(|data| {
-        data.get_temp::<Open>(open_id())
-            .is_some_and(|open| open.pass == pass && open.panes.last() == Some(&(layer, true)))
+        data.get_temp::<Open>(open_id()).is_some_and(|open| {
+            open.pass == pass
+                && open
+                    .panes
+                    .last()
+                    .is_some_and(|(at, content, _)| *at == layer && *content)
+        })
     });
     assert!(
         !(inside && cfg!(debug_assertions)),
@@ -223,6 +228,24 @@ pub(super) fn column_in_content(ui: &Ui) -> bool {
          `Body::Fills(Fills::because(FillsReason::Columns))` for columns that each scroll"
     );
     inside
+}
+
+/// The usable rect of the innermost pane body that `ui` is drawn in, on `ui`'s layer: its room
+/// above the footer, inside the clip. A part that opens a layer from a body (a drop-down's list)
+/// keeps inside it, so it never covers the pane's footer. `None` outside a pane.
+pub fn body_room(ui: &Ui) -> Option<Rect> {
+    let (layer, pass) = (ui.layer_id(), ui.ctx().cumulative_pass_nr());
+    ui.ctx().data(|data| {
+        data.get_temp::<Open>(open_id())
+            .filter(|open| open.pass == pass)
+            .and_then(|open| {
+                open.panes
+                    .iter()
+                    .rev()
+                    .find(|(at, _, _)| *at == layer)
+                    .map(|(_, _, usable)| *usable)
+            })
+    })
 }
 
 /// Each pane identity drawn in this pass. Two live panes with one identity would share their
@@ -522,6 +545,8 @@ impl Footer<'_> {
                 .layout(*ui.layout()),
         );
         body_ui.set_clip_rect(body_clip(ui, body_room));
+        // What a layer opened from the body may use: the body's room, inside the clip.
+        let usable = body_clip(ui, body_room).intersect(body_room);
         let (inner, scroll) = match body {
             Body::Content => {
                 // The viewport is the real room, however small: egui's own 64 px minimum would
@@ -531,7 +556,7 @@ impl Footer<'_> {
                     .max_height(room_height)
                     .min_scrolled_height(room_height)
                     .show(&mut body_ui, |ui| {
-                        open(ui, Some(true));
+                        open(ui, Some((true, usable)));
                         let first = widget_count(ui);
                         let inner = add(ui);
                         let last = widget_count(ui);
@@ -547,7 +572,7 @@ impl Footer<'_> {
                 (output.inner, Some(scroll))
             }
             Body::Fills(_) => {
-                open(&body_ui, Some(false));
+                open(&body_ui, Some((false, usable)));
                 let inner = add(&mut body_ui);
                 open(&body_ui, None);
                 (inner, None)

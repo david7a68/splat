@@ -491,6 +491,7 @@ pub struct ScrollColumn {
     fit_height: bool,
     offset: Option<f32>,
     sideways: bool,
+    full_width: bool,
 }
 
 impl ScrollColumn {
@@ -502,6 +503,7 @@ impl ScrollColumn {
             fit_height: false,
             offset: None,
             sideways: false,
+            full_width: false,
         }
     }
 
@@ -523,6 +525,14 @@ impl ScrollColumn {
 
     pub fn vertical_scroll_offset(mut self, offset: f32) -> Self {
         self.offset = Some(offset);
+        self
+    }
+
+    /// The content takes the column's whole width even when it is narrower: a list whose rows
+    /// fill the column. Without it the column gives its width only as the most the content may
+    /// take, so a form that narrows itself (`set_max_width`) keeps its own width (K2, gap K-6).
+    pub fn full_width(mut self) -> Self {
+        self.full_width = true;
         self
     }
 
@@ -572,13 +582,15 @@ impl ScrollColumn {
         if super::pane::column_in_content(ui) {
             return self.inline(ui, add);
         }
-        let sideways = self.sideways;
+        let (sideways, full) = (self.sideways, self.full_width);
         Self::styled(ui, |ui, width| {
             self.area().show(ui, |ui| {
                 if !sideways {
                     ui.set_max_width(width);
                 }
-                ui.set_min_width(width);
+                if full {
+                    ui.set_min_width(width);
+                }
                 add(ui)
             })
         })
@@ -596,9 +608,12 @@ impl ScrollColumn {
             return self.inline(ui, |ui| add(ui, 0..rows));
         }
         Self::styled(ui, |ui, width| {
+            let full = self.full_width;
             self.area().show_rows(ui, row_height, rows, |ui, range| {
                 ui.set_max_width(width);
-                ui.set_min_width(width);
+                if full {
+                    ui.set_min_width(width);
+                }
                 add(ui, range)
             })
         })
@@ -617,9 +632,12 @@ impl ScrollColumn {
             return self.inline(ui, |ui| add(ui, all));
         }
         Self::styled(ui, |ui, width| {
+            let full = self.full_width;
             self.area().show_viewport(ui, |ui, viewport| {
                 ui.set_max_width(width);
-                ui.set_min_width(width);
+                if full {
+                    ui.set_min_width(width);
+                }
                 add(ui, viewport)
             })
         })
@@ -1353,9 +1371,9 @@ pub struct Named;
 /// Typestate of an [`InlineCreate`]: complete.
 pub struct Complete;
 
-/// The one inline creation layout: the fields (and choices) in order, the named Create after
-/// the last field on that field's line (after its side action), then one kept line below it,
-/// then the last field's help. Help under an earlier field has `L` before the next label.
+/// The one inline creation layout: the fields (and choices) in order, each with its help; the
+/// named Create after the last field on that field's line (after its side action), then the last
+/// field's help, then one kept line. Help under an earlier field has `L` before the next label.
 /// Nothing moves while the DM types: Create keeps its word, and at one width the kept line keeps
 /// its height for the life of the form (a resize may change it, as it changes wrapped text).
 ///
@@ -1587,6 +1605,11 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
                 }
             }
         }
+        // The last field's help, under its line (K2, gap K-5): each field with its help, then
+        // the kept line.
+        if let Some(help) = last_help.take() {
+            super::help(ui, help);
+        }
         // The kept line: one fixed height for the life of the form, whatever it holds now.
         let cancel = self.kept.cancel.map(|(word, _)| word);
         let height = kept_line_height::<R>(ui, room, cancel);
@@ -1609,9 +1632,6 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
             kept.add(egui::Label::new(words).wrap());
         } else if let Some(preview) = self.kept.preview {
             preview_line(&mut kept, preview);
-        }
-        if let Some(help) = last_help {
-            super::help(ui, help);
         }
         out
     }
@@ -1650,11 +1670,13 @@ pub fn menu_popup(response: &Response) -> egui::Popup<'_> {
     egui::Popup::menu(response)
 }
 
-// The popup parts, public here so their doc tests can name them (`splat::layout::Dropdown`).
+// The popup and status parts, public here so their doc tests can name them
+// (`splat::layout::Dropdown`).
 pub use super::popups::{
     Dropdown, DropdownResponse, Ghost, HasChoices, ImageSize, NoChoice, TIP_WIDTH, TipLine,
     drag_source, fitted, image_viewer, rich_tip,
 };
+pub use super::status::{KindStatus, StatusKind, Tinted};
 
 #[cfg(test)]
 pub(crate) mod bans;
