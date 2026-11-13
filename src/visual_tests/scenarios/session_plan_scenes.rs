@@ -184,21 +184,24 @@ pub fn run(d: &mut Driver<'_>) {
     d.click_starting(&format!("{VARRA} (opens"));
     d.wait_for_text("A note for tonight.");
     d.audit_goal_within("T12.11", "read the NPC that a scene links", 1);
-    // Section 1.2: the reader's header shows `Add to Log` next to Edit and `Start fight` with
-    // its word after it, where the room after the title holds them. At 960 the room beside a
-    // 13-letter title holds `Add to Log` as its icon alone; at 1200, `Start fight` too.
-    for (size, shown) in [(SMALL, false), (DEFAULT, true), (LARGE, true)] {
+    // Round 27 FC4, FJ3, FM5: the reader's header shows Edit, `Start fight` and `Add to Log`,
+    // each with its word, at every size: after the title when they fit, else together on one
+    // line under it.
+    for size in [SMALL, DEFAULT, LARGE] {
         let (fits, detail) = d.at_size(size, |d| {
             let (log, start, order) = reader_header(d, VARRA);
+            let word = |rect: Option<egui::Rect>| {
+                rect.is_some_and(|rect| rect.width() > crate::design::Density::Read.control() + 0.5)
+            };
             (
-                start.is_some() == shown && log.is_some() && order,
+                word(start) && word(log) && order,
                 format!("Add to Log {log:?}, Start fight {start:?}"),
             )
         });
         d.observe(
             "T12.12",
             fits,
-            format!("At {size:?}, the reader's Start fight shows: {shown}. {detail}"),
+            format!("At {size:?}, the reader's actions all show with their words. {detail}"),
         );
     }
     d.state("scene-link-in-lookup", Sizes::All);
@@ -208,10 +211,18 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("Remove from tonight");
     // App round 1, V3 and V13: Start fight first, the removal last, both lines with an icon,
     // so their words start at one x.
-    let (start, remove) = (
-        d.place_of(&format!("Start a fight with {VARRA}")),
-        d.place_of("Remove from tonight"),
-    );
+    // The reader beside the plan has its own `Start fight` on its title line (round 27): the
+    // menu's is the one just above the removal.
+    let remove = d.place_of("Remove from tonight");
+    let start = remove.and_then(|remove| {
+        d.nodes()
+            .into_iter()
+            .filter(|node| {
+                node.name == format!("Start a fight with {VARRA}") && node.rect.top() < remove.top()
+            })
+            .map(|node| node.rect)
+            .max_by(|a, b| a.top().total_cmp(&b.top()))
+    });
     let lines: Vec<f32> = [("Start fight", start), ("Remove from tonight", remove)]
         .iter()
         .filter_map(|(words, line)| {
@@ -761,32 +772,41 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         "Escape closes the field, not Lookup, and writes nothing",
     );
 
-    // The reader's header, with a 19-letter title: `Add to Log` next to Edit gives way first, to
-    // its icon, then away; `Start fight` keeps its word or does not show; the title keeps its
-    // width. Beside Lookup at 960 neither fits, at 1200 `Start fight` alone, and wider both
-    // words (section 1.2, measured).
-    for (size, log_shown, start_shown) in [
-        (SMALL, false, false),
-        (DEFAULT, false, true),
-        (LARGE, true, true),
-    ] {
+    // The reader's header, with a 19-letter title (round 27 FC4, FJ3, FM5): no action goes
+    // away or loses its word. When the title and all of them do not fit on the title's line,
+    // Edit, `Start fight` and `Add to Log` move together to one line under the title, `XS`
+    // apart. Beside Lookup at 960 they are under the title.
+    for size in [SMALL, DEFAULT, LARGE] {
         let (fits, detail) = d.at_size(size, |d| {
             let (log, start, order) = reader_header(d, VARRA_BLACK);
-            let word =
-                log.is_some_and(|log| log.width() > crate::design::Density::Read.control() + 0.5);
+            let word = |rect: Option<egui::Rect>| {
+                rect.is_some_and(|rect| rect.width() > crate::design::Density::Read.control() + 0.5)
+            };
+            let edit = d.place_of(&format!("Edit {VARRA_BLACK}"));
+            let title = d.place_of(SEARCH_LOOKUP).and_then(|search| {
+                let (width, height) = d.window_size();
+                d.painted_word_rect(
+                    VARRA_BLACK,
+                    egui::Rect::from_min_max(
+                        egui::pos2(search.left() - 1.0, search.bottom()),
+                        egui::pos2(width, height),
+                    ),
+                )
+            });
+            let under = edit.zip(title).is_some_and(|(edit, title)| edit.top() >= title.bottom() - 0.5);
             (
                 order
-                    && d.has(&format!("Edit {VARRA_BLACK}"))
-                    && log.is_some() == log_shown
-                    && (!log_shown || word)
-                    && start.is_some() == start_shown,
-                format!("Add to Log {log:?}, Start fight {start:?}"),
+                    && word(edit)
+                    && word(log)
+                    && word(start)
+                    && (size != SMALL || under),
+                format!("Edit {edit:?}, Add to Log {log:?}, Start fight {start:?}, title {title:?}"),
             )
         });
         d.observe(
             "T18.2",
             fits,
-            format!("At {size:?}, the header's actions follow section 1.2: {detail}"),
+            format!("At {size:?}, every title-line action shows with its word, on one line: {detail}"),
         );
     }
     d.state("log-header-long-title", Sizes::All);
@@ -794,6 +814,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     // An edit form blocks the field: Splat makes no "changed on disk" warning of its own.
     d.click(&format!("Edit {VARRA_BLACK}"));
     d.type_into_editor(" Draft.");
+    let discard = d.place_of("Discard");
     d.click("Close Lookup");
     d.click(&long_menu);
     d.click(&long);
@@ -801,6 +822,19 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         "T18.2",
         d.visible_text("Save or discard your edit first.") && !d.has(&field),
         "While the entry has an edit form, the Log field waits",
+    );
+    // Round 27 FC2: the reason is in Lookup's footer, so the form the DM types in keeps its
+    // place when the waiting field comes.
+    let waiting = d.place_of("Discard");
+    let footer = d.painted_rect_in(
+        "Save or discard your edit first.",
+        egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(f32::MAX, f32::MAX)),
+    );
+    d.observe(
+        "iter-27-D-FC2",
+        discard.zip(waiting).is_some_and(|(a, b)| (a.top() - b.top()).abs() <= 0.5)
+            && footer.zip(waiting).is_some_and(|(reason, discard)| reason.top() > discard.bottom()),
+        format!("Discard stays at {discard:?} → {waiting:?}; the reason {footer:?} sits below the form, in the footer"),
     );
     d.state("log-field-blocked-by-edit", Sizes::Default);
     d.click("Discard");
@@ -894,7 +928,38 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         d.has(&copy) && d.has(&format!("Dismiss the Log line for {VARRA_BLACK}")),
         "The deleted entry's notice has Copy text and Dismiss",
     );
+    // Round 27 FC1, AC1, SC1: the lost draft's `Undo discard` is no body place of Ashfall
+    // Keep: it is a footer line, just above the deleted entry's notice, and its press works.
+    let everywhere =
+        egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(f32::MAX, f32::MAX));
+    let discarded = format!("{VARRA_BLACK} draft discarded.");
+    let undo = format!("Undo discard of {VARRA_BLACK}");
+    for size in [SMALL, DEFAULT] {
+        let (result, notice_at) = d.at_size(size, |d| {
+            (
+                d.painted_rect_in(&discarded, everywhere),
+                d.painted_rect_in(&notice, everywhere),
+            )
+        });
+        d.observe(
+            "iter-27-D-FC1",
+            result.zip(notice_at).is_some_and(|(result, notice)| {
+                result.bottom() <= notice.top()
+                    && notice.top() - result.bottom() < 3.0 * crate::design::XXL
+            }) && d.has(&undo),
+            format!("At {size:?}, the discarded draft's result {result:?} sits in the footer above the notice {notice_at:?}"),
+        );
+    }
     d.state("log-words-of-a-deleted-entry", Sizes::Default);
+    d.click(&undo);
+    let lost = format!("Discard the draft of {VARRA_BLACK}");
+    d.observe(
+        "iter-27-D-FC1-undo",
+        d.has(&lost) && !d.has(&undo) && d.has(&copy),
+        "Undo discard in Lookup's footer brings the lost draft back, with its choices, and keeps the notice",
+    );
+    d.click(&lost);
+    d.expect(&undo);
     d.app_mut().lookup.search_for(KEEP);
     d.settle();
     d.click("Clear");

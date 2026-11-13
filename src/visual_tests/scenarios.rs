@@ -10586,8 +10586,45 @@ pub mod world {
         d.state("world-new-menu", Sizes::Default);
         d.click("NPC…");
         d.expect("Type a name first.");
+        // Round 27 FH5, AH1, SH1: inline creation has one layout. Create NPC follows the Name
+        // field on its line, and the kept line below holds Cancel and the reason or the file:
+        // typing moves neither action.
+        let places = |d: &mut Driver<'_>| {
+            [SMALL, DEFAULT, LARGE].map(|size| {
+                d.at_size(size, |d| {
+                    let field = d
+                        .nodes()
+                        .into_iter()
+                        .find(|node| node.name == "Name" && node.role == Role::TextInput)
+                        .map(|node| node.rect);
+                    (d.place_of("Create NPC"), d.place_of("Cancel"), field)
+                })
+            })
+        };
+        let empty = places(d);
         d.type_into("Name", "Watchkeeper");
         d.wait_for_text("Will create NPCs/Watchkeeper.md");
+        let filled = places(d);
+        for (size, ((create, cancel, name), (create_after, cancel_after, _))) in
+            [SMALL, DEFAULT, LARGE].into_iter().zip(empty.into_iter().zip(filled))
+        {
+            let same = |a: Option<egui::Rect>, b: Option<egui::Rect>| {
+                a.zip(b).is_some_and(|(a, b)| (a.min - b.min).length() < 0.5)
+            };
+            d.observe(
+                "iter-27-D-FH5",
+                same(create, create_after)
+                    && same(cancel, cancel_after)
+                    && create.zip(name).is_some_and(|(create, name)| {
+                        create.left() > name.right()
+                            && (create.center().y - name.center().y).abs() <= 0.5
+                    })
+                    && cancel.zip(name).is_some_and(|(cancel, name)| cancel.top() > name.bottom()),
+                format!(
+                    "At {size:?}, Create NPC {create:?} → {create_after:?} sits on the Name field's line {name:?}; Cancel {cancel:?} → {cancel_after:?} starts the line below"
+                ),
+            );
+        }
         d.state("world-new-npc-form", Sizes::All);
         d.click("Create NPC");
         d.expect("Watchkeeper");
@@ -22486,14 +22523,9 @@ fn lookup_show_all(d: &mut Driver<'_>, six: &str) {
             show_all_count(d)
         ),
     );
-    // The Show all proof needs seven or eight matches: more than six, and all in view after.
-    let words = ["wolf", "giant", "fire", "sword", "cult"]
-        .into_iter()
-        .find(|words| {
-            d.replace_text_in(SEARCH_LOOKUP, words);
-            show_all_count(d).is_some_and(|count| (7..=8).contains(&count))
-        })
-        .unwrap_or("wolf");
+    // The Show all proof needs more than six matches, all in view once listed: `iron` has seven.
+    let words = "iron";
+    d.replace_text_in(SEARCH_LOOKUP, words);
     let before = lookup_results(d).len();
     let count = show_all_count(d);
     let label = format!("Show all {}", count.unwrap_or_default());

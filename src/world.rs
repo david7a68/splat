@@ -2044,11 +2044,11 @@ pub(crate) fn title_line_rows(
     let mut row = 0;
     let mut used: Option<f32> = None;
     for width in widths {
-        // The first target of a row starts `S` before the text edge, so its icon is at it.
-        let next = used.map_or(width - design::S, |used| used + design::XS + width);
+        // The first target of a row starts at the text edge: Lookup's reader clips at it.
+        let next = used.map_or(*width, |used| used + design::XS + width);
         if used.is_some() && next > line {
             row += 1;
-            used = Some(width - design::S);
+            used = Some(*width);
         } else {
             used = Some(next);
         }
@@ -2057,11 +2057,11 @@ pub(crate) fn title_line_rows(
     Some(rows)
 }
 
-/// Draw a reader's title-line actions by `title_line_rows`. `cell` holds the title and its kind
-/// line, drawn at its full width; `title` is the title's measured width and `room` the width
-/// from the cell's left edge that the actions may use beside the title (less a portrait). Under
-/// the title, the first action's icon sits at the text edge and its target `S` into the
-/// gutter, as on the title line. Returns which actions were pressed, in order.
+/// Draw a reader's title-line actions by `title_line_rows`, just after `cell`, which holds the
+/// title and its kind line; `title` is the title's measured width and `room` the width from the
+/// cell's left edge that the actions may use beside the title (less a portrait). Under the
+/// title, the first action's target starts at the text edge, so no part of it is clipped where
+/// a pane clips at its text edge (Lookup). Returns which actions were pressed, in order.
 pub(crate) fn title_line_actions(
     ui: &mut egui::Ui,
     cell: egui::Rect,
@@ -2074,10 +2074,16 @@ pub(crate) fn title_line_actions(
         .map(|action| action.natural_width(ui))
         .collect();
     let height = Density::Read.control();
-    let rows = title_line_rows(room, cell.width(), title, &widths);
+    // The cell's rect is as wide as its words; the line under it has the pane's width.
+    let line_width = ui.available_width();
+    let rows = title_line_rows(room, line_width, title, &widths);
     let mut places = Vec::with_capacity(widths.len());
     match &rows {
         None => {
+            // The line under the title takes one auto ID; so does this layout, so the field
+            // and form IDs below stay the same when a resize moves the actions, and the
+            // keyboard stays in the field the DM types in.
+            ui.skip_ahead_auto_ids(1);
             let mut next = cell.left() + title + design::L - design::S;
             for width in &widths {
                 places.push(egui::pos2(next, cell.top()));
@@ -2088,16 +2094,16 @@ pub(crate) fn title_line_actions(
             let count = rows.last().map_or(0, |row| row + 1);
             let (line, _) = ui.allocate_exact_size(
                 egui::vec2(
-                    cell.width(),
+                    line_width,
                     height * count as f32 + design::XS * count.saturating_sub(1) as f32,
                 ),
                 egui::Sense::hover(),
             );
-            let mut next = line.left() - design::S;
+            let mut next = line.left();
             let mut last = 0;
             for (width, row) in widths.iter().zip(rows) {
                 if *row != last {
-                    next = line.left() - design::S;
+                    next = line.left();
                     last = *row;
                 }
                 places.push(egui::pos2(
@@ -3208,26 +3214,19 @@ impl Reader {
         campaign: &Campaign,
         editing: bool,
     ) -> Option<Go> {
-        // With no field open, no scope: an empty one still takes an item gap.
-        if !self.log_fields.contains_key(&(campaign.id, item.entry.id)) {
+        // With no field open, or a field that waits for an edit form, no scope: an empty one
+        // still takes an item gap, and would move the form (round 27 FC2).
+        if !self.log_fields.contains_key(&(campaign.id, item.entry.id))
+            || editing
+            || self.edited_elsewhere.contains(&item.entry.id)
+        {
             return None;
         }
-        design::reader::measure(ui, |ui| self.log_field_in(ui, item, campaign, editing))
+        design::reader::measure(ui, |ui| self.log_field_in(ui, item, campaign))
     }
 
-    fn log_field_in(
-        &mut self,
-        ui: &mut egui::Ui,
-        item: &Item,
-        campaign: &Campaign,
-        editing: bool,
-    ) -> Option<Go> {
+    fn log_field_in(&mut self, ui: &mut egui::Ui, item: &Item, campaign: &Campaign) -> Option<Go> {
         let key = (campaign.id, item.entry.id);
-        // The field waits, with its words, while an edit form of this entry is open; the reason
-        // is in the pane's footer, so the form below never moves (round 27 FC2).
-        if editing || self.edited_elsewhere.contains(&item.entry.id) {
-            return None;
-        }
         let stamp = self
             .line_stamp()
             .map(|stamp| format!("{}:", sessions::plain_links(&stamp)));
@@ -5964,7 +5963,7 @@ mod tests {
             Some(vec![0, 0, 0])
         );
         // A line too narrow for all three takes as many as fit, in order, on more rows.
-        let two = 60.0 - design::S + design::XS + 100.0;
+        let two = 60.0 + design::XS + 100.0;
         assert_eq!(
             title_line_rows(two, two, title, &widths),
             Some(vec![0, 0, 1])
