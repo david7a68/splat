@@ -486,11 +486,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "new_result! statement",
             &[Ban::Results],
         ),
-        (
-            "src/campaign_content.rs",
-            "page_footer",
-            &[Ban::Results, Ban::Pane(1)],
-        ),
+        ("src/campaign_content.rs", "page_footer", &[Ban::Results]),
         (
             "src/campaign_content.rs",
             "repair_section_content",
@@ -629,12 +625,13 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Results],
         ),
         ("src/sessions/page.rs", "banner_notices", &[Ban::Results]),
+        ("src/sessions/page.rs", "folder_fields", &[Ban::Layout(1)]),
+        ("src/sessions/page.rs", "folder_messages", &[Ban::Results]),
         (
             "src/sessions/page.rs",
-            "folder_form",
-            &[Ban::Results, Ban::Layout(1), Ban::Extras(3)],
+            "folder_save_row",
+            &[Ban::Results, Ban::Extras(3)],
         ),
-        ("src/sessions/page.rs", "folder_messages", &[Ban::Results]),
         (
             "src/sessions/page.rs",
             "markers",
@@ -738,14 +735,13 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/campaign_content.rs",
             "packages_content",
-            &[Ban::Layout(4), Ban::Extras(3)],
+            &[Ban::Extras(3)],
         ),
         (
             "src/campaign_content.rs",
             "reconcile_section",
-            &[Ban::Layout(1), Ban::Extras(1)],
+            &[Ban::Extras(1)],
         ),
-        ("src/campaign_content.rs", "show", &[Ban::Layout(1)]),
         (
             "src/campaigns.rs",
             "selector",
@@ -880,11 +876,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "side_control",
             &[Ban::Layout(2), Ban::Extras(2)],
         ),
-        (
-            "src/lib.rs",
-            "page",
-            &[Ban::Layout(3), Ban::Extras(6), Ban::Pane(3)],
-        ),
+        ("src/lib.rs", "page", &[Ban::Extras(6)]),
         ("src/library.rs", "above_footer", &[Ban::Layout(1)]),
         (
             "src/library.rs",
@@ -1392,12 +1384,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Pane(1)],
         ),
         ("src/library.rs", "form_footer", &[Ban::Pane(1)]),
+        ("src/campaign_content.rs", "show", &[Ban::Pane(1)]),
         ("src/party.rs", "show", &[Ban::Pane(1)]),
-        (
-            "src/settings.rs",
-            "a_failed_removal_keeps_disconnect_until_it_works",
-            &[Ban::Pane(1)],
-        ),
     ]
 };
 

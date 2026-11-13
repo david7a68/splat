@@ -901,7 +901,9 @@ Its state says Not connected · showing the name saved on this computer.
 A session-folder change counts notes, events, templates and recordings left behind, and says what the safe
 choice costs: `If you save without moving, Splat no longer shows these files.` Offer Move files and save
 or Save without moving. The session folder's warning, its save error and its move result sit in the Link and
-folder pane's message footer, so the first typed letter, a refusal or a move never moves the save row. Folder help
+folder pane's message footer, so the first typed letter, a refusal or a move never moves the save row. The
+session folder's heading and save row stand above the pane, at its top, so Save is in view at every size
+without a scroll; its field and help are the pane's content, after the link. Folder help
 uses `design::help`. Move files and save is primary when no other primary is in view; it is secondary while a
 run is open or the campaign details form is open. Refuse collisions and copy every owned file before changing the manifest. A run-folder
 change counts saved files left behind. Move runs and save is primary when no other primary is in view; it
