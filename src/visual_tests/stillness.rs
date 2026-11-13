@@ -1301,8 +1301,8 @@ pub fn quiet_rects(shapes: &[ClippedShape]) -> Vec<egui::Rect> {
 /// N4. A quiet action is a button whose rect is one of `quiet` (see `quiet_rects`). Its words
 /// start where its first non-icon text starts. It paints first on its line when no text of its
 /// clip, outside it, lies on its line to its left. Then its words start, within 1 px, at the text
-/// edge: the start of the nearest line above or below it in its clip (within `2 × L`, and within
-/// `3 × L` sideways). A quiet action that is not first does not reach left over the text before it
+/// edge: the start of the nearest line above or of the nearest line below it in its clip (within
+/// `2 × L`, and within `3 × L` sideways); it is a finding when they match neither. A quiet action that is not first does not reach left over the text before it
 /// (`line_start` hangs its padding into the gutter; mid-line it covers its neighbour).
 pub fn line_starts(items: &[Item], quiet: &[egui::Rect], texts: &[Placed]) -> Vec<Raw> {
     let mut out = Vec::new();
@@ -1347,40 +1347,47 @@ pub fn line_starts(items: &[Item], quiet: &[egui::Rect], texts: &[Placed]) -> Ve
             }
             continue;
         }
-        let edge = texts
-            .iter()
-            .filter(outside)
-            .filter(|text| !icon_only(&text.words))
-            .filter(|text| !line.contains(text.rect.center().y))
-            .filter(|text| (text.start - words.start).abs() <= 3.0 * L)
-            .map(|text| {
-                let gap = if text.rect.bottom() <= item.rect.top() {
-                    item.rect.top() - text.rect.bottom()
-                } else {
-                    text.rect.top() - item.rect.bottom()
-                };
-                (text, gap)
-            })
-            .filter(|(_, gap)| (0.0..=2.0 * L).contains(gap))
-            .min_by(|a, b| a.1.total_cmp(&b.1));
-        let Some((edge, _)) = edge else {
-            continue;
+        // The nearest line above and the nearest below, in its clip, within `2 × L`.
+        let near = |above: bool| {
+            texts
+                .iter()
+                .filter(outside)
+                .filter(|text| !icon_only(&text.words))
+                .filter(|text| (text.start - words.start).abs() <= 3.0 * L)
+                .filter_map(|text| {
+                    let gap = if above {
+                        item.rect.top() - text.rect.bottom()
+                    } else {
+                        text.rect.top() - item.rect.bottom()
+                    };
+                    (0.0..=2.0 * L).contains(&gap).then_some((text, gap))
+                })
+                .min_by(|a, b| a.1.total_cmp(&b.1))
+                .map(|(text, _)| text)
         };
-        let off = words.start - edge.start;
-        if off.abs() > MOVE_TOLERANCE {
-            out.push(Raw {
-                check: N4,
-                control: display(item),
-                old: edge.rect,
-                new: item.rect,
-                trigger: format!(
-                    "first on its line: its words start {:.0} px {} the text edge of {:?}",
-                    off.abs(),
-                    if off > 0.0 { "right of" } else { "left of" },
-                    edge.words
-                ),
-            });
+        let edges: Vec<&Placed> = [near(true), near(false)].into_iter().flatten().collect();
+        // The words line up with either neighbour: that is the block's text edge.
+        if edges.is_empty()
+            || edges
+                .iter()
+                .any(|edge| (words.start - edge.start).abs() <= MOVE_TOLERANCE)
+        {
+            continue;
         }
+        let edge = edges[0];
+        let off = words.start - edge.start;
+        out.push(Raw {
+            check: N4,
+            control: display(item),
+            old: edge.rect,
+            new: item.rect,
+            trigger: format!(
+                "first on its line: its words start {:.0} px {} the text edge of {:?}",
+                off.abs(),
+                if off > 0.0 { "right of" } else { "left of" },
+                edge.words
+            ),
+        });
     }
     out
 }
@@ -2589,6 +2596,17 @@ mod tests {
                 &[cancel(365.0)],
                 &[at(365.0, 226.0, 64.0, 28.0)],
                 &[progress.clone(), words(373.0),]
+            )
+            .is_empty()
+        );
+        // A neighbour that agrees is enough: the line above lines up, the status line below does
+        // not.
+        let status = text("Not connected", 358.0, 258.0, 90.0);
+        assert!(
+            line_starts(
+                &[cancel(364.0)],
+                &[at(364.0, 226.0, 64.0, 28.0)],
+                &[progress.clone(), words(372.0), status,]
             )
             .is_empty()
         );
