@@ -189,7 +189,6 @@
     ["N5/icon-starts-wrapping-text","08-log-words-without-an-entry","960x640","Text \"\\u{e4e0} Captain Varra Black: told the party who burned the ropes at the ford\"",1]
   ],
   "nav-table": [
-    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Conditions\"",1]
   ],
   "npc-in-encounter": [
     ["G1b/pressed-control-moved","03-npc-in-setup","960x640","Button \"Save encounter\"",1]
@@ -435,7 +434,6 @@
   "session-notes": [
     ["G1b/pressed-control-moved","22-timeline-time-not-counted","960x640","Button \"Travel · Session 1\"",1],
     ["G1b/pressed-control-moved","27-session-long-title","960x640","Button \"Save details\"",1],
-    ["G1b/pressed-control-moved","32-session-folder-in-campaign","960x640","Button \"Link and folder\"",1],
     ["G1b/pressed-control-moved","38-sessions-with-notes","960x640","Button \"Conditions for this participant\"",1],
     ["G6/footer-far-below-body","10-session-event-added","960x640","Label \"\\u{e182}\\u{a0}Everyone\\u{a0}at\\u{a0}full\"",1],
     ["G6/footer-far-below-body","11-plan-event-title","960x640","Link \"Timeline\"",1],
@@ -464,8 +462,6 @@
   ],
   "session-plan": [
     ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Save encounter\"",1],
-    ["G1b/pressed-control-moved","12-rule-from-the-row","960x640","Button \"Log\"",1],
-    ["G1b/pressed-control-moved","14-correct-initiative","960x640","Button \"Correct\"",1],
     ["G3/far-action","38-saved-runs-history","1920x1080","Button \"Resume\"",3],
     ["G6/footer-far-below-body","19-rewards-added","1200x800","Label \"5\\u{a0}party ·\\u{a0}2\\u{a0}×\\u{a0}Ember\\u{a0}Cultist ·\\u{a0}XP\\u{a0}400\\u{a0}·\\u{a0}Low\"",1],
     ["G6/footer-far-below-body","19-rewards-added","1920x1080","Label \"5\\u{a0}party ·\\u{a0}2\\u{a0}×\\u{a0}Ember\\u{a0}Cultist ·\\u{a0}XP\\u{a0}400\\u{a0}·\\u{a0}Low\\u{a0}(up\\u{a0}to\\u{a0}2,800)\"",1],
@@ -512,12 +508,7 @@
   "session-recording": [
     ["G1b/pressed-control-moved","04-recording-listed","960x640","Button \"Recordings, 1 recording\"",1],
     ["G1b/pressed-control-moved","05-run-silent","960x640","Button \"Note\"",1],
-    ["G1b/pressed-control-moved","15-key-for-another-service","960x640","Button \"Account and campaigns\"",1],
-    ["G1b/pressed-control-moved","15-key-for-another-service","960x640","Button \"Recording and processing\"",1],
-    ["G1b/pressed-control-moved","16-recording-ready","960x640","Button \"Account and campaigns\"",1],
-    ["G1b/pressed-control-moved","27-second-pass-review","960x640","Button \"What the check changed\"",1],
     ["G1b/pressed-control-moved","37-input-during-recording","960x640","Button \"Record again\"",1],
-    ["G1b/pressed-control-moved","37-input-during-recording","960x640","Button \"Recording and processing\"",1],
     ["G6/footer-far-below-body","11-recording-saved-no-key","960x640","Button \"Process: 2026-01-01 19-00\"",1],
     ["G6/footer-far-below-body","12-processing-settings","1920x1080","Button \"Transcript and summary instructions\"",1],
     ["G6/footer-far-below-body","14-processing-settings-anthropic","1920x1080","Button \"Transcript and summary instructions\"",1],
@@ -630,17 +621,14 @@
     ["N2/icon-off-text-centre","47-processing-with-ended-run","960x640","Button \"More actions for 2026-01-01 19:00\"",1]
   ],
   "settings": [
-    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Account and campaigns\"",1],
     ["G1b/pressed-control-moved","09-edit-campaign","960x640","Button \"Edit details\"",1],
     ["G1b/pressed-control-moved","11-campaign-details-discarded","960x640","Button \"Edit details\"",1],
-    ["G1b/pressed-control-moved","16-touchpad-settings","960x640","Button \"Touchpad\"",1],
     ["N2/icon-off-text-centre","15-sync-stopped-recovery","1200x800","Button \"Dismiss this message\"",1],
     ["N2/icon-off-text-centre","15-sync-stopped-recovery","1920x1080","Button \"Dismiss this message\"",1],
     ["N2/icon-off-text-centre","15-sync-stopped-recovery","960x640","Button \"Dismiss this message\"",1]
   ],
   "signed-in": [
-    ["G1b/pressed-control-moved","15-link-tab-during-run","960x640","Button \"Add\"",1],
-    ["G1b/pressed-control-moved","15-link-tab-during-run","960x640","Button \"Link and folder\"",1]
+    ["G1b/pressed-control-moved","15-link-tab-during-run","960x640","Button \"Add\"",1]
   ],
   "trackers": [
     ["G6/footer-far-below-body","03-trackers-three-notices","1920x1080","Button \"MORE TRACKERS 2\"",1],

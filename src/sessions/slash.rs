@@ -569,6 +569,10 @@ fn roll(
 }
 
 /// A search field with the best results under it. Enter or a click links the chosen one.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn search(
     ui: &mut egui::Ui,
     index: Option<&ContentIndex>,

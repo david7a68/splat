@@ -232,6 +232,10 @@ const FIRST_FIELD_WIDTH: f32 = 56.0;
     clippy::too_many_arguments,
     reason = "each field differs in each of these"
 )]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn short_field(
     ui: &mut egui::Ui,
     word: &str,

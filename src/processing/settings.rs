@@ -601,6 +601,10 @@ impl ProcessingSettings {
     /// the bar, and names the first missing value.
     /// Round 27 FI7: the reason is `XS` below its field; when a label follows it, `M` comes
     /// before that label, so the reason reads as its own field's.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn field_reason(
         &mut self,
         ui: &mut egui::Ui,
@@ -818,6 +822,10 @@ impl ProcessingSettings {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     pub fn show(&mut self, ui: &mut egui::Ui) {
         design::help(
             ui,
