@@ -685,7 +685,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/world/edit.rs",
             "edit_form",
-            &[Ban::Results, Ban::Layout(3), Ban::Extras(4)],
+            &[Ban::Results, Ban::Layout(1), Ban::Extras(2)],
         ),
         (
             "src/world/edit.rs",
@@ -695,18 +695,14 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/world/page.rs",
             "creation_body",
-            &[Ban::Results, Ban::Layout(2), Ban::Extras(2)],
+            &[Ban::Results, Ban::Extras(1)],
         ),
         (
             "src/world/page.rs",
             "creation_form",
             &[Ban::Results, Ban::Layout(1), Ban::Pane(1)],
         ),
-        (
-            "src/world/page.rs",
-            "show",
-            &[Ban::Results, Ban::Layout(4), Ban::Extras(4)],
-        ),
+        ("src/world/page.rs", "show", &[Ban::Results, Ban::Layout(4)]),
         ("src/world/repair.rs", "choose", &[Ban::Results]),
         ("src/world/repair.rs", "edit", &[Ban::Results]),
         (
@@ -715,11 +711,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Results, Ban::Pane(1)],
         ),
         ("src/world.rs", "draw_footer", &[Ban::Results, Ban::Pane(1)]),
-        (
-            "src/world.rs",
-            "entry_controls",
-            &[Ban::Results, Ban::Layout(1)],
-        ),
+        ("src/world.rs", "entry_controls", &[Ban::Results]),
         ("src/world.rs", "stamp", &[Ban::Results]),
         // Package K: raw egui calls that a layout part replaces.
         ("src/art.rs", "show_viewer", &[Ban::Layout(2)]),
@@ -890,11 +882,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Layout(1), Ban::Extras(5)],
         ),
         ("src/library.rs", "show", &[Ban::Layout(6), Ban::Extras(10)]),
-        ("src/lookup.rs", "panel", &[Ban::Layout(2), Ban::Extras(2)]),
+        ("src/lookup.rs", "panel", &[Ban::Layout(2)]),
         (
             "src/lookup.rs",
             "written_reader",
-            &[Ban::Layout(1), Ban::Extras(2)],
+            &[Ban::Layout(1), Ban::Extras(1)],
         ),
         (
             "src/loot_editor.rs",
@@ -993,17 +985,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "show",
             &[Ban::Layout(1), Ban::Extras(1)],
         ),
-        (
-            "src/world.rs",
-            "add_form",
-            &[Ban::Layout(2), Ban::Extras(2)],
-        ),
-        (
-            "src/world.rs",
-            "make_entry_control",
-            &[Ban::Layout(1), Ban::Extras(1)],
-        ),
-        ("src/world.rs", "pick", &[Ban::Layout(1), Ban::Extras(1)]),
+        ("src/world.rs", "add_form", &[Ban::Layout(1)]),
         ("src/world/page.rs", "new_menu", &[Ban::Layout(1)]),
         ("src/world/repair.rs", "editor_events", &[Ban::Layout(2)]),
         // Package M (round 28): the escapes of `design::outcome`, and its own helpers.
@@ -1230,8 +1212,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/library/view.rs", "reading_view", &[Ban::Extras(3)]),
         ("src/library/view.rs", "reference", &[Ban::Extras(1)]),
         ("src/library/view.rs", "show_inner", &[Ban::Extras(1)]),
-        ("src/lookup.rs", "generator_card", &[Ban::Extras(1)]),
-        ("src/lookup.rs", "search_over_trackers", &[Ban::Extras(1)]),
         ("src/markdown_view.rs", "flush", &[Ban::Extras(2)]),
         (
             "src/markdown_view.rs",
@@ -1274,23 +1254,14 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "rest_ruling_line",
             &[Ban::Extras(1)],
         ),
-        ("src/world.rs", "draw", &[Ban::Extras(5)]),
+        ("src/world.rs", "draw", &[Ban::Extras(4)]),
         ("src/world.rs", "missing_link", &[Ban::Extras(1)]),
         ("src/world.rs", "unread_groups_message", &[Ban::Extras(1)]),
-        ("src/world.rs", "value_row", &[Ban::Extras(2)]),
-        ("src/world/edit.rs", "conflict", &[Ban::Extras(1)]),
+        ("src/world.rs", "value_row", &[Ban::Extras(1)]),
         ("src/world/edit.rs", "copy_or_let_go", &[Ban::Extras(1)]),
-        ("src/world/page.rs", "checks_view", &[Ban::Extras(7)]),
-        ("src/world/page.rs", "list", &[Ban::Extras(3)]),
-        ("src/world/page.rs", "unread_pane", &[Ban::Extras(2)]),
-        ("src/world/page.rs", "unsaved_npc_row", &[Ban::Extras(1)]),
-        (
-            "src/world/related.rs",
-            "from_other_pages",
-            &[Ban::Extras(2)],
-        ),
+        ("src/world/page.rs", "list", &[Ban::Extras(1)]),
+        ("src/world/page.rs", "unread_pane", &[Ban::Extras(1)]),
         ("src/world/related.rs", "history_rows", &[Ban::Extras(1)]),
-        ("src/world/related.rs", "related", &[Ban::Extras(7)]),
         (
             "src/encounters/groups.rs",
             "editor_members",
