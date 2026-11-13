@@ -11221,9 +11221,18 @@ fn footer_presses(d: &mut Driver<'_>, id: &str, notice: Option<&str>, action: bo
             let source = d.place_of(SOURCE);
             d.click(SOURCE);
             let body = d.has_containing(OPENED) && !d.has("Close Lookup") && footer(d) && empty(d);
-            d.click(SOURCE);
+            // A press that went elsewhere is recorded, then put back, so each part still runs.
+            if d.has("Close Lookup") {
+                d.press_ctrl(egui::Key::K);
+                if !d.has(SOURCE) {
+                    d.click("Stat block");
+                }
+            }
+            if d.has_containing(OPENED) {
+                d.click(SOURCE);
+            }
             let closed = !d.has_containing(OPENED);
-            let (pressed, tab) = if action {
+            let (pressed, tab) = if action && d.has("Read the new version") {
                 d.click("Read the new version");
                 let pressed = d.has("Close Lookup") && !d.has_containing(OPENED);
                 d.press_ctrl(egui::Key::K);
@@ -11234,7 +11243,7 @@ fn footer_presses(d: &mut Driver<'_>, id: &str, notice: Option<&str>, action: bo
                     && d.focused_name().as_deref() == Some("Read the new version");
                 (pressed, tab)
             } else {
-                (!d.has("Read the new version"), true)
+                (!action && !d.has("Read the new version"), true)
             };
             d.click("Amount");
             d.type_text("7");
