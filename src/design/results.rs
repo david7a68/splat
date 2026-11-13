@@ -638,7 +638,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/sessions/page.rs",
             "markers",
-            &[Ban::Results, Ban::Extras(2)],
+            &[Ban::Results, Ban::Extras(3)],
         ),
         (
             "src/sessions/page.rs",
@@ -808,7 +808,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/view.rs",
             "panel_tabs",
-            &[Ban::Layout(1), Ban::Extras(1)],
+            &[Ban::Layout(1), Ban::Extras(2)],
         ),
         (
             "src/encounter_run/view.rs",
@@ -829,7 +829,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/view.rs",
             "setup_row",
-            &[Ban::Layout(1), Ban::Extras(9)],
+            &[Ban::Layout(1), Ban::Extras(10)],
         ),
         (
             "src/encounters.rs",
@@ -947,7 +947,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "input_section",
             &[Ban::Layout(1), Ban::Extras(3)],
         ),
-        ("src/processing/settings.rs", "key_row", &[Ban::Layout(1)]),
+        (
+            "src/processing/settings.rs",
+            "key_row",
+            &[Ban::Layout(1), Ban::Extras(1)],
+        ),
         (
             "src/processing/settings.rs",
             "llm_section",
@@ -1185,6 +1189,20 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Extras(2)],
         ),
         ("src/encounter_run/view.rs", "sync_block", &[Ban::Extras(2)]),
+        ("src/encounter_run/view.rs", "toggle", &[Ban::Extras(1)]),
+        (
+            "src/encounter_run/view.rs",
+            "setup_tie_controls",
+            &[Ban::Extras(1)],
+        ),
+        ("src/encounter_run/view.rs", "log_link", &[Ban::Extras(1)]),
+        (
+            "src/party.rs",
+            "wrapped_sheet_cells_keep_the_next_pair_on_one_row",
+            &[Ban::Extras(1)],
+        ),
+        ("src/sessions/plan.rs", "word_link", &[Ban::Extras(1)]),
+        ("src/sessions/plan.rs", "plan_row_with", &[Ban::Extras(1)]),
         ("src/encounters.rs", "add_pane", &[Ban::Extras(1)]),
         ("src/encounters.rs", "detail_columns", &[Ban::Extras(2)]),
         (
@@ -1453,11 +1471,6 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "overflow_tabs",
             &[Ban::Layout(1)],
         ),
-        (
-            "src/design/components.rs",
-            "iter18_a_a_line_start_action_hangs_its_icon_and_padding",
-            &[Ban::Layout(1)],
-        ),
         ("src/design/components.rs", "row_menu", &[Ban::Layout(1)]),
         ("src/design/components.rs", "scroll_part", &[Ban::Layout(1)]),
         ("src/design/components.rs", "search_box", &[Ban::Layout(1)]),
@@ -1477,6 +1490,7 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Layout(1)],
         ),
         ("src/design/components.rs", "text_input", &[Ban::Layout(1)]),
+        ("src/design/components.rs", "paint", &[Ban::Extras(1)]),
         ("src/design/extras.rs", "space", &[Ban::Extras(1)]),
         ("src/design/gallery.rs", "markdown", &[Ban::Layout(1)]),
         ("src/design/gallery.rs", "show", &[Ban::Layout(1)]),

@@ -3,8 +3,11 @@
 //! (N1). `clippy.toml` (section "Package X") refuses the raw egui calls and the old parts these
 //! replace; each staged use is one row of `design::results::STAGED_ALLOWS` (`Ban::Extras(n)`).
 //!
-//! What stays with a caller: nothing for the space and the check. A caller gives words and
-//! whether the choice is the selected one.
+//! What is enforced for space: `Ui::add_space` and `Ui::allocate_space` are refused outside
+//! `src/design/` (a raw amount becomes a `Gap` token), the heading adds the space above it, and a
+//! field adds `L` after its help. Other raw spacing (`ui.spacing_mut().item_spacing.y = …`, 54
+//! assignments in 20 files) is a reviewer duty; the gate's alignment and stillness checks see its
+//! effects. A caller of `choice` gives words and whether the choice is the selected one.
 use super::{components::*, icons, tokens::*};
 use eframe::egui::{self, Align2, Response, Sense, Ui, WidgetInfo, WidgetType, pos2, vec2};
 
@@ -154,7 +157,12 @@ pub fn heading(ui: &mut Ui, heading: Heading<'_>) -> Response {
 // ------------------------------------------------------------------------------------------------
 // Choices (N1)
 
-/// One choice in a menu, a drop-down or a list, of which one is the selected one. The selected
+/// One choice in a menu, a drop-down or a list, of which one is the selected one (N1).
+/// Clippy refuses egui's other ways to draw one outside `src/design/`: `Ui::selectable_value`,
+/// `Ui::selectable_label`, `Button::selectable`, `Button::selected` and `SelectableLabel::new`
+/// (staged, `Ban::Extras`). Selected states that are NOT this part, each with its own part: a
+/// radio (one of a few shown at once), a checkbox (on or off), the toggle (`Action::selected`, a
+/// button that stays pressed), and tabs (`segmented`, `counted_tab`, `overflow_tabs`). The selected
 /// choice shows the check (`icons::OK`) in a fixed column at its left, so every choice's words
 /// start at one x whether or not it is selected, and its accessible state is selected. In a
 /// column it takes the column's width; on a line, its own. `clicked()` chooses it.
@@ -322,5 +330,52 @@ mod tests {
             })
             .count();
         assert_eq!(checks, 1, "one check, on the selected choice");
+
+        // Changing the selection moves no word and keeps the menu's width: in a menu that takes
+        // its width from its choices (a shrinking area), each word's x and the menu's width are
+        // the same whichever choice is selected.
+        let menu = |selected: usize| {
+            let ctx = Context::default();
+            let mut width = 0.0;
+            let mut output = None;
+            for _ in 0..2 {
+                let out = ctx.run(egui::RawInput::default(), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.horizontal_top(|ui| {
+                            let column = ui.vertical(|ui| {
+                                for (at, word) in
+                                    ["This campaign", "Built in", "All"].iter().enumerate()
+                                {
+                                    let _ = choice(ui, at == selected, word);
+                                }
+                            });
+                            width = column.response.rect.width();
+                        });
+                    });
+                });
+                output = Some(out);
+            }
+            let words: Vec<f32> = output
+                .unwrap()
+                .shapes
+                .iter()
+                .filter_map(|clipped| match &clipped.shape {
+                    egui::Shape::Text(text) if text.galley.job.text != icons::OK => {
+                        Some(text.pos.x)
+                    }
+                    _ => None,
+                })
+                .collect();
+            (words, width)
+        };
+        let first = menu(0);
+        assert_eq!(first.0.len(), 3, "three words painted");
+        for selected in [1, 2] {
+            assert_eq!(
+                menu(selected),
+                first,
+                "n1-still: selection {selected} moved a word or the menu"
+            );
+        }
     }
 }

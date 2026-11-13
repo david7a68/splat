@@ -2909,6 +2909,10 @@ mod sheet_now_tests {
     }
 
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn wrapped_sheet_cells_keep_the_next_pair_on_one_row() {
         let ctx = eframe::egui::Context::default();
         let mut cells = [eframe::egui::Rect::NOTHING; 4];

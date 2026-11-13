@@ -153,12 +153,16 @@ disallowed-methods = [
     # a caller cannot add or forget them. A suppression's row in `design::results::STAGED_ALLOWS`
     # is `Ban::Extras(n)`, with the number of these calls its item holds.
     # N3: space comes from a part (a heading adds the space above it, a field the `L` after its
-    # help) or from a token (`design::gap(ui, Gap::…)`), never from a raw number.
+    # help) or from a token (`design::gap(ui, Gap::…)`), never from a raw number. Changing
+    # `item_spacing` through `Ui::spacing_mut` is not banned (143 calls, most for a line's layout):
+    # a reviewer reads it, and the gate's alignment and stillness checks see its effects.
     { path = "egui::Ui::add_space", reason = "space comes from the part (a heading, a field) or from design::gap(ui, Gap::…)", allow-invalid = true },
+    { path = "egui::Ui::allocate_space", reason = "an empty allocation is raw space: use design::gap(ui, Gap::…), or allocate the widget's own rect", allow-invalid = true },
     # N1: a selected choice in a menu or a list is `design::choice`, with its check mark.
     { path = "egui::Ui::selectable_value", reason = "use design::choice, which marks the selected choice with its check", allow-invalid = true },
     { path = "egui::Ui::selectable_label", reason = "use design::choice, which marks the selected choice with its check", allow-invalid = true },
     { path = "egui::Button::selectable", reason = "use design::choice, which marks the selected choice with its check", allow-invalid = true },
+    { path = "egui::Button::selected", reason = "use design::choice for a selected choice; a toggle, a tab, a radio or a checkbox has its own part", allow-invalid = true },
     { path = "egui::SelectableLabel::new", reason = "use design::choice, which marks the selected choice with its check", allow-invalid = true },
     # N10: a search field always draws its `Clear`.
     { path = "splat::design::components::search_field", reason = "use FieldId::search, which always draws its Clear" },

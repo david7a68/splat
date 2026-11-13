@@ -54,7 +54,13 @@ enum Shape {
     Method(String),
     /// `name(…)` or `module::name`: a free function.
     Free(Option<String>, String),
+    /// `Owner::ctor(…)` then `.x(…)` calls up to `.name(…)`: a builder method of a type that is
+    /// not a `RECEIVERS` value (`egui::Button::new(…).selected(…)`).
+    Chain(String, String),
 }
+
+/// Builder types whose banned methods are counted in a constructor's chain.
+const BUILDERS: [&str; 1] = ["Button"];
 
 /// The egui types whose banned functions are methods of a value.
 const RECEIVERS: [&str; 8] = [
@@ -129,6 +135,9 @@ fn shapes(letter: char, lines: &str, out: &mut Vec<(Group, Shape)>) {
                 // The same function called by its path: `egui::Ui::menu_button(ui, …)`.
                 out.push((group, Shape::Assoc(owner.to_owned(), name)));
             } else {
+                if BUILDERS.contains(&owner) {
+                    out.push((group, Shape::Chain(owner.to_owned(), name.clone())));
+                }
                 out.push((group, Shape::Assoc(owner.to_owned(), name)));
             }
         } else if owner == "menu" && MENU_MODULE.contains(&name.as_str()) {
@@ -176,6 +185,50 @@ fn path_sep(tokens: &[Token], at: usize) -> bool {
     tokens.get(at) == Some(&Token::Punct(':')) && tokens.get(at + 1) == Some(&Token::Punct(':'))
 }
 
+/// The index after the group that opens at `at` (an `Open` token), or `None`.
+fn after_group(tokens: &[Token], at: usize) -> Option<usize> {
+    if !matches!(tokens.get(at), Some(Token::Open(_))) {
+        return None;
+    }
+    let mut depth = 0usize;
+    for (offset, token) in tokens[at..].iter().enumerate() {
+        match token {
+            Token::Open(_) => depth += 1,
+            Token::Close => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(at + offset + 1);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// `Owner::ctor(…)` at `at`, then method calls, one of them `.name(…)`.
+fn chain_hits(tokens: &[Token], at: usize, owner: &str, name: &str) -> bool {
+    if ident(tokens.get(at)) != Some(owner) || !path_sep(tokens, at + 1) {
+        return false;
+    }
+    let Some(mut next) = after_group(tokens, at + 4) else {
+        return false;
+    };
+    while tokens.get(next) == Some(&Token::Punct('.')) {
+        let Some(method) = ident(tokens.get(next + 1)) else {
+            return false;
+        };
+        if method == name {
+            return true;
+        }
+        match after_group(tokens, next + 2) {
+            Some(after) => next = after,
+            None => return false,
+        }
+    }
+    false
+}
+
 /// How many calls of `group`'s paths `source` holds. `Err` when it does not lex.
 pub(crate) fn count(source: &str, group: Group) -> Result<usize, String> {
     let stream = TokenStream::from_str(source).map_err(|error| error.to_string())?;
@@ -206,6 +259,7 @@ pub(crate) fn count(source: &str, group: Group) -> Result<usize, String> {
                         && path_sep(&tokens, at + 1)
                         && ident(tokens.get(at + 3)) == Some(name)
                 }
+                Shape::Chain(owner, name) => chain_hits(&tokens, at, owner, name),
                 Shape::Free(None, name) => {
                     ident(tokens.get(at)) == Some(name)
                         && tokens.get(at + 1) == Some(&Token::Open(Delimiter::Parenthesis))
@@ -435,6 +489,17 @@ mod tests {
             extras(
                 "fn f() { design::gap(ui, Gap::S); design::heading(ui, Heading::Label(\"add_space(\")); design::choice(ui, true, \"One\"); SEARCH.search(ui, \"Search\", t, \"…\", 200.0); let _ = egui::Label::new(\"x\").selectable(false); }"
             ),
+            0
+        );
+        // A builder method in its constructor's chain, across lines; `Action::selected` is not one.
+        assert_eq!(
+            extras(
+                "fn f() { let b = egui::Button::new(Type::Body.rich(ui, \"x\"))\n.min_size(s)\n.selected(on); ui.add(egui::Button::new(\"a\").selected(true)); }"
+            ),
+            2
+        );
+        assert_eq!(
+            extras("fn f() { Action::quiet(\"Absent\").selected(true).show(ui); }"),
             0
         );
         // K's count does not see X's calls, nor X's K's.

@@ -136,6 +136,10 @@ pub(crate) fn other_effect_field(
 }
 
 /// Run toggles use a selected surface; the turn action keeps the accent fill.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(crate) fn toggle(
     ui: &mut egui::Ui,
     label: &str,
@@ -5581,6 +5585,10 @@ impl Run {
     }
 
     /// Tied rows alone have two fixed arrow slots under Init.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn setup_tie_controls(&self, ui: &mut egui::Ui, index: usize) -> Option<Command> {
         let (position, up, down) = self.setup_tie_directions(index)?;
         let p = &self.state.participants[index];
@@ -7071,6 +7079,10 @@ impl TurnMark {
 /// The notice's `Log` link. The underline covers only the word, and the word starts where the
 /// item gap puts it. The 24 px target is the link's own minimum size: a word narrower than that
 /// gets the extra width evenly on both sides, inside the gaps, so nothing beside it moves.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 pub(super) fn log_link(ui: &mut egui::Ui) -> egui::Response {
     const WORD: &str = "Log";
     let c = colors();

@@ -545,8 +545,6 @@ pub struct Action<'a> {
     line_start: bool,
     /// A `line_start` Undo whose target stays in its message's column: the row's left edge.
     column: bool,
-    /// `under_rows`: the part does not look for a line start.
-    under_rows: bool,
     min_width: Option<f32>,
 }
 
@@ -565,7 +563,6 @@ impl<'a> Action<'a> {
             plain: false,
             line_start: false,
             column: false,
-            under_rows: false,
             min_width: None,
         }
     }
@@ -581,8 +578,6 @@ impl<'a> Action<'a> {
         self
     }
 
-    /// A quiet action. When it is the first thing on its line (see [`Action::line_start`]), the
-    /// part aligns its words with the text above it by itself, so no caller can forget it (N4).
     pub fn quiet(label: &'a str) -> Self {
         Self::new(Kind::Quiet, label)
     }
@@ -590,21 +585,8 @@ impl<'a> Action<'a> {
     /// of that edge. Only an action inside a message has an icon when it starts a line: the icon
     /// then sits in the message's icon column. Outside a message, give it no icon, so its target
     /// reaches only `S` into the pane's gutter.
-    ///
-    /// The part does this by itself for a quiet action without an icon that is the first thing
-    /// on its line: its line starts at its `Ui`'s left edge and it is not in a menu, a popup or a
-    /// table cell (`starts_line`). Then only its words move to the edge: its target starts there
-    /// too, inside its column. Call this only for a line that starts at an inset the layout
-    /// cannot see (after `gap`, under a message's icon).
     pub fn line_start(mut self) -> Self {
         self.line_start = true;
-        self
-    }
-
-    /// The named escape from the found line start (N4): the text above is a list's rows, whose
-    /// words start `S` in, as a quiet action's padding does, so the action keeps its padding.
-    pub fn under_rows(mut self) -> Self {
-        self.under_rows = true;
         self
     }
 
@@ -671,17 +653,6 @@ impl<'a> Action<'a> {
     }
 
     pub fn show(mut self, ui: &mut Ui) -> Response {
-        // Found by the part: its words go to the text edge, and its target stays inside its
-        // column, so it never reaches a splitter or a scroll bar beside the column.
-        if self.kind == Kind::Quiet
-            && self.icon.is_none()
-            && !self.line_start
-            && !self.under_rows
-            && starts_line(ui)
-        {
-            self.line_start = true;
-            self.column = true;
-        }
         if self.kind == Kind::Primary
             && (self.selected
                 || ui.ctx().data(|data| {
@@ -735,6 +706,10 @@ impl<'a> Action<'a> {
             .max(self.height)
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+    )]
     fn paint(&self, ui: &mut Ui) -> Response {
         let c = colors();
         let font = self.font().font(ui);
@@ -778,10 +753,8 @@ impl<'a> Action<'a> {
             // An Undo under its message keeps its target in the message's column, so it never
             // hangs past a pane whose text edge is the message's (Lookup's reader). The icon
             // and the words keep their places.
-            // A target kept in the column is still at least as wide as it is high.
             let target = if self.column {
-                let kept = rect.with_min_x(rect.min.x.max(ui.max_rect().left()));
-                kept.with_max_x(kept.max.x.max(kept.min.x + self.height))
+                rect.with_min_x(rect.min.x.max(ui.max_rect().left()))
             } else {
                 rect
             };
@@ -858,37 +831,6 @@ impl<'a> Action<'a> {
         }
         response
     }
-}
-
-/// Is the next item the first thing on its line, at its `Ui`'s left edge, in a left-to-right
-/// place that is not a menu, a popup, a picker, a tooltip or a table cell? A column of buttons in
-/// a menu and the cells of a table keep their padding.
-fn starts_line(ui: &Ui) -> bool {
-    use egui::UiKind;
-    let layout = ui.layout();
-    if layout.prefer_right_to_left() || layout.horizontal_placement() != Align::Min {
-        return false;
-    }
-    // At the left edge of its own `Ui`, and of each enclosing `Ui` up to the content column
-    // (the nearest one of a kind: a panel, a frame, a scroll area, a section). A part that puts an
-    // action in a child `Ui` beside others (a title line, a column of a row) is not a line start.
-    let x = ui.cursor().left();
-    for frame in ui.stack().iter() {
-        if x > frame.max_rect.left() + 0.5 {
-            return false;
-        }
-        if frame.kind().is_some() {
-            break;
-        }
-    }
-    !ui.stack().iter().any(|frame| {
-        matches!(
-            frame.kind(),
-            Some(
-                UiKind::Menu | UiKind::Popup | UiKind::Picker | UiKind::Tooltip | UiKind::TableCell
-            )
-        )
-    })
 }
 
 /// An action with a default, and a caret beside it that opens a menu of the other ways
@@ -4732,10 +4674,6 @@ mod tests {
     /// icon and the padding hang left of it (`S + ICON_SLOT`); without one, only the padding.
     /// A normal quiet action keeps its icon and words inside its target from the edge.
     #[test]
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
-    )]
     fn iter18_a_a_line_start_action_hangs_its_icon_and_padding() {
         const EDGE: f32 = 60.0;
         let mut harness = egui_kittest::Harness::builder()
@@ -4796,94 +4734,6 @@ mod tests {
                 && (words("Undo replacement") - (EDGE + S + ICON_SLOT)).abs() <= 0.5,
             "no-hang: words {}, target {normal:?}",
             words("Undo replacement")
-        );
-
-        // N4: the part finds a line's start by itself; no caller calls `line_start` here. First
-        // on its line (in a column and on a horizontal line), its words are at the text edge.
-        // After a label on its line, an icon on it, or in a menu, it keeps its padding.
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(vec2(400.0, 300.0))
-            .build_ui(|ui| {
-                ui.label("Edge");
-                let _ = Action::quiet("Death saves").show(ui);
-                ui.horizontal(|ui| {
-                    let _ = Action::quiet("Cancel run").show(ui);
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Progress");
-                    let _ = Action::quiet("Stop run").show(ui);
-                });
-                let _ = Action::quiet("Reload list").icon(icons::REFRESH).show(ui);
-                let _ = Action::quiet("←").name("Back").show(ui);
-                let _ = Action::quiet("Show all 43").under_rows().show(ui);
-                let _ = Action::secondary("Bordered").show(ui);
-                let popup = ui.label("Menu");
-                egui::Popup::new(
-                    Id::new("n4_menu"),
-                    ui.ctx().clone(),
-                    popup.rect,
-                    ui.layer_id(),
-                )
-                .kind(egui::PopupKind::Menu)
-                .open(true)
-                .show(|ui| {
-                    let _ = Action::quiet("Remove from list").show(ui);
-                });
-            });
-        super::super::theme::install(&harness.ctx);
-        harness.run_steps(3);
-        let texts = painted_texts(&harness);
-        let words = |label: &str| {
-            texts
-                .iter()
-                .find(|(text, _)| text == label)
-                .map(|(_, rect)| rect.left())
-                .unwrap_or_else(|| panic!("{label} is painted"))
-        };
-        let node = |name: &str| {
-            use egui_kittest::kittest::Queryable;
-            harness.get_by_label(name).rect()
-        };
-        let edge = words("Edge");
-        // Its target stays inside its column, so it never reaches a splitter beside it.
-        for label in ["Death saves", "Cancel run"] {
-            assert!(
-                (words(label) - edge).abs() <= 0.5 && (node(label).left() - edge).abs() <= 0.5,
-                "n4-start {label}: words {}, target {:?}, edge {edge}",
-                node(label),
-                words(label)
-            );
-        }
-        let after = node("Stop run");
-        assert!(
-            (words("Stop run") - (after.left() + S)).abs() <= 0.5 && after.left() > edge + S,
-            "n4-after: words {}, target {after:?}",
-            words("Stop run")
-        );
-        assert!(
-            (node("Reload list").left() - edge).abs() <= 0.5,
-            "n4-icon: an action with an icon keeps its padding outside a message"
-        );
-        assert!(
-            (node("Bordered").left() - edge).abs() <= 0.5,
-            "n4-secondary"
-        );
-        // The named escape: under rows whose words start `S` in, it keeps its padding.
-        assert!(
-            (words("Show all 43") - (edge + S)).abs() <= 0.5,
-            "n4-under-rows: words {}",
-            words("Show all 43")
-        );
-        let back = node("Back");
-        assert!(
-            back.width() >= Density::Scan.control() - 0.5 && (back.left() - edge).abs() <= 0.5,
-            "n4-short: a one-glyph action keeps a whole target: {back:?}"
-        );
-        let menu = node("Remove from list");
-        assert!(
-            (words("Remove from list") - (menu.left() + S)).abs() <= 0.5,
-            "n4-menu: words {}, target {menu:?}",
-            words("Remove from list")
         );
     }
 

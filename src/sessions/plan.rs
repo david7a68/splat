@@ -425,6 +425,10 @@ fn link_gap(ui: &egui::Ui) -> f32 {
         .x
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn word_link(ui: &mut egui::Ui, label: &str) -> egui::Response {
     let c = colors();
     let galley = ui
@@ -539,6 +543,10 @@ fn plan_row(
 
 /// A plan row whose start is `lead`: a fight's caret, or a scene's box. Every row has the one
 /// leading slot, so every row's words start at one column.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn plan_row_with(
     ui: &mut egui::Ui,
     widths: &[f32],

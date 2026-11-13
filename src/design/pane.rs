@@ -251,16 +251,26 @@ fn widget_count(ui: &Ui) -> usize {
 }
 
 /// A body control that gained keyboard focus in this pass comes whole into the pane's view,
-/// above the footer: Tab never reaches a control hidden under it. Only a control that the body
-/// added (`widgets`, on the pane's layer) is scrolled to; a change of focus with a pointer press,
-/// hold or release is not, as `scroll_part` does for the footer.
-fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>) {
+/// above the footer: Tab never reaches a control hidden under it. So does the focused control
+/// when the visible room changes under it (the footer came or grew, the session banner came, the
+/// whole-row cut came with it; review of PR 306): a key press then never reaches a hidden control. Only
+/// a control that the body added (`widgets`, on the pane's layer) is scrolled to; a change of
+/// focus with a pointer press, hold or release is not, as `scroll_part` does for the footer.
+fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect, visible: Rect) {
     let focused = ui.ctx().memory(|memory| memory.focused());
     let seen = id.with("seen_focus");
-    if ui.ctx().data(|data| data.get_temp::<Option<Id>>(seen)) == Some(focused) {
+    // The room, not the clip: a wheel scroll moves the whole-row cut, and must not pull the
+    // focused control back into view.
+    let before = ui
+        .ctx()
+        .data(|data| data.get_temp::<(Option<Id>, Rect)>(seen));
+    if before == Some((focused, room)) {
         return;
     }
-    ui.ctx().data_mut(|data| data.insert_temp(seen, focused));
+    ui.ctx()
+        .data_mut(|data| data.insert_temp(seen, (focused, room)));
+    // The same control, a new room: scroll only when it is not whole in view.
+    let moved_room = before.is_some_and(|(was, _)| was == focused);
     let pointer = ui.input(|input| {
         let pointer = &input.pointer;
         pointer.any_down() || pointer.any_pressed() || pointer.any_released()
@@ -275,7 +285,9 @@ fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>) {
                 .flatten()
         })
     });
-    if let Some(rect) = rect {
+    if let Some(rect) = rect
+        && !(moved_room && visible.contains_rect(rect))
+    {
         ui.scroll_to_rect(rect, None);
     }
 }
@@ -561,7 +573,8 @@ impl Footer<'_> {
             .data(|data| data.get_temp::<(Rect, f32)>(cut_key))
             .filter(|(kept, _)| *kept == body_room)
             .map(|(_, cut)| cut);
-        body_ui.set_clip_rect(body_clip(ui, body_room, row_cut));
+        let visible = body_clip(ui, body_room, row_cut);
+        body_ui.set_clip_rect(visible);
         let rows_before = super::components::rows_this_pass(ui.ctx()).len();
         let (inner, scroll) = match body {
             Body::Content => {
@@ -577,7 +590,7 @@ impl Footer<'_> {
                         let inner = add(ui);
                         let last = widget_count(ui);
                         open(ui, None);
-                        reveal_focus(ui, id, first..last);
+                        reveal_focus(ui, id, first..last, body_room, visible);
                         inner
                     });
                 let scroll = Scroll {
@@ -772,5 +785,106 @@ mod row_cut_tests {
             }
         }
         assert!(hidden_by_the_cut > 0, "n12-reached: some height cut a row");
+    }
+
+    /// Review of PR 306: with keyboard focus on a registered row near the bottom, a footer (or
+    /// the session banner) that comes without a change of focus brings that row whole into view
+    /// before a key reaches it, and Enter fires exactly its one action. Both edges.
+    #[test]
+    fn a_new_edge_brings_the_focused_row_whole_into_view() {
+        #[derive(Default)]
+        struct State {
+            message: bool,
+            banner: bool,
+            focus: Option<usize>,
+            pressed: Vec<usize>,
+            rows: Vec<Rect>,
+            clip: f32,
+        }
+        for banner in [false, true] {
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(600.0, 420.0))
+                .build_state(
+                    |ctx, state: &mut State| {
+                        if state.banner {
+                            note_bottom_banner(ctx);
+                            egui::TopBottomPanel::bottom("row_cut_banner").show(ctx, |ui| {
+                                for line in 0..3 {
+                                    ui.label(format!("Banner line {line}"));
+                                }
+                            });
+                        }
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            let mut pressed = None;
+                            let mut footer = Footer::new("row_focus_test", ui.available_width());
+                            if state.message {
+                                footer.outcome(
+                                    Outcome::Refused(crate::sentence!(
+                                        "Save the draft first. The other changes wait until it is saved."
+                                    )),
+                                    &mut pressed,
+                                );
+                            }
+                            let focus = state.focus.take();
+                            let (rows, presses, clip) = footer.pane(ui, Body::Content, |ui| {
+                                let mut rows = Vec::new();
+                                let mut presses = Vec::new();
+                                for at in 0..30 {
+                                    let row = two_line_row(
+                                        ui,
+                                        44.0,
+                                        false,
+                                        &format!("Row {at}"),
+                                        "Its second line",
+                                    );
+                                    if focus == Some(at) {
+                                        row.request_focus();
+                                    }
+                                    if row.clicked() {
+                                        presses.push(at);
+                                    }
+                                    rows.push(row.rect);
+                                }
+                                (rows, presses, ui.clip_rect().bottom())
+                            });
+                            state.rows = rows;
+                            state.pressed.extend(presses);
+                            state.clip = clip;
+                        });
+                    },
+                    State::default(),
+                );
+            crate::design::theme::install(&harness.ctx);
+            harness.run_steps(3);
+            // The last row whole in view with no edge: focus it.
+            let clip = harness.state().clip;
+            let target = harness
+                .state()
+                .rows
+                .iter()
+                .rposition(|row| row.bottom() <= clip)
+                .expect("a row is whole in view");
+            harness.state_mut().focus = Some(target);
+            harness.run_steps(2);
+            // The edge comes; focus does not change.
+            if banner {
+                harness.state_mut().banner = true;
+            } else {
+                harness.state_mut().message = true;
+            }
+            harness.run_steps(4);
+            let (row, clip) = (harness.state().rows[target], harness.state().clip);
+            assert!(
+                row.bottom() <= clip + 0.5 && row.top() >= 0.0,
+                "n12-focus banner {banner}: row {target} {row:?} not whole above {clip}"
+            );
+            harness.key_press(egui::Key::Enter);
+            harness.run_steps(2);
+            assert_eq!(
+                harness.state().pressed,
+                vec![target],
+                "n12-enter banner {banner}: exactly the focused row's action"
+            );
+        }
     }
 }
