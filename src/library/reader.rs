@@ -1,4 +1,5 @@
 //! A common reading layout for all non-creature entries.
+#![warn(deprecated)] // Its parent allows old message functions; this file does not.
 use super::presentation::{self, ReadingSection};
 use crate::design::reader as style;
 use eframe::egui;

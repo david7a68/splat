@@ -149,9 +149,15 @@ pub const fn check_literal(template: &'static str) -> &'static str {
 /// - `sentence!("Removed {}.", name)` checks the template at compile time (`check_template`):
 ///   a capital, a number or a value first; an end mark last; curly apostrophes; no code word.
 /// - `Sentence::outside(text)` for words that come from outside the app (an error of the system,
-///   a parser's message, a row of the DM's table). It gives them an end mark and a capital.
-///   `rg 'Sentence::outside'` lists every such place.
+///   a parser's message, a row of the DM's table). It gives them an end mark and a capital, and
+///   gives `None` for blank words. The source lint counts its uses per file (`outside-words`).
 /// - `a.then(b)` joins two sentences.
+///
+/// What the check cannot see: the values of a template. `sentence!("{}.", error)` checks only
+/// `{}.`; an argument may carry outside words (a file's error, a name), lower case or code words.
+/// The macro's helpers (`check_template`, `Sentence::__formatted`, `Sentence::__literal`) can
+/// build an unchecked sentence; the source lint (`outcome-internal`, rung 3) fails on them
+/// outside this file.
 ///
 /// A sentence without its end mark does not compile:
 ///
@@ -203,18 +209,19 @@ impl Sentence {
 
     /// Words that come from outside the app: an error of the system, a parser's message, a row
     /// of the DM's own table. They start with a capital and end with an end mark, whatever came.
-    pub fn outside(words: impl Into<String>) -> Self {
+    /// Blank words are no sentence: `None`, and the caller says what it knows in its own
+    /// checked words. The source lint counts the uses of this escape per file.
+    pub fn outside(words: impl Into<String>) -> Option<Self> {
         let words: String = words.into();
         let mut words = words.trim().to_owned();
-        if let Some(first) = words.chars().next()
-            && first.is_lowercase()
-        {
+        let first = words.chars().next()?;
+        if first.is_lowercase() {
             words = first.to_uppercase().chain(words.chars().skip(1)).collect();
         }
-        if !words.is_empty() && !ends_with_mark(&words) {
+        if !ends_with_mark(&words) {
             words.push('.');
         }
-        Self(Cow::Owned(words))
+        Some(Self(Cow::Owned(words)))
     }
 
     /// This sentence, then `next`, with one space.
@@ -353,6 +360,9 @@ enum Step {
 /// from a `Verb` (and an object), or from the name of an act, and the part that tells two steps
 /// apart (a copy number, a folder) is kept whole by every fit.
 ///
+/// ```
+/// let _ = splat::outcome::UndoStep::act("Undo it");
+/// ```
 /// ```compile_fail
 /// let _ = splat::outcome::UndoStep { label: "Undo it".to_owned() };
 /// ```
@@ -550,7 +560,10 @@ impl<'a> Done<'a> {
 }
 
 /// A finished change in the domain's own words, in the success tone (`Seals for Party changed to
-/// 1.`). Its Undo is an `UndoStep`, never words.
+/// 1.`). Its Undo is an `UndoStep`, never words. `Said` is the named escape for a result that is
+/// not a verb and an object: nothing ties its words to its Undo's verb, so
+/// `Said::new(order, sentence!("Removed Bell.")).undo(UndoStep::of(Verb::Delete, "Bell"))`
+/// compiles. Only `Done` holds one verb for both; a reviewer checks each `Said`.
 ///
 /// ```
 /// use splat::outcome::{ResultOrder, Said, UndoStep};
@@ -664,7 +677,7 @@ impl<'a> FaultMessage<'a> {
 /// | `Refused` | warning | reasons |
 /// | `Fault` | from its `Severity` | reasons; first, as a result, while its Undo is live |
 ///
-/// There is no public way to draw an outcome outside `Footer::outcome`:
+/// An `Outcome` has no public draw method; it reaches the screen only through `Footer::outcome`:
 ///
 /// ```
 /// fn f(ui: &mut eframe::egui::Ui) {
@@ -909,7 +922,7 @@ impl Body<'_> {
                 }
             })
             .response;
-        register(ui, response.rect, place);
+        register(ui, response.rect, place, self.tone);
         pressed
     }
 
@@ -1059,25 +1072,28 @@ pub fn fault_words(fault: &dyn Fault) -> Sentence {
 
 /// A fault that belongs to one row or member, drawn where that row is, in the compact form.
 pub fn row_fault(ui: &mut Ui, fault: &dyn Fault) -> Response {
-    let response = small_tone_message(ui, fault.severity().tone(), fault_words(fault).as_str());
-    register(ui, response.rect, MessagePlace::Row);
+    let tone = fault.severity().tone();
+    let response = small_tone_message(ui, tone, fault_words(fault).as_str());
+    register(ui, response.rect, MessagePlace::Row, tone);
     response
 }
 
-/// A notice that came by itself, at the top of a pane's body, in the compact form.
+/// A notice that came by itself, at the top of a pane's body, in the compact form. It holds no
+/// Undo, no choice and no order, so it cannot carry a result's way back; its words can still say
+/// anything. `banner`, `row_fault` and `PagePlaceholder` are the body places: they take any `Ui`,
+/// so the source lint counts their uses per file (`body-message`), and a new use shows in review.
 pub enum Banner<'a> {
     Fault(&'a dyn Fault),
     Notice(Sentence),
 }
 
 pub fn banner(ui: &mut Ui, banner: Banner<'_>) -> Response {
-    let response = match banner {
-        Banner::Fault(fault) => {
-            small_tone_message(ui, fault.severity().tone(), fault_words(fault).as_str())
-        }
-        Banner::Notice(words) => small_tone_message(ui, Tone::Info, words.as_str()),
+    let (tone, words) = match banner {
+        Banner::Fault(fault) => (fault.severity().tone(), fault_words(fault)),
+        Banner::Notice(words) => (Tone::Info, words),
     };
-    register(ui, response.rect, MessagePlace::Banner);
+    let response = small_tone_message(ui, tone, words.as_str());
+    register(ui, response.rect, MessagePlace::Banner, tone);
     response
 }
 
@@ -1130,19 +1146,21 @@ pub enum MessagePlace {
 #[cfg(test)]
 pub const MESSAGE_RECTS: &str = "design_message_rects";
 
-fn register(ui: &Ui, rect: Rect, place: MessagePlace) {
+fn register(ui: &Ui, rect: Rect, place: MessagePlace, tone: Tone) {
     #[cfg(test)]
-    super::components::keep_for_pass(ui, MESSAGE_RECTS, (rect, place));
+    super::components::keep_for_pass(ui, MESSAGE_RECTS, (rect, place, tone));
     #[cfg(not(test))]
-    let _ = (ui, rect, place);
+    let _ = (ui, rect, place, tone);
 }
 
 /// Each message a typed place drew in the last pass that drew one, with its place. Only test
 /// builds keep them; the old message functions register nothing.
 #[cfg(test)]
-pub fn message_rects(ctx: &eframe::egui::Context) -> Vec<(Rect, MessagePlace)> {
+pub fn message_rects(ctx: &eframe::egui::Context) -> Vec<(Rect, MessagePlace, Tone)> {
     ctx.data(|data| {
-        data.get_temp::<(u64, Vec<(Rect, MessagePlace)>)>(eframe::egui::Id::new(MESSAGE_RECTS))
+        data.get_temp::<(u64, Vec<(Rect, MessagePlace, Tone)>)>(eframe::egui::Id::new(
+            MESSAGE_RECTS,
+        ))
     })
     .map(|(_, rects)| rects)
     .unwrap_or_default()
@@ -1207,12 +1225,16 @@ mod tests {
 
     #[test]
     fn outside_words_get_a_capital_and_an_end_mark() {
+        let outside = |words: &str| Sentence::outside(words).map(|s| s.to_string());
         assert_eq!(
-            Sentence::outside("no such file (os error 2)").as_str(),
-            "No such file (os error 2)."
+            outside("no such file (os error 2)").as_deref(),
+            Some("No such file (os error 2).")
         );
-        assert_eq!(Sentence::outside(" Done. ").as_str(), "Done.");
-        assert_eq!(Sentence::outside("Go “now”").as_str(), "Go “now”.");
+        assert_eq!(outside(" Done. ").as_deref(), Some("Done."));
+        assert_eq!(outside("Go “now”").as_deref(), Some("Go “now”."));
+        // Blank words are no sentence.
+        assert_eq!(outside(""), None);
+        assert_eq!(outside(" \n\t "), None);
         assert_eq!(
             crate::sentence!("Removed {}.", "Bell")
                 .then(crate::sentence!("Undo is kept."))
@@ -1277,6 +1299,48 @@ mod tests {
                 ],
             "{:?}",
             ranks.map(|(rank, order, _)| (rank, order))
+        );
+    }
+
+    /// One fault drawn in every place has one tone, its severity's, and one form of words.
+    #[test]
+    fn one_fault_has_one_tone_in_every_place() {
+        let mut h = Harness::builder()
+            .with_size(egui::vec2(600.0, 500.0))
+            .build_ui(|ui| {
+                let fault = Hp(Severity::NeedsFixing, Some(14));
+                banner(ui, Banner::Fault(&fault));
+                row_fault(ui, &fault);
+                let _ = PagePlaceholder::new(&fault).show(ui);
+                let mut pressed = None;
+                let mut footer = Footer::new("one_fault", ui.available_width());
+                footer.outcome(FaultMessage::new(&fault), &mut pressed);
+                let _ = footer.show(ui);
+            });
+        crate::design::theme::install(&h.ctx);
+        h.run_steps(4);
+        let rects = message_rects(&h.ctx);
+        let places: Vec<_> = rects.iter().map(|(_, place, _)| *place).collect();
+        assert_eq!(
+            places,
+            [
+                MessagePlace::Banner,
+                MessagePlace::Row,
+                MessagePlace::Page,
+                MessagePlace::Footer
+            ]
+        );
+        assert!(
+            rects.iter().all(|(_, _, tone)| *tone == Tone::Warning),
+            "{rects:?}"
+        );
+        assert_eq!(
+            h.query_all_by_role_and_label(
+                egui::accesskit::Role::Label,
+                "Cinder Wolf · line 14: The HP is missing."
+            )
+            .count(),
+            4
         );
     }
 

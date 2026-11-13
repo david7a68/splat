@@ -1963,7 +1963,7 @@ pub fn empty_state_with_body(
     });
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Tone {
     Info,
     Success,

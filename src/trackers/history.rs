@@ -6,11 +6,12 @@
 //! it raised, as Undo does, and it has one Undo, as the Timeline's removal has. The rows and the
 //! problems are worked out when the ledger or the definitions change; a folded section does no
 //! work, and an open one draws only the rows in view.
+use super::TrackerFault;
 use super::{
     NoticeRef, Rules, State, Today, Trackers, Unrecorded, label, ledger, place_name, replay,
     result_words, with_dependents,
 };
-use crate::design::outcome::{PagePlaceholder, Severity};
+use crate::design::outcome::PagePlaceholder;
 use crate::design::{self, Action, Density, Tone, Type, colors};
 use crate::world::{FooterAct, FooterKind, FooterLine, FooterRank};
 use eframe::egui;
@@ -377,13 +378,7 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, note: &splat::content::E
     let id = note.id;
     if let Some(error) = &trackers.rules.unreadable {
         ui.add_space(design::L);
-        let _ = PagePlaceholder::new(&super::view::TrackerFault(
-            Severity::CannotRead,
-            design::outcome::Sentence::outside(error.as_str()).then(crate::sentence!(
-                "Splat shows no tracker history until it can be read."
-            )),
-        ))
-        .show(ui);
+        let _ = PagePlaceholder::new(&TrackerFault::NotesUnreadable(error.clone())).show(ui);
         return;
     }
     if !in_play(&trackers.rules, id) {
@@ -391,11 +386,7 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, note: &splat::content::E
     }
     ui.add_space(design::L);
     if let Some(error) = &trackers.unreadable {
-        let _ = PagePlaceholder::new(&super::view::TrackerFault(
-            Severity::CannotRead,
-            super::view::ledger_unreadable(error),
-        ))
-        .show(ui);
+        let _ = PagePlaceholder::new(&TrackerFault::LedgerUnreadable(error.clone())).show(ui);
         return;
     }
     for (_, problem) in trackers
@@ -403,7 +394,7 @@ pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, note: &splat::content::E
         .iter()
         .filter(|(owner, _)| *owner == Some(id))
     {
-        design::outcome::row_fault(ui, &super::view::problem_fault(problem));
+        design::outcome::row_fault(ui, &TrackerFault::Problem(problem.clone()));
     }
     let mut pressed = None;
     let played = trackers.played;

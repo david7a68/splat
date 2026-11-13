@@ -1191,12 +1191,13 @@ fn act_words(rules: &Rules, ledger: &Ledger, state: &State, entries: &[Entry]) -
                 .as_ref()
                 .map_or(String::new(), |n| format!(" for {n}"));
             // The row's words are the DM's own table text.
+            let table = rules.table_name(&roll.table);
             return Sentence::outside(format!(
-                "Rolled {} on {}{name}: {}",
+                "Rolled {} on {table}{name}: {}",
                 roll.value,
-                rules.table_name(&roll.table),
                 roll.row.trim()
-            ));
+            ))
+            .unwrap_or_else(|| crate::sentence!("Rolled {} on {table}{name}.", roll.value));
         }
     }
     // Each value it left is a sentence of its own; `Undo: <label>` below names the act.
@@ -1216,7 +1217,8 @@ fn act_words(rules: &Rules, ledger: &Ledger, state: &State, entries: &[Entry]) -
         if let Some(Roll::Dice(text)) = &entry.roll {
             words = words.then(match &entry.row {
                 // The row's words are the DM's own table text.
-                Some(row) => Sentence::outside(format!("{}: {row}", rolled(text))),
+                Some(row) => Sentence::outside(format!("{}: {row}", rolled(text)))
+                    .unwrap_or_else(|| crate::sentence!("{}.", rolled(text))),
                 None => crate::sentence!("{}.", rolled(text)),
             });
         }
@@ -1427,6 +1429,76 @@ fn press_op(
         entries[0].row = Some(row);
     }
     Ok(stamp(entries, session))
+}
+
+/// A fault of the trackers' files or of a write, by kind. The kind decides its severity in one
+/// `match` (`Fault::severity`), and its words in one place, so every view that draws it (the
+/// Trackers view, a house rule note's reader, the footer) gives it one tone and one wording.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum TrackerFault {
+    /// `Trackers.md` cannot be read: the system's words.
+    LedgerUnreadable(String),
+    /// `Campaign.md` or a house rule note in play cannot be read: the reader's words.
+    NotesUnreadable(String),
+    /// The day count is not known: the Timeline's words.
+    ClockNotRead(String),
+    /// A write of `Trackers.md` failed: the system's words.
+    NotSaved(String),
+    /// The Timeline did not save the event that `Add to Timeline` made: its words.
+    TimelineNotSaved(String),
+    /// A problem of the problems list: a member or a note the DM must fix before it counts.
+    Problem(String),
+}
+
+impl crate::design::outcome::Fault for TrackerFault {
+    fn severity(&self) -> crate::design::outcome::Severity {
+        use crate::design::outcome::Severity;
+        match self {
+            Self::LedgerUnreadable(_) | Self::NotesUnreadable(_) | Self::ClockNotRead(_) => {
+                Severity::CannotRead
+            }
+            Self::NotSaved(_) | Self::TimelineNotSaved(_) => Severity::NotSaved,
+            Self::Problem(_) => Severity::NeedsFixing,
+        }
+    }
+
+    fn cause(&self) -> Sentence {
+        use crate::sentence;
+        // Each kind's words come from outside the app; blank words fall back to the app's own.
+        let outside = |words: String, blank: Sentence| Sentence::outside(words).unwrap_or(blank);
+        match self {
+            Self::LedgerUnreadable(error) => outside(
+                format!("{} cannot be read: {error}", ledger::FILE),
+                sentence!("{} cannot be read.", ledger::FILE),
+            )
+            .then(sentence!(
+                "The history in the file is safe. Splat writes nothing to it until it can be read."
+            )),
+            Self::NotesUnreadable(error) => outside(
+                error.clone(),
+                sentence!("A house rule note cannot be read."),
+            )
+            .then(sentence!(
+                "Splat shows no tracker and records nothing until it can be read. It reads the notes again when its window gets focus."
+            )),
+            Self::ClockNotRead(why) => outside(
+                why.clone(),
+                sentence!("The Timeline cannot be read."),
+            )
+            .then(view::DAY_MARKS_WAIT),
+            Self::NotSaved(error) => outside(
+                format!("{} was not saved: {}", ledger::FILE, error.trim_end_matches('.')),
+                sentence!("{} was not saved.", ledger::FILE),
+            )
+            .then(sentence!("Nothing was recorded.")),
+            Self::TimelineNotSaved(words) => {
+                outside(words.clone(), sentence!("The timeline was not saved."))
+            }
+            Self::Problem(problem) => {
+                outside(problem.clone(), sentence!("A tracker cannot be used."))
+            }
+        }
+    }
 }
 
 /// Why the last act wrote nothing. It shows on the result line, at the bottom edge of the view,

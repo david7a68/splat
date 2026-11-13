@@ -1,4 +1,5 @@
 //! Small, lossless edits to one key in `splat_world`. Unsupported YAML stays untouched.
+#![warn(deprecated)] // Its parent allows old message functions; this file does not.
 use serde_yaml_ng::Value;
 
 pub(super) fn patch(text: &str, key: &str, value: Value) -> Result<String, String> {

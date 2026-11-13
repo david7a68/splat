@@ -1,10 +1,13 @@
 //! The Trackers view of the Lookup panel: the Due rows, then the pinned trackers in the note's
 //! order, then `More trackers`, in one scroll area; the results sit in the panel's message
 //! footer. The view draws from the ledger as read, and every press is one act.
-use super::{Rules, Says, State, Trackers, Unrecorded, ledger::Entry, ledger::NoticeRef, mark_of};
+use super::{
+    Rules, Says, State, TrackerFault, Trackers, Unrecorded, ledger::Entry, ledger::NoticeRef,
+    mark_of,
+};
 use crate::design::outcome::{
     Banner, Fault, FaultMessage, MessageChoice, Outcome, PagePlaceholder, Pressed, Said, Sentence,
-    Severity, UndoStep, Verb,
+    UndoStep, Verb,
 };
 use crate::design::{self, Action, Density, Type, colors, icons};
 use eframe::egui;
@@ -194,19 +197,6 @@ pub(crate) const RULES_ROUTE: &str = "Campaign → Rules and runs";
 pub(crate) const DAY_MARKS_WAIT: Sentence =
     crate::sentence!("No day mark shows until the Timeline is read.");
 
-/// A fault of the trackers' files or of a write, for the typed message places: its severity
-/// and its words.
-pub(crate) struct TrackerFault(pub Severity, pub Sentence);
-
-impl Fault for TrackerFault {
-    fn severity(&self) -> Severity {
-        self.0
-    }
-    fn cause(&self) -> Sentence {
-        self.1.clone()
-    }
-}
-
 /// One act the DM asked for in this frame.
 pub(crate) enum Act {
     Press {
@@ -359,21 +349,10 @@ fn apply(trackers: &mut Trackers, act: Act) {
     }
 }
 
-/// `Trackers.md cannot be read: <error> The history in the file is safe.`
-pub(super) fn ledger_unreadable(error: &str) -> Sentence {
-    Sentence::outside(format!("{} cannot be read: {error}", super::ledger::FILE))
-        .then(crate::sentence!("The history in the file is safe."))
-}
-
 fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
     if let Some(error) = &trackers.unreadable {
         let path = trackers.path();
-        let fault = TrackerFault(
-            Severity::CannotRead,
-            ledger_unreadable(error).then(crate::sentence!(
-                "Splat writes nothing to it until it can be read."
-            )),
-        );
+        let fault = TrackerFault::LedgerUnreadable(error.clone());
         let hover = path.as_ref().map(|path| path.display().to_string());
         let mut placeholder =
             PagePlaceholder::new(&fault).choice(MessageChoice::Choice("Try again"));
@@ -406,24 +385,12 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
     } = trackers;
     // A definition that cannot be read shows no value, never an old one.
     if let Some(error) = &rules.unreadable {
-        let _ = PagePlaceholder::new(&TrackerFault(
-            Severity::CannotRead,
-            Sentence::outside(error.as_str()).then(crate::sentence!(
-                "Splat shows no tracker and records nothing until it can be read. It reads the notes again when its window gets focus."
-            )),
-        ))
-        .show(ui);
+        let _ = PagePlaceholder::new(&TrackerFault::NotesUnreadable(error.clone())).show(ui);
         return;
     }
     // A day count that is not known shows no day notice, never an old one, and says why.
     if let Some(why) = &state.clock_not_read {
-        design::outcome::banner(
-            ui,
-            Banner::Fault(&TrackerFault(
-                Severity::CannotRead,
-                Sentence::outside(why.as_str()).then(DAY_MARKS_WAIT),
-            )),
-        );
+        design::outcome::banner(ui, Banner::Fault(&TrackerFault::ClockNotRead(why.clone())));
     }
     if !state.due.is_empty() {
         design::group_heading(ui, "Due", state.due.len());
@@ -463,7 +430,7 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
     // A member that cannot be used is reported, and the others still work. So are a row of the
     // ledger that counts for nothing and a value below its `min`.
     for (_, problem) in problems.iter() {
-        design::outcome::row_fault(ui, &problem_fault(problem));
+        design::outcome::row_fault(ui, &TrackerFault::Problem(problem.clone()));
     }
 }
 
@@ -915,11 +882,6 @@ fn amount_field(
     }
 }
 
-/// A problem of the problems list: the DM must fix it before it counts.
-pub(super) fn problem_fault(problem: &str) -> TrackerFault {
-    TrackerFault(Severity::NeedsFixing, Sentence::outside(problem))
-}
-
 /// The view's message footer: why the last act recorded nothing, then the last act of the
 /// session being played with `Undo: <label>` and `Add to Timeline`, or, after `Add to
 /// Timeline`, `Added to the Timeline.` with `Undo add`. Nothing shows while `Trackers.md`
@@ -935,22 +897,23 @@ fn footer(ui: &mut egui::Ui, trackers: &Trackers, act: &mut Option<Act>) -> f32 
             .filter(|added| added.entry == first.id)
     });
     let not_saved = match &trackers.reason {
-        Some(Unrecorded::NotSaved(error)) => {
-            Some(TrackerFault(Severity::NotSaved, not_saved(error)))
-        }
+        Some(Unrecorded::NotSaved(error)) => Some(TrackerFault::NotSaved(error.clone())),
         _ => None,
     };
     // The event waits in the Timeline's draft when its save failed: say so, not success.
     let added_not_saved = added
         .and_then(|added| added.not_saved.as_ref())
-        .map(|words| TrackerFault(Severity::NotSaved, Sentence::outside(words.as_str())));
+        .map(|words| TrackerFault::TimelineNotSaved(words.clone()));
     let (mut reason_pressed, mut result_pressed) = (None, None);
     let mut footer = design::Footer::new("trackers_footer", ui.available_width());
     if shown {
         match (&trackers.reason, &not_saved) {
             (Some(Unrecorded::Refused(why)), _) => {
                 footer.outcome(
-                    Outcome::Refused(Sentence::outside(why.as_str())),
+                    Outcome::Refused(
+                        Sentence::outside(why.as_str())
+                            .unwrap_or(crate::sentence!("Nothing was recorded.")),
+                    ),
                     &mut reason_pressed,
                 );
             }
@@ -1003,12 +966,7 @@ const ADD_TO_TIMELINE: &str = "Add to Timeline";
 
 /// The words of a failed save: the file, the reason, and that nothing was recorded.
 pub(super) fn not_saved(error: &str) -> Sentence {
-    Sentence::outside(format!(
-        "{} was not saved: {}",
-        super::ledger::FILE,
-        error.trim_end_matches('.')
-    ))
-    .then(crate::sentence!("Nothing was recorded."))
+    TrackerFault::NotSaved(error.to_owned()).cause()
 }
 
 #[cfg(test)]
