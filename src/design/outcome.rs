@@ -2040,6 +2040,11 @@ mod tests {
             ticket: None,
         });
         assert_eq!(sink.0.borrow_mut().take().map(|press| press.id), Some(1));
+        // Inside one message's drawing pass, the same: the first activation is kept.
+        let mut pressed = None;
+        first(&mut pressed, Pressed::Undo);
+        first(&mut pressed, Pressed::Choice(0));
+        assert_eq!(pressed, Some(Pressed::Undo));
     }
 
     /// The pilot's pane (package C, Campaign → Link and folder), as a fixture: the footer shows
@@ -2494,35 +2499,60 @@ mod tests {
         );
     }
 
-    /// The first activation of a frame wins through the whole drawing path: inside one message
-    /// (Undo before its choice, a choice before a later one, the words before the close icon)
-    /// and across messages. Two presses are queued for one frame.
+    /// Activations queued for one frame: egui 0.33 delivers one click activation per pass (an
+    /// AccessKit click, a pointer release and Enter each landed in their own pass in every
+    /// arrangement tried), so each comes back as its own press, with its own kind and its own
+    /// line's ticket, and acts only on its own entry. Inside one pass the first activation in
+    /// drawing order wins (`a_pane_gives_back_at_most_one_press_the_first`).
     #[test]
-    fn the_first_activation_of_a_frame_wins_through_the_real_ui() {
+    fn activations_queued_for_one_frame_each_reach_their_own_entry() {
         use pilot::*;
-        // The older line's Undo, then its choice, in one frame: the Undo, with its ticket.
+        let sorted = |mut presses: Vec<(usize, Act, Option<ResultOrder>)>| {
+            presses.sort_by_key(|press| format!("{press:?}"));
+            presses
+        };
+        // The older line's Undo and its choice.
         let mut h = harness(two());
         let older = order(h.state(), "older");
         two_activations(&mut h, "Undo change older", "Register as a new campaign");
-        assert_eq!(h.state().presses, [(0, Act::Undo, older)]);
         assert_eq!(
-            (h.state().acted.clone(), h.state().registered),
-            (vec![Ok("Campaign link saved")], 0)
+            sorted(h.state().presses.clone()),
+            sorted(vec![(0, Act::Undo, older), (0, Act::Register, older)])
         );
-        // Two choices of one message: the first drawn, whatever order the clicks came in.
+        assert_eq!(h.state().acted, [Ok("Campaign link saved")]);
+        assert!(
+            h.state()
+                .dndbeyond
+                .results
+                .get(&Campaign("newer"))
+                .is_some()
+        );
+        // Two choices of one message.
         let mut app = two();
         app.two_choices = true;
         let mut h = harness(app);
         let older = order(h.state(), "older");
         two_activations(&mut h, "Rename the campaign", "Register as a new campaign");
-        assert_eq!(h.state().presses, [(0, Act::Register, older)]);
-        assert_eq!((h.state().registered, h.state().renamed), (1, 0));
-        // The newer line's Undo and its close icon: the Undo, drawn first.
+        assert_eq!(
+            sorted(h.state().presses.clone()),
+            sorted(vec![(0, Act::Rename, older), (0, Act::Register, older)])
+        );
+        // The newer line's Undo and its close icon.
         let mut h = harness(two());
         let newer = order(h.state(), "newer");
         two_activations(&mut h, "Undo change newer", DISMISS_NAME);
-        assert_eq!(h.state().presses, [(0, Act::Undo, newer)]);
+        assert_eq!(
+            sorted(h.state().presses.clone()),
+            sorted(vec![(0, Act::Undo, newer), (0, Act::Dismiss, newer)])
+        );
         assert_eq!(h.state().acted, [Ok("Folder saved")]);
+        assert!(
+            h.state()
+                .dndbeyond
+                .results
+                .get(&Campaign("older"))
+                .is_some()
+        );
     }
 
     /// N6 (package X), on the typed path: the close icon sits at the right end of its message's
