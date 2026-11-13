@@ -118,19 +118,66 @@ fn scene_matches_fight(d: &Driver<'_>) -> (bool, String) {
     let column = words
         .zip(fight)
         .is_some_and(|(words, fight)| (words.left() - fight.left()).abs() <= 0.5);
-    let pitch = words.zip(detail).zip(fight.zip(summary)).is_some_and(
-        |((words, detail), (fight, summary))| {
-            ((detail.top() - words.top()) - (summary.top() - fight.top())).abs() <= 0.5
-        },
-    );
+    // App round 2, X12: measured on the painted words, by the baseline of each text's first
+    // line. The scene's first line sits as far below its row's top (its box) as the fight's
+    // title below its own (its link's target), and its second line as far below its first as
+    // the fight's summary below the title.
+    let baseline = |left: f32, below: f32, words: Option<&str>| {
+        let mut found: Option<f32> = None;
+        d.each_painted_text(|text, _| {
+            let rect = text.galley.rect.translate(text.pos.to_vec2());
+            let Some((row, glyph)) = text
+                .galley
+                .rows
+                .first()
+                .and_then(|row| Some((row, row.glyphs.first()?)))
+            else {
+                return;
+            };
+            let line = text.pos.y + row.pos.y + glyph.pos.y;
+            if (rect.left() - left).abs() <= 0.5
+                && rect.top() >= below - 0.5
+                && words.is_none_or(|words| text.galley.job.text == words)
+                && found.is_none_or(|found| line < found)
+            {
+                found = Some(line);
+            }
+        });
+        found
+    };
+    let scene_top = d.place_of(&format!("Open: {VARRA}"));
+    let scene_line = words.and_then(|words| baseline(words.left(), words.top(), Some(VARRA)));
+    let detail_line = detail.and_then(|detail| {
+        baseline(
+            detail.left(),
+            detail.top(),
+            Some("NPC · alive · Ashfall Keep"),
+        )
+    });
+    let title_line = fight.and_then(|fight| baseline(fight.left(), fight.top(), Some(SHRINE)));
+    let summary_line = summary.and_then(|summary| baseline(summary.left(), summary.top(), None));
+    let first_line = scene_top
+        .zip(scene_line)
+        .zip(fight.zip(title_line))
+        .is_some_and(|((row, line), (fight, title))| {
+            ((line - row.top()) - (title - fight.top())).abs() <= 0.5
+        });
+    let pitch = scene_line
+        .zip(detail_line)
+        .zip(title_line.zip(summary_line))
+        .is_some_and(|((words, detail), (title, summary))| {
+            ((detail - words) - (summary - title)).abs() <= 0.5
+        });
     let size = !sizes.is_empty()
         && sizes
             .iter()
             .all(|size| *size == crate::design::Type::Body.size());
     (
-        column && pitch && size,
+        column && first_line && pitch && size,
         format!(
-            "words {words:?}, second line {detail:?}; fight {fight:?}, its second line {summary:?}; sizes {sizes:?}"
+            "words {words:?}, second line {detail:?}; fight {fight:?}, its second line {summary:?}; \
+             baselines: scene row {scene_top:?}, words {scene_line:?}, second line {detail_line:?}; \
+             fight title {title_line:?}, summary {summary_line:?}; sizes {sizes:?}"
         ),
     )
 }
@@ -336,6 +383,33 @@ pub fn run(d: &mut Driver<'_>) {
             }),
         format!("The first row was at {first:?} and is at {now:?}; the field is at {field:?}, Undo scene at {undo:?}"),
     );
+    // App round 2, X13: `Undo scene` takes a line of its own only when it is wider than the
+    // room after the words in their column, which ends where the rows' menus end.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (words, undo, column) = d.at_size(size, |d| {
+            (
+                painted(d, "Scene added to tonight.")
+                    .first()
+                    .map(|(rect, _)| *rect),
+                d.place_of("Undo scene"),
+                d.place_of(&format!("More actions for {SHRINE}"))
+                    .map(|rect| rect.right()),
+            )
+        });
+        let wraps_only_when_wider =
+            words
+                .zip(undo)
+                .zip(column)
+                .is_some_and(|((words, undo), column)| {
+                    undo.top() < words.bottom()
+                        || words.right() + crate::design::S + undo.width() > column + 0.5
+                });
+        d.observe(
+            "X13",
+            wraps_only_when_wider,
+            format!("At {size:?}: the words at {words:?}, Undo scene at {undo:?}, the column ends at {column:?}"),
+        );
+    }
     d.state("scene-added", Sizes::All);
     // App round 1, W1-D1: at 960x640 the scene just added stays in view while the DM types the
     // next one and its suggestions show: the fold holds while the field has focus.
@@ -630,8 +704,12 @@ pub fn log_from_play(d: &mut Driver<'_>) {
             let action = d.place_of(&short);
             let menu = d.place_of(&format!("More actions for {VARRA_BLACK}"));
             let open = d.has(&format!("Add to Log: {KEEP}"));
+            // App round 2, X29: on the row it has no icon, as the row's other actions.
+            let icon = action
+                .is_some_and(|action| d.painted_in(action).contains(crate::design::icons::ADD));
             (
                 !open
+                    && !icon
                     && (size != DEFAULT || action.is_some())
                     && action.is_none_or(|action| {
                         menu.is_some_and(|menu| {
@@ -924,6 +1002,31 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         )),
         "A deleted entry's typed Log words block nothing, and the footer says them",
     );
+    // App round 2, X14: the scene whose entry is gone says `Not found`, in the warning tone, on
+    // its second line at the words' column, as Lookup and World say it.
+    for size in [SMALL, DEFAULT] {
+        let (said, detail) = d.at_size(size, |d| {
+            let row = d.place_of(&format!("Done: {VARRA_BLACK}"));
+            let found: Vec<_> = painted(d, "Not found")
+                .into_iter()
+                .filter(|(rect, formats)| {
+                    row.is_some_and(|row| {
+                        (rect.left() - row.right()).abs() <= 0.5
+                            && rect.top() > row.top()
+                            && rect.top() < row.top() + 2.0 * crate::design::XL
+                    }) && formats
+                        .iter()
+                        .all(|format| format.color == crate::design::colors().result.warning)
+                })
+                .map(|(rect, _)| rect)
+                .collect();
+            (
+                found.len() == 1,
+                format!("row {row:?}, Not found at {found:?}"),
+            )
+        });
+        d.observe("X14", said, format!("At {size:?}: {detail}"));
+    }
     // X28 of app round 2: the notice offers the words with `Copy text`, as a lost draft does,
     // and stays until the DM copies or dismisses it, also while Lookup shows no entry.
     let notice = format!("“{VARRA_BLACK}” was deleted. The Log line was not added: “{TYPED}”");
@@ -950,5 +1053,32 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         "T18.2-guard",
         d.copied_text().as_deref() == Some(TYPED) && !d.visible_text(&notice) && !d.has(&copy),
         "Copy text puts the words on the clipboard and ends the notice",
+    );
+    // Astra's review: a link that two entries share is not gone; that scene says no `Not found`.
+    entry(
+        d,
+        "Locations/Ashfall Keep, the old fort.md",
+        KEEP,
+        "location",
+        "",
+    );
+    d.app_mut().lookup.refresh();
+    d.settle();
+    let row = d.place_of(&format!("Open: {KEEP}"));
+    let found: Vec<_> = painted(d, "Not found")
+        .into_iter()
+        .map(|(rect, _)| rect)
+        .filter(|rect| {
+            row.is_some_and(|row| {
+                rect.top() > row.top() && rect.top() < row.top() + 2.0 * crate::design::XL
+            })
+        })
+        .collect();
+    d.observe(
+        "X14",
+        row.is_some() && found.is_empty(),
+        format!(
+            "A name that two entries share is not Not found: row {row:?}, Not found at {found:?}"
+        ),
     );
 }

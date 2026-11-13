@@ -431,6 +431,9 @@ pub struct Sessions {
     pub wants_event: Option<String>,
     /// The encounter to start, by its path.
     pub wants_fight: Option<String>,
+    /// A planned fight's `Edit encounter`: its encounter, by its ID, opens in the editor, whose
+    /// way back is this session.
+    pub wants_edit_encounter: Option<Uuid>,
     pub wants_campaign_link: bool,
     pub wants_runs_refresh: bool,
     pub wants_new_fight: bool,
@@ -7779,6 +7782,7 @@ mod tests {
     fn read_plan_summary_keeps_mixed_notes_and_repeated_fights_in_the_file() {
         let fights = [PlanFight {
             saved: None,
+            id: uuid::Uuid::nil(),
             name: "Bridge Ambush".into(),
             path: String::new(),
             summary: String::new(),
@@ -7858,6 +7862,7 @@ mod tests {
         })];
         let fights = [PlanFight {
             saved: None,
+            id: uuid::Uuid::nil(),
             name: "Bridge Ambush".into(),
             path: String::new(),
             summary: String::new(),

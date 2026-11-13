@@ -149,7 +149,8 @@ pub fn run(d: &mut Driver<'_>) {
     );
     d.begin_task();
     d.click(ROLL_FOR_ENCOUNTERS);
-    d.expect("Encounter checks added to this journey.");
+    const STARTED: &str = "Encounter checks added to this journey.";
+    d.expect(STARTED);
     d.observe(
         "T11.10",
         d.has("Choose a table")
@@ -158,6 +159,45 @@ pub fn run(d: &mut Driver<'_>) {
             && timeline_file(&dir).contains("  - Checks table:\n"),
         "With several tables and no earlier choice, the block waits for a table, and focus is in How long",
     );
+    // App round 2: where the line has no room, the result shortens by whole words, never
+    // inside a word (at 1200x800 the note is beside the plan). Review round 1: widths between,
+    // so that a cut that is blind to words lands inside one at some of them.
+    for size in [
+        SMALL,
+        (1040.0, 800.0),
+        (1080.0, 800.0),
+        (1120.0, 800.0),
+        (1160.0, 800.0),
+        DEFAULT,
+        (1240.0, 800.0),
+        (1280.0, 800.0),
+        LARGE,
+    ] {
+        // The line that paints the result: whole, or its start and `…`.
+        let line = d.at_size(size, |d| {
+            d.painted_lines_in(egui::Rect::EVERYTHING)
+                .into_iter()
+                .find(|line| {
+                    line == STARTED
+                        || line
+                            .strip_suffix('…')
+                            .is_some_and(|kept| !kept.is_empty() && STARTED.starts_with(kept))
+                })
+        });
+        let whole_words = line.as_deref().is_some_and(|line| {
+            line == STARTED
+                || line.strip_suffix('…').is_some_and(|kept| {
+                    STARTED
+                        .strip_prefix(kept)
+                        .is_some_and(|rest| rest.starts_with(' '))
+                })
+        });
+        d.observe(
+            "T11.10-whole-words",
+            whole_words,
+            format!("At {size:?}, the result reads {line:?}"),
+        );
+    }
     // The event holds the block through a restart, with no table chosen yet.
     d.restart();
     d.click(NAV_SESSIONS);

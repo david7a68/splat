@@ -19115,16 +19115,28 @@ pub mod session_plan {
                 }),
             format!("At {size:?}, Log, Whole run and Timeline share one line: {words:?}"),
         );
-        // Round 27 FH4: one blank on each side of `·`, as the plan's other lines have (about
-        // 11 px from word to word, where 16 px on each side gave about 36).
+        // App round 2, X48, changed by round 27 FH4: one blank on each side of each `·`, as the
+        // plan's other lines have, at every size: from a word's painted end to the `·`, and from
+        // the `·` to the next word. An `S` gap (X48) or 16 px (round 26) is too wide.
         let gaps: Vec<f32> = words
             .windows(2)
-            .filter_map(|pair| pair[0].zip(pair[1]).map(|(a, b)| b.left() - a.right()))
+            .filter_map(|pair| {
+                let (a, b) = pair[0].zip(pair[1])?;
+                let between = egui::Rect::from_x_y_ranges(a.right()..=b.left(), a.y_range());
+                let dot = d.painted_word_rect("·", between)?;
+                Some([dot.left() - a.right(), b.left() - dot.right()])
+            })
+            .flatten()
             .collect();
         d.observe(
             "iter-27-S-FH4",
-            gaps.len() == 2 && gaps.iter().all(|gap| *gap > 0.0 && *gap < crate::design::L),
-            format!("At {size:?}, the links' word gaps are one blank, `·`, one blank: {gaps:?}"),
+            gaps.len() == 4
+                && gaps
+                    .iter()
+                    .all(|gap| *gap > 0.5 && *gap < crate::design::S - 1.0),
+            format!(
+                "At {size:?}, one blank beside each `·` of Log · Whole run · Timeline: {gaps:?}"
+            ),
         );
     }
 
@@ -19205,7 +19217,7 @@ pub mod session_plan {
             d.click(&action);
             d.audit_goal_within("T18.1", "put a played fight's rewards in the note", 1);
             d.wait_for_text("In notes");
-            let result = d.has_containing(&format!("Rewards for “{FIRST}” added under Loot and rewards. XP added. Delete that line to leave XP out from now on. XP tonight: "));
+            let result = d.has_containing(&format!("Rewards for “{FIRST}” added under Loot and rewards. XP line added. Delete it in the note to leave XP out from now on. XP tonight: "));
             let written = std::fs::read_to_string(&note).unwrap();
             // The counts assume the note in Write; this one shows as a reader.
             write_note(d);
@@ -20115,10 +20127,35 @@ pub mod session_plan {
             "Final HP names each character in the plan, with no run to reopen",
         );
         rewards_in_the_note(d);
+        // W2-D3 (app round 2): the opened played row has the Timeline detail's `Where`. It is
+        // that event's own field: typed here, the Timeline holds it, with no page change. At
+        // 960x640 the taller row leaves the next fight's primary action in view.
+        let next = d.at_size(SMALL, |d| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name == format!("Start fight: {SECOND}"))
+                .is_some_and(|node| node.fully_in_view())
+        });
+        d.begin_task();
+        d.type_into("Where", "The ford");
+        let placed =
+            d.app().timeline.events.iter().any(|event| {
+                event.title == FIRST && event.run.is_some() && event.place == "The ford"
+            });
+        d.observe(
+            "W2-D3-where",
+            placed && next && d.page_title().as_deref() == Some("Session"),
+            format!("Where on the played row writes the Timeline's event {placed}; at 960x640 the next fight's Start fight is whole in view {next}"),
+        );
         d.click(FIRST);
 
         d.click(NAV_TIMELINE);
         assert!(d.has_containing("Held the bridge · Ended · Round 1"));
+        d.observe(
+            "W2-D3-where",
+            d.has_containing("The ford"),
+            "Timeline shows the place typed on the plan's row",
+        );
         d.state_prepared("timeline-after-fight", Sizes::All, |d| {
             d.observe(
                 "iter-23-S-FK2-timeline",
