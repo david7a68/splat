@@ -3990,6 +3990,28 @@ pub mod encounter_build {
                 ),
             );
         }
+        // iter-27-B SB1: beside Lookup the actions are measured, so a short name and both
+        // actions, each with its word, share the name's line at every size.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let line = d.at_size(size, |d| {
+                let field = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with("Encounter name"))?
+                    .rect;
+                let on_line = |name: &str| {
+                    d.place_of(name).map(|action| {
+                        field.y_range().contains(action.center().y) && action.left() > field.right()
+                    })
+                };
+                Some((on_line(SAVE_ENCOUNTER)?, on_line(RUN_ENCOUNTER)?))
+            });
+            d.observe(
+                "iter-27-B-SB1",
+                line == Some((true, true)),
+                format!("At {size:?} beside Lookup, Save encounter and Start fight after the name: {line:?}"),
+            );
+        }
         d.state("stat-block-beside-editor", Sizes::All);
         // The Cultist's Skills row in Lookup: `Deception +2, Religion +2`.
         check_skills_row(
