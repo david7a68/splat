@@ -2223,31 +2223,14 @@ pub fn linked_sentence(ui: &mut Ui, names: &[&str], suffix: &str) -> Option<usiz
     clicked
 }
 
-/// An Undo message whose affected entries remain links on the message line. Capped at
-/// `LIST_MEASURE` like every notice.
-pub fn undo_message_with_links(
-    ui: &mut Ui,
-    tone: Tone,
-    names: &[&str],
-    suffix: &str,
-    action: &str,
-) -> (bool, Option<usize>) {
+/// A message whose first words are entry links, such as the encounters a package removal leaves
+/// without creatures. Capped at `LIST_MEASURE` like every notice. Round 27 FE5: a result's Undo
+/// stays on its own success sentence (`undo_message`), and this message follows it, so it has no
+/// action of its own. The pressed link's index.
+pub fn message_with_links(ui: &mut Ui, tone: Tone, names: &[&str], suffix: &str) -> Option<usize> {
+    let (icon, color) = tone.parts();
     ui.scope(|ui| {
         ui.set_max_width(ui.available_width().min(LIST_MEASURE));
-        undo_message_with_links_inside(ui, tone, names, suffix, action)
-    })
-    .inner
-}
-
-fn undo_message_with_links_inside(
-    ui: &mut Ui,
-    tone: Tone,
-    names: &[&str],
-    suffix: &str,
-    action: &str,
-) -> (bool, Option<usize>) {
-    fn notice(ui: &mut Ui, tone: Tone, names: &[&str], suffix: &str) -> Option<usize> {
-        let (icon, color) = tone.parts();
         ui.horizontal_top(|ui| {
             let start = ui.cursor().min;
             ui.add_space(S + 1.0);
@@ -2267,44 +2250,8 @@ fn undo_message_with_links_inside(
             content.inner
         })
         .inner
-    }
-    let button = Action::quiet(action)
-        .icon(icons::UNDO)
-        .density(Density::Read);
-    let button_width = button.natural_width(ui);
-    let inset = S
-        + 1.0
-        + number_width(ui, tone.parts().0, &Type::Body.font(ui))
-        + ui.spacing().item_spacing.x * 2.0
-        - XS;
-    let words = format!("{} {suffix}", names.join(" and "));
-    let gap = ui.spacing().item_spacing.x;
-    let mut pressed = false;
-    let clicked;
-    if ui.available_width()
-        < number_width(ui, &words, &Type::Body.font(ui)) + inset + gap + button_width
-    {
-        clicked = notice(ui, tone, names, suffix);
-        ui.horizontal(|ui| {
-            ui.add_space((inset - gap).max(0.0));
-            pressed = button.line_start_in_column().show(ui).clicked();
-        });
-    } else {
-        clicked = ui
-            .horizontal_top(|ui| {
-                let width = (ui.available_width() - button_width - gap).max(0.0);
-                let clicked = ui
-                    .allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
-                        ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
-                        notice(ui, tone, names, suffix)
-                    })
-                    .inner;
-                pressed = button.show(ui).clicked();
-                clicked
-            })
-            .inner;
-    }
-    (pressed, clicked)
+    })
+    .inner
 }
 
 /// A message with several actions below it, aligned with the message text.
@@ -4407,19 +4354,13 @@ mod tests {
             right - left <= LIST_MEASURE + 0.5 && words.height() > Type::Body.line(),
             "the message spans {left}..{right}: words {words:?}, action {action:?}"
         );
-        // The same cap holds for the two Undo messages.
+        // The same cap holds for the Undo message and the message with links.
         for links in [false, true] {
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(1800.0, 240.0))
                 .build_ui(move |ui| {
                     if links {
-                        undo_message_with_links(
-                            ui,
-                            Tone::Success,
-                            &["Ashen Marches"],
-                            LONG,
-                            "Undo",
-                        );
+                        message_with_links(ui, Tone::Warning, &["Ashen Marches"], LONG);
                     } else {
                         undo_message(ui, Tone::Success, LONG, "Undo");
                     }
@@ -4437,7 +4378,7 @@ mod tests {
                 .fold(f32::MAX, f32::min);
             assert!(
                 !texts.is_empty() && right - left <= LIST_MEASURE,
-                "links {links}: the Undo message spans {left}..{right}"
+                "links {links}: the message spans {left}..{right}"
             );
         }
     }

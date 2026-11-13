@@ -325,7 +325,7 @@ with **Always use this one**. Until you choose, the note's World row says **Plac
 and the header's **notes need fixing** link counts it. An empty World note says **Nothing written yet.**
 Its file line keeps the one **Edit in Obsidian** link.
 
-With no campaigns, the switcher says **No campaign** and offers **Add campaign…**.
+With no campaigns, the switcher says **No campaign** and offers **Add campaign**.
 New entry and Copy entry use **Destination** and show a short path, with the full path
 on hover. Sharing required campaign entries lists the copies before **Copy both**.
 
