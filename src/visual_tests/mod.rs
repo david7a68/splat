@@ -762,6 +762,7 @@ fn prepare_output(directory: &Path, capture: bool) {
         "ergonomics.md",
         "chrome-observation.json",
         "stillness.json",
+        "stillness-known.txt",
     ] {
         match fs::remove_file(directory.join(name)) {
             Ok(()) => {}
@@ -782,6 +783,7 @@ fn a_run_without_captures_clears_reports_but_keeps_other_files() {
         "ergonomics.md",
         "chrome-observation.json",
         "stillness.json",
+        "stillness-known.txt",
     ];
     let retained = ["empty__01__960x640.png", "manifest.txt", "notes.md"];
     for name in reports.into_iter().chain(retained) {
@@ -1108,6 +1110,11 @@ fn visual_suite() {
         stillness::json_lines(&still),
     )
     .expect("write stillness.json");
+    fs::write(
+        directory.join("stillness-known.txt"),
+        stillness::known_lines(&still, &names),
+    )
+    .expect("write stillness-known.txt");
     fs::write(
         directory.join("ergonomics.md"),
         ergonomics::write_markdown(&report) + &still_report.markdown(),

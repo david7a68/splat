@@ -2934,17 +2934,11 @@ impl<'a> Driver<'a> {
         // egui's clash warnings from every painted shape, and the design's record of the text
         // fields drawn (package K, rung 4 for `FieldId`). Every state of every scenario.
         let shapes = &self.harness.output().shapes;
+        // Reported as G7 with the other G checks, and blocking against its known lines.
+        let window = format!("{}x{}", size.0, size.1);
         for words in crate::design::layout::widget_id_clashes(&self.harness.ctx, shapes) {
-            self.outcome.violations.push(ergonomics::Violation {
-                check: "widget-id-clash".into(),
-                scenario: self.scenario.into(),
-                state: state.into(),
-                window: format!("{}x{}", size.0, size.1),
-                node: words,
-                role: String::new(),
-                rect: [0.0; 4],
-                detail: "Two live widgets share one id: give each its own FieldId key".into(),
-            });
+            self.stillness
+                .push(self.scenario, state, &window, stillness::id_clash(words));
         }
     }
 
@@ -2967,7 +2961,17 @@ impl<'a> Driver<'a> {
         let shapes = &self.harness.output().shapes;
         let painted = stillness::painted_texts(shapes);
         let texts = stillness::texts(&painted);
-        let messages = stillness::messages(shapes, &painted, &items);
+        let registry: Vec<(egui::Rect, crate::design::outcome::MessagePlace)> =
+            crate::design::outcome::message_rects(&self.harness.ctx)
+                .into_iter()
+                .map(|(rect, place, _)| (rect, place))
+                .collect();
+        let messages = stillness::with_typed(
+            &registry,
+            &texts,
+            &items,
+            stillness::messages(shapes, &painted, &items),
+        );
         let rows = ergonomics::row_rects(&self.harness.ctx);
         let window = format!("{}x{}", size.0, size.1);
         let mut found = Vec::new();
@@ -2977,8 +2981,29 @@ impl<'a> Driver<'a> {
         if size == SMALL {
             found.extend(stillness::repeated_sentences(&items, &rows));
         }
+        // G6: P's exact form for a pane with a record; the band rule for a pane placed by hand.
         let footers = crate::design::footer_bands(&self.harness.ctx);
-        found.extend(stillness::footer_gaps(&items, &footers));
+        let nodes = self.nodes();
+        let mut covered = Vec::new();
+        for record in self.pane_records() {
+            let focus = accesskit::NodeId(record.id().with("focus").value());
+            let Some(footer) = nodes.iter().find(|node| node.id == focus).map(|n| n.rect) else {
+                continue;
+            };
+            covered.push(footer);
+            let body = nodes
+                .iter()
+                .filter(|node| node.id != focus)
+                .map(|node| node.rect);
+            if let Some(gap) = crate::design::pane::short_body_gap(&record, 1.0, footer, body) {
+                found.push(stillness::exact_footer_gap(
+                    &format!("{:?}", record.local()),
+                    footer,
+                    gap,
+                ));
+            }
+        }
+        found.extend(stillness::footer_gaps(&items, &footers, &covered));
         let lines = stillness::lines(&painted);
         found.extend(stillness::icon_centres(&items, &lines));
         found.extend(stillness::icon_wraps(&lines));

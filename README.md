@@ -114,25 +114,30 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   because the item takes every press.
   `KNOWN_APP_VS_CHROME` in `src/visual_tests/ergonomics.rs` is empty and may only stay
   empty, so any pair fails the run.
-- The G checks (`src/visual_tests/stillness.rs`) compare what the app shows. `stillness.json` has
-  one line per finding (scenario, state, window, check, control, old and new rect, and the
-  message, press, bar or size that set it off), and the terminal and `ergonomics.md` give the
-  counts per check. G1 compares two states in a row at one size: **G1a** a message came or went
-  in a pane (a message is its pane and its words) and content below it moved, while the content
-  above it stayed (its own block, a form that opened in place and a scrolled pane are left out);
-  **G1b** the control a script pressed moved (by more than 1 px; a selected toggle may grow by
-  up to `TOGGLE_WEIGHT` with its line and one edge kept; links are not checked); **G1c** a
-  scroll bar came or went and a right edge in its pane moved by the bar's lane. **G3** at
-  1920x1080 a registered row's first action is more than `3 × L` after its last words (form and
-  table rows are exempt). These four block: a line that `stillness_known::KNOWN` does not list
-  fails the run, and so does a listed state with fewer lines, so the list only shrinks.
-  Report-only: **G1b** for a control found again only by its id, **G2** a short header action at
-  the widest size is gone or paints other words at a narrower size, **G4** one pane shows a
-  text of four or more words twice, **G6** a message footer more than `S` below a body that
-  ends short of it, **N2** an icon control's centre more than 1 px off the text line beside it,
-  **N5** a text that starts with an icon and wrapped inside its own layout job, and **N8** one
-  word shown twice in a row (`Travel Travel`, `Day 1: Day`). Until `src/design` registers message rects, G1a finds a message by what
-  `design::message` draws: the tone bar, the tone icon and the words.
+- The G and N checks (`src/visual_tests/stillness.rs`) compare what the app shows. One report:
+  `stillness.json` has one line per finding (scenario, state, window, check, control, old and
+  new rect, and what set it off), and the terminal and `ergonomics.md` give the counts per check.
+  G1 compares two states in a row at one size: **G1a** a message came or went in a pane (a
+  message is its pane and its words; a typed row, banner or page message may move what follows
+  it) and content below it moved while the content above stayed; **G1b** the control a script
+  pressed moved (by more than 1 px; a selected toggle may grow by up to `TOGGLE_WEIGHT` with its
+  line and one edge kept; links are not checked); **G1c** a scroll bar came or went and a right
+  edge in its pane moved by the bar's lane. **G3** at 1920x1080 a registered row's first action
+  is more than `3 × L` after its last words (form and table rows are exempt). **G6** a pane's
+  footer is more than `2 × L` below a short body (`pane::short_body_gap` for a `Footer::pane`;
+  the footer band for a pane placed by hand). **G7** two live widgets share one id. **N2** an
+  icon control's centre is more than 1 px off the centre of the text line beside it. **N5** a
+  text that starts with an icon wrapped inside its own layout job. These block. Report-only:
+  **G1b** for a control found again only by its id, **G2** a short header action at the widest
+  size is gone or paints other words at a narrower size, **G4** one pane shows a text of four or
+  more words twice, and **N8** one word shown twice in a row (`Travel Travel`).
+- A blocking check fails the run on a line that `KNOWN` in `src/visual_tests/stillness_known.rs`
+  does not list, and on a listed state with fewer lines, so the list only shrinks. The list has
+  one block per scenario, headed `// <scenario>`. To lower your lines after a fix, run your
+  scenarios (`visual-test <label> --only a,b`): each run writes
+  `artifacts/screenshots/<label>/stillness-known.txt` with the lines those scenarios need, one
+  block per scenario. Replace your scenarios' blocks in `stillness_known.rs` with those blocks and
+  run `cargo fmt`. A count may only go down; a new line needs a fix or an `expect_moves`.
 - `d.expect_moves("reason")` before a state where a move is the point (a reorder, an answered
   question that goes) is the one escape from G1a and G1b; it never covers G1c. Its findings
   stay in `stillness.json` with the reason, and the report counts each use per scenario.

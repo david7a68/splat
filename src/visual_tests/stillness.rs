@@ -12,18 +12,24 @@
 //! - **N8** one word is shown twice in a row, in one text or two adjacent texts of a line.
 //!
 //! G1a, G1b, G1c and G3 block: a finding that `stillness_known::KNOWN` does not list fails the
-//! run, and so does a listed state with fewer findings (the list may only shrink). G2, G4 and
-//! G1b's renamed tier (`G1B_RENAMED`) are report-only.
+//! run, and so does a listed state with fewer findings (the list may only shrink). So do G6, G7
+//! (two live widgets with one id, package K's `layout::widget_id_clashes`), N2 and N5. G2, G4, N8
+//! and G1b's renamed tier (`G1B_RENAMED`) are report-only.
 //!
 //! G1 compares two states in a row at one window size. It matches a control by its pane, role,
 //! accessible name and place among equal names, never by AccessKit id alone: egui's automatic ids
 //! shift when a widget is inserted before them. `Driver::expect_moves` is the one escape: it
 //! marks the next state's G1a and G1b findings as intended, with a reason the report counts.
 //!
-//! Messages: until `src/design` registers each message's rect, a message is found in the painted
-//! shapes by what `design::message` and `design::small_message` draw: a 3 px bar in a result tone,
-//! a tone icon after it, then the words. The words' AccessKit label gives the pane.
+//! Messages: a typed message is read from package M's registry (`outcome::message_rects`), which
+//! gives its whole block and its place. A message drawn in a typed row, banner or page place may
+//! move what follows it (the place is the rule), so it does not set G1a off; a typed footer
+//! message does. A message that an old, untyped function draws registers nothing, so it is still
+//! found in the painted shapes by what `design::message` and `design::small_message` draw: a 3 px
+//! bar in a result tone, a tone icon after it, then the words. That search goes when Wave 2 has
+//! moved every caller to the typed places.
 use super::ergonomics::{Control, StateKey};
+use crate::design::outcome::MessagePlace;
 use crate::design::{L, S, XS};
 use eframe::egui::{self, accesskit::Role, epaint::ClippedShape};
 use serde::Serialize;
@@ -43,9 +49,11 @@ pub const G6: &str = "G6/footer-far-below-body";
 pub const N2: &str = "N2/icon-off-text-centre";
 pub const N5: &str = "N5/icon-starts-wrapping-text";
 pub const N8: &str = "N8/doubled-word";
-pub const CHECKS: [&str; 11] = [G1A, G1B, G1B_RENAMED, G1C, G2, G3, G4, G6, N2, N5, N8];
+/// Package K's check: two live widgets with one id (two text fields with one `FieldId`).
+pub const G7: &str = "G7/widget-id-clash";
+pub const CHECKS: [&str; 12] = [G1A, G1B, G1B_RENAMED, G1C, G2, G3, G4, G6, G7, N2, N5, N8];
 /// The checks whose findings must be in `stillness_known::KNOWN`.
-pub const BLOCKING: [&str; 4] = [G1A, G1B, G1C, G3];
+pub const BLOCKING: [&str; 8] = [G1A, G1B, G1C, G3, G6, G7, N2, N5];
 
 /// An edge may move by rounding up to this much (the design's ±1 px).
 const MOVE_TOLERANCE: f32 = 1.0;
@@ -140,6 +148,18 @@ pub struct Message {
     pub rect: egui::Rect,
     pub scope: Option<u64>,
     pub clip: Option<egui::Rect>,
+    /// The typed place that drew it (package M's registry); `None` for an old, untyped message.
+    pub typed: Option<MessagePlace>,
+}
+
+impl Message {
+    /// A typed row, banner or page message may move what follows it: its place is the rule.
+    fn moves_by_place(&self) -> bool {
+        matches!(
+            self.typed,
+            Some(MessagePlace::Row | MessagePlace::Banner | MessagePlace::Page)
+        )
+    }
 }
 
 /// A pane: its top-level scope and the left, top and right of its scroll area. The bottom is left
@@ -331,8 +351,55 @@ pub fn messages(
             rect: bar.union(words_rect).intersect(*clip),
             scope: label.map(|item| item.scope),
             clip: label.and_then(|item| item.clip),
+            typed: None,
         });
     }
+    out
+}
+
+/// The typed messages of package M's registry, each with its words (the painted texts inside its
+/// rect, in reading order) and its pane (a label inside it), then the untyped messages that the
+/// shape search found outside every typed one.
+pub fn with_typed(
+    registry: &[(egui::Rect, MessagePlace)],
+    texts: &[Text],
+    items: &[Item],
+    untyped: Vec<Message>,
+) -> Vec<Message> {
+    let mut out: Vec<Message> = registry
+        .iter()
+        .map(|(rect, place)| {
+            let mut inside: Vec<&Text> = texts
+                .iter()
+                .filter(|text| rect.expand(MOVE_TOLERANCE).contains(text.rect.center()))
+                .collect();
+            inside.sort_by(|a, b| {
+                a.rect
+                    .top()
+                    .total_cmp(&b.rect.top())
+                    .then(a.rect.left().total_cmp(&b.rect.left()))
+            });
+            let label = items
+                .iter()
+                .find(|item| item.is_label() && rect.contains(item.rect.center()));
+            Message {
+                words: inside
+                    .iter()
+                    .map(|text| text.words.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                rect: *rect,
+                scope: label.map(|item| item.scope),
+                clip: label.and_then(|item| item.clip),
+                typed: Some(*place),
+            }
+        })
+        .collect();
+    out.extend(untyped.into_iter().filter(|message| {
+        !registry
+            .iter()
+            .any(|(rect, _)| rect.expand(MOVE_TOLERANCE).contains(message.rect.center()))
+    }));
     out
 }
 
@@ -379,7 +446,12 @@ fn own_block<'a>(
     pane: &[(Key<'a>, &'a Item)],
     footers: &[egui::Rect],
 ) -> HashSet<Key<'a>> {
-    let mut out = HashSet::new();
+    // A typed message's rect is its whole block.
+    let mut out: HashSet<Key<'a>> = pane
+        .iter()
+        .filter(|(_, item)| message.rect.contains(item.rect.center()))
+        .map(|(key, _)| *key)
+        .collect();
     if let Some(footer) = footers
         .iter()
         .find(|footer| footer.expand(MOVE_TOLERANCE).contains_rect(message.rect))
@@ -428,12 +500,12 @@ pub fn message_moves(old: &Snapshot, new: &Snapshot) -> Vec<Raw> {
     };
     let (old_keys, new_keys) = (keys(old), keys(new));
     let mut changed = Vec::new();
-    for message in &new.messages {
+    for message in new.messages.iter().filter(|m| !m.moves_by_place()) {
         if !old_keys.contains(&(message.key().0, message.words.clone())) {
             changed.push((message, new, old, "appeared"));
         }
     }
-    for message in &old.messages {
+    for message in old.messages.iter().filter(|m| !m.moves_by_place()) {
         if !new_keys.contains(&(message.key().0, message.words.clone())) {
             changed.push((message, old, new, "went"));
         }
@@ -921,14 +993,22 @@ pub fn repeated_sentences(items: &[Item], rows: &[egui::Rect]) -> Vec<Raw> {
     out
 }
 
-/// G6: a footer follows a short body. For each footer band (`design::footer_bands`: from `S` above
-/// the footer to the pane's bottom), the last body item above it in the pane ends at most 1 px
-/// above the band: the footer's first message is at most `S` + 1 px below the body. A body that
-/// fills the pane, scrolled or not, ends at the band, so it passes; only a footer left far below a
-/// short body is found.
-pub fn footer_gaps(items: &[Item], footers: &[egui::Rect]) -> Vec<Raw> {
+/// G6: a footer follows a short body. A pane that keeps package P's record (`Footer::pane`) is
+/// checked exactly by `pane::short_body_gap` in the driver; this is the check for a footer band
+/// (`design::footer_bands`: from `S` above the footer to the pane's bottom) that no record covers,
+/// a pane still placed by hand (`show_by_hand`). There, the last body item above the band (its
+/// visible bottom) ends at most `2 × L` above the footer, as in P's check (row padding and a frame
+/// under the last item end there). A body that fills the pane (its last item runs past its scroll
+/// area) passes. `covered` are the footers of the panes with a record.
+pub fn footer_gaps(items: &[Item], footers: &[egui::Rect], covered: &[egui::Rect]) -> Vec<Raw> {
     let mut out = Vec::new();
     for band in footers {
+        if covered.iter().any(|footer| {
+            (footer.top() - S - band.top()).abs() <= 2.0
+                && footer.x_range().intersects(band.x_range())
+        }) {
+            continue;
+        }
         let last = items
             .iter()
             .filter(|item| {
@@ -945,22 +1025,48 @@ pub fn footer_gaps(items: &[Item], footers: &[egui::Rect]) -> Vec<Raw> {
         let Some((item, bottom)) = last else {
             continue;
         };
-        // The last item runs past its scroll area: the body fills the pane.
         if item.rect.bottom() > bottom + MOVE_TOLERANCE {
             continue;
         }
         let gap = band.top() + S - bottom;
-        if gap > S + MOVE_TOLERANCE {
+        if gap > 2.0 * L {
             out.push(Raw {
                 check: G6,
                 control: display(item),
                 old: item.rect,
                 new: *band,
-                trigger: format!("the footer is {gap:.0} px below the body's last item"),
+                trigger: format!(
+                    "the footer is {gap:.0} px below the body's last item (a pane placed by hand)"
+                ),
             });
         }
     }
     out
+}
+
+/// G6 for a pane with package P's record: the exact gap that `pane::short_body_gap` found.
+pub fn exact_footer_gap(pane: &str, footer: egui::Rect, gap: f32) -> Raw {
+    Raw {
+        check: G6,
+        control: format!("Pane {pane}"),
+        old: egui::Rect::from_min_size(
+            footer.min - egui::vec2(0.0, gap),
+            egui::vec2(footer.width(), 0.0),
+        ),
+        new: footer,
+        trigger: format!("the footer is {gap:.0} px below the body (Footer::pane)"),
+    }
+}
+
+/// G7: package K's `layout::widget_id_clashes` words for one state.
+pub fn id_clash(words: String) -> Raw {
+    Raw {
+        check: G7,
+        control: words,
+        old: egui::Rect::NOTHING,
+        new: egui::Rect::NOTHING,
+        trigger: "two live widgets share one id: give each its own FieldId key".to_owned(),
+    }
 }
 
 /// A painted text as N2, N5 and N8 read it.
@@ -1008,8 +1114,9 @@ pub fn lines(painted: &[(egui::epaint::TextShape, egui::Rect)]) -> Vec<Line> {
 }
 
 /// N2: an icon control (a control that paints only icons) sits on the line of the text beside
-/// it: a text within `3 × L` to its left or right whose first row overlaps the control's height;
-/// of those, the row whose centre is nearest the control's. The control's centre is within 1 px
+/// it: a text within `3 × L` to its left or right whose first row holds the control's centre;
+/// of those, the row whose centre is nearest the control's. A control more than twice as tall as
+/// that row is a tile and is left out. The control's centre is within 1 px
 /// of that row's centre. Text inside a text field counts as the field, whose box is the line;
 /// text in a multi-line editor is left out.
 pub fn icon_centres(items: &[Item], lines: &[Line]) -> Vec<Raw> {
@@ -1042,7 +1149,11 @@ pub fn icon_centres(items: &[Item], lines: &[Line]) -> Vec<Raw> {
                     .map(|field| field.rect);
                 (line, field.unwrap_or(line.first))
             })
-            .filter(|(_, row)| row.y_range().intersects(item.rect.y_range()))
+            // The row must hold the control's centre: a long text's first row elsewhere is not its
+            // line.
+            .filter(|(_, row)| row.y_range().contains(centre.y))
+            // A control twice as tall as the line is a tile, not an icon on the line.
+            .filter(|(_, row)| item.rect.height() <= 2.0 * row.height())
             .filter(|(_, row)| {
                 let gap = if row.right() <= item.rect.left() {
                     item.rect.left() - row.right()
@@ -1331,6 +1442,54 @@ pub fn compare_known(
     (worse, stale)
 }
 
+/// The Rust name of a blocking check's constant, for `stillness_known.rs`.
+fn constant(check: &str) -> &'static str {
+    match check {
+        G1A => "G1A",
+        G1B => "G1B",
+        G1C => "G1C",
+        G3 => "G3",
+        G6 => "G6",
+        G7 => "G7",
+        N2 => "N2",
+        N5 => "N5",
+        _ => "?",
+    }
+}
+
+/// `stillness-known.txt`: the known lines this run's findings need, one block per scenario that
+/// ran, in the form and order of `stillness_known.rs`. A package that fixed lines replaces its
+/// scenarios' blocks with these; a line may only go down or go.
+pub fn known_lines(findings: &[Finding], scenarios: &[&str]) -> String {
+    let mut found: BTreeMap<(&str, &str, &str, &str), usize> = BTreeMap::new();
+    for finding in findings
+        .iter()
+        .filter(|f| f.escaped.is_none() && BLOCKING.contains(&f.check))
+    {
+        *found
+            .entry((
+                finding.scenario.as_str(),
+                constant(finding.check),
+                finding.state.as_str(),
+                finding.window.as_str(),
+            ))
+            .or_default() += 1;
+    }
+    let mut ran: Vec<&str> = scenarios.to_vec();
+    ran.sort_unstable();
+    let mut out = String::new();
+    for scenario in ran {
+        out.push_str(&format!("    // {scenario}\n"));
+        for ((_, check, state, window), count) in found.iter().filter(|(key, _)| key.0 == scenario)
+        {
+            out.push_str(&format!(
+                "    ({check}, ({scenario:?}, {state:?}, {window:?}), {count}),\n"
+            ));
+        }
+    }
+    out
+}
+
 /// `stillness.json`: a JSON array with one finding per line, so `grep` and `diff` read it.
 pub fn json_lines(findings: &[Finding]) -> String {
     let lines: Vec<String> = findings
@@ -1491,6 +1650,7 @@ mod tests {
             rect,
             scope: Some(1),
             clip,
+            typed: None,
         }
     }
 
@@ -1564,6 +1724,40 @@ mod tests {
             vec![],
         );
         assert!(message_moves(&old, &scrolled).is_empty());
+    }
+
+    #[test]
+    fn g1a_lets_a_typed_row_banner_or_page_message_move_what_follows() {
+        let body = Some(at(0.0, 0.0, 600.0, 600.0));
+        let above = item(Role::Label, "File line", at(10.0, 60.0, 200.0, 20.0), body);
+        let row = |y| item(Role::Button, "Strength", at(10.0, y, 100.0, 24.0), body);
+        let old = snapshot(vec![above.clone(), row(100.0)], vec![], vec![]);
+        for (place, found) in [
+            (MessagePlace::Row, 0),
+            (MessagePlace::Banner, 0),
+            (MessagePlace::Page, 0),
+            (MessagePlace::Footer, 1),
+        ] {
+            let mut message = saved(at(10.0, 100.0, 200.0, 20.0), body);
+            message.typed = Some(place);
+            let new = snapshot(vec![above.clone(), row(128.0)], vec![message], vec![]);
+            assert_eq!(message_moves(&old, &new).len(), found, "{place:?}");
+        }
+        // The registry gives the words and the block; a shape-found copy inside it is dropped.
+        let texts = [Text {
+            words: "Changes saved.".into(),
+            rect: at(30.0, 102.0, 100.0, 16.0),
+        }];
+        let block = at(10.0, 100.0, 300.0, 50.0);
+        let found = with_typed(
+            &[(block, MessagePlace::Footer)],
+            &texts,
+            &[],
+            vec![saved(at(10.0, 100.0, 200.0, 20.0), body)],
+        );
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].words, "Changes saved.");
+        assert_eq!(found[0].typed, Some(MessagePlace::Footer));
     }
 
     #[test]
@@ -1897,17 +2091,22 @@ mod tests {
     fn g6_finds_a_footer_far_below_a_short_body() {
         let pane_band = |top: f32| at(400.0, top, 500.0, 1080.0 - top);
         let row = item(Role::Button, "Process", at(420.0, 300.0, 90.0, 28.0), None);
-        // The footer follows the body: its message is `S` below the last row.
-        assert!(footer_gaps(std::slice::from_ref(&row), &[pane_band(328.0)]).is_empty());
-        assert!(footer_gaps(std::slice::from_ref(&row), &[pane_band(329.0)]).is_empty());
-        // 1.5 px past the rule, and 700 px (the round 28 faults).
+        // The footer follows the body; up to `2 × L` (row padding, a frame) passes, as in P's check.
+        assert!(footer_gaps(std::slice::from_ref(&row), &[pane_band(328.0)], &[]).is_empty());
+        assert!(footer_gaps(std::slice::from_ref(&row), &[pane_band(352.0)], &[]).is_empty());
+        // 0.5 px past it, and 700 px (the round 28 faults).
         assert_eq!(
-            footer_gaps(std::slice::from_ref(&row), &[pane_band(329.5)]).len(),
+            footer_gaps(std::slice::from_ref(&row), &[pane_band(352.5)], &[]).len(),
             1
         );
         assert_eq!(
-            footer_gaps(std::slice::from_ref(&row), &[pane_band(1028.0)]).len(),
+            footer_gaps(std::slice::from_ref(&row), &[pane_band(1028.0)], &[]).len(),
             1
+        );
+        // A pane with P's record is checked exactly in the driver, not here.
+        let footer = at(400.0, 1036.0, 500.0, 44.0);
+        assert!(
+            footer_gaps(std::slice::from_ref(&row), &[pane_band(1028.0)], &[footer]).is_empty()
         );
         // A body that fills the pane runs past its scroll area: it passes, also when the scroll
         // area ends above the band (an editor's frame margin).
@@ -1917,10 +2116,13 @@ mod tests {
             at(420.0, 300.0, 400.0, 2000.0),
             Some(at(400.0, 100.0, 500.0, 800.0)),
         );
-        assert!(footer_gaps(&[tall], &[pane_band(1028.0)]).is_empty());
+        assert!(footer_gaps(&[tall], &[pane_band(1028.0)], &[]).is_empty());
         // Another pane's content beside it does not count.
         let beside = item(Role::Button, "Other", at(100.0, 900.0, 90.0, 28.0), None);
-        assert_eq!(footer_gaps(&[row, beside], &[pane_band(1028.0)]).len(), 1);
+        assert_eq!(
+            footer_gaps(&[row, beside], &[pane_band(1028.0)], &[]).len(),
+            1
+        );
     }
 
     fn line(words: &str, rect: egui::Rect) -> Line {
@@ -1988,6 +2190,16 @@ mod tests {
         );
         let file = line("# Session 1", at(380.0, 210.0, 100.0, 300.0));
         assert!(icon_centres(&[editor, menu(222.0)], &[file, dots(222.0)]).is_empty());
+        // A tall tile with an icon box beside a short number is not on that number's line.
+        let tile = item(
+            Role::CheckBox,
+            "Half damage",
+            at(152.0, 130.0, 24.0, 40.0),
+            None,
+        );
+        let box_icon = line("\u{e184}", at(156.0, 140.0, 14.0, 16.0));
+        let hp = line("17", at(180.0, 140.0, 18.0, 16.0));
+        assert!(icon_centres(&[tile], &[hp, box_icon]).is_empty());
         let far = item(Role::Button, "Close", at(900.0, 222.0, 24.0, 24.0), None);
         assert!(
             icon_centres(
@@ -2089,6 +2301,12 @@ mod tests {
         let (worse, stale) = compare_known(&[], known, &["s"]);
         assert_eq!((worse.len(), stale.len()), (0, 1));
         assert_eq!(compare_known(&[], known, &["other"]), (vec![], vec![]));
+        // The file a package pastes from: one block per scenario that ran, in the list's form.
+        let lines = known_lines(&[finding(G3, "01-a"), finding(G2, "02-b")], &["s", "t"]);
+        assert_eq!(
+            lines,
+            "    // s\n    (G3, (\"s\", \"01-a\", \"960x640\"), 1),\n    // t\n"
+        );
         let mut escaped = finding(G1A, "02-b");
         escaped.escaped = Some("A reorder.");
         assert_eq!(
