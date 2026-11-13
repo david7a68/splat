@@ -22,6 +22,8 @@ use std::{
 use uuid::Uuid;
 
 /// Sheets refresh in the background, so the campaign package needs another look now and then.
+const NEEDED_SEARCH: design::FieldId = crate::field_id!("package_needed_search");
+const PACKAGE_SEARCH: design::FieldId = crate::field_id!("package_entries_search");
 const CHECK_EVERY: Duration = Duration::from_secs(5 * 60);
 
 pub(crate) struct Snapshot {
@@ -1386,10 +1388,6 @@ impl CampaignContent {
     }
 
     /// Each change waits for the DM. A blocked one says what they must decide first.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn reconcile_section(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
         let reconcile = &mut self.reconcile;
         if reconcile.applying {
@@ -1473,7 +1471,7 @@ impl CampaignContent {
             self.reconcile.message = None;
             self.start_check(ui.ctx(), campaigns, active.clone(), Some(keys));
         }
-        ui.add_space(design::S);
+        design::gap(ui, design::Gap::S);
     }
 
     fn repair_section(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
@@ -1558,7 +1556,13 @@ impl CampaignContent {
             ui.data_mut(|data| data.insert_temp(id, open));
             if open {
                 // The message above names the file; the editor's accessible name names it too.
-                design::group_heading(ui, "Repair", 0);
+                design::heading(
+                    ui,
+                    design::Heading::Group {
+                        title: "Repair",
+                        count: 0,
+                    },
+                );
                 ui.scope(|ui| {
                     // What is wrong comes first, and stays true as the DM edits.
 
@@ -1695,7 +1699,7 @@ impl CampaignContent {
             })
         }) {
             // The package list below draws the one rule; a second rule here would separate nothing.
-            ui.add_space(design::L);
+            design::gap(ui, design::Gap::L);
         }
         if repaired && !self.dirty() {
             self.reload(ui.ctx(), campaigns, active.clone());
@@ -2164,10 +2168,6 @@ impl CampaignContent {
         });
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn packages_content(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
         // Review round 26: egui panels set their own clip to the panel's rect, so their rows would
         // paint and take clicks below the page's viewport, under the footer. Each column clips
@@ -2578,15 +2578,26 @@ impl CampaignContent {
                 if self.dependencies {
                     ui.horizontal(|ui| {
                         ui.set_min_height(Density::Read.control());
-                        design::group_heading(ui, "Needed by your entries", closure.required.len());
+                        // Its own scope: the heading's space under it stays inside it, not in this line.
+                        ui.scope(|ui| {
+                            design::heading(
+                                ui,
+                                design::Heading::Group {
+                                    title: "Needed by your entries",
+                                    count: closure.required.len(),
+                                },
+                            )
+                        });
                     });
-                    design::search_field(
-                        ui,
-                        "Find a needed entry",
-                        &mut self.search,
-                        "Find an entry…",
-                        ui.available_width(),
-                    );
+                    let _ = NEEDED_SEARCH
+                        .search(
+                            ui,
+                            "Find a needed entry",
+                            &mut self.search,
+                            "Find an entry…",
+                            ui.available_width(),
+                        )
+                        .field;
                     let query = self.search.to_lowercase();
                     let mut required: Vec<_> = closure
                         .required
@@ -2709,13 +2720,15 @@ impl CampaignContent {
                         document.selections.remove(i);
                     }
                 });
-                design::search_field(
-                    ui,
-                    "Find an entry in this package",
-                    &mut self.search,
-                    "Find an entry…",
-                    ui.available_width(),
-                );
+                let _ = PACKAGE_SEARCH
+                    .search(
+                        ui,
+                        "Find an entry in this package",
+                        &mut self.search,
+                        "Find an entry…",
+                        ui.available_width(),
+                    )
+                    .field;
                 let query = self.search.to_lowercase();
                 if self
                     .entry_matches
@@ -2749,7 +2762,7 @@ impl CampaignContent {
                             let required = closure.required.contains_key(&id);
                             let mut selected = closure.direct.contains(&id) || required;
                             ui.push_id(id, |ui| {
-                                ui.horizontal(|ui| {
+                                let row = ui.horizontal(|ui| {
                                     ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
                                     ui.set_min_height(30.0);
                                     let why = closure.required.get(&id).map(|reasons| {
@@ -2804,6 +2817,7 @@ impl CampaignContent {
                                     }
                                     ui.label(job);
                                 });
+                                design::register_row(ui, row.response.rect);
                             });
                         }
                     });
