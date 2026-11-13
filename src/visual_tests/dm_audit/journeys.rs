@@ -308,12 +308,16 @@ fn counted_end(a: &mut Audit<'_, '_>, fight: &str, outcome: Option<&str>) {
 }
 
 /// `Add rewards` for this played fight, where the fit rule puts it: on the row, else the last
-/// link of the opened row, else a line of the row's menu (section 2.5, row 10).
+/// link of the opened row (the DM opens the row), else a line of the row's menu (section 2.5,
+/// row 10).
 fn add_rewards(a: &mut Audit<'_, '_>, fight: &str) {
     let on_row = format!("Add rewards: {fight}");
     if a.d.has(&on_row) {
         a.click(Do, &on_row);
         return;
+    }
+    if !a.d.has("Add rewards") {
+        a.click(Find, fight);
     }
     if !a.d.has("Add rewards") {
         a.click(Find, &format!("More actions for {fight}"));
@@ -457,7 +461,7 @@ fn improvised_evening(a: &mut Audit<'_, '_>) {
             && block[0].contains("\n  - XP ")
             && block[0].trim_end().ends_with("\n  - Ostrel’s signet ring")
             && note.matches("Ostrel’s signet ring").count() == 1,
-        rewards,
+        &note,
     );
     let fight = saved_event(a.d, &format!("Fight with {OSTREL}"));
     a.outcome(
