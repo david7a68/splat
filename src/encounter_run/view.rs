@@ -2466,7 +2466,9 @@ impl Run {
                     ui.label(format!("and {} more", changes.len() - 3));
                 }
             } else if conflict.is_some() {
-                ui.add(egui::Label::new(conflict_close_words(block.is_some())).wrap());
+                if let Some(words) = conflict_close_words(block.is_some()) {
+                    ui.add(egui::Label::new(words).wrap());
+                }
             } else if stranded.is_empty() {
                 ui.add(egui::Label::new(note).wrap());
             } else {
@@ -2492,21 +2494,25 @@ impl Run {
                 self.wants_sign_in = true;
                 keep = true;
             }
-            // Every close action here waits for the same cause, so it shows once, above them.
-            if block.is_some() {
-                ui.add_space(design::S);
-                design::blocked_reason(ui, block.as_deref());
-            }
+            // Every close action here waits for the same cause. Round 27 FN4: it shows once,
+            // `S` left of the blocked close on the right, or after the red one when that is
+            // the only close.
+            let right_close = cannot_save || lost.is_empty();
             let (lose, ()) = design::dialog_actions(
                 ui,
                 |ui| {
-                    (cannot_save || !lost.is_empty())
+                    let lose = (cannot_save || !lost.is_empty())
                         && Action::destructive("Close and lose changes")
                             .blocked(block.as_deref())
                             .show(ui)
-                            .clicked()
+                            .clicked();
+                    if !right_close {
+                        design::blocked_reason(ui, block.as_deref());
+                    }
+                    lose
                 },
                 |ui| {
+                    ui.spacing_mut().item_spacing.x = design::S;
                     if cannot_save {
                         save_new = Action::primary("Save as a new run and close")
                             .blocked(block.as_deref())
@@ -2517,6 +2523,10 @@ impl Run {
                             .blocked(block.as_deref())
                             .show(ui)
                             .clicked();
+                    }
+                    if right_close && block.is_some() {
+                        design::blocked_reason(ui, block.as_deref());
+                        ui.add_space(design::L - design::S);
                     }
                     let response = Action::secondary("Keep running").show(ui);
                     let id = ui.id().with("close_default_focused");
@@ -6308,12 +6318,10 @@ pub(crate) fn close_recovery_actions(
 }
 
 /// The close dialog's words for a sync conflict. They offer a close only when a close can happen.
-fn conflict_close_words(blocked: bool) -> &'static str {
-    if blocked {
-        "Choose which HP to keep before you close."
-    } else {
-        "Choose which HP to keep, or close and choose next time."
-    }
+/// Round 27 FN4: a blocked close has no words here. The title names the conflict, and the reason
+/// beside the disabled `Close now` says what to do, once.
+fn conflict_close_words(blocked: bool) -> Option<&'static str> {
+    (!blocked).then_some("Choose which HP to keep, or close and choose next time.")
 }
 
 /// What a close keeps. A close keeps the run's Undo steps too (they are saved with the run), so
@@ -12521,14 +12529,12 @@ mod tests {
 
     #[test]
     fn iter23_s_am1_conflict_words_offer_a_close_only_when_it_can_happen() {
-        assert_eq!(
-            conflict_close_words(true),
-            "Choose which HP to keep before you close."
-        );
+        // Round 27 FN4: a blocked close has no body words; its reason sits beside Close now.
+        assert_eq!(conflict_close_words(true), None);
         // Lookalike outside the rule: a conflict with nothing blocking keeps the close offer.
         assert_eq!(
             conflict_close_words(false),
-            "Choose which HP to keep, or close and choose next time."
+            Some("Choose which HP to keep, or close and choose next time.")
         );
     }
 
