@@ -41,9 +41,9 @@ src/copy_dialog.rs old-message 2
 src/dndbeyond.rs old-message 2
 src/encounter_run/notice.rs old-message 1
 src/encounter_run/view.rs old-message 19
-src/encounters.rs old-message 22
+src/encounters.rs old-message 20
 src/encounters/disk.rs old-message 2
-src/encounters/groups.rs old-message 16
+src/encounters/groups.rs old-message 17
 src/lib.rs old-message 1
 src/library.rs old-message 37
 src/library/view.rs old-message 1
@@ -72,5 +72,3 @@ src/encounter_run/loot.rs phrase-owner 2
 src/encounters.rs phrase-owner 1
 src/library.rs phrase-owner 1
 src/sessions/plan.rs phrase-owner 1
-# A blocked reason without its end mark (round 27 FI11); Wave 2 package B ends it.
-src/encounters.rs reason-end-mark 1
