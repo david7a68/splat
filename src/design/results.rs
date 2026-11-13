@@ -551,7 +551,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/view.rs",
             "message_footer",
-            &[Ban::Results, Ban::Extras(2), Ban::Pane(1)],
+            &[Ban::Results, Ban::Extras(1), Ban::Pane(1)],
         ),
         (
             "src/encounters/groups.rs",
@@ -738,9 +738,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/ad_hoc.rs",
             "add_creature_form",
-            &[Ban::Layout(2), Ban::Extras(5)],
+            &[Ban::Layout(2), Ban::Extras(1)],
         ),
-        ("src/encounter_run/dock.rs", "dice", &[Ban::Layout(1)]),
         (
             "src/encounter_run/rolling.rs",
             "row_menu",
@@ -749,12 +748,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/view.rs",
             "conditions_tab",
-            &[Ban::Layout(1), Ban::Extras(1)],
+            &[Ban::Layout(1), Ban::RowKey(1)],
         ),
         (
             "src/encounter_run/view.rs",
             "ended_view",
-            &[Ban::Layout(2), Ban::Extras(4)],
+            &[Ban::Layout(2), Ban::Extras(1)],
         ),
         (
             "src/encounter_run/view.rs",
@@ -764,49 +763,36 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/view.rs",
             "live_footer",
-            &[Ban::Layout(2), Ban::Extras(1)],
+            &[Ban::Layout(1)],
         ),
         ("src/encounter_run/view.rs", "log_tab", &[Ban::Layout(1)]),
-        (
-            "src/encounter_run/view.rs",
-            "notes_tab",
-            &[Ban::Layout(1), Ban::Extras(2)],
-        ),
+        ("src/encounter_run/view.rs", "notes_tab", &[Ban::Layout(1)]),
         (
             "src/encounter_run/view.rs",
             "optional_number",
             &[Ban::Layout(1)],
         ),
-        (
-            "src/encounter_run/view.rs",
-            "other_effect_field",
-            &[Ban::Layout(1)],
-        ),
-        (
-            "src/encounter_run/view.rs",
-            "panel_tabs",
-            &[Ban::Layout(1), Ban::Extras(2)],
-        ),
+        ("src/encounter_run/view.rs", "panel_tabs", &[Ban::Layout(1)]),
         (
             "src/encounter_run/view.rs",
             "record_tab",
-            &[Ban::Layout(2), Ban::Extras(11)],
+            &[Ban::Layout(1), Ban::Extras(1), Ban::RowKey(1)],
         ),
         (
             "src/encounter_run/view.rs",
             "reference_tab",
-            &[Ban::Layout(2), Ban::Extras(1), Ban::Pane(1)],
+            &[Ban::Layout(2), Ban::Pane(1)],
         ),
         ("src/encounter_run/view.rs", "roster", &[Ban::Layout(1)]),
         (
             "src/encounter_run/view.rs",
             "setup_body",
-            &[Ban::Layout(1), Ban::Extras(7)],
+            &[Ban::Layout(1), Ban::Extras(5)],
         ),
         (
             "src/encounter_run/view.rs",
             "setup_row",
-            &[Ban::Layout(1), Ban::Extras(10)],
+            &[Ban::Layout(1), Ban::Extras(7)],
         ),
         (
             "src/encounters.rs",
@@ -1038,41 +1024,13 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/dndbeyond.rs", "connection_help", &[Ban::Extras(1)]),
         ("src/dndbeyond.rs", "show_import", &[Ban::Extras(1)]),
         (
-            "src/encounter_run/ad_hoc.rs",
-            "short_field",
-            &[Ban::Extras(1)],
-        ),
-        ("src/encounter_run/dock.rs", "dock", &[Ban::Extras(4)]),
-        ("src/encounter_run/loot.rs", "card_loot", &[Ban::Extras(3)]),
-        ("src/encounter_run/loot.rs", "loot_list", &[Ban::Extras(1)]),
-        (
             "src/encounter_run/loot.rs",
             "loot_section",
-            &[Ban::Extras(4)],
+            &[Ban::Extras(1)],
         ),
         (
             "src/encounter_run/notice.rs",
             "live_header",
-            &[Ban::Extras(8)],
-        ),
-        (
-            "src/encounter_run/rolling.rs",
-            "compact_actions",
-            &[Ban::Extras(1)],
-        ),
-        (
-            "src/encounter_run/view.rs",
-            "change_rows",
-            &[Ban::Extras(1)],
-        ),
-        (
-            "src/encounter_run/view.rs",
-            "changes_block",
-            &[Ban::Extras(1)],
-        ),
-        (
-            "src/encounter_run/view.rs",
-            "close_dialog",
             &[Ban::Extras(2)],
         ),
         (
@@ -1082,23 +1040,10 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         (
             "src/encounter_run/view.rs",
-            "death_saves",
-            &[Ban::Extras(1)],
-        ),
-        (
-            "src/encounter_run/view.rs",
             "dismissable",
             &[Ban::Extras(1)],
         ),
-        ("src/encounter_run/view.rs", "group_list", &[Ban::Extras(4)]),
-        ("src/encounter_run/view.rs", "keys_tab", &[Ban::Extras(2)]),
         ("src/encounter_run/view.rs", "live_view", &[Ban::Extras(1)]),
-        (
-            "src/encounter_run/view.rs",
-            "other_effects_list",
-            &[Ban::Extras(2)],
-        ),
-        ("src/encounter_run/view.rs", "sync_block", &[Ban::Extras(2)]),
         ("src/encounter_run/view.rs", "toggle", &[Ban::Extras(1)]),
         (
             "src/encounter_run/view.rs",
@@ -1136,7 +1081,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters/groups.rs",
             "conditions_row",
-            &[Ban::Extras(1)],
+            &[Ban::Extras(1), Ban::RowKey(1)],
         ),
         (
             "src/encounters/groups.rs",
@@ -1194,8 +1139,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Extras(2)],
         ),
         ("src/rolls.rs", "armed_hint", &[Ban::Extras(2)]),
-        ("src/rolls.rs", "compact_tiles", &[Ban::Extras(1)]),
-        ("src/rolls.rs", "tiles", &[Ban::Extras(4)]),
         ("src/sessions/carry.rs", "last_time_line", &[Ban::Extras(1)]),
         ("src/sessions/page.rs", "draft_warning", &[Ban::Extras(2)]),
         ("src/sessions/page.rs", "record_line", &[Ban::Extras(1)]),

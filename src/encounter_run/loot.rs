@@ -380,10 +380,6 @@ impl Run {
 
     /// One holder's loot: words as the note has them, then each roll, with its button until it
     /// has a result, and then the result in its place. Returns the line the DM asked to roll.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     pub(super) fn loot_list(&self, ui: &mut egui::Ui, holder: &Holder) -> Option<usize> {
         let c = colors();
         let mut request = None;
@@ -447,7 +443,7 @@ impl Run {
                                     },
                                 );
                             }
-                            ui.add_space(design::S);
+                            design::gap(ui, design::Gap::S);
                             let name =
                                 format!("Roll {} for {}", plain_roll(times, &key), holder.name);
                             if Action::secondary("Roll")
@@ -474,10 +470,6 @@ impl Run {
     }
 
     /// The card's loot. One quiet line while the creature stands, and all of it at 0 HP.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     pub(super) fn card_loot(&mut self, ui: &mut egui::Ui, index: usize) {
         let p = &self.state.participants[index];
         let lines = p.loot_lines();
@@ -504,14 +496,14 @@ impl Run {
                 )
                 .wrap(),
             );
-            ui.add_space(design::S);
+            design::gap(ui, design::Gap::S);
             return;
         }
-        design::group_label(ui, "Loot");
+        design::heading(ui, design::Heading::Label("Loot"));
         if let Some(at) = self.loot_list(ui, &holder) {
             self.roll_loot(&[(holder, at)]);
         }
-        ui.add_space(design::S);
+        design::gap(ui, design::Gap::S);
     }
 
     /// The ended view's loot: the encounter's and each downed creature's, with what is left to
@@ -585,7 +577,7 @@ impl Run {
             if let Some(at) = self.loot_list(ui, holder) {
                 picks = vec![(holder.clone(), at)];
             }
-            ui.add_space(design::S);
+            design::gap(ui, design::Gap::S);
         }
         if !standing.is_empty() {
             let title = if standing.len() == 1 {
@@ -600,11 +592,11 @@ impl Run {
                     if let Some(at) = self.loot_list(ui, holder) {
                         picks = vec![(holder.clone(), at)];
                     }
-                    ui.add_space(design::S);
+                    design::gap(ui, design::Gap::S);
                 }
             });
         }
-        ui.add_space(design::M);
+        design::gap(ui, design::Gap::M);
         if !picks.is_empty() {
             self.roll_loot(&picks);
         }

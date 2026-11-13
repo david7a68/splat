@@ -2008,7 +2008,7 @@ pub(super) fn overrides_form(
         // The run's condition form width: the grid, the effects and Add stay within it.
         ui.scope(|ui| {
             ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
-            conditions_row(ui, &mut overrides.conditions);
+            conditions_row(ui, id, &mut overrides.conditions);
         });
     }
     text_row(ui, "Note", &mut overrides.note, "Why this creature differs");
@@ -2039,7 +2039,7 @@ pub(super) fn overrides_form(
     clippy::disallowed_methods,
     reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
 )]
-fn conditions_row(ui: &mut egui::Ui, conditions: &mut Vec<String>) {
+fn conditions_row(ui: &mut egui::Ui, id: &str, conditions: &mut Vec<String>) {
     design::group_label(ui, "Starting conditions");
     // The run's grid: fixed columns, `S` apart.
     if let Some(name) =
@@ -2069,12 +2069,14 @@ fn conditions_row(ui: &mut egui::Ui, conditions: &mut Vec<String>) {
     {
         conditions.retain(|c| c != &custom[at]);
     }
-    let id = ui.id().with("starting_other_effect");
+    let draft_id = ui.id().with("starting_other_effect");
     let mut text = ui
-        .data(|data| data.get_temp::<String>(id))
+        .data(|data| data.get_temp::<String>(draft_id))
         .unwrap_or_default();
+    // The member's draft: its field keeps its own cursor and Undo (`id` names this member).
     if crate::encounter_run::view::other_effect_field(
         ui,
+        design::TextKey::from_data(id),
         &mut text,
         (width, "Other effect…"),
         false,
@@ -2086,7 +2088,7 @@ fn conditions_row(ui: &mut egui::Ui, conditions: &mut Vec<String>) {
         }
         text.clear();
     }
-    ui.data_mut(|data| data.insert_temp(id, text));
+    ui.data_mut(|data| data.insert_temp(draft_id, text));
 }
 
 impl Encounters {
@@ -3548,6 +3550,39 @@ mod tests {
         assert_eq!(harness.state().0.setup.members[0], member);
         assert_eq!(harness.state().0.setup.members[1].count, 7);
         assert_eq!(harness.state().0.notes, "A new note after removal");
+
+        // A member's Other effect draft is its own, with its own cursor and text Undo: type in A
+        // (twice, with time between, so A has two undo states), open B, Ctrl+Z in B's field.
+        harness.get_by_label("Changes for Goblin").click();
+        harness.run_steps(2);
+        harness.get_by_label("Other effect").click();
+        harness.run_steps(1);
+        harness.get_by_label("Other effect").type_text("Haste");
+        harness.run_steps(16);
+        harness.get_by_label("Other effect").type_text("!");
+        harness.run_steps(1);
+        assert_eq!(
+            harness.get_by_label("Other effect").value().as_deref(),
+            Some("Haste!"),
+            "A's draft was typed"
+        );
+        harness.get_by_label("Done with changes").click();
+        harness.run_steps(2);
+        harness.get_by_label("Changes for Wolf").click();
+        harness.run_steps(2);
+        harness.get_by_label("Other effect").click();
+        harness.run_steps(1);
+        harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Z);
+        harness.run_steps(2);
+        assert_eq!(
+            harness
+                .get_by_label("Other effect")
+                .value()
+                .as_deref()
+                .unwrap_or(""),
+            "",
+            "Ctrl+Z in B's Other effect gave B the history of A"
+        );
     }
 
     #[test]
