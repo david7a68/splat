@@ -681,7 +681,7 @@ impl<'a> FaultMessage<'a> {
 ///     let mut pressed = None;
 ///     let mut footer = splat::outcome::Footer::new("f", 400.0);
 ///     footer.outcome(splat::outcome::Outcome::Refused(splat::sentence!("No.")), &mut pressed);
-///     let _ = footer.show(ui);
+///     footer.pane(ui, splat::pane::Body::Content, |_| ());
 /// }
 /// ```
 /// ```compile_fail
@@ -690,7 +690,7 @@ impl<'a> FaultMessage<'a> {
 ///     let mut footer = splat::outcome::Footer::new("f", 400.0);
 ///     let done = splat::outcome::Done::new(splat::outcome::Verb::Remove, "Bell");
 ///     footer.outcome(done, &mut pressed);
-///     let _ = footer.show(ui);
+///     footer.pane(ui, splat::pane::Body::Content, |_| ());
 /// }
 /// ```
 /// ```compile_fail
@@ -1400,7 +1400,7 @@ mod tests {
                 let mut pressed = None;
                 let mut footer = Footer::new("one_fault", ui.available_width());
                 footer.outcome(FaultMessage::new(&fault), &mut pressed);
-                let _ = footer.show(ui);
+                footer.pane(ui, crate::design::Body::Content, |_| ());
             });
         crate::design::theme::install(&h.ctx);
         h.run_steps(4);
@@ -1527,8 +1527,7 @@ mod tests {
                             );
                         }
                     }
-                    let bottom = footer.show(ui);
-                    ui.allocate_space(egui::vec2(10.0, (bottom - ui.cursor().top()).max(0.0)));
+                    footer.pane(ui, crate::design::Body::Content, |_| ());
                     state.pressed.extend(party.map(|p| ("party", p)));
                     state.pressed.extend(keyring.map(|p| ("keyring", p)));
                 },

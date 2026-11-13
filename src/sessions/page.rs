@@ -3188,6 +3188,10 @@ impl Sessions {
     /// The message footer of a pane whose body is one draft's editor: the draft's own result
     /// with its Undo, and for a template, the template action's error. Returns where the body
     /// ends.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `Footer::show_by_hand` (design::results::STAGED_ALLOWS)"
+    )]
     fn draft_footer(&mut self, ui: &mut egui::Ui, id: &str, template: bool) -> f32 {
         let undo = std::cell::Cell::new(false);
         let undo_delete = std::cell::Cell::new(false);
@@ -3210,7 +3214,7 @@ impl Sessions {
                 design::message(ui, Tone::Error, &error);
             });
         }
-        let bottom = footer.show(ui);
+        let bottom = footer.show_by_hand(ui);
         if undo_delete.get() {
             self.undo_delete_template();
         }
@@ -4090,6 +4094,10 @@ impl Sessions {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `Footer::show_by_hand` (design::results::STAGED_ALLOWS)"
+    )]
     pub fn notes_panel(&mut self, ctx: &egui::Context) {
         let width = design::side_panel_width(ctx.content_rect().width());
         design::Column::panel("session_notes", width)
@@ -4169,7 +4177,7 @@ impl Sessions {
                         });
                     });
                 }
-                let bottom = footer.show(ui);
+                let bottom = footer.show_by_hand(ui);
                 let (play, start) = choice.get();
                 if undo.get()
                     && let Some(draft) = &mut self.draft
@@ -5882,7 +5890,7 @@ impl Sessions {
         }
         self.carry_in_footer(&mut undos, &mut footer, &act);
         undos.into_footer(&mut footer);
-        let bottom = footer.show(ui);
+        let bottom = footer.show_by_hand(ui);
         if undo_dropped.get()
             && let Some(draft) = &mut self.draft
         {
@@ -6251,6 +6259,10 @@ impl Sessions {
             .and_then(|path| Draft::open(path).ok());
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `Footer::show_by_hand` (design::results::STAGED_ALLOWS)"
+    )]
     fn templates_view(&mut self, ui: &mut egui::Ui) {
         if self.template.is_none()
             && let Some(first) = self.templates.first().map(|t| t.name.clone())
@@ -6267,7 +6279,7 @@ impl Sessions {
             let mut undos = LiveUndos::new();
             self.deleted_template_in(&mut undos, &undo_delete);
             undos.into_footer(&mut footer);
-            let bottom = footer.show(ui);
+            let bottom = footer.show_by_hand(ui);
             if undo_delete.get() {
                 self.undo_delete_template();
             }

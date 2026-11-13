@@ -960,7 +960,7 @@ fn footer(ui: &mut egui::Ui, trackers: &Trackers, act: &mut Option<Act>) -> f32 
             );
         }
     }
-    let bottom = footer.show(ui);
+    let bottom = footer.show_by_hand(ui);
     match (result_pressed, added, result) {
         (Some(Pressed::Undo), Some(added), _) => *act = Some(Act::UndoAdd(added.event.clone())),
         (Some(Pressed::Undo), None, _) => *act = Some(Act::Undo(entries.to_vec())),

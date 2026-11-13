@@ -1018,7 +1018,7 @@ impl TimelinePage {
             });
         }
         undos.into_footer(&mut footer);
-        let bottom = footer.show(ui);
+        let bottom = footer.show_by_hand(ui);
         file_act(book, file.take());
         match act.take() {
             Some(ListAct::UndoLinks) => notes.undo_event_link_update(),

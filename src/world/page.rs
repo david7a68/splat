@@ -1005,7 +1005,7 @@ impl WorldPage {
                     design::message(ui, design::Tone::Error, &words);
                 });
             }
-            footer.show(ui)
+            footer.show_by_hand(ui)
         };
         egui::ScrollArea::vertical()
             .id_salt("world_creation")

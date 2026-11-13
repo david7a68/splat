@@ -149,4 +149,13 @@ disallowed-methods = [
     { path = "splat::design::outcome::banner", reason = "put the notice in the pane's `Footer`; a body place is a review decision: `Ban::Body`" },
     { path = "splat::design::outcome::row_fault", reason = "put the fault in the pane's `Footer`; a body place is a review decision: `Ban::Body`" },
     { path = "splat::design::outcome::PagePlaceholder::show", reason = "a page placeholder is a review decision: `Ban::Body`" },
+    # Package P: the pane places its footer (`Footer::pane`). A footer placed by hand is staged out,
+    # and a body that manages its own room is the one named escape; each function that still calls
+    # one has its row in `design::results::STAGED_ALLOWS` with the number of calls it holds
+    # (`Ban::Pane(n)`). Content placed by the room's height moves when a message comes: the app's
+    # empty state is a part that keeps its top.
+    { path = "splat::design::components::Footer::show_by_hand", reason = "give the body to Footer::pane, which places the footer: `Ban::Pane`" },
+    { path = "splat::design::pane::Fills::because", reason = "use Body::Content: the pane is the scroll column; a body that manages its own room is a review decision: `Ban::Pane`" },
+    { path = "egui::Ui::centered_and_justified", reason = "keep content at the body's top; use design::empty_state for an empty state", allow-invalid = true },
+    { path = "egui::Ui::vertical_centered_justified", reason = "keep content at the body's top; use design::empty_state for an empty state", allow-invalid = true },
 ]

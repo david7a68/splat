@@ -440,6 +440,7 @@ fn add_results<'a>(
 
 /// The pane's message footer when it has no reader: below a form, or below the empty state of a
 /// scope with no entries. It holds the page's results and its error. Returns what was pressed.
+#[allow(clippy::disallowed_methods)]
 fn form_footer(
     ui: &mut egui::Ui,
     id: &str,
@@ -452,7 +453,7 @@ fn form_footer(
     add_results(&mut footer, results, orders, &pressed);
     page_error(&mut footer, form_error);
     page_error(&mut footer, error);
-    let bottom = footer.show(ui);
+    let bottom = footer.show_by_hand(ui);
     (pressed.get(), bottom)
 }
 
@@ -6928,7 +6929,7 @@ impl Library {
             page_error(&mut footer, self.error.as_deref());
             // The empty reader below holds nothing past the cursor, so the pane ends at the
             // footer's top.
-            let _ = footer.show(ui);
+            let _ = footer.show_by_hand(ui);
             self.apply_package_results(&pressed.get());
         }
         let recovery = self
@@ -7919,7 +7920,7 @@ impl Library {
                 &mut reader_press,
             );
             page_error(&mut footer, self.error.as_deref());
-            body_bottom = footer.show(ui);
+            body_bottom = footer.show_by_hand(ui);
             let (discard_undo, heading_undo, vital_undo, shown) = (
                 discard_undo.get(),
                 heading_undo.get(),
@@ -8008,7 +8009,7 @@ impl Library {
                 &mut reader_press,
             );
             page_error(&mut footer, self.error.as_deref());
-            body_bottom = footer.show(ui);
+            body_bottom = footer.show_by_hand(ui);
             heading_pressed = reader_press.heading;
             // Presses come only from the footer that drew the results: this one in Read. With a
             // save row, Edit Markdown's list drew them and `pressed` already holds them.

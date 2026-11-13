@@ -2691,11 +2691,10 @@ type FooterMessage<'a> = (
 /// newest first. Each result is one item with its own order: never put two results in one. A state word stays on the save row; a fault that belongs to one row
 /// stays on that row.
 ///
-/// Build it, then call `show` where the pane's body starts, and draw the body next in the same
-/// `Ui` (in its own scroll area or editor) and nothing below it: `show` returns the y where the
-/// body must end, `S` above the footer's pinned place, and the footer measures where the body
-/// really ended from that `Ui`. A body that fills its room (a scroll area that does not shrink
-/// to its content) keeps the footer pinned.
+/// Build it, then give it the pane's body with `Footer::pane` (`src/design/pane.rs`): the part
+/// draws the body in its own `Ui`, measures where the body's content ends, and places the
+/// footer. The caller gets no y. `show_by_hand` is the old way, staged out (Clippy's
+/// `disallowed-methods` and the lint rule `footer-by-hand`).
 ///
 /// ```ignore
 /// let mut undo = false;
@@ -2703,8 +2702,9 @@ type FooterMessage<'a> = (
 /// // `discarded_order` was issued with `ResultOrder::issue()` when the draft was discarded.
 /// footer.result(discarded_order, &words, true, |ui| undo = design::draft_discarded(ui, name));
 /// footer.reason(problem, |ui| { design::message(ui, Tone::Error, problem); });
-/// let bottom = footer.show(ui);
-/// // ...the body, which ends at `bottom`...
+/// footer.pane(ui, design::Body::Content, |ui| {
+///     // ...the body...
+/// });
 /// ```
 pub struct Footer<'a> {
     id: Id,
@@ -2787,15 +2787,20 @@ impl<'a> Footer<'a> {
         self
     }
 
+    /// Staged out: use `Footer::pane`. Clippy's `disallowed-methods` refuses a call outside
+    /// `src/design/`, and the lint counts the calls left (`footer-by-hand`), shrink only.
+    ///
     /// Draw the footer `S` below the body, or at the bottom of what is left of `ui` when the body
     /// fills it, and return the y where the body ends: `S` above the footer's pinned place, or
     /// the pane's bottom when the footer is empty. Each message's
     /// `draw` runs here, in the footer's order. The body sizes itself to end there (a scroll
     /// area's `max_height`, an editor's height). `ui` also ends there when it holds nothing below
     /// the cursor already, but egui keeps a `Ui`'s bottom below what it holds, so do not rely on
-    /// `ui.available_height()` alone. `ui` lays out top down.
+    /// `ui.available_height()` alone. `ui` lays out top down. It measures the body from the last
+    /// pass's widgets, and takes a `Ui` that starts at the body's top and holds a scroll area
+    /// that does not shrink for a body that fills the pane (round 28, `footer-escape.md`).
     #[must_use = "the body must end at this y: size it with the returned value"]
-    pub fn show(mut self, ui: &mut Ui) -> f32 {
+    pub fn show_by_hand(mut self, ui: &mut Ui) -> f32 {
         debug_assert!(
             ui.layout().main_dir() == egui::Direction::TopDown,
             "a pane's message footer ends a top-down Ui"
@@ -2843,10 +2848,6 @@ impl<'a> Footer<'a> {
             ui.ctx()
                 .request_discard("the message footer measures its body");
         }
-        // Results newest first by their order; a stable sort keeps the caller's order for
-        // reasons and notices, and puts plain notices before results with no live Undo.
-        self.messages
-            .sort_by_key(|(rank, order, ..)| (*rank, order.map(std::cmp::Reverse)));
         let most = (pane.height() / 3.0).floor().max(0.0);
         // Last pass's height; a change is measured below, and the pass is drawn again.
         let height = stored.min(most);
@@ -2874,22 +2875,6 @@ impl<'a> Footer<'a> {
             pos2(pane.left(), footer_top),
             vec2(self.width.min(pane.width()), height),
         );
-        if cut && height > 0.0 {
-            // The cut body's last line reads as a list that goes on, not as a drawing fault.
-            ui.painter().hline(
-                rect.x_range(),
-                rect.top() + HAIRLINE_WIDTH / 2.0,
-                Stroke::new(HAIRLINE_WIDTH, colors().hairline),
-            );
-        }
-        let name = self
-            .messages
-            .iter()
-            .map(|(_, _, words, _)| words.as_ref())
-            .filter(|words| !words.is_empty())
-            .collect::<Vec<_>>()
-            .join(" ");
-        let messages = std::mem::take(&mut self.messages);
         // The widgets the footer adds, so the next pass does not take them for the body.
         let layer = ui.layer_id();
         let added = |ui: &Ui| {
@@ -2897,23 +2882,13 @@ impl<'a> Footer<'a> {
                 .viewport(|viewport| viewport.this_pass.widgets.get_layer(layer).count())
         };
         let before = added(ui);
-        let (_, content) = scroll_part(ui, rect, self.id, &name, |ui| {
-            for (_, _, _, draw) in messages {
-                draw(ui);
-            }
-        });
+        self.draw_messages(ui, rect, cut, most, stored);
         let own: std::collections::HashSet<Id> = ui.ctx().viewport(|viewport| {
             let widgets = viewport.this_pass.widgets.get_layer(layer);
             widgets.skip(before).map(|widget| widget.id).collect()
         });
         ui.ctx()
             .data_mut(|data| data.insert_temp(self.id.with("own"), own));
-        let wanted = (content + 2.0 * PART_INSET).ceil().min(most);
-        if (wanted - stored).abs() >= HAIRLINE_WIDTH {
-            ui.ctx().data_mut(|data| data.insert_temp(key, wanted));
-            ui.ctx()
-                .request_discard("the message footer changed height");
-        }
         if height == 0.0 {
             // Not measured yet: this pass is drawn again, with the body's room as it was.
             remember(ui, pane.bottom(), pane.bottom());
@@ -2935,6 +2910,68 @@ impl<'a> Footer<'a> {
         clip.max.y = clip.max.y.min(rect.top() - S);
         ui.set_clip_rect(clip);
         limit
+    }
+
+    /// Whether the footer holds a message.
+    pub(super) fn is_empty(&self) -> bool {
+        self.messages.is_empty()
+    }
+
+    /// Scope the footer's id to `parent` (a pane's parent `Ui`); returns the id the caller gave.
+    pub(super) fn rescope(&mut self, parent: Id) -> Id {
+        let local = self.id;
+        self.id = parent.with(local);
+        local
+    }
+
+    /// The footer's id and its width in a pane `room` wide.
+    pub(super) fn id_and_width(&self, room: f32) -> (Id, f32) {
+        (self.id, self.width.min(room))
+    }
+
+    /// Draw the messages in `rect`, in the footer's one order, as one focusable group named with
+    /// all their words, with a hairline at its top when it `cut`s the body. Keep the height they
+    /// want, up to `most`; a change from `stored` draws the pass again.
+    pub(super) fn draw_messages(
+        &mut self,
+        ui: &mut Ui,
+        rect: Rect,
+        cut: bool,
+        most: f32,
+        stored: f32,
+    ) {
+        // Results newest first by their order; a stable sort keeps the caller's order for
+        // reasons and notices, and puts plain notices before results with no live Undo.
+        self.messages
+            .sort_by_key(|(rank, order, ..)| (*rank, order.map(std::cmp::Reverse)));
+        if cut && rect.height() > 0.0 {
+            // The cut body's last line reads as a list that goes on, not as a drawing fault.
+            ui.painter().hline(
+                rect.x_range(),
+                rect.top() + HAIRLINE_WIDTH / 2.0,
+                Stroke::new(HAIRLINE_WIDTH, colors().hairline),
+            );
+        }
+        let name = self
+            .messages
+            .iter()
+            .map(|(_, _, words, _)| words.as_ref())
+            .filter(|words| !words.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let messages = std::mem::take(&mut self.messages);
+        let (_, content) = scroll_part(ui, rect, self.id, &name, |ui| {
+            for (_, _, _, draw) in messages {
+                draw(ui);
+            }
+        });
+        let wanted = (content + 2.0 * PART_INSET).ceil().min(most);
+        if (wanted - stored).abs() >= HAIRLINE_WIDTH {
+            ui.ctx()
+                .data_mut(|data| data.insert_temp(self.id.with("height"), wanted));
+            ui.ctx()
+                .request_discard("the message footer changed height");
+        }
     }
 }
 
@@ -2991,7 +3028,7 @@ impl FooterBody {
 /// For checks: the band each message footer took from its pane in this pass, from `S` above the
 /// footer to the pane's bottom, across the whole pane. A pane's content ends at its top.
 #[cfg(test)]
-fn record_band(ui: &Ui, pane: Rect, footer: Rect) {
+pub(super) fn record_band(ui: &Ui, pane: Rect, footer: Rect) {
     let pass = ui.ctx().cumulative_pass_nr();
     let band = Rect::from_min_max(pos2(pane.left(), footer.top() - S), pane.right_bottom());
     ui.ctx().data_mut(|data| {
@@ -5092,7 +5129,7 @@ mod tests {
                                 message(ui, Tone::Error, "Line 3 opens a list.");
                             });
                         }
-                        let bottom = footer.show(ui);
+                        let bottom = footer.show_by_hand(ui);
                         let body = egui::ScrollArea::vertical()
                             .id_salt("test_body")
                             .max_height(bottom - ui.cursor().top())
@@ -5357,7 +5394,7 @@ mod tests {
                             ui.label(words.as_str());
                         });
                     }
-                    let _ = footer.show(ui);
+                    footer.pane(ui, crate::design::Body::Content, |_| ());
                 });
             harness.run_steps(3);
             let mut rows: Vec<(f32, String)> = harness
@@ -5448,7 +5485,10 @@ mod tests {
     /// above the footer takes its press while the footer follows, while it is pinned, and while
     /// its content grows; the pane's own press area, which lies under a following footer, never
     /// takes the footer's press; a click on an outside field moves focus there and typing goes
-    /// there; Tab reaches the last Undo of an overflowing footer, in view.
+    /// there; Tab reaches the last Undo of an overflowing footer, in view. Round 28, package P:
+    /// all of this for the footer placed by hand and for `Footer::pane`, after the pane's
+    /// placement for every body shape (`iter28_p_the_pane_places_its_footer_for_every_body`).
+    /// A caller of `pane` does not repeat this proof.
     #[allow(
         clippy::disallowed_methods,
         reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
@@ -5474,11 +5514,17 @@ mod tests {
             }
             harness.run_steps(2);
         };
-        for size in [
-            vec2(960.0, 640.0),
-            vec2(1200.0, 800.0),
-            vec2(1920.0, 1080.0),
-        ] {
+        iter28_p_the_pane_places_its_footer_for_every_body();
+        // The press proof, for the footer placed by hand (staged out) and by `Footer::pane`.
+        for (by_hand, size) in [true, false].into_iter().flat_map(|by_hand| {
+            [
+                vec2(960.0, 640.0),
+                vec2(1200.0, 800.0),
+                vec2(1920.0, 1080.0),
+            ]
+            .map(|size| (by_hand, size))
+        }) {
+            let mode = if by_hand { "By hand" } else { "Pane" };
             // How many lines the editor holds, and whether the reason shows.
             let lines = Rc::new(Cell::new(4_usize));
             let reason = Rc::new(Cell::new(false));
@@ -5532,29 +5578,43 @@ mod tests {
                                 message(ui, Tone::Error, REASON);
                             });
                         }
-                        let bottom = footer.show(ui);
                         // The pane's own press area, as a pane that ends a selection on a press
                         // has: it holds the whole pane, so it lies under a following footer.
-                        if ui
-                            .interact(whole, Id::new("pane_background"), Sense::click())
-                            .clicked()
-                        {
-                            background_in.set(background_in.get() + 1);
-                        }
-                        // The editor leaves room for its save row above `bottom`, as World's does.
-                        let row = Type::Body.line() + ui.spacing().item_spacing.y;
-                        egui::ScrollArea::vertical()
-                            .id_salt("follow_body")
-                            .max_height((bottom - ui.cursor().top() - row).max(0.0))
-                            .auto_shrink([false, true])
-                            .show(ui, |ui| {
-                                for line in 0..lines_in.get() {
-                                    if ui.button(format!("Editor line {line}")).clicked() {
-                                        line_in.set(Some(line));
-                                    }
+                        let background = |ui: &mut Ui| {
+                            if ui
+                                .interact(whole, Id::new("pane_background"), Sense::click())
+                                .clicked()
+                            {
+                                background_in.set(background_in.get() + 1);
+                            }
+                        };
+                        let lines = |ui: &mut Ui| {
+                            for line in 0..lines_in.get() {
+                                if ui.button(format!("Editor line {line}")).clicked() {
+                                    line_in.set(Some(line));
                                 }
+                            }
+                        };
+                        if by_hand {
+                            let bottom = footer.show_by_hand(ui);
+                            background(ui);
+                            // The editor leaves room for its save row above `bottom`, as World's
+                            // does.
+                            let row = Type::Body.line() + ui.spacing().item_spacing.y;
+                            super::super::layout::ScrollColumn::new("follow_body")
+                                .fit_height()
+                                .max_height((bottom - ui.cursor().top() - row).max(0.0))
+                                .show(ui, lines);
+                            ui.label(SAVE_ROW);
+                        } else {
+                            // The pane is the scroll column: the lines, then the save row as its
+                            // last line.
+                            footer.pane(ui, super::super::pane::Body::Content, |ui| {
+                                background(ui);
+                                lines(ui);
+                                ui.label(SAVE_ROW);
                             });
-                        ui.label(SAVE_ROW);
+                        }
                     });
             super::super::theme::install(&harness.ctx);
             harness.run_steps(3);
@@ -5572,11 +5632,15 @@ mod tests {
                     })
             };
             let footer = |harness: &egui_kittest::Harness<'_>| {
-                harness
-                    .ctx
-                    .read_response(Id::new("follow_footer").with("focus"))
-                    .map(|response| response.rect)
-                    .filter(|_| reason.get())
+                if by_hand {
+                    harness
+                        .ctx
+                        .read_response(Id::new("follow_footer").with("focus"))
+                        .map(|response| response.rect)
+                } else {
+                    super::super::pane::footer_rect(&harness.ctx, Id::new("follow_footer"))
+                }
+                .filter(|_| reason.get())
             };
             let hairline = |harness: &egui_kittest::Harness<'_>, at: Rect| {
                 harness.output().shapes.iter().any(|shape| {
@@ -5595,15 +5659,22 @@ mod tests {
             };
             // The last body action whole in the editor's view (which ends at the save row, `S` or
             // more above the footer): its index and its centre.
+            // Where the editor's view ends: by hand, at its save row; in the pane, `S` above the
+            // footer (the save row is the column's last line).
             let last_line = |harness: &egui_kittest::Harness<'_>, at: Rect| {
-                let save = place(harness, SAVE_ROW)?;
-                assert!(
-                    save.bottom() <= at.top() - S + 0.5,
-                    "the save row is above the footer"
-                );
+                let end = if by_hand {
+                    let save = place(harness, SAVE_ROW)?;
+                    assert!(
+                        save.bottom() <= at.top() - S + 0.5,
+                        "the save row is above the footer"
+                    );
+                    save.top()
+                } else {
+                    at.top() - S + 0.5
+                };
                 (0..lines.get()).rev().find_map(|line| {
                     place(harness, &format!("Editor line {line}"))
-                        .filter(|rect| rect.bottom() <= save.top())
+                        .filter(|rect| rect.bottom() <= end)
                         .map(|rect| (line, rect.center()))
                 })
             };
@@ -5624,13 +5695,13 @@ mod tests {
                 at.is_some_and(|at| (at.top() - (save.bottom() + S)).abs() <= 1.0
                     && at.bottom() < size.y - L
                     && !hairline(&harness, at)),
-                "At {size:?} the first frame's footer {at:?} is `S` below the save row {save:?}, with no hairline"
+                "{mode} at {size:?} the first frame's footer {at:?} is `S` below the save row {save:?}, with no hairline"
             );
             harness.run_steps(3);
             let (save, at) = (place(&harness, SAVE_ROW).unwrap(), footer(&harness));
             assert!(
                 at.is_some_and(|at| (at.top() - (save.bottom() + S)).abs() <= 1.0),
-                "At {size:?} the footer {at:?} stays `S` below the save row {save:?}"
+                "{mode} at {size:?} the footer {at:?} stays `S` below the save row {save:?}"
             );
             // The Undo where the footer follows the body takes the press.
             let undo = text(&harness, "Undo it").expect("the Undo shows").center();
@@ -5638,8 +5709,20 @@ mod tests {
             assert_eq!(
                 (undone.get(), line_pressed.get(), background.get()),
                 (1, None, 0),
-                "At {size:?} the following footer's Undo takes the press, not the pane's press area under it"
+                "{mode} at {size:?} the following footer's Undo takes the press, not the pane's press area under it"
             );
+            // The blank band `S` above the following footer, under which the pane's press area
+            // lies: nothing in the body takes that press. Only the pane holds this; the footer
+            // placed by hand gives it to the pane's press area (round 28, package P).
+            let at = footer(&harness).expect("the footer shows");
+            click(&mut harness, pos2(at.right() - 4.0, at.top() - S / 2.0));
+            assert!(
+                by_hand || (line_pressed.get(), background.get()) == (None, 0),
+                "{mode} at {size:?} a press just above the following footer {at:?} reaches no body target: {:?}",
+                (line_pressed.get(), background.get())
+            );
+            background.set(0);
+            line_pressed.set(None);
             // The last body action takes its press while the footer follows, and again once three
             // more results have grown the footer.
             for grown in [0, 3] {
@@ -5652,7 +5735,7 @@ mod tests {
                 assert_eq!(
                     (line_pressed.get(), background.get()),
                     (Some(line), 0),
-                    "At {size:?} with {grown} more results, the last body action (line {line}) above the following footer {at:?} takes its press"
+                    "{mode} at {size:?} with {grown} more results, the last body action (line {line}) above the following footer {at:?} takes its press"
                 );
             }
             extra.set(0);
@@ -5667,30 +5750,79 @@ mod tests {
                 assert_eq!(
                     text(&harness, "Editor line 0").map(|line| line.top()),
                     Some(top),
-                    "At {size:?} with {count} lines the editor's top stays"
+                    "{mode} at {size:?} with {count} lines the editor's top stays"
                 );
             }
             harness.run_steps(3);
             let at = footer(&harness).expect("the footer shows");
             let save = place(&harness, SAVE_ROW).unwrap();
+            // Pinned with its hairline. By hand the save row stays above it; in the pane the save
+            // row is the column's last line, scrolled below the footer.
             assert!(
                 at.bottom() >= size.y - L
-                    && save.bottom() <= at.top() - S + 0.5
+                    && (!by_hand || save.bottom() <= at.top() - S + 0.5)
                     && hairline(&harness, at),
-                "At {size:?} with 60 lines the footer {at:?} is pinned below the save row {save:?}, with its hairline"
+                "{mode} at {size:?} with 60 lines the footer {at:?} is pinned with its hairline (save row {save:?})"
             );
             assert_eq!(
                 text(&harness, "Editor line 0").map(|line| line.top()),
                 Some(top),
-                "At {size:?} the editor's top stays with 60 lines"
+                "{mode} at {size:?} the editor's top stays with 60 lines"
             );
+            // Astra re-check 2: in the pane, Tab into a body row hidden under the pinned footer
+            // brings it whole into view above the footer, and Enter presses that row.
+            if !by_hand {
+                use egui_kittest::kittest::{NodeT, Queryable};
+                let at = footer(&harness).expect("the footer shows");
+                let view_end = at.top() - S + 0.5;
+                let line_of = |harness: &egui_kittest::Harness<'_>| {
+                    let focus = focused(harness)?;
+                    (0..60).find(|line| {
+                        harness
+                            .query_by_label(&format!("Editor line {line}"))
+                            .is_some_and(|node| node.accesskit_node().id() == focus)
+                    })
+                };
+                let mut revealed = None;
+                for _ in 0..90 {
+                    let hidden: Vec<usize> = (0..60)
+                        .filter(|line| {
+                            place(&harness, &format!("Editor line {line}"))
+                                .is_some_and(|rect| rect.bottom() > view_end)
+                        })
+                        .collect();
+                    harness.key_press(egui::Key::Tab);
+                    harness.run_steps(2);
+                    if let Some(line) = line_of(&harness)
+                        && hidden.contains(&line)
+                    {
+                        let rect = place(&harness, &format!("Editor line {line}")).unwrap();
+                        assert!(
+                            rect.bottom() <= view_end && rect.top() >= top - 0.5,
+                            "{mode} at {size:?} Tab brings hidden line {line} {rect:?} whole into view above the footer {at:?}"
+                        );
+                        revealed = Some(line);
+                        break;
+                    }
+                }
+                let line = revealed.expect("Tab reaches a body row hidden under the footer");
+                line_pressed.set(None);
+                harness.key_press(egui::Key::Enter);
+                harness.run_steps(3);
+                assert_eq!(
+                    (line_pressed.get(), background.get()),
+                    (Some(line), 0),
+                    "{mode} at {size:?} Enter presses the revealed line {line}"
+                );
+                line_pressed.set(None);
+            }
             // On the hairline, over the cut line: the footer has the press, never the cut line
             // under it nor the pane's press area.
             click(&mut harness, pos2(at.left() + 40.0, at.top() + 0.5));
             assert_eq!(
                 (line_pressed.get(), background.get()),
                 (None, 0),
-                "At {size:?} a press on the hairline reaches the footer, not a cut body line"
+                "{mode} at {size:?} a press on the hairline reaches the footer, not a cut body line"
             );
             let before = undone.get();
             let undo = text(&harness, "Undo it").expect("the Undo shows").center();
@@ -5698,7 +5830,7 @@ mod tests {
             assert_eq!(
                 (undone.get(), background.get()),
                 (before + 1, 0),
-                "At {size:?} the pinned footer's Undo takes the press"
+                "{mode} at {size:?} the pinned footer's Undo takes the press"
             );
             // The last body action whole above the pinned footer takes its press, also after the
             // footer grows by six results.
@@ -5712,7 +5844,7 @@ mod tests {
                 assert_eq!(
                     (line_pressed.get(), background.get()),
                     (Some(line), 0),
-                    "At {size:?} with {grown} more results, the last body action (line {line}) above the pinned footer {at:?} takes its press"
+                    "{mode} at {size:?} with {grown} more results, the last body action (line {line}) above the pinned footer {at:?} takes its press"
                 );
             }
             // Still pinned and grown: the wheel scrolls the editor to its end, and its very last
@@ -5734,7 +5866,7 @@ mod tests {
             let end = last_line(&harness, at);
             assert!(
                 end.is_some_and(|(line, _)| line == 59),
-                "At {size:?} the wheel brings line 59 whole into view above the pinned footer {at:?}: {end:?}"
+                "{mode} at {size:?} the wheel brings line 59 whole into view above the pinned footer {at:?}: {end:?}"
             );
             let (_, centre) = end.unwrap();
             line_pressed.set(None);
@@ -5742,7 +5874,7 @@ mod tests {
             assert_eq!(
                 (line_pressed.get(), background.get()),
                 (Some(59), 0),
-                "At {size:?} the last body line, scrolled to above the pinned and grown footer {at:?}, takes its press"
+                "{mode} at {size:?} the last body line, scrolled to above the pinned and grown footer {at:?}, takes its press"
             );
             extra.set(0);
             line_pressed.set(None);
@@ -5756,7 +5888,7 @@ mod tests {
                 at.is_some_and(
                     |at| (at.top() - (save.bottom() + S)).abs() <= 1.0 && !hairline(&harness, at)
                 ),
-                "At {size:?} back at 4 lines the footer {at:?} follows the save row {save:?}"
+                "{mode} at {size:?} back at 4 lines the footer {at:?} follows the save row {save:?}"
             );
             // Focus in the footer, then a click on the outside field: focus goes there, and the
             // typed words too.
@@ -5772,7 +5904,7 @@ mod tests {
             }
             assert!(
                 undo_id.is_some() && focused(&harness) == undo_id,
-                "At {size:?} Tab reaches the footer's Undo"
+                "{mode} at {size:?} Tab reaches the footer's Undo"
             );
             let field = harness
                 .ctx
@@ -5787,7 +5919,7 @@ mod tests {
                     .ctx
                     .memory(|memory| memory.has_focus(Id::new("outside_field")))
                     && *outside.borrow() == "abc",
-                "At {size:?} a click on the outside field takes the focus from the footer, and the typed words go there: {:?}",
+                "{mode} at {size:?} a click on the outside field takes the focus from the footer, and the typed words go there: {:?}",
                 outside.borrow()
             );
             // Twenty more results overflow the footer: Tab from the field reaches the last Undo,
@@ -5811,7 +5943,7 @@ mod tests {
                     && focused(&harness) == last_undo
                     && at.height() <= size.y / 3.0 + 1.0
                     && shown.is_some_and(|undo| undo.is_positive() && at.contains_rect(undo)),
-                "At {size:?} Tab reaches the last Undo of the overflowing footer {at:?}, in view: {shown:?}"
+                "{mode} at {size:?} Tab reaches the last Undo of the overflowing footer {at:?}, in view: {shown:?}"
             );
             extra.set(0);
             harness.run_steps(3);
@@ -5822,7 +5954,10 @@ mod tests {
             let at = footer(&harness).expect("the footer shows");
             reason.set(false);
             harness.run_steps(3);
-            assert!(footer(&harness).is_none(), "At {size:?} the footer empties");
+            assert!(
+                footer(&harness).is_none(),
+                "{mode} at {size:?} the footer empties"
+            );
             // The body line now shown whole inside the footer's old place.
             let there = harness
                 .output()
@@ -5849,9 +5984,608 @@ mod tests {
             assert_eq!(
                 (line_pressed.get(), background.get()),
                 (Some(line), 0),
-                "At {size:?} the body line {line} now where the footer was {at:?} takes the press"
+                "{mode} at {size:?} the body line {line} now where the footer was {at:?} takes the press"
             );
         }
+    }
+
+    /// Round 28, package P (repair of PR 305's review): `Footer::pane` places its footer for each
+    /// body shape, checked against rects the test reads itself (the accessibility tree, painted
+    /// words and their clip), never against the part's own placement. `Body::Content` is the
+    /// pane's scroll column: rows, rows in a scope, rows in a `Frame` with a margin, and two
+    /// `ui.columns` with a control as tall as the room. `Body::Fills`: a side `Column` with two
+    /// labels and an action (Astra 1a), a nested `Content` pane, and an editor as tall as the
+    /// room. With 2 rows a `Content` footer's top is `S` (±1) below the last body rect, with no
+    /// hairline, and G6 finds nothing; a body that takes all the room, or 200 rows, pins the
+    /// footer below the room: every painted body word ends `S` above it, the 200 rows draw the
+    /// hairline, and the body control next to the footer takes its press. The pane's record is
+    /// of the last completed pass only: present, absent (no record), present. A vertical
+    /// `ScrollColumn` inside a `Content` pane is refused.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
+    fn iter28_p_the_pane_places_its_footer_for_every_body() {
+        use super::super::{
+            layout::ScrollColumn,
+            pane::{
+                Body, Fills, FillsReason, footer_rect, pane_record, pane_records, short_body_gap,
+            },
+        };
+        use std::{cell::Cell, rc::Rc};
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        enum Shape {
+            Rows,
+            InScope,
+            InFrame,
+            TallColumn,
+            SideColumn,
+            Nested,
+            Editor,
+        }
+        const REASON: &str = "Line 1 opens a list.";
+        let rows = |ui: &mut Ui, count: usize| {
+            for line in 0..count {
+                ui.label(format!("Line {line}"));
+            }
+        };
+        let click = |harness: &mut egui_kittest::Harness<'_>, pos: egui::Pos2| {
+            harness.event(egui::Event::PointerMoved(pos));
+            for pressed in [true, false] {
+                harness.event(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers::NONE,
+                });
+                harness.run_steps(1);
+            }
+            harness.run_steps(2);
+        };
+        // Every accessible rect on screen, as the gate reads them: the whole tree.
+        let access = |harness: &egui_kittest::Harness<'_>| -> Vec<(String, Rect)> {
+            use egui_kittest::kittest::{NodeT, Queryable};
+            harness
+                .query_all(egui_kittest::kittest::By::new().predicate(|_| true))
+                .filter_map(|node| {
+                    let b = node.accesskit_node().bounding_box()?;
+                    Some((
+                        node.accesskit_node()
+                            .label()
+                            .or_else(|| node.accesskit_node().value())
+                            .unwrap_or_default(),
+                        Rect::from_min_max(
+                            pos2(b.x0 as f32, b.y0 as f32),
+                            pos2(b.x1 as f32, b.y1 as f32),
+                        ),
+                    ))
+                })
+                .collect()
+        };
+        for size in [vec2(960.0, 640.0), vec2(1920.0, 1080.0)] {
+            for shape in [
+                Shape::Rows,
+                Shape::InScope,
+                Shape::InFrame,
+                Shape::TallColumn,
+                Shape::SideColumn,
+                Shape::Nested,
+                Shape::Editor,
+            ] {
+                for count in [2, 200] {
+                    let pressed = Rc::new(Cell::new(None::<&'static str>));
+                    let pressed_in = pressed.clone();
+                    let mut harness =
+                        egui_kittest::Harness::builder()
+                            .with_size(size)
+                            .build_ui(move |ui| {
+                                ui.label("Title");
+                                let mut footer = Footer::new("shape_footer", ui.available_width());
+                                footer.reason(REASON, |ui| {
+                                    message(ui, Tone::Error, REASON);
+                                });
+                                let body = match shape {
+                                    Shape::SideColumn | Shape::Nested => {
+                                        Body::Fills(Fills::for_test(FillsReason::Columns))
+                                    }
+                                    Shape::Editor => {
+                                        Body::Fills(Fills::for_test(FillsReason::NoteEditor))
+                                    }
+                                    _ => Body::Content,
+                                };
+                                let press = |ui: &mut Ui, name: &'static str| {
+                                    if ui.button(name).clicked() {
+                                        pressed_in.set(Some(name));
+                                    }
+                                };
+                                footer.pane(ui, body, |ui| match shape {
+                                    Shape::Rows => {
+                                        rows(ui, count);
+                                        press(ui, "Last action");
+                                    }
+                                    Shape::InScope => {
+                                        let rect = ui.available_rect_before_wrap();
+                                        ui.scope_builder(
+                                            egui::UiBuilder::new().max_rect(rect),
+                                            |ui| {
+                                                rows(ui, count);
+                                                press(ui, "Last action");
+                                            },
+                                        );
+                                    }
+                                    Shape::InFrame => {
+                                        egui::Frame::new().inner_margin(4).show(ui, |ui| {
+                                            ui.push_id("inner", |ui| {
+                                                rows(ui, count);
+                                                press(ui, "Last action");
+                                            });
+                                        });
+                                    }
+                                    Shape::TallColumn => {
+                                        ui.columns(2, |columns| {
+                                            rows(&mut columns[0], count);
+                                            let room = columns[1].available_size();
+                                            if columns[1]
+                                                .add_sized(room, egui::Button::new("Tall action"))
+                                                .clicked()
+                                            {
+                                                pressed_in.set(Some("Tall action"));
+                                            }
+                                        });
+                                    }
+                                    Shape::SideColumn => {
+                                        super::super::Column::left(
+                                            "shape_left",
+                                            200.0,
+                                            150.0..=300.0,
+                                        )
+                                        .show_inside(
+                                            ui,
+                                            |ui| {
+                                                ui.label("Left row 0");
+                                                ui.label("Left row 1");
+                                                press(ui, "Left action");
+                                            },
+                                        );
+                                        // A column of its own may scroll inside a `Fills` body.
+                                        egui::CentralPanel::default()
+                                            .frame(egui::Frame::new())
+                                            .show_inside(ui, |ui| {
+                                                ScrollColumn::new("shape_rows")
+                                                    .show(ui, |ui| rows(ui, count));
+                                            });
+                                    }
+                                    Shape::Nested => {
+                                        let mut inner =
+                                            Footer::new("inner_footer", ui.available_width());
+                                        inner.reason("Inner reason.", |ui| {
+                                            message(ui, Tone::Warning, "Inner reason.");
+                                        });
+                                        inner.pane(ui, Body::Content, |ui| {
+                                            rows(ui, count);
+                                            press(ui, "Last action");
+                                        });
+                                    }
+                                    Shape::Editor => {
+                                        let mut text = (0..count)
+                                            .map(|line| format!("Line {line}"))
+                                            .collect::<Vec<_>>()
+                                            .join("\n");
+                                        ui.add_sized(
+                                            ui.available_size(),
+                                            egui::TextEdit::multiline(&mut text)
+                                                .id(Id::new("editor")),
+                                        );
+                                    }
+                                });
+                            });
+                    super::super::theme::install(&harness.ctx);
+                    harness.run_steps(4);
+                    let case = format!("{shape:?} with {count} lines at {size:?}");
+                    let footer = footer_rect(&harness.ctx, Id::new("shape_footer"))
+                        .unwrap_or_else(|| panic!("{case}: the footer shows"));
+                    let hairline = harness.output().shapes.iter().any(|shape| {
+                        matches!(&shape.shape, egui::Shape::LineSegment { points, stroke }
+                            if stroke.color == colors().hairline
+                                && (points[0].y - footer.top()).abs() <= 1.0
+                                && (points[0].x - footer.left()).abs() <= 1.0)
+                    });
+                    let record = pane_record(&harness.ctx, Id::new("shape_footer"))
+                        .unwrap_or_else(|| panic!("{case}: the pane keeps its record"));
+                    let room = record.room();
+                    let nodes = access(&harness);
+                    // The body's accessible rects: below the title, above the footer, not the
+                    // footer's own and not the nested pane's footer.
+                    let inner_footer = footer_rect(&harness.ctx, Id::new("inner_footer"));
+                    let body: Vec<(String, Rect)> = nodes
+                        .iter()
+                        .filter(|(_, rect)| {
+                            rect.is_positive()
+                                && rect.top() >= room.top() - 0.5
+                                && rect.bottom() <= footer.top() + 0.5
+                                && rect.bottom() < room.bottom()
+                        })
+                        .cloned()
+                        .collect();
+                    let end = body
+                        .iter()
+                        .map(|(_, rect)| rect.bottom())
+                        .chain(inner_footer.map(|rect| rect.bottom()))
+                        .fold(room.top(), f32::max);
+                    // Every painted body word, as clipped, ends `S` above the footer: it never
+                    // lies under it. Body words are known by their text (the rows, the actions
+                    // and labels this test draws), not by where they are.
+                    let body_word = |words: &str| {
+                        (words.starts_with("Line ") && words != REASON)
+                            || [
+                                "Last action",
+                                "Left row 0",
+                                "Left row 1",
+                                "Left action",
+                                "Tall action",
+                            ]
+                            .contains(&words)
+                    };
+                    let mut words_seen = 0;
+                    for shape in &harness.output().shapes {
+                        if let egui::Shape::Text(text) = &shape.shape
+                            && body_word(&text.galley.job.text)
+                        {
+                            let rect = Rect::from_min_size(text.pos, text.galley.size())
+                                .intersect(shape.clip_rect);
+                            if rect.is_positive() {
+                                words_seen += 1;
+                                assert!(
+                                    rect.bottom() <= footer.top() - S + 0.5,
+                                    "{case}: {:?} at {rect:?} ends `S` above the footer {footer:?}",
+                                    text.galley.job.text
+                                );
+                            }
+                        }
+                    }
+                    assert!(words_seen > 0, "{case}: body words are painted");
+                    let follows = count == 2
+                        && matches!(shape, Shape::Rows | Shape::InScope | Shape::InFrame);
+                    if follows {
+                        // The frame's 4 px margin is under its last rect.
+                        let margin = if shape == Shape::InFrame { 4.0 } else { 0.0 };
+                        assert!(
+                            (footer.top() - (end + margin + S)).abs() <= 1.0
+                                && !hairline
+                                && short_body_gap(
+                                    &record,
+                                    1.0,
+                                    footer,
+                                    body.iter().map(|(_, rect)| *rect)
+                                )
+                                .is_none(),
+                            "{case}: the footer {footer:?} is `S` below the last body rect {end} (and the frame's margin {margin}), with no hairline ({hairline})"
+                        );
+                    } else {
+                        let cut = count == 200
+                            && matches!(
+                                shape,
+                                Shape::Rows | Shape::InScope | Shape::InFrame | Shape::TallColumn
+                            );
+                        assert!(
+                            (footer.bottom() - room.bottom()).abs() <= 1.0 && hairline == cut,
+                            "{case}: the footer {footer:?} is pinned at the pane's bottom {}, with its hairline only over cut rows ({hairline}, expected {cut})",
+                            room.bottom()
+                        );
+                    }
+                    // The body control next to the footer takes its press.
+                    let target = match shape {
+                        Shape::TallColumn => Some("Tall action"),
+                        Shape::SideColumn => Some("Left action"),
+                        Shape::Editor => None,
+                        _ if count == 2 => Some("Last action"),
+                        _ => None,
+                    };
+                    if let Some(name) = target {
+                        let rect = nodes
+                            .iter()
+                            .find(|(label, _)| label == name)
+                            .map(|(_, rect)| *rect)
+                            .unwrap_or_else(|| panic!("{case}: {name} shows"));
+                        assert!(
+                            rect.bottom() <= footer.top() - S + 0.5,
+                            "{case}: {name} {rect:?} ends `S` above the footer {footer:?}"
+                        );
+                        click(&mut harness, pos2(rect.center().x, rect.bottom() - 2.0));
+                        assert_eq!(
+                            pressed.get(),
+                            Some(name),
+                            "{case}: {name}, next to the footer, takes its press"
+                        );
+                    }
+                }
+            }
+        }
+        // A small room (Astra re-check 1): the viewport is the real room, even below egui's own
+        // 64 px minimum, so the wheel brings the last row whole into view above the footer, and it
+        // takes its press. One size gives a room under 64 px, so the case can fail.
+        let mut under_64 = false;
+        for size in [vec2(420.0, 130.0), vec2(420.0, 150.0), vec2(420.0, 190.0)] {
+            let pressed = Rc::new(Cell::new(false));
+            let pressed_in = pressed.clone();
+            let mut harness =
+                egui_kittest::Harness::builder()
+                    .with_size(size)
+                    .build_ui(move |ui| {
+                        ui.label("Title");
+                        let mut footer = Footer::new("small_footer", ui.available_width());
+                        footer.reason(REASON, |ui| {
+                            message(ui, Tone::Error, REASON);
+                        });
+                        footer.pane(ui, Body::Content, |ui| {
+                            rows(ui, 8);
+                            if ui.button("Last action").clicked() {
+                                pressed_in.set(true);
+                            }
+                        });
+                    });
+            super::super::theme::install(&harness.ctx);
+            harness.run_steps(4);
+            let footer = footer_rect(&harness.ctx, Id::new("small_footer")).expect("the footer");
+            let room = pane_record(&harness.ctx, Id::new("small_footer"))
+                .unwrap()
+                .room();
+            let body = footer.top() - S - room.top();
+            under_64 |= body < 64.0;
+            let last = |harness: &egui_kittest::Harness<'_>| {
+                access(harness)
+                    .into_iter()
+                    .find(|(label, _)| label == "Last action")
+                    .map(|(_, rect)| rect)
+            };
+            harness.event(egui::Event::PointerMoved(pos2(
+                room.left() + 20.0,
+                room.top() + 4.0,
+            )));
+            for _ in 0..40 {
+                if last(&harness).is_some_and(|rect| rect.bottom() <= footer.top() - S + 0.5) {
+                    break;
+                }
+                harness.event(egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: vec2(0.0, -Type::Body.line()),
+                    modifiers: egui::Modifiers::NONE,
+                });
+                harness.run_steps(2);
+            }
+            let rect = last(&harness).expect("Last action shows");
+            assert!(
+                rect.top() >= room.top() - 0.5 && rect.bottom() <= footer.top() - S + 0.5,
+                "At {size:?} (body {body} px) the wheel brings Last action {rect:?} whole above the footer {footer:?}"
+            );
+            click(&mut harness, rect.center());
+            assert!(pressed.get(), "At {size:?} Last action takes its press");
+        }
+        assert!(under_64, "one small room is under egui's 64 px minimum");
+
+        // One pane function in two `push_id` scopes (Astra re-check 3): A holds a message, B's
+        // comes and goes. A's footer keeps its place, its focused Undo and its press. Two panes
+        // with one identity in one scope are refused.
+        let b_shows = Rc::new(Cell::new(false));
+        let undone = Rc::new(Cell::new((0, 0)));
+        let (b_in, undone_in) = (b_shows.clone(), undone.clone());
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(960.0, 640.0))
+            .build_ui(move |ui| {
+                let pane_of = |ui: &mut Ui, side: usize, message: bool| {
+                    let mut footer = Footer::new("shared_footer", ui.available_width());
+                    if message {
+                        let undone = &undone_in;
+                        footer.reason(REASON, move |ui| {
+                            if ui.button(format!("Undo {side}")).clicked() {
+                                let (a, b) = undone.get();
+                                undone.set(if side == 0 { (a + 1, b) } else { (a, b + 1) });
+                            }
+                        });
+                    }
+                    footer.pane(ui, Body::Content, |ui| rows(ui, 2));
+                };
+                ui.columns(2, |columns| {
+                    columns[0].push_id("a", |ui| pane_of(ui, 0, true));
+                    let b = b_in.get();
+                    columns[1].push_id("b", |ui| pane_of(ui, 1, b));
+                });
+            });
+        super::super::theme::install(&harness.ctx);
+        harness.run_steps(4);
+        let a_footer = |harness: &egui_kittest::Harness<'_>| {
+            pane_records(&harness.ctx)
+                .into_iter()
+                .filter(|record| record.local() == Id::new("shared_footer"))
+                .min_by(|x, y| x.room().left().total_cmp(&y.room().left()))
+                .and_then(|record| record.footer())
+        };
+        let harness_undo_id = |harness: &egui_kittest::Harness<'_>| {
+            use egui_kittest::kittest::{NodeT, Queryable};
+            harness
+                .query_by_label("Undo 0")
+                .map(|node| node.accesskit_node().id())
+        };
+        let focused = |harness: &egui_kittest::Harness<'_>| {
+            harness
+                .ctx
+                .memory(|memory| memory.focused())
+                .map(|id| egui::accesskit::NodeId(id.value()))
+        };
+        for _ in 0..20 {
+            if focused(&harness).is_some() && focused(&harness) == harness_undo_id(&harness) {
+                break;
+            }
+            harness.key_press(egui::Key::Tab);
+            harness.run_steps(2);
+        }
+        let before = a_footer(&harness);
+        assert!(
+            before.is_some() && focused(&harness) == harness_undo_id(&harness),
+            "A's Undo has keyboard focus"
+        );
+        for b in [true, false, true] {
+            b_shows.set(b);
+            harness.run_steps(4);
+            assert_eq!(
+                a_footer(&harness),
+                before,
+                "B's message ({b}) leaves A's footer where it is"
+            );
+            assert_eq!(
+                focused(&harness),
+                harness_undo_id(&harness),
+                "B's message ({b}) leaves A's Undo focused"
+            );
+        }
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(3);
+        assert_eq!(undone.get(), (1, 0), "Enter on A's Undo acts on A only");
+        let twice = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(960.0, 640.0))
+                .build_ui(|ui| {
+                    ui.columns(2, |columns| {
+                        for column in columns.iter_mut().take(1) {
+                            Footer::new("one_name", 400.0).pane(column, Body::Content, |_| ());
+                            Footer::new("one_name", 400.0).pane(column, Body::Content, |_| ());
+                        }
+                    });
+                });
+            harness.run_steps(1);
+        }));
+        let refusal = twice
+            .err()
+            .and_then(|panic| {
+                panic.downcast_ref::<String>().cloned().or_else(|| {
+                    panic
+                        .downcast_ref::<&str>()
+                        .map(|words| (*words).to_owned())
+                })
+            })
+            .unwrap_or_default();
+        assert!(
+            refusal.contains("two panes with one identity"),
+            "two panes with one identity in one scope are refused: {refusal:?}"
+        );
+
+        // A vertical `ScrollColumn` inside a `Content` pane in a release build (Astra re-check 6):
+        // its content is drawn in place, and the pane scrolls it. With 2 rows the footer follows
+        // them; with 200 the pane is pinned, cut, and the wheel brings the last row whole into
+        // view above the footer.
+        for count in [2, 200] {
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(960.0, 640.0))
+                .build_ui(move |ui| {
+                    let mut footer = Footer::new("inline_footer", ui.available_width());
+                    footer.reason(REASON, |ui| {
+                        message(ui, Tone::Error, REASON);
+                    });
+                    footer.pane(ui, Body::Content, |ui| {
+                        let _ = ScrollColumn::new("inner").inline(ui, |ui| rows(ui, count));
+                    });
+                });
+            super::super::theme::install(&harness.ctx);
+            harness.run_steps(4);
+            let footer = footer_rect(&harness.ctx, Id::new("inline_footer")).expect("the footer");
+            let record = pane_record(&harness.ctx, Id::new("inline_footer")).unwrap();
+            let line = |harness: &egui_kittest::Harness<'_>, name: &str| {
+                access(harness)
+                    .into_iter()
+                    .find(|(label, _)| label == name)
+                    .map(|(_, rect)| rect)
+            };
+            if count == 2 {
+                let end = line(&harness, "Line 1").expect("Line 1").bottom();
+                assert!(
+                    (footer.top() - (end + S)).abs() <= 1.0,
+                    "inline 2 rows: the footer {footer:?} follows them ({end})"
+                );
+            } else {
+                assert!(record.cut(), "inline 200 rows: the pane is cut");
+                harness.event(egui::Event::PointerMoved(pos2(
+                    record.room().left() + 20.0,
+                    record.room().top() + 20.0,
+                )));
+                for _ in 0..400 {
+                    if line(&harness, "Line 199")
+                        .is_some_and(|rect| rect.bottom() <= footer.top() - S + 0.5)
+                    {
+                        break;
+                    }
+                    harness.event(egui::Event::MouseWheel {
+                        unit: egui::MouseWheelUnit::Point,
+                        delta: vec2(0.0, -10.0 * Type::Body.line()),
+                        modifiers: egui::Modifiers::NONE,
+                    });
+                    harness.run_steps(1);
+                }
+                let last = line(&harness, "Line 199").expect("Line 199");
+                assert!(
+                    last.bottom() <= footer.top() - S + 0.5 && last.top() >= record.room().top(),
+                    "inline 200 rows: the pane scrolls Line 199 {last:?} whole into view above {footer:?}"
+                );
+            }
+        }
+
+        // The record is of the last completed pass: present, absent, present.
+        let present = Rc::new(Cell::new(true));
+        let present_in = present.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(960.0, 640.0))
+            .build_ui(move |ui| {
+                if present_in.get() {
+                    let mut footer = Footer::new("toggled_footer", ui.available_width());
+                    footer.reason(REASON, |ui| {
+                        message(ui, Tone::Error, REASON);
+                    });
+                    footer.pane(ui, Body::Content, |ui| ui.label("A row"));
+                }
+            });
+        let id = Id::new("toggled_footer");
+        for shown in [true, false, true] {
+            present.set(shown);
+            harness.run_steps(3);
+            let record = pane_record(&harness.ctx, id);
+            assert_eq!(
+                (record.is_some(), pane_records(&harness.ctx).is_empty()),
+                (shown, !shown),
+                "the pane's record is there exactly while the pane is ({shown})"
+            );
+            assert!(
+                !shown || record.is_some_and(|record| record.footer().is_some()),
+                "a present pane's record holds its footer"
+            );
+        }
+        // A vertical scroll column inside a `Content` pane is refused.
+        let refused = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(960.0, 640.0))
+                .build_ui(|ui| {
+                    Footer::new("refusing_footer", ui.available_width()).pane(
+                        ui,
+                        Body::Content,
+                        |ui| {
+                            ScrollColumn::new("inside").show(ui, |ui| ui.label("A row"));
+                        },
+                    );
+                });
+            harness.run_steps(1);
+        }));
+        let message = refused
+            .err()
+            .and_then(|panic| {
+                panic.downcast_ref::<String>().cloned().or_else(|| {
+                    panic
+                        .downcast_ref::<&str>()
+                        .map(|words| (*words).to_owned())
+                })
+            })
+            .unwrap_or_default();
+        assert!(
+            message.contains("inside a `Body::Content` pane"),
+            "a ScrollColumn inside a Content pane panics with the rule: {message:?}"
+        );
     }
 
     #[test]

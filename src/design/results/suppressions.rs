@@ -30,6 +30,10 @@ pub(crate) enum Ban {
     /// Package K: `RowIndex::from_data` and `TextKey::from_data`, row keys a reviewer reads; the
     /// number of uses in the item.
     RowKey(u16),
+    /// Package P: `Footer::show_by_hand` (staged out: use `Footer::pane`) and `Fills::because`
+    /// (the pane's one named escape), and the room-centred layouts; the number of calls in the
+    /// item, counted in its tokens as `Layout` is.
+    Pane(u16),
 }
 
 impl Ban {
@@ -47,7 +51,7 @@ impl Ban {
             Self::Order => &["outcome_at"],
             Self::Body => &["banner", "row_fault", ".show("],
             // Counted in the item's tokens instead (`check`).
-            Self::Layout(_) | Self::RowKey(_) => &[],
+            Self::Layout(_) | Self::RowKey(_) | Self::Pane(_) => &[],
         }
     }
 }
@@ -246,13 +250,13 @@ pub(crate) fn check(files: &[(String, String)], table: &[(&str, &str, &[Ban])]) 
                         .any(|ban| ban.calls().iter().any(|call| suppression.body.contains(call)));
                     // Package K: the row's number of calls is the item's, exactly.
                     use crate::design::layout::bans::{Group, count};
-                    for group in [Group::Layout, Group::RowKey] {
+                    for group in [Group::Layout, Group::RowKey, Group::Pane] {
                         let listed = bans
                             .iter()
                             .find_map(|ban| match (ban, group) {
-                                (Ban::Layout(n), Group::Layout) | (Ban::RowKey(n), Group::RowKey) => {
-                                    Some(usize::from(*n))
-                                }
+                                (Ban::Layout(n), Group::Layout)
+                                | (Ban::RowKey(n), Group::RowKey)
+                                | (Ban::Pane(n), Group::Pane) => Some(usize::from(*n)),
                                 _ => None,
                             })
                             .unwrap_or(0);
