@@ -545,6 +545,8 @@ pub struct Action<'a> {
     line_start: bool,
     /// A `line_start` Undo whose target stays in its message's column: the row's left edge.
     column: bool,
+    /// `under_rows`: the part does not look for a line start.
+    under_rows: bool,
     min_width: Option<f32>,
 }
 
@@ -563,6 +565,7 @@ impl<'a> Action<'a> {
             plain: false,
             line_start: false,
             column: false,
+            under_rows: false,
             min_width: None,
         }
     }
@@ -595,6 +598,13 @@ impl<'a> Action<'a> {
     /// cannot see (after `gap`, under a message's icon).
     pub fn line_start(mut self) -> Self {
         self.line_start = true;
+        self
+    }
+
+    /// The named escape from the found line start (N4): the text above is a list's rows, whose
+    /// words start `S` in, as a quiet action's padding does, so the action keeps its padding.
+    pub fn under_rows(mut self) -> Self {
+        self.under_rows = true;
         self
     }
 
@@ -663,7 +673,12 @@ impl<'a> Action<'a> {
     pub fn show(mut self, ui: &mut Ui) -> Response {
         // Found by the part: its words go to the text edge, and its target stays inside its
         // column, so it never reaches a splitter or a scroll bar beside the column.
-        if self.kind == Kind::Quiet && self.icon.is_none() && !self.line_start && starts_line(ui) {
+        if self.kind == Kind::Quiet
+            && self.icon.is_none()
+            && !self.line_start
+            && !self.under_rows
+            && starts_line(ui)
+        {
             self.line_start = true;
             self.column = true;
         }
@@ -4757,6 +4772,7 @@ mod tests {
                 });
                 let _ = Action::quiet("Reload list").icon(icons::REFRESH).show(ui);
                 let _ = Action::quiet("←").name("Back").show(ui);
+                let _ = Action::quiet("Show all 43").under_rows().show(ui);
                 let _ = Action::secondary("Bordered").show(ui);
                 let popup = ui.label("Menu");
                 egui::Popup::new(
@@ -4808,6 +4824,12 @@ mod tests {
         assert!(
             (node("Bordered").left() - edge).abs() <= 0.5,
             "n4-secondary"
+        );
+        // The named escape: under rows whose words start `S` in, it keeps its padding.
+        assert!(
+            (words("Show all 43") - (edge + S)).abs() <= 0.5,
+            "n4-under-rows: words {}",
+            words("Show all 43")
         );
         let back = node("Back");
         assert!(

@@ -487,17 +487,6 @@ pub fn messages(ui: &mut egui::Ui) {
             "Use the saved HP",
         );
     });
-    design_group(ui, "Footer message with Dismiss");
-    ui.allocate_ui(egui::vec2(READER_MEASURE, 3.0 * XL), |ui| {
-        let mut pressed = None;
-        let mut footer = Footer::new("gallery_footer", ui.available_width());
-        footer.outcome(
-            outcome::Notice::new(crate::sentence!("Sync is off until you sign in again."))
-                .choice(outcome::MessageChoice::Dismiss(outcome::Lost::Nothing)),
-            &mut pressed,
-        );
-        let _ = footer.show(ui);
-    });
     design_group(ui, "Sections");
     let _ = section(ui, "A section", |ui| {
         ui.label("Its contents.");
