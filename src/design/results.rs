@@ -1341,7 +1341,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "rest_ruling_line",
             &[Ban::Extras(1)],
         ),
-        ("src/trackers/view.rs", "tracker_lines", &[Ban::Extras(2)]),
         ("src/world.rs", "draw", &[Ban::Extras(5)]),
         ("src/world.rs", "missing_link", &[Ban::Extras(1)]),
         ("src/world.rs", "unread_groups_message", &[Ban::Extras(1)]),

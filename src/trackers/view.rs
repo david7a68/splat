@@ -712,10 +712,6 @@ fn register_block(ui: &egui::Ui, top: f32) {
 /// A tracker's lines: one line, or a heading and one line for each instance. Every line stands
 /// in the panel's columns.
 #[allow(clippy::too_many_arguments)]
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn tracker_lines(
     ui: &mut egui::Ui,
     rules: &Rules,
@@ -733,11 +729,12 @@ fn tracker_lines(
             None => value.to_string(),
         }
     };
-    let indent = if def.per.is_empty() {
-        0.0
-    } else {
+    let indented = !def.per.is_empty();
+    let indent = if indented {
         ui.label(Type::Body.rich(ui, &def.name));
         design::L
+    } else {
+        0.0
     };
     // Names and values stand in the panel's columns, so the values read down one edge and the
     // first actions start at one edge. A long name is cut at a whole word, and its hover keeps it.
@@ -746,7 +743,9 @@ fn tracker_lines(
     for instance in def.instances() {
         let line_top = ui.cursor().top();
         let head = |ui: &mut egui::Ui, view: &mut ViewState| {
-            ui.add_space(indent);
+            if indented {
+                design::gap(ui, Gap::L);
+            }
             let height = Density::Read.control();
             let name = instance.unwrap_or(&def.name);
             name_cell(ui, view, name, egui::vec2(name_width, height));
@@ -776,7 +775,9 @@ fn tracker_lines(
             ui.with_layout(top, |ui| head(ui, view));
             if !def.quick.is_empty() {
                 ui.with_layout(top, |ui| {
-                    ui.add_space(indent);
+                    if indented {
+                        design::gap(ui, Gap::L);
+                    }
                     ui.horizontal_wrapped(|ui| quick_actions(ui, view, key, def, instance, act));
                 });
             }
