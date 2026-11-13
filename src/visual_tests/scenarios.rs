@@ -4835,6 +4835,8 @@ pub mod settings {
                 "r3f-X41-secondary-connect",
                 true,
             );
+            // The shared check sees this step too: it measures the painted row.
+            d.check_footer_room("r3f-X41-secondary");
             d.click(CANCEL);
             assert!(!d.has(EDIT_FORM), "Cancel closes the campaign form");
         });
@@ -11710,6 +11712,14 @@ pub mod session_notes {
         d.replace_text_in("Folder", "30 Sessions");
         d.expect("Move files and save");
         d.expect("Unsaved");
+        // R3f X40: at 960x640 the warning came while the save row was whole, with no scroll of
+        // the scenario's since, so only the reveal can bring it back whole above the footer.
+        super::session_recording::check_row_clear_of_footer(
+            d,
+            "Move files and save",
+            "r3f-X40-move-clear",
+            true,
+        );
         d.click("Discard");
         d.observe(
             "iter-7-S3",
@@ -11735,14 +11745,6 @@ pub mod session_notes {
         save_row_whole(d);
         d.replace_text_in("Folder", "30 Sessions");
         d.expect("Save without moving");
-        // R3f X40: at 960x640 the warning came while the save row was whole, so the reveal
-        // brought it back whole above the footer, with no resize in between.
-        super::session_recording::check_row_clear_of_footer(
-            d,
-            "Move files and save",
-            "r3f-X40-move-clear",
-            true,
-        );
         // Review of PR 274, item 3: the footer and the form share one scan of the current folder,
         // so an unchanged frame lists its files at most once, as before the footer. The count is
         // kept inside `storage_files`.

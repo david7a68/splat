@@ -2759,11 +2759,16 @@ impl<'a> Driver<'a> {
             state,
             &window,
         ));
-        // R3f: a pane's content ends above its message footer. Each next action the reveal knows
-        // (every primary, and each action marked with `keep_above_footer`), also one wholly
-        // hidden, that a footer took room from while it was whole is measured where it is
-        // painted after the frame: it fails when that row is cut, unless a guard holds the reveal
-        // back or the row needed more than the room lost. Each state with a footer names its words.
+        self.check_footer_room(state);
+    }
+
+    /// R3f, the shared footer check, for a captured state or a step that names it: a pane's content ends above its message footer. Each next action the reveal knows
+    /// (every primary, and each action marked with `keep_above_footer`), also one wholly
+    /// hidden, that a footer took room from while it was whole is measured where it is
+    /// painted after the frame: it fails when that row is cut, unless a guard holds the reveal
+    /// back or the row needed more than the room lost. Each state with a footer names its words.
+    pub(super) fn check_footer_room(&mut self, state: &str) {
+        let window = format!("{}x{}", self.window.0, self.window.1);
         let bands = self.footer_bands();
         if !bands.is_empty() {
             let nodes = self.nodes();
