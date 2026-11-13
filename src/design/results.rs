@@ -1032,11 +1032,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "an_open_history_prepares_its_rows_once_and_draws_only_those_in_view",
             &[Ban::Layout(1)],
         ),
-        ("src/trackers/view.rs", "amount_field", &[Ban::Layout(1)]),
+        ("src/trackers/view.rs", "amount_field", &[Ban::RowKey(3)]),
         (
             "src/trackers/view.rs",
             "show",
-            &[Ban::Layout(1), Ban::Extras(2)],
+            &[Ban::Layout(1), Ban::Extras(1)],
         ),
         (
             "src/world.rs",
@@ -1087,12 +1087,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/trackers.rs", "act_words", &[Ban::Words]),
         ("src/trackers.rs", "cause", &[Ban::Words]),
-        (
-            "src/trackers/history.rs",
-            "show",
-            &[Ban::Body, Ban::Extras(2)],
-        ),
-        ("src/trackers/view.rs", "body", &[Ban::Body, Ban::Extras(4)]),
+        ("src/trackers/history.rs", "show", &[Ban::Body]),
+        ("src/trackers/view.rs", "body", &[Ban::Body]),
         (
             "src/trackers/view.rs",
             "footer",
@@ -1345,8 +1341,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "rest_ruling_line",
             &[Ban::Extras(1)],
         ),
-        ("src/trackers/view.rs", "notice_row", &[Ban::Extras(1)]),
-        ("src/trackers/view.rs", "tracker_lines", &[Ban::Extras(5)]),
         ("src/world.rs", "draw", &[Ban::Extras(5)]),
         ("src/world.rs", "missing_link", &[Ban::Extras(1)]),
         ("src/world.rs", "unread_groups_message", &[Ban::Extras(1)]),
