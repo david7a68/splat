@@ -120,7 +120,9 @@ pub fn broken(d: &mut Driver<'_>) {
             "iter-27-D-FH3",
             icon.zip(words)
                 .is_some_and(|(icon, words)| words.left() >= icon.right() - 0.5),
-            format!("At {size:?}, the cause {words:?} starts right of the icon {icon:?} on every line"),
+            format!(
+                "At {size:?}, the cause {words:?} starts right of the icon {icon:?} on every line"
+            ),
         );
     }
     d.state("broken-note-listed", Sizes::All);
@@ -624,12 +626,14 @@ pub fn broken(d: &mut Driver<'_>) {
     // Round 27 FE6: the warning is about another note's draft, so it is in the footer and
     // Setting's own text keeps its place too.
     let prose = "A cold war around an inner sea.";
-    let everywhere =
-        egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(f32::MAX, f32::MAX));
+    let everywhere = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(f32::MAX, f32::MAX));
     let file_line: Vec<_> = [SMALL, DEFAULT, LARGE]
         .map(|size| {
             d.at_size(size, |d| {
-                (d.place_of("Show file"), d.painted_rect_in(prose, everywhere))
+                (
+                    d.place_of("Show file"),
+                    d.painted_rect_in(prose, everywhere),
+                )
             })
         })
         .into();
@@ -1755,15 +1759,17 @@ pub fn facts(d: &mut Driver<'_>) {
                 .find(|node| node.name == "Another type" && node.role == Role::TextInput)
                 .map(|node| node.rect);
             // The title, right of the notes column (the list has a row of the same name).
-            let title = d.place_of("Resize World notes column").and_then(|splitter| {
-                d.painted_word_rect(
-                    "Setting",
-                    egui::Rect::from_min_max(
-                        egui::pos2(splitter.right(), 0.0),
-                        egui::pos2(f32::MAX, f32::MAX),
-                    ),
-                )
-            });
+            let title = d
+                .place_of("Resize World notes column")
+                .and_then(|splitter| {
+                    d.painted_word_rect(
+                        "Setting",
+                        egui::Rect::from_min_max(
+                            egui::pos2(splitter.right(), 0.0),
+                            egui::pos2(f32::MAX, f32::MAX),
+                        ),
+                    )
+                });
             (field, title)
         });
         d.observe(
@@ -1771,7 +1777,9 @@ pub fn facts(d: &mut Driver<'_>) {
             field.zip(title).is_some_and(|(field, title)| {
                 (field.right() - (title.left() + design::FORM_WIDTH)).abs() <= 1.0
             }),
-            format!("At {size:?}, Another type {field:?} ends at the form edge from the title {title:?}"),
+            format!(
+                "At {size:?}, Another type {field:?} ends at the form edge from the title {title:?}"
+            ),
         );
     }
     action_at_text_edge(
@@ -2564,7 +2572,8 @@ pub fn places(d: &mut Driver<'_>) {
     d.type_into("Location name", "Watch House");
     d.click("Create location here");
     d.expect("Place set to Watch House. It was Ashfall Keep.");
-    let (success, detail) = finished_change_tone(d, "Place set to Watch House. It was Ashfall Keep.");
+    let (success, detail) =
+        finished_change_tone(d, "Place set to Watch House. It was Ashfall Keep.");
     d.observe("iter-20-D-FD5-place", success, detail);
     d.state("npc-new-place", Sizes::All);
     d.click("Undo place change");
@@ -3384,8 +3393,7 @@ pub fn generator(d: &mut Driver<'_>) {
     // stays, so the DM can copy again; the card's Save row keeps its place.
     let save_before = d.place_of("Save NPC");
     d.click(crate::lookup::COPY_MARKER);
-    let everywhere =
-        egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(f32::MAX, f32::MAX));
+    let everywhere = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(f32::MAX, f32::MAX));
     let copied = d.painted_rect_in(crate::lookup::MARKER_COPIED, everywhere);
     let save_after = d.place_of("Save NPC");
     d.observe(
@@ -3403,7 +3411,9 @@ pub fn generator(d: &mut Driver<'_>) {
             && copied
                 .zip(save_after)
                 .is_some_and(|(copied, save)| copied.top() > save.bottom()),
-        format!("The result {copied:?} is in the footer below Save NPC {save_before:?} → {save_after:?}"),
+        format!(
+            "The result {copied:?} is in the footer below Save NPC {save_before:?} → {save_after:?}"
+        ),
     );
     d.state("generator-marker-copied", Sizes::Default);
     // Must stay true: the NPC moved, so Lookup cannot save it twice, and World still saves it.

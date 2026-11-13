@@ -938,11 +938,7 @@ impl Reader {
             _ => ("not set".to_owned(), colors().muted, Type::Small),
         };
         let group_words = if groups_error.is_some() {
-            (
-                "not read".to_owned(),
-                colors().result.warning,
-                Type::Small,
-            )
+            ("not read".to_owned(), colors().result.warning, Type::Small)
         } else if draft.now.groups.is_empty() {
             ("not set".to_owned(), colors().muted, Type::Small)
         } else {

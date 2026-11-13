@@ -1031,34 +1031,35 @@ impl WorldPage {
             let created = {
                 let name = &mut self.new_name;
                 let note_type = &mut self.note_type;
-                let field = |ui: &mut egui::Ui, last: bool, draw: &mut dyn FnMut(&mut egui::Ui) -> egui::Response| {
-                    if !last {
-                        draw(ui);
-                        return false;
-                    }
-                    let width = (ui.available_width() - create_width - design::S)
-                        .min(design::FORM_WIDTH)
-                        .max(design::XXL);
-                    // Create sits `S` after the field's column, centred on the field itself.
-                    // The column's height is the line's, so the kept line follows it.
-                    let column = ui.allocate_ui_with_layout(
-                        egui::vec2(width, 0.0),
-                        egui::Layout::top_down(egui::Align::Min),
-                        |ui| draw(ui).rect,
-                    );
-                    let field = column.inner;
-                    let at = egui::Rect::from_min_size(
-                        egui::pos2(
-                            column.response.rect.right() + design::S,
-                            field.center().y - design::Density::Scan.control() / 2.0,
-                        ),
-                        egui::vec2(create_width, design::Density::Scan.control()),
-                    );
-                    super::in_rect(ui, at, |ui| create().blocked(reason).show(ui).clicked())
-                };
-                let mut name_field = |ui: &mut egui::Ui| {
-                    design::text_field(ui, "Name", name, None, None)
-                };
+                let field =
+                    |ui: &mut egui::Ui,
+                     last: bool,
+                     draw: &mut dyn FnMut(&mut egui::Ui) -> egui::Response| {
+                        if !last {
+                            draw(ui);
+                            return false;
+                        }
+                        let width = (ui.available_width() - create_width - design::S)
+                            .clamp(design::XXL, design::FORM_WIDTH);
+                        // Create sits `S` after the field's column, centred on the field itself.
+                        // The column's height is the line's, so the kept line follows it.
+                        let column = ui.allocate_ui_with_layout(
+                            egui::vec2(width, 0.0),
+                            egui::Layout::top_down(egui::Align::Min),
+                            |ui| draw(ui).rect,
+                        );
+                        let field = column.inner;
+                        let at = egui::Rect::from_min_size(
+                            egui::pos2(
+                                column.response.rect.right() + design::S,
+                                field.center().y - design::Density::Scan.control() / 2.0,
+                            ),
+                            egui::vec2(create_width, design::Density::Scan.control()),
+                        );
+                        super::in_rect(ui, at, |ui| create().blocked(reason).show(ui).clicked())
+                    };
+                let mut name_field =
+                    |ui: &mut egui::Ui| design::text_field(ui, "Name", name, None, None);
                 if kind == "note" {
                     field(ui, false, &mut name_field);
                     field(ui, true, &mut |ui: &mut egui::Ui| {

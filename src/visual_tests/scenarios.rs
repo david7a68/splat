@@ -11328,10 +11328,13 @@ pub mod world {
         d.wait_for_text("Will create NPCs/Watchkeeper.md");
         let filled = places(d);
         for (size, ((create, cancel, name), (create_after, cancel_after, _))) in
-            [SMALL, DEFAULT, LARGE].into_iter().zip(empty.into_iter().zip(filled))
+            [SMALL, DEFAULT, LARGE]
+                .into_iter()
+                .zip(empty.into_iter().zip(filled))
         {
             let same = |a: Option<egui::Rect>, b: Option<egui::Rect>| {
-                a.zip(b).is_some_and(|(a, b)| (a.min - b.min).length() < 0.5)
+                a.zip(b)
+                    .is_some_and(|(a, b)| (a.min - b.min).length() < 0.5)
             };
             d.observe(
                 "iter-27-D-FH5",
@@ -23438,7 +23441,9 @@ fn lookup_show_all(d: &mut Driver<'_>, six: &str) {
     let rows = lookup_results(d);
     d.observe(
         "iter-27-D-FJ2",
-        rows.len() == 6 && show_all_count(d).is_none() && rows.iter().all(|row| row.fully_in_view()),
+        rows.len() == 6
+            && show_all_count(d).is_none()
+            && rows.iter().all(|row| row.fully_in_view()),
         format!(
             "Six matches for {six} show as six rows with no Show all: {} rows, Show all {:?}",
             rows.len(),

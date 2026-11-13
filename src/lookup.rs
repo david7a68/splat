@@ -2548,7 +2548,9 @@ impl Lookup {
             Some(world::FooterAct::Trackers) => trackers.undo_remove(),
             Some(act) => {
                 if let Some(campaign) = campaign {
-                    nav = nav.take().or(reader.footer_act(ui.ctx(), act, current, campaign));
+                    nav = nav
+                        .take()
+                        .or(reader.footer_act(ui.ctx(), act, current, campaign));
                 }
             }
             None => {}

@@ -878,20 +878,22 @@ pub fn log_from_play(d: &mut Driver<'_>) {
                     ),
                 )
             });
-            let under = edit.zip(title).is_some_and(|(edit, title)| edit.top() >= title.bottom() - 0.5);
+            let under = edit
+                .zip(title)
+                .is_some_and(|(edit, title)| edit.top() >= title.bottom() - 0.5);
             (
-                order
-                    && word(edit)
-                    && word(log)
-                    && word(start)
-                    && (size != SMALL || under),
-                format!("Edit {edit:?}, Add to Log {log:?}, Start fight {start:?}, title {title:?}"),
+                order && word(edit) && word(log) && word(start) && (size != SMALL || under),
+                format!(
+                    "Edit {edit:?}, Add to Log {log:?}, Start fight {start:?}, title {title:?}"
+                ),
             )
         });
         d.observe(
             "T18.2",
             fits,
-            format!("At {size:?}, every title-line action shows with its word, on one line: {detail}"),
+            format!(
+                "At {size:?}, every title-line action shows with its word, on one line: {detail}"
+            ),
         );
     }
     d.state("log-header-long-title", Sizes::All);
@@ -1040,8 +1042,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     );
     // Round 27 FC1, AC1, SC1: the lost draft's `Undo discard` is no body place of Ashfall
     // Keep: it is a footer line, just above the deleted entry's notice, and its press works.
-    let everywhere =
-        egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(f32::MAX, f32::MAX));
+    let everywhere = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(f32::MAX, f32::MAX));
     let discarded = format!("{VARRA_BLACK} draft discarded.");
     let undo = format!("Undo discard of {VARRA_BLACK}");
     for size in [SMALL, DEFAULT] {

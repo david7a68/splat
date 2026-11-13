@@ -617,12 +617,16 @@ fn warning_link(ui: &mut egui::Ui, words: &str) -> egui::Response {
     );
     let mut job = egui::text::LayoutJob::default();
     let style = ui.style().clone();
-    Type::Body.rich(ui, words).color(c.accent).underline().append_to(
-        &mut job,
-        &style,
-        egui::FontSelection::Style(egui::TextStyle::Body),
-        egui::Align::Center,
-    );
+    Type::Body
+        .rich(ui, words)
+        .color(c.accent)
+        .underline()
+        .append_to(
+            &mut job,
+            &style,
+            egui::FontSelection::Style(egui::TextStyle::Body),
+            egui::Align::Center,
+        );
     job.wrap.max_width = (ui.available_width() - icon.size().x).max(1.0);
     let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
     let (rect, response) = ui.allocate_exact_size(
@@ -2197,7 +2201,10 @@ pub(crate) enum FooterKind {
     /// A Log line whose entry is gone, with `Copy text` and `Dismiss`.
     GoneLog(GoneLog),
     /// A draft whose note is gone, with `Copy text` and `Discard draft`.
-    LostDraft { id: Uuid, name: String },
+    LostDraft {
+        id: Uuid,
+        name: String,
+    },
 }
 
 /// One World or Lookup message for its pane's footer (round 26): a result, reason or notice
@@ -5976,7 +5983,12 @@ mod tests {
                 .all(|line| !matches!(line.kind, FooterKind::GoneLog(_)))
         );
         let first = gone.iter().find(|gone| gone.words == "Kept.").unwrap().id;
-        lookup.footer_act(&egui::Context::default(), FooterAct::GoneLog(first), item, &campaign);
+        lookup.footer_act(
+            &egui::Context::default(),
+            FooterAct::GoneLog(first),
+            item,
+            &campaign,
+        );
         assert_eq!(notices(&mut lookup), 1);
     }
 
