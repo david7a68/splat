@@ -16790,6 +16790,8 @@ pub mod encounter_groups {
         d.click(&add_group(GROUP_RIVALS));
         d.expect("placed after");
         let before = current_participant(d);
+        // The point of Move before is that the tied rows change places.
+        d.expect_moves("Move before puts the tied arrival above its twin.");
         d.click("Move Rival Team (Rival Captain 2) before Rival Team");
         d.at_size(DEFAULT, |d| {
             d.expect("Rival Team (Rival Captain 2) moved before Rival Team at\u{a0}14")

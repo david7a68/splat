@@ -42,6 +42,7 @@ mod scenarios;
 mod settle_probe;
 mod slots;
 mod steps;
+mod stillness;
 mod video;
 
 use driver::{Driver, Outcome};
@@ -759,6 +760,7 @@ fn prepare_output(directory: &Path, capture: bool) {
         "ergonomics.json",
         "ergonomics.md",
         "chrome-observation.json",
+        "stillness.json",
     ] {
         match fs::remove_file(directory.join(name)) {
             Ok(()) => {}
@@ -778,6 +780,7 @@ fn a_run_without_captures_clears_reports_but_keeps_other_files() {
         "ergonomics.json",
         "ergonomics.md",
         "chrome-observation.json",
+        "stillness.json",
     ];
     let retained = ["empty__01__960x640.png", "manifest.txt", "notes.md"];
     for name in reports.into_iter().chain(retained) {
@@ -1022,6 +1025,9 @@ fn visual_suite() {
     let mut look_review = Vec::new();
     let mut videos = Vec::new();
     let mut failed = Vec::new();
+    let mut still = Vec::new();
+    let mut still_escapes = Vec::new();
+    let mut still_time = std::time::Duration::ZERO;
     for (name, outcome) in outcomes {
         match outcome {
             Ok(outcome) => {
@@ -1034,6 +1040,9 @@ fn visual_suite() {
                 not_measured.extend(outcome.not_measured);
                 look_review.extend(outcome.look_review);
                 videos.extend(outcome.video);
+                still.extend(outcome.stillness);
+                still_escapes.extend(outcome.stillness_escapes);
+                still_time += outcome.stillness_time;
             }
             Err(panic) => failed.push(format!("{name}: {}", panic_line(panic.as_ref()))),
         }
@@ -1085,9 +1094,15 @@ fn visual_suite() {
         serde_json::to_vec_pretty(&report).expect("encode report"),
     )
     .expect("write ergonomics.json");
+    let still_report = stillness::Report::new(&still, &still_escapes, still_time);
+    fs::write(
+        directory.join("stillness.json"),
+        stillness::json_lines(&still),
+    )
+    .expect("write stillness.json");
     fs::write(
         directory.join("ergonomics.md"),
-        ergonomics::write_markdown(&report),
+        ergonomics::write_markdown(&report) + &still_report.markdown(),
     )
     .expect("write ergonomics.md");
     if capture {
@@ -1128,6 +1143,7 @@ fn visual_suite() {
     for line in &known_open {
         println!("Known app-vs-chrome pair (the list must end empty): {line}");
     }
+    println!("{}", still_report.summary());
     let silent = if names.len() == SCENARIOS.len() {
         silent_section8_tests(&passes, &violations, &not_measured, &look_review)
     } else {

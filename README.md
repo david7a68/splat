@@ -77,7 +77,7 @@ worse count fails the test, and a better one is printed. The tests use temporary
 synthetic data. Test builds have no route to your settings, character cache, keyring or
 D&D Beyond.
 
-Each completed suite writes `ergonomics.json` and `ergonomics.md` to
+Each completed suite writes `ergonomics.json`, `ergonomics.md` and `stillness.json` to
 `artifacts/screenshots/latest/`, or to `SPLAT_VISUAL_DIR` when set. Each suite clears
 the old reports before starting its scenarios, even without captures.
 If the child exits before reports are written, that folder has no ergonomics report
@@ -114,6 +114,21 @@ or set `SPLAT_VISUAL_CONTACT_SHEET=1` to make it with a full `visual-test` run.
   because the item takes every press.
   `KNOWN_APP_VS_CHROME` in `src/visual_tests/ergonomics.rs` is empty and may only stay
   empty, so any pair fails the run.
+- The G checks (`src/visual_tests/stillness.rs`) are report-only: they never fail a run yet.
+  `stillness.json` has one line per finding (scenario, state, window, check, control, old and
+  new rect, and the message, press, bar or size that set it off), and the terminal and
+  `ergonomics.md` give the counts per check. G1 compares two states in a row at one size:
+  **G1a** a message came or went in a pane and content below it moved (the content above it
+  stayed); **G1b** the control a script pressed moved (links are not checked: they open
+  something else); **G1c** a scroll bar came or went and a right edge in its pane moved by
+  the bar's lane. **G2** a short header action at the widest size is gone, or paints other
+  words, at a narrower size. **G3** at 1920x1080 a registered row's first action is more than
+  `3 × L` after its last words. **G4** one pane shows a text of four or more words twice.
+  Until `src/design` registers message rects, G1a finds a message by what `design::message`
+  draws: the tone bar, the tone icon and the words.
+- `d.expect_moves("reason")` before a state where a move is the point (a reorder, a sort)
+  is the one escape from G1. Its findings stay in `stillness.json` with the reason, and the
+  report counts each use per scenario.
 - After reviewing chrome changes, `devenv shell -- visual-baseline-chrome work`
   applies the saved chrome counts from label `work` without running scenarios again.
   This also works after `--only`: it changes only those scenarios' egui chrome counts,

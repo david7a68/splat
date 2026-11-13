@@ -2,6 +2,7 @@
 use super::{
     ergonomics::{self, TaskCost, Violation},
     fixture::World,
+    stillness,
     video::{Overlay, Recorder},
 };
 use crate::Splat;
@@ -97,6 +98,11 @@ pub struct Outcome {
     pub look_review: Vec<String>,
     pub video: Option<String>,
     pub failed_expectations: Vec<String>,
+    /// G1 to G4 findings (report-only), each `expect_moves` (scenario, state, reason), and the
+    /// time the checks took.
+    pub stillness: Vec<stillness::Finding>,
+    pub stillness_escapes: Vec<(String, String, &'static str)>,
+    pub stillness_time: Duration,
 }
 
 pub struct Driver<'a> {
@@ -129,6 +135,9 @@ pub struct Driver<'a> {
     timing: CaptureTiming,
     repeated_captures: super::repeated_captures::RepeatedCaptures,
     expect_same: Option<&'static str>,
+    /// The reason of the next state's intended moves, for G1.
+    expect_moves: Option<&'static str>,
+    stillness: stillness::Tracker,
     /// A probe can expire the real settle loop without waiting three minutes.
     pub(super) settle_timeout: Duration,
     /// The last rendered frame, keyed by the harness and the app pass it shows. Video holds,
@@ -324,6 +333,8 @@ impl<'a> Driver<'a> {
             timing: CaptureTiming::default(),
             repeated_captures: Default::default(),
             expect_same: None,
+            expect_moves: None,
+            stillness: stillness::Tracker::default(),
             settle_timeout: ASYNC_TIMEOUT,
             last_render: None,
             harness_generation: 0,
@@ -338,6 +349,9 @@ impl<'a> Driver<'a> {
                 look_review: Vec::new(),
                 video: None,
                 failed_expectations: Vec::new(),
+                stillness: Vec::new(),
+                stillness_escapes: Vec::new(),
+                stillness_time: Duration::ZERO,
             },
         };
         driver.settle();
@@ -1121,6 +1135,7 @@ impl<'a> Driver<'a> {
     }
 
     fn click_rect(&mut self, rect: egui::Rect, caption: &str) {
+        let target = self.press_target(rect);
         let pos = rect.center();
         self.film_aim(rect, caption);
         self.harness.hover_at(pos);
@@ -1138,6 +1153,7 @@ impl<'a> Driver<'a> {
         self.harness.remove_cursor();
         self.interactions += 1;
         self.settle();
+        self.press_result(target, caption);
         let pressed = Overlay {
             pressed: true,
             ..Overlay::caption(caption)
@@ -1165,6 +1181,7 @@ impl<'a> Driver<'a> {
         self.harness.remove_cursor();
         self.interactions += 1;
         self.settle();
+        self.stillness.column_dragged = true;
         self.film_result("Drag a column's edge");
     }
 
@@ -1386,6 +1403,7 @@ impl<'a> Driver<'a> {
     }
 
     fn secondary_click_rect(&mut self, rect: egui::Rect, caption: &str) {
+        let target = self.press_target(rect);
         let pos = rect.center();
         self.film_aim(rect, caption);
         self.harness.hover_at(pos);
@@ -1402,7 +1420,43 @@ impl<'a> Driver<'a> {
         self.harness.remove_cursor();
         self.interactions += 1;
         self.settle();
+        self.press_result(target, caption);
         self.film_result(caption);
+    }
+
+    /// G1b: the control a press at `aim` goes to, unless a state's `prepare` presses it.
+    fn press_target(&mut self, aim: egui::Rect) -> Option<stillness::Pressed> {
+        if self.stillness.in_state || self.harness.ctx.pixels_per_point() != 1.0 {
+            return None;
+        }
+        let started = Instant::now();
+        let found = self.nodes();
+        let nodes: Vec<stillness::Node<'_>> = found
+            .iter()
+            .map(|node| (node.id.0, node.role, node.name.as_str(), node.rect))
+            .collect();
+        let shown: Vec<egui::Rect> = found.iter().map(|node| node.shown).collect();
+        let target = stillness::pressed(&nodes, &shown, aim, &self.current_page());
+        self.stillness.time += started.elapsed();
+        target
+    }
+
+    /// G1b: after the press, the pressed control is where it was.
+    fn press_result(&mut self, target: Option<stillness::Pressed>, caption: &str) {
+        let Some(target) = target else {
+            return;
+        };
+        let started = Instant::now();
+        let found = self.nodes();
+        let nodes: Vec<stillness::Node<'_>> = found
+            .iter()
+            .map(|node| (node.id.0, node.role, node.name.as_str(), node.rect))
+            .collect();
+        if let Some(raw) = stillness::press_moves(&target, &nodes, &self.current_page(), caption) {
+            let window = format!("{}x{}", self.window.0, self.window.1);
+            self.stillness.press(window, raw);
+        }
+        self.stillness.time += started.elapsed();
     }
 
     /// Ctrl+click a run row, to add it to the targets of one amount.
@@ -2656,6 +2710,14 @@ impl<'a> Driver<'a> {
         self.expect_same = Some(reason);
     }
 
+    /// The next state moves content on purpose (Move up, a sort, a new row above). Its G1
+    /// stillness findings stay in `stillness.json`, marked with this reason, and the report counts
+    /// each use. It is the one escape from G1.
+    pub fn expect_moves(&mut self, reason: &'static str) {
+        assert!(!reason.trim().is_empty(), "expect_moves needs a reason");
+        self.expect_moves = Some(reason);
+    }
+
     /// Restore transient UI after each resize, then verify the named state before capture.
     /// Repeating setup for another capture size is not another action in the DM's task.
     pub fn state_prepared(&mut self, name: &str, sizes: Sizes, prepare: impl FnMut(&mut Self)) {
@@ -2674,6 +2736,8 @@ impl<'a> Driver<'a> {
         let expect_same = self.expect_same.take();
         self.states += 1;
         let label = format!("{:02}-{name}", self.states);
+        let escape = self.expect_moves.take();
+        self.stillness.begin(self.scenario, &label, escape);
         self.named_states
             .insert(name.into(), (label.clone(), sizes));
         for &(size, density) in sizes.plan() {
@@ -2699,9 +2763,11 @@ impl<'a> Driver<'a> {
             }
             self.capture(&label, size, density, expect_same, capture);
         }
+        self.header_check(&label);
         self.resize(self.base, 1.0);
         prepare(self);
         self.settle();
+        self.stillness.end();
         self.interactions = task_interactions;
         self.hold();
     }
@@ -2770,6 +2836,74 @@ impl<'a> Driver<'a> {
             state,
             &window,
         ));
+        if self.harness.ctx.pixels_per_point() == 1.0 {
+            let started = Instant::now();
+            self.stillness_check(state, size, &controls, viewport);
+            self.stillness.time += started.elapsed();
+        }
+    }
+
+    /// G1a, G1c, G3 and G4 at one size, and what G2 needs from it.
+    fn stillness_check(
+        &mut self,
+        state: &str,
+        size: (f32, f32),
+        controls: &[ergonomics::Control],
+        viewport: egui::Rect,
+    ) {
+        let mut words = std::collections::HashMap::new();
+        ergonomics::visit_nodes(&self.harness, |node, _| {
+            let access = node.accesskit_node();
+            if let Some(text) = ergonomics::label_words(&access) {
+                words.insert(access.id().0, text);
+            }
+        });
+        let (items, bars) = stillness::items(controls, &words);
+        let shapes = &self.harness.output().shapes;
+        let painted = stillness::painted_texts(shapes);
+        let texts = stillness::texts(&painted);
+        let messages = stillness::messages(shapes, &painted, &items);
+        let rows = ergonomics::row_rects(&self.harness.ctx);
+        let window = format!("{}x{}", size.0, size.1);
+        let mut found = Vec::new();
+        if size == LARGE {
+            found.extend(stillness::far_actions(&rows, &items, &texts));
+        }
+        if size == SMALL {
+            found.extend(stillness::repeated_sentences(&items, &rows));
+        }
+        self.stillness.headers.push(stillness::HeaderView {
+            window: window.clone(),
+            width: size.0,
+            header: stillness::header(&items, &texts, viewport.top()),
+            all: items
+                .iter()
+                .map(|item| (item.role, item.name.clone()))
+                .collect(),
+        });
+        found.extend(self.stillness.observe(
+            size,
+            stillness::Snapshot {
+                state: self.states,
+                page: self.current_page(),
+                items,
+                bars,
+                messages,
+            },
+        ));
+        for raw in found {
+            self.stillness.push(self.scenario, state, &window, raw);
+        }
+    }
+
+    /// G2 over the sizes this state checked.
+    fn header_check(&mut self, state: &str) {
+        let started = Instant::now();
+        let views = std::mem::take(&mut self.stillness.headers);
+        for (window, raw) in stillness::header_losses(&views) {
+            self.stillness.push(self.scenario, state, &window, raw);
+        }
+        self.stillness.time += started.elapsed();
     }
 
     fn capture(
@@ -3018,6 +3152,10 @@ impl<'a> Driver<'a> {
 
     pub fn finish(mut self) -> Outcome {
         self.stop_filming();
+        self.stillness.finish(self.scenario);
+        self.outcome.stillness = std::mem::take(&mut self.stillness.findings);
+        self.outcome.stillness_escapes = std::mem::take(&mut self.stillness.escapes);
+        self.outcome.stillness_time = self.stillness.time;
         self.outcome.failed_expectations = self.failed_expectations.into_inner();
         if std::env::var_os("SPLAT_VISUAL_TIMINGS").is_some() {
             println!(
