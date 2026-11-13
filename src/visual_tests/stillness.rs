@@ -7,6 +7,9 @@
 //! - **G3** at 1920 px, a row's first action at the right is far from the row's last words.
 //! - **G4** one pane shows the same sentence twice.
 //! - **G6** a pane's message footer sits more than `S` below a body that ends short of it.
+//! - **N2** an icon control's centre is off the centre of the text line beside it.
+//! - **N5** a text that can wrap starts with an icon inside its own layout job.
+//! - **N8** one word is shown twice in a row, in one text or two adjacent texts of a line.
 //!
 //! G1a, G1b, G1c and G3 block: a finding that `stillness_known::KNOWN` does not list fails the
 //! run, and so does a listed state with fewer findings (the list may only shrink). G2, G4 and
@@ -37,7 +40,10 @@ pub const G2: &str = "G2/header-action-lost";
 pub const G3: &str = "G3/far-action";
 pub const G4: &str = "G4/same-sentence-twice";
 pub const G6: &str = "G6/footer-far-below-body";
-pub const CHECKS: [&str; 8] = [G1A, G1B, G1B_RENAMED, G1C, G2, G3, G4, G6];
+pub const N2: &str = "N2/icon-off-text-centre";
+pub const N5: &str = "N5/icon-starts-wrapping-text";
+pub const N8: &str = "N8/doubled-word";
+pub const CHECKS: [&str; 11] = [G1A, G1B, G1B_RENAMED, G1C, G2, G3, G4, G6, N2, N5, N8];
 /// The checks whose findings must be in `stillness_known::KNOWN`.
 pub const BLOCKING: [&str; 4] = [G1A, G1B, G1C, G3];
 
@@ -953,6 +959,191 @@ pub fn footer_gaps(items: &[Item], footers: &[egui::Rect]) -> Vec<Raw> {
     out
 }
 
+/// A painted text as N2, N5 and N8 read it.
+#[derive(Clone, Debug)]
+pub struct Line {
+    pub words: String,
+    /// The visible part of the whole text.
+    pub rect: egui::Rect,
+    /// Its first row, on screen.
+    pub first: egui::Rect,
+    pub rows: usize,
+    /// Its layout job wraps at a width.
+    pub wraps: bool,
+}
+
+/// A private-use character: one of the app's icon glyphs.
+fn is_icon(c: char) -> bool {
+    ('\u{e000}'..='\u{f8ff}').contains(&c)
+}
+
+fn icon_only(words: &str) -> bool {
+    let words = words.trim();
+    !words.is_empty() && words.chars().all(|c| is_icon(c) || c.is_whitespace())
+}
+
+pub fn lines(painted: &[(egui::epaint::TextShape, egui::Rect)]) -> Vec<Line> {
+    painted
+        .iter()
+        .map(|(text, clip)| {
+            let galley = &text.galley;
+            let first = galley
+                .rows
+                .first()
+                .map_or(galley.rect, |row| row.rect())
+                .translate(text.pos.to_vec2());
+            Line {
+                words: galley.job.text.clone(),
+                rect: text.visual_bounding_rect().intersect(*clip),
+                first,
+                rows: galley.rows.len(),
+                wraps: galley.job.wrap.max_width.is_finite(),
+            }
+        })
+        .collect()
+}
+
+/// N2: an icon control (a control that paints only icons) sits on the line of the nearest text
+/// beside it: within `3 × L` to its left or right, its first row overlapping the control's height.
+/// The control's centre is within 1 px of that row's centre.
+pub fn icon_centres(items: &[Item], lines: &[Line]) -> Vec<Raw> {
+    let mut out = Vec::new();
+    for item in items.iter().filter(|item| !item.is_label()) {
+        let inside = |line: &Line| item.rect.expand(1.0).contains(line.rect.center());
+        let own: Vec<&Line> = lines.iter().filter(|line| inside(line)).collect();
+        if own.is_empty() || !own.iter().all(|line| icon_only(&line.words)) {
+            continue;
+        }
+        let centre = item.rect.center();
+        let beside = lines
+            .iter()
+            .filter(|line| !inside(line) && !icon_only(&line.words))
+            .filter(|line| line.first.y_range().intersects(item.rect.y_range()))
+            .map(|line| {
+                let gap = if line.first.right() <= item.rect.left() {
+                    item.rect.left() - line.first.right()
+                } else if line.first.left() >= item.rect.right() {
+                    line.first.left() - item.rect.right()
+                } else {
+                    f32::INFINITY
+                };
+                (line, gap)
+            })
+            .filter(|(_, gap)| *gap <= 3.0 * L)
+            .min_by(|a, b| a.1.total_cmp(&b.1));
+        let Some((line, _)) = beside else {
+            continue;
+        };
+        let off = centre.y - line.first.center().y;
+        if off.abs() > MOVE_TOLERANCE {
+            out.push(Raw {
+                check: N2,
+                control: display(item),
+                old: line.first,
+                new: item.rect,
+                trigger: format!(
+                    "{:.0} px {} the centre of {:?}",
+                    off.abs(),
+                    if off < 0.0 { "above" } else { "below" },
+                    line.words
+                ),
+            });
+        }
+    }
+    out
+}
+
+/// N5: a text whose layout job wraps starts with an icon. A wrapped second row then starts under
+/// the icon, not under the words (`design::wrapped_status` keeps the icon outside the job).
+pub fn icon_wraps(lines: &[Line]) -> Vec<Raw> {
+    lines
+        .iter()
+        .filter(|line| {
+            line.wraps
+                && line.words.trim_start().chars().next().is_some_and(is_icon)
+                && !icon_only(&line.words)
+        })
+        .map(|line| Raw {
+            check: N5,
+            control: format!("Text {:?}", line.words),
+            old: line.first,
+            new: line.rect,
+            trigger: if line.rows > 1 {
+                format!("wrapped onto {} rows", line.rows)
+            } else {
+                "can wrap; one row now".to_owned()
+            },
+        })
+        .collect()
+}
+
+/// A word for N8: lower case and letters only, so a number or a dice term (`2d6`) is not a word.
+fn word(raw: &str) -> Option<String> {
+    let word: String = raw
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect();
+    (word.chars().count() > 1 && word.chars().all(char::is_alphabetic)).then_some(word)
+}
+
+fn is_number(raw: &str) -> bool {
+    let core: String = raw.chars().filter(|c| c.is_alphanumeric()).collect();
+    !core.is_empty() && core.chars().all(|c| c.is_ascii_digit())
+}
+
+/// N8: one word twice in a row: in one text (`Travel Travel`, or across a number: `Day 1: Day`),
+/// or as the last word of a text and the first word of the text just after it on its line.
+pub fn doubled_words(lines: &[Line]) -> Vec<Raw> {
+    let mut out = Vec::new();
+    for line in lines {
+        let raw: Vec<&str> = line.words.split_whitespace().collect();
+        for (index, current) in raw.iter().enumerate() {
+            let Some(first) = word(current) else {
+                continue;
+            };
+            let next = raw.get(index + 1).and_then(|next| word(next));
+            let after_number = raw
+                .get(index + 1)
+                .filter(|between| is_number(between))
+                .and(raw.get(index + 2))
+                .and_then(|next| word(next));
+            if next.as_ref() == Some(&first) || after_number.as_ref() == Some(&first) {
+                out.push(Raw {
+                    check: N8,
+                    control: format!("Text {:?}", line.words),
+                    old: line.rect,
+                    new: line.rect,
+                    trigger: format!("{first:?} twice in one text"),
+                });
+                break;
+            }
+        }
+    }
+    for left in lines {
+        let Some(last) = left.words.split_whitespace().last().and_then(word) else {
+            continue;
+        };
+        for right in lines {
+            let same_line = (left.first.center().y - right.first.center().y).abs() <= 2.0;
+            let gap = right.first.left() - left.rect.right();
+            if same_line
+                && (-MOVE_TOLERANCE..=L).contains(&gap)
+                && right.words.split_whitespace().next().and_then(word) == Some(last.clone())
+            {
+                out.push(Raw {
+                    check: N8,
+                    control: format!("Text {:?}", right.words),
+                    old: left.rect,
+                    new: right.rect,
+                    trigger: format!("{last:?} ends {:?} and starts the next text", left.words),
+                });
+            }
+        }
+    }
+    out
+}
+
 /// The driver's G state: the last snapshot per size, presses waiting for their state's name,
 /// the escape for the next state, and what was found.
 #[derive(Default)]
@@ -1684,6 +1875,99 @@ mod tests {
         // Another pane's content beside it does not count.
         let beside = item(Role::Button, "Other", at(100.0, 900.0, 90.0, 28.0), None);
         assert_eq!(footer_gaps(&[row, beside], &[pane_band(1028.0)]).len(), 1);
+    }
+
+    fn line(words: &str, rect: egui::Rect) -> Line {
+        Line {
+            words: words.into(),
+            rect,
+            first: rect,
+            rows: 1,
+            wraps: false,
+        }
+    }
+
+    #[test]
+    fn n2_finds_an_icon_off_the_centre_of_its_line() {
+        let title = line("2026-01-01 19:00", at(372.0, 230.0, 120.0, 20.0));
+        let menu = |y: f32| {
+            item(
+                Role::Button,
+                "More for the recording",
+                at(510.0, y, 24.0, 24.0),
+                None,
+            )
+        };
+        let dots = |y: f32| line("\u{e3e0}", at(515.0, y + 4.0, 14.0, 16.0));
+        // On the line: centre 240 both.
+        assert!(icon_centres(&[menu(228.0)], &[title.clone(), dots(228.0)]).is_empty());
+        // 1 px passes; 6 px above (routing row 41) is found.
+        assert!(icon_centres(&[menu(229.0)], &[title.clone(), dots(229.0)]).is_empty());
+        let found = icon_centres(&[menu(222.0)], &[title.clone(), dots(222.0)]);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].trigger.starts_with("6 px above"));
+        // A control with words is not an icon control; a text far away is not beside it.
+        let words = item(Role::Button, "Process", at(510.0, 222.0, 80.0, 24.0), None);
+        assert!(
+            icon_centres(
+                &[words],
+                &[title.clone(), line("Process", at(515.0, 226.0, 60.0, 16.0))]
+            )
+            .is_empty()
+        );
+        let far = item(Role::Button, "Close", at(900.0, 222.0, 24.0, 24.0), None);
+        assert!(
+            icon_centres(
+                &[far],
+                &[title, line("\u{e4f6}", at(905.0, 226.0, 14.0, 16.0))]
+            )
+            .is_empty()
+        );
+    }
+
+    #[test]
+    fn n5_finds_a_wrapping_text_that_starts_with_an_icon() {
+        let mut status = line(
+            "\u{e4e0} Captain Varra Black: told the party",
+            at(170.0, 340.0, 380.0, 48.0),
+        );
+        status.wraps = true;
+        status.rows = 2;
+        let found = icon_wraps(std::slice::from_ref(&status));
+        assert_eq!(found.len(), 1);
+        assert!(found[0].trigger.starts_with("wrapped onto 2"));
+        // Words first, or a job that does not wrap, or an icon alone: nothing.
+        let mut words_first = status.clone();
+        words_first.words = "Captain Varra Black \u{e4e0}".into();
+        let mut no_wrap = status.clone();
+        no_wrap.wraps = false;
+        let mut icon = status;
+        icon.words = "\u{e4e0}".into();
+        assert!(icon_wraps(&[words_first, no_wrap, icon]).is_empty());
+    }
+
+    #[test]
+    fn n8_finds_a_word_twice_in_a_row() {
+        let at_line = |words: &str, x: f32, width: f32| line(words, at(x, 100.0, width, 20.0));
+        assert_eq!(
+            doubled_words(&[at_line("Travel Travel", 0.0, 100.0)]).len(),
+            1
+        );
+        assert_eq!(doubled_words(&[at_line("Day 1: Day", 0.0, 100.0)]).len(), 1);
+        // Two texts on one line: `Travel` then `Travel ·`.
+        let pair = [
+            at_line("Travel", 0.0, 50.0),
+            at_line("Travel · 2 hours", 58.0, 120.0),
+        ];
+        assert_eq!(doubled_words(&pair).len(), 1);
+        // Passing: different words, a word after other words, a number twice, texts far apart.
+        assert!(doubled_words(&[at_line("Day 1: Harvest Eve", 0.0, 140.0)]).is_empty());
+        assert!(doubled_words(&[at_line("Rule · Creating a Rule", 0.0, 140.0)]).is_empty());
+        assert!(
+            doubled_words(&[at_line("2d6 2d6", 0.0, 60.0), at_line("1 1", 80.0, 20.0)]).is_empty()
+        );
+        let apart = [at_line("Travel", 0.0, 50.0), at_line("Travel", 300.0, 50.0)];
+        assert!(doubled_words(&apart).is_empty());
     }
 
     fn finding(check: &'static str, state: &str) -> Finding {

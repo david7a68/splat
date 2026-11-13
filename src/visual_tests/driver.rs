@@ -2932,6 +2932,12 @@ impl<'a> Driver<'a> {
         }
         let footers = crate::design::footer_bands(&self.harness.ctx);
         found.extend(stillness::footer_gaps(&items, &footers));
+        let lines = stillness::lines(&painted);
+        found.extend(stillness::icon_centres(&items, &lines));
+        found.extend(stillness::icon_wraps(&lines));
+        if size == SMALL {
+            found.extend(stillness::doubled_words(&lines));
+        }
         self.stillness.headers.push(stillness::HeaderView {
             window: window.clone(),
             width: size.0,
