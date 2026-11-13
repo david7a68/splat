@@ -851,6 +851,11 @@ fn reader_table(
     // its hairline, so the bar never covers cell text.
     let cut = (scrolls && top < outer_clip.bottom() && top + height + lane > outer_clip.bottom())
         .then(|| (outer_clip.bottom() - lane, outer_clip.bottom()));
+    // The header follows the top edge until the final row leaves the reader.
+    let header_top = top.max(outer_clip.top()).min(top + height - heights[0]);
+    // Round 27 FC3: while the header floats, a row whose text would start under it shows no
+    // text, so no cut line of text shows between the header and the next row's rule.
+    let cover = (header_top > top).then(|| header_top + heights[0]);
     let mut moving_origin = egui::pos2(left + widths[0] + TABLE_GAP, top);
     let mut moving_clip = outer_clip.intersect(egui::Rect::from_min_max(
         egui::pos2(left + widths[0] + TABLE_GAP, outer_clip.top()),
@@ -869,7 +874,7 @@ fn reader_table(
                     &heights,
                     0..1,
                     matched,
-                    cut,
+                    (cut, cover),
                     mark_at(slot, &dice),
                 );
             },
@@ -887,7 +892,7 @@ fn reader_table(
                         &heights,
                         1..widths.len(),
                         matched,
-                        cut,
+                        (cut, cover),
                         None,
                     );
                     if lane > 0.0 {
@@ -938,9 +943,7 @@ fn reader_table(
             egui::Stroke::new(design::HAIRLINE_WIDTH, colors().hairline),
         );
     }
-    // The header follows the top edge until the final row leaves the reader.
     if let Some(header) = cells.first() {
-        let header_top = top.max(outer_clip.top()).min(top + height - heights[0]);
         let header_rect = egui::Rect::from_min_max(
             egui::pos2(left, header_top),
             egui::pos2(
@@ -1012,7 +1015,7 @@ fn table_part(
     heights: &[f32],
     columns: std::ops::Range<usize>,
     matched: Option<usize>,
-    cut: Option<(f32, f32)>,
+    (cut, cover): (Option<(f32, f32)>, Option<f32>),
     mark: MarkSlot<'_>,
 ) {
     ui.spacing_mut().item_spacing.y = 0.0;
@@ -1038,9 +1041,12 @@ fn table_part(
             painter.rect_filled(fill, egui::CornerRadius::ZERO, colors().selected);
         }
         let mut x = rect.left();
+        // `cover`: the floating header's bottom. A row whose text starts above it is under the
+        // header: no text of it is drawn, and its cells are not controls (row 0 is the header).
+        let under_header = row > 0 && cover.is_some_and(|cover| rect.top() + design::XS < cover);
         // The rolled row's mark sits in the slot; every row's range starts after it.
         if let Some((slot, dice)) = mark {
-            if matched == Some(row) {
+            if matched == Some(row) && !under_header {
                 painter.galley(
                     egui::pos2(x, rect.top() + design::XS),
                     dice.clone(),
@@ -1054,7 +1060,10 @@ fn table_part(
                 egui::pos2(x, rect.top() + design::XS),
                 cells[column].size(),
             );
-            if cut.is_some_and(|(lane_top, bottom)| cell.bottom() > lane_top && cell.top() < bottom)
+            if under_header {
+                // Under the header: nothing to draw.
+            } else if cut
+                .is_some_and(|(lane_top, bottom)| cell.bottom() > lane_top && cell.top() < bottom)
             {
                 painter.galley(cell.min, cells[column].clone(), colors().text);
             } else {
