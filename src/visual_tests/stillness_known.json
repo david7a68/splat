@@ -613,7 +613,6 @@
     ["G1b/pressed-control-moved","15-link-tab-during-run","960x640","Button \"Add\"",1]
   ],
   "trackers": [
-    ["G6/footer-far-below-body","03-trackers-three-notices","1920x1080","Button \"MORE TRACKERS 2\"",1],
     ["G6/footer-far-below-body","07-tracker-history-in-the-reader","1200x800","Label \"5\\u{a0}party ·\\u{a0}2\\u{a0}×\\u{a0}Ember\\u{a0}Cultist ·\\u{a0}XP\\u{a0}400\\u{a0}·\\u{a0}Low\\u{a0}(up\\u{a0}to\\u{a0}2,800)\"",1],
     ["G6/footer-far-below-body","07-tracker-history-in-the-reader","1920x1080","Label \"5\\u{a0}party ·\\u{a0}2\\u{a0}×\\u{a0}Ember\\u{a0}Cultist ·\\u{a0}XP\\u{a0}400\\u{a0}·\\u{a0}Low\\u{a0}(up\\u{a0}to\\u{a0}2,800)\"",1],
     ["G6/footer-far-below-body","07-tracker-history-in-the-reader","960x640","Label \"5\\u{a0}party ·\\u{a0}2\\u{a0}×\\u{a0}Ember\\u{a0}Cultist ·\\u{a0}XP\\u{a0}400\\u{a0}·\\u{a0}Low\\u{a0}(up\\u{a0}to\\u{a0}2,800)\"",1],
