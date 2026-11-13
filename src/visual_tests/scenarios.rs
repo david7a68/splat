@@ -394,6 +394,97 @@ fn footer_with(d: &Driver<'_>, words: &str) -> Option<egui::Rect> {
         .min_by(|a, b| a.area().total_cmp(&b.area()))
 }
 
+/// The Party member rows in view, top to bottom: (accessible name, rect).
+fn party_rows(d: &Driver<'_>) -> Vec<(String, egui::Rect)> {
+    let mut rows: Vec<_> = d
+        .nodes()
+        .into_iter()
+        .filter(|node| {
+            node.name.contains(" · HP ") && node.name.contains(" · AC ") && node.in_view()
+        })
+        .map(|node| (node.name, node.rect))
+        .collect();
+    rows.sort_by(|a, b| a.1.top().total_cmp(&b.1.top()));
+    rows
+}
+
+/// The member whose sheet is open: the name painted, exactly, right of the member list and
+/// above `footer`.
+fn party_sheet_title(d: &Driver<'_>, footer: Option<egui::Rect>) -> Option<String> {
+    let rows = party_rows(d);
+    let list_right = rows.iter().map(|(_, rect)| rect.right()).reduce(f32::max)?;
+    let names: Vec<String> = rows
+        .iter()
+        .filter_map(|(name, _)| name.split(" · ").next().map(str::to_owned))
+        .collect();
+    let mut title = None;
+    d.each_painted_text(|text, clip| {
+        let rect = text.visual_bounding_rect();
+        if rect.left() > list_right
+            && clip.intersects(rect)
+            && footer.is_none_or(|footer| rect.bottom() <= footer.top())
+            && names.contains(&text.galley.job.text)
+        {
+            title = Some(text.galley.job.text.clone());
+        }
+    });
+    title
+}
+
+/// Round 27 review (revision 19): the body keeps its presses while the Party footer shows
+/// `words` (empty: no footer). At 960, 1200 and 1920: press the first member row, then the last
+/// row in view above the footer. The last one's sheet opens, the footer keeps its words and its
+/// place, and the rows do not move. Proof steps only: the first member's sheet is open again
+/// after, at the size the scenario had.
+fn party_body_takes_presses(d: &mut Driver<'_>, id: &str, words: &str) {
+    let base = d.window_size();
+    let start = party_sheet_title(d, footer_with(d, words).filter(|_| !words.is_empty()));
+    for size in [SMALL, DEFAULT, LARGE] {
+        d.set_base(size);
+        let footer = |d: &Driver<'_>| footer_with(d, words).filter(|_| !words.is_empty());
+        let before = footer(d);
+        let rows = party_rows(d);
+        let last = rows
+            .iter()
+            .rev()
+            .find(|(_, rect)| before.is_none_or(|footer| rect.bottom() <= footer.top()))
+            .cloned();
+        let (opened, after, rows_after) = d.aside(|d| {
+            if let Some((first, _)) = rows.first() {
+                d.click(first);
+            }
+            if let Some((last, _)) = &last {
+                d.click(last);
+            }
+            (party_sheet_title(d, footer(d)), footer(d), party_rows(d))
+        });
+        let member = last
+            .as_ref()
+            .and_then(|(name, _)| name.split(" · ").next().map(str::to_owned));
+        d.observe(
+            id,
+            rows.len() >= 2
+                && member.is_some()
+                && opened == member
+                && (words.is_empty() || before.is_some())
+                && after == before
+                && rows_after.iter().map(|(_, rect)| *rect).eq(rows.iter().map(|(_, rect)| *rect)),
+            format!(
+                "At {size:?}, with the footer {words:?} at {before:?}: the last row in view {member:?} \
+                 opens {opened:?}; the footer is at {after:?} after"
+            ),
+        );
+    }
+    d.set_base(base);
+    if let Some(start) = start
+        && let Some((first, _)) = party_rows(d)
+            .into_iter()
+            .find(|(name, _)| name.starts_with(&start))
+    {
+        d.aside(|d| d.click(&first));
+    }
+}
+
 fn words_left_in(d: &Driver<'_>, area: egui::Rect) -> Option<f32> {
     let mut left = None::<f32>;
     d.each_painted_text(|text, _| {
@@ -3734,9 +3825,55 @@ pub mod party {
         d.settle();
         d.expect(FORCE_READ);
         d.state("copy-has-local-edits", Sizes::All);
+        const LOCAL_EDITS: &str = "so Splat stopped updating it.";
+        party_body_takes_presses(d, "iter-27-C-press-local-edits", LOCAL_EDITS);
+        // Round 27 review: typing in a field outside the footer reaches that field, and the
+        // footer keeps its words and place. Proof steps: the page goes back after.
+        let footer_before = footer_with(d, LOCAL_EDITS);
+        let typed = d.aside(|d| {
+            d.click_containing(SECOND_MEMBER);
+            if !d.in_view("Spells") {
+                d.click("More sheet pages");
+            }
+            d.click("Spells");
+            let shown = d.in_view("Filter this page");
+            if shown {
+                d.type_into("Filter this page", "fire");
+            }
+            let text = d.field_text("Filter this page");
+            let footer = footer_with(d, LOCAL_EDITS);
+            if shown {
+                d.clear_text_in("Filter this page");
+            }
+            d.click(OVERVIEW);
+            d.click_containing(FIRST_MEMBER);
+            (text, footer)
+        });
+        d.observe(
+            "iter-27-C-press-outside-field",
+            typed.0.as_deref() == Some("fire")
+                && footer_before.is_some()
+                && typed.1 == footer_before,
+            format!(
+                "The filter field holds {:?}; the footer {footer_before:?} → {:?}",
+                typed.0, typed.1
+            ),
+        );
+        let title_before = party_sheet_title(d, footer_with(d, LOCAL_EDITS));
         d.click(FORCE_READ);
         d.settle();
         d.expect(REPLACED);
+        // The footer's action changes only its own state: the open sheet stays.
+        d.observe(
+            "iter-27-C-press-footer-action",
+            title_before.is_some()
+                && party_sheet_title(d, footer_with(d, REPLACED)) == title_before,
+            format!(
+                "Replace leaves the open sheet {title_before:?}: {:?}",
+                party_sheet_title(d, footer_with(d, REPLACED))
+            ),
+        );
+        party_body_takes_presses(d, "iter-27-C-press-replaced", REPLACED);
         // Round 25 FD3: one dismiss form on the page. The replaced-sheet notice ends its first
         // line with the close icon, as the stopped-sync notice does; no word `Dismiss` is left.
         d.observe_both(
@@ -3775,6 +3912,7 @@ pub mod party {
             !d.has_containing(REPLACED),
             "Dismiss removes the report of where the edits went",
         );
+        party_body_takes_presses(d, "iter-27-C-press-dismissed", "");
         let with_none = list_tops(d, "");
         d.observe(
             "iter-27-C-FH1",
@@ -5302,9 +5440,11 @@ pub mod settings {
                     .all(|gap| gap.is_some_and(|gap| gap >= crate::design::S - 0.5)),
             format!("Gaps after temporary HP: {gaps:?}"),
         );
+        party_body_takes_presses(d, "iter-27-C-press-stopped", STOPPED);
         d.state("sync-stopped-recovery", Sizes::All);
         assert!(d.in_view("Dismiss this message"));
         d.click("Dismiss this message");
+        party_body_takes_presses(d, "iter-27-C-press-stopped-dismissed", "");
         assert!(!d.has_containing("Combat sync stopped when the connection"));
         // Round 27 FA4: the footer empties and no member row moves; a press where the second
         // row was goes to that row.
@@ -9935,6 +10075,81 @@ pub mod signed_in {
                 format!("At {size:?}: names, widest right, Add and Added rights {placed:?}"),
             );
         }
+        // Round 27 review: Add's room comes before the name's. Salt Road's name grows one
+        // letter at a time, across the length where it no longer fits beside Add; at every
+        // length the whole Add target stays inside the column. Then Add is pressed on a name just
+        // past that length, and the matching import form opens. The name goes back after.
+        const LONG: &str = "Salt Road and the long ferry crossing of the Grey Marsh beyond Ashfall Keep and the Drowned Kingdoms";
+        let column_right = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .filter(|node| {
+                    node.name.starts_with("More actions for ") || node.name == "Reload from disk"
+                })
+                .map(|node| node.rect.right())
+                .reduce(f32::max)
+        };
+        let cut = |d: &Driver<'_>, name: &str| {
+            let mut cut = None;
+            d.each_painted_text(|text, _| {
+                if text.galley.job.text == name {
+                    cut = Some(text.galley.elided);
+                }
+            });
+            cut
+        };
+        let mut outside = Vec::new();
+        let mut first_cut = None;
+        for end in REMOTE_NAME.len()..=LONG.len() {
+            let name = &LONG[..end];
+            if name.ends_with(' ') {
+                continue;
+            }
+            d.app_mut().dndbeyond.rename_remote("9002", name);
+            d.settle();
+            let add = d.place_of(&format!("Add {name} from D&D Beyond"));
+            let right = column_right(d);
+            if !add
+                .zip(right)
+                .is_some_and(|(add, right)| add.right() <= right + 0.5)
+            {
+                outside.push((end, add, right));
+            }
+            if first_cut.is_none() && cut(d, name) == Some(true) {
+                first_cut = Some(end);
+            }
+        }
+        // Six letters past the first cut: a name that would fit the column, but not beside Add.
+        let boundary = first_cut
+            .map(|end| LONG[..(end + 6).min(LONG.len())].trim_end().to_owned())
+            .unwrap_or_default();
+        d.app_mut().dndbeyond.rename_remote("9002", &boundary);
+        d.settle();
+        let opened = d.aside(|d| {
+            let add = format!("Add {boundary} from D&D Beyond");
+            let whole = d
+                .place_of(&add)
+                .zip(column_right(d))
+                .is_some_and(|(add, right)| add.right() <= right + 0.5);
+            d.click(&add);
+            let form = d.field_text("Campaign name");
+            d.click("Cancel");
+            (whole, form)
+        });
+        d.app_mut().dndbeyond.rename_remote("9002", REMOTE_NAME);
+        d.settle();
+        d.observe(
+            "iter-27-C-AN2-boundary",
+            outside.is_empty()
+                && first_cut.is_some()
+                && opened.0
+                && opened.1.as_deref() == Some(boundary.as_str()),
+            format!(
+                "Add outside the column at {outside:?}; first cut at {first_cut:?}; boundary \
+                 {boundary:?}: Add whole {}, import form name {:?}",
+                opened.0, opened.1
+            ),
+        );
         d.click("Add Salt Road from D&D Beyond");
         // Round 23 AM2/FM7: quiet Cancel starts the form's last row at the labels' text edge.
         let (add, labels) = d.at_size(DEFAULT, |d| {

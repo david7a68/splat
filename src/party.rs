@@ -1410,6 +1410,9 @@ fn member_row(
     detail_ui.set_clip_rect(detail_ui.clip_rect().intersect(detail_rect));
     detail_ui.spacing_mut().item_spacing.x = 0.0;
     detail_ui.spacing_mut().interact_size.y = 0.0;
+    // The row takes every press on it. Selectable words would take a press on the detail line,
+    // which at 960 holds the row's centre (round 27 review: Sable's `Local edits` row).
+    detail_ui.style_mut().interaction.selectable_labels = false;
     detail_ui.label(Type::Small.rich(&detail_ui, &summary).color(c.muted));
     if local_edits {
         detail_ui.label(
