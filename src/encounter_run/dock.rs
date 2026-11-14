@@ -278,6 +278,10 @@ impl Run {
     /// The dock's second line as one field, for the row it opened for. Enter adds the words
     /// and Escape clears them; either closes the field and puts focus in `Amount`. Any other
     /// way out, such as `Next turn`, closes it, and its words wait for that row.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: the run’s Effect field keeps its row’s height, keys only, as the design system describes it (design::results::STAGED_ALLOWS)"
+    )]
     fn effect_line(&mut self, ui: &mut egui::Ui, index: usize) -> Option<Command> {
         let p = &self.state.participants[index];
         let (key, hint) = (
@@ -288,7 +292,7 @@ impl Run {
         let result = ui
             .horizontal(|ui| {
                 ui.set_min_height(Density::Read.control());
-                design::add_field(
+                design::add_field_keys(
                     ui,
                     field,
                     "Effect",

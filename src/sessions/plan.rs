@@ -4454,87 +4454,77 @@ impl Sessions {
         shown: Shown,
         act: &mut Option<SceneAct>,
     ) {
-        let Some(state) = &mut self.scenes.field else {
+        // The field's state leaves `scenes` while the form draws, so the result's room can draw
+        // the plan's result (R30); it goes back unless the field closed.
+        let Some(mut state) = self.scenes.field.take() else {
             self.scenes.typing = false;
             return;
         };
-        let reveal = state.focus;
         design::gap(ui, design::Gap::S);
+        let id = crate::field_id!("plan_scene").once(crate::layout::Once::CreateForm);
+        let mut undo = false;
         let result = design::add_field(
-            ui,
-            state,
+            id,
             "Plan a scene",
             "Plan a scene: words, a person or a place",
-            0.0,
-            |_| None,
-            |words| {
-                let Some(index) = index else {
-                    return Vec::new();
-                };
-                let rows = index
-                    .search(&words.trim().to_lowercase())
-                    .into_iter()
-                    .filter(|at| is_world(index, *at))
-                    .take(4)
-                    .map(|at| {
-                        (
-                            index.items[at].entry.name.clone(),
-                            world_detail(index, at),
-                            index.link_to(at),
-                        )
-                    })
-                    .collect();
-                vec![design::Suggestions {
-                    label: "World",
-                    rows,
-                }]
-            },
-        );
+        )
+        .actions(crate::word!("Add"), crate::word!("Cancel"))
+        .suggest(|words| {
+            let Some(index) = index else {
+                return Vec::new();
+            };
+            let rows = index
+                .search(&words.trim().to_lowercase())
+                .into_iter()
+                .filter(|at| is_world(index, *at))
+                .take(4)
+                .map(|at| {
+                    (
+                        index.items[at].entry.name.clone(),
+                        world_detail(index, at),
+                        index.link_to(at),
+                    )
+                })
+                .collect();
+            vec![design::Suggestions {
+                label: "World",
+                rows,
+            }]
+        })
+        .result_room(|ui| self.field_result(ui, shown, &mut undo))
+        .show(ui, &mut state);
         let typed = state.words.trim().to_owned();
         let emptied = state.words.is_empty();
         self.scenes.typing = result.field.has_focus();
-        self.field_result(ui, reveal.then_some(result.field.rect), shown, act);
+        if undo {
+            *act = Some(SceneAct::UndoAdd);
+        }
         if let Some(link) = result.chosen {
             *act = Some(SceneAct::Add(link));
         } else if result.enter && !typed.is_empty() {
             *act = Some(SceneAct::Add(typed));
         }
-        if ui.input(|input| input.key_pressed(egui::Key::Escape))
-            && (result.field.has_focus() || result.field.lost_focus())
-            && emptied
-        {
-            self.scenes.field = None;
+        if !(result.cancel && emptied) {
+            self.scenes.field = Some(state);
         }
     }
 
-    /// The Scene field's fault, and `Scene added to tonight.` with `Undo scene`, under the open
-    /// field, so the field never moves for its own result. With `reveal`, the field's rectangle,
-    /// the field and its words scroll into view together.
-    fn field_result(
-        &self,
-        ui: &mut egui::Ui,
-        reveal: Option<egui::Rect>,
-        shown: Shown,
-        act: &mut Option<SceneAct>,
-    ) {
+    /// The Scene field's fault, and `Scene added to tonight.` with `Undo scene`, in the room the
+    /// open field keeps for its result (R30), so neither the field nor `Add` moves for it.
+    /// `undo`: Undo was pressed.
+    fn field_result(&self, ui: &mut egui::Ui, shown: Shown, undo: &mut bool) {
         self.row_fault(ui, Place::Field, shown);
         if shown.added == Some(Place::Field)
-            && let Some(undo) = &self.scenes.added
-            && self.draft.as_ref().is_some_and(|draft| undo.live(draft))
+            && let Some(added) = &self.scenes.added
+            && self.draft.as_ref().is_some_and(|draft| added.live(draft))
         {
             design::gap(ui, design::Gap::XS);
-            if design::undo_message(
+            *undo |= design::undo_message(
                 ui,
                 Tone::Success,
                 "Scene added to tonight.",
                 "Undo add scene",
-            ) {
-                *act = Some(SceneAct::UndoAdd);
-            }
-        }
-        if let Some(field) = reveal {
-            let bottom = ui.cursor().top().max(field.bottom());
-            ui.scroll_to_rect(field.with_max_y(bottom), None);
+            );
         }
     }
 
