@@ -1630,6 +1630,8 @@ impl Sessions {
             .iter()
             .map(|note| (note.id, note.link()))
             .collect();
+        // Row 123: the note's own events end a plan line's result, on every page.
+        self.follow_plan_line();
         book.poll(ctx);
     }
 

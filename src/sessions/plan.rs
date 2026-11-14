@@ -2108,8 +2108,9 @@ impl JourneyPlan {
 /// wrote (its session and file) and that note's Undo. It lasts while the note's words are what
 /// the act left, as every note act's Undo does.
 struct PlannedLine {
-    /// This result among the plan lines this page made: what its validity is cached by.
-    id: u64,
+    /// The source of the note's words that the result last held at (`follow_plan_line`): the
+    /// draft's revision, or the disk generation. Taken right after the act.
+    seen: NoteSource,
     /// The owner: the campaign the act was made in. The result ends when the campaign changes
     /// or the session's note leaves the folder (`Sessions::planned`).
     campaign: Option<Uuid>,
@@ -2293,12 +2294,6 @@ pub(super) struct Travel {
     generation: u64,
     /// Row 123: the plan's `Undo add plan line` failed while its journey's block was closed.
     undo_fault: Option<checks::UndoFault>,
-    /// Row 123, final review point 4: whether `planned` holds, by its id and the source of its
-    /// note's words (the draft's revision or the disk generation), so a quiet frame checks no
-    /// words.
-    live: Option<((u64, NoteSource), bool)>,
-    /// The id the last plan line got.
-    planned_ids: u64,
 }
 
 /// What Timeline's view of a session plan is read from: the campaign, the session and its file,
@@ -3048,40 +3043,56 @@ impl Sessions {
                 .is_some_and(|planned| Some(planned.note) == session)
     }
 
-    /// Whether the plan line's result still holds: the note is as the act left it, in the open
-    /// draft when it holds that note, else as the last disk check read it.
+    /// Whether the plan line's result still holds. It only reads what `follow_plan_line` keeps.
     fn planned_live(&mut self) -> bool {
-        let Some((note, path)) = self
+        self.follow_plan_line();
+        self.travel.planned.is_some()
+    }
+
+    /// Row 123, final review: the one place where the note's own events end the plan line's
+    /// result. `poll` calls it every frame on every page, so an edit, a save with other words, an
+    /// outside change seen by the disk check, a discard or a move is met as it happens, with no
+    /// view of the result drawn. At each change of the note's source (its draft's revision, or
+    /// its disk generation), the result stays only when the note holds exactly the act's words,
+    /// saved: the act's own write, or a later save of that same write. Anything else ends it
+    /// for good; reopening a view never brings it back. A quiet frame compares no words.
+    pub(super) fn follow_plan_line(&mut self) {
+        let Some((note, path, seen)) = self
             .planned()
-            .map(|planned| (planned.note, planned.path.clone()))
+            .map(|planned| (planned.note, planned.path.clone(), planned.seen))
         else {
-            return false;
+            return;
         };
-        let source = self.note_source(note, &path);
-        let Some(planned) = &self.travel.planned else {
-            return false;
-        };
-        let key = (planned.id, source);
-        if let Some((known, live)) = self.travel.live
-            && known == key
-        {
-            return live;
+        let mut source = self.note_source(note, &path);
+        // The draft that held the note closed: what its last save left is read from the file now.
+        if matches!((seen, source), (NoteSource::Draft(_), NoteSource::Disk(_))) {
+            self.read_note_again(note, &path);
+            source = self.note_source(note, &path);
+        }
+        if source == seen {
+            return;
         }
         #[cfg(test)]
         timeline::page::PLAN_LINE_CHECKS.with(|checks| checks.set(checks.get() + 1));
-        let live = match source {
+        let Some(planned) = &mut self.travel.planned else {
+            return;
+        };
+        let holds = match source {
             NoteSource::Draft(_) => self
                 .draft
                 .as_ref()
-                .is_some_and(|draft| planned.undo.live(draft)),
+                .is_some_and(|draft| !draft.unsaved() && planned.undo.live(draft)),
             NoteSource::Disk(_) => self
                 .travel
                 .watched
                 .get(&note)
                 .is_some_and(|watched| watched.body.as_deref() == Some(planned.undo.after())),
         };
-        self.travel.live = Some((key, live));
-        live
+        if holds {
+            planned.seen = source;
+        } else {
+            self.travel.planned = None;
+        }
     }
 
     /// Row 123: Timeline's view of the plan of `journey`'s session, for its check results'
@@ -3229,9 +3240,9 @@ impl Sessions {
         undo: NoteUndo,
     ) {
         self.travel.planned_order = design::ResultOrder::issue();
-        self.travel.planned_ids += 1;
+        let seen = self.note_source(note, &path);
         self.travel.planned = Some(PlannedLine {
-            id: self.travel.planned_ids,
+            seen,
             campaign: self.campaign.as_ref().map(|campaign| campaign.id),
             journey: journey.to_owned(),
             chosen: chosen.clone(),
@@ -6016,6 +6027,39 @@ mod tests {
                 .contains("[[Shrine of Cinders]]")
                 && sessions.planned_live()
         );
+        b_file(1);
+        // Final review, last point: with only the Note tab shown (no view of the result drawn),
+        // the DM types a letter, it saves, they delete it, it saves. Each frame's `poll` meets
+        // the edit: the result ends, and the restored words do not bring it back to either
+        // reader.
+        let home_campaign = sessions.campaign.clone();
+        let frame = |sessions: &mut Sessions| {
+            sessions.last_scan = Some(Instant::now());
+            sessions.poll(
+                &egui::Context::default(),
+                home_campaign.as_ref(),
+                &mut Book::default(),
+            );
+        };
+        frame(&mut sessions);
+        assert!(sessions.travel.planned.is_some());
+        let restored = sessions.draft.as_ref().unwrap().body.clone();
+        for words in [format!("{restored}x"), restored.clone()] {
+            let draft = sessions.draft.as_mut().unwrap();
+            draft.body = words;
+            draft.edited();
+            frame(&mut sessions);
+            sessions.draft.as_mut().unwrap().save();
+            frame(&mut sessions);
+        }
+        assert_eq!(sessions.draft.as_ref().unwrap().body, restored);
+        assert!(
+            !sessions.plan_line_shown_in(Some(b)),
+            "the plan offers no result"
+        );
+        // Timeline's footer (`plan_line_result`) shows the result only while this holds.
+        assert!(!sessions.planned_live(), "Timeline offers no result");
+        assert_eq!(sessions.undo_plan_line(), None, "no Undo");
         b_file(1);
         // Review 3, point 1: another campaign ends the result, and its Undo reaches no note.
         sessions.campaign = Some(campaign("Other"));
