@@ -5547,6 +5547,15 @@ mod tests {
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
         let scans = crate::lookup::FAULT_SCANS.with(std::cell::Cell::get);
         let faults = index.note_faults();
+        // By path: two files that claim one identity have no one position by id.
+        let at_path = |path: &std::path::Path| {
+            let relative = path.strip_prefix(dir.path()).unwrap().to_string_lossy();
+            index
+                .items
+                .iter()
+                .position(|item| item.entry.path == relative)
+                .unwrap()
+        };
         let fault_of = |id| faults.of_note(index.position(id).unwrap()).cloned();
         assert_eq!(
             fault_of(id),
@@ -5554,7 +5563,10 @@ mod tests {
         );
         assert_eq!(fault_of(mara), Some(NoteFault::Renamed));
         assert_eq!(NoteFault::Renamed.words(), "File name differs");
-        assert_eq!(fault_of(gate), Some(NoteFault::Duplicate));
+        assert_eq!(
+            faults.of_note(at_path(&gate_path)).cloned(),
+            Some(NoteFault::Duplicate)
+        );
         assert_eq!(fault_of(plain), None);
         // The menu lists exactly the notes with a record, so the count is their number.
         let listed: Vec<_> = faults.listed().to_vec();
