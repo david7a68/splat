@@ -904,11 +904,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "creature_search_with_summary",
             &[Ban::Layout(1), Ban::Extras(1)],
         ),
-        (
-            "src/encounters.rs",
-            "editor_view",
-            &[Ban::Pane(1)],
-        ),
+        ("src/encounters.rs", "editor_view", &[Ban::Pane(1)]),
         ("src/encounters.rs", "notes_field", &[Ban::Layout(1)]),
         (
             "src/encounters.rs",
