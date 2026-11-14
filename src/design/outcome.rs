@@ -2349,9 +2349,13 @@ impl<'f, A: 'static> Messages<'f, A> {
 /// first). The typed `Row` place: they belong to the row above them, so they may move what
 /// follows them, never the row or anything above it. Entries are owned and typed as a
 /// [`Messages`] footer's are, and a kept line still borrows this frame's [`PaneFrame`].
+/// One entry of [`RowMessages`]: its rank and order in the footer's order, what it draws, and
+/// a kept result's ticket.
+type RowEntry<A> = (FooterRank, Option<ResultOrder>, Typed<A>, Option<Ticket>);
+
 #[must_use = "give it to `ValueBlock::messages`"]
 pub struct RowMessages<'f, A: 'static> {
-    items: Vec<(FooterRank, Option<ResultOrder>, Typed<A>, Option<Ticket>)>,
+    items: Vec<RowEntry<A>>,
     frame: std::marker::PhantomData<&'f PaneFrame>,
 }
 

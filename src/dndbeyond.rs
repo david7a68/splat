@@ -410,10 +410,6 @@ impl DndBeyond {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
@@ -444,6 +440,10 @@ impl DndBeyond {
     }
 
     /// The link's field: the campaign picker, its refresh and its help.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
     fn show_link(
         &mut self,
         ui: &mut egui::Ui,

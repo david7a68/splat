@@ -733,7 +733,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/design/results.rs", "record", &[Ban::Results]),
         ("src/dndbeyond.rs", "footer_messages", &[Ban::Results]),
-        ("src/dndbeyond.rs", "show", &[Ban::Results]),
+        ("src/dndbeyond.rs", "show_link", &[Ban::Results]),
         (
             "src/encounter_run/view.rs",
             "groups_tab",
