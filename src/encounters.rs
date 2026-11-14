@@ -7910,7 +7910,7 @@ mod tests {
             let footer = design::pane::footer_rect(&h.ctx, egui::Id::new("spike_rules")).unwrap();
             let form = h.get_by_label("Rules form").rect();
             assert!(
-                footer.top() - form.bottom() <= design::M,
+                ((footer.top() - form.bottom()) - design::S).abs() <= 0.5,
                 "{form:?} {footer:?}"
             );
             assert_eq!(h.query_all_by_label("Show file: Campaign.md").count(), 1);
@@ -7961,7 +7961,10 @@ mod tests {
         let footer = design::pane::footer_rect(&h.ctx, egui::Id::new("spike_unread")).unwrap();
         let body = h.get_by_label("Roster body").rect();
         assert!(footer.height() <= 640.0 / 3.0 + 1.0, "{footer:?}");
-        assert!(body.bottom() <= footer.top(), "{body:?} {footer:?}");
+        assert!(
+            ((footer.top() - body.bottom()) - design::S).abs() <= 0.5,
+            "{body:?} {footer:?}"
+        );
         assert_eq!(
             h.query_all_by_label_contains("Show file: Shrine of Cinders.md")
                 .count(),
