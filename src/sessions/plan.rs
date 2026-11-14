@@ -4904,9 +4904,11 @@ mod tests {
             for _ in 0..2 {
                 let output = ctx.run(Default::default(), |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
-                        ui.set_width(width as f32);
-                        words = road_day(ui, summary, Some(day));
-                        planned_summary_on_road(ui, summary, words.as_deref(), Some(&rating));
+                        ui.scope(|ui| {
+                            ui.set_width(width as f32);
+                            words = road_day(ui, summary, Some(day));
+                            planned_summary_on_road(ui, summary, words.as_deref(), Some(&rating));
+                        });
                     });
                 });
                 painted = output.shapes.iter().find_map(|shape| match &shape.shape {
