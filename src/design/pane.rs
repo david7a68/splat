@@ -330,39 +330,66 @@ impl EditorRegion<'_> {
         let key = self.pane.with("editor_region");
         let max = self.max;
         let top = ui.cursor().top();
-        // The focused caret of the last pass, in the region's content (top, bottom), with that
-        // pass's view height and offset. When the view's height changes under it (the footer
-        // gained or lost a line, the window changed), the offset that keeps the caret in view
-        // is set before this pass lays out, with no animation: the first frame shown has the
-        // caret in view. Only then, so the DM's own wheel is never pulled back.
+        // The focused caret of the last pass, in the region's content (left, top, bottom), with
+        // that pass's view height and offset. The region is the one writer of its offset, and
+        // it writes at most once per pass, before the pass lays out, from the view's height NOW
+        // (no animation: the first frame shown has the caret in view):
+        // - the view's height changed under the caret (the footer gained or lost a line, the
+        //   window changed): the least scroll that keeps the caret in view;
+        // - a reveal is pending (the caret moved outside the view in the last pass): the least
+        //   scroll when the caret is less than a view away, else the caret centred.
+        // Otherwise nothing, so the DM's own wheel is never pulled back.
+        /// The editor region's one offset for a pass: `caret` (content rows) was seen at `offset` in
+        /// the last pass; `view` is the region's height NOW. A changed height gives the least scroll
+        /// that keeps the caret in view; a pending `reveal` gives the same when the caret is less than
+        /// a view away, else the caret centred. `None`: leave the offset as it is.
+        fn follow_caret(
+            caret: std::ops::Range<f32>,
+            offset: f32,
+            view: f32,
+            reveal: bool,
+            height_changed: bool,
+        ) -> Option<f32> {
+            if !(reveal || height_changed) {
+                return None;
+            }
+            let least = if caret.end > offset + view {
+                caret.end - view
+            } else if caret.start < offset {
+                caret.start
+            } else {
+                offset
+            };
+            let at = if reveal && (least - offset).abs() > view {
+                (caret.start + caret.end - view) / 2.0
+            } else {
+                least
+            }
+            .max(0.0);
+            ((at - offset).abs() > 0.5).then_some(at)
+        }
         let caret_key = key.with("caret");
+        let reveal_key = key.with("reveal");
         let kept = ui
             .ctx()
-            .data(|data| data.get_temp::<(f32, f32, f32, f32)>(caret_key));
+            .data(|data| data.get_temp::<(f32, f32, f32, f32, f32)>(caret_key));
+        let reveal = ui
+            .ctx()
+            .data_mut(|data| data.remove_temp::<bool>(reveal_key))
+            .unwrap_or(false);
         let mut column = ScrollColumn::new(key)
             .max_height(max)
             .min_scrolled_height(max)
             .fit_height();
-        // A caret that moved outside the view in the last pass: the offset that centres it.
-        let reveal_key = key.with("reveal");
-        let reveal = ui
-            .ctx()
-            .data_mut(|data| data.remove_temp::<f32>(reveal_key));
-        if let Some((caret_top, caret_bottom, view, offset)) = kept
-            && (view - max).abs() > 0.5
-        {
-            let keep = if caret_bottom > offset + max {
-                caret_bottom - max
-            } else if caret_top < offset {
-                caret_top
-            } else {
-                offset
-            };
-            if (keep - offset).abs() > 0.5 {
-                column = column.vertical_scroll_offset(keep.max(0.0));
-            }
-        }
-        if let Some(at) = reveal {
+        if let Some(at) = kept.and_then(|(_, caret_top, caret_bottom, view, offset)| {
+            follow_caret(
+                caret_top..caret_bottom,
+                offset,
+                max,
+                reveal,
+                (view - max).abs() > 0.5,
+            )
+        }) {
             column = column.vertical_scroll_offset(at);
         }
         let output = column.show_in_region(ui, |ui| {
@@ -380,6 +407,15 @@ impl EditorRegion<'_> {
             // Where the content starts in this layout (the view's top less the offset used).
             let origin = ui.max_rect().top();
             let editor = field.editor(ui, text, style);
+            // The editor asks its scroll area to follow a caret that moved (egui's
+            // `scroll_to_rect`, animated, to the nearest edge). The region follows the caret
+            // itself, so that ask is replaced by one that moves nothing: no animated target
+            // competes with the region's offset in a later pass.
+            ui.scroll_to_rect_animation(
+                Rect::from_center_size(ui.clip_rect().center(), egui::Vec2::ZERO),
+                None,
+                egui::style::ScrollAnimation::none(),
+            );
             open(ui, None);
             (editor, origin)
         });
@@ -399,11 +435,11 @@ impl EditorRegion<'_> {
                     .pos_from_cursor(range.primary)
                     .translate(editor.galley_pos.to_vec2())
             }));
-        // A caret that moved since the last pass (set from code, or the first pass with focus)
-        // and lies outside the view: centre it in the next pass. One that did not move is never
-        // scrolled to, so the DM's own wheel is not pulled back.
-        // The editor did not draw in the pass before (the pane showed something else, as Read
-        // does): its kept caret is old, and a caret now is a new one.
+        // A caret that moved since the last pass (set from code, a key, typed text, or the first
+        // pass with focus) and lies outside the view: a reveal for the next pass, drawn again at
+        // once. One that did not move is never scrolled to, so the DM's own wheel is not pulled
+        // back. The editor did not draw in the pass before (the pane showed something else, as
+        // Read does): its kept caret is old, and a caret now is a new one.
         let drawn_key = key.with("drawn");
         let drawn_before = ui
             .ctx()
@@ -416,14 +452,15 @@ impl EditorRegion<'_> {
         if let Some(caret) = caret {
             let (caret_top, caret_bottom) = (caret.top() - origin, caret.bottom() - origin);
             let moved = !drawn_before
-                || kept.is_none_or(|(top, bottom, _, _)| {
-                    (top - caret_top).abs() > 0.5 || (bottom - caret_bottom).abs() > 0.5
+                || editor.response.changed()
+                || kept.is_none_or(|(left, top, bottom, _, _)| {
+                    (left - caret.left()).abs() > 0.5
+                        || (top - caret_top).abs() > 0.5
+                        || (bottom - caret_bottom).abs() > 0.5
                 });
             let offset = output.state.offset.y;
             if moved && (caret_top < offset - 0.5 || caret_bottom > offset + max + 0.5) {
-                let centred = ((caret_top + caret_bottom - max) / 2.0).max(0.0);
-                ui.ctx()
-                    .data_mut(|data| data.insert_temp(reveal_key, centred));
+                ui.ctx().data_mut(|data| data.insert_temp(reveal_key, true));
                 ui.ctx()
                     .request_discard("an editor region reveals a caret outside its view");
                 ui.ctx().request_repaint();
@@ -434,6 +471,7 @@ impl EditorRegion<'_> {
                 data.insert_temp(
                     caret_key,
                     (
+                        caret.left(),
                         caret.top() - origin,
                         caret.bottom() - origin,
                         max,
@@ -441,7 +479,7 @@ impl EditorRegion<'_> {
                     ),
                 );
             }
-            None => data.remove::<(f32, f32, f32, f32)>(caret_key),
+            None => data.remove::<(f32, f32, f32, f32, f32)>(caret_key),
         });
         ui.ctx().data_mut(|data| {
             data.insert_temp(region_drawn_id(self.pane), (pass, height));
@@ -2203,8 +2241,20 @@ mod editor_region_tests {
         state: State,
         steps: usize,
     ) -> egui_kittest::Harness<'static, State> {
+        harness_timed(height, state, steps, 1.0 / 4.0)
+    }
+
+    /// As [`harness_after`], with `dt` seconds per frame (1/60: a real frame, so an egui
+    /// animation is still running two frames later).
+    fn harness_timed(
+        height: f32,
+        state: State,
+        steps: usize,
+        dt: f32,
+    ) -> egui_kittest::Harness<'static, State> {
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(600.0, height))
+            .with_step_dt(dt)
             .build_ui_state(
                 |ui, state: &mut State| {
                     let want = state.lines;
@@ -2314,6 +2364,21 @@ mod editor_region_tests {
             .expect("the editor's text is painted")
     }
 
+    /// The region's scroll offset as painted: the view's top less the top of the editor's text.
+    fn painted_offset(harness: &egui_kittest::Harness<'_, State>) -> f32 {
+        harness
+            .output()
+            .shapes
+            .iter()
+            .find_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(text) if text.galley.job.text.starts_with("Line 0\nLine 1") => {
+                    Some(clipped.clip_rect.top() - text.pos.y)
+                }
+                _ => None,
+            })
+            .expect("the editor's text is painted")
+    }
+
     /// Round 28, P2: a pane's editor region. A short draft: the footer is `S` under the save
     /// row, as for `Body::Content`. A 600-line draft at 300 px: the save row is whole in the room
     /// above the footer, the region scrolls, the caret at the end is in view; the footer gains a
@@ -2358,6 +2423,123 @@ mod editor_region_tests {
         assert!(
             kept.is_some_and(|kept| kept.top() > wheeled.bottom()),
             "reveal-wheel: after the wheel, the unmoved caret {kept:?} stays below the view {wheeled:?}"
+        );
+    }
+
+    /// PR 343 re-check (P2): a reveal that is still pending when the region's height changes
+    /// (a long broken file opened, then the window shrunk before the reveal ran) is computed
+    /// from the NEW height: the caret is in the view of the first frame after the resize. One
+    /// pass per frame, so the reveal waits for the next frame, as it does when the pass budget
+    /// is spent.
+    #[test]
+    fn a_pending_reveal_uses_the_region_height_of_its_own_pass() {
+        let mut harness = harness(
+            700.0,
+            State {
+                lines: 200,
+                messages: 1,
+                region: true,
+                ..Default::default()
+            },
+        );
+        harness
+            .ctx
+            .options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
+        let tall = region_view(&harness);
+        let at: usize = (0..150).map(|line| format!("Line {line}").len() + 1).sum();
+        harness.state_mut().set_caret = Some(at);
+        // Frame 1 places the caret; frame 2 sees it outside the view: a reveal is pending.
+        harness.run_steps(2);
+        harness.set_size(vec2(600.0, 200.0));
+        harness.step();
+        let view = region_view(&harness);
+        let caret = harness.state().caret.expect("a focused caret");
+        assert!(
+            view.height() < tall.height() - 100.0,
+            "pending-resize-setup: the view shrank from {tall:?} to {view:?}"
+        );
+        assert!(
+            view.contains_rect(caret),
+            "pending-resize: the caret {caret:?} at line 150 is in the shrunk view {view:?} \
+             (the tall view was {tall:?})"
+        );
+    }
+
+    /// PR 343 re-check (P3): Shift+Down past the view's bottom edge. The region is the one
+    /// writer of its offset: no animated egui target competes with it, so the first frame after the
+    /// key and the frame after it (real frame times) show the same offset, with the caret in view.
+    #[test]
+    fn a_caret_moved_past_the_view_by_a_key_settles_at_once() {
+        let mut harness = harness_timed(
+            300.0,
+            State {
+                lines: 200,
+                messages: 1,
+                region: true,
+                ..Default::default()
+            },
+            4,
+            1.0 / 60.0,
+        );
+        let view = region_view(&harness);
+        // The last line whose bottom is in the view: Shift+Down takes the caret past it.
+        let last = ((view.height() / 18.0).floor() as usize).saturating_sub(1);
+        let at: usize = (0..last).map(|line| format!("Line {line}").len() + 1).sum();
+        harness.state_mut().set_caret = Some(at);
+        harness.run_steps(3);
+        let before = harness.state().caret.expect("a focused caret");
+        assert!(
+            region_view(&harness).contains_rect(before),
+            "key-setup: the caret {before:?} starts in the view {view:?}"
+        );
+        let start = painted_offset(&harness);
+        harness.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::ArrowDown);
+        harness.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::ArrowDown);
+        // The key frames (the first frame shown after the key), then one more frame.
+        harness.step();
+        let (first, first_offset) = (harness.state().caret, painted_offset(&harness));
+        harness.step();
+        let (second, second_offset) = (harness.state().caret, painted_offset(&harness));
+        let view = region_view(&harness);
+        assert!(
+            first_offset > start + 18.0 && (first_offset - second_offset).abs() <= 0.5,
+            "key-stable: the offset moved down from {start} and stays: {first_offset} then \
+             {second_offset}"
+        );
+        assert!(
+            first == second && second.is_some_and(|second| view.contains_rect(second)),
+            "key-in-view: the caret {first:?} then {second:?} is in the view {view:?}"
+        );
+        // Twenty Shift+Down in one frame: the caret goes more than a view past the edge, so the
+        // region centres it while egui's own ask would stop at the edge. With egui's animated
+        // ask left in place, the offset would go on moving toward that edge.
+        let start = second_offset;
+        let press = egui::Event::Key {
+            key: egui::Key::ArrowDown,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::SHIFT,
+        };
+        harness.input_mut().modifiers = egui::Modifiers::SHIFT;
+        harness
+            .input_mut()
+            .events
+            .extend(std::iter::repeat_n(press, 20));
+        harness.step();
+        harness.input_mut().modifiers = egui::Modifiers::NONE;
+        let (first, first_offset) = (harness.state().caret, painted_offset(&harness));
+        harness.step();
+        let (second, second_offset) = (harness.state().caret, painted_offset(&harness));
+        let view = region_view(&harness);
+        assert!(
+            first_offset > start + view.height() && (first_offset - second_offset).abs() <= 0.5,
+            "burst-stable: the offset moved down from {start} by more than a view and stays: \
+             {first_offset} then {second_offset}"
+        );
+        assert!(
+            first == second && second.is_some_and(|second| view.contains_rect(second)),
+            "burst-in-view: the caret {first:?} then {second:?} is in the view {view:?}"
         );
     }
 
