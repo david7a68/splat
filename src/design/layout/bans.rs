@@ -105,7 +105,12 @@ fn patterns() -> Vec<(Group, Shape)> {
     ] {
         shapes(letter, lines, &mut out);
     }
-    for (name, args) in [("undo", 2), ("use_press", 1)] {
+    for (name, args) in [
+        ("undo", 2),
+        ("use_press", 1),
+        ("revise", 2),
+        ("revise_where", 2),
+    ] {
         out.push((Group::ByOwner, Shape::Arity(name.to_owned(), args)));
         out.push((
             Group::ByOwner,
