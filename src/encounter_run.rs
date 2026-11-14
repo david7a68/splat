@@ -882,6 +882,9 @@ pub(crate) struct Run {
     /// What each group in Arrivals would make the fight, with the XP its members on the other
     /// side add, worked out for one `revision`, one read of the groups and one scale. Never saved.
     arrival_words: Option<(ArrivalKey, ArrivalWords)>,
+    /// Arrivals' difficulty lines, fitted and kept by group (point 1 of the round 29 review):
+    /// this run's own, so they die with it and no other run reads them.
+    arrival_lines: crate::difficulty::Kept<Uuid>,
     /// How often frames asked for the Arrivals words, and how often they were worked out.
     #[cfg(test)]
     pub(crate) arrival_counts: (usize, usize),
@@ -1412,6 +1415,7 @@ impl Run {
             revision: 0,
             loot_copied: None,
             arrival_words: None,
+            arrival_lines: crate::difficulty::Kept::default(),
             #[cfg(test)]
             arrival_counts: (0, 0),
             arrival_summaries: None,
@@ -4740,6 +4744,7 @@ impl Run {
             revision: 0,
             loot_copied: None,
             arrival_words: None,
+            arrival_lines: crate::difficulty::Kept::default(),
             #[cfg(test)]
             arrival_counts: (0, 0),
             arrival_summaries: None,

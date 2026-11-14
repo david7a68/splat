@@ -331,6 +331,48 @@ fn arrival_total(text: &str) -> Result<Option<i64>, &'static str> {
     }
 }
 
+/// How one Arrivals heading shares its width (points 2 and 3 of the round 29 reviews).
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct HeadingSplit {
+    /// The title's room.
+    title: f32,
+    /// The status words stay in the heading.
+    status: bool,
+    /// The difficulty line's room.
+    room: f32,
+    /// The line has its own line under the heading.
+    below: bool,
+}
+
+/// `whole` is the heading's width, `title` the whole title's, `floor` its first word with `…`
+/// (or the whole title when shorter), `status` the status words with their gap (0 for none),
+/// and `shortest` the smallest complete `Fight after: …`. R1: that answer is reserved first;
+/// the status words stay only where the whole title, they and it fit; the title shortens in
+/// what is left, never below `floor`. Where even `floor` and the answer do not fit together
+/// (the rule for the boundary), the answer takes its own line under the heading at the whole
+/// width, and the title keeps the heading.
+fn heading_split(whole: f32, title: f32, floor: f32, status: f32, shortest: f32) -> HeadingSplit {
+    if whole < floor + design::L + shortest {
+        return HeadingSplit {
+            title: title.min(whole),
+            status: false,
+            room: whole,
+            below: true,
+        };
+    }
+    let keep = status > 0.0 && title + status + design::L + shortest <= whole;
+    let status_room = if keep { status } else { 0.0 };
+    let title = title
+        .min(whole - design::L - shortest - status_room)
+        .max(floor);
+    HeadingSplit {
+        title,
+        status: keep,
+        room: whole - title - status_room - design::L,
+        below: false,
+    }
+}
+
 fn arrival_add_word(group: &super::RunGroup) -> String {
     if group.warnings.is_empty() {
         "Add".to_owned()
@@ -3420,6 +3462,10 @@ impl Run {
                     Some((group.id, (fight, adds)))
                 })
                 .collect();
+            // A group that is no longer offered drops its kept line.
+            let offered: std::collections::BTreeSet<Uuid> =
+                groups.iter().map(|group| group.id).collect();
+            self.arrival_lines.retain(|id| offered.contains(id));
             self.arrival_words = Some((key, words));
         }
         self.arrival_words.as_ref().map(|(_, words)| words)
@@ -3871,21 +3917,30 @@ impl Run {
             group.id,
         );
         let font = Type::Small.font(ui);
-        let id = grip.id.with("fight_after");
         // Point 2 (round 29 review, R1): the heading reserves the smallest COMPLETE
-        // `Fight after: <word or reason>` first, and the title shortens in what is left. The
-        // status words stay in the heading only where the whole title, they and that smallest
-        // line fit together.
-        let shortest = crate::difficulty::shortest_kept(ui, id, content, &font, line);
-        let whole = grip.rect.width();
-        let status_in_heading =
-            !status.is_empty() && heading_width + status_room + design::L + shortest <= whole;
+        // `Fight after: <word or reason>` first, and the title shortens in what is left
+        // (`heading_split`, which also holds the rule for a heading too narrow for both).
+        let shortest = self
+            .arrival_lines
+            .shortest(ui, &group.id, content, &font, line);
+        let first_word = name.split_whitespace().next().unwrap_or(name);
+        let floor = heading_width.min(design::number_width(
+            ui,
+            &format!("{} {first_word}…", icons::DRAG),
+            &Type::Strong.font(ui),
+        ));
+        let split = heading_split(
+            grip.rect.width(),
+            heading_width,
+            floor,
+            if status.is_empty() { 0.0 } else { status_room },
+            shortest,
+        );
+        let (status_in_heading, title_width, room) = (split.status, split.title, split.room);
         let status_room = if status_in_heading { status_room } else { 0.0 };
-        let title_width = heading_width
-            .min(whole - design::L - shortest - status_room)
-            .max(0.0);
-        let room = whole - title_width - status_room - design::L;
-        let fitted = crate::difficulty::fit_kept(ui, id, content, room, &font, line);
+        let fitted = self
+            .arrival_lines
+            .fit(ui, &group.id, content, room, &font, line);
         let shown = rating.as_ref().and_then(|fight| fight.rating.as_ref());
         // A pointer's way to do what the Add button does, so the keyboard does not stop here.
         grip.widget_info(|| {
@@ -3931,8 +3986,17 @@ impl Run {
             crate::difficulty::append_form(&mut job, ui, Type::Small, &fitted.form);
         }
         let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
-        let word_rect = Align2::RIGHT_CENTER.anchor_size(grip.rect.right_center(), galley.size());
-        ui.painter().galley(word_rect.min, galley, c.text);
+        // Point 3: with no room for the title's first word and the answer together, the answer
+        // takes its own line under the heading, whole, and the title has the heading.
+        let word_rect = if split.below {
+            Rect::from_min_size(grip.rect.right_center(), egui::Vec2::ZERO)
+        } else {
+            Align2::RIGHT_CENTER.anchor_size(grip.rect.right_center(), galley.size())
+        };
+        let below = split.below.then_some(galley.clone());
+        if !split.below {
+            ui.painter().galley(word_rect.min, galley, c.text);
+        }
         if status_in_heading {
             ui.painter().text(
                 pos2(
@@ -3989,7 +4053,10 @@ impl Run {
             movable.then_some(GroupDrag(group.id)),
             design::Ghost::new(icons::ADD, name),
         );
-        if fitted.is_none() {
+        if let Some(galley) = below {
+            let (rect, _) = ui.allocate_exact_size(galley.size(), egui::Sense::hover());
+            ui.painter().galley(rect.min, galley, c.text);
+        } else if fitted.is_none() {
             ui.add(egui::Label::new(Type::Small.rich(ui, &totals_text).color(c.muted)).wrap());
         }
         let mut add = false;
@@ -7724,8 +7791,8 @@ struct Extra {
     /// Each effect shows as its plain words: the row with each time taken away (X5, the
     /// ruling on PR 276), whose lines and height the row keeps.
     as_plain: bool,
-    /// R27 (G176): this step owes a concentration save whose DC gave way. Where the mark ends
-    /// the line (a roll's result follows it there), it reads `Conc save`, never a bare `Conc`.
+    /// R27 (G176, amended): this step owes a concentration save whose DC gave way, and a roll's
+    /// result follows the mark. Where the mark ends the line it reads `Conc save due`.
     save_owed: bool,
 }
 
@@ -7848,12 +7915,80 @@ impl RowLayout {
     /// (Bloodied, Conc) never give way. Only when the two parts fit in none of these does the
     /// result take a line of its own, and the row grows by it. The hover and the Log keep it
     /// whole.
-    fn with_badge(mut self, ui: &egui::Ui, badge: Option<&str>) -> Self {
+    fn with_badge(self, ui: &egui::Ui, badge: Option<&str>) -> Self {
+        let input = self.input.clone();
+        let placed = self.place_badge(ui, badge);
+        match (badge, input) {
+            (Some(badge), Some(input)) => placed.with_save_due(ui, badge, input),
+            _ => placed,
+        }
+    }
+
+    /// R27 (amended, G176): a result follows this row's bare `Conc` mark while a save is owed
+    /// (its DC gave way). The mark then reads `Conc save due` where that keeps the row's place
+    /// and the result's room; else the row shows its DC (`Conc · save DC 10`) and the result
+    /// takes its own line (R8's last form). A row with its DC shown is unchanged.
+    fn with_save_due(self, ui: &egui::Ui, badge: &str, input: Arc<RowInput>) -> Self {
+        let bare = self.second_line.as_ref().is_some_and(|line| {
+            let text = line.text().trim_end();
+            text.ends_with("Conc") && !text.contains("save DC")
+        });
+        if self.badge_below || input.conc_dc.is_none() || !bare {
+            return self;
+        }
+        let font = Type::Small.font(ui);
+        let parts: Vec<&str> = badge.split(" · ").collect();
+        let result = parts[parts.len().saturating_sub(2)..].join(" · ");
+        let whole = design::number_width(ui, &result, &font);
+        let count = input.words.conditions.len();
+        let due = Self::measured(
+            ui,
+            &input,
+            (
+                count,
+                BonusFit::All,
+                &Extra {
+                    as_plain: true,
+                    save_owed: true,
+                    ..Extra::default()
+                },
+            ),
+        );
+        if due.keeps_place_of(&self, input.scale) && whole <= badge_place(&due, 0.0).2 {
+            return Self {
+                art: self.art.clone(),
+                input: Some(input),
+                ..due
+            };
+        }
+        let mut dc = Self::measured(
+            ui,
+            &input,
+            (
+                count,
+                BonusFit::All,
+                &Extra {
+                    as_plain: true,
+                    conc_dc: input.conc_dc,
+                    ..Extra::default()
+                },
+            ),
+        );
+        dc.badge_below = true;
+        Self {
+            art: self.art.clone(),
+            input: Some(input),
+            ..dc
+        }
+    }
+
+    /// The old placing of a result, without R27's mark (see `with_badge`).
+    fn place_badge(mut self, ui: &egui::Ui, badge: Option<&str>) -> Self {
         self.badge_below = false;
         let base = self
             .without_effects
             .take()
-            .map(|base| base.with_badge(ui, badge));
+            .map(|base| base.place_badge(ui, badge));
         if let Some(badge) = badge {
             let font = Type::Small.font(ui);
             let parts: Vec<&str> = badge.split(" · ").collect();
@@ -7912,10 +8047,8 @@ impl RowLayout {
                         .cloned()
                 })
                 .unwrap_or_else(|| {
-                    // R27: with no DC on the line, a save still owed keeps `save` on the mark.
                     let extra = Extra {
                         as_plain: true,
-                        save_owed: input.conc_dc.is_some(),
                         ..Extra::default()
                     };
                     let mut layout = Self::measured(ui, input, (count, BonusFit::All, &extra));
@@ -8047,7 +8180,6 @@ impl RowLayout {
         // height and the effects it shows by their words stay.
         let base = measure(&Extra {
             as_plain: true,
-            save_owed: conc_dc.is_some(),
             ..Extra::default()
         });
         let mut effects: Vec<(usize, &str)> = conditions
@@ -8546,15 +8678,15 @@ impl RowLayout {
                 },
             );
         }
-        // R27 (G176): a save is owed but its DC gave way, and the mark ends the line, where a
-        // roll's result follows it: the mark keeps `save` (`Conc save`, never `Conc Saved`).
+        // R27 (G176, amended): a save is owed, its DC gave way, and the mark ends the line, where
+        // a roll's result follows it: the mark reads `Conc save due` (never `Conc Saved`).
         if extra.save_owed
             && extra.conc_dc.is_none()
             && conc_end.is_some()
             && conc_end == Some(job.text.chars().count())
         {
             job.append(
-                "\u{a0}save",
+                "\u{a0}save\u{a0}due",
                 0.0,
                 egui::TextFormat::simple(font.clone(), c.participant.concentrating),
             );
@@ -11441,13 +11573,42 @@ mod tests {
                     line.contains("Bloodied") && line.contains("Conc"),
                     "iter-28-R-R8: both marks stay: {line}"
                 );
-                // R27 (iter-29 G176): where the DC gave way, the mark says `Conc save`, so the
-                // result never follows a bare `Conc` (`Conc Saved` read as a save that passed).
+                // R27 (amended, iter-29 G176): the line holds the DC, or the mark reads `Conc save
+                // due` before the result; never a bare `Conc` and never `Conc save` before it.
+                let end = line.trim_end();
                 assert!(
-                    line.contains("save DC 10") || line.contains("Conc\u{a0}save"),
+                    line.contains("save DC 10") || end.ends_with("Conc\u{a0}save\u{a0}due"),
                     "iter-29-R1-G176: {line}"
                 );
-                assert!(!line.trim_end().ends_with("Conc"), "iter-29-R1-G176: {line}");
+                assert!(
+                    !end.ends_with("Conc") && !end.ends_with("Conc\u{a0}save"),
+                    "iter-29-R1-G176: {line}"
+                );
+                // The earlier trap: with conditions after the mark, `due` changes nothing, and
+                // no condition word folds into `N more` for it, at 450 px.
+                let crowded = || {
+                    RowLayout::fitted(
+                        ui,
+                        450.0,
+                        &p,
+                        (None, Some(10), false),
+                        scale,
+                        RowFit::Natural,
+                        0.0,
+                    )
+                };
+                let text = |layout: RowLayout| {
+                    layout
+                        .second_line
+                        .map(|line| line.text().to_owned())
+                        .unwrap_or_default()
+                };
+                let result = Some("Saved · 1 damage (half)");
+                assert_eq!(
+                    text(crowded().with_badge(ui, result)),
+                    text(crowded().place_badge(ui, result)),
+                    "iter-29-R1-G176 at 450"
+                );
                 assert_eq!(
                     saved.height(scale),
                     row(None).height(scale)
@@ -13430,6 +13591,50 @@ mod tests {
         assert!(!run.request_close());
         assert!(run.closing.is_open());
         assert!(!run.confirm_close);
+    }
+
+    /// Points 2 and 3 of the round 29 reviews (R1): an Arrivals heading reserves the smallest
+    /// complete `Fight after: …` before its title; the title shortens, never below its first
+    /// word; where even that and the answer do not fit, the answer takes its own line under the
+    /// heading at the whole width. At no width is the answer's room less than that answer.
+    #[test]
+    fn iter_29_r1_the_heading_reserves_fight_after_before_the_title() {
+        let (title, floor, shortest) = (250.0, 60.0, 100.0);
+        for whole in 1..=600 {
+            let whole = whole as f32;
+            for status in [0.0, 80.0] {
+                let split = heading_split(whole, title, floor, status, shortest);
+                assert!(
+                    split.room >= shortest - 0.01 || (split.below && split.room == whole),
+                    "{whole} {status}: {split:?}"
+                );
+                if split.below {
+                    assert!(whole < floor + design::L + shortest, "{whole}: {split:?}");
+                    assert!(!split.status);
+                } else {
+                    assert!(split.title >= floor, "{whole}: {split:?}");
+                    assert!(split.title <= title);
+                }
+                // The status words stay only beside the whole title.
+                if split.status {
+                    assert_eq!(split.title, title, "{whole}: {split:?}");
+                }
+            }
+        }
+        // The boundary: exactly the first word, its gap and the answer.
+        let edge = heading_split(floor + design::L + shortest, title, floor, 0.0, shortest);
+        assert_eq!(
+            (edge.below, edge.title, edge.room),
+            (false, floor, shortest)
+        );
+        let under = heading_split(
+            floor + design::L + shortest - 1.0,
+            title,
+            floor,
+            0.0,
+            shortest,
+        );
+        assert!(under.below);
     }
 
     /// FL4, AL2, FL2, SL3 (iter-29 G178): the pending line names the change that waits, in the

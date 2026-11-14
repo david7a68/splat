@@ -1145,6 +1145,22 @@ mod iter_2_c_tests {
                     "{line:?}"
                 );
             }
+            // What is left of the summary is the summary's own start, in order: whole, or cut
+            // with `…` where it gave way, never corrupt partial words.
+            let shown = line
+                .strip_suffix(" · Above High")
+                .map(|rest| rest.strip_suffix(" · XP 6,300").unwrap_or(rest))
+                .unwrap_or("");
+            let shown = shown.strip_prefix("5 party · ").unwrap_or(shown);
+            let tail = detail.strip_prefix("5 party · ").unwrap();
+            assert!(
+                shown.is_empty()
+                    || shown == tail
+                    || shown.strip_suffix('…').is_some_and(|cut| {
+                        tail.starts_with(cut.trim_end_matches([' ', '·', ',']))
+                    }),
+                "{line:?}"
+            );
         }
         // The detail is whole where it fits, and gives way where it does not.
         let whole = format!("{detail}{FORM}");

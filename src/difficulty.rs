@@ -401,40 +401,33 @@ pub struct Summary {
 }
 
 impl Summary {
-    /// TRANSITIONAL, at the edge only (`From<&str>`): the Encounters list still hands its Ready row's summary
-    /// as built words (`encounters::roster_summary`). This reads them back into parts once, at
-    /// the caller, before any fit. A name that holds `, ` cannot be read back whole from built
-    /// words; the Encounters list must hand a `Summary` instead (routed with this PR).
+    /// TRANSITIONAL, at the edge only (`From<&str>`): the Encounters list still hands its Ready
+    /// row's summary as built words (`encounters::roster_summary`; the typed handoff is routed
+    /// to the Encounters package). Only a leading party count (`5 party`) is read; everything
+    /// after it is ONE opaque fact: never parsed into members, never narrowed member by member.
+    /// It is shown as it came, and it gives way whole, after the XP number (Q-s). A name such as
+    /// `Ghost, 02 × Echo` keeps its words at every width.
     pub fn from_built(text: &str) -> Self {
-        let mut summary = Self::default();
-        for (index, fact) in text.split(" · ").filter(|f| !f.is_empty()).enumerate() {
-            let party = fact
-                .strip_suffix(" party")
-                .filter(|count| !count.is_empty() && count.chars().all(|c| c.is_ascii_digit()))
-                .and_then(|count| count.parse().ok());
-            if let (0, Some(party)) = (index, party) {
-                summary.party = party;
-                continue;
-            }
-            let members: Option<Vec<Member>> = fact
-                .split(", ")
-                .map(|member| {
-                    let (count, name) = member.split_once(" × ")?;
-                    Some(Member {
-                        count: count.parse().ok()?,
-                        name: name.to_owned(),
-                    })
-                })
-                .collect();
-            match members {
-                // The parts keep the words' order: members only before any other fact.
-                Some(members) if summary.members.is_empty() && summary.facts.is_empty() => {
-                    summary.members = members;
-                }
-                _ => summary.facts.push(fact.to_owned()),
-            }
+        let (party, rest) = match text.split_once(" · ") {
+            Some((first, rest)) => (first, rest),
+            None => (text, ""),
+        };
+        let count = party
+            .strip_suffix(" party")
+            .filter(|count| !count.is_empty() && count.chars().all(|c| c.is_ascii_digit()))
+            .and_then(|count| count.parse().ok());
+        let (party, rest) = match count {
+            Some(count) => (count, rest),
+            None => (0, text),
+        };
+        Self {
+            party,
+            members: Vec::new(),
+            facts: (!rest.is_empty())
+                .then(|| rest.to_owned())
+                .into_iter()
+                .collect(),
         }
-        summary
     }
 }
 
@@ -815,77 +808,77 @@ impl<'a> Line<'a> {
     }
 }
 
-/// What a caller keeps of one line between frames: its key (content, room, font) and the
-/// answer. One entry per line; a new key replaces it.
-#[derive(Clone)]
-struct Kept<T> {
-    key: u64,
-    answer: T,
+/// Point 3 and point 1 of the round 29 reviews: the fitted lines of one owner, kept between
+/// frames. The OWNER holds it (a loaded run keeps one for its Arrivals), so it dies with that
+/// owner and no other run can read its answers. Each line is kept under its own id with one
+/// key: its content key, its room, its font and the display scale. On a frame where the key is
+/// unchanged, the line is not built and nothing is measured; a new key replaces the entry.
+#[derive(Default)]
+pub(crate) struct Kept<K> {
+    fits: std::collections::HashMap<K, (u64, Option<Fitted>)>,
+    shortest: std::collections::HashMap<K, (u64, f32)>,
 }
 
-/// Point 3 (round 29 review): a line fitted to `room` in `font`, kept by the caller's content
-/// key. On a frame where the key, the room and the font are unchanged, `line` is not built and
-/// nothing is measured. `key` must change whenever the line's parts change (a content revision).
-pub(crate) fn fit_kept<'a>(
-    ui: &egui::Ui,
-    id: egui::Id,
-    key: impl std::hash::Hash,
-    room: f32,
-    font: &egui::FontId,
-    line: impl FnOnce() -> Line<'a>,
-) -> Option<Fitted> {
-    kept(
-        ui,
-        id.with("difficulty_fit"),
-        (key, room.to_bits(), font),
-        || line().fit(|text| crate::design::number_width(ui, text, font) <= room),
-    )
-}
-
-/// The width of [`Line::shortest`] in `font` (0 with no line), kept as [`fit_kept`] keeps a fit.
-pub(crate) fn shortest_kept<'a>(
-    ui: &egui::Ui,
-    id: egui::Id,
-    key: impl std::hash::Hash,
-    font: &egui::FontId,
-    line: impl FnOnce() -> Line<'a>,
-) -> f32 {
-    kept(ui, id.with("difficulty_shortest"), (key, font), || {
-        count_work(0, 1);
-        line().shortest().map_or(0.0, |fitted| {
-            crate::design::number_width(ui, &fitted.text(), font)
-        })
-    })
-}
-
-fn kept<T: Clone + Send + Sync + 'static>(
-    ui: &egui::Ui,
-    id: egui::Id,
-    key: impl std::hash::Hash,
-    answer: impl FnOnce() -> T,
-) -> T {
-    use std::hash::Hasher;
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    key.hash(&mut hasher);
-    let key = hasher.finish();
-    if let Some(kept) = ui
-        .ctx()
-        .data(|data| data.get_temp::<Kept<T>>(id))
-        .filter(|kept| kept.key == key)
-    {
-        return kept.answer;
+impl<K: std::hash::Hash + Eq + Clone> Kept<K> {
+    /// A line fitted to `room` in `font`. `content` must change whenever the line's parts do.
+    pub(crate) fn fit<'a>(
+        &mut self,
+        ui: &egui::Ui,
+        id: &K,
+        content: impl std::hash::Hash,
+        room: f32,
+        font: &egui::FontId,
+        line: impl FnOnce() -> Line<'a>,
+    ) -> Option<Fitted> {
+        let key = key(ui, (content, room.to_bits(), font));
+        if let Some((kept, answer)) = self.fits.get(id)
+            && *kept == key
+        {
+            return answer.clone();
+        }
+        let answer = line().fit(|text| crate::design::number_width(ui, text, font) <= room);
+        self.fits.insert(id.clone(), (key, answer.clone()));
+        answer
     }
-    let answer = answer();
-    ui.ctx().data_mut(|data| {
-        data.insert_temp(
-            id,
-            Kept {
-                key,
-                answer: answer.clone(),
-            },
-        );
-    });
-    answer
+
+    /// The width of [`Line::shortest`] in `font` (0 with no line).
+    pub(crate) fn shortest<'a>(
+        &mut self,
+        ui: &egui::Ui,
+        id: &K,
+        content: impl std::hash::Hash,
+        font: &egui::FontId,
+        line: impl FnOnce() -> Line<'a>,
+    ) -> f32 {
+        let key = key(ui, (content, font));
+        if let Some((kept, width)) = self.shortest.get(id)
+            && *kept == key
+        {
+            return *width;
+        }
+        count_work(0, 1);
+        let width = line().shortest().map_or(0.0, |fitted| {
+            crate::design::number_width(ui, &fitted.text(), font)
+        });
+        self.shortest.insert(id.clone(), (key, width));
+        width
+    }
+
+    /// Drop the lines whose owner no longer shows them (a group no longer offered).
+    pub(crate) fn retain(&mut self, keep: impl Fn(&K) -> bool) {
+        self.fits.retain(|id, _| keep(id));
+        self.shortest.retain(|id, _| keep(id));
+    }
+}
+
+/// A line's key: its content, room and font, and the display scale (a new scale measures
+/// again).
+fn key(ui: &egui::Ui, parts: impl std::hash::Hash) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    parts.hash(&mut hasher);
+    ui.ctx().pixels_per_point().to_bits().hash(&mut hasher);
+    hasher.finish()
 }
 
 /// One part of a line in the line's own type: the word in `text`, its separators and numbers
@@ -990,8 +983,20 @@ mod tests {
             }),
             ..Difficulty::default()
         };
-        let summary = "5 party · 2 × Cinder Wolf, 1 × Ember Cultist";
-        let ready = Line::roster(&low, summary);
+        // Typed parts (point 1): the party count and each member with its count and name.
+        let typed = |party: usize, members: &[(usize, &str)]| Summary {
+            party,
+            members: members
+                .iter()
+                .map(|(count, name)| Member {
+                    count: *count,
+                    name: (*name).to_owned(),
+                })
+                .collect(),
+            facts: Vec::new(),
+        };
+        let summary = typed(5, &[(2, "Cinder Wolf"), (1, "Ember Cultist")]);
+        let ready = Line::roster(&low, &summary);
         let at = |room| ready.fit(fits(room)).unwrap().text();
         // Room for all of it.
         let whole = "5 party · 2 × Cinder Wolf, 1 × Ember Cultist · XP 400 · Low (up to 2,800)";
@@ -1018,7 +1023,10 @@ mod tests {
             assert!(text.chars().count() <= room, "{room}: {text:?}");
         }
         // Only a first fact that counts the party is the party fact.
-        let named_party = Line::roster(&low, "Party Crashers · 2 × Cinder Wolf");
+        let named_party = Line::roster(
+            &low,
+            Summary::from_built("Party Crashers · 2 × Cinder Wolf"),
+        );
         assert_eq!(
             named_party.fit(fits(52)).unwrap().text(),
             "Party Crashers · 2 × Cinder Wolf · XP 400 · Low"
@@ -1051,7 +1059,7 @@ mod tests {
         }
         // A fight with no form has no line on a roster.
         assert!(
-            Line::roster(&Difficulty::default(), summary)
+            Line::roster(&Difficulty::default(), &summary)
                 .fit(fits(200))
                 .is_none()
         );
@@ -1076,7 +1084,7 @@ mod tests {
             }),
             ..Difficulty::default()
         };
-        let mixed = Line::roster(&unknown, summary);
+        let mixed = Line::roster(&unknown, &summary);
         let at = |room| mixed.fit(fits(room)).unwrap().text();
         assert_eq!(
             at(200),
@@ -1102,13 +1110,13 @@ mod tests {
             }),
             ..Difficulty::default()
         };
-        let visitor = Line::roster(&lone, "5 party · 1 × Nameless Thing");
+        let visitor = Line::roster(&lone, typed(5, &[(1, "Nameless Thing")]));
         let at = |room| visitor.fit(fits(room)).unwrap().text();
         assert_eq!(at(200), "5 party · 1 × Nameless Thing · XP not known");
         assert_eq!(at(36), "1 × Nameless Thing · XP not known");
         assert_eq!(at(32), "… · XP not known: Nameless Thing");
         assert!(!visitor.fit(fits(200)).unwrap().cut);
-        let two = Line::roster(&unknown, "5 party · 1 × Nameless Thing, 1 × Ox");
+        let two = Line::roster(&unknown, typed(5, &[(1, "Nameless Thing"), (1, "Ox")]));
         assert_eq!(
             two.fit(fits(200)).unwrap().text(),
             "5 party · 1 × Nameless Thing, 1 × Ox · XP not known: Wisp"
@@ -1182,6 +1190,25 @@ mod tests {
             "2 × Cinder Wolf, … · XP not known: Ghost, of the Mill"
         );
         assert_eq!(at(40), "… · XP not known: Ghost, of the Mill");
+        // Point 2 of the second review: BUILT words are opaque. `Ghost, 02 × Echo` is never read
+        // as members: its words stay as they came at full width, and narrowing never halves it
+        // (it gives way whole, after `5 party`, the limit and the XP number).
+        let built = Line::roster(&low, Summary::from_built("5 party · 1 × Ghost, 02 × Echo"));
+        let at = |room| built.fit(fits(room)).unwrap().text();
+        assert_eq!(
+            at(200),
+            "5 party · 1 × Ghost, 02 × Echo · XP 400 · Low (up to 2,800)"
+        );
+        for room in (1..=70).rev() {
+            let text = at(room);
+            assert!(
+                text.contains("1 × Ghost, 02 × Echo") || !text.contains("Ghost"),
+                "never halved at {room}: {text}"
+            );
+        }
+        assert_eq!(at(40), "1 × Ghost, 02 × Echo · XP 400 · Low");
+        assert_eq!(at(30), "1 × Ghost, 02 × Echo · Low");
+        assert_eq!(at(20), "… · Low");
         // Point 2: the smallest complete line, every part that can give way gone.
         assert_eq!(
             Line::fight_after(&low, patrol()).shortest().unwrap().text(),
@@ -1225,17 +1252,17 @@ mod tests {
         let ctx = egui::Context::default();
         crate::design::theme::install(&ctx);
         let work = || WORK.with(std::cell::Cell::get);
-        let frame = |revision: u64, room: f32| {
+        let id = 7_u32;
+        let frame = |kept: &mut Kept<u32>, revision: u64, room: f32| {
             let mut out = None;
             let _ = ctx.run(egui::RawInput::default(), |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     let font = crate::design::Type::Small.font(ui);
-                    let id = egui::Id::new("kept_line");
                     let width =
-                        shortest_kept(ui, id, revision, &font, || Line::roster(&low, &summary));
+                        kept.shortest(ui, &id, revision, &font, || Line::roster(&low, &summary));
                     out = Some((
                         width,
-                        fit_kept(ui, id, revision, room, &font, || {
+                        kept.fit(ui, &id, revision, room, &font, || {
                             Line::roster(&low, &summary)
                         }),
                     ));
@@ -1243,16 +1270,33 @@ mod tests {
             });
             out.unwrap()
         };
-        let first = frame(1, 300.0);
+        let mut run_a = Kept::default();
+        let first = frame(&mut run_a, 1, 300.0);
         let after_first = work();
         assert!(after_first.0 >= 1 && after_first.1 >= 1, "{after_first:?}");
-        assert_eq!(frame(1, 300.0), first);
+        assert_eq!(frame(&mut run_a, 1, 300.0), first);
         assert_eq!(work(), after_first, "an unchanged frame does no work");
-        let _ = frame(1, 200.0);
+        let _ = frame(&mut run_a, 1, 200.0);
         assert!(work().1 > after_first.1, "a new room measures again");
         let before = work();
-        let _ = frame(2, 200.0);
+        let _ = frame(&mut run_a, 2, 200.0);
         assert!(work().0 > before.0, "a new revision builds again");
+        // Point 1 of the second review: another owner (run B, loaded with the same group id and
+        // the same counters) never reads run A's answers: it works its own out.
+        let before = work();
+        let mut run_b = Kept::default();
+        let _ = frame(&mut run_b, 2, 200.0);
+        assert!(work().0 > before.0, "run B builds its own line");
+        // A changed display scale fits again.
+        let before = work();
+        ctx.set_pixels_per_point(2.0);
+        let _ = frame(&mut run_b, 2, 200.0);
+        assert!(work().1 > before.1, "a new display scale measures again");
+        // A group that is no longer offered drops its kept line.
+        run_b.retain(|kept| *kept != id);
+        let before = work();
+        let _ = frame(&mut run_b, 2, 200.0);
+        assert!(work().0 > before.0, "a dropped line is built again");
     }
 
     #[test]
