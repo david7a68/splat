@@ -1001,19 +1001,49 @@ pub fn footer_rect(ctx: &egui::Context, local: Id) -> Option<Rect> {
 /// row under the cut neither shows nor takes a press.
 fn body_clip(ui: &Ui, body_room: Rect, row_cut: Option<f32>) -> Rect {
     let mut clip = ui.clip_rect();
-    // A quiet `line_start` action hangs its padding and its icon left of the text edge: the
-    // clip reaches that far into the margin left of the pane, but never past what encloses the
-    // pane (the parent's clip). Where the parent leaves less room, the parent cuts the action as
-    // it cuts any content: a caller's layout fault that the gate reports. No content moves.
-    clip.min.x = clip
-        .min
-        .x
-        .max(body_room.left() - super::components::LINE_START_REACH);
+    clip.min.x = hang_left(ui, body_room);
     clip.max.y = clip.max.y.min(body_room.bottom());
     if let Some(cut) = row_cut {
         clip.max.y = clip.max.y.min(cut);
     }
     clip
+}
+
+/// The leftmost x that a quiet `line_start` action in the body may use for its hang (its padding
+/// and icon, left of the text edge): `LINE_START_REACH` into the margin left of the pane, but
+/// never past what encloses the pane (the parent's clip), and never over a control left of the
+/// pane that takes a press or a drag (a splitter's grab band, a scroll bar, a button), as egui
+/// recorded it in this pass or the last. The one place that decides the hang's room: the body's
+/// paint clip and its scroll column's surface both start here, so what is painted, what takes a
+/// press and what the scroll area covers are the same. Where the parent leaves less room, the
+/// parent cuts the action as it cuts any content: a caller's layout fault that the gate reports.
+/// Nothing is stored and no content moves: the text edge is the room's left in every pass.
+fn hang_left(ui: &Ui, body_room: Rect) -> f32 {
+    let edge = body_room.left();
+    let mut left = ui
+        .clip_rect()
+        .left()
+        .max(edge - super::components::LINE_START_REACH);
+    let layer = ui.layer_id();
+    let blockers = |widgets: &egui::WidgetRects, left: &mut f32| {
+        for widget in widgets.get_layer(layer) {
+            let at = widget.interact_rect;
+            // A control wholly left of the text edge, in the hang's strip, beside the body.
+            if (widget.sense.senses_click() || widget.sense.senses_drag())
+                && at.right() <= edge + 0.5
+                && at.right() > *left
+                && at.top() < body_room.bottom()
+                && at.bottom() > body_room.top()
+            {
+                *left = at.right().min(edge);
+            }
+        }
+    };
+    ui.ctx().viewport(|viewport| {
+        blockers(&viewport.prev_pass.widgets, &mut left);
+        blockers(&viewport.this_pass.widgets, &mut left);
+    });
+    left.min(edge)
 }
 
 /// The top of the lowest registered row that the viewport's bottom edge cuts (its top above the
@@ -1212,13 +1242,6 @@ impl Footer<'_> {
         };
         let body_room = Rect::from_min_max(room.min, pos2(room.right(), limit.max(room.top())));
 
-        // The body, in the part's own `Ui`; one id in every state, so its scroll and focus stay.
-        let mut body_ui = ui.new_child(
-            egui::UiBuilder::new()
-                .id_salt(id.with("body"))
-                .max_rect(body_room)
-                .layout(*ui.layout()),
-        );
         // Last pass's whole-row cut, while the room is the same; a new cut draws the pass again.
         let cut_key = id.with("row_cut");
         let row_cut = ui
@@ -1227,6 +1250,20 @@ impl Footer<'_> {
             .filter(|(kept, _)| *kept == body_room)
             .map(|(_, cut)| cut);
         let visible = body_clip(ui, body_room, row_cut);
+        // A `Content` body's scroll column starts where the hang may reach (`hang_left`) and
+        // insets its content by the same width, so its surface covers the hang it paints (a
+        // nested scroll never cuts the hang) and the text edge stays at the room's left.
+        let reach = match body {
+            Body::Content => (body_room.left() - visible.left()).max(0.0),
+            Body::Fills(_) => 0.0,
+        };
+        // The body, in the part's own `Ui`; one id in every state, so its scroll and focus stay.
+        let mut body_ui = ui.new_child(
+            egui::UiBuilder::new()
+                .id_salt(id.with("body"))
+                .max_rect(body_room.with_min_x(body_room.left() - reach))
+                .layout(*ui.layout()),
+        );
         body_ui.set_clip_rect(visible);
         let rows_before = super::components::rows_this_pass(ui.ctx()).len();
         // An edge (the footer, the session banner) ends the body: no registered row is cut.
@@ -1275,7 +1312,7 @@ impl Footer<'_> {
                 let rest_key = id.with("region_rest");
                 let rest = ui.ctx().data(|data| data.get_temp::<f32>(rest_key));
                 let region_max = region_height(room_height, rest);
-                let output = column.show(&mut body_ui, |ui| {
+                let content = |ui: &mut Ui| {
                     open(
                         ui,
                         Some(OpenPane {
@@ -1302,6 +1339,19 @@ impl Footer<'_> {
                         super::extras::space(ui, held.room);
                     }
                     inner
+                };
+                let output = column.show(&mut body_ui, |ui| {
+                    // The content starts at the room's left (the text edge), `reach` in from the
+                    // column's own left; always one child with one id, whatever the reach.
+                    let inset = ui.max_rect().with_min_x(ui.max_rect().left() + reach);
+                    ui.scope_builder(
+                        egui::UiBuilder::new()
+                            .id_salt("hang_inset")
+                            .max_rect(inset)
+                            .layout(*ui.layout()),
+                        content,
+                    )
+                    .inner
                 });
                 let room = if options.holds {
                     ui.ctx()
@@ -2045,6 +2095,11 @@ mod row_cut_tests {
     ///    paint nor its hit area reaches into the splitter's grab band (they may be cut).
     /// 3. The text edge of a `Content` pane is the same before and after a `line_start` action
     ///    first draws in it.
+    ///
+    /// P3a (package R's counterexample: `run-rolls` 02 at 960, `Stop` 45 px wide, 37 shown):
+    /// in 1, the pane's own scroll column (its surface, which egui and the gate read as the
+    /// column's room) starts at the clip, so it covers the hang. 4. A control in the margin
+    /// (a splitter's band, a scroll bar): the clip, the hit area and the surface stop at it.
     #[test]
     fn a_line_start_action_keeps_its_gutter_in_a_pane() {
         use crate::design::components::{Action, LINE_START_HANG};
@@ -2148,6 +2203,66 @@ mod row_cut_tests {
                     <= 0.5,
             "gutter-edge: the words of Stop {stop:?} and of the icon action {icon:?} start at the label's edge {:?}",
             state.label
+        );
+        // P3a (the nested scroll): the pane's own scroll column is a surface the gate and egui
+        // read as the column's room. It starts where the clip starts, so it covers the hang it
+        // paints; it does not end at the text edge. Pressure first: Stop really hangs past it.
+        assert!(
+            stop.0.left() < edge - 0.5,
+            "gutter-pressure: Stop {stop:?} hangs left of the text edge {edge}"
+        );
+        let surface = pane_records(&margin.ctx)
+            .into_iter()
+            .find_map(|record| record.viewport())
+            .expect("the Content pane's column");
+        assert!(
+            (surface.left() - state.clip.left()).abs() <= 0.5
+                && surface.left() <= stop.0.left() + 0.5,
+            "gutter-surface: the column's surface {surface:?} starts at the clip {:?} and covers Stop {:?}",
+            state.clip,
+            stop.0
+        );
+        // 4: a control in the margin left of the pane (a splitter's band, a scroll bar): the
+        // hang's clip, its hit area and the column's surface stop at the control's right edge.
+        let mut blocked = egui_kittest::Harness::builder()
+            .with_size(vec2(700.0, 300.0))
+            .build_ui_state(
+                move |ui, state: &mut State| {
+                    let room = ui.available_rect_before_wrap();
+                    let band = Rect::from_x_y_ranges(
+                        room.left() + 4.0..=room.left() + 10.0,
+                        room.y_range(),
+                    );
+                    let _ = ui.interact(band, Id::new("gutter_band"), Sense::drag());
+                    state.parent = band;
+                    let inner = room.with_min_x(room.left() + crate::design::tokens::L);
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(inner), |ui| pane(ui, state));
+                },
+                State {
+                    action: true,
+                    ..State::default()
+                },
+            );
+        crate::design::theme::install(&blocked.ctx);
+        blocked.run_steps(3);
+        let state = blocked.state();
+        let band = state.parent;
+        let (_, hit) = state.stop.expect("Stop");
+        assert!(
+            state.stop.expect("Stop").0.left() < band.right() - 0.5,
+            "gutter-band-pressure: Stop {:?} would hang over the band {band:?}",
+            state.stop
+        );
+        let surface = pane_records(&blocked.ctx)
+            .into_iter()
+            .find_map(|record| record.viewport())
+            .expect("the Content pane's column");
+        assert!(
+            (state.clip.left() - band.right()).abs() <= 0.5
+                && hit.left() >= band.right() - 0.5
+                && (surface.left() - band.right()).abs() <= 0.5,
+            "gutter-band: the clip {:?}, Stop's hit area {hit:?} and the surface {surface:?} stop at the band {band:?}",
+            state.clip
         );
         // 2: flush against a splitter.
         let mut flush = egui_kittest::Harness::builder()

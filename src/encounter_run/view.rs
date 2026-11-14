@@ -4448,15 +4448,21 @@ impl Run {
                 .collect();
             design::overflow_tabs_small(ui, &mut self.sheet_page, &pages);
             let page = self.sheet_page;
-            design::ScrollColumn::new(("run_sheet", record.definition.splat_id, page)).show(
-                ui,
-                |ui| {
-                    crate::rolls::set_roller(ui.ctx(), Some(index));
-                    self.armed_tiles_begin(ui.ctx());
-                    crate::party::sheet_page(ui, &record, page, "", Some(&live));
-                    crate::rolls::set_roller(ui.ctx(), None);
-                },
+            // The sheet is the panel's pane too (no message of its own yet), so a `line_start`
+            // action's hang (`Roll for them`, `Stop`) is inside its scroll column (P3a). The
+            // pane's id is the sheet's and its page, so each keeps its own scroll.
+            let frame = design::outcome::PaneFrame::new(ui);
+            let messages = design::outcome::Messages::<design::outcome::NoPress>::new(
+                &frame,
+                ("run_sheet", record.definition.splat_id, page),
+                ui.available_width(),
             );
+            let _ = messages.pane(ui, design::pane::Body::Content, |ui| {
+                crate::rolls::set_roller(ui.ctx(), Some(index));
+                self.armed_tiles_begin(ui.ctx());
+                crate::party::sheet_page(ui, &record, page, "", Some(&live));
+                crate::rolls::set_roller(ui.ctx(), None);
+            });
             return;
         }
         let mut link = None;
