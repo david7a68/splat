@@ -2737,12 +2737,10 @@ impl Reader {
             campaign.filter(|campaign| edit::editable(item, index) && !self.editing(id, campaign));
         // Lookup has no file line. While the repair message names the fault, the kind line
         // names the open file in place of the fault.
-        let duplicate = self.compact
-            && campaign.is_some()
-            && index.duplicate_world.contains_key(&item.entry.path);
+        let duplicate = index.duplicate_world.contains_key(&item.entry.path);
         let kind = ReaderStatus::of(item, index, campaign.is_some(), self.status_editing)
             .kind_words(item, duplicate);
-        let kind_line = if duplicate {
+        let kind_line = if self.compact && campaign.is_some() && duplicate {
             format!("{kind} · {} · {}", item.owner, item.entry.path)
         } else {
             format!("{kind} · {}", item.owner)
@@ -4607,11 +4605,12 @@ impl Reader {
                 let name = reader_field(&item.entry, "creature")
                     .map(|v| link_name(v, "Stat block"))
                     .unwrap_or_else(|| "Stat block".into());
+                // Its name and `Not found` share a line when they fit, as before (FD6).
+                let room = width.max(missing_width(ui, &name, false));
                 Self::value_row(
                     ui,
                     "Stat block",
-                    width,
-                    // Its name and `Not found` share a line when they fit, as before (FD6).
+                    room,
                     |ui| missing_link(ui, &name, false),
                     None,
                 );
@@ -4655,7 +4654,8 @@ impl Reader {
                 && let Some(place) = reader_field(&item.entry, "in").and_then(Value::as_str)
             {
                 let name = place.trim_matches(['[', ']']);
-                Self::value_row(ui, "In", width, |ui| missing_link(ui, name, false), None);
+                let room = width.max(missing_width(ui, name, false));
+                Self::value_row(ui, "In", room, |ui| missing_link(ui, name, false), None);
             }
             if go.is_some() {
                 return go;
