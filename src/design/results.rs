@@ -829,13 +829,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Results, Ban::Layout(1), Ban::Pane(1)],
         ),
         ("src/world/page.rs", "show", &[Ban::Results, Ban::Layout(3)]),
-        ("src/world/repair.rs", "choose", &[Ban::Results]),
-        ("src/world/repair.rs", "edit", &[Ban::Results]),
-        (
-            "src/world/repair.rs",
-            "footer",
-            &[Ban::Results, Ban::Pane(1)],
-        ),
         ("src/world.rs", "draw_footer", &[Ban::Results, Ban::Pane(1)]),
         ("src/world.rs", "entry_controls", &[Ban::Results]),
         ("src/world.rs", "stamp", &[Ban::Results]),
@@ -1086,6 +1079,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Body],
         ),
         ("src/trackers.rs", "act_words", &[Ban::Words]),
+        ("src/world/repair.rs", "cause", &[Ban::Words]),
         ("src/trackers.rs", "cause", &[Ban::Words]),
         ("src/trackers/history.rs", "show", &[Ban::Body]),
         ("src/trackers/view.rs", "body", &[Ban::Body]),
@@ -1231,6 +1225,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/library.rs", "form_footer", &[Ban::Pane(1)]),
         ("src/campaign_content.rs", "show", &[Ban::Pane(1)]),
         ("src/party.rs", "show", &[Ban::Pane(1)]),
+        ("src/world/repair.rs", "editor_fills", &[Ban::Pane(1)]),
     ]
 };
 
@@ -1444,7 +1439,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/world.rs", 2),
             ("src/world/edit.rs", 4),
             ("src/world/page.rs", 3),
-            ("src/world/repair.rs", 2),
         ],
     ),
     (
@@ -1457,7 +1451,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/design/gallery.rs", 2),
             ("src/encounters.rs", 3),
             ("src/world/edit.rs", 1),
-            ("src/world/repair.rs", 1),
         ],
     ),
     (
