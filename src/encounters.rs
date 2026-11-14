@@ -8038,7 +8038,11 @@ mod tests {
         let copy = dir.path().join("Rook copy.md");
         let text = fs::read_to_string(&copy).unwrap();
         let id = crate::content_workspace::note_id(&text).unwrap();
-        fs::write(&copy, text.replace(&id.to_string(), &Uuid::new_v4().to_string())).unwrap();
+        fs::write(
+            &copy,
+            text.replace(&id.to_string(), &Uuid::new_v4().to_string()),
+        )
+        .unwrap();
         harness.run_steps(2);
         assert!(
             harness.query_by_label("Undo: separate entry").is_some(),
