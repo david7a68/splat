@@ -6,8 +6,8 @@ use crate::{
     design::{
         self, Action, Density, Status, Tone, Type, colors, icons,
         outcome::{
-            Choice, Fault, FaultMessage, KeptOutcome, MessageChoice, Messages, Notice, Outcome,
-            PaneFrame, Said, Sentence, Severity, UndoStep, Verb,
+            Choice, Fault as MessageFault, FaultMessage, KeptOutcome, MessageChoice, Messages,
+            Notice, Outcome, PaneFrame, Said, Sentence, Severity, UndoStep, Verb,
         },
     },
     encounter_run::fight_summary,
@@ -115,7 +115,7 @@ enum PlanFault {
     Check(Sentence),
 }
 
-impl Fault for PlanFault {
+impl MessageFault for PlanFault {
     fn severity(&self) -> Severity {
         Severity::NeedsFixing
     }
@@ -6851,7 +6851,7 @@ mod tests {
         assert!(!sessions.removal_superseded(&book));
         // Undo on Timeline ends the removal, and the plan sees the edit.
         delete(&mut sessions, &book, Some(run));
-        book.undo_remove();
+        crate::timeline::press_footer_undo(&mut book, crate::timeline::TestUndo::Remove);
         sessions.end_plan_results_after_edits(&book);
         assert!(!sessions.removal_superseded(&book));
         // Removing the same event again is a new step: its result shows (path 1).
@@ -6860,21 +6860,21 @@ mod tests {
             !sessions.removal_superseded(&book),
             "a new removal of the same event keeps its own result"
         );
-        book.undo_remove();
+        crate::timeline::press_footer_undo(&mut book, crate::timeline::TestUndo::Remove);
         book.remove(&second);
         assert!(!sessions.removal_superseded(&book));
         // Re-check of PR 245: with a note open, Timeline's Undo remove and a new removal of the
         // same event both happen before the plan draws again. The note and the events then
         // equal the plan's witness, so its cleanup keeps the deletion result; the new removal
         // still shows its message and Undo remove, because it is a different action.
-        book.undo_remove();
+        crate::timeline::press_footer_undo(&mut book, crate::timeline::TestUndo::Remove);
         let note = folder.path().join("note.md");
         fs::write(&note, "## What happened\n\nThe bridge held.\n").unwrap();
         sessions.draft = Some(Draft::open(&note).unwrap());
         book.remove(&first);
         delete(&mut sessions, &book, Some(run));
         assert!(sessions.removal_superseded(&book));
-        book.undo_remove();
+        crate::timeline::press_footer_undo(&mut book, crate::timeline::TestUndo::Remove);
         book.remove(&first);
         sessions.end_plan_results_after_edits(&book);
         assert!(

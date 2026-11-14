@@ -7,7 +7,6 @@ use crate::design::{
         Choice, Fault, FaultMessage, FaultPlace, KeptOutcome, MessageChoice, Messages, Notice,
         PaneFrame, Said, Sentence, Severity, UndoStep, Verb,
     },
-    results::ByTicket,
 };
 use eframe::egui;
 use std::time::{Duration, Instant};
@@ -2015,7 +2014,7 @@ mod tests {
         let mut harness = egui_kittest::Harness::builder().build_state(
             move |ctx, book: &mut Book| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    if let Some(action) = rest_ruling(ui, &book.events[0], true) {
+                    if let Some(action) = rest_ruling(ui, &book.events[0]) {
                         action.apply(book, &event_id);
                     }
                 });
@@ -2296,7 +2295,7 @@ mod tests {
              stay. 1 note still links to it."
         );
         // The session comes from the removed event: the one in the other session stands alone.
-        book.undo_remove();
+        crate::timeline::press_footer_undo(&mut book, crate::timeline::TestUndo::Remove);
         book.remove(&other);
         assert_eq!(
             timeline_removal_words(&book, "Bridge Ambush", 0),

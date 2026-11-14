@@ -7590,7 +7590,7 @@ mod tests {
         );
         book.events[0].session = session;
         // A remaining fight with no result yet stays, with no result to name.
-        book.undo_remove();
+        crate::timeline::press_footer_undo(&mut book, crate::timeline::TestUndo::Remove);
         book.events[1].result.clear();
         book.remove("a");
         assert_eq!(
@@ -7673,7 +7673,11 @@ mod tests {
             Some("Bridge Ambush"),
             "an edit to B keeps A’s Undo"
         );
-        assert_eq!(book.undo_remove().as_deref(), Some("a"));
+        assert_eq!(
+            crate::timeline::press_footer_undo(&mut book, crate::timeline::TestUndo::Remove)
+                .as_deref(),
+            Some("a")
+        );
         assert_eq!(book.events[0].id, "a");
         assert_eq!(book.events[0].session, Some(a));
         assert!(book.removed().is_none(), "the words go with the Undo");
@@ -7691,7 +7695,10 @@ mod tests {
         draft.edited();
         sessions.end_removal_on_note_edit(&mut book);
         assert!(book.removed().is_none(), "an edit to A ends it");
-        assert!(book.undo_remove().is_none());
+        assert!(
+            crate::timeline::press_footer_undo(&mut book, crate::timeline::TestUndo::Remove)
+                .is_none()
+        );
     }
 
     #[test]

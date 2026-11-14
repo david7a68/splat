@@ -2072,6 +2072,88 @@ impl Book {
     }
 }
 
+/// Which of the book's kept results a test presses Undo on.
+#[cfg(test)]
+#[derive(Clone, Copy)]
+pub(crate) enum TestUndo {
+    Remove,
+    Reload,
+    Ruling,
+}
+
+/// Press that result's Undo in a footer drawn from the book's store, as the pages do: the line
+/// comes from the store's view and the press acts by its ticket. Returns what `undo_remove`
+/// returns (the event put back), else `None`. With no such result, no Undo shows: `None`.
+#[cfg(test)]
+pub(crate) fn press_footer_undo(book: &mut Book, which: TestUndo) -> Option<String> {
+    use crate::design::outcome::{Messages, PaneFrame, Said, UndoStep, Verb};
+    use egui_kittest::kittest::Queryable;
+    let label = match which {
+        TestUndo::Remove => "Undo remove",
+        TestUndo::Reload => "Undo reload",
+        TestUndo::Ruling => "Undo change ruling",
+    };
+    let mut harness = egui_kittest::Harness::builder()
+        .with_size(eframe::egui::vec2(800.0, 300.0))
+        .build_state(
+            move |ctx, (book, back): &mut (Book, Option<String>)| {
+                eframe::egui::CentralPanel::default().show(ctx, |ui| {
+                    let frame = PaneFrame::new(ui);
+                    let mut messages = Messages::new(&frame, "test_footer", ui.available_width());
+                    let file = book.file();
+                    let words = crate::sentence!("A result.");
+                    match which {
+                        TestUndo::Remove => {
+                            if let Some(shown) = book.results.removal.get(&file) {
+                                messages.kept(shown.outcome(&frame, |_| {
+                                    Said::new(words)
+                                        .undo(UndoStep::verb(Verb::Remove).pressed_as(()))
+                                        .into()
+                                }));
+                            }
+                        }
+                        TestUndo::Reload => {
+                            if let Some(shown) = book.results.reloaded.get(&file) {
+                                messages.kept(shown.outcome(&frame, |_| {
+                                    Said::new(words)
+                                        .undo(UndoStep::verb(Verb::Reload).pressed_as(()))
+                                        .into()
+                                }));
+                            }
+                        }
+                        TestUndo::Ruling => {
+                            if let Some(shown) = book.results.ruling.get(&file) {
+                                messages.kept(shown.outcome(&frame, |_| {
+                                    Said::new(words)
+                                        .undo(UndoStep::of(Verb::Change, "ruling").pressed_as(()))
+                                        .into()
+                                }));
+                            }
+                        }
+                    }
+                    let paned = messages.pane(ui, crate::design::Body::Content, |_| ());
+                    if let Some(ticket) = paned.pressed.and_then(|press| press.ticket) {
+                        match which {
+                            TestUndo::Remove => *back = book.undo_remove(ticket),
+                            TestUndo::Reload => book.undo_reload(ticket),
+                            TestUndo::Ruling => book.undo_restores(ticket),
+                        }
+                    }
+                });
+            },
+            (std::mem::take(book), None),
+        );
+    crate::design::theme::install(&harness.ctx);
+    harness.run_steps(2);
+    if harness.query_by_label(label).is_some() {
+        harness.get_by_label(label).click();
+        harness.run_steps(2);
+    }
+    let (after, back) = std::mem::take(harness.state_mut());
+    *book = after;
+    back
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2131,7 +2213,11 @@ mod tests {
             "B road"
         );
         assert!(book.removed().is_none(), "A's notice ends");
-        assert!(book.undo_remove().is_none(), "and its Undo");
+        assert!(
+            crate::timeline::press_footer_undo(&mut book, crate::timeline::TestUndo::Remove)
+                .is_none(),
+            "and its Undo"
+        );
     }
 
     #[test]
@@ -2199,7 +2285,11 @@ mod tests {
             book.events.iter().any(|event| event.id == a_event),
             "A came back"
         );
-        assert!(book.removed().is_none() && book.undo_remove().is_none());
+        assert!(
+            book.removed().is_none()
+                && crate::timeline::press_footer_undo(&mut book, crate::timeline::TestUndo::Remove)
+                    .is_none()
+        );
         book.overwrite();
         assert!(!book.conflict, "{:?}", book.error);
         assert_eq!(
@@ -2789,7 +2879,7 @@ mod tests {
         book.reload_keeping_undo();
         assert!(book.events.is_empty());
         assert_eq!(book.dropped(), Some(2));
-        book.undo_reload();
+        crate::timeline::press_footer_undo(&mut book, crate::timeline::TestUndo::Reload);
         assert_eq!(book.events[1].id, rest);
         assert_eq!(book.dropped(), None);
     }
@@ -3282,7 +3372,10 @@ mod tests {
         book.remove(&rest);
         bridge.steps += 1;
         book.record_run(&bridge, session, true);
-        assert_eq!(book.undo_remove(), Some(rest));
+        assert_eq!(
+            crate::timeline::press_footer_undo(&mut book, crate::timeline::TestUndo::Remove),
+            Some(rest)
+        );
         let state = party_state(&book.events, session);
         assert!(state.rested);
         assert_eq!(state.fights.len(), 1, "the fight came after the rest");
@@ -3304,7 +3397,10 @@ mod tests {
         // it still keeps the Undo.
         book.add(Kind::Travel, Some(Uuid::from_u128(1)));
         assert_eq!(book.removed(), Some("Long rest"));
-        assert_eq!(book.undo_remove(), Some(rest.clone()));
+        assert_eq!(
+            crate::timeline::press_footer_undo(&mut book, crate::timeline::TestUndo::Remove),
+            Some(rest.clone())
+        );
         // iter-23-S FK2: opening a run in Setup puts nothing on the timeline, so the removal's
         // result and Undo stay. Combat that begins in the removal's session ends them; combat
         // in another session does not.
@@ -3343,7 +3439,10 @@ mod tests {
         book.record_run(&begun, None, true);
         assert!(book.events.iter().any(|event| event.run == Some(begun.id)));
         assert!(book.removed().is_none());
-        assert!(book.undo_remove().is_none());
+        assert!(
+            crate::timeline::press_footer_undo(&mut book, crate::timeline::TestUndo::Remove)
+                .is_none()
+        );
         assert!(!book.events.iter().any(|event| event.id == rest));
         // A removed fight whose run comes back in another session: its Undo would give the run
         // a second event, so it ends.
@@ -3420,11 +3519,17 @@ mod tests {
         book.remove(&rest);
         assert_eq!(book.removed(), Some("Long rest"));
         assert_eq!(book.events.len(), 2);
-        assert_eq!(book.undo_remove(), Some(rest.clone()));
+        assert_eq!(
+            crate::timeline::press_footer_undo(&mut book, crate::timeline::TestUndo::Remove),
+            Some(rest.clone())
+        );
         assert_eq!(book.events[1].id, rest);
         book.remove(&rest);
         book.add(Kind::Day, None);
-        assert!(book.undo_remove().is_none());
+        assert!(
+            crate::timeline::press_footer_undo(&mut book, crate::timeline::TestUndo::Remove)
+                .is_none()
+        );
         // iter-23-S FK2: a removal belongs to its event's session. Another session's edit keeps
         // it, and Undo puts the event back after its old neighbour; an edit in its own session
         // ends it.
@@ -3437,7 +3542,10 @@ mod tests {
         book.place_after(&other, None);
         assert_eq!(book.events[0].id, other, "B's edit happened");
         assert_eq!(book.removed(), Some("Long rest"), "B's edit keeps A's Undo");
-        assert_eq!(book.undo_remove(), Some(rest.clone()));
+        assert_eq!(
+            crate::timeline::press_footer_undo(&mut book, crate::timeline::TestUndo::Remove),
+            Some(rest.clone())
+        );
         let order: Vec<_> = book.events.iter().map(|event| event.id.clone()).collect();
         assert_eq!(order, [other, first.clone(), rest.clone()]);
         assert!(book.removed().is_none(), "the words go with the Undo");
@@ -3513,14 +3621,14 @@ mod tests {
         assert!(party_state(&book.events, session).rested);
         book.set_restores(&id, false);
         assert_eq!(party_state(&book.events, session), before);
-        book.undo_restores();
+        crate::timeline::press_footer_undo(&mut book, crate::timeline::TestUndo::Ruling);
         assert!(party_state(&book.events, session).rested);
         assert!(book.rest_undo_id().is_none());
         book.set_restores(&id, false);
         book.set_restores(&id, true);
         assert!(party_state(&book.events, session).rested);
         assert_eq!(book.event_mut(&id).unwrap().played_order, order);
-        book.undo_restores();
+        crate::timeline::press_footer_undo(&mut book, crate::timeline::TestUndo::Ruling);
         assert_eq!(party_state(&book.events, session), before);
         book.remove(&id);
         assert_eq!(party_state(&book.events, session), before);
@@ -3537,12 +3645,12 @@ mod tests {
         assert_eq!(party_state(&book.events, session).fights.len(), 1);
         book.event_mut(&id).unwrap().notes = "Later edit".into();
         assert!(book.rest_undo_id().is_none());
-        book.undo_restores();
+        crate::timeline::press_footer_undo(&mut book, crate::timeline::TestUndo::Ruling);
         assert!(book.event_mut(&id).unwrap().restores);
         book.set_restores(&id, false);
         book.add(Kind::Travel, session);
         assert!(book.rest_undo_id().is_none());
-        book.undo_restores();
+        crate::timeline::press_footer_undo(&mut book, crate::timeline::TestUndo::Ruling);
         assert!(!book.event_mut(&id).unwrap().restores);
         // Recording markers remain proposals, without an automatic HP ruling.
         let marker = book.add(Kind::LongRest, session);
