@@ -219,8 +219,8 @@ enum ContentPress {
     Remove(usize),
     /// An encounter that uses an unavailable package's creatures.
     OpenEntry(Uuid),
-    /// The package's details link: its words are on hover; the press does nothing.
-    Details,
+    /// An unavailable package's details link: it shows or hides the package's reference.
+    Details(usize),
 }
 
 /// What the Campaign page says is wrong, in its footer or its body. The tone comes from the
@@ -247,6 +247,8 @@ enum ContentFault<'a> {
     Manifest {
         package: &'a str,
         problem: &'a str,
+        /// The manifest's path in its package, for what Replace keeps and replaces.
+        path: &'a str,
         on_disk: bool,
     },
     /// A chosen package that is not available, and where it was.
@@ -255,6 +257,8 @@ enum ContentFault<'a> {
         it_was: Option<&'a str>,
         /// The encounters that use its creatures (`A and B`), and how many.
         used_by: Option<(&'a str, usize)>,
+        /// The package's reference, while its Technical details are open.
+        reference: Option<&'a str>,
     },
     /// A Campaign.md flag or a missing dependency (the content layer's words).
     Flag(&'a str),
@@ -323,25 +327,49 @@ impl design::outcome::Fault for ContentFault<'_> {
                 outside(cause).unwrap_or(crate::sentence!("This needs fixing."))
             }
             Self::Manifest {
-                package, problem, ..
-            } => outside(&manifest_message(package, problem))
-                .unwrap_or(crate::sentence!("The package manifest cannot be used.")),
+                package,
+                problem,
+                path,
+                on_disk,
+            } => {
+                let words = outside(&manifest_message(package, problem))
+                    .unwrap_or(crate::sentence!("The package manifest cannot be used."));
+                // What Replace keeps and replaces, in the Library's words (one owner).
+                match on_disk
+                    .then(|| {
+                        outside(&crate::content_workspace::manifest_replace_consequence(
+                            path,
+                        ))
+                    })
+                    .flatten()
+                {
+                    Some(consequence) => words.then(consequence),
+                    None => words,
+                }
+            }
             Self::Unavailable {
                 message,
                 it_was,
                 used_by,
+                reference,
             } => {
                 let mut words =
                     outside(message).unwrap_or(crate::sentence!("This package is not available."));
                 if let Some(folder) = it_was {
                     words = words.then(crate::sentence!("It was in {}/.", folder));
                 }
-                match used_by {
+                words = match used_by {
                     Some((names, 1)) => {
                         words.then(crate::sentence!("{} uses its creatures.", names))
                     }
                     Some((names, _)) => {
                         words.then(crate::sentence!("{} use its creatures.", names))
+                    }
+                    None => words,
+                };
+                match reference {
+                    Some(reference) => {
+                        words.then(crate::sentence!("Package reference: {}.", reference))
                     }
                     None => words,
                 }
@@ -353,6 +381,8 @@ impl design::outcome::Fault for ContentFault<'_> {
 
 #[derive(Default)]
 pub struct CampaignContent {
+    /// The unavailable packages whose Technical details are open, by their reference.
+    details: BTreeSet<String>,
     /// Where each open repair's editor sits this frame. Focus scrolling leaves them to the
     /// editor, which scrolls the page to its own viewport.
     editor_rects: Vec<egui::Rect>,
@@ -1221,6 +1251,10 @@ impl CampaignContent {
                 }));
             }
         }
+        // The package faults come before the page's errors: an error that a package choice brings
+        // (a wrong folder) comes below the pressed choice, so it does not move.
+        let warnings = self.package_warnings_of(campaigns);
+        self.package_messages(&mut messages, campaigns, &warnings.unavailable);
         // Round 27 FB3, AB1: with no package list to show, the page's errors are its content, at
         // the top of the page (`page`), not in the footer.
         if !self.body_missing() {
@@ -1242,8 +1276,6 @@ impl CampaignContent {
                 messages.outcome(FaultMessage::new(&ContentFault::Error(error)));
             }
         }
-        let warnings = self.package_warnings_of(campaigns);
-        self.package_messages(&mut messages, campaigns, &warnings.unavailable);
         messages
     }
 
@@ -1416,8 +1448,7 @@ impl CampaignContent {
                 let _ = results.undo_by(ticket, |kept| self.undo_result(kept.0.kind));
                 self.results = results;
             }
-            (ContentPress::Undo, None)
-            | (ContentPress::WriteCampaign | ContentPress::Details, _) => {}
+            (ContentPress::Undo, None) | (ContentPress::WriteCampaign, _) => {}
             (press, _) => self.package_press(ctx, campaigns, active, press),
         }
     }
@@ -2036,6 +2067,7 @@ impl CampaignContent {
             let fault = FaultMessage::new(&ContentFault::Manifest {
                 package: &module.name,
                 problem,
+                path,
                 on_disk: exists,
             });
             let fault = if exists {
@@ -2050,8 +2082,6 @@ impl CampaignContent {
                             crate::choice!("Replace with a basic {}", path),
                             ContentPress::WriteManifest(module.id),
                         )
-                        // What Replace keeps and replaces, as the Library says it.
-                        .hover(crate::content_workspace::manifest_replace_consequence(path))
                         .locked_when(unsaved, wait()),
                     )
             } else {
@@ -2087,12 +2117,17 @@ impl CampaignContent {
                     users.len(),
                 )
             });
+            let reference = selection.package.label();
             let mut fault = FaultMessage::new(&ContentFault::Unavailable {
                 message,
                 it_was: it_was.as_deref(),
                 used_by: used_by
                     .as_ref()
                     .map(|(names, count)| (names.as_str(), *count)),
+                reference: self
+                    .details
+                    .contains(reference.as_str())
+                    .then_some(reference.as_str()),
             });
             if relocated.is_some() {
                 fault = fault.choice(
@@ -2136,17 +2171,14 @@ impl CampaignContent {
                     ContentPress::OpenEntry(id),
                 ));
             }
-            // The package's identifier stays out of the words: on hover of its details link.
-            fault = fault.choice(
-                Choice::new(
-                    MessageChoice::Link {
-                        word: "Technical details",
-                        hover: None,
-                    },
-                    ContentPress::Details,
-                )
-                .hover(format!("Package reference: {}", selection.package.label())),
-            );
+            // The package's identifier stays out of the words until the DM opens its details.
+            fault = fault.choice(Choice::new(
+                MessageChoice::Link {
+                    word: "Technical details",
+                    hover: None,
+                },
+                ContentPress::Details(*i),
+            ));
             messages.outcome(fault);
         }
     }
@@ -2206,6 +2238,17 @@ impl CampaignContent {
                 return;
             }
             _ => {}
+        }
+        if let ContentPress::Details(at) = press {
+            if let Some(reference) = unavailable
+                .iter()
+                .find(|unavailable| unavailable.index == at)
+                .map(|unavailable| unavailable.selection.package.label())
+                && !self.details.remove(&reference)
+            {
+                self.details.insert(reference);
+            }
+            return;
         }
         let at = match press {
             ContentPress::UseFolder(at)
