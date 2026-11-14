@@ -2798,7 +2798,7 @@ impl MemberMark {
 impl design::results::Kept for MemberMark {
     type Owner = MemberOwner;
     const ENDS: design::results::Ends = design::results::Ends {
-        // Its data went: a move, a newer result, a Save or Discard of the draft.
+        // Its data went: its member removed or changed, a newer result, a Save of the draft.
         owner_changed: design::results::OwnerChanged::Ends,
         // Nothing is on disk until Save.
         disk_changed: design::results::DiskChanged::Stays,
@@ -3923,6 +3923,38 @@ impl Encounters {
                 Err(mpsc::TryRecvError::Empty) => {}
             }
         }
+        self.end_unreachable_results();
+    }
+    /// The one end of the draft results whose draft can never come back. A draft's member and
+    /// editor results live while some state holds that draft: the open draft, a discard that
+    /// Undo discard restores, a deleted group the draft keeps, a group held by a removed group's
+    /// Undo. Close, an expired discard, a new draft and a campaign change only drop the draft;
+    /// this runs each frame (from `poll`, on every page) and ends what they left. Its cost is
+    /// the stores' size, which this bounds by the drafts held.
+    fn end_unreachable_results(&mut self) {
+        let drafts: Vec<&Draft> = self.draft.iter().chain(self.discarded.iter()).collect();
+        let mut groups: Vec<Uuid> = self
+            .group_draft
+            .iter()
+            .chain(self.discarded_group.iter())
+            .chain(
+                drafts
+                    .iter()
+                    .flat_map(|draft| draft.groups.iter().chain(draft.deleted_groups.iter())),
+            )
+            .map(GroupDraft::results_key)
+            .collect();
+        self.editor_results.end_unreachable(|mark| {
+            let reachable = drafts
+                .iter()
+                .any(|draft| draft.results_key == mark.owner.draft);
+            if reachable && let DraftUndo::RemovedGroup { group, .. } = &mark.undo {
+                groups.push(group.results_key());
+            }
+            reachable
+        });
+        self.member_results
+            .end_unreachable(|mark| groups.contains(&mark.owner.draft));
     }
     /// Ctrl+S on this page saves the open encounter.
     pub fn save_shortcut(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
@@ -5009,8 +5041,8 @@ impl Encounters {
     }
 
     /// Move each group draft's new member result into the store, with its data (its order is
-    /// issued now, in the frame of the act), and end a replacement whose member moved or no
-    /// longer holds its creature. A discarded draft's result stays in the store, hidden (its
+    /// issued now, in the frame of the act), and end a replacement whose member was removed or
+    /// no longer holds its creature (a move keeps it: it names its member by identity). A discarded draft's result stays in the store, hidden (its
     /// `results_key` is not the clean draft's), and shows again with Undo discard (review of
     /// PR 339).
     fn record_member_results(&mut self) {
@@ -5027,18 +5059,11 @@ impl Encounters {
                 root: root.clone(),
                 draft: draft.results_key(),
             };
-            // A move made before this frame's new result ends only an older replacement.
-            let moved = draft.take_members_moved();
             if let Some(undo) = draft.take_member_new() {
-                if moved {
-                    Self::end_moved_replacement(&mut self.member_results, &owner);
-                }
                 self.member_results.record(MemberMark {
                     owner: owner.clone(),
                     undo,
                 });
-            } else if moved {
-                Self::end_moved_replacement(&mut self.member_results, &owner);
             }
             if self
                 .member_results
@@ -5047,19 +5072,6 @@ impl Encounters {
             {
                 self.member_results.owner_changed(&owner);
             }
-        }
-    }
-
-    /// A member moved: the owner's stored replacement no longer names its member.
-    fn end_moved_replacement(
-        results: &mut design::Results<MemberOwner, MemberMark>,
-        owner: &MemberOwner,
-    ) {
-        if results
-            .get(owner)
-            .is_some_and(|shown| shown.value().undo.is_replacement())
-        {
-            results.owner_changed(owner);
         }
     }
 
@@ -5099,13 +5111,7 @@ impl Encounters {
                         .flat_map(|draft| draft.groups.iter_mut()),
                 )
                 .find(|draft| draft.results_key() == mark.owner.draft);
-            match draft {
-                Some(draft) => {
-                    draft.undo_member_result(&mark.undo);
-                    Ok(())
-                }
-                None => Err(()),
-            }
+            draft.ok_or(())?.undo_member_result(&mark.undo)
         });
         self.member_results = results;
         self.expanded = None;

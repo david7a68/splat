@@ -133,8 +133,6 @@ pub(super) struct GroupDraft {
     /// moves it into its store (`Encounters::record_member_results`), which issues its order and
     /// holds it with its ticket, so an Undo applies only its own data.
     member_new: Option<MemberUndo>,
-    /// A member moved: a stored replacement's place no longer names its member, so it ends.
-    members_moved: bool,
     /// This draft's content, as the owner of its member result: a fresh one at each open, kept
     /// by a clone, so a discarded draft and the clean draft that replaces it (same note, same
     /// `id`) never share a result.
@@ -193,27 +191,23 @@ impl MemberUndo {
             Self::Removed { .. } | Self::Unread { .. } => UndoStep::of(Verb::Remove, "member"),
         }
     }
-    /// Whether a replacement still names its member: its member still holds the chosen
-    /// creature. A removal always holds.
+    /// Whether its Undo still applies: a replacement's member (by its identity, which a move
+    /// does not change) is in the draft and still holds the chosen creature. A removal always
+    /// holds.
     pub(super) fn holds(&self, draft: &GroupDraft) -> bool {
         match self {
-            Self::Replaced(result) => draft
-                .setup
-                .members
-                .get(result.index)
-                .is_some_and(|member| member.creature == result.after),
+            Self::Replaced(result) => draft.replaced_member(result).is_some(),
             Self::Removed { .. } | Self::Unread { .. } => true,
         }
     }
-    pub(super) fn is_replacement(&self) -> bool {
-        matches!(self, Self::Replaced(_))
-    }
 }
 
-/// A member's creature before and after `Use`, with the result's words.
+/// A member's creature before and after `Use`, with the result's words. It names its member
+/// by identity, not by place: a move between the act and its Undo cannot point it at another
+/// member, even one that holds the same creature.
 #[derive(Clone)]
 pub(super) struct Replaced {
-    index: usize,
+    member: MemberId,
     before: EntryRef,
     after: EntryRef,
     words: String,
@@ -248,7 +242,6 @@ impl GroupDraft {
             flags: Vec::new(),
             repair: None,
             member_new: None,
-            members_moved: false,
             results_key: crate::hermetic::new_uuid(),
             revision: next_revision(),
             members_saved: None,
@@ -286,7 +279,6 @@ impl GroupDraft {
             flags: entry.flags.clone(),
             repair: None,
             member_new: None,
-            members_moved: false,
             results_key: crate::hermetic::new_uuid(),
             revision: next_revision(),
             members_saved: None,
@@ -311,10 +303,6 @@ impl GroupDraft {
     pub(super) fn take_member_new(&mut self) -> Option<MemberUndo> {
         self.member_new.take()
     }
-    /// Whether a member moved since the page last looked, and the look.
-    pub(super) fn take_members_moved(&mut self) -> bool {
-        std::mem::take(&mut self.members_moved)
-    }
     /// The owner of this draft's member result in the page's store.
     pub(super) fn results_key(&self) -> Uuid {
         self.results_key
@@ -332,15 +320,26 @@ impl GroupDraft {
     pub(super) fn is_empty(&self) -> bool {
         self.setup.members.is_empty()
     }
+    /// The member a replacement names, while it still holds the chosen creature.
+    fn replaced_member(&self, result: &Replaced) -> Option<usize> {
+        self.setup
+            .members
+            .iter()
+            .position(|member| member.id.0 == result.member.0 && member.creature == result.after)
+    }
     /// Undo one member result, from the data its store holds with its ticket: the creature,
-    /// the member or the unread row comes back at its place, and other draft edits stay.
-    pub(super) fn undo_member_result(&mut self, undo: &MemberUndo) {
+    /// the member or the unread row comes back, and other draft edits stay. A replacement whose
+    /// member was removed or changed since (in this pass too) is refused, and nothing changes.
+    pub(super) fn undo_member_result(&mut self, undo: &MemberUndo) -> Result<(), ()> {
+        if !undo.holds(self) {
+            return Err(());
+        }
         self.members_saved = None;
         self.touch();
         match undo {
             MemberUndo::Replaced(result) => {
-                if let Some(member) = self.setup.members.get_mut(result.index) {
-                    member.creature = result.before.clone();
+                if let Some(at) = self.replaced_member(result) {
+                    self.setup.members[at].creature = result.before.clone();
                 }
             }
             MemberUndo::Removed { index, member, .. } => {
@@ -362,6 +361,7 @@ impl GroupDraft {
                 self.reread_lines();
             }
         }
+        Ok(())
     }
     /// Whether no member has moved, been added, changed or removed since the note was read.
     /// The comparison runs only after a change (`members_saved`); each frame reaches it.
@@ -3340,7 +3340,7 @@ fn members(
                         .and_then(|id| snapshot.catalogue.entries.get(&id))
                         .map_or_else(|| creature.label(), |entry| entry.entry.name.clone());
                     replaced = Some(Replaced {
-                        index,
+                        member: member.id,
                         before: std::mem::replace(&mut member.creature, creature.clone()),
                         after: creature,
                         words: format!("Replaced {name} with {chosen}."),
@@ -3387,11 +3387,6 @@ fn members(
         && expanded.as_deref() == Some(member_key(&path, member).as_str())
     {
         *expanded = None;
-    }
-    // A move or a removal changes the members' places: a stored replacement ends. The page
-    // reads this before it records a result made in the same frame.
-    if remove.or(raise).or(lower).is_some() {
-        draft.members_moved = true;
     }
     // One result line: the newest member result takes it (the store replaces).
     if let Some(result) = replaced {

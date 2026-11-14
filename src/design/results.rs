@@ -609,6 +609,12 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
         }
     }
 
+    /// Each result whose owner can never come back (a dropped draft that no Undo can restore)
+    /// ends, in every scope. `reachable` is asked once per result, with its value.
+    pub fn end_unreachable(&mut self, mut reachable: impl FnMut(&T) -> bool) {
+        self.entries.retain(|entry| reachable(&entry.value));
+    }
+
     /// The files changed on disk (a reload, a file event). `holds` says whether a result still
     /// holds; it is asked only for a kind whose `disk_changed` is `Checked`.
     pub fn disk_changed(&mut self, mut holds: impl FnMut(&T) -> bool) {
