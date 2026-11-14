@@ -391,7 +391,7 @@ impl EditDraft {
                 &self.now.creature,
                 &theirs.creature,
             ),
-            ("In", changed.place, &self.now.place, &theirs.place),
+            ("Place", changed.place, &self.now.place, &theirs.place),
         ] {
             if now != disk {
                 effects.push((
@@ -813,6 +813,51 @@ impl Reader {
         out.extend(self.edits.keys().copied());
     }
 
+    /// Whether this reader's save row names a waiting Log field of the note: its edit form is
+    /// open here, and a Log field of the note is open in either reader (ruling Q-t).
+    pub(super) fn save_row_names_log(&self, key: super::LogKey) -> bool {
+        self.edits
+            .get(&key.1)
+            .is_some_and(|draft| draft.campaign == key.0)
+            && self.log_waits(key)
+    }
+
+    /// Whether a Log field of the note is open in either reader.
+    fn log_waits(&self, key: super::LogKey) -> bool {
+        self.held.log_fields.contains_key(&key) || self.logs_elsewhere.contains(&key)
+    }
+
+    /// Whether this reader's footer names its own waiting Log field: the note's edit form is
+    /// open in the other reader, whose save row is not on screen. One cause, one place.
+    pub(super) fn footer_names_log(&self, key: super::LogKey) -> bool {
+        self.held.log_fields.contains_key(&key)
+            && !self.save_row_names_log(key)
+            && !self.edits.contains_key(&key.1)
+            && self.edited_elsewhere.contains(&key.1)
+            && self.form_shown_elsewhere != Some(key.1)
+    }
+
+    /// Hand the other reader what it needs of this one: the edit forms open here, the Log
+    /// fields open here, and the note whose edit form this reader drew in the last pass (its
+    /// save row is on screen). `pass` is this pass's `cumulative_pass_nr`.
+    pub fn share_with(&self, other: &mut super::Reader, pass: u64) {
+        self.edit_forms_into(&mut other.edited_elsewhere);
+        // Copied again only when a field here opened or closed (its stamp), not each pass.
+        if other.logs_elsewhere_from != self.held.log_fields.keys {
+            #[cfg(test)]
+            super::LOG_KEY_SHARES.with(|count| count.set(count.get() + 1));
+            other.logs_elsewhere.clear();
+            other
+                .logs_elsewhere
+                .extend(self.held.log_fields.keys().copied());
+            other.logs_elsewhere_from = self.held.log_fields.keys;
+        }
+        other.form_shown_elsewhere = self
+            .form_drawn
+            .filter(|(id, drawn)| *drawn + 1 >= pass && self.edits.contains_key(id))
+            .map(|(id, _)| id);
+    }
+
     /// Drafts whose note was deleted or given a new identity outside Splat, as footer notices
     /// of the reader's pane (round 27 FE6): they are no note's state, so they never sit in the
     /// body of the note on show. They cannot open again, so the DM copies the text or lets the
@@ -1014,7 +1059,7 @@ impl Reader {
         };
         let words = [
             npc.then(|| slot_words(&draft.now.creature, "Stat block")),
-            Some(slot_words(&draft.now.place, "In")),
+            Some(slot_words(&draft.now.place, "Place")),
             Some(group_words.clone()),
         ];
         // One Change column for Stat block, In and Part of (AI1): an `L` gap after the widest
@@ -1055,7 +1100,7 @@ impl Reader {
                 npc.then_some(&mut draft.now.creature),
                 words[0].clone(),
             ),
-            ("in", "In", Some(&mut draft.now.place), words[1].clone()),
+            ("in", "Place", Some(&mut draft.now.place), words[1].clone()),
         ] {
             let (Some(slot), Some(words)) = (slot, words) else {
                 continue;
@@ -1136,7 +1181,18 @@ impl Reader {
             response
         })
         .has_focus();
-        let switch = crate::encounters::draft_switch_reason();
+        // A Log field of this note waits for this form. The save row says so in its one
+        // sentence, so one cause is said once (ruling Q-t, FC10); a clean form says Cancel.
+        // The draft is out of `edits` while the form draws, so the form asks for the Log
+        // fields alone: it is the form (review of 1f560778).
+        let log_waits = super::takes_log(item, index) && self.log_waits((campaign.id, id));
+        self.form_drawn = Some((id, ui.ctx().cumulative_pass_nr()));
+        let switch = if log_waits {
+            super::LOG_WAITS_FOR_SAVE
+        } else {
+            crate::encounters::draft_switch_reason()
+        };
+        let clean_reason = log_waits.then_some(super::LOG_WAITS_FOR_CANCEL);
         let narrow = switch_reason_below(ui, switch);
         let text = design::field(ui, "Text", None, None, |ui| {
             let font = style::prose_type(ui).font(ui);
@@ -1243,7 +1299,11 @@ impl Reader {
                         discard
                     } else {
                         design::status(ui, state);
-                        Action::quiet("Cancel").show(ui).clicked()
+                        let cancel = Action::quiet("Cancel").show(ui).clicked();
+                        if !narrow {
+                            design::blocked_reason(ui, clean_reason);
+                        }
+                        cancel
                     };
                 });
             });
@@ -1251,6 +1311,8 @@ impl Reader {
         if narrow {
             if dirty {
                 design::blocked_reason(ui, Some(switch));
+            } else if clean_reason.is_some() {
+                design::blocked_reason(ui, clean_reason);
             } else {
                 ui.add_space(reason_line(ui));
             }

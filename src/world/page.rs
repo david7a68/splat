@@ -549,24 +549,10 @@ impl WorldPage {
             data.insert_temp(egui::Id::new("reader_surface"), egui::Id::new("world"))
         });
         let broken = index.map_or(0, |index| index.broken_world.len());
-        let count = index.map_or(0, |index| {
-            index.world_groups("").values().map(Vec::len).sum::<usize>() + broken
-        });
-        let broken_links = index.map_or(0, |index| {
-            index
-                .world_groups("")
-                .values()
-                .flatten()
-                .filter(|(at, _)| {
-                    !super::broken_links(&index.items[*at], index).is_empty()
-                        || index
-                            .duplicate_world
-                            .contains_key(&index.items[*at].entry.path)
-                        || !index.items[*at].entry.flags.is_empty()
-                        || crate::roll_table::fault_count(&index.items[*at].entry.body) > 0
-                })
-                .count()
-        });
+        // The fault records, found once per index: the count, its menu and the rows read them.
+        let faults = index.map(|index| index.note_faults());
+        let count = faults.map_or(0, |faults| faults.notes() + broken);
+        let broken_links = faults.map_or(0, |faults| faults.listed().len());
         let mut create = None;
         design::page_header(
             ui,
@@ -596,15 +582,10 @@ impl WorldPage {
                         },
                     );
                     design::layout::menu_popup(ui, &response).show(|ui| {
-                        if let Some(index) = index {
-                            for &(at, _) in index.world_groups("").values().flatten() {
+                        if let (Some(index), Some(faults)) = (index, faults) {
+                            for &at in faults.listed() {
                                 let item = &index.items[at];
-                                if (!super::broken_links(item, index).is_empty()
-                                    || index.duplicate_world.contains_key(&item.entry.path)
-                                    || !item.entry.flags.is_empty()
-                                    || crate::roll_table::fault_count(&item.entry.body) > 0)
-                                    && design::link(ui, &item.entry.name).clicked()
-                                {
+                                if design::link(ui, &item.entry.name).clicked() {
                                     self.open_note(item.entry.id);
                                     ui.close();
                                 }
@@ -1717,8 +1698,6 @@ impl WorldPage {
             ui.spacing_mut().item_spacing.y = 0.0;
             for &(position, depth) in rows {
                 let entry = &index.items[position].entry;
-                let problems = super::broken_links(&index.items[position], index);
-                let faults = crate::roll_table::fault_count(&entry.body);
                 let duplicate = index.duplicate_world.contains_key(&entry.path);
                 let name = if duplicate {
                     std::path::Path::new(&entry.path)
@@ -1729,28 +1708,11 @@ impl WorldPage {
                 } else {
                     entry.name.clone()
                 };
-                let detail = if duplicate {
-                    format!("{} Same note in two files", icons::WARN)
-                } else if !entry.flags.is_empty() {
-                    format!(
-                        "{} {}",
-                        icons::WARN,
-                        design::count(entry.flags.len(), "value not read", "values not read")
-                    )
-                } else if faults > 0 {
-                    format!(
-                        "{} {}",
-                        icons::WARN,
-                        design::count(faults, "table fault", "table faults")
-                    )
-                } else if !problems.is_empty() {
-                    format!("{} {}", icons::WARN, super::link_problem_words(&problems))
+                // The note's fault record, the one the header's count and its menu read.
+                let detail = if let Some(fault) = index.note_faults().of_note(position) {
+                    format!("{} {}", icons::WARN, fault.words())
                 } else if entry.kind == "world" {
-                    if index.items.iter().any(|other| {
-                        other.entry.id != entry.id
-                            && other.entry.kind == "world"
-                            && other.entry.name == entry.name
-                    }) {
+                    if index.shares_name(position) {
                         let file = std::path::Path::new(&entry.path)
                             .file_name()
                             .unwrap_or_default()
