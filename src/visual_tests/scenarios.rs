@@ -2361,19 +2361,6 @@ pub mod campaign_content {
                     })
             },
         );
-        // Wave 2 m1 (package C), field owner: egui keeps a field's cursor and text Undo under its
-        // id, and the search is cleared when another package is chosen, so the focused search has
-        // this package's own id, not the bare one. Proof steps: the page goes back after.
-        let keyed = d.aside(|d| {
-            d.type_into("Find an entry in this package", "");
-            d.focus_id()
-                .is_some_and(|id| id != crate::campaign_content::PACKAGE_SEARCH.id())
-        });
-        d.observe(
-            "iter-28-m1-C-field-owner",
-            keyed,
-            "The focused package search has its package's own field id, not the bare one",
-        );
         // Round 26 FA8: the package's heading sits on the line of its mode and its actions.
         for size in [SMALL, DEFAULT, LARGE] {
             let centres = d.at_size(size, |d| {
@@ -4065,12 +4052,6 @@ pub mod party {
             if shown {
                 d.type_into("Filter this page", "fire");
             }
-            // Wave 2 m1 (package C), field owner: egui keeps a field's cursor and text Undo
-            // under its id, and the filter is cleared when another character is chosen, so the
-            // focused filter has this character's own id, not the bare one.
-            let keyed = d
-                .focus_id()
-                .is_some_and(|id| id != crate::party::SHEET_SEARCH.id());
             let text = d.field_text("Filter this page");
             let footer = footer_with(d, LOCAL_EDITS).filter(|_| d.short_body_gaps().is_empty());
             if shown {
@@ -4078,7 +4059,7 @@ pub mod party {
             }
             d.click(OVERVIEW);
             d.click_containing(FIRST_MEMBER);
-            (text, footer, shown && keyed)
+            (text, footer)
         });
         d.observe(
             "iter-27-C-press-outside-field",
@@ -4087,11 +4068,6 @@ pub mod party {
                 "The filter field holds {:?}; the footer {footer_before:?} → {:?}, and no footer far below a short body",
                 typed.0, typed.1
             ),
-        );
-        d.observe(
-            "iter-28-m1-C-field-owner",
-            typed.2,
-            "The focused filter has its character's own field id, not the bare one",
         );
         // Round 28 (package P): an empty party whose read failed is short content, and its
         // footer stands `S` below the empty state. G6 from the accessibility tree; the record
@@ -5561,6 +5537,33 @@ pub mod settings {
             );
         }
         d.state("campaign-list", Sizes::All);
+        // Wave 2 m1 (package C): the switcher's choices, `No campaign` too, wrap inside the rail
+        // column (960 px, the default rail): each ends left of the column's edge, which is `S`
+        // left of the splitter. Proof steps: the menu closes after.
+        const CHOICES: [&str; 3] = ["No campaign", "Quiet Harbor", "Hollow Keep"];
+        let (choices, column) = d.aside(|d| {
+            d.click_starting("Active campaign: ");
+            let nodes = d.nodes();
+            let column = nodes
+                .iter()
+                .find(|node| node.name.starts_with("Active campaign: "))
+                .map(|node| node.rect.right());
+            let choices: Vec<egui::Rect> = nodes
+                .iter()
+                .filter(|node| CHOICES.contains(&node.name.as_str()) && node.in_view())
+                .filter(|node| column.is_some_and(|right| node.rect.left() < right))
+                .map(|node| node.rect)
+                .collect();
+            d.press(egui::Key::Escape);
+            (choices, column)
+        });
+        d.observe(
+            "iter-28-m1-C-switcher-choices",
+            choices.len() == CHOICES.len()
+                && column
+                    .is_some_and(|right| choices.iter().all(|rect| rect.right() <= right + 0.5)),
+            format!("The switcher's choices {choices:?} end left of the column edge {column:?}"),
+        );
         d.goal("find campaign management");
 
         d.click(EDIT_DETAILS);

@@ -396,17 +396,19 @@ impl Settings {
                 data.get_temp::<bool>(egui::Id::new("focus_cookie"))
                     .unwrap_or(false)
             });
-        let heading_top = ui.cursor().top();
-        ui.ctx().data_mut(|data| {
-            data.insert_temp(egui::Id::new("account_heading_content_y"), heading_top)
-        });
-        design::heading(
+        let heading = design::heading(
             ui,
             design::Heading::Group {
                 title: "D&D Beyond account",
                 count: 0,
             },
         );
+        // The heading's own top (the heading adds its space above it first), which the import
+        // hint in `DndBeyond::show_import` reads to tell whether the heading is in view.
+        let heading_top = heading.rect.top();
+        ui.ctx().data_mut(|data| {
+            data.insert_temp(egui::Id::new("account_heading_content_y"), heading_top)
+        });
         // Round 28 FO3: a connected account opens its sign-in and Disconnect as a caret section,
         // as the other inline forms on this page open (`Add campaign`).
         let details = !open

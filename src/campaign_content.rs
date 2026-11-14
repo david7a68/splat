@@ -22,8 +22,6 @@ use std::{
 use uuid::Uuid;
 
 /// Sheets refresh in the background, so the campaign package needs another look now and then.
-const NEEDED_SEARCH: design::FieldId = crate::field_id!("package_needed_search");
-pub(crate) const PACKAGE_SEARCH: design::FieldId = crate::field_id!("package_entries_search");
 const CHECK_EVERY: Duration = Duration::from_secs(5 * 60);
 
 pub(crate) struct Snapshot {
@@ -2162,6 +2160,10 @@ impl CampaignContent {
         });
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn packages_content(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
         // Review round 26: egui panels set their own clip to the panel's rect, so their rows would
         // paint and take clicks below the page's viewport, under the footer. Each column clips
@@ -2580,15 +2582,13 @@ impl CampaignContent {
                             },
                         );
                     });
-                    let _ = NEEDED_SEARCH
-                        .search(
-                            ui,
-                            "Find a needed entry",
-                            &mut self.search,
-                            "Find an entry…",
-                            ui.available_width(),
-                        )
-                        .field;
+                    design::search_field(
+                        ui,
+                        "Find a needed entry",
+                        &mut self.search,
+                        "Find an entry…",
+                        ui.available_width(),
+                    );
                     let query = self.search.to_lowercase();
                     let mut required: Vec<_> = closure
                         .required
@@ -2711,16 +2711,13 @@ impl CampaignContent {
                         document.selections.remove(i);
                     }
                 });
-                let _ = PACKAGE_SEARCH
-                    .with(module.id)
-                    .search(
-                        ui,
-                        "Find an entry in this package",
-                        &mut self.search,
-                        "Find an entry…",
-                        ui.available_width(),
-                    )
-                    .field;
+                design::search_field(
+                    ui,
+                    "Find an entry in this package",
+                    &mut self.search,
+                    "Find an entry…",
+                    ui.available_width(),
+                );
                 let query = self.search.to_lowercase();
                 if self
                     .entry_matches

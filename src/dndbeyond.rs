@@ -495,7 +495,16 @@ impl DndBeyond {
                         },
                     ))
                     .show_ui(ui, |ui| {
-                        crate::design::choice_value(ui, &mut selected, None, "Not linked");
+                        if crate::design::extras::choice_wrapped(
+                            ui,
+                            selected.is_none(),
+                            "Not linked",
+                            None,
+                        )
+                        .clicked()
+                        {
+                            selected = None;
+                        }
                         for remote in &self.campaigns {
                             let used = local.linked_elsewhere(&remote.id);
                             ui.add_enabled_ui(!used, |ui| {

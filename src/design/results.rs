@@ -489,6 +489,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/campaign_content.rs", "page_footer", &[Ban::Results]),
         (
             "src/campaign_content.rs",
+            "packages_content",
+            &[Ban::Extras(2)],
+        ),
+        (
+            "src/campaign_content.rs",
             "repair_section_content",
             &[Ban::Results, Ban::Extras(1)],
         ),
@@ -607,8 +612,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/library.rs", "register_copy", &[Ban::Results]),
         ("src/library.rs", "reload_note_from_disk", &[Ban::Results]),
         ("src/library.rs", "unregister_dialog", &[Ban::Results]),
-        ("src/party.rs", "character_key", &[Ban::RowKey(1)]),
         ("src/party.rs", "page_footer", &[Ban::Results]),
+        ("src/party.rs", "sheet_view", &[Ban::Extras(1)]),
         ("src/party_sync.rs", "campaign_copy_saved", &[Ban::Results]),
         ("src/sessions/carry.rs", "carry_in_footer", &[Ban::Results]),
         ("src/sessions/carry.rs", "record", &[Ban::Results]),

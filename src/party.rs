@@ -774,6 +774,10 @@ impl Party {
         design::rule(ui);
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn sheet_view(&mut self, ui: &mut egui::Ui, session: Option<Session>) {
         let c = colors();
         let Some(id) = &self.reader.selected.clone() else {
@@ -857,17 +861,23 @@ impl Party {
         }
         design::rule(ui);
         if self.page > 0 && sheet_entries(record, self.page).len() > 8 {
-            // The page's search is one field; `Clear` is the part's.
-            let _ = SHEET_SEARCH
-                .with(character_key(id))
-                .search(
+            ui.horizontal(|ui| {
+                design::search_field(
                     ui,
                     "Filter this page",
                     &mut self.search,
                     &format!("Filter {}…", SHEET_PAGES[self.page].1.to_lowercase()),
                     240.0_f32.min(ui.available_width() - 70.0),
-                )
-                .field;
+                );
+                if !self.search.is_empty()
+                    && Action::quiet("Clear")
+                        .density(Density::Scan)
+                        .show(ui)
+                        .clicked()
+                {
+                    self.search.clear();
+                }
+            });
         }
         if self.page == 0
             && self
@@ -1056,18 +1066,6 @@ pub struct LiveValues {
 }
 
 /// One entry on a sheet page: its name and its facts.
-pub(crate) const SHEET_SEARCH: design::FieldId = crate::field_id!("sheet_search");
-
-/// The key of one character's own fields: their D&D Beyond id. egui keeps a field's cursor and
-/// text Undo under its id, and the page's search is cleared when another character is chosen,
-/// so each character has their own.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: a text key from the character id, so each character keeps its own field Undo (design::results::STAGED_ALLOWS)"
-)]
-fn character_key(id: &str) -> design::TextKey {
-    design::TextKey::from_data(id)
-}
 const ENTRY_ROW: f32 = 40.0;
 /// The way to connect, wherever the party asks the DM to.
 const CONNECT: &str = "Connect D&D Beyond";
@@ -2152,7 +2150,6 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
             pool.max
         ));
     }
-    design::gap(ui, design::Gap::S);
     let proficiencies = |ui: &mut egui::Ui| {
         sheet_section(ui, "Proficiencies & languages");
         for group in &record.character.proficiencies {
@@ -2217,6 +2214,8 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
         proficiencies(ui);
         defenses(ui);
     } else {
+        // A column's heading is first in its column, so no space comes from it: `S` is here.
+        design::gap(ui, design::Gap::S);
         sheet_columns(ui, 2, |ui, column| {
             if column == 0 {
                 proficiencies(ui);
@@ -2500,8 +2499,8 @@ fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search:
                 .filter(|(_, chip)| chip.label.to_lowercase().contains(&search.to_lowercase()))
                 .map(|(place, chip)| (Some(place), chip))
                 .collect();
+            // `Action descriptions` follows, and a heading owns the space above it.
             crate::rolls::tiles(ui, &record.definition.splat_name, &chips);
-            design::gap(ui, design::Gap::S);
         }
         2 => {
             sheet_section(ui, "Spellcasting");

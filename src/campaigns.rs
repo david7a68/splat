@@ -702,7 +702,16 @@ impl Campaigns {
                             ui.close();
                         }
                     } else {
-                        design::choice_value(ui, &mut selected, None, "No campaign");
+                        if design::extras::choice_wrapped(
+                            ui,
+                            selected.is_none(),
+                            "No campaign",
+                            None,
+                        )
+                        .clicked()
+                        {
+                            selected = None;
+                        }
                     }
                     for campaign in &self.data.campaigns {
                         // A campaign's name is the DM's own words: it wraps, never cuts.

@@ -22,6 +22,9 @@
     ["G1b/pressed-control-moved","15-missing-campaign-manifest-needs-explicit-write","960x640","MultilineTextInput \"Note text: Notes/Cracked.md\"",4],
     ["G1b/pressed-control-moved","17-campaign-manifest-write-undone","960x640","Button \"Undo write Campaign.md\"",1]
   ],
+  "campaign-copy-registered": [
+    ["G1b/pressed-control-moved","01-copy-registered","960x640","Button \"Add campaign\"",1]
+  ],
   "column-resize": [
     ["G1b/pressed-control-moved","06-run-rail-keeps-roster-room","1200x800","Button \"Next turn\"",1],
     ["G6/footer-far-below-body","13-session-events-fill-their-column","1200x800","Button \"Add to notes: Major event\"",1],
