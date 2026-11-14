@@ -2998,10 +2998,16 @@ fn group_fields(
         let hint = design::placeholder(ui, "When they arrive, what they want. Markdown is fine.");
         let rows = if open.is_some() { 2 } else { 4 };
         // Keyed by the group draft, so two groups never share its text or its Undo.
-        let output = GROUP_NOTES.of(draft.id()).editor(ui, &mut draft.notes, |edit| {
-            super::notes_style(edit, rows).hint_text(hint)
-        });
-        design::named(ui, &output.response, &format!("{NOTES_FIELD} for {}", draft.name));
+        let output = GROUP_NOTES
+            .of(draft.id())
+            .editor(ui, &mut draft.notes, |edit| {
+                super::notes_style(edit, rows).hint_text(hint)
+            });
+        design::named(
+            ui,
+            &output.response,
+            &format!("{NOTES_FIELD} for {}", draft.name),
+        );
     });
 }
 

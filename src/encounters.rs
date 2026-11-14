@@ -2695,7 +2695,8 @@ enum EncounterFault {
     /// A copied note's separation, or its Undo, failed: the reason.
     SeparationFailed(String),
     /// A warning of a group's file that no member row states.
-    FileWarning(String),    /// The draft cannot be saved as it is: a missing creature, an empty group. The DM fixes
+    FileWarning(String),
+    /// The draft cannot be saved as it is: a missing creature, an empty group. The DM fixes
     /// it in the editor.
     Invalid(String),
 }
@@ -4919,11 +4920,8 @@ impl Encounters {
         self.record_member_results();
         self.record_editor_results();
         let draft_id = self.draft.as_ref().map(|draft| draft.id);
-        let mut messages = design::outcome::Messages::new(
-            frame,
-            ("encounter_editor_footer", draft_id),
-            width,
-        );
+        let mut messages =
+            design::outcome::Messages::new(frame, ("encounter_editor_footer", draft_id), width);
         for (owner, tone, words, undo) in self.editor_result_lines() {
             let Some(shown) = self.editor_results.get(&owner) else {
                 continue;
@@ -5587,7 +5585,8 @@ impl Encounters {
                 }
                 FooterPress::ChooseFolder => self.wants_run_folder = true,
                 // The list shows no member result and no separation.
-                FooterPress::UndoMember | FooterPress::UndoSeparation | FooterPress::UndoEditor => {}
+                FooterPress::UndoMember | FooterPress::UndoSeparation | FooterPress::UndoEditor => {
+                }
             }
         }
         let Some(action) = paned.body else {
