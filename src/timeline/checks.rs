@@ -1,9 +1,9 @@
 //! A journey's encounter checks: one roll on a marked table for each day or watch of a Travel
 //! event, kept in that event's lines of `Timeline.md` by its offset from the journey's start.
 //! The plan's Travel row and Timeline's detail column draw the same block from here.
-#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{Book, Check, DAY, Event, HOUR, Kind, clock_words, read_duration};
-use crate::design::{self, Action, Density, Status, Tone, Type, colors, icons};
+use crate::design::outcome::{Fault, Sentence, Severity};
+use crate::design::{self, Action, Density, Status, Type, colors, icons};
 use crate::roll_table::{Per, Table};
 use eframe::egui;
 use splat::execution::dice::Random;
@@ -521,7 +521,7 @@ pub fn header(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<A
         )
         .on_hover_text(fault);
     } else if let Some(warning) = table.and_then(|table| table.per.warning()) {
-        design::small_message(ui, Tone::Warning, &warning);
+        check_fault(ui, &CheckFault::Table(&warning));
     }
     act
 }
@@ -723,7 +723,7 @@ pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Ac
             && check.is_none()
             && at == Some(*place)
         {
-            design::small_message(ui, Tone::Warning, problem);
+            check_fault(ui, &CheckFault::Line(problem));
         }
         act
     };
@@ -734,11 +734,11 @@ pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Ac
         design::blocked_reason(ui, blocked);
     }
     if let Err(count) = schedule {
-        design::small_message(
+        check_notice(
             ui,
-            Tone::Info,
-            &format!(
-                "This journey has {count} checks. Split it into shorter journeys to roll them here."
+            crate::sentence!(
+                "This journey has {} checks. Split it into shorter journeys to roll them here.",
+                count
             ),
         );
     }
@@ -771,7 +771,7 @@ pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Ac
         }
     }
     if let Some((None, problem)) = &state.problem {
-        design::small_message(ui, Tone::Warning, problem);
+        check_fault(ui, &CheckFault::Line(problem));
     }
     act
 }
@@ -962,6 +962,50 @@ pub fn settle_length(book: &mut Book, open: Option<usize>) {
         }
     };
     note_taken(book, taken);
+}
+
+/// Why a journey's checks cannot go on as they are, by kind; each one needs the DM's fix.
+enum CheckFault<'a> {
+    /// The chosen table's period cannot be read as written: the table's words.
+    Table(&'a str),
+    /// An act on one line, or on the block, could not happen: its words.
+    Line(&'a str),
+}
+
+impl Fault for CheckFault<'_> {
+    fn severity(&self) -> Severity {
+        Severity::NeedsFixing
+    }
+
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "a table's and an act's words come from the DM's table and the Timeline's write"
+    )]
+    fn cause(&self) -> Sentence {
+        let words = match self {
+            Self::Table(words) | Self::Line(words) => *words,
+        };
+        Sentence::outside(words).unwrap_or(crate::sentence!("This check cannot go on now."))
+    }
+}
+
+/// A fault of one line or of the block, where it is: the block shows on the plan and on
+/// Timeline, inside their forms, so it is the row's place, not a pane's footer.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "a check's fault belongs to its line in the block (`Ban::Body`)"
+)]
+fn check_fault(ui: &mut egui::Ui, fault: &CheckFault<'_>) {
+    design::outcome::row_fault(ui, fault);
+}
+
+/// A note on the whole block, at its place in the block.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "a note on the block belongs to the block (`Ban::Body`)"
+)]
+fn check_notice(ui: &mut egui::Ui, words: Sentence) {
+    design::outcome::banner(ui, design::outcome::Banner::Notice(words));
 }
 
 #[cfg(test)]

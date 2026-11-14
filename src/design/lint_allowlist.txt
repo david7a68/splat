@@ -29,7 +29,6 @@ src/sessions/page.rs allow-deprecated 1
 src/sessions/plan.rs allow-deprecated 1
 src/sessions/slash.rs allow-deprecated 1
 src/settings.rs allow-deprecated 1
-src/timeline/checks.rs allow-deprecated 1
 src/timeline/page.rs allow-deprecated 1
 src/world.rs allow-deprecated 1
 src/world/edit.rs allow-deprecated 1
