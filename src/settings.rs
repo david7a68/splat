@@ -397,19 +397,13 @@ impl Settings {
                 data.get_temp::<bool>(egui::Id::new("focus_cookie"))
                     .unwrap_or(false)
             });
-        let heading = design::heading(
+        design::heading(
             ui,
             design::Heading::Group {
                 title: "D&D Beyond account",
                 count: 0,
             },
         );
-        // The heading's own top (the heading adds its space above it first), which the import
-        // hint in `DndBeyond::show_import` reads to tell whether the heading is in view.
-        let heading_top = heading.rect.top();
-        ui.ctx().data_mut(|data| {
-            data.insert_temp(egui::Id::new("account_heading_content_y"), heading_top)
-        });
         // Round 28 FO3: a connected account opens its sign-in and Disconnect as a caret section,
         // as the other inline forms on this page open (`Add campaign`).
         let details = !open
@@ -455,16 +449,10 @@ impl Settings {
                 }
             });
             if details {
-                let section = egui::CollapsingHeader::new("Sign-in details")
-                    .icon(design::section_icon)
-                    .id_salt("compact_sign_in_details")
-                    .show(ui, |ui| self.show_account(ui, false, false));
-                // egui gives a caret section no expanded state; screen readers need it.
-                let expanded = section.body_response.is_some();
-                ui.ctx()
-                    .accesskit_node_builder(section.header_response.id, |node| {
-                        node.set_expanded(expanded)
-                    });
+                // The section says whether it is open (expanded) to a screen reader.
+                design::section_with_id(ui, "compact_sign_in_details", "Sign-in details", |ui| {
+                    self.show_account(ui, false, false)
+                });
             }
         }
         ui.ctx().data_mut(|data| data.insert_temp(id, open));

@@ -5,10 +5,12 @@ use super::{
     Rules, Says, State, TrackerFault, Trackers, Unrecorded, ledger::Entry, ledger::NoticeRef,
     mark_of,
 };
+use crate::design::outcome::PaneFrame;
 use crate::design::outcome::{
-    Banner, Fault, FaultMessage, KeptOutcome, MessageChoice, Outcome, PagePlaceholder, Pressed,
-    Said, Sentence, UndoStep, Verb,
+    Banner, Choice, Fault, FaultMessage, KeptOutcome, MessageChoice, Messages, Outcome,
+    PagePlaceholder, Said, Sentence, UndoStep, Verb,
 };
+use crate::design::pane::{Body, ContentScroll, held_seen, hold_press};
 use crate::design::{self, Action, Density, Gap, Heading, TextKey, Type, colors, icons};
 use eframe::egui;
 use std::collections::HashSet;
@@ -24,11 +26,6 @@ pub(crate) struct ViewState {
     /// The act pressed in this frame. The shell applies it after Lookup drew, once it has read
     /// the day count again, so an act uses the day at the click.
     pressed: Option<Act>,
-    /// The quick action pressed last, and where it was, for a few passes after the press.
-    keep: Option<Keep>,
-    /// Blank room after the trackers, so the scroll can hold a pressed action in its place
-    /// near the end of the view. It shrinks as the DM scrolls back up.
-    room: f32,
     /// A name wider than its column, as shortened for that width, so a frame with no change
     /// does not shorten it again.
     fitted: std::collections::HashMap<(String, u32), String>,
@@ -140,20 +137,6 @@ fn columns(
     }
 }
 
-/// How many passes after a press the view still holds the pressed action in place. The Due
-/// list can settle over more than one: a scroll bar that comes with it narrows the words.
-const KEEP_PASSES: u64 = 6;
-
-/// A pressed quick action: its line and label, its top on screen at the press, the pass of the
-/// press, its top as drawn in the pass now, and the height of the view's content at the press.
-struct Keep {
-    place: (String, Option<String>, String),
-    top: f32,
-    pass: u64,
-    now: Option<f32>,
-    content: Option<f32>,
-}
-
 impl ViewState {
     /// The amount field again, with the number typed for an act that recorded nothing.
     pub(super) fn ask_again(
@@ -170,17 +153,6 @@ impl ViewState {
             amount.to_string(),
         ));
         self.focus_asking = true;
-    }
-
-    /// Hold this quick action in place on screen for the passes after its press.
-    fn hold(&mut self, ui: &egui::Ui, key: &str, instance: &Option<String>, label: &str, top: f32) {
-        self.keep = Some(Keep {
-            place: (key.to_owned(), instance.clone(), label.to_owned()),
-            top,
-            pass: ui.ctx().cumulative_pass_nr(),
-            now: None,
-            content: None,
-        });
     }
 
     /// The words in the amount field, while it is open.
@@ -241,86 +213,51 @@ impl Trackers {
     }
 }
 
-/// The message footer, then the empty state, a file that cannot be read, or the trackers.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
+/// What the DM can press in the view's footer and in its placeholder.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TrackerPress {
+    /// `Undo: <label>`: the newest act of the session being played.
+    UndoAct,
+    AddToTimeline,
+    /// `Undo add`: the event `Add to Timeline` made.
+    UndoAdd,
+    ReadAgain,
+    ShowFile,
+}
+
+/// The view as one pane: the empty state, a file that cannot be read, or the trackers, as the
+/// pane's scroll column, then the message footer, whose messages are made before the body runs.
+/// A press that raises or ends a Due row above a quick action holds that action under the
+/// pointer (`ContentScroll::holds_presses`), so a second press of a still pointer presses it
+/// again; the view opens at its top.
 pub fn show(ui: &mut egui::Ui, trackers: &mut Trackers, from_top: bool) {
     let mut act = None;
-    // The footer comes first: why an act recorded nothing stays in view, also when the row it
-    // was pressed on went away.
-    let bottom = footer(ui, trackers, &mut act);
+    let frame = PaneFrame::new(ui);
+    let messages = messages(&frame, trackers, ui.available_width());
     if !trackers.in_play() {
-        design::gap(ui, Gap::S);
-        design::empty_state(
-            ui,
-            icons::BELL,
-            "No house rules in play",
-            "Turn one on to see its trackers here.",
-            |ui| {
-                // One route has one form: a bordered button, as `Campaign → Packages` is.
-                if Action::secondary(RULES_ROUTE).show(ui).clicked() {
-                    trackers.wants_rules = true;
-                }
-            },
-        );
+        let paned = messages.pane(ui, Body::Content, |ui| {
+            design::gap(ui, Gap::S);
+            design::empty_state(
+                ui,
+                icons::BELL,
+                "No house rules in play",
+                "Turn one on to see its trackers here.",
+                |ui| {
+                    // One route has one form: a bordered button, as `Campaign → Packages` is.
+                    if Action::secondary(RULES_ROUTE).show(ui).clicked() {
+                        trackers.wants_rules = true;
+                    }
+                },
+            );
+        });
+        footer_press(trackers, paned.pressed.map(|press| press.id), &mut act);
         trackers.view.pressed = act;
         return;
     }
-    // What is due is in view when the view opens.
-    let mut area = egui::ScrollArea::vertical()
-        .id_salt("trackers_view")
-        .max_height((bottom - ui.cursor().top()).max(0.0))
-        .auto_shrink([false, false]);
-    if from_top {
-        area = area.vertical_scroll_offset(0.0);
-        trackers.view.keep = None;
-    }
-    let room = trackers.view.room;
-    let output = area.show(ui, |ui| {
-        body(ui, trackers, &mut act);
-        ui.add_space(room);
-    });
-    hold_pressed_place(ui, &mut trackers.view, output);
+    let scroll = ContentScroll::default().from_top(from_top).holds_presses();
+    let paned = messages.pane_content(ui, scroll, |ui| body(ui, trackers, &mut act));
+    footer_press(trackers, paned.pressed.map(|press| press.id), &mut act);
     trackers.view.pressed = act;
-}
-
-/// A press that raises or ends a Due row changes the list's height above the trackers. In the
-/// passes after the press the view scrolls by as much, so the pressed action is where it was and
-/// a second press of a still pointer presses it again. It acts only while the content's height
-/// differs from the press's; the DM's own wheel or drag, or a view opened again, ends it. The
-/// room after the trackers is only what the scroll needs to hold it there.
-fn hold_pressed_place(
-    ui: &egui::Ui,
-    view: &mut ViewState,
-    output: egui::scroll_area::ScrollAreaOutput<()>,
-) {
-    let mut state = output.state;
-    let pass = ui.ctx().cumulative_pass_nr();
-    let content = output.content_size.y - view.room;
-    let scrolled = ui.input(|i| {
-        i.raw_scroll_delta != egui::Vec2::ZERO
-            || i.smooth_scroll_delta != egui::Vec2::ZERO
-            || i.pointer.is_decidedly_dragging()
-    });
-    view.keep
-        .take_if(|keep| scrolled || pass > keep.pass + KEEP_PASSES);
-    if let Some(keep) = view.keep.as_mut()
-        && (*keep.content.get_or_insert(content) - content).abs() > 0.5
-        && let Some(now) = keep.now.take()
-        && (now - keep.top).abs() > 0.5
-    {
-        let offset = (state.offset.y + now - keep.top).max(0.0);
-        let end = output.content_size.y - output.inner_rect.height();
-        view.room += (offset - end).max(0.0);
-        state.offset.y = offset;
-        state.store(ui.ctx(), output.id);
-        ui.ctx()
-            .request_discard("a press moved the Due list above it");
-        return;
-    }
-    view.room = (state.offset.y + output.inner_rect.height() - content).max(0.0);
 }
 
 fn apply(trackers: &mut Trackers, act: Act) {
@@ -361,18 +298,25 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
     if let Some(error) = &trackers.unreadable {
         let path = trackers.path();
         let fault = TrackerFault::LedgerUnreadable(error.clone());
-        let hover = path.as_ref().map(|path| path.display().to_string());
-        let mut placeholder =
-            PagePlaceholder::new(&fault).choice(MessageChoice::Choice("Try again"));
-        if let Some(hover) = &hover {
-            placeholder = placeholder.choice(MessageChoice::Link {
-                word: "Show file",
-                hover: Some(hover),
-            });
+        let mut placeholder = PagePlaceholder::new(&fault).choice(Choice::new(
+            MessageChoice::Choice("Try again"),
+            TrackerPress::ReadAgain,
+        ));
+        if let Some(path) = &path {
+            placeholder = placeholder.choice(
+                Choice::new(
+                    MessageChoice::Link {
+                        word: "Show file",
+                        hover: None,
+                    },
+                    TrackerPress::ShowFile,
+                )
+                .hover(path.display().to_string()),
+            );
         }
         match placeholder.show(ui) {
-            Some(Pressed::Choice(0)) => *act = Some(Act::ReadAgain),
-            Some(Pressed::Choice(_)) => {
+            Some(TrackerPress::ReadAgain) => *act = Some(Act::ReadAgain),
+            Some(TrackerPress::ShowFile) => {
                 if let Some(path) = path
                     && let Ok(url) = reqwest::Url::from_file_path(&path)
                 {
@@ -393,7 +337,8 @@ fn body(ui: &mut egui::Ui, trackers: &mut Trackers, act: &mut Option<Act>) {
     } = trackers;
     // A definition that cannot be read shows no value, never an old one.
     if let Some(error) = &rules.unreadable {
-        let _ = PagePlaceholder::new(&TrackerFault::NotesUnreadable(error.clone())).show(ui);
+        let _ = PagePlaceholder::<TrackerPress>::new(&TrackerFault::NotesUnreadable(error.clone()))
+            .show(ui);
         return;
     }
     // A day count that is not known shows no day notice, never an old one, and says why.
@@ -817,13 +762,10 @@ fn quick_actions(
                 None => quick.label.clone(),
             })
             .show(ui);
-        if let Some(keep) = view.keep.as_mut().filter(|keep| {
-            (&keep.place.0, &keep.place.1, &keep.place.2) == (&place.0, &place.1, &quick.label)
-        }) {
-            keep.now = Some(response.rect.top());
-        }
+        let control = (&place.0, &place.1, &quick.label);
+        held_seen(ui, control, response.rect.top());
         if response.clicked() {
-            view.hold(ui, &place.0, &place.1, &quick.label, response.rect.top());
+            hold_press(ui, control, &response);
             // Read on the click only: a dice amount is parsed to tell it from `ask`.
             if quick.asks() {
                 view.asking = Some((
@@ -928,7 +870,7 @@ fn amount_field(
         if enter && let Ok(amount) = typed.trim().parse::<i64>() {
             let (key, instance) = (key.clone(), instance.clone());
             // Enter is the press: the action keeps its place as a click's does.
-            view.hold(ui, &key, &instance, label, response.rect.top());
+            hold_press(ui, (&key, &instance, label), &response);
             *act = Some(Act::Press {
                 key,
                 instance,
@@ -940,83 +882,93 @@ fn amount_field(
     }
 }
 
-/// The view's message footer: why the last act recorded nothing, then the last act of the
-/// session being played with `Undo: <label>` and `Add to Timeline`, or, after `Add to
-/// Timeline`, `Added to the Timeline.` with `Undo add`. Nothing shows while `Trackers.md`
-/// cannot be read. Returns the y where the body ends.
+/// The view's footer messages, made before the body runs: why the last act recorded nothing,
+/// then the last act of the session being played with `Undo: <label>` and `Add to Timeline`, or,
+/// after `Add to Timeline`, `Added to the Timeline.` with `Undo add`. Nothing shows while
+/// `Trackers.md` cannot be read.
 #[allow(
     clippy::disallowed_methods,
     reason = "a refusal carries the ledger’s words"
 )]
-fn footer(ui: &mut egui::Ui, trackers: &Trackers, act: &mut Option<Act>) -> f32 {
-    let shown = trackers.unreadable.is_none();
+fn messages<'f>(
+    frame: &'f PaneFrame,
+    trackers: &Trackers,
+    width: f32,
+) -> Messages<'f, TrackerPress> {
+    let mut messages = Messages::new(frame, "trackers_footer", width);
+    if trackers.unreadable.is_some() {
+        return messages;
+    }
+    match &trackers.reason {
+        Some(Unrecorded::Refused(why)) => {
+            messages.outcome(Outcome::Refused(
+                Sentence::outside(why.as_str())
+                    .unwrap_or(crate::sentence!("Nothing was recorded.")),
+            ));
+        }
+        Some(Unrecorded::NotSaved(error)) => {
+            messages.outcome(FaultMessage::new(&TrackerFault::NotSaved(error.clone())));
+        }
+        None => {}
+    }
     let entries = trackers.newest();
-    let result = entries.first().zip(trackers.result.as_ref());
-    let added = result.and_then(|(first, _)| {
+    let (Some(first), Some((label, words))) = (entries.first(), trackers.result.as_ref()) else {
+        return messages;
+    };
+    let added = trackers
+        .added
+        .as_ref()
+        .filter(|added| added.entry == first.id);
+    let Some(shown) = trackers
+        .played_owner()
+        .and_then(|owner| trackers.results.get(&owner))
+    else {
+        return messages;
+    };
+    let line = shown.outcome(frame, |_| match added {
+        // The event waits in the Timeline's draft when its save failed: say so, not success.
+        Some(added) => match &added.not_saved {
+            Some(words) => KeptOutcome::Fault(
+                FaultMessage::new(&TrackerFault::TimelineNotSaved(words.clone())),
+                UndoStep::verb(Verb::Add).pressed_as(TrackerPress::UndoAdd),
+            ),
+            None => Said::new(crate::sentence!("Added to the Timeline."))
+                .undo(UndoStep::verb(Verb::Add).pressed_as(TrackerPress::UndoAdd))
+                .into(),
+        },
+        None => Said::new(words.clone())
+            .undo(UndoStep::act(label.as_str()).pressed_as(TrackerPress::UndoAct))
+            .choice(Choice::new(
+                MessageChoice::Choice(ADD_TO_TIMELINE),
+                TrackerPress::AddToTimeline,
+            ))
+            .into(),
+    });
+    messages.kept(line);
+    messages
+}
+
+/// The act a footer press asks for, from the view's state in this frame.
+fn footer_press(trackers: &Trackers, pressed: Option<TrackerPress>, act: &mut Option<Act>) {
+    let entries = trackers.newest();
+    let first = entries.first();
+    let added = first.and_then(|first| {
         trackers
             .added
             .as_ref()
             .filter(|added| added.entry == first.id)
     });
-    let not_saved = match &trackers.reason {
-        Some(Unrecorded::NotSaved(error)) => Some(TrackerFault::NotSaved(error.clone())),
-        _ => None,
-    };
-    // The event waits in the Timeline's draft when its save failed: say so, not success.
-    let added_not_saved = added
-        .and_then(|added| added.not_saved.as_ref())
-        .map(|words| TrackerFault::TimelineNotSaved(words.clone()));
-    let (mut reason_pressed, mut result_pressed) = (None, None);
-    let mut footer = design::Footer::new("trackers_footer", ui.available_width());
-    if shown {
-        match (&trackers.reason, &not_saved) {
-            (Some(Unrecorded::Refused(why)), _) => {
-                footer.outcome(
-                    Outcome::Refused(
-                        Sentence::outside(why.as_str())
-                            .unwrap_or(crate::sentence!("Nothing was recorded.")),
-                    ),
-                    &mut reason_pressed,
-                );
-            }
-            (_, Some(fault)) => {
-                footer.outcome(FaultMessage::new(fault), &mut reason_pressed);
-            }
-            _ => {}
+    match (pressed, first, added) {
+        (Some(TrackerPress::UndoAdd), _, Some(added)) => {
+            *act = Some(Act::UndoAdd(added.event.clone()));
         }
-        let shown = trackers
-            .played_owner()
-            .and_then(|owner| trackers.results.get(&owner));
-        if let (Some(shown), Some((_, (label, words)))) = (shown, result) {
-            footer.kept_outcome(
-                shown,
-                |_| match (added, &added_not_saved) {
-                    (Some(_), Some(fault)) => {
-                        KeptOutcome::Fault(FaultMessage::new(fault), UndoStep::verb(Verb::Add))
-                    }
-                    (Some(_), None) => Said::new(crate::sentence!("Added to the Timeline."))
-                        .undo(UndoStep::verb(Verb::Add))
-                        .into(),
-                    (None, _) => Said::new(words.clone())
-                        .undo(UndoStep::act(label.as_str()))
-                        .choice(MessageChoice::Choice(ADD_TO_TIMELINE))
-                        .into(),
-                },
-                &mut result_pressed,
-            );
-        }
-    }
-    let bottom = footer.show_by_hand(ui);
-    match (result_pressed, added, result) {
-        (Some(Pressed::Undo), Some(added), _) => *act = Some(Act::UndoAdd(added.event.clone())),
-        (Some(Pressed::Undo), None, _) => *act = Some(Act::Undo(entries.to_vec())),
-        (Some(Pressed::Choice(_)), None, Some((first, _))) => {
+        (Some(TrackerPress::UndoAct), Some(_), None) => *act = Some(Act::Undo(entries.to_vec())),
+        (Some(TrackerPress::AddToTimeline), Some(first), None) => {
             let title = super::timeline_title(&trackers.rules, &trackers.ledger, entries);
             *act = Some(Act::AddToTimeline(first.id.clone(), title));
         }
         _ => {}
     }
-    bottom
 }
 
 /// The result's choice that makes a Major event of the act.
