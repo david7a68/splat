@@ -392,6 +392,75 @@ fn unread_roster_rows(
     );
 }
 
+/// SPIKE (M4 a, not for merge): the unread roster rows as typed footer messages, one warning
+/// each, the last with what to do and the file's line.
+fn spike_unread_messages<'f, A: 'static>(
+    messages: &mut design::outcome::Messages<'f, A>,
+    root: &std::path::Path,
+    path: &str,
+    notes: &[String],
+    faults: usize,
+) {
+    use design::outcome::{FaultMessage, FileLine};
+    let Some((last, before)) = notes.split_last() else {
+        return;
+    };
+    for note in before {
+        messages.outcome(FaultMessage::new(&EncounterFault::FileWarning(
+            note.clone(),
+        )));
+    }
+    let last = if faults == 0 {
+        last.clone()
+    } else {
+        format!("{last} {}", fix_roster_rows(faults))
+    };
+    messages.outcome(
+        FaultMessage::new(&EncounterFault::FileWarning(last))
+            .file(FileLine::new(root, path).edit().show()),
+    );
+}
+
+/// SPIKE (M4 b, not for merge): Rules and runs' footer messages typed, so the pane places them
+/// `S` under the form: the failed act, the rule warnings with Campaign.md's line under the last,
+/// the run folder's warning before Save, and the open draft's notice.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "spike: the run's words as a sentence"
+)]
+fn spike_rules_messages<'f, A: 'static>(
+    messages: &mut design::outcome::Messages<'f, A>,
+    root: &std::path::Path,
+    error: Option<&str>,
+    rule_words: &[String],
+    folder_warning: Option<&str>,
+    draft_open: bool,
+) {
+    use design::outcome::{FaultMessage, FileLine, Notice, Sentence};
+    if let Some(error) = error {
+        messages.outcome(FaultMessage::new(&EncounterFault::Failed(error.to_owned())));
+    }
+    if let Some((last, before)) = rule_words.split_last() {
+        for words in before {
+            messages.outcome(FaultMessage::new(&EncounterFault::FileWarning(
+                words.clone(),
+            )));
+        }
+        messages.outcome(
+            FaultMessage::new(&EncounterFault::FileWarning(last.clone()))
+                .file(FileLine::new(root, "Campaign.md").edit().show()),
+        );
+    }
+    if let Some(words) = folder_warning.and_then(Sentence::outside) {
+        messages.outcome(Notice::warning(words));
+    }
+    if draft_open {
+        messages.outcome(Notice::new(crate::sentence!(
+            "Save or discard the open encounter to change run settings."
+        )));
+    }
+}
+
 fn roster_fault_reason(path: &str, faults: &[RosterFault]) -> Option<String> {
     (!faults.is_empty()).then(|| {
         format!(
@@ -7806,6 +7875,105 @@ fn roster_detail(detail: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// SPIKE (M4 b): rows 47, 63, 64: the warnings sit `S` under a short form, in the pane's
+    /// footer, at 960 and 1920.
+    #[test]
+    fn spike_m4_b_rules_warnings_under_the_form() {
+        use egui_kittest::kittest::Queryable;
+        for size in [egui::vec2(960.0, 640.0), egui::vec2(1920.0, 1080.0)] {
+            let mut h = egui_kittest::Harness::builder()
+                .with_size(size)
+                .build_ui(move |ui| {
+                    let frame = design::outcome::PaneFrame::new(ui);
+                    let mut messages =
+                        design::outcome::Messages::<design::outcome::NoPress>::new(
+                            &frame,
+                            "spike_rules",
+                            design::FORM_WIDTH,
+                        );
+                    spike_rules_messages(
+                        &mut messages,
+                        std::path::Path::new("/vault/Ashen"),
+                        Some("Run folder not found: /vault/Ashen/Runs."),
+                        &["Line 12: house rule “Flanking” was not read.".to_owned(),
+                          "Line 14: house rule “Potions” was not read.".to_owned()],
+                        Some("2 saved runs stay in Runs. 1 are unfinished. From the new folder, Splat will not show these runs or resume them."),
+                        true,
+                    );
+                    let _ = messages.pane(ui, design::Body::Content, |ui| {
+                        ui.add_sized(egui::vec2(400.0, 200.0), egui::Label::new("Rules form"));
+                    });
+                });
+            design::theme::install(&h.ctx);
+            h.run_steps(4);
+            let footer = design::pane::footer_rect(&h.ctx, egui::Id::new("spike_rules")).unwrap();
+            let form = h.get_by_label("Rules form").rect();
+            assert!(
+                footer.top() - form.bottom() <= design::M,
+                "{form:?} {footer:?}"
+            );
+            assert_eq!(h.query_all_by_label("Show file: Campaign.md").count(), 1);
+            eprintln!("SPIKE-B {size:?} form {form:?} footer {footer:?}");
+        }
+    }
+
+    /// SPIKE (M4 a): 30 malformed rows at 960 × 640 in the typed footer.
+    #[test]
+    fn spike_m4_a_thirty_unread_rows_in_the_typed_footer() {
+        use egui_kittest::kittest::Queryable;
+        let rows: Vec<RosterFault> = (0..30)
+            .map(|at| RosterFault {
+                name: format!("Ember Cultist {at}"),
+                line: 20 + at,
+                problem: "the HP was not read".to_owned(),
+                before: 0,
+            })
+            .collect();
+        let path = "encounters/Shrine of Cinders.md";
+        let flags: Vec<_> = (0..30)
+            .map(|at| splat::content::layout::Flag::new(20 + at, "the HP was not read.".to_owned()))
+            .collect();
+        let notes = unread_notes(path, &flags, &rows);
+        assert_eq!(notes.len(), 30);
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(960.0, 640.0))
+            .build_ui(move |ui| {
+                let frame = design::outcome::PaneFrame::new(ui);
+                let mut messages = design::outcome::Messages::<design::outcome::NoPress>::new(
+                    &frame,
+                    "spike_unread",
+                    ui.available_width(),
+                );
+                spike_unread_messages(
+                    &mut messages,
+                    std::path::Path::new("/vault/Ashen"),
+                    path,
+                    &notes,
+                    30,
+                );
+                let _ = messages.pane(ui, design::Body::Content, |ui| {
+                    ui.label("Roster body");
+                });
+            });
+        design::theme::install(&h.ctx);
+        h.run_steps(4);
+        let footer = design::pane::footer_rect(&h.ctx, egui::Id::new("spike_unread")).unwrap();
+        let body = h.get_by_label("Roster body").rect();
+        assert!(footer.height() <= 640.0 / 3.0 + 1.0, "{footer:?}");
+        assert!(body.bottom() <= footer.top(), "{body:?} {footer:?}");
+        assert_eq!(
+            h.query_all_by_label_contains("Show file: Shrine of Cinders.md")
+                .count(),
+            1
+        );
+        assert!(
+            h.query_all_by_label_contains("Ember Cultist 29 · line 49")
+                .count()
+                >= 1
+        );
+        eprintln!("SPIKE-A footer {footer:?} body {body:?}");
+    }
     #[test]
     fn run_copy_word_names_copies_and_not_the_original() {
         assert_eq!(

@@ -7407,7 +7407,7 @@ impl Sessions {
             messages.outcome(FaultMessage::new(fault));
         }
         if let Some(counts) = self.folder_move_counts(book, &files) {
-            messages.outcome(Notice::new(folder_keeps(&counts)));
+            messages.outcome(Notice::warning(folder_keeps(&counts)));
         }
         if let Some(shown) = self.folder_link().and_then(|link| {
             self.folder_moves
@@ -7692,6 +7692,59 @@ fn fixed_scope<R>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// SPIKE (M4 c): the folder's warning before the move is a warning notice; Campaign
+    /// content's path-first error keeps its path through `Sentence::outside`.
+    #[test]
+    #[allow(clippy::disallowed_methods, reason = "spike")]
+    fn spike_m4_c_folder_warning_and_a_path_first_error() {
+        use crate::design::outcome::{
+            Fault, FaultMessage, MessagePlace, Messages, NoPress, PaneFrame, Sentence, Severity,
+            message_rects,
+        };
+        use egui_kittest::kittest::Queryable;
+        struct Picked(Sentence);
+        impl Fault for Picked {
+            fn severity(&self) -> Severity {
+                Severity::NeedsFixing
+            }
+            fn cause(&self) -> Sentence {
+                self.0.clone()
+            }
+        }
+        let error = format!(
+            "{}/ holds a different package. Choose the folder that holds {}.",
+            "wrong-package", "Ashen Marches"
+        );
+        let mut h = egui_kittest::Harness::builder()
+            .with_size(eframe::egui::vec2(960.0, 640.0))
+            .build_ui(move |ui| {
+                let frame = PaneFrame::new(ui);
+                let mut messages = Messages::<NoPress>::new(&frame, "spike_c", 960.0);
+                messages.outcome(Notice::warning(folder_keeps("1 note and 4 events")));
+                messages.outcome(FaultMessage::new(&Picked(
+                    Sentence::outside(error.as_str()).unwrap(),
+                )));
+                let _ = messages.pane(ui, crate::design::Body::Content, |ui| {
+                    ui.label("Body");
+                });
+            });
+        crate::design::theme::install(&h.ctx);
+        h.run_steps(4);
+        let tones: Vec<_> = message_rects(&h.ctx)
+            .into_iter()
+            .filter(|(_, place, _)| *place == MessagePlace::Footer)
+            .map(|(_, _, tone)| tone)
+            .collect();
+        assert_eq!(tones, [Tone::Warning, Tone::Warning]);
+        assert!(
+            h.query_all_by_label_contains("wrong-package/ holds a different package.")
+                .count()
+                >= 1
+                && h.query_all_by_label_contains("Wrong-package").count() == 0
+        );
+        eprintln!("SPIKE-C tones {tones:?}");
+    }
     use crate::timeline::{Kind, removed_event_words};
 
     #[test]
