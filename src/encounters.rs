@@ -8028,6 +8028,28 @@ mod tests {
                 .next()
                 .is_none()
         );
+        // Round 28 (a): the store's disk end event. Separate again; then another program
+        // gives the copy another identity: the next refresh ends the result, and its Undo goes.
+        harness
+            .get_by_label("Make Rook copy.md a separate entry")
+            .click();
+        harness.run_steps(2);
+        assert!(harness.query_by_label("Undo: separate entry").is_some());
+        let copy = dir.path().join("Rook copy.md");
+        let text = fs::read_to_string(&copy).unwrap();
+        let id = crate::content_workspace::note_id(&text).unwrap();
+        fs::write(&copy, text.replace(&id.to_string(), &Uuid::new_v4().to_string())).unwrap();
+        harness.run_steps(2);
+        assert!(
+            harness.query_by_label("Undo: separate entry").is_some(),
+            "nothing ends it before the disk check"
+        );
+        harness.state_mut().refresh_separations();
+        harness.run_steps(2);
+        assert!(
+            harness.query_by_label("Undo: separate entry").is_none(),
+            "a copy whose identity changed on disk ends its separation"
+        );
     }
 
     #[test]
