@@ -667,14 +667,14 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         // The encounter editor's old footer (its pane keeps main's form until part P2) has no
         // ticket: the separation's and the member result's Undo go by owner.
+        ("src/encounters.rs", "undo_editor_of", &[Ban::ByOwner(1)]),
+        ("src/encounters.rs", "undo_kept_of", &[Ban::ByOwner(1)]),
         ("src/encounters.rs", "undo_member_of", &[Ban::ByOwner(1)]),
         (
             "src/encounters.rs",
             "undo_separation_of",
             &[Ban::ByOwner(1)],
         ),
-        ("src/encounters.rs", "results_into", &[Ban::Results]),
-        ("src/encounters.rs", "result_stamp", &[Ban::Results]),
         (
             "src/encounters.rs",
             "run_settings",
@@ -1421,7 +1421,7 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/design/components.rs", 16),
             ("src/dndbeyond.rs", 1),
             ("src/encounter_run.rs", 2),
-            ("src/encounters.rs", 2),
+            ("src/encounters.rs", 1),
             ("src/encounters/groups.rs", 1),
             ("src/library.rs", 16),
             ("src/party_sync.rs", 1),
