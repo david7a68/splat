@@ -2021,10 +2021,8 @@ pub fn signed(value: i64) -> String {
 }
 
 /// A count and the right word for it: `1 entry`, `2 entries`.
-pub fn count(n: usize, one: &str, many: &str) -> String {
-    if n == 0 {
-        return String::new();
-    }
+/// The app's one number form: digits grouped by threes with commas (`2,310`).
+pub(super) fn grouped_number(n: usize) -> String {
     let digits = n.to_string();
     let mut grouped = String::new();
     for (i, digit) in digits.chars().enumerate() {
@@ -2033,6 +2031,14 @@ pub fn count(n: usize, one: &str, many: &str) -> String {
         }
         grouped.push(digit);
     }
+    grouped
+}
+
+pub fn count(n: usize, one: &str, many: &str) -> String {
+    if n == 0 {
+        return String::new();
+    }
+    let grouped = grouped_number(n);
     let unit = if n == 1 { one } else { many };
     if unit.is_empty() {
         grouped
@@ -3272,20 +3278,23 @@ pub(super) fn undo_message_capped(
     action: &str,
     name: Option<&str>,
 ) -> bool {
-    undo_message_line(ui, tone, text, action, name).0
+    undo_message_line(ui, tone, text, action, name, None).0
 }
 
-/// `undo_message_capped`, and the y of the centre of the words' first line.
+/// `undo_message_capped`, with Undo blocked for `blocked`'s reason (only Undo greys, and the line
+/// keeps its layout, so blocking moves nothing on it; the caller paints the reason), and the y of
+/// the centre of the words' first line.
 pub(super) fn undo_message_line(
     ui: &mut Ui,
     tone: Tone,
     text: &str,
     action: &str,
     name: Option<&str>,
+    blocked: Option<&str>,
 ) -> (bool, f32) {
     ui.scope(|ui| {
         ui.set_max_width(ui.available_width().min(LIST_MEASURE));
-        undo_message_inside(ui, tone, text, action, name)
+        undo_message_inside(ui, tone, text, action, name, blocked)
     })
     .inner
 }
@@ -3296,10 +3305,12 @@ fn undo_message_inside(
     text: &str,
     action: &str,
     name: Option<&str>,
+    blocked: Option<&str>,
 ) -> (bool, f32) {
     let button = Action::quiet(action)
         .icon(icons::UNDO)
-        .density(Density::Read);
+        .density(Density::Read)
+        .blocked(blocked);
     let button = match name {
         Some(name) => button.name(name),
         None => button,
