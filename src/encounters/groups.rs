@@ -2654,10 +2654,6 @@ impl Encounters {
     }
 
     /// The group editor's body, in the pane: the members and Add creatures, as columns or tabs.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn group_editor_body(
         &mut self,
         ui: &mut egui::Ui,
