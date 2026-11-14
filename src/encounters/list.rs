@@ -61,6 +61,14 @@ pub(super) fn row_menu(ui: &mut egui::Ui, name: &str, add: impl FnOnce(&mut egui
         .show(add);
 }
 
+/// FM1: a menu whose first choice has no icon, but a later one has, says so before its first
+/// choice: egui sizes a menu on its first pass, so a slot that came later would cut the choices
+/// before it (`Edit encounter` above `Remove`, R12).
+fn menu_has_icons(ui: &egui::Ui) {
+    let mark = ui.layer_id().id.with("menu has icons");
+    ui.data_mut(|data| data.insert_temp(mark, true));
+}
+
 /// Where a row menu may open: below or above its button, ending at the button's right edge, or
 /// starting at its left edge when only that keeps the menu `S` inside the pane. egui picks the
 /// first of these that fits the window, and the first one when none does, so the menu never
@@ -285,16 +293,20 @@ pub(super) fn list_row(
                             } else {
                                 0.0
                             };
-                        // F1, FB2, FB6: the difficulty ends the line in its one form, and the
-                        // detail gives way first. Hover and the accessible name keep the whole
-                        // line (V7).
-                        let parts = difficulty.and_then(crate::difficulty::Difficulty::parts);
-                        let form = difficulty.and_then(crate::difficulty::Difficulty::form);
-                        let form_width = form.as_ref().map_or(0.0, |form| {
-                            design::number_width(ui, &format!(" · {form}"), &Type::Small.font(ui))
+                        // F1, FB2, FB6: the difficulty ends the line in its one form. N7, FG1:
+                        // `difficulty::Line` decides what gives way: the word's limit first,
+                        // then the detail from its end by whole facts and members, then the XP
+                        // number. Hover and the accessible name keep the whole line (V7).
+                        let font = Type::Small.font(ui);
+                        let fitted = difficulty.and_then(|difficulty| {
+                            crate::difficulty::Line::roster(difficulty, detail)
+                                .fit(|text| design::number_width(ui, text, &font) <= room)
                         });
-                        let visible_detail =
-                            fit_detail(ui, detail, &Type::Small.font(ui), room - form_width);
+                        let form = difficulty.and_then(crate::difficulty::Difficulty::form);
+                        let (visible_detail, parts) = match fitted {
+                            Some(fitted) => (fitted.lead, Some(fitted.form)),
+                            None => (fit_detail(ui, detail, &font, room), None),
+                        };
                         let whole = match &form {
                             Some(form) => format!("{detail} · {form}"),
                             None => detail.to_owned(),
@@ -680,10 +692,14 @@ pub(super) fn ready_list(
             Some(&template.difficulty).filter(|_| !row.unfinished_run),
             |ui| {
                 row_menu(ui, &template.name, |ui| {
+                    let remove = !has_saved_run(page, row);
+                    if remove {
+                        menu_has_icons(ui);
+                    }
                     if menu_action(ui, "Edit encounter", None) {
                         *action = Some(ListAction::Edit(template.path.clone()));
                     }
-                    if !has_saved_run(page, row) && menu_action(ui, "Remove…", None) {
+                    if remove && menu_action(ui, "Remove", None) {
                         *action = Some(ListAction::RemoveEncounter(template.path.clone()));
                     }
                 });
@@ -754,11 +770,8 @@ pub(super) struct Reading<'a> {
     pub not_last: Option<&'static str>,
 }
 
-/// History. Returns the screen y of the opened run's clean top edge, when a run is open there.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
+/// History. Returns, when a run is open there, the screen span from the opened run's clean top
+/// edge to the end of its Final state: what `Open` brings into view (R2).
 pub(super) fn history_list(
     ui: &mut egui::Ui,
     page: &history::Arranged<'_>,
@@ -766,7 +779,7 @@ pub(super) fn history_list(
     live: Option<&SavedRunInfo>,
     read: Option<Reading<'_>>,
     action: &mut Option<ListAction>,
-) -> Option<f32> {
+) -> Option<egui::Rangef> {
     design::gap(ui, design::Gap::L);
     if page.runs_unread {
         heading(ui, "HISTORY", 0);
@@ -778,8 +791,8 @@ pub(super) fn history_list(
         blocked_reason(ui, Some("No ended fights yet."));
         return None;
     }
-    // The opened run's row: the top of its gap above it, where the list keeps it (X36, X37).
-    let mut opened_top = None;
+    // The opened run: the top of its row's gap above it, to the end of its Final state (R2).
+    let mut opened = None;
     section(
         ui,
         "encounter_history",
@@ -788,7 +801,13 @@ pub(super) fn history_list(
         read.as_ref().map(|_| true),
         |ui| {
             for session in &page.history {
-                design::group_heading(ui, session.label, session.runs.len());
+                design::heading(
+                    ui,
+                    design::Heading::Group {
+                        title: session.label,
+                        count: session.runs.len(),
+                    },
+                );
                 for past in &session.runs {
                     let run = past.run;
                     let date = run
@@ -861,11 +880,19 @@ pub(super) fn history_list(
                         let not_last = read.not_last.map(|reason| {
                             crate::encounter_run::continue_reason(reason, past.template.is_some())
                         });
-                        if history_summary(ui, read.summary, blocked.filter(|_| !here), not_last) {
+                        let (go_on, final_end) =
+                            history_summary(ui, read.summary, blocked.filter(|_| !here), not_last);
+                        if go_on {
                             *action = Some(ListAction::ContinueFight(run.path.clone()));
                         }
+                        // FH4: the open run ends with a gap, so the next row does not read as
+                        // a line of its log.
+                        design::gap(ui, design::Gap::L);
                         // The top of the row's own gap above it: the line above ends there.
-                        opened_top = Some(top - ui.spacing().item_spacing.y);
+                        opened = Some(egui::Rangef::new(
+                            top - ui.spacing().item_spacing.y,
+                            final_end,
+                        ));
                     }
                 }
             }
@@ -880,19 +907,12 @@ pub(super) fn history_list(
             }
         },
     );
-    if let Some(top) = opened_top {
-        // Room below the list's end, so the opened run's row reaches the list's top also when
-        // little follows it (a list held at its end would cut the line at its top, X37), and
-        // stays there when the list's visible height changes (X36).
-        let below = ui.min_rect().bottom() - top;
-        ui.add_space((ui.clip_rect().height() - below).max(0.0));
-    }
-    opened_top
+    opened
 }
 
-/// An ended fight, read in place. Returns true when the DM chooses to go on with it. `not_last`
-/// says why this fight cannot go on, when it is not the fight that was played last: then its
-/// sentence stands where the control would be.
+/// An ended fight, read in place. Returns true when the DM chooses to go on with it, and the
+/// screen y where its Final state ends. `not_last` says why this fight cannot go on, when it is
+/// not the fight that was played last: then its sentence stands where the control would be.
 #[allow(
     clippy::disallowed_methods,
     reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
@@ -902,8 +922,9 @@ fn history_summary(
     summary: &FightSummary,
     blocked: Option<&str>,
     not_last: Option<&str>,
-) -> bool {
+) -> (bool, f32) {
     let mut go_on = false;
+    let mut final_end = ui.cursor().top();
     ui.indent("history_summary", |ui| {
         // The line under Read-only is `S` below it and `M` above Final state, so it reads as
         // the run's own line and not as part of Final state.
@@ -940,8 +961,8 @@ fn history_summary(
                     .clicked();
             }
         }
-        ui.add_space(design::M - spacing);
-        design::group_label(ui, "Final state");
+        // The heading part owns the space above it (`L`, more than the `XS` under it).
+        design::heading(ui, design::Heading::Label("Final state"));
         // AI1, FI6, SI1: shared columns. The name column is as wide as the longest name, up to
         // half the room (a longer name wraps); then HP and temporary HP, each as wide as its
         // widest value, kept where a row has none; then Absent and the conditions, which wrap
@@ -1028,17 +1049,18 @@ fn history_summary(
                 });
             });
         }
-        // X66: the log's heading has the gap that Final state's has.
-        ui.add_space(design::M - spacing);
-        design::group_label(ui, "Combat log");
+        final_end = ui.min_rect().bottom();
+        // X66: the log's heading has the gap that Final state's has: the heading part's.
+        design::heading(ui, design::Heading::Label("Combat log"));
         for line in &summary.log {
             blocked_reason(ui, Some(line));
         }
     });
-    go_on
+    (go_on, final_end)
 }
 
-/// A Final state row's last column: Absent, the saved concentration in the mark that the
+/// A Final state row's last column: the HP state's icon and word in its colour, as the run's
+/// rows show it (FK5: `0 HP`, `Bloodied`), Absent, the saved concentration in the mark that the
 /// run's rows use (X70), then the conditions. `None` when the row has none of them.
 fn final_state_rest(
     ui: &egui::Ui,
@@ -1052,6 +1074,8 @@ fn final_state_rest(
         .join(", ");
     let muted = colors().muted;
     let parts = [
+        design::hp_word(row.hp, row.max_hp)
+            .map(|(icon, word, color)| (format!("{icon}\u{a0}{word}"), color)),
         (!row.present).then(|| ("Absent".to_owned(), muted)),
         row.concentration
             .then(crate::encounter_run::view::concentration_mark),
@@ -1152,7 +1176,7 @@ mod iter_2_c_tests {
         assert_eq!(menu_aligns(near_left, menu, narrow), end);
     }
 
-    /// T12.12: Remove… is offered only for an encounter with no saved run: none unfinished,
+    /// T12.12: Remove is offered only for an encounter with no saved run: none unfinished,
     /// none ended, and no unreadable run that names it.
     #[test]
     fn remove_is_offered_only_for_an_encounter_with_no_saved_run() {
