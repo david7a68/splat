@@ -246,7 +246,7 @@ pub fn components(ui: &mut egui::Ui) {
         ui.vertical(|ui| {
             ui.set_max_width(240.0);
             ui.label(Type::Small.rich(ui, "Under a group heading").color(c.muted));
-            small_text_field(ui, "Campaign name", &mut text, None, None);
+            text_field(ui, "Campaign name", &mut text, None, None);
             ui.label(Type::Small.rich(ui, "Alone on a form").color(c.muted));
             text_field(ui, "Field", &mut text, Some("Help text."), None);
             text_field(
