@@ -6026,8 +6026,8 @@ impl Encounters {
                     .iter_mut()
                     .filter_map(|group| {
                         let (words, undo) = group.member_result()?;
-                        let label = if undo.label() == "Undo replace" {
-                            "Undo replace"
+                        let label = if undo.label() == "Undo replace member" {
+                            "Undo replace member"
                         } else {
                             "Undo remove member"
                         };

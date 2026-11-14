@@ -285,7 +285,7 @@ impl GroupDraft {
             {
                 return Some((
                     result.words.clone(),
-                    design::outcome::UndoStep::verb(design::outcome::Verb::Replace),
+                    design::outcome::UndoStep::of(design::outcome::Verb::Replace, "member"),
                 ));
             }
             self.replaced = None;
