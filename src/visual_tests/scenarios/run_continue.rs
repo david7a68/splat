@@ -236,10 +236,10 @@ pub(crate) fn history_edges(d: &mut Driver<'_>) {
             });
             Some(row.rect.top() - list?.top() <= crate::design::L)
         });
+        // A run that a resize took out of view (R2 scrolls only at Open) is not at the top.
         d.observe(
             "X37-history-clean-edge",
-            at_top.is_some()
-                && (at_top == Some(false) || edges.as_ref().is_some_and(|(cut, _)| cut.is_empty())),
+            at_top != Some(true) || edges.as_ref().is_some_and(|(cut, _)| cut.is_empty()),
             format!(
                 "At {size:?}, row at the list's top {at_top:?}; the texts cut there: {edges:?}"
             ),

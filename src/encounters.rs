@@ -4623,7 +4623,10 @@ impl Encounters {
             if gone {
                 // FF7: a draft whose file was gone was removed with it; its Undo says so.
                 KeptOutcome::Notice(
-                    Notice::new(crate::sentence!("{} removed. Its draft was discarded.", name)),
+                    Notice::new(crate::sentence!(
+                        "{} removed. Its draft was discarded.",
+                        name
+                    )),
                     UndoStep::verb(Verb::Remove).pressed_as(FooterPress::Undo),
                 )
             } else {
@@ -4734,7 +4737,13 @@ impl Encounters {
     fn kept_footer_lines(
         &self,
         kinds: &[KeptResult],
-    ) -> Vec<(KeptResult, design::results::FooterResult, Tone, &'static str, Option<String>)> {
+    ) -> Vec<(
+        KeptResult,
+        design::results::FooterResult,
+        Tone,
+        &'static str,
+        Option<String>,
+    )> {
         let Some(root) = self.active.as_ref().map(|active| active.path.clone()) else {
             return Vec::new();
         };
@@ -4745,7 +4754,12 @@ impl Encounters {
                     KeptResult::Discarded => {
                         let draft = self.discarded.as_ref()?;
                         if draft.recovery.file_gone() {
-                            (Tone::Info, disk::removed_with_draft(&draft.name), "Undo remove", None)
+                            (
+                                Tone::Info,
+                                disk::removed_with_draft(&draft.name),
+                                "Undo remove",
+                                None,
+                            )
                         } else {
                             (
                                 Tone::Info,
@@ -4758,7 +4772,12 @@ impl Encounters {
                     KeptResult::GroupDiscarded => {
                         let draft = self.discarded_group.as_ref()?;
                         if draft.file_gone() {
-                            (Tone::Info, disk::removed_with_draft(&draft.name()), "Undo remove", None)
+                            (
+                                Tone::Info,
+                                disk::removed_with_draft(&draft.name()),
+                                "Undo remove",
+                                None,
+                            )
                         } else {
                             (
                                 Tone::Info,
@@ -4786,7 +4805,13 @@ impl Encounters {
     /// `pressed`.
     fn kept_into_footer<'a>(
         footer: &mut design::Footer<'a>,
-        lines: &'a [(KeptResult, design::results::FooterResult, Tone, &'static str, Option<String>)],
+        lines: &'a [(
+            KeptResult,
+            design::results::FooterResult,
+            Tone,
+            &'static str,
+            Option<String>,
+        )],
         pressed: &'a std::cell::Cell<Option<KeptResult>>,
     ) {
         for (kind, line, tone, undo, name) in lines {

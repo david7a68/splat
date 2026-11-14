@@ -16919,12 +16919,12 @@ pub mod encounter_groups {
         d.click("Remove");
         d.expect("Undo remove group");
         d.expect("Lost Patrol draft discarded.");
-        assert!(d.has("Undo discard of Lost Patrol"));
+        assert!(d.has("Undo discard Lost Patrol"));
         let two_results = heading_tops(d);
         // Newest first: the removal, then the older discard.
         let order = d
             .place_of("Undo remove group")
-            .zip(d.place_of("Undo discard of Lost Patrol"))
+            .zip(d.place_of("Undo discard Lost Patrol"))
             .map(|(removed, discarded)| (removed.top(), discarded.top()));
         d.state_prepared("group-removed", Sizes::All, |d| {
             // iter11-B-FT4: the discard notice is an Undo message, like the removal above it.
@@ -16970,7 +16970,7 @@ pub mod encounter_groups {
                 painted == Some(body),
                 format!("At {size:?}, the discard notice uses Body text: {painted:?}, not {body}"),
             );
-            check_undo_icon(d, "Undo discard of Lost Patrol", "iter11-B-FT4");
+            check_undo_icon(d, "Undo discard Lost Patrol", "iter11-B-FT4");
         });
         d.observe(
             "F15",
@@ -16981,7 +16981,7 @@ pub mod encounter_groups {
         // with its words, and the removal keeps its result and Undo. A discard again ends where
         // this started.
         let (older_undone, newer_kept) = d.aside(|d| {
-            d.click("Undo discard of Lost Patrol");
+            d.click("Undo discard Lost Patrol");
             d.expect(&format!("Group name: {GROUP_LOST}"));
             let back = d.visible_text("Arrive at dusk.");
             d.click("Discard");
