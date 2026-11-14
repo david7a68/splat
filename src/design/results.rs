@@ -813,17 +813,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "edit_form",
             &[Ban::Results, Ban::Layout(1), Ban::Extras(2)],
         ),
-        (
-            "src/world/page.rs",
-            "creation_body",
-            &[Ban::Results, Ban::Extras(1)],
-        ),
-        (
-            "src/world/page.rs",
-            "creation_form",
-            &[Ban::Results, Ban::Layout(1), Ban::Pane(1)],
-        ),
-        ("src/world/page.rs", "show", &[Ban::Layout(1)]),
+        ("src/world/page.rs", "creation_body", &[Ban::Extras(1)]),
         // Package K: raw egui calls that a layout part replaces.
         (
             "src/campaigns.rs",
@@ -1413,7 +1403,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/timeline.rs", 3),
             ("src/timeline/page.rs", 2),
             ("src/trackers/history.rs", 1),
-            ("src/world/page.rs", 1),
         ],
     ),
     (

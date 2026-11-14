@@ -3678,6 +3678,16 @@ pub fn generator(d: &mut Driver<'_>) {
         line.contains(" is not saved. It is in Lookup.") && info,
         format!("World's card line {line:?} is an info message with its bar ({info})"),
     );
+    // Round 28 rows 7 and 44 (FG5, AG1, SG1): the line is a state of the card, in the pane's
+    // footer below the card, so the card does not move when it comes.
+    let (notice, save) = (d.place_of(&line), d.place_of("Save NPC"));
+    d.observe(
+        "iter-28-D-FG5",
+        notice
+            .zip(save)
+            .is_some_and(|(notice, save)| notice.top() >= save.bottom()),
+        format!("The kept-in-Lookup line {notice:?} sits below the card's Save NPC {save:?}"),
+    );
     d.state("generator-world-keeps-its-npc", Sizes::All);
     d.click(NAV_LOOKUP);
     d.observe(

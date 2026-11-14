@@ -2817,6 +2817,9 @@ pub(crate) const OWN_NAMES_HELP: &str = "Built-in names. To use your own, add a 
 pub(crate) const NAMES_MARKER: &str = "<!-- splat:rolls key=npc-name dice=1d6 -->";
 pub(crate) const COPY_MARKER: &str = "Copy the marker";
 /// After the copy: what the DM changes in the pasted line. The dice are the marker's own.
+/// The words of the card's copy result, for the checks: World's footer says them with a checked
+/// `sentence!` of the same words.
+#[cfg(test)]
 pub(crate) const MARKER_COPIED: &str = "Copied. Change 1d6 to the number of names.";
 pub(crate) const BUILT_IN_NAMES: &str = "Built-in names.";
 pub(crate) const USE_OWN_NAMES: &str = "Use your own names";

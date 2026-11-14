@@ -4,7 +4,7 @@ use super::{Nav, Reader, file_fault::FileFault};
 use crate::{
     design::{
         self, Type, colors, icons,
-        outcome::{FaultMessage, Messages, PaneFrame, Said, UndoStep},
+        outcome::{FaultMessage, Messages, Notice, PaneFrame, Said, UndoStep},
         pane::Body,
     },
     lookup::{ContentIndex, WorldGroups},
@@ -172,6 +172,33 @@ impl design::results::Kept for PageKept {
     }
 }
 
+/// The result of the card's `Copy the marker`: the held NPC it was pressed for. It has no Undo;
+/// it shows while that NPC is on the card. Another NPC on the card (a roll, Lookup's card), its
+/// save or discard, and a campaign change end it; a new press replaces it.
+struct MarkerCopied(String);
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct MarkerSlot;
+
+impl design::results::Owner for MarkerSlot {
+    type Scope = ();
+    fn scope(&self) -> &() {
+        &()
+    }
+}
+
+impl design::results::Kept for MarkerCopied {
+    type Owner = MarkerSlot;
+    const ENDS: design::results::Ends = design::results::Ends {
+        owner_changed: design::results::OwnerChanged::Ends,
+        disk_changed: design::results::DiskChanged::Stays,
+        press: design::results::Press::Nothing,
+    };
+    fn owner(&self) -> MarkerSlot {
+        MarkerSlot
+    }
+}
+
 /// One ticked question: its note and the line that holds its box, in its campaign.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct TickOwner {
@@ -278,10 +305,8 @@ pub struct WorldPage {
     ticks: design::Results<TickOwner, Tick>,
     /// Why the last tick, or its Undo, wrote nothing.
     tick_error: Option<String>,
-    /// The held NPC whose card's `Copy the marker` was pressed, by name, with the order the
-    /// press issued: the footer says `MARKER_COPIED` while that card is the view. Another NPC on
-    /// the card (a roll, Lookup's card), its save or discard, and a campaign change end it.
-    marker_copied: Option<(String, crate::design::ResultOrder)>,
+    /// The card's `Copy the marker` result (`MarkerCopied`).
+    marker_copied: design::Results<MarkerSlot, MarkerCopied>,
 }
 
 /// One unreadable note's row words.
@@ -382,7 +407,7 @@ impl WorldPage {
             self.generated = None;
             self.generated_shown = false;
             self.discarded_npc = None;
-            self.marker_copied = None;
+            self.marker_copied.owner_changed(&MarkerSlot);
             self.ticks = design::Results::new();
             self.tick_error = None;
         }
@@ -467,7 +492,7 @@ impl WorldPage {
         self.new_kind = None;
         self.error = None;
         self.lookup_kept = false;
-        self.marker_copied = None;
+        self.marker_copied.owner_changed(&MarkerSlot);
         self.generated = Some(card.npc);
         self.generated_shown = true;
         self.discarded_npc = None;
@@ -504,10 +529,6 @@ impl WorldPage {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
-    )]
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
@@ -667,9 +688,10 @@ impl WorldPage {
                     "Find a note",
                     width,
                 );
-                egui::ScrollArea::vertical()
-                    .id_salt("world_list")
-                    .auto_shrink([false, false])
+                // The list column's own scroll: it keeps its lane, so nothing moves when the bar
+                // comes or goes; its rows fill the column.
+                design::ScrollColumn::new("world_list")
+                    .full_width()
                     .show(ui, |ui| {
                         if groups.is_empty() && index.broken_world.is_empty() {
                             ui.label(
@@ -915,7 +937,7 @@ impl WorldPage {
         match crate::npc_generator::roll(&tables) {
             Ok(npc) => {
                 self.generated = Some(npc);
-                self.marker_copied = None;
+                self.marker_copied.owner_changed(&MarkerSlot);
                 self.generated_shown = true;
                 self.discarded_npc = None;
                 self.generator_sources = tables.sources;
@@ -940,8 +962,6 @@ impl WorldPage {
         }
     }
 
-    /// The result this page shows in the footer: the NPC Discard let go, or the repair that made
-    /// the open note readable, with when it was made.
     /// The page's result, while its own state holds: the discarded NPC while no NPC is held,
     /// `Note repaired.` while the repaired note is open.
     fn page_messages<'f>(
@@ -1093,50 +1113,45 @@ impl WorldPage {
     }
 
     /// A creation form or the held NPC's card, with the pane's footer: the card's `Copy the
-    /// marker` result and the error of the last Create or Save (round 27 FG2: no body places).
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
-    )]
+    /// marker` result, the line that names the NPC Lookup keeps (round 28 rows 7 and 44: a
+    /// state of the card, so the card never moves when it comes), and the error of the last
+    /// Create or Save (round 27 FG2: no body places). The form is the pane's scroll column.
     fn creation_form(&mut self, ui: &mut egui::Ui, index: &ContentIndex, campaign: &Campaign) {
         let form = self.new_kind.is_some() || self.card_shown();
-        // The copy's result, with the order its press issued; it has no Undo.
-        let copied = self
-            .generated
-            .as_ref()
-            .filter(|_| self.generated_shown)
-            .and_then(|npc| {
-                self.marker_copied
-                    .as_ref()
-                    .filter(|(name, _)| *name == npc.name)
-                    .map(|(_, order)| *order)
-            });
-        let error = match &self.error {
-            Some(PageError::Words(error)) if form => Some(error.clone()),
-            _ => None,
-        };
-        let bottom = if copied.is_none() && error.is_none() {
-            ui.max_rect().bottom()
-        } else {
-            let mut footer = design::Footer::new("world_footer", ui.available_width());
-            if let Some(order) = copied {
-                footer.result(order, crate::lookup::MARKER_COPIED, false, |ui| {
-                    design::message(ui, design::Tone::Success, crate::lookup::MARKER_COPIED);
-                });
+        let frame = PaneFrame::new(ui);
+        let mut messages: Messages<'_, super::FooterAct> =
+            Messages::new(&frame, "world_creation", ui.available_width());
+        let card = self.generated.as_ref().filter(|_| self.generated_shown);
+        if let Some(npc) = card {
+            // Two NPCs: the one Lookup keeps and the one on this card. Each is named, so the DM
+            // knows which to save and which moves here. It is a state: an info notice.
+            if let Some(name) = self.lookup_npc.as_ref().filter(|_| self.lookup_kept) {
+                messages.outcome(Notice::new(super::said(&kept_in_lookup(name, &npc.name))));
             }
-            if let Some(error) = error {
-                let words = error.clone();
-                footer.reason(error, move |ui| {
-                    design::message(ui, design::Tone::Error, &words);
-                });
+            if let Some(shown) = self
+                .marker_copied
+                .get(&MarkerSlot)
+                .filter(|shown| shown.value().0 == npc.name)
+            {
+                // `lookup::MARKER_COPIED`.
+                messages.kept(shown.outcome(&frame, |_| {
+                    Said::new(crate::sentence!(
+                        "Copied. Change 1d6 to the number of names."
+                    ))
+                    .into()
+                }));
             }
-            footer.show_by_hand(ui)
-        };
-        egui::ScrollArea::vertical()
-            .id_salt("world_creation")
-            .max_height((bottom - ui.cursor().top()).max(0.0))
-            .auto_shrink([false, false])
-            .show(ui, |ui| self.creation_body(ui, index, campaign));
+        }
+        if let Some(PageError::Words(error)) = &self.error
+            && form
+        {
+            messages.outcome(FaultMessage::new(&super::ReaderFault::Action(
+                error.clone(),
+            )));
+        }
+        let _ = messages.pane(ui, Body::Content, |ui| {
+            self.creation_body(ui, index, campaign)
+        });
     }
 
     /// Inline creation (round 27 ruling): the Label title and the fields, the named Create
@@ -1262,12 +1277,6 @@ impl WorldPage {
             });
         }
         if let Some(npc) = self.generated.as_ref().filter(|_| self.generated_shown) {
-            if let Some(name) = self.lookup_npc.as_ref().filter(|_| self.lookup_kept) {
-                // Two NPCs: the one Lookup keeps and the one on this card. Each is named, so the
-                // DM knows which to save and which moves here. It is a state, so it is an info
-                // message with its icon (round 26 FB8).
-                design::small_message(ui, design::Tone::Info, &kept_in_lookup(name, &npc.name));
-            }
             let choice = crate::lookup::generator_card(
                 ui,
                 npc,
@@ -1279,7 +1288,7 @@ impl WorldPage {
             );
             if choice.copied_marker {
                 // Each press is a new result, ahead of the older one it replaces.
-                self.marker_copied = Some((npc.name.clone(), crate::design::ResultOrder::issue()));
+                self.marker_copied.record(MarkerCopied(npc.name.clone()));
             }
             if choice.save {
                 made = Some(super::create_generated(campaign, npc));
@@ -1291,7 +1300,7 @@ impl WorldPage {
                 && let Some(npc) = self.generated.take()
             {
                 // The copy's result belonged to this card; `Undo discard` does not bring it back.
-                self.marker_copied = None;
+                self.marker_copied.owner_changed(&MarkerSlot);
                 self.results
                     .record(PageKept(super::PageResult::Discarded(npc.name.clone())));
                 self.discarded_npc = Some((
@@ -1310,7 +1319,7 @@ impl WorldPage {
                 self.new_kind = None;
                 // A New form's save leaves a held NPC in its row.
                 if self.generated_shown {
-                    self.marker_copied = None;
+                    self.marker_copied.owner_changed(&MarkerSlot);
                     self.generated = None;
                     self.generated_shown = false;
                 }
