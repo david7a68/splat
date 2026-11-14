@@ -946,7 +946,7 @@ impl WorldPage {
         let fault = unread.fault.clone();
         design::reader::title(ui, fault.path.rsplit('/').next().unwrap_or(&fault.path));
         // No editor link: an editor cannot open a file that Splat cannot read either.
-        super::entry_file_actions(ui, &campaign.path, &fault.path, false);
+        super::folder_file_line(ui, &campaign.path, &fault.path, false);
         // The title and file line name the file, so the error says `this note` (FG6).
         let (again, cancel) =
             design::message_with_actions(ui, design::Tone::Error, &fault.pane_headline(), |ui| {

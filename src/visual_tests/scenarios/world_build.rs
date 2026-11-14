@@ -1021,6 +1021,21 @@ pub fn broken(d: &mut Driver<'_>) {
         fits,
         "At 960, the longest path's message wraps whole and its choices stay in view",
     );
+    // Round 28 FH9: the title is the file's name, so the file line shows the folder, not the
+    // file name again.
+    let line = d.at_size(SMALL, |d| {
+        d.nodes()
+            .into_iter()
+            .find(|node| node.name.ends_with(long_path))
+            .map(|node| d.painted_in(node.rect))
+    });
+    d.observe(
+        "iter-28-D-FH9",
+        line.as_deref().is_some_and(|words| {
+            words.trim_end().ends_with('/') && !words.contains("Harbour Council.md")
+        }),
+        format!("The file line under the file-name title says {line:?}"),
+    );
     d.state("repair-cannot-open-long", Sizes::Small);
     // A file deleted outside Splat while its pane is open ends the pane on the next load.
     fs::remove_file(&long).unwrap();

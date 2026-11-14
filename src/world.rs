@@ -1342,11 +1342,14 @@ pub fn npc_group(npc: &Entry, stat_block: &Entry, side: &str) -> Arc<RunGroup> {
     })
 }
 
-/// Always offer both routes: Obsidian for editing and the system file handler.
+/// Always offer both routes: Obsidian for editing and the system file handler. The repair
+/// editor's title is the file's name, so its line shows the folder (`folder_file_line`).
 pub(crate) fn file_actions(ui: &mut egui::Ui, campaign: &Campaign, relative: &str) {
-    entry_file_actions(ui, &campaign.path, relative, true);
+    folder_file_line(ui, &campaign.path, relative, true);
 }
 
+/// A file line under a title that is the entry's name: the file's path, then the links. Under a
+/// title that is the file's name, use `folder_file_line`.
 pub(crate) fn entry_file_actions(ui: &mut egui::Ui, root: &Path, relative: &str, obsidian: bool) {
     // When even `…/<file name>` does not fit beside the links, the path takes its own row and
     // the links the row below, as in Library: the file name is never cut (FA4).
@@ -1401,6 +1404,53 @@ pub(crate) fn entry_file_parts(ui: &mut egui::Ui, root: &Path, relative: &str, o
     design::named(ui, &response, &path.display().to_string());
     response.on_hover_text(path.display().to_string());
     entry_file_links(ui, &path, obsidian);
+}
+
+/// A file line under a title that is the file's name (the repair editor, an unreadable note):
+/// the folder, then the links, so the line never repeats the title (FH9). A folder too
+/// long for its room gives way at its start, so its last part, the one nearest the file, stays.
+/// Its hover and accessible name keep the whole path.
+pub(crate) fn folder_file_line(ui: &mut egui::Ui, root: &Path, relative: &str, obsidian: bool) {
+    let path = root.join(relative);
+    let folder = relative
+        .rsplit_once('/')
+        .map(|(folder, _)| format!("{folder}/"));
+    let font = Type::Small.font(ui);
+    let links = entry_file_links_width(ui, obsidian);
+    let beside = ui.available_width() - links - design::L;
+    // The folder takes its own row only when not even a short end of it fits beside the links.
+    let own_row = folder
+        .as_ref()
+        .is_some_and(|folder| beside < design::number_width(ui, folder, &font).min(design::XXL * 3.0));
+    let shown = folder.map(|folder| {
+        let room = if own_row { ui.available_width() } else { beside };
+        let mut shown = folder.clone();
+        let chars: Vec<char> = folder.chars().collect();
+        let mut from = 0;
+        while design::number_width(ui, &shown, &font) > room && from < chars.len() {
+            from += 1;
+            shown = format!("…{}", chars[from..].iter().collect::<String>());
+        }
+        shown
+    });
+    let label = |ui: &mut egui::Ui, shown: String| {
+        let response = ui.label(Type::Small.rich(ui, shown).color(colors().muted));
+        design::named(ui, &response, &path.display().to_string());
+        response.on_hover_text(path.display().to_string());
+    };
+    if own_row {
+        if let Some(shown) = shown {
+            label(ui, shown);
+        }
+        ui.horizontal(|ui| entry_file_links(ui, &path, obsidian));
+    } else {
+        ui.horizontal(|ui| {
+            if let Some(shown) = shown {
+                label(ui, shown);
+            }
+            entry_file_links(ui, &path, obsidian);
+        });
+    }
 }
 
 /// The width of a file line's links, with the gap between them.
