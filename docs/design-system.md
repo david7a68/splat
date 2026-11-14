@@ -1055,12 +1055,13 @@ take the same widget IDs, so a field below keeps the keyboard when a resize move
 saves `Fight with <name>` with the party and the creature and starts its run; an encounter of that name (or of
 that name with a number) that was never run and holds the same roster starts instead. An NPC with no stat block
 opens the run's made-up form in Arrivals, with the name filled in and the keyboard in HP. `Add to Log` opens one
-`add_field` under the kind line, named `Log line for <name>`, with the placeholder `What happened?` and the
-keyboard in it; the line's stamp (`Session 12, Day 3:`, the stamp of a Change at that moment, or the day alone
-when no session is being played) stands before it in `Type::Small` `muted`, on the field's line while the field
-keeps 224 px and the words it holds fit whole, else above it, so a done scene's long words are never cut. Stamp and field end at the reader's measure
-(`READER_MEASURE`, 488 px), as its rules do. Enter adds one line at the end of the entry's `## Log` (Splat makes the heading
-when the note has none) and closes the field; Escape clears and closes it. Its result, `Added to <name>’s Log.`
+inline creation (`InlineCreate`) under the kind line: the field `Log line for <name>` with the keyboard in it,
+bordered `Add` at the end of its line (blocked with `Write what happened first.` while it is empty), the line's
+stamp as its help under it (`The line starts with “Session 12, Day 3:”.`: the stamp of a Change at that moment,
+or the day alone when no session is being played), and quiet `Cancel` at the start of the kept line. The stamp
+never shares the field's line, so a done scene's long words are never cut. The form ends at the reader's measure
+(`READER_MEASURE`, 488 px), as its rules do. Enter or `Add` adds one line at the end of the entry's `## Log` (Splat
+makes the heading when the note has none) and closes the field; Escape or `Cancel` clears and closes it. Its result, `Added to <name>’s Log.`
 with `Undo Log line`, sits in the pane's message footer, as every World and Lookup result does; Undo removes
 that line only while the file holds what the act wrote, and ends when the entry's text changes or the reader
 shows another entry. A failed read or write is the error of the last action, also in the footer: it names the
