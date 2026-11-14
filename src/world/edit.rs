@@ -477,7 +477,7 @@ impl EditDraft {
         let Some((disk, theirs)) = self.disk.take() else {
             return Conflict::None;
         };
-        let choice = design::disk_conflict_choices(ui, "note");
+        let choice = design::disk_conflict_choices(ui, design::ConflictSubject::Named { name: &self.name, noun: "note" });
         if let Some(theirs) = &theirs {
             let effects = self.overwrite_effects(theirs, index);
             if !effects.is_empty() {

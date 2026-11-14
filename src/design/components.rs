@@ -3145,12 +3145,33 @@ pub enum DiskConflictChoice {
     Reload,
 }
 
-pub fn disk_conflict_choices(ui: &mut Ui, noun: &str) -> Option<DiskConflictChoice> {
+/// What changed on disk, in a disk conflict's message: the thing's own name, or, only when it
+/// has none, `This <noun>`. An enum, so a caller says which: a noun cannot pass as a name.
+#[derive(Clone, Copy, Debug)]
+pub enum ConflictSubject<'a> {
+    /// The name the DM knows the thing by (`Bridge Ambush`), and the noun for it when the name
+    /// is blank.
+    Named { name: &'a str, noun: &'static str },
+    /// A thing with no name of its own: `note` gives `This note`.
+    This(&'static str),
+}
+
+/// The message names the thing the DM knows (`Bridge Ambush changed on disk.`), not its file
+/// (ruling R10); `This <noun>` only for a thing with no name of its own. Callers: World's edit
+/// form and World's repair editor (`src/world/edit.rs`, `src/world/repair.rs`).
+pub fn disk_conflict_choices(
+    ui: &mut Ui,
+    subject: ConflictSubject<'_>,
+) -> Option<DiskConflictChoice> {
+    let thing = match subject {
+        ConflictSubject::Named { name, .. } if !name.trim().is_empty() => name.trim().to_owned(),
+        ConflictSubject::Named { noun, .. } | ConflictSubject::This(noun) => format!("This {noun}"),
+    };
     // The choices start at the message text, like every other message with choices.
     actions_message(
         ui,
         Tone::Warning,
-        &format!("This {noun} changed on disk. Your draft is safe until you choose."),
+        &format!("{thing} changed on disk. Your draft is safe until you choose."),
         |ui| {
             ui.horizontal_wrapped(|ui| {
                 let mut choice = None;

@@ -1495,7 +1495,7 @@ pub fn broken(d: &mut Driver<'_>) {
     let outside = format!("{fixed}\nAn outside line.\n");
     fs::write(&path, &outside).unwrap();
     d.click("Save changes");
-    d.expect("This note changed on disk. Your draft is safe until you choose.");
+    d.expect("Repaired watchkeeper changed on disk. Your draft is safe until you choose.");
     d.settle();
     d.click("Reload and lose my draft");
     d.settle();
@@ -10630,7 +10630,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     );
 
     // A readable list: the draft adds a group while Obsidian adds another.
-    let conflict = "This note changed on disk. Your draft is safe until you choose.";
+    let conflict = "Safe Rook changed on disk. Your draft is safe until you choose.";
     let zarel = "- \"[[Zarel|the Archdevil]]\" # Keep the alias.\n";
     let outside_line = "- '[[Outside Guild]]' # Added in Obsidian.\n";
     let outside = readable.replace(zarel, &format!("{zarel}{outside_line}"));
@@ -10928,7 +10928,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     );
     fs::write(&path, &unread).unwrap();
     d.click("Save changes");
-    d.expect("This note changed on disk. Your draft is safe until you choose.");
+    d.expect("Safe Rook changed on disk. Your draft is safe until you choose.");
     // The save reads the note again, as a refused Part of write does.
     d.settle();
     d.observe_both(
@@ -11240,7 +11240,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     d.expect("Added Guild");
     d.click("Added Guild");
     d.click("Save changes");
-    d.expect("This note changed on disk. Your draft is safe until you choose.");
+    d.expect("Safe Rook changed on disk. Your draft is safe until you choose.");
     d.click("Overwrite with my draft");
     d.settle();
     assert_eq!(
