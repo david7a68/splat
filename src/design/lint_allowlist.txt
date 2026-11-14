@@ -51,4 +51,3 @@ src/sessions/page.rs phrase-owner 1
 src/world/edit.rs phrase-owner 1
 # A layer built by hand (`LayerId { order: … }`, `Order::…`), which Clippy's method list cannot see
 # (package K). Wave 2 moves the drag ghost to a design part.
-src/encounter_run/view.rs foreground-layer 1
