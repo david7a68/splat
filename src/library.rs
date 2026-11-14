@@ -7664,8 +7664,28 @@ impl Library {
             .collect();
         let mut reader_press = ReaderPress::default();
         let no_results = ReaderResults::default();
-        // Where the body ends: above the message footer, when the save row has one.
-        let mut body_bottom = f32::INFINITY;
+        // Each kept result of Edit Markdown's footer is its own footer message, with its own
+        // Undo: Discard's, the heading and stat fixes', and each of the reader's results.
+        #[derive(Clone, Copy)]
+        enum Kept {
+            Discard,
+            Heading,
+            Vital,
+        }
+        // What Edit Markdown's footer shows, gathered with the save row. The footer is built from
+        // it before the body and drawn by the pane after the body (`Footer::pane_editor`, round
+        // 28 P2); its presses are applied after the pane returns.
+        struct EditData {
+            kept: Vec<(Kept, String, bool, design::ResultOrder)>,
+            vital_result: Option<String>,
+            vitals: Vec<(&'static str, &'static str, i64, String)>,
+            broken_cache: (Vec<String>, String),
+            broken_taken: bool,
+            results_shown: bool,
+            waits: bool,
+            reason_tone: Tone,
+        }
+        let mut edit_data = None;
         // Save and Discard are one row, as far apart as the pane allows.
         if slot_row {
             let row = ui
@@ -7686,8 +7706,8 @@ impl Library {
                 self.draft_revision += 1;
                 self.error = None;
             }
-            // The pane's message footer, pinned at the bottom of the pane below the editor, so
-            // no message moves the editor: its top stays and only its visible height changes.
+            // The pane's message footer, below the editor: `S` under a short draft, pinned under
+            // a long one, whose editor region scrolls (round 28 P2).
             // Results that carry a live Undo come first (Discard's, the heading and stat fixes',
             // the reader's results with Undo): a broken file's reason never clears after Discard
             // or Reload, so a reason first would hide the only way back. Then Save's reason (a
@@ -7702,7 +7722,7 @@ impl Library {
                 .vital_undo
                 .as_ref()
                 .filter(|(path, _, after, _)| path == &note.path && after == &self.draft)
-                .map(|(_, _, _, result)| result.as_str());
+                .map(|(_, _, _, result)| result.clone());
             let vitals = match (editable, &parsed) {
                 (true, Ok(entry)) => creature::vital_checks(entry),
                 _ => Vec::new(),
@@ -7744,7 +7764,6 @@ impl Library {
             let broken = &broken_cache.0;
             // In Read with a changed draft too: one list of kept results per footer.
             let results_shown = results.any();
-            let repair = recovery.as_ref().filter(|_| note.error.is_some());
             let waits = repair_problem.is_none()
                 && failed.is_none()
                 && link_words.is_none()
@@ -7761,16 +7780,6 @@ impl Library {
                 .map_or(Tone::Error, |(_, _, exists)| {
                     crate::content_workspace::manifest_fault_tone(*exists)
                 });
-            let (mut heading_fix, mut vital_use) = (false, None);
-            // Each kept result is its own footer message, with its own Undo: Discard's, the
-            // heading and stat fixes', and each of the reader's results. The footer lists results
-            // with a live Undo newest first, by when each action was done (`result_orders`).
-            #[derive(Clone, Copy)]
-            enum Kept {
-                Discard,
-                Heading,
-                Vital,
-            }
             let orders = &self.result_orders;
             let mut kept: Vec<(Kept, String, bool, design::ResultOrder)> = Vec::new();
             if discard_shown {
@@ -7789,22 +7798,82 @@ impl Library {
                     order_of(orders, OrderKey::Heading),
                 ));
             }
-            if let Some(result) = vital_result {
+            if let Some(result) = &vital_result {
                 kept.push((
                     Kept::Vital,
-                    result.to_owned(),
+                    result.clone(),
                     true,
                     order_of(orders, OrderKey::Vital),
                 ));
             }
-            let (discard_undo, heading_undo, vital_undo) = (
-                std::cell::Cell::new(false),
-                std::cell::Cell::new(false),
-                std::cell::Cell::new(false),
+            edit_data = Some(EditData {
+                kept,
+                vital_result,
+                vitals,
+                broken_cache,
+                broken_taken,
+                results_shown,
+                waits,
+                reason_tone,
+            });
+        }
+        // Live, because Discard in this same frame changed the draft.
+        if self.draft != note.text {
+            self.discarded = None;
+        }
+        // In Read, the discard result sits with the reader's other results, in the footer.
+        if !save_row && discard_is_for(self.discarded.as_ref(), note) {
+            if choices_in_reader {
+                results.discarded = Some(note.name().to_owned());
+            } else if design::draft_discarded(ui, note.name())
+                && let Some((_, _, text)) = self.discarded.take()
+            {
+                self.draft = text;
+                // The draft changed: a failed Save of the old words no longer owns it.
+                self.draft_revision += 1;
+            }
+        }
+        // The pane's footer: Edit Markdown's (with a save row) or Read's. The pane draws the body
+        // and then this footer (`Footer::pane`, `Footer::pane_editor`), so the footer follows a
+        // short body; its presses are read after the pane (round 28, row G6 and P2). Keyed by
+        // the entry, as the old body scroll was: each entry keeps its own offset.
+        let (discard_undo, heading_undo, vital_undo) = (
+            std::cell::Cell::new(false),
+            std::cell::Cell::new(false),
+            std::cell::Cell::new(false),
+        );
+        let shown = std::cell::RefCell::new(None::<ResultPress>);
+        let (mut heading_fix, mut vital_use, mut footer_repair) = (false, None, false);
+        let mut pane_footer = None;
+        if let Some(data) = &edit_data {
+            let EditData {
+                kept,
+                vital_result,
+                vitals,
+                broken_cache,
+                results_shown,
+                waits,
+                reason_tone,
+                ..
+            } = data;
+            let (vital_result, broken, reason_tone) =
+                (vital_result.as_deref(), &broken_cache.0, *reason_tone);
+            let link_words = missing_link.as_ref().map(|(_, words)| words.as_str());
+            let repair = recovery.as_ref().filter(|_| note.error.is_some());
+            let orders = &self.result_orders;
+            let mut footer = design::Footer::new(
+                (
+                    if self.source {
+                        "library_source"
+                    } else {
+                        "library_footer"
+                    },
+                    note.owner.id(),
+                    &note.path,
+                ),
+                editor_width,
             );
-            let shown = std::cell::RefCell::new(None::<ResultPress>);
-            let mut footer = design::Footer::new("library_footer", editor_width);
-            for (which, words, undo, order) in &kept {
+            for (which, words, undo, order) in kept {
                 let which = *which;
                 let (discard_undo, heading_undo, vital_undo) =
                     (&discard_undo, &heading_undo, &vital_undo);
@@ -7822,7 +7891,7 @@ impl Library {
             }
             // The reader's results, each with its own order (a link offer's and a link result's
             // from their stores).
-            if results_shown {
+            if *results_shown {
                 for item in results.items() {
                     let (kind, results, shown) = (item.0, &results, &shown);
                     add_reader_result(&mut footer, results, orders, item, move |ui| {
@@ -7846,7 +7915,7 @@ impl Library {
             // A broken manifest's recovery depends on the saved file only, so it stays while
             // the DM edits.
             if let Some(repair) = repair {
-                let pressed = &mut repair_pressed;
+                let pressed = &mut footer_repair;
                 footer.reason("", |ui| {
                     *pressed = recovery_action(ui, repair, draft_reason);
                 });
@@ -7881,7 +7950,6 @@ impl Library {
                     .map(|(_, _, _, words)| words.as_str())
                     .collect::<Vec<_>>()
                     .join(" ");
-                let vitals = &vitals;
                 footer.notice(words, move |ui| {
                     for (key, label, value, message) in vitals {
                         if design::message_with_action(
@@ -7895,7 +7963,7 @@ impl Library {
                     }
                 });
             }
-            if waits && let Some(reason) = draft_reason {
+            if *waits && let Some(reason) = draft_reason {
                 // Round 27 FA3: the footer's message form (bar and icon), as its other
                 // messages have.
                 footer.notice(reason, move |ui| {
@@ -7917,85 +7985,8 @@ impl Library {
                 &mut reader_press,
             );
             page_error(&mut footer, self.error.as_deref());
-            body_bottom = footer.show_by_hand(ui);
-            let (discard_undo, heading_undo, vital_undo, shown) = (
-                discard_undo.get(),
-                heading_undo.get(),
-                vital_undo.get(),
-                shown.into_inner(),
-            );
-            if broken_taken && let Some((_, _, _, warnings)) = &mut self.broken_lines {
-                *warnings = broken_cache;
-            }
-            if let Some(shown) = shown {
-                pressed = shown;
-            }
-            heading_pressed = (heading_fix, heading_undo);
-            if discard_undo && let Some((_, _, text)) = self.discarded.take() {
-                self.draft = text;
-                // The draft changed: a failed Save of the old words no longer owns it.
-                self.draft_revision += 1;
-            }
-            // Applied now, before the editor shows the draft.
-            if heading_pressed.0 || heading_pressed.1 {
-                self.draft_revision += 1;
-            }
-            let fixed = heading_pressed.0;
-            save |= heading.apply(
-                std::mem::take(&mut heading_pressed),
-                &note.path,
-                &mut self.draft,
-                &mut self.heading_undo,
-            );
-            if fixed && self.heading_undo.is_some() {
-                self.result_orders
-                    .insert(OrderKey::Heading, design::ResultOrder::issue());
-            }
-            if let (Some((key, label, value)), Ok(entry)) = (vital_use, &parsed) {
-                match creature::use_vital(&self.draft, entry, key, value) {
-                    Ok(after) => {
-                        self.result_orders
-                            .insert(OrderKey::Vital, design::ResultOrder::issue());
-                        self.vital_undo = Some((
-                            note.path.clone(),
-                            self.draft.clone(),
-                            after.clone(),
-                            format!("The stat block now says {label} {value}."),
-                        ));
-                        self.draft = after;
-                        // The draft changed: a failed Save of the old words no longer owns it.
-                        self.draft_revision += 1;
-                    }
-                    Err(error) => self.error = Some(error),
-                }
-            }
-            if vital_undo && let Some((_, before, _, _)) = self.vital_undo.take() {
-                self.draft = before;
-                // The draft changed: a failed Save of the old words no longer owns it.
-                self.draft_revision += 1;
-            }
-        }
-        // Live, because Discard in this same frame changed the draft.
-        if self.draft != note.text {
-            self.discarded = None;
-        }
-        // In Read, the discard result sits with the reader's other results, in the footer.
-        if !save_row && discard_is_for(self.discarded.as_ref(), note) {
-            if choices_in_reader {
-                results.discarded = Some(note.name().to_owned());
-            } else if design::draft_discarded(ui, note.name())
-                && let Some((_, _, text)) = self.discarded.take()
-            {
-                self.draft = text;
-                // The draft changed: a failed Save of the old words no longer owns it.
-                self.draft_revision += 1;
-            }
-        }
-        // In Read the pane draws the body and then this footer (`Footer::pane`), so the footer
-        // follows a short body; its presses are read after the pane (round 28, row G6).
-        let mut read_footer = None;
-        if choices_in_reader && !slot_row {
-            // Keyed by the entry, as the old body scroll was: each entry keeps its own offset.
+            pane_footer = Some(footer);
+        } else if choices_in_reader {
             let mut footer = design::Footer::new(
                 ("library_footer", note.owner.id(), &note.path),
                 editor_width.min(design::READER_MEASURE),
@@ -8012,7 +8003,7 @@ impl Library {
                 &mut reader_press,
             );
             page_error(&mut footer, self.error.as_deref());
-            read_footer = Some(footer);
+            pane_footer = Some(footer);
         }
         let mut reload_from_disk = false;
         let mut read_disk_again = false;
@@ -8113,95 +8104,91 @@ impl Library {
         let mut open_link = None;
         let mut pressed_link = None;
         if self.source && self.disk_change.is_none() {
-            egui::Frame::new()
-                .fill(colors().well)
-                .stroke(egui::Stroke::new(
-                    design::HAIRLINE_WIDTH,
-                    colors().field_border,
-                ))
-                .corner_radius(design::RADIUS_CONTROL)
-                .inner_margin(design::S)
-                .show(ui, |ui| {
-                    ui.set_max_width(editor_width - (design::S + design::HAIRLINE_WIDTH) * 2.0);
-                    // The editor ends above the message footer, inside this frame's margin.
-                    let visible_height = ui
-                        .available_height()
-                        .min(body_bottom - design::S - design::HAIRLINE_WIDTH - ui.cursor().top())
-                        .max(design::XL);
-                    egui::ScrollArea::vertical()
-                        .id_salt(("library_source", note.owner.id(), &note.path))
-                        .max_height(visible_height)
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| {
-                            let width = ui.available_width();
-                            let output =
-                                note.markdown_field().editor(ui, &mut self.draft, |edit| {
-                                    edit.font(egui::TextStyle::Monospace)
-                                        .frame(false)
-                                        .margin(egui::Vec2::ZERO)
-                                        .desired_width(width)
-                                        .min_size(egui::vec2(0.0, visible_height))
-                                        .interactive(editable)
-                                });
-                            // Each edit is a new draft: a failed Save of the old words ends.
-                            if output.response.changed() {
-                                self.draft_revision += 1;
-                            }
-                            pressed_link = crate::markdown_source::pressed_note_link(
-                                ui,
-                                &output,
-                                note.entry.as_ref().map(|entry| entry.id),
-                            );
-                            let response = output.response;
-                            design::named(ui, &response, "Markdown editor");
-                            if std::mem::take(&mut self.focus_markdown) {
-                                response.request_focus();
-                            }
-                            if std::mem::take(&mut self.focus_repair)
-                                && let Some(line) = repair_line
-                            {
-                                let at = self
-                                    .draft
-                                    .lines()
-                                    .take(line.saturating_sub(1))
-                                    .map(|line| line.chars().count() + 1)
-                                    .sum();
-                                response.request_focus();
-                                let row =
-                                    output.galley.pos_from_cursor(egui::text::CCursor::new(at));
-                                ui.scroll_to_rect(
-                                    row.translate(output.galley_pos.to_vec2()),
-                                    Some(egui::Align::Center),
-                                );
-                                let mut state = egui::TextEdit::load_state(ui.ctx(), response.id)
-                                    .unwrap_or_default();
-                                state
-                                    .cursor
-                                    .set_char_range(Some(egui::text::CCursorRange::one(
-                                        egui::text::CCursor::new(at),
-                                    )));
-                                state.store(ui.ctx(), response.id);
-                            }
-                            if std::mem::take(&mut self.focus_hp)
-                                && let Some(at) = self
-                                    .draft
-                                    .find("initiative: ")
-                                    .map(|at| at + "initiative: ".len())
-                            {
-                                response.request_focus();
-                                let at = self.draft[..at].chars().count();
-                                let mut state = egui::TextEdit::load_state(ui.ctx(), response.id)
-                                    .unwrap_or_default();
-                                state
-                                    .cursor
-                                    .set_char_range(Some(egui::text::CCursorRange::two(
-                                        egui::text::CCursor::new(at),
-                                        egui::text::CCursor::new(at + 1),
-                                    )));
-                                state.store(ui.ctx(), response.id);
-                            }
-                        });
-                });
+            // Edit Markdown (or a built-in's source): the editor is the pane's editor region, as
+            // tall as its text while the pane fits, and scrolling inside the region when it does
+            // not, so the footer under it stays in view (round 28 P2). With no save row the
+            // footer is empty, and the pane is still the editor's.
+            let footer = pane_footer.take().unwrap_or_else(|| {
+                design::Footer::new(
+                    ("library_source", note.owner.id(), &note.path),
+                    editor_width,
+                )
+            });
+            footer.pane_editor(ui, |ui, region| {
+                egui::Frame::new()
+                    .fill(colors().well)
+                    .stroke(egui::Stroke::new(
+                        design::HAIRLINE_WIDTH,
+                        colors().field_border,
+                    ))
+                    .corner_radius(design::RADIUS_CONTROL)
+                    .inner_margin(design::S)
+                    .show(ui, |ui| {
+                        ui.set_max_width(editor_width - (design::S + design::HAIRLINE_WIDTH) * 2.0);
+                        let width = ui.available_width();
+                        let output =
+                            region.editor(ui, note.markdown_field(), &mut self.draft, |edit| {
+                                edit.font(egui::TextStyle::Monospace)
+                                    .frame(false)
+                                    .margin(egui::Vec2::ZERO)
+                                    .desired_width(width)
+                                    .interactive(editable)
+                            });
+                        // Each edit is a new draft: a failed Save of the old words ends.
+                        if output.response.changed() {
+                            self.draft_revision += 1;
+                        }
+                        pressed_link = crate::markdown_source::pressed_note_link(
+                            ui,
+                            &output,
+                            note.entry.as_ref().map(|entry| entry.id),
+                        );
+                        let response = output.response;
+                        design::named(ui, &response, "Markdown editor");
+                        if std::mem::take(&mut self.focus_markdown) {
+                            response.request_focus();
+                        }
+                        // The caret goes to the broken line. (The region has no way to scroll its
+                        // editor to a line: a part gap, reported with PR 341's follow-up.)
+                        if std::mem::take(&mut self.focus_repair)
+                            && let Some(line) = repair_line
+                        {
+                            let at = self
+                                .draft
+                                .lines()
+                                .take(line.saturating_sub(1))
+                                .map(|line| line.chars().count() + 1)
+                                .sum();
+                            response.request_focus();
+                            let mut state = egui::TextEdit::load_state(ui.ctx(), response.id)
+                                .unwrap_or_default();
+                            state
+                                .cursor
+                                .set_char_range(Some(egui::text::CCursorRange::one(
+                                    egui::text::CCursor::new(at),
+                                )));
+                            state.store(ui.ctx(), response.id);
+                        }
+                        if std::mem::take(&mut self.focus_hp)
+                            && let Some(at) = self
+                                .draft
+                                .find("initiative: ")
+                                .map(|at| at + "initiative: ".len())
+                        {
+                            response.request_focus();
+                            let at = self.draft[..at].chars().count();
+                            let mut state = egui::TextEdit::load_state(ui.ctx(), response.id)
+                                .unwrap_or_default();
+                            state
+                                .cursor
+                                .set_char_range(Some(egui::text::CCursorRange::two(
+                                    egui::text::CCursor::new(at),
+                                    egui::text::CCursor::new(at + 1),
+                                )));
+                            state.store(ui.ctx(), response.id);
+                        }
+                    });
+            });
         } else {
             // The body's words, in Read (in the pane) and beside an open conflict (in its own
             // scroll area, as Edit Markdown's form keeps until the pane part P2).
@@ -8297,53 +8284,95 @@ impl Library {
                 });
             };
             // The body takes the whole pane, so a wide table can use it; prose keeps its
-            // measure. A draft's comparison keeps the pane it had.
-            if !slot_row {
-                // Read: the pane draws the body, then its message footer `S` below a short body,
-                // or pinned when the body scrolls (round 28 rows 17, 50, 53, 54; G6).
-                let footer = read_footer.take().unwrap_or_else(|| {
-                    design::Footer::new(
-                        ("library_footer", note.owner.id(), &note.path),
-                        editor_width.min(design::READER_MEASURE),
-                    )
+            // measure. Read (with or without a changed draft) and an open conflict: the pane draws
+            // the body, then its message footer `S` below a short body, or pinned when the body
+            // scrolls (round 28 rows 17, 50, 53, 54; G6; P2 for the draft's footer).
+            let footer = pane_footer.take().unwrap_or_else(|| {
+                design::Footer::new(
+                    ("library_footer", note.owner.id(), &note.path),
+                    editor_width.min(design::READER_MEASURE),
+                )
+            });
+            let body = egui::Rect::from_min_max(
+                ui.cursor().min,
+                egui::pos2(right, ui.max_rect().bottom()),
+            );
+            ui.scope_builder(egui::UiBuilder::new().max_rect(body), |ui| {
+                crate::markdown_view::with_wide_tables(ui, |ui| {
+                    footer.pane(ui, design::Body::Content, |ui| content(ui));
                 });
-                let body = egui::Rect::from_min_max(
-                    ui.cursor().min,
-                    egui::pos2(right, ui.max_rect().bottom()),
-                );
-                ui.scope_builder(egui::UiBuilder::new().max_rect(body), |ui| {
-                    crate::markdown_view::with_wide_tables(ui, |ui| {
-                        footer.pane(ui, design::Body::Content, |ui| content(ui));
-                    });
-                });
-            } else {
-                // It starts `S` left of the text, with an `S` margin, so a quiet `line_start`
-                // action that hangs its icon left of the message words is not clipped at the
-                // pane's edge. The text stays where it was.
-                let body = egui::Rect::from_min_max(
-                    egui::pos2(ui.cursor().min.x - design::S, ui.cursor().min.y),
-                    egui::pos2(right, ui.max_rect().bottom().min(body_bottom)),
-                );
-                ui.scope_builder(egui::UiBuilder::new().max_rect(body), |ui| {
-                    crate::markdown_view::with_wide_tables(ui, |ui| {
-                        egui::ScrollArea::vertical()
-                            .id_salt(("entry_body", note.owner.id(), &note.path))
-                            .auto_shrink([false, false])
-                            .show(ui, |ui| {
-                                egui::Frame::new()
-                                    .inner_margin(egui::Margin {
-                                        left: design::S as i8,
-                                        ..Default::default()
-                                    })
-                                    .show(ui, |ui| content(ui));
-                            });
-                    });
-                });
-            }
+            });
         }
-        // The Read footer's presses, after the pane drew it. (With a save row, no Read footer was
-        // drawn; its borrows end here.)
-        drop(read_footer);
+        // The footer's presses, after the pane drew it; its borrows end here.
+        drop(pane_footer);
+        if let Some(data) = edit_data {
+            // Edit Markdown's presses, applied after the pane drew the body and the footer. The
+            // editor shows the changed draft in the next frame, which the change asks for.
+            if data.broken_taken
+                && let Some((_, _, _, warnings)) = &mut self.broken_lines
+            {
+                *warnings = data.broken_cache;
+            }
+            if let Some(shown) = shown.into_inner() {
+                pressed = shown;
+            }
+            let draft_before = self.draft_revision;
+            if discard_undo.get()
+                && let Some((_, _, text)) = self.discarded.take()
+            {
+                self.draft = text;
+                // The draft changed: a failed Save of the old words no longer owns it.
+                self.draft_revision += 1;
+            }
+            let pressed_heading = (heading_fix, heading_undo.get());
+            if pressed_heading.0 || pressed_heading.1 {
+                self.draft_revision += 1;
+            }
+            let fixed = pressed_heading.0;
+            save |= heading.apply(
+                pressed_heading,
+                &note.path,
+                &mut self.draft,
+                &mut self.heading_undo,
+            );
+            if fixed && self.heading_undo.is_some() {
+                self.result_orders
+                    .insert(OrderKey::Heading, design::ResultOrder::issue());
+            }
+            if let (Some((key, label, value)), Ok(entry)) = (vital_use, &parsed) {
+                match creature::use_vital(&self.draft, entry, key, value) {
+                    Ok(after) => {
+                        self.result_orders
+                            .insert(OrderKey::Vital, design::ResultOrder::issue());
+                        self.vital_undo = Some((
+                            note.path.clone(),
+                            self.draft.clone(),
+                            after.clone(),
+                            format!("The stat block now says {label} {value}."),
+                        ));
+                        self.draft = after;
+                        // The draft changed: a failed Save of the old words no longer owns it.
+                        self.draft_revision += 1;
+                    }
+                    Err(error) => self.error = Some(error),
+                }
+            }
+            if vital_undo.get()
+                && let Some((_, before, _, _)) = self.vital_undo.take()
+            {
+                self.draft = before;
+                // The draft changed: a failed Save of the old words no longer owns it.
+                self.draft_revision += 1;
+            }
+            // Live, as above: a press that changed the draft ends Discard's Undo.
+            if self.draft != note.text {
+                self.discarded = None;
+            }
+            if self.draft_revision != draft_before {
+                ui.ctx().request_repaint();
+            }
+            repair_pressed |= footer_repair;
+        }
         if choices_in_reader && !slot_row {
             heading_pressed = reader_press.heading;
             // Presses come only from the footer that drew the results: this one in Read. With a

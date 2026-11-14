@@ -4092,19 +4092,26 @@ fn fixed_part_scrolls(d: &mut Driver<'_>, message: &str) -> (bool, bool, bool, [
     };
     let tabbed = d.tab_to(message);
     // Astra re-check 3: the part's focus ring keeps clear of its own scroll bar at each size.
+    // Round 28 P2: where the footer follows a short draft and holds every message whole (1920),
+    // the part has nothing to scroll and takes no focus: no ring, no bar, and its words in view.
     let ring_clear = [SMALL, DEFAULT, LARGE].map(|size| {
         d.at_size(size, |d| {
             let lanes = d.chrome_lanes();
             let rings = d.focus_rings();
-            !rings.is_empty()
-                && rings
-                    .iter()
-                    // Painted over: an overlap with area, not a shared edge.
-                    .all(|(ring, _)| {
-                        lanes
-                            .iter()
-                            .all(|lane| !lane.intersect(*ring).is_positive())
-                    })
+            let whole = d
+                .nodes()
+                .iter()
+                .any(|node| node.name.contains(message) && node.fully_in_view());
+            (rings.is_empty() && whole)
+                || !rings.is_empty()
+                    && rings
+                        .iter()
+                        // Painted over: an overlap with area, not a shared edge.
+                        .all(|(ring, _)| {
+                            lanes
+                                .iter()
+                                .all(|lane| !lane.intersect(*ring).is_positive())
+                        })
         })
     });
     // Tab passes the part's own Undo first, and egui scrolls the part to show it: start from the
@@ -5329,6 +5336,9 @@ fn undo_follows_message(d: &mut Driver<'_>, id: &str, message: &str, undo: &str)
     }
 }
 
+/// A short window for the editor region's least height (P2): the region keeps 64 px.
+const SHORT_EDITOR: f32 = 300.0;
+
 /// A rename on disk keeps an identity-based package link working.
 pub fn package_rename(d: &mut Driver<'_>) {
     let package = d.root.join("modules/ashen-marches");
@@ -5489,6 +5499,13 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.wait_for_text("Undo stat change");
     let fixed = d.editor_text().unwrap();
     assert_ne!(fixed, typed, "Use 24 did not change the draft");
+    // Round 28 P2 (the Library editor on `pane_editor`): the footer's presses are applied after
+    // the pane draws the editor, and the DM's unsent line stays in the draft the fix changed.
+    d.observe(
+        "iter-28-L-P2-unsent",
+        fixed.contains("Hit Points 24 (4d8 + 4)"),
+        "After Use 24 in the footer, the draft keeps the typed Hit Points line and has the fix",
+    );
     undo_follows_message(
         d,
         "iter-19-E-AD3-stat",
@@ -5496,6 +5513,35 @@ pub fn package_rename(d: &mut Driver<'_>) {
         "Undo stat change",
     );
     d.state("stat-fix-undo-message", Sizes::All);
+    // Round 28 P2: in the pane's editor region, Save (above the pane), the editor and the
+    // footer's Undo stay in view at 960, 1280 and 1920 wide and at a short height; the region
+    // keeps at least 64 px (`REGION_LEAST`) and ends above the footer.
+    let regions = [SMALL, (1280.0, 800.0), LARGE, (1280.0, SHORT_EDITOR)].map(|size| {
+        d.at_size(size, |d| {
+            let editor = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name == "Markdown editor")?
+                .shown;
+            let undo = d.place_of("Undo stat change")?;
+            Some((
+                size.1,
+                d.in_view("Save"),
+                d.in_view("Undo stat change"),
+                editor.height(),
+                editor.bottom() <= undo.top(),
+            ))
+        })
+    });
+    d.observe(
+        "iter-28-L-P2-save-in-view",
+        regions.iter().all(|region| {
+            region.is_some_and(|(_, save, undo, height, above)| {
+                save && undo && above && height >= 64.0 - 0.5
+            })
+        }),
+        format!("(height, Save, Undo, editor view, editor above the footer): {regions:?}"),
+    );
     // Round 25 AC3, FC1, SC2 and the message-space contract: the stat warning, its result, a
     // reason that hides the result, Discard, Undo discard and the result again all keep the
     // editor still. The hidden result comes back while its owner (this draft) lives.
@@ -8201,7 +8247,8 @@ pub(super) fn reader_title_tops(d: &mut Driver<'_>, title: &str) -> Vec<Option<f
 /// per pane, pinned below the editor). With `words`, at each size: one footer holds them all, it
 /// starts at least `S` below the editor frame and ends in the window, it is at most a third of
 /// the window high, and each of `words` is painted inside it, in this order from the top. With
-/// no `words`: no footer, and the editor runs to the pane's bottom.
+/// no `words`: no footer, and the editor either runs to the pane's bottom or, as tall as its text
+/// (round 28 P2: the pane's editor region fits a short draft), shows all of it.
 fn footer_in_order(d: &mut Driver<'_>, words: &[&str]) -> [bool; 3] {
     [SMALL, DEFAULT, LARGE].map(|size| {
         d.at_size(size, |d| {
@@ -8219,7 +8266,12 @@ fn footer_in_order(d: &mut Driver<'_>, words: &[&str]) -> [bool; 3] {
                 })
                 .collect();
             if words.is_empty() {
-                return below.is_empty() && editor.bottom() > size.1 - crate::design::XXL * 2.0;
+                let whole = d
+                    .nodes()
+                    .iter()
+                    .any(|node| node.name == "Markdown editor" && node.fully_in_view());
+                return below.is_empty()
+                    && (editor.bottom() > size.1 - crate::design::XXL * 2.0 || whole);
             }
             let Some(footer) = below
                 .iter()
