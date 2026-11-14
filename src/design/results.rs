@@ -714,6 +714,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         (
             "src/encounters/groups.rs",
+            "discard_group_draft",
+            &[Ban::Results],
+        ),
+        (
+            "src/encounters/groups.rs",
             "group_editor_view",
             &[Ban::Results, Ban::Extras(1), Ban::Pane(1)],
         ),
