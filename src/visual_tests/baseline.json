@@ -2,7 +2,7 @@
   "violations": {
     "accessible-name/egui-chrome": {
       "book-to-package": 18,
-      "campaign-content": 20,
+      "campaign-content": 21,
       "campaign-copy-registered": 2,
       "column-resize": 30,
       "creature-filter": 5,
@@ -39,7 +39,7 @@
       "party-from-run": 10,
       "plain-evening": 10,
       "prep-to-table": 3,
-      "reader-tables": 17,
+      "reader-tables": 15,
       "recording-banner-priority": 2,
       "remove-package-in-use": 17,
       "roll-table-author": 11,
@@ -101,7 +101,7 @@
     },
     "target-size/egui-chrome": {
       "book-to-package": 50,
-      "campaign-content": 91,
+      "campaign-content": 92,
       "campaign-copy-registered": 8,
       "column-resize": 129,
       "creature-filter": 15,
@@ -142,7 +142,7 @@
       "party-from-run": 52,
       "plain-evening": 66,
       "prep-to-table": 42,
-      "reader-tables": 44,
+      "reader-tables": 42,
       "recording-banner-priority": 32,
       "remove-package-in-use": 59,
       "roll-table-author": 32,

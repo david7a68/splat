@@ -556,7 +556,8 @@ mod tests {
             extras(
                 "fn f() { design::search_field(ui, \"Search\", t, \"…\", 200.0); design::group_heading(ui, \"Ready\", 2); design::group_label(ui, \"Party\"); design::reader::section_heading(ui, \"Actions\"); }"
             ),
-            4
+            // `reader::section_heading` is gone (its last callers moved to `heading`): not counted.
+            3
         );
         // The parts that replace them, and words in strings, are not calls.
         assert_eq!(

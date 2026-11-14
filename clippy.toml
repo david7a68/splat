@@ -176,7 +176,6 @@ disallowed-methods = [
     # N3: a heading adds its own space above it.
     { path = "splat::design::components::group_heading", reason = "use design::heading(ui, Heading::Group { … }), which adds the space above it" },
     { path = "splat::design::components::group_label", reason = "use design::heading(ui, Heading::Label(…)), which adds the space above it" },
-    { path = "splat::design::reader::section_heading", reason = "use design::heading(ui, Heading::Section(…)), which adds the space above it" },
     # Package P: the pane places its footer (`Footer::pane`). A footer placed by hand is staged out,
     # and a body that manages its own room is the one named escape; each function that still calls
     # one has its row in `design::results::STAGED_ALLOWS` with the number of calls it holds
