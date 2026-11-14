@@ -238,6 +238,8 @@ fn show_inner(
         // Line warnings wrap at the reader measure, where the stat block and the prose end, as
         // World's do (round 26 FG3).
         if !entry.flags.is_empty() {
+            // One `L` after the kind line, also before a warning (row 94).
+            design::gap(ui, design::Gap::L);
             style::measure(ui, |ui| {
                 for flag in &entry.flags {
                     design::message(ui, crate::design::Tone::Warning, &flag.message);
@@ -322,14 +324,24 @@ fn content(
         });
     } else {
         // A creature the DM wrote has no source text to style. Its numbers still lead.
-        // The stat head ends with its own gap, as a styled stat block does, so the reader
-        // adds no second gap after it: the first heading sits where a styled one does.
+        // The reader adds no lead gap after the stat head: prose gets the stat head's `S`, and
+        // the first heading owns its space, so it sits where a styled one does.
         let mut lead_gap = lead_gap;
+        let mut after_stat_head = false;
         if let Some(entry) = entry.filter(|entry| reading.is_none() && creature::has_stats(entry)) {
             creature::stat_head(ui, entry, values);
             lead_gap = false;
+            after_stat_head = true;
         }
-        reader::show(ui, entry, sections, builtin, reading.is_some(), lead_gap);
+        reader::show(
+            ui,
+            entry,
+            sections,
+            builtin,
+            reading.is_some(),
+            lead_gap,
+            after_stat_head,
+        );
     }
     if let Some(entry) = entry.filter(|entry| class::lists_features(entry)) {
         open_link = open_link.or(class::show_features(ui, entry, links));
@@ -451,6 +463,11 @@ mod tests {
 
     /// The top of the painted prose line, read through `show_with_related`.
     fn prose_top(entry: &Entry, empty_value_block: bool) -> f32 {
+        text_top(entry, empty_value_block, "Keep this prose.")
+    }
+
+    /// The top of the first painted text that holds `words`.
+    fn text_top(entry: &Entry, empty_value_block: bool, words: &str) -> f32 {
         let ctx = egui::Context::default();
         design::theme::install(&ctx);
         let output = ctx.run(Default::default(), |ctx| {
@@ -475,12 +492,10 @@ mod tests {
             .shapes
             .iter()
             .find_map(|shape| match &shape.shape {
-                egui::Shape::Text(text) if text.galley.job.text.contains("Keep this prose.") => {
-                    Some(text.pos.y)
-                }
+                egui::Shape::Text(text) if text.galley.job.text.contains(words) => Some(text.pos.y),
                 _ => None,
             })
-            .expect("the prose is painted")
+            .expect("the words are painted")
     }
 
     /// The tops of a creature's opening stat block rule and of its first section heading, and
@@ -629,6 +644,12 @@ mod tests {
             prose_top(&warned, true),
             prose_top(&warned, false),
             "iter-18-E-FT2-warning: a line warning keeps the gap before the prose"
+        );
+        // Row 94 (FH2): a warning starts `L` below what is above it, as the prose does.
+        let warning_top = text_top(&warned, false, "Unknown field");
+        assert!(
+            warning_top >= with_gap - 0.5,
+            "iter-28-L-94: the warning starts at {warning_top}, the prose of a plain note at {with_gap}"
         );
         // The reader shows a flag's words as they were made or saved, and adds no line: an
         // older saved flag and a new one each name line 19 once, in their whole sentence.
