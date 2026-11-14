@@ -1085,14 +1085,15 @@ pub(super) fn whole_rows<R>(ui: &mut Ui, column: Id, add: impl FnOnce(&mut Ui) -
     // P3a: a column in a `Fills` body has the hang's room of a pane of its own (`hang_left`
     // from the column's left), so a `line_start` action in it never paints or takes a press
     // over a control left of the column (the scroll bar of the column beside it).
-    let mut clip = ui.clip_rect();
-    let column_room = Rect::from_min_max(pos2(ui.max_rect().left(), clip.top()), clip.max);
+    // The column's view as egui gave it: the cut's key, its reveal room and its hairline.
+    let view = ui.clip_rect();
+    let column_room = Rect::from_min_max(pos2(ui.max_rect().left(), view.top()), view.max);
+    let mut clip = view;
     clip.min.x = clip.min.x.max(hang_left(ui, column_room));
     ui.set_clip_rect(clip);
     if !pane.edge {
         return add(ui);
     }
-    let view = ui.clip_rect();
     let key = pane.pane.with(("column_cut", column));
     let kept = ui
         .ctx()
@@ -1100,7 +1101,6 @@ pub(super) fn whole_rows<R>(ui: &mut Ui, column: Id, add: impl FnOnce(&mut Ui) -
         .filter(|(at, _)| *at == view)
         .map(|(_, cut)| cut);
     if let Some(cut) = kept {
-        let mut clip = view;
         clip.max.y = clip.max.y.min(cut);
         ui.set_clip_rect(clip);
     }
