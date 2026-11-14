@@ -3788,30 +3788,35 @@ impl Run {
                 .map_or(text, |rest| rest.trim_start_matches(" · "))
                 .to_owned()
         };
-        // The status words take their room only after the line has its own (R1: the line's
-        // `Fight after` never gives way to them); with no room left they are not in the heading,
-        // as before.
+        // R1: the line's own facts (members, side, XP number) give way so that the status words
+        // keep their place in the heading (they are not the line's); only where even the
+        // shortest line and the status do not fit together do the status words leave the
+        // heading, as before. `Fight after` and its word never give way.
         let room = grip.rect.width() - heading_width - design::L;
-        let fitted = fight.as_ref().and_then(|line| {
-            line.fit(|text| {
-                design::number_width(ui, &after_name(text), &Type::Small.font(ui)) <= room
-            })
-        });
-        // A group with no word keeps its totals, where they fit.
-        let totals_in_heading = fitted.is_none()
-            && design::number_width(ui, &totals_text, &Type::Small.font(ui)) <= room;
-        let line_width = fitted.as_ref().map_or_else(
-            || {
-                if totals_in_heading {
-                    design::number_width(ui, &totals_text, &Type::Small.font(ui))
-                } else {
-                    0.0
-                }
-            },
-            |fitted| design::number_width(ui, &after_name(&fitted.text()), &Type::Small.font(ui)),
-        );
-        let status_in_heading = !status.is_empty() && line_width + status_room <= room;
+        let width = |text: &str| design::number_width(ui, &after_name(text), &Type::Small.font(ui));
+        let fit_in = |room: f32| {
+            fight
+                .as_ref()
+                .and_then(|line| line.fit(|text| width(text) <= room))
+                .filter(|fitted| width(&fitted.text()) <= room)
+        };
+        let (fitted, status_in_heading) = match fit_in(room - status_room) {
+            Some(fitted) if !status.is_empty() => (Some(fitted), true),
+            _ => (
+                fit_in(room).or_else(|| {
+                    fight
+                        .as_ref()
+                        .and_then(|line| line.fit(|text| width(text) <= room))
+                }),
+                false,
+            ),
+        };
+        // A group with no word keeps its totals, where they fit, and its status beside them.
+        let totals = design::number_width(ui, &totals_text, &Type::Small.font(ui));
+        let status_in_heading = status_in_heading
+            || (fight.is_none() && !status.is_empty() && totals + status_room <= room);
         let status_room = if status_in_heading { status_room } else { 0.0 };
+        let totals_in_heading = fitted.is_none() && totals + status_room <= room;
         let shown = rating.as_ref().and_then(|fight| fight.rating.as_ref());
         // A pointer's way to do what the Add button does, so the keyboard does not stop here.
         grip.widget_info(|| {
