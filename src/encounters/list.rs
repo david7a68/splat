@@ -14,25 +14,23 @@ pub(super) fn blocked_reason(ui: &mut egui::Ui, reason: Option<&str>) {
     }
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
+/// The quiet `⋯` menu of a row or a header. The menu part places and sizes it (`menu_popup`):
+/// inside the pane it opens from, clear of its splitter and scroll bar, measured at each opening.
 pub(super) fn row_menu(ui: &mut egui::Ui, name: &str, add: impl FnOnce(&mut egui::Ui)) {
     let name = format!("More actions for {name}");
-    // The pane the menu opens from: the menu stays inside it, as its submenus do.
+    // The pane the menu opens from.
     let inside = ui.clip_rect();
     let button = Action::quiet(icons::EXPAND)
         .density(Density::Read)
         .name(&name)
         .hint(&name)
         .show(ui);
-    let popup = egui::Popup::menu(&button);
+    let id = egui::Popup::default_response_id(&button);
     // When the pane changes size under an open menu (the window shrinks), the pane brings the
     // menu's button back into view, so the menu does not hang from a button the DM cannot see.
     // Only a resize does this: the DM's own scrolling stays where the DM leaves it.
-    let pane = popup.get_id().with("pane size");
-    if egui::Popup::is_id_open(ui.ctx(), popup.get_id()) {
+    let pane = id.with("pane size");
+    if egui::Popup::is_id_open(ui.ctx(), id) {
         let last = ui.data_mut(|data| data.get_temp::<egui::Vec2>(pane));
         let resized = last.is_some_and(|last| last != inside.size());
         let pending = pane.with("bring back");
@@ -53,12 +51,7 @@ pub(super) fn row_menu(ui: &mut egui::Ui, name: &str, add: impl FnOnce(&mut egui
     } else {
         ui.data_mut(|data| data.remove::<egui::Vec2>(pane));
     }
-    let size = egui::AreaState::load(ui.ctx(), popup.get_id()).and_then(|state| state.size);
-    let aligns = menu_aligns(button.interact_rect, size, inside);
-    popup
-        .align(aligns[0])
-        .align_alternatives(&aligns[1..])
-        .show(add);
+    design::menu_popup(ui, &button).show(add);
 }
 
 /// FM1: a menu whose first choice has no icon, but a later one has, says so before its first
@@ -67,27 +60,6 @@ pub(super) fn row_menu(ui: &mut egui::Ui, name: &str, add: impl FnOnce(&mut egui
 fn menu_has_icons(ui: &egui::Ui) {
     let mark = ui.layer_id().id.with("menu has icons");
     ui.data_mut(|data| data.insert_temp(mark, true));
-}
-
-/// Where a row menu may open: below or above its button, ending at the button's right edge, or
-/// starting at its left edge when only that keeps the menu `S` inside the pane. egui picks the
-/// first of these that fits the window, and the first one when none does, so the menu never
-/// opens beside its button, over a splitter or scroll bar.
-fn menu_aligns(
-    button: egui::Rect,
-    size: Option<egui::Vec2>,
-    inside: egui::Rect,
-) -> [egui::RectAlign; 2] {
-    use egui::RectAlign;
-    let start_only = size.is_some_and(|size| {
-        button.right() - size.x < inside.left() + design::S
-            && button.left() + size.x <= inside.right() - design::S
-    });
-    if start_only {
-        [RectAlign::BOTTOM_START, RectAlign::TOP_START]
-    } else {
-        [RectAlign::BOTTOM_END, RectAlign::TOP_END]
-    }
 }
 
 fn menu_icon(word: &str) -> Option<&'static str> {
@@ -1153,27 +1125,73 @@ mod iter_2_c_tests {
         );
     }
 
-    /// Astra review of PR 231: a row menu opens below or above its button, never beside it, and
-    /// starts at the button's left edge only when ending at its right edge would cross the pane.
+    /// Astra review of PR 231, on the menu part since round 28: a row menu opens below or above
+    /// its button, never beside it, and stays inside the pane it opens from, one scroll lane
+    /// clear of the pane's right edge (a splitter or a scroll bar): at the pane's right edge
+    /// near the window's bottom, and near the pane's left edge.
     #[test]
     fn iter22_b_row_menu_opens_below_or_above_inside_its_pane() {
-        use egui::{RectAlign, pos2, vec2};
+        use egui::{pos2, vec2};
+        use egui_kittest::kittest::Queryable;
         let pane = egui::Rect::from_min_max(pos2(150.0, 90.0), pos2(590.0, 632.0));
-        let button = egui::Rect::from_min_max(pos2(561.0, 600.0), pos2(585.0, 628.0));
-        let menu = Some(vec2(236.0, 110.0));
-        let end = [RectAlign::BOTTOM_END, RectAlign::TOP_END];
-        // Unknown size (the first frame) and the usual case: end at the button's right edge.
-        assert_eq!(menu_aligns(button, None, pane), end);
-        assert_eq!(menu_aligns(button, menu, pane), end);
-        // A button near the pane's left edge: ending at it would cross the pane, so start at it.
-        let near_left = button.translate(vec2(160.0 - button.left(), 0.0));
-        assert_eq!(
-            menu_aligns(near_left, menu, pane),
-            [RectAlign::BOTTOM_START, RectAlign::TOP_START]
-        );
-        // A pane too narrow for either: still end at the button, never beside it.
-        let narrow = egui::Rect::from_min_max(pos2(150.0, 90.0), pos2(330.0, 632.0));
-        assert_eq!(menu_aligns(near_left, menu, narrow), end);
+        let size = vec2(24.0, 28.0);
+        for (case, button) in [
+            (
+                // A row's `⋯` ends at its list's scroll lane, as every row's action does.
+                "right edge, near the bottom",
+                egui::Rect::from_min_size(pos2(548.0, 600.0), size),
+            ),
+            (
+                "left edge, near the top",
+                egui::Rect::from_min_size(pos2(160.0, 100.0), size),
+            ),
+        ] {
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(960.0, 640.0))
+                .build(move |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.scope_builder(egui::UiBuilder::new().max_rect(pane), |ui| {
+                            ui.set_clip_rect(pane);
+                            ui.scope_builder(egui::UiBuilder::new().max_rect(button), |ui| {
+                                row_menu(ui, "Bridge Ambush", |ui| {
+                                    let _ = menu_action(ui, "Edit encounter", None);
+                                    let _ = menu_action(ui, "Delete the saved run", None);
+                                });
+                            });
+                        });
+                    });
+                });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            harness
+                .get_by_label("More actions for Bridge Ambush")
+                .click();
+            harness.run_steps(4);
+            let shown = harness
+                .get_by_label("More actions for Bridge Ambush")
+                .rect();
+            let lane = design::lane_width().max(design::S);
+            let rows: Vec<egui::Rect> = ["Edit encounter", "Delete the saved run"]
+                .iter()
+                .map(|name| {
+                    harness
+                        .query_all_by_label(name)
+                        .map(|node| node.rect())
+                        .reduce(|a, b| a.union(b))
+                        .unwrap_or(egui::Rect::NOTHING)
+                })
+                .collect();
+            let inside = rows.iter().all(|row| {
+                row.is_positive()
+                    && row.left() >= pane.left() + lane - 0.5
+                    && row.right() <= pane.right() - lane + 0.5
+                    && (row.bottom() <= shown.top() + 0.5 || row.top() >= shown.bottom() - 0.5)
+            });
+            assert!(
+                inside,
+                "{case}: the menu’s rows {rows:?} lie below or above the button {shown:?}, inside the pane {pane:?} less a lane of {lane}"
+            );
+        }
     }
 
     /// T12.12: Remove is offered only for an encounter with no saved run: none unfinished,
