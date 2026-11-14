@@ -7378,7 +7378,7 @@ impl Sessions {
         not(test),
         expect(
             dead_code,
-            reason = "package C's Link and folder page calls it when its footer moves to `Messages`; until then it calls `folder_footer`"
+            reason = "the Link and folder page (package C) calls it when its footer moves to `Messages`; until then that page calls `folder_footer`"
         )
     )]
     pub fn folder_messages<'f, A: 'static>(
