@@ -670,10 +670,6 @@ impl Splat {
         items
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn close_prompt(&mut self, ctx: &egui::Context) {
         let items = self.unsaved_items();
         // Sync finished, or a draft was saved, while the prompt was open.
@@ -771,7 +767,7 @@ impl Splat {
             if !advice.is_empty() {
                 ui.label(Type::Small.rich(ui, advice).color(colors().muted));
             }
-            ui.add_space(design::S);
+            design::gap(ui, design::Gap::S);
             let loses = items.len() != background && (!only_sync || sync_loss);
             let chosen = encounter_run::view::close_recovery_actions(
                 ui,
@@ -849,10 +845,6 @@ impl Splat {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn rail(&mut self, ctx: &egui::Context, connection: Connection) {
         let c = colors();
         let at_table = self.visible_page() == Some(Page::Run);
@@ -883,7 +875,7 @@ impl Splat {
             }
             ui.spacing_mut().item_spacing.y = 2.0;
             ui.label(Type::Title.rich(ui, "Splat").color(c.text));
-            ui.add_space(design::XS);
+            design::gap(ui, design::Gap::XS);
             let blocked = self.blocked_switch();
             ui.spacing_mut().interact_size.y = Density::Read.control();
             if self.campaigns.selector(ui, blocked) {
@@ -891,7 +883,7 @@ impl Splat {
                 self.settings_tab = SettingsTab::Account;
                 self.page = Page::Settings;
             }
-            ui.add_space(design::S);
+            design::gap(ui, design::Gap::S);
             if !self.encounters.has_run() {
                 let fights = self.encounters.paused_run_count();
                 let paused = self.encounters.paused_run().map(|run| {
@@ -1092,7 +1084,7 @@ impl Splat {
                     egui::pos2(rail_rect.right(), rail_rect.bottom().max(lower_top)),
                 )),
                 |ui| {
-                    ui.add_space(design::XS);
+                    design::gap(ui, design::Gap::XS);
                     if design::nav_toggle(ui, icons::SEARCH, "Lookup", "Ctrl+K", self.lookup.open)
                         .on_hover_text("Search everything, beside this page (Ctrl+K)")
                         .clicked()
@@ -1123,7 +1115,7 @@ impl Splat {
                         self.page = Page::Settings;
                     }
                     if let Some(account) = account {
-                        ui.add_space(design::XS);
+                        design::gap(ui, design::Gap::XS);
                         let top = ui.cursor().top();
                         self.rail_status(ui, account, true);
                         ui.expand_to_include_y(top + account_slot);
@@ -1851,10 +1843,6 @@ impl Splat {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn page(&mut self, ui: &mut egui::Ui) {
         let active = self.campaigns.active_campaign();
         let (_, session) = self.settings.campaign_session();
@@ -1875,8 +1863,13 @@ impl Splat {
                 }
                 design::rule(ui);
                 if self.settings_tab == SettingsTab::Touchpad {
-                    ui.add_space(design::L);
-                    design::group_heading(ui, "Touchpad", 0);
+                    design::heading(
+                        ui,
+                        design::Heading::Group {
+                            title: "Touchpad",
+                            count: 0,
+                        },
+                    );
                     design::small_field(
                         ui,
                         "Scrolling speed",
@@ -1941,7 +1934,6 @@ impl Splat {
                         ui.vertical(|ui| {
                             let mut campaigns = campaigns.borrow_mut();
                             let campaigns: &mut campaigns::Campaigns = &mut campaigns;
-                            ui.add_space(design::L);
                             let list =
                             |ui: &mut egui::Ui,
                              campaigns: &mut campaigns::Campaigns,
@@ -1949,6 +1941,7 @@ impl Splat {
                                 campaigns.show(ui, session.clone(), dndbeyond, blocked);
                             };
                             if ui.ctx().content_rect().width() >= 1000.0 {
+                                design::gap(ui, design::Gap::L);
                                 // A clear gutter, so that the left column's text does not run on.
                                 // Not `ui.columns`, whose justified layout stretches the words in a paragraph.
                                 let half = (ui.available_width() - design::XL) / 2.0;
@@ -1979,12 +1972,14 @@ impl Splat {
                             } else {
                                 settings.campaign_form_open = campaigns.form_open();
                                 if has_run {
+                                    // The account's heading is first in the column: no space above.
                                     settings.show_compact(ui);
-                                    ui.add_space(design::L);
+                                    design::gap(ui, design::Gap::L);
                                     list(ui, campaigns, dndbeyond);
                                 } else {
+                                    design::gap(ui, design::Gap::L);
                                     list(ui, campaigns, dndbeyond);
-                                    ui.add_space(design::L);
+                                    // The account's heading adds the space above it.
                                     settings.show_compact(ui);
                                 }
                             }
@@ -2175,7 +2170,7 @@ impl Splat {
                         (CampaignTab::Link, "Link and folder"),
                     ],
                 );
-                ui.add_space(design::XS);
+                design::gap(ui, design::Gap::XS);
                 match self.campaign_tab {
                     CampaignTab::Packages => {
                         self.campaign_content.show(ui, &self.campaigns);

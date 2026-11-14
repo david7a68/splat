@@ -815,7 +815,7 @@ impl Party {
             ui.allocate_ui_with_layout(egui::vec2(ui.available_width(), design::XL), line, |ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
                 ui.label(Type::Small.rich(ui, class_line(record)).color(c.muted));
-                ui.add_space(design::L);
+                design::gap(ui, design::Gap::L);
                 if design::small_link(ui, "D&D Beyond ↗").clicked() {
                     ui.ctx().open_url(egui::OpenUrl::new_tab(format!(
                         "https://www.dndbeyond.com/characters/{id}"
@@ -917,7 +917,7 @@ impl Party {
                     });
                 sheet_page(ui, record, self.page, &self.search, live.as_ref());
                 if self.page == 0 {
-                    ui.add_space(design::M);
+                    design::gap(ui, design::Gap::M);
                     design::quiet_section(ui, "Technical details", |ui| {
                         source_and_parity(
                             ui,
@@ -1669,14 +1669,10 @@ pub const SHEET_PAGES: [(usize, &str); 6] = [
 ];
 
 /// Labelled prose, one paragraph at a time, at a reading width.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn prose(ui: &mut egui::Ui, label: Option<&str>, text: &str) {
     design::reader::measure(ui, |ui| {
         if let Some(label) = label {
-            ui.add_space(design::S);
+            design::gap(ui, design::Gap::S);
             ui.label(Type::Small.rich(ui, label).color(colors().muted));
         }
         for paragraph in text.split("\n\n") {
@@ -1684,16 +1680,12 @@ fn prose(ui: &mut egui::Ui, label: Option<&str>, text: &str) {
                 egui::Label::new(Type::ProseCompact.rich(ui, paragraph).color(colors().text))
                     .wrap(),
             );
-            ui.add_space(design::XS);
+            design::gap(ui, design::Gap::XS);
         }
     });
 }
 
 /// Who the character is, as the player wrote it on D&D Beyond.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn background(ui: &mut egui::Ui, record: &EntitySnapshot) {
     use splat::character::profile::{characteristic_rows, companion_line, detail_rows, story_rows};
     let profile = record.profile();
@@ -1706,12 +1698,12 @@ fn background(ui: &mut egui::Ui, record: &EntitySnapshot) {
         && story.is_empty()
         && profile.companions.is_empty()
     {
-        section_heading(ui, "Background");
+        sheet_section(ui, "Background");
         ui.weak("This sheet has no background, details or notes.");
         return;
     }
     if let Some(background) = &profile.background {
-        section_heading(ui, "Background");
+        sheet_section(ui, "Background");
         ui.label(Type::Strong.rich(
             ui,
             if background.custom {
@@ -1738,7 +1730,7 @@ fn background(ui: &mut egui::Ui, record: &EntitySnapshot) {
         }
     }
     if !details.is_empty() {
-        section_heading(ui, "Details");
+        sheet_section(ui, "Details");
         sheet_columns(ui, details.len(), |ui, at| {
             let (label, value) = &details[at];
             ui.add(egui::Label::new(format!("{label}: {value}")).wrap());
@@ -1748,7 +1740,7 @@ fn background(ui: &mut egui::Ui, record: &EntitySnapshot) {
         if rows.is_empty() {
             continue;
         }
-        section_heading(ui, title);
+        sheet_section(ui, title);
         for (label, text) in rows {
             prose(ui, Some(label), text);
         }
@@ -1757,7 +1749,7 @@ fn background(ui: &mut egui::Ui, record: &EntitySnapshot) {
         sheet_heading(ui, "Companions", profile.companions.len());
         design::help(ui, "Stat blocks are not imported. HP is the printed value.");
         for companion in profile.companions.values() {
-            ui.add_space(design::S);
+            design::gap(ui, design::Gap::S);
             ui.label(Type::Strong.rich(ui, &companion.name));
             ui.add(
                 egui::Label::new(
@@ -1865,13 +1857,8 @@ fn text(v: &Value) -> &str {
 fn array(v: &Value) -> &[Value] {
     v.as_array().map(Vec::as_slice).unwrap_or(&[])
 }
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
-fn section_heading(ui: &mut egui::Ui, title: &str) {
-    ui.add_space(design::L);
-    design::group_heading(ui, title, 0);
+fn sheet_section(ui: &mut egui::Ui, title: &str) {
+    sheet_heading(ui, title, 0);
 }
 const TILE_WIDTH: f32 = 112.0;
 
@@ -2019,13 +2006,9 @@ fn overview_death_saves(record: &EntitySnapshot, live: Option<&LiveValues>) -> O
     ))
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<&LiveValues>) {
     let narrow = ui.available_width() < 560.0;
-    section_heading(ui, "Combat");
+    sheet_section(ui, "Combat");
     tiles(ui, |ui| {
         let (hp, max, temp) = live.map_or_else(
             || {
@@ -2056,7 +2039,7 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
             },
         );
     });
-    section_heading(ui, "Ability scores");
+    sheet_section(ui, "Ability scores");
     tiles(ui, |ui| {
         for ability in ABILITIES {
             let label = format!(
@@ -2073,7 +2056,7 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
             }
         }
     });
-    section_heading(ui, "Passive scores & movement");
+    sheet_section(ui, "Passive scores & movement");
     tiles(ui, |ui| {
         for (label, key) in [
             ("Perception", "passive_perception"),
@@ -2092,7 +2075,7 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
             }
         }
     });
-    section_heading(ui, "Saving throws");
+    sheet_section(ui, "Saving throws");
     sheet_columns(ui, ABILITIES.len(), |ui, at| {
         let ability = ABILITIES[at];
         ui.horizontal(|ui| {
@@ -2104,7 +2087,7 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
             ui.label(name);
         });
     });
-    section_heading(ui, "Skills");
+    sheet_section(ui, "Skills");
     let skills = skill_order(record);
     sheet_columns(ui, skills.len(), |ui, at| {
         let skill = &record.character.skills[skills[at]];
@@ -2150,7 +2133,7 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
             ui.add(egui::Label::new(job).wrap());
         });
     });
-    section_heading(ui, "Resources");
+    sheet_section(ui, "Resources");
     if record.definition.splat_resources.is_empty() {
         ui.weak("No limited-use pools returned.");
     }
@@ -2167,9 +2150,8 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
             pool.max
         ));
     }
-    ui.add_space(design::S);
     let proficiencies = |ui: &mut egui::Ui| {
-        section_heading(ui, "Proficiencies & languages");
+        sheet_section(ui, "Proficiencies & languages");
         for group in &record.character.proficiencies {
             let values = text(&group["values"]);
             if !values.is_empty() {
@@ -2178,7 +2160,7 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
         }
     };
     let defenses = |ui: &mut egui::Ui| {
-        section_heading(ui, "Defenses & senses");
+        sheet_section(ui, "Defenses & senses");
         for (label, values) in [
             ("Resistance", &record.character.resistances),
             ("Immunity", &record.character.immunities),
@@ -2196,10 +2178,10 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
             ));
         }
         if let Some(words) = overview_death_saves(record, live) {
-            section_heading(ui, "Death saves");
+            sheet_section(ui, "Death saves");
             ui.label(words);
         }
-        section_heading(ui, "Conditions");
+        sheet_section(ui, "Conditions");
         let names: Vec<String> = live.map_or_else(
             || {
                 record
@@ -2232,6 +2214,8 @@ pub(crate) fn overview(ui: &mut egui::Ui, record: &EntitySnapshot, live: Option<
         proficiencies(ui);
         defenses(ui);
     } else {
+        // A column's heading is first in its column, so no space comes from it: `S` is here.
+        design::gap(ui, design::Gap::S);
         sheet_columns(ui, 2, |ui, column| {
             if column == 0 {
                 proficiencies(ui);
@@ -2503,10 +2487,6 @@ pub(crate) fn sheet_chips(record: &EntitySnapshot) -> Vec<Chip> {
         .collect()
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search: &str) {
     match page {
         1 => {
@@ -2519,11 +2499,11 @@ fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search:
                 .filter(|(_, chip)| chip.label.to_lowercase().contains(&search.to_lowercase()))
                 .map(|(place, chip)| (Some(place), chip))
                 .collect();
+            // `Action descriptions` follows, and a heading owns the space above it.
             crate::rolls::tiles(ui, &record.definition.splat_name, &chips);
-            ui.add_space(design::S);
         }
         2 => {
-            section_heading(ui, "Spellcasting");
+            sheet_section(ui, "Spellcasting");
             // Round 25 AI2: help keeps the reader measure; the spell list below keeps its width.
             design::help(
                 ui,
@@ -2573,19 +2553,10 @@ fn detail_intro(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search:
     }
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn sheet_heading(ui: &mut egui::Ui, title: &str, count: usize) {
-    ui.add_space(design::L);
-    design::group_heading(ui, title, count);
+    design::heading(ui, design::Heading::Group { title, count });
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, search: &str) {
     detail_intro(ui, record, page, search);
     let entries = sheet_entries(record, page);
@@ -2690,7 +2661,7 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
             state.toggle(ui);
         }
         state.show_body_unindented(ui, |ui| {
-            ui.add_space(design::XS);
+            design::gap(ui, design::Gap::XS);
             prose(ui, None, description);
         });
     }

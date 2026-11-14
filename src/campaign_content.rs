@@ -1386,10 +1386,6 @@ impl CampaignContent {
     }
 
     /// Each change waits for the DM. A blocked one says what they must decide first.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn reconcile_section(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
         let reconcile = &mut self.reconcile;
         if reconcile.applying {
@@ -1473,7 +1469,7 @@ impl CampaignContent {
             self.reconcile.message = None;
             self.start_check(ui.ctx(), campaigns, active.clone(), Some(keys));
         }
-        ui.add_space(design::S);
+        design::gap(ui, design::Gap::S);
     }
 
     fn repair_section(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
@@ -1485,7 +1481,7 @@ impl CampaignContent {
 
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
     )]
     fn repair_section_content(
         &mut self,
@@ -1695,7 +1691,7 @@ impl CampaignContent {
             })
         }) {
             // The package list below draws the one rule; a second rule here would separate nothing.
-            ui.add_space(design::L);
+            design::gap(ui, design::Gap::L);
         }
         if repaired && !self.dirty() {
             self.reload(ui.ctx(), campaigns, active.clone());
@@ -2578,7 +2574,13 @@ impl CampaignContent {
                 if self.dependencies {
                     ui.horizontal(|ui| {
                         ui.set_min_height(Density::Read.control());
-                        design::group_heading(ui, "Needed by your entries", closure.required.len());
+                        design::heading(
+                            ui,
+                            design::Heading::Group {
+                                title: "Needed by your entries",
+                                count: closure.required.len(),
+                            },
+                        );
                     });
                     design::search_field(
                         ui,
@@ -2749,7 +2751,7 @@ impl CampaignContent {
                             let required = closure.required.contains_key(&id);
                             let mut selected = closure.direct.contains(&id) || required;
                             ui.push_id(id, |ui| {
-                                ui.horizontal(|ui| {
+                                let row = ui.horizontal(|ui| {
                                     ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
                                     ui.set_min_height(30.0);
                                     let why = closure.required.get(&id).map(|reasons| {
@@ -2804,6 +2806,7 @@ impl CampaignContent {
                                     }
                                     ui.label(job);
                                 });
+                                design::register_row(ui, row.response.rect);
                             });
                         }
                     });

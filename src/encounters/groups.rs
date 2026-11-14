@@ -36,10 +36,10 @@ const MISSING_ENCOUNTER: &str = "Deleted encounter";
 pub(crate) const ENCOUNTER_DELETED: &str = "Encounter deleted";
 const NOTES_FIELD: &str = "Group notes";
 const LABEL_WIDTH: f32 = 120.0;
-const OVERRIDE_NAME: design::FieldId = crate::field_id!("override_name");
-const OVERRIDE_NOTE: design::FieldId = crate::field_id!("override_note");
-const GROUP_NAME: design::FieldId = crate::field_id!("group_name");
-const ENCOUNTER_GROUP_NAME: design::FieldId = crate::field_id!("encounter_group_name");
+const OVERRIDE_NAME: design::FieldName = crate::field_id!("override_name");
+const OVERRIDE_NOTE: design::FieldName = crate::field_id!("override_note");
+const GROUP_NAME: design::FieldName = crate::field_id!("group_name");
+const ENCOUNTER_GROUP_NAME: design::FieldName = crate::field_id!("encounter_group_name");
 /// The name of a roster slot's button, for the form it opens.
 pub(super) const SLOT_OPTIONS: &str =
     "Options: starting HP, temporary HP, initiative group and changes";
@@ -72,7 +72,7 @@ struct GroupSetup {
 fn name_field(ui: &mut egui::Ui, draft: &mut GroupDraft, width: f32) -> egui::Response {
     let font = Type::Heading.font(ui);
     GROUP_NAME
-        .with(draft.id)
+        .of(draft.id)
         .single_line(ui, &mut draft.name, |edit| {
             edit.desired_width(width)
                 .min_size(egui::vec2(0.0, Density::Scan.control()))
@@ -106,6 +106,8 @@ pub(super) struct GroupDraft {
     repair: Option<(usize, Mapping)>,
     removed_unread: Option<(usize, String, String)>,
     removed_member: Option<(usize, MemberDraft, String)>,
+    /// The words typed in a change form's field while it has focus ([`TypedWords`]).
+    typed: TypedWords,
     /// The last `Use` on a member this campaign could not find. It owns the result line until
     /// its Undo, a newer member result, or a move or removal that changes the members' places.
     replaced: Option<Replaced>,
@@ -150,6 +152,7 @@ impl GroupDraft {
             members: Vec::new(),
         };
         Self {
+            typed: TypedWords::default(),
             recovery: Default::default(),
             id,
             path: format!("{FOLDER}/{id}.md"),
@@ -196,6 +199,7 @@ impl GroupDraft {
         .map_err(|e| format!("This group needs repair in Campaign → Campaign entries: {e}"))?;
         let notes = splat::content::list_formats::prose(&entry);
         Ok(Self {
+            typed: TypedWords::default(),
             recovery: Default::default(),
             id: entry.id,
             path: path.into(),
@@ -1329,7 +1333,7 @@ pub(super) fn of_encounter(
                                     let width = (ui.available_width() - 2.0 * design::S)
                                         .min(design::FORM_WIDTH);
                                     let font = Type::Heading.font(ui);
-                                    let response = ENCOUNTER_GROUP_NAME.with(group.id).single_line(
+                                    let response = ENCOUNTER_GROUP_NAME.of(group.id).single_line(
                                         ui,
                                         &mut group.name,
                                         |edit| {
@@ -1794,12 +1798,44 @@ fn single_change(label: &str, value: Option<Change>) -> Overrides {
 }
 
 /// One line of words, or nothing. Blank means no change.
+/// The exact words the DM types in a draft's field that stores a cleaned value (a lone space
+/// stores no name). While the field has focus it keeps them, so the field part never sees its
+/// bound text rewritten and keeps the DM's text Undo. It is a field of the draft, so the words
+/// end with the draft (Save, Discard, a replacement or a reload). One field has focus at a time.
+#[derive(Clone, Debug, Default)]
+pub(super) struct TypedWords(Option<(egui::Id, String)>);
+
+impl TypedWords {
+    /// The text to bind to the field `id`: the kept words while it has them, else `stored`.
+    pub(super) fn bound(&self, id: egui::Id, stored: impl FnOnce() -> String) -> String {
+        match &self.0 {
+            Some((kept, words)) if *kept == id => words.clone(),
+            _ => stored(),
+        }
+    }
+
+    /// After the field `id` drew: keep its words while it has focus, and forget them when not.
+    pub(super) fn keep(&mut self, id: egui::Id, focused: bool, words: String) {
+        if focused {
+            self.0 = Some((id, words));
+        } else if self.0.as_ref().is_some_and(|(kept, _)| *kept == id) {
+            self.0 = None;
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn holds_words(&self) -> bool {
+        self.0.is_some()
+    }
+}
+
 fn text_row(
     ui: &mut egui::Ui,
     field: design::FieldId,
     label: &str,
     value: &mut Option<String>,
     hint: &str,
+    typed: &mut TypedWords,
 ) {
     ui.horizontal(|ui| {
         let (rect, _) = ui.allocate_exact_size(
@@ -1813,11 +1849,16 @@ fn text_row(
             Type::Small.font(ui),
             colors().muted,
         );
-        let mut text = value.clone().unwrap_or_default();
+        // While the field has focus it keeps the exact words typed (a lone space too): the field
+        // part drops its text Undo when the bound text is rewritten under it.
+        let id = field.named_id(label);
+        let mut text = typed.bound(id, || value.clone().unwrap_or_default());
         let width = text_field_width(ui.available_width());
-        if design::line_field(ui, field, label, &mut text, hint, width).changed() {
-            *value = (!text.trim().is_empty()).then_some(text);
+        let response = design::line_field(ui, field, label, &mut text, hint, width);
+        if response.changed() {
+            *value = (!text.trim().is_empty()).then(|| text.clone());
         }
+        typed.keep(id, response.has_focus(), text);
     });
 }
 
@@ -1863,6 +1904,7 @@ pub(super) fn overrides_form(
     entry: &Entry,
     side: &str,
     sides: Option<&[String]>,
+    typed: &mut TypedWords,
 ) -> FormEnd {
     let mut overrides = match Overrides::parse(block) {
         Ok(overrides) => overrides,
@@ -1922,10 +1964,11 @@ pub(super) fn overrides_form(
     }
     text_row(
         ui,
-        OVERRIDE_NAME.with(design::TextKey::from_data(id)),
+        OVERRIDE_NAME.of(design::TextKey::from_data(id)),
         "Display name",
         &mut overrides.name,
         &entry.name,
+        typed,
     );
     // Only a name just typed: opening the form must not edit what a note holds.
     if overrides.name != before.name {
@@ -2036,10 +2079,11 @@ pub(super) fn overrides_form(
     }
     text_row(
         ui,
-        OVERRIDE_NOTE.with(design::TextKey::from_data(id)),
+        OVERRIDE_NOTE.of(design::TextKey::from_data(id)),
         "Note",
         &mut overrides.note,
         "Why this creature differs",
+        typed,
     );
     // A group of rows, as Starting conditions is.
     design::heading(ui, design::Heading::Label("Loot"));
@@ -3139,7 +3183,15 @@ fn members(
                 // The open form edits one member's changes: a change it writes is an edit. The form
                 // says so itself; nothing here copies the changes (review of PR 299).
                 if is_open {
-                    let end = overrides_form(ui, &key, &mut member.overrides, entry, &side, None);
+                    let end = overrides_form(
+                        ui,
+                        &key,
+                        &mut member.overrides,
+                        entry,
+                        &side,
+                        None,
+                        &mut draft.typed,
+                    );
                     edited |= end.changed;
                     if end.done {
                         *expanded = None;
@@ -3360,7 +3412,17 @@ fn unread_member(
         });
         if let Some(entry) = entry {
             let id = format!("{repair_id}:{line}");
-            if overrides_form(ui, &id, block, &entry.entry, &draft.setup.side, None).done {
+            if overrides_form(
+                ui,
+                &id,
+                block,
+                &entry.entry,
+                &draft.setup.side,
+                None,
+                &mut draft.typed,
+            )
+            .done
+            {
                 apply = Some(block.clone());
             }
         } else {
@@ -3422,6 +3484,72 @@ fn unread_changes(raw: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// K3 review 1, finding 4: a change form's text row keeps the DM's exact words while it has
+    /// focus, so the field's text Undo survives a word the row stores as `None` (a lone space).
+    #[test]
+    fn a_text_row_keeps_its_undo_through_a_blank_word() {
+        const ROW: design::FieldName = crate::field_id!("test_override_row");
+        let ctx = egui::Context::default();
+        let field = ROW.of(Uuid::from_u128(7));
+        let id = field.named_id("Display name");
+        let mut value = Some(String::from("Wolf"));
+        // The words typed belong to the draft (review 2, finding A): a field of the draft.
+        let mut draft = GroupDraft::new();
+        let mut frame = |value: &mut Option<String>, events: Vec<egui::Event>| {
+            let input = egui::RawInput {
+                events,
+                ..Default::default()
+            };
+            let _ = ctx.run(input, |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    text_row(ui, field, "Display name", value, "", &mut draft.typed);
+                });
+            });
+        };
+        ctx.memory_mut(|memory| memory.request_focus(id));
+        frame(&mut value, Vec::new());
+        // Select all and type a space: the row stores no name.
+        let key = |key, modifiers| egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers,
+        };
+        frame(
+            &mut value,
+            vec![key(egui::Key::A, egui::Modifiers::COMMAND)],
+        );
+        frame(&mut value, vec![egui::Event::Text(" ".into())]);
+        assert_eq!(value, None, "a blank word stores no name");
+        frame(&mut value, Vec::new());
+        frame(
+            &mut value,
+            vec![key(egui::Key::Z, egui::Modifiers::COMMAND)],
+        );
+        assert_eq!(
+            value.as_deref(),
+            Some("Wolf"),
+            "k3-blank: Ctrl+Z brings the name back"
+        );
+        // Type a space again and close the draft (Save closes it before its fields draw again)
+        // while the field still has focus: the words end with the draft, and egui's map keeps
+        // no copy of them.
+        frame(
+            &mut value,
+            vec![key(egui::Key::A, egui::Modifiers::COMMAND)],
+        );
+        frame(&mut value, vec![egui::Event::Text(" ".into())]);
+        assert!(ctx.memory(|memory| memory.has_focus(id)));
+        assert!(draft.typed.holds_words(), "the draft holds the typed words");
+        drop(draft);
+        assert_eq!(
+            ctx.data(|data| data.get_temp::<String>(id.with("typed"))),
+            None,
+            "k3-draft-owns-words: no typed words outlive the draft in egui's map"
+        );
+    }
 
     /// FT4: UI text names a value in curly quotation marks, never straight ones.
     #[test]

@@ -86,7 +86,7 @@ fn painted(output: &egui::FullOutput) -> Vec<String> {
     texts(output).into_iter().map(|text| text.words).collect()
 }
 
-const SIDE: FieldId = crate::field_id!("test_dropdown_side");
+const SIDE: FieldId = crate::field_id!("test_dropdown_side").once(crate::design::Once::Example);
 const WORDS: [&str; 4] = ["Allies", "Enemies", "Neutral", "Lair"];
 
 fn list() -> Id {
