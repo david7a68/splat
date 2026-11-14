@@ -1031,6 +1031,25 @@ pub(super) fn whole_rows<R>(ui: &mut Ui, column: Id, add: impl FnOnce(&mut Ui) -
     inner
 }
 
+/// A quiet `line_start` action hangs `hang` left of the text edge, in the pane body that `ui` is
+/// drawn in (a `Content` body): the pane keeps that much gutter inside its rect from now on. A
+/// larger hang than the pane kept draws the pass again.
+pub(super) fn note_line_start(ui: &Ui, hang: f32) {
+    let Some(pane) = innermost(ui).filter(|pane| pane.content) else {
+        return;
+    };
+    let key = pane.pane.with("line_start_hang");
+    let kept = ui
+        .ctx()
+        .data(|data| data.get_temp::<f32>(key))
+        .unwrap_or(0.0);
+    if hang > kept + 0.5 {
+        ui.ctx().data_mut(|data| data.insert_temp(key, hang));
+        ui.ctx()
+            .request_discard("a line_start action needs its gutter inside the pane");
+    }
+}
+
 fn banner_id() -> Id {
     Id::new("splat_bottom_banner")
 }
@@ -1129,18 +1148,20 @@ impl Footer<'_> {
         let body_room = Rect::from_min_max(room.min, pos2(room.right(), limit.max(room.top())));
 
         // The body, in the part's own `Ui`; one id in every state, so its scroll and focus stay.
-        // A `Content` body starts `LINE_START_REACH` inside the pane: the gutter a quiet `line_start`
-        // action (with or without its icon) hangs into stays inside the pane's rect, so its
-        // target never reaches past the pane toward a splitter at its left.
-        // Also clear of a splitter's grab band, which reaches this far into a column beside it
-        // (egui's own resize radius).
-        // A `Fills` body places its own columns (each with its own room), so only a `Content`
-        // body gets the gutter: its column takes the width it is given.
+        // A `Content` body that holds a quiet `line_start` action keeps the action's hang (its
+        // padding, and its icon if it has one) inside the pane's rect, left of its content, and
+        // clear of a splitter's grab band at its left (egui's own resize radius). The pane learns
+        // the hang when the action first draws in it (that pass is drawn again, so no frame shows
+        // the action cut) and keeps it for its life, so the text edge moves at most once. A pane
+        // with no such action keeps its full width. A `Fills` body places its own columns, so it
+        // gets no gutter.
+        let hang = ui
+            .ctx()
+            .data(|data| data.get_temp::<f32>(id.with("line_start_hang")))
+            .unwrap_or(0.0);
         let gutter = match body {
-            Body::Content => {
-                super::components::LINE_START_REACH + ui.style().interaction.resize_grab_radius_side
-            }
-            Body::Fills(_) => 0.0,
+            Body::Content if hang > 0.0 => hang + ui.style().interaction.resize_grab_radius_side,
+            _ => 0.0,
         };
         let content_rect = body_room.with_min_x((body_room.left() + gutter).min(body_room.right()));
         let mut body_ui = ui.new_child(
