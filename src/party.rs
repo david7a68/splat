@@ -2695,6 +2695,48 @@ mod sheet_now_tests {
             ["b"],
             "Replace on the second notice forces a read of B only; A is unchanged"
         );
+        // Wave 2 d (C): two moved-aside sheets, A then B, each a kept result with its own close
+        // icon. B's (the newest, first in the footer) ends B's result only; A's stays.
+        {
+            let mut party = party.borrow_mut();
+            party.reader.conflicts.clear();
+            for (owner, path) in [("a", "/campaign/a-old.md"), ("b", "/campaign/b-old.md")] {
+                party.reader.archived.record(crate::party_sync::Archived {
+                    path: std::path::Path::new(path).into(),
+                    owner: owner.into(),
+                });
+            }
+        }
+        harness.run_steps(3);
+        let closes: Vec<_> = harness
+            .get_all_by_label(design::outcome::DISMISS_NAME)
+            .map(|node| node.rect())
+            .collect();
+        assert_eq!(closes.len(), 2, "each moved-aside sheet has its close icon");
+        let newest = closes
+            .iter()
+            .min_by(|x, y| x.top().total_cmp(&y.top()))
+            .copied()
+            .unwrap();
+        harness.event(egui::Event::PointerMoved(newest.center()));
+        for pressed in [true, false] {
+            harness.event(egui::Event::PointerButton {
+                pos: newest.center(),
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            });
+            harness.run_steps(1);
+        }
+        harness.run_steps(2);
+        let left: Vec<_> = party
+            .borrow()
+            .reader
+            .archived
+            .newest_first(&())
+            .map(|shown| shown.value().owner.clone())
+            .collect();
+        assert_eq!(left, ["a"], "B’s close icon ends B’s result; A’s stays");
     }
 
     #[test]
