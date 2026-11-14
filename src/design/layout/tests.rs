@@ -13,6 +13,8 @@ struct Painted {
     rect: Rect,
     clip: Rect,
     elided: bool,
+    /// Whether its colour shows (a fully transparent text paints nothing).
+    shown: bool,
 }
 
 /// One frame at `size` with `events`, drawing `add` in a central panel.
@@ -38,6 +40,8 @@ fn frame_with(
                 rect: text.visual_bounding_rect(),
                 clip,
                 elided: text.galley.elided,
+                shown: text.galley.job.sections.iter().any(|section| section.format.color.a() > 0)
+                    && text.opacity_factor > 0.0,
             }),
             egui::Shape::Vec(shapes) => {
                 for shape in shapes {
@@ -1000,6 +1004,8 @@ fn a_search_field_always_draws_its_clear() {
     for (width, query, hint) in [
         (50.0, "", "Search by name…"),
         (50.0, "Wolf", "Search by name…"),
+        (30.0, "Wolf", "Search by name…"),
+        (30.0, "", "Search by name…"),
         (150.4, "", LONG_WORD),
         (150.4, "", UNSPACED),
         (150.4, "Wolf", UNSPACED),
@@ -1037,6 +1043,24 @@ fn a_search_field_always_draws_its_clear() {
                 "x2-narrow: Clear {:?} inside the frame {field:?}",
                 clear.rect
             );
+        }
+        // X2 re-check 3: no two painted parts (the icon, the words, Clear) overlap, at any
+        // width; a part clipped away is not painted.
+        let parts: Vec<Rect> = painted
+            .iter()
+            .filter(|text| text.shown)
+            .map(|text| text.rect.intersect(text.clip))
+            .filter(|rect| rect.is_positive())
+            .collect();
+        for (at, a) in parts.iter().enumerate() {
+            for b in &parts[at + 1..] {
+                assert!(
+                    a.intersect(*b).area() < 1.0,
+                    "x2-parts: at {width} px with {query:?}, painted parts {a:?} and {b:?} overlap"
+                );
+            }
+        }
+        if !query.is_empty() {
             continue;
         }
         let shown: Vec<&Painted> = painted

@@ -1370,16 +1370,26 @@ pub(super) fn search_box(
                 top: 6,
                 bottom: 6,
             })
-            .hint_text(Type::Body.rich(ui, hint).color(c.faint)),
+            .hint_text(Type::Body.rich(ui, hint).color(c.faint))
+            // With no text area the words have no room: they are kept but not shown, so no
+            // edge of them lies under `Clear`.
+            .text_color(if text_room < 1.0 {
+                Color32::TRANSPARENT
+            } else {
+                c.text
+            }),
     );
     named(ui, &response, name);
-    ui.painter().text(
-        pos2(response.rect.left() + S, response.rect.center().y),
-        Align2::LEFT_CENTER,
-        icons::SEARCH,
-        Type::Body.font(ui),
-        c.muted,
-    );
+    // The icon's place meets `Clear`'s place below this width: the icon is not painted there.
+    if width >= SEARCH_LEFT + kept {
+        ui.painter().text(
+            pos2(response.rect.left() + S, response.rect.center().y),
+            Align2::LEFT_CENTER,
+            icons::SEARCH,
+            Type::Body.font(ui),
+            c.muted,
+        );
+    }
     response
 }
 
