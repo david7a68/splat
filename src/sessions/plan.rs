@@ -1507,7 +1507,7 @@ pub(super) struct PlanModelCache {
 /// Where a scene act's words show: under the scene's row, under the Scene field, or in the
 /// plan's message footer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Place {
+pub(super) enum Place {
     Row(Slot),
     Field,
     Footer,
