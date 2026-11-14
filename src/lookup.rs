@@ -2052,10 +2052,6 @@ impl Lookup {
         response
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn panel(&mut self, ui: &mut egui::Ui, trackers: &mut crate::trackers::Trackers) {
         // With the margin, so a press anywhere on the panel counts as here.
         let panel = ui.max_rect().expand(PANEL_MARGIN);
@@ -2313,10 +2309,10 @@ impl Lookup {
             let follow = std::mem::take(&mut self.follow_highlight);
             // Every row keeps its control, so Tab reaches a match below the list's edge. A row
             // paints only while it is in view.
-            egui::ScrollArea::vertical()
-                .id_salt("lookup_results")
+            design::ScrollColumn::new("lookup_results")
                 .max_height(RESULT_ROW * rows.min(RESULTS_LISTED) as f32)
-                .auto_shrink([false, true])
+                .fit_height()
+                .full_width()
                 .show(ui, |ui| {
                     for row in 0..rows {
                         let (title, detail, selected) = &results[row];
@@ -2601,65 +2597,65 @@ impl Lookup {
             WrittenIn::Event(_) => "Open on the timeline",
         };
         let mut open = false;
-        egui::ScrollArea::vertical()
-            .id_salt(("lookup_written", at))
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                // The card's one action is a title-line action, as every reader's is (FN2, FM5):
-                // after the title when it fits, else in one row under it, from the text edge.
-                let width = ui.available_width();
-                let cell = ui
-                    .allocate_ui_with_layout(
-                        egui::vec2(width, 0.0),
-                        egui::Layout::top_down(egui::Align::Min),
-                        |ui| {
-                            style::title(ui, &written.title);
-                            style::subtitle(ui, &written.detail);
-                        },
-                    )
-                    .response
-                    .rect;
-                let title = ui
-                    .painter()
-                    .layout(
-                        written.title.clone(),
-                        Type::Display.font(ui),
-                        colors().text,
-                        width.max(design::XXL),
-                    )
-                    .size()
-                    .x;
-                let action = Action::quiet(place)
-                    .icon(icons::OPEN_OUT)
-                    .density(Density::Read);
-                open = world::title_line_actions(ui, cell, title, width, vec![action])
-                    .first()
-                    .copied()
-                    .unwrap_or(false);
-                // The `L` gap after the kind line, as every other Lookup entry has. Their reader
-                // also keeps one row gap for its line warnings above the prose, so the card's
-                // words start where a spell's do.
-                ui.add_space(design::L + ui.spacing().item_spacing.y);
-                let found: Vec<&str> = written
-                    .text
-                    .lines()
-                    .filter(|line| !query.is_empty() && line.to_lowercase().contains(query))
-                    .take(FOUND_LINES)
-                    .collect();
-                // A short note is all in view, and needs no second copy of its own line.
-                if !found.is_empty() && written.text.lines().count() > FOUND_FROM_LINES {
-                    design::heading(ui, design::Heading::Label("Found here"));
-                    for line in found {
-                        let words = line.trim_start_matches(['#', '-', '*', ' ']);
-                        ui.add(
-                            egui::Label::new(Type::Body.rich(ui, words).color(colors().text))
-                                .wrap(),
-                        );
-                    }
-                    design::rule(ui);
+        // The card is its pane's scroll column; it has no footer messages.
+        let frame = PaneFrame::new(ui);
+        let messages: Messages<'_, world::FooterAct> =
+            Messages::new(&frame, ("lookup_written", at), ui.available_width());
+        let _ = messages.pane(ui, Body::Content, |ui| {
+            // The card's one action is a title-line action, as every reader's is (FN2, FM5):
+            // after the title when it fits, else in one row under it, from the text edge.
+            let width = ui.available_width();
+            let cell = ui
+                .allocate_ui_with_layout(
+                    egui::vec2(width, 0.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        style::title(ui, &written.title);
+                        style::subtitle(ui, &written.detail);
+                    },
+                )
+                .response
+                .rect;
+            let title = ui
+                .painter()
+                .layout(
+                    written.title.clone(),
+                    Type::Display.font(ui),
+                    colors().text,
+                    width.max(design::XXL),
+                )
+                .size()
+                .x;
+            let action = Action::quiet(place)
+                .icon(icons::OPEN_OUT)
+                .density(Density::Read);
+            open = world::title_line_actions(ui, cell, title, width, vec![action])
+                .first()
+                .copied()
+                .unwrap_or(false);
+            // The `L` gap after the kind line, as every other Lookup entry has. Their reader
+            // also keeps one row gap for its line warnings above the prose, so the card's
+            // words start where a spell's do.
+            ui.add_space(design::L + ui.spacing().item_spacing.y);
+            let found: Vec<&str> = written
+                .text
+                .lines()
+                .filter(|line| !query.is_empty() && line.to_lowercase().contains(query))
+                .take(FOUND_LINES)
+                .collect();
+            // A short note is all in view, and needs no second copy of its own line.
+            if !found.is_empty() && written.text.lines().count() > FOUND_FROM_LINES {
+                design::heading(ui, design::Heading::Label("Found here"));
+                for line in found {
+                    let words = line.trim_start_matches(['#', '-', '*', ' ']);
+                    ui.add(
+                        egui::Label::new(Type::Body.rich(ui, words).color(colors().text)).wrap(),
+                    );
                 }
-                crate::markdown_view::show_compact(ui, &written.text);
-            });
+                design::rule(ui);
+            }
+            crate::markdown_view::show_compact(ui, &written.text);
+        });
         if open {
             self.open_written = Some(written.place.clone());
         }

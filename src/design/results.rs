@@ -927,12 +927,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/library.rs", "scope_menu", &[Ban::Layout(1)]),
         ("src/library.rs", "show", &[Ban::Layout(6)]),
-        ("src/lookup.rs", "panel", &[Ban::Layout(1)]),
-        (
-            "src/lookup.rs",
-            "written_reader",
-            &[Ban::Layout(1), Ban::Extras(1)],
-        ),
+        ("src/lookup.rs", "written_reader", &[Ban::Extras(1)]),
         (
             "src/loot_editor.rs",
             "line_row",
