@@ -249,45 +249,6 @@ pub fn quick_add_with(
     })
 }
 
-/// A footer's results with a live Undo, gathered with their order; the footer lists them newest
-/// first.
-pub(crate) struct LiveUndos<'a> {
-    items: Vec<LiveUndo<'a>>,
-}
-
-/// One result with a live Undo: its order, its words and how to draw it.
-type LiveUndo<'a> = (
-    design::ResultOrder,
-    String,
-    Box<dyn FnOnce(&mut egui::Ui) + 'a>,
-);
-
-impl<'a> LiveUndos<'a> {
-    pub(crate) fn new() -> Self {
-        Self { items: Vec::new() }
-    }
-
-    pub(crate) fn push(
-        &mut self,
-        order: design::ResultOrder,
-        words: String,
-        draw: impl FnOnce(&mut egui::Ui) + 'a,
-    ) {
-        self.items.push((order, words, Box::new(draw)));
-    }
-
-    /// Add them to `footer`, which puts them newest first.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
-    pub(crate) fn into_footer(self, footer: &mut design::Footer<'a>) {
-        for (order, words, draw) in self.items {
-            footer.result(order, words, true, draw);
-        }
-    }
-}
-
 /// What the DM chose in the Timeline list's message footer, done after the footer is drawn.
 #[derive(Clone, Debug, PartialEq)]
 enum ListAct {
@@ -1205,13 +1166,7 @@ impl TimelinePage {
         clippy::disallowed_methods,
         reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
     )]
-    fn detail(
-        &mut self,
-        ui: &mut egui::Ui,
-        book: &mut Book,
-        sessions: &[SessionLink],
-        notes: &mut crate::sessions::page::Sessions,
-    ) {
+    fn detail(&mut self, ui: &mut egui::Ui, book: &mut Book, sessions: &[SessionLink]) {
         let c = colors();
         let index = self
             .selected
@@ -1813,8 +1768,8 @@ impl TimelinePage {
                 // so they move no field.
                 notes.expire_event_link_undo(true, book);
                 let open = self.selected.clone();
-                self.list_pane(ui, book, notes, open.as_deref(), |page, ui, book, notes| {
-                    page.detail(ui, book, sessions, notes);
+                self.list_pane(ui, book, notes, open.as_deref(), |page, ui, book, _| {
+                    page.detail(ui, book, sessions);
                 });
             } else {
                 notes.expire_event_link_undo(true, book);
@@ -1841,7 +1796,7 @@ impl TimelinePage {
                         left: design::S as i8,
                         ..Default::default()
                     }))
-                    .show_inside(ui, |ui| self.detail(ui, book, sessions, notes));
+                    .show_inside(ui, |ui| self.detail(ui, book, sessions));
                 egui::CentralPanel::default()
                     // The panel's drag handle lies on this edge, so the rows stop short of it.
                     .frame(egui::Frame::new().inner_margin(egui::Margin {

@@ -174,11 +174,6 @@ impl Removal {
     pub fn label(&self) -> &str {
         &self.label
     }
-
-    /// The event Undo puts back.
-    pub fn event(&self) -> &Event {
-        &self.event
-    }
 }
 
 impl crate::design::results::Kept for Removal {
@@ -1461,6 +1456,7 @@ impl Book {
         });
     }
 
+    #[cfg(test)]
     pub fn dropped(&self) -> Option<usize> {
         self.results
             .reloaded
@@ -1753,11 +1749,6 @@ impl Book {
             .map(|shown| shown.value())
     }
 
-    pub fn removed_row(&self) -> Option<(usize, String)> {
-        self.removal()
-            .map(|removal| (removal.index, removal.label.clone()))
-    }
-
     /// The identity of the removal that Undo would reverse. A result that follows this action
     /// keeps it, so a later removal of the same event is told apart.
     pub fn removal_action(&self) -> Option<u64> {
@@ -1769,6 +1760,7 @@ impl Book {
         self.removal().map(|removal| &removal.event)
     }
 
+    #[cfg(test)]
     pub fn removed(&self) -> Option<&str> {
         self.removal().map(|removal| removal.label.as_str())
     }

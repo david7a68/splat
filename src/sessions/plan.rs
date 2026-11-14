@@ -1687,7 +1687,7 @@ impl Scenes {
 
 /// A scene act that the plan takes after it draws.
 #[derive(Clone, Debug, PartialEq)]
-enum SceneAct {
+pub(super) enum SceneAct {
     Add(String),
     Tick(Slot, TaskLine),
     /// The row's place, and its line's place among the plan's lines.
@@ -2178,7 +2178,7 @@ enum RewardsAt {
 
 /// What the DM pressed for a played fight: `Add rewards`, or `Undo rewards`, by its event.
 #[derive(Clone, Debug, PartialEq)]
-enum RewardsAct {
+pub(super) enum RewardsAct {
     Add(String, Uuid),
     Undo(String),
 }
@@ -3134,7 +3134,6 @@ impl Sessions {
         let mut delete_run = None;
         let mut toggle = None;
         let mut changed = false;
-        let event_count = book.events.len();
         let open_event = self.open_event.clone();
         let mut ruling = None;
         // A journey's checks: the clock at the open journey's start, and the results that hold.

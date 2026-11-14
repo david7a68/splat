@@ -294,8 +294,6 @@ thread_local! {
 /// A rename's offer to update the links in the notes: what it says, its action, and what it
 /// would write.
 pub struct LinkOffer {
-    pub words: String,
-    pub action: String,
     changes: Vec<(Draft, String)>,
     title: String,
     /// The old names the links say, and how many links would change.
@@ -321,8 +319,6 @@ impl LinkOffer {
 struct LinkUndoState {
     notes: Vec<(PathBuf, String)>,
     events: Vec<timeline::Event>,
-    /// The event's name that the links now say. It ends with this state.
-    title: String,
 }
 
 /// A notice the page just made: it takes a new footer order in `order`, so it lists as the
@@ -2424,12 +2420,7 @@ impl Sessions {
                 changes.push((draft, body));
             }
         }
-        let old: Vec<&str> = renamed.iter().map(String::as_str).collect();
-        let (words, action) =
-            crate::content_workspace::link_offer_words(&old, &current.title, count);
         (count > 0).then(|| LinkOffer {
-            words,
-            action,
             changes,
             title: current.title.clone(),
             old: renamed.clone(),
@@ -2449,17 +2440,7 @@ impl Sessions {
         self.link_undo_state = Some(LinkUndoState {
             notes: self.note_bodies(),
             events: book.events.clone(),
-            title: offer.title,
         });
-    }
-
-    /// The link update's result, while its Undo is live: the Library's words for the same
-    /// action, the name the links now say.
-    pub fn event_link_result(&self) -> Option<String> {
-        self.updated_links.as_ref()?;
-        self.link_undo_state
-            .as_ref()
-            .map(|state| format!("Links now say “{}”.", state.title))
     }
 
     /// `Undo link update`, pressed on the result its ticket names. The result stays, with its
@@ -8001,7 +7982,6 @@ mod tests {
             sessions.link_undo_state = Some(LinkUndoState {
                 notes: sessions.note_bodies(),
                 events: book.events.clone(),
-                title: String::new(),
             });
             sessions.expire_event_link_undo(true, &book);
             assert!(sessions.updated_links.is_some());
@@ -8175,7 +8155,6 @@ mod tests {
         sessions.link_undo_state = Some(LinkUndoState {
             notes: Vec::new(),
             events: book.events.clone(),
-            title: "Rest at the mill".into(),
         });
         super::NOTE_READS.with(|reads| reads.set(0));
         sessions.expire_event_link_undo(false, &book);
