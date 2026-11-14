@@ -1004,6 +1004,11 @@ fn before_lose(ui: &mut Ui, width: f32, gap: f32) {
     }
 }
 
+/// Ruling R29, set by the pinned footer around its messages' draw (`draw_messages`): the open
+/// locks' reason rooms give up their room (`GIVE_UP`), and how much room they took (`RESERVED`).
+pub(in crate::design) const GIVE_UP: &str = "design_reasons_give_up";
+pub(in crate::design) const RESERVED: &str = "design_reasons_reserved";
+
 /// The close icon's accessible name and hover words.
 pub const DISMISS_NAME: &str = "Dismiss this message";
 
@@ -2554,16 +2559,32 @@ impl Body {
                 None => said.push((reason, *locked)),
             }
         }
+        // Ruling R29: an open lock's room is a reservation, not content. A pinned footer that
+        // has no room for it under its cap tells `reasons` to give it up (`GIVE_UP`), and learns
+        // how tall it is from `RESERVED`; a locked reason always shows.
+        let give_up = ui
+            .ctx()
+            .data(|data| data.get_temp::<bool>(egui::Id::new(GIVE_UP)))
+            .unwrap_or(false);
         for (reason, locked) in said {
-            message_choice_row(ui, self.tone, |ui| {
-                if locked {
-                    blocked_reason(ui, Some(reason));
-                } else {
+            if locked {
+                message_choice_row(ui, self.tone, |ui| blocked_reason(ui, Some(reason)));
+            } else if !give_up {
+                let before = ui.cursor().top();
+                message_choice_row(ui, self.tone, |ui| {
                     ui.scope_builder(egui::UiBuilder::new().invisible(), |ui| {
                         blocked_reason(ui, Some(reason));
                     });
-                }
-            });
+                });
+                let room = ui.cursor().top() - before;
+                // Only inside a pinned footer's draw, which set the sum; a body message keeps
+                // its room and counts nothing.
+                ui.ctx().data_mut(|data| {
+                    if let Some(sum) = data.get_temp::<f32>(egui::Id::new(RESERVED)) {
+                        data.insert_temp(egui::Id::new(RESERVED), sum + room);
+                    }
+                });
+            }
         }
     }
 
@@ -4774,6 +4795,10 @@ mod tests {
         let mut app = two();
         app.narrow = Some(320.0);
         let mut h = harness_sized(app, 960.0);
+        // Ruling R29: a lock moves nothing where the footer has room for its reservation; at
+        // 960 × 500 this footer is at its cap, so that case is below, in the pane that shrinks.
+        h.set_size(egui::vec2(960.0, 800.0));
+        h.run_steps(6);
         let tops = |h: &egui_kittest::Harness<'_, App>| {
             ["Folder saved.", "Campaign link saved."].map(|words| {
                 h.get_by_role_and_label(egui::accesskit::Role::Label, words)
@@ -4805,5 +4830,63 @@ mod tests {
         h.state_mut().run_live = false;
         h.run_steps(4);
         assert_eq!(tops(&h), open, "a lock that goes moves no line");
+
+        // Ruling R29: the open lock's room is a reservation. Shrink the pane: while the footer
+        // has room for it, it is kept (above); once the visible lines fit under the cap (a third
+        // of the pane) only without it, it gives up its room and the footer holds just its
+        // lines: its height stays the same while the pane shrinks, so it is not at its cap and
+        // does not scroll. (A footer at its cap shrinks with the pane, by a third of each step.)
+        // The footer's own height (it follows its short body, so its band reaches the pane's
+        // bottom and tells nothing).
+        // The footer is one widget named with all its words (joined in its order).
+        let footer = |h: &egui_kittest::Harness<'_, App>| {
+            h.query_all_by_label_contains("Folder saved. Campaign link saved.")
+                .map(|node| node.rect().height())
+                .min_by(f32::total_cmp)
+                .expect("the footer's part")
+        };
+        let room = footer(&h);
+        let mut sizes = Vec::new();
+        for height in (200..=800).rev().step_by(6) {
+            h.set_size(egui::vec2(960.0, height as f32));
+            h.run_steps(6);
+            sizes.push((height, footer(&h)));
+        }
+        let gave_up = sizes
+            .windows(2)
+            .find(|pair| pair[0].1 < room - 0.5 && (pair[0].1 - pair[1].1).abs() < 0.5);
+        let Some(&[_, (height, held)]) = gave_up else {
+            panic!(
+                "the reservation never gave up its room: a capped footer scrolls ({room} with room): {sizes:?}"
+            );
+        };
+        let band = crate::design::components::footer_bands(&h.ctx)[0];
+        h.set_size(egui::vec2(960.0, height as f32));
+        h.run_steps(6);
+        assert!((footer(&h) - held).abs() < 0.5);
+        for words in ["Folder saved.", "Campaign link saved."] {
+            let line = h
+                .get_by_role_and_label(egui::accesskit::Role::Label, words)
+                .rect();
+            assert!(
+                line.top() >= band.top() - 0.5 && line.bottom() <= band.bottom() + 0.5,
+                "{words} is in the footer, in view: {line:?} in {band:?}"
+            );
+        }
+        // Locked there, the reason is content: it shows whole (the footer may scroll).
+        h.state_mut().run_live = true;
+        h.run_steps(6);
+        let line = Type::Small.line();
+        let reasons: Vec<_> = h
+            .query_all_by_role_and_label(egui::accesskit::Role::Label, LOCK.as_str())
+            .map(|node| node.rect())
+            .collect();
+        assert!(
+            !reasons.is_empty()
+                && reasons
+                    .iter()
+                    .all(|reason| reason.height() >= 2.0 * line - 1.0),
+            "a locked reason shows whole in a capped footer: {reasons:?}"
+        );
     }
 }
