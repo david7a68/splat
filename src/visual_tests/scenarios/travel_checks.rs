@@ -578,7 +578,23 @@ pub fn run(d: &mut Driver<'_>) {
         seen.iter().all(|seen| *seen),
         format!("Timeline: In the plan is in view at 960, 1200 and 1920: {seen:?}"),
     );
-    d.state("travel-checks-timeline", Sizes::All);
+    // The same, at each capture as it is taken.
+    d.state_prepared("travel-checks-timeline", Sizes::All, |d| {
+        // The capture's resize puts the form back at its top; the scenario scrolls to the line
+        // (the reveal at the roll is proved above).
+        if let Some(block) = d.place_of("Encounter checks") {
+            d.scroll_until(block.center(), "In the plan", 6);
+        }
+        let seen = d
+            .nodes()
+            .iter()
+            .any(|node| node.name.contains("In the plan") && node.fully_in_view());
+        d.observe(
+            "iter-29-S1-G142-reveal",
+            seen,
+            "The capture of state 06 shows In the plan whole",
+        );
+    });
     d.state_prepared("travel-checks-timeline-lookup", Sizes::Small, |d| {
         if !d.has("Close Lookup") {
             d.click(NAV_LOOKUP);
@@ -1072,7 +1088,20 @@ pub fn plan_act(d: &mut Driver<'_>) {
         whole.iter().all(|whole| *whole) && note_file(&dir).contains("- [[Shrine of Cinders]]"),
         format!("The footer's result, its Undo and In the plan are whole at each size: {whole:?}"),
     );
-    d.state("plan-on-timeline", Sizes::All);
+    d.state_prepared("plan-on-timeline", Sizes::All, |d| {
+        let nodes = d.nodes();
+        let whole = |name: &str| {
+            nodes
+                .iter()
+                .any(|node| node.name == name && node.fully_in_view())
+        };
+        let shown = whole(PLANNED) && whole("Undo add plan line");
+        d.observe(
+            "iter-29-S1-G142-planned",
+            shown,
+            "The capture after the press shows the result and its Undo whole",
+        );
+    });
     let note_path = fs::read_dir(&dir)
         .unwrap()
         .filter_map(Result::ok)
@@ -1118,16 +1147,23 @@ pub fn plan_act(d: &mut Driver<'_>) {
         d.click("Choose a table");
         d.click("On the road");
     }
-    d.replace_text_in("How long", "12 days");
+    d.replace_text_in("How long", "20 days");
     d.press(Key::Enter);
     d.type_into("Enter a roll for Day 1", "5");
     d.press(Key::Enter);
-    let column = d.place_of("Encounter checks").expect("the block").center();
-    d.scroll_until(column, "Enter a roll for Day 7", 30);
-    // Day 7's line at the view's lower edge, so its result and offer reach below it.
-    let field = d.place_of("Enter a roll for Day 7").expect("Day 7's field");
+    // A point low in the detail column's scroll body, wherever a roll left the block.
+    let column = egui::pos2(
+        d.place_of("Title").expect("the form").center().x,
+        SMALL.1 - 80.0,
+    );
+    d.scroll_until(column, "Enter a roll for Day 15", 40);
+    // Day 15's line at the view's lower edge, so its result and offer reach below it, and
+    // the block reaches above and below the view.
+    let field = d
+        .place_of("Enter a roll for Day 15")
+        .expect("Day 15's field");
     d.scroll_points_at(column, field.bottom() - (SMALL.1 - 10.0));
-    d.type_into("Enter a roll for Day 7", "19");
+    d.type_into("Enter a roll for Day 15", "19");
     d.press(Key::Enter);
     let offer = d
         .nodes()
@@ -1145,13 +1181,9 @@ pub fn plan_act(d: &mut Driver<'_>) {
     );
     // Final review 3, point 2: a reveal left pending by journey A (Ford crossing) when the DM
     // leaves it before its next draw is A's alone: journey B (Long road) opens where it opens.
-    // B has a result on Day 12, below its opening view, at the offset A's reveal names.
-    // Scroll where the block is now, whichever way the roll left it.
-    let column = d
-        .place_of("Roll for Day 8")
-        .map_or(column, |roll| roll.center());
-    d.scroll_until(column, "Enter a roll for Day 12", 30);
-    d.type_into("Enter a roll for Day 12", "3");
+    // B has a result on Day 20, below its opening view, at the offset A's reveal names.
+    d.scroll_until(column, "Enter a roll for Day 20", 40);
+    d.type_into("Enter a roll for Day 20", "3");
     d.press(Key::Enter);
     let long = format!("{LONG} ·");
     d.click(NAV_LOOKUP);
@@ -1162,7 +1194,7 @@ pub fn plan_act(d: &mut Driver<'_>) {
     d.click("All events");
     d.app_mut()
         .timeline_page
-        .simulate_pending_reveal(&ford, 11 * 24);
+        .simulate_pending_reveal(&ford, 19 * 24);
     d.click_starting(&long);
     let after = d.place_of("Encounter checks");
     d.observe(
