@@ -13023,6 +13023,22 @@ pub mod session_notes {
         d.state("templates-deleted", Sizes::Default);
         d.click("Undo delete");
         d.expect("Downtime");
+        // Review of PR 335: beside Lookup the templates page is narrow, and `All templates` shows
+        // the list alone, its rows in the pane's own scroll column (a second column inside the
+        // pane was refused by a debug build). Choosing a template goes back to its editor.
+        d.aside(|d| {
+            d.press_ctrl(Key::K);
+            d.click("All templates");
+            d.expect("Short notes");
+            d.observe(
+                "round-28-S-template-list-narrow",
+                d.has_containing("Short notes") && !d.has("All templates"),
+                "With Lookup beside it, All templates shows the list alone",
+            );
+            d.click_starting("Downtime");
+            d.expect("All templates");
+            d.press_ctrl(Key::K);
+        });
 
         d.click("Sessions");
         d.click("Campaign");
@@ -14452,9 +14468,8 @@ pub mod session_recording {
             parts
         };
         // Round 24 FC7 (moved by round 27 FE8 to the recording that still saves, where the line
-        // stays): the other session's time and title never take the state's colour. Wave 2 d
-        // (S): the line is a typed footer notice, drawn in the notice's one tone, so the state
-        // word no longer has its own colour either (a gap of `Notice`, sent to the lead).
+        // stays): only the icon and the state word have the state's colour; the other
+        // session's time and title are muted.
         let parts = other_line(d, "Recording");
         let c = crate::design::colors();
         d.observe(
@@ -14462,8 +14477,15 @@ pub mod session_recording {
             parts
                 .iter()
                 .any(|(words, _)| words.contains("in Session 1"))
-                && parts.iter().all(|(_, color)| *color != c.recording),
-            format!("The other session's line takes no state colour: {parts:?}"),
+                && parts.iter().all(|(words, color)| {
+                    *color
+                        == if words.contains("in Session 1") {
+                            c.muted
+                        } else {
+                            c.recording
+                        }
+                }),
+            format!("Only the state has its colour on the other session's line: {parts:?}"),
         );
         d.app_mut()
             .sessions

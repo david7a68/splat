@@ -57,7 +57,7 @@ impl Kept for Separate {
 
 /// Round 27 FI3, FN2: a marker's `Add` result, kept by the session whose recording holds the
 /// marker and the Timeline event it made. It shows in that session's footer while the event
-/// stands; `Undo add`, leaving the Recordings tab or a reload of the folder ends it.
+/// stands; `Undo add` or leaving the Recordings tab ends it.
 pub(super) struct MarkerAdd {
     pub owner: OfSession,
     pub id: String,
@@ -96,10 +96,11 @@ pub(super) struct Moved {
 impl Kept for Moved {
     type Owner = Page;
     const ENDS: Ends = Ends {
-        // Another notice of the page, or a change to the Timeline or the note, ends it
-        // (`expire_move`).
+        // A change to the Timeline or the note since the move (also one a reload brings), and
+        // the `stays in` notice of a new session, end it (`expire_move`,
+        // `say_where_the_run_stays`).
         owner_changed: OwnerChanged::Ends,
-        disk_changed: DiskChanged::Ends,
+        disk_changed: DiskChanged::Stays,
         press: Press::Undo,
     };
     fn owner(&self) -> Page {
