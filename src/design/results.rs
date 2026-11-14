@@ -655,12 +655,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/sessions/page.rs",
             "template_editor",
-            &[Ban::Results, Ban::Layout(4)],
+            &[Ban::Results, Ban::Layout(3)],
         ),
         (
             "src/sessions/plan.rs",
             "plan_pane",
-            &[Ban::Results, Ban::Layout(2), Ban::Pane(1)],
+            &[Ban::Results, Ban::Layout(1), Ban::Pane(1)],
         ),
         (
             "src/sessions/plan.rs",
@@ -905,10 +905,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/page.rs", "read_tab", &[Ban::Layout(1)]),
         ("src/sessions/page.rs", "recordings_tab", &[Ban::Layout(1)]),
         ("src/sessions/page.rs", "template_list", &[Ban::Layout(1)]),
-        ("src/sessions/plan.rs", "event_fields", &[Ban::Layout(2)]),
         ("src/sessions/plan.rs", "fight_block", &[Ban::Layout(1)]),
-        ("src/sessions/plan.rs", "place_field", &[Ban::Layout(1)]),
-        ("src/sessions/plan.rs", "plan_menu", &[Ban::Layout(2)]),
+        ("src/sessions/plan.rs", "plan_menu", &[Ban::Layout(1)]),
         ("src/sessions/slash.rs", "note", &[Ban::Layout(1)]),
         ("src/sessions/slash.rs", "popup_at", &[Ban::Layout(1)]),
         ("src/timeline/checks.rs", "table_line", &[Ban::Layout(1)]),

@@ -1120,11 +1120,13 @@ fn event_fields(ui: &mut egui::Ui, event: &mut timeline::Event) -> bool {
     let mut changed = title.changed();
     design::field(ui, "Notes", None, None, |ui| {
         let width = ui.available_width() - 2.0 * design::S;
-        let response = EVENT_NOTES.of(key).multi_line(ui, &mut event.notes, |edit| {
-            edit.desired_width(width)
-                .desired_rows(2)
-                .margin(egui::vec2(design::S, design::S))
-        });
+        let response = EVENT_NOTES
+            .of(key)
+            .multi_line(ui, &mut event.notes, |edit| {
+                edit.desired_width(width)
+                    .desired_rows(2)
+                    .margin(egui::vec2(design::S, design::S))
+            });
         design::named(ui, &response, "Notes on this event");
         changed |= response.changed();
     });
@@ -4894,6 +4896,7 @@ mod tests {
         // Round 28 FE6: where the row is cut, the party's size gives way first, then the
         // roster; the day, which ties the fight to its journey, goes last.
         let mut day_kept_in_a_cut = 0;
+        let day = "Day 2 of Travel";
         for width in (120..=600).step_by(10) {
             let mut words = None;
             let mut painted = None;
@@ -5435,9 +5438,8 @@ mod tests {
                     });
                 });
                 painted = output.shapes.iter().find_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text) if text.galley.job.text.contains("not known") => {
-                        Some(text.galley.job.text.replace('\u{a0}', " "))
-                    }
+                    egui::Shape::Text(text) => Some(text.galley.job.text.replace('\u{a0}', " "))
+                        .filter(|words| words.contains("not known")),
                     _ => None,
                 });
             }

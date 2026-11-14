@@ -3418,9 +3418,10 @@ impl Sessions {
         );
         if form.editing.is_none() {
             design::field(ui, "Template", None, None, |ui| {
-                let mut names = self.templates.iter().map(|template| {
-                    (template.name.clone(), template.name.as_str())
-                });
+                let mut names = self
+                    .templates
+                    .iter()
+                    .map(|template| (template.name.clone(), template.name.as_str()));
                 if let Some((first, label)) = names.next() {
                     let _ = design::Dropdown::new(
                         SESSION_TEMPLATE.once(design::Once::CreateForm),
