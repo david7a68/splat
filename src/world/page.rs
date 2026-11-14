@@ -4,7 +4,7 @@ use super::{Nav, Reader, file_fault::FileFault};
 use crate::{
     design::{
         self, Type, colors, icons,
-        outcome::{FaultMessage, Messages, Notice, PaneFrame, Said, UndoStep},
+        outcome::{Done, FaultMessage, Messages, Notice, PaneFrame, Said, Verb},
         pane::Body,
     },
     lookup::{ContentIndex, WorldGroups},
@@ -241,8 +241,10 @@ struct Tick {
     /// The body line that holds the box, and that line before the tick.
     at: usize,
     line: String,
-    /// The result's words: the question and its note.
-    words: String,
+    /// The question's words, and the name of the note that holds it: the result says
+    /// `“<question>” ticked in <note>.` and its Undo `Undo tick “<question>” in <note>`.
+    question: String,
+    note_name: String,
 }
 
 /// What the DM did in a checks view: open a page at a heading, or tick the question at this
@@ -884,11 +886,26 @@ impl WorldPage {
                 self.page_messages(&frame, &mut messages, Some(item.entry.id));
                 crate::trackers::history::footer(trackers, item.entry.id, &mut messages);
                 // As in Library, a wide table may use the pane; prose keeps its measure.
+                // An open edit form takes the editor form of the pane (P2): its text gives way,
+                // so Save stays in view under a long note.
                 let reader = &mut self.reader;
                 let paned = crate::markdown_view::with_wide_tables(ui, |ui| {
-                    messages.pane(ui, Body::Content, |ui| {
-                        reader.read_with(ui, item, index, Some(campaign), Some(&mut *trackers))
-                    })
+                    if reader.edits_in_pane(item.entry.id, Some(campaign)) {
+                        messages.pane_editor(ui, |ui, region| {
+                            reader.read_in_pane(
+                                ui,
+                                item,
+                                index,
+                                Some(campaign),
+                                Some(&mut *trackers),
+                                Some(region),
+                            )
+                        })
+                    } else {
+                        messages.pane(ui, Body::Content, |ui| {
+                            reader.read_with(ui, item, index, Some(campaign), Some(&mut *trackers))
+                        })
+                    }
                 });
                 nav = nav.take().or(paned.body);
                 if let Some(press) = paned.pressed {
@@ -1561,7 +1578,7 @@ impl WorldPage {
         };
         let item = &index.items[found.page];
         let (note, name) = (item.entry.id, item.entry.name.clone());
-        let words = format!("\u{201c}{}\u{201d} ticked in {name}.", found.words);
+        let question = found.words.clone();
         let result = Self::write_tick(&self.reader, campaign, item, at, &line, true);
         self.tick_error = result.err();
         if self.tick_error.is_none() {
@@ -1571,7 +1588,8 @@ impl WorldPage {
                 note,
                 at,
                 line,
-                words,
+                question,
+                note_name: name,
             });
             self.reload = true;
         }
@@ -1642,9 +1660,8 @@ impl WorldPage {
             .map(|_| ())
     }
 
-    /// Open questions' footer: each tick's result with its Undo, newest first, then why the
-    /// last tick wrote nothing. A tick has no verb of its own (`Undo: tick`): the counted
-    /// `Said` escape, until the shared part has one.
+    /// Open questions' footer: each tick's result with its Undo, newest first (`Done` with
+    /// `Verb::Tick`: one verb for the result and its Undo), then why the last tick wrote nothing.
     fn questions_messages<'f>(
         &self,
         frame: &'f PaneFrame,
@@ -1653,8 +1670,10 @@ impl WorldPage {
     ) {
         for shown in self.ticks.newest_first(&campaign.id) {
             messages.kept(shown.outcome(frame, |tick| {
-                Said::new(super::said(&tick.words))
-                    .undo(UndoStep::act("tick").pressed_as(super::FooterAct::Untick))
+                Done::new(Verb::Tick, format!("\u{201c}{}\u{201d}", tick.question))
+                    .object_first()
+                    .within(tick.note_name.clone())
+                    .undo(super::FooterAct::Untick)
                     .into()
             }));
         }

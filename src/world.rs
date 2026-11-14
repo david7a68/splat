@@ -1565,24 +1565,29 @@ impl ChangeKind {
         }
     }
 
-    /// Its Undo, named by the verb and the object of the result's words: `Part of set to …`
-    /// has `Undo change Part of` (round 28 FE5: one name for one fact). A separate note's Undo
-    /// has no verb of its own: the counted `UndoStep::act` escape.
-    fn undo_step(self) -> UndoStep {
+    /// Its Undo, named by its verb and an object that reads as English: `Undo change place`,
+    /// `Undo change groups` (the Part of field holds the note's groups), `Undo change <note>`
+    /// for the edit form's save, `Undo separate note`. `note` is the note's name.
+    fn undo_step(self, note: &str) -> UndoStep {
         match self {
             Self::Place => UndoStep::of(Verb::Change, "place"),
-            Self::PartOf => UndoStep::of(Verb::Change, "Part of"),
+            Self::PartOf => UndoStep::of(Verb::Change, "groups"),
             Self::Status => UndoStep::of(Verb::Change, "status"),
             Self::StatBlock => UndoStep::of(Verb::Change, "stat block"),
             Self::Name => UndoStep::of(Verb::Change, "name"),
-            Self::Identity(noun) => UndoStep::act(noun.act()),
-            Self::Edit => UndoStep::verb(Verb::Change),
+            Self::Identity(noun) => UndoStep::of(Verb::Separate, noun.act()),
+            Self::Edit => UndoStep::of(Verb::Change, note),
             Self::Log => UndoStep::of(Verb::Add, "Log line"),
         }
     }
 }
 
 impl Change {
+    /// Its Undo step: the kind's, with the name of the note it changed (`ChangeKind::undo_step`).
+    pub(crate) fn undo_step(&self, note: &str) -> UndoStep {
+        self.kind.undo_step(note)
+    }
+
     /// For the encounter editor's own footer (package B), which still draws by hand.
     pub(crate) fn identity_undo_label(&self) -> &'static str {
         match self.kind {
@@ -1814,7 +1819,7 @@ impl IdentityNoun {
         }
     }
 
-    /// The act a separate note's Undo names: `Undo: separate note`.
+    /// What a separate note's Undo names: `Undo separate note`.
     fn act(self) -> &'static str {
         match self {
             Self::Note => "separate note",
@@ -2177,7 +2182,7 @@ impl PageResult {
 pub(crate) fn discarded_outcome(name: &str, act: FooterAct) -> KeptOutcome<FooterAct> {
     KeptOutcome::Notice(
         Notice::new(crate::sentence!("{} draft discarded.", name)),
-        UndoStep::of(Verb::Discard, format!("of {name}")).pressed_as(act),
+        UndoStep::of(Verb::Discard, name).pressed_as(act),
     )
 }
 
@@ -2675,6 +2680,26 @@ impl Reader {
         campaign: Option<&Campaign>,
         trackers: Option<&mut crate::trackers::Trackers>,
     ) -> Option<Nav> {
+        self.read_in_pane(ui, item, index, campaign, trackers, None)
+    }
+
+    /// Whether the open note `id` has its edit form open in this campaign: its pane then takes
+    /// the editor form (`pane_editor`), so Save stays in view under a long text.
+    pub(crate) fn edits_in_pane(&self, id: Uuid, campaign: Option<&Campaign>) -> bool {
+        campaign.is_some_and(|campaign| self.editing(id, campaign))
+    }
+
+    /// `read_with` in its pane's body: `region` is the pane's editor region when the pane took
+    /// the editor form (`edits_in_pane`); the edit form's text draws in it.
+    pub(crate) fn read_in_pane(
+        &mut self,
+        ui: &mut egui::Ui,
+        item: &Item,
+        index: &ContentIndex,
+        campaign: Option<&Campaign>,
+        trackers: Option<&mut crate::trackers::Trackers>,
+        region: Option<design::pane::EditorRegion<'_>>,
+    ) -> Option<Nav> {
         self.prepare(item);
         // A change's result ends when its file no longer holds what the change wrote.
         if let Some(ReaderResult::Change(change)) = self.result(Slot::Change)
@@ -2701,7 +2726,7 @@ impl Reader {
             None
         };
         crate::markdown_view::want_heading(ui.ctx(), heading);
-        let go = self.draw(ui, item, index, campaign, trackers);
+        let go = self.draw(ui, item, index, campaign, trackers, region);
         // A request lasts one draw, so it cannot reach a heading on another page.
         crate::markdown_view::want_heading(ui.ctx(), None);
         go.and_then(|go| self.settle(go))
@@ -2718,6 +2743,7 @@ impl Reader {
         index: &ContentIndex,
         campaign: Option<&Campaign>,
         trackers: Option<&mut crate::trackers::Trackers>,
+        region: Option<design::pane::EditorRegion<'_>>,
     ) -> Option<Go> {
         let mut go = None;
         if self.place_choices_document != Some(item.entry.id) {
@@ -2890,7 +2916,7 @@ impl Reader {
         if let Some(campaign) = campaign
             && editing
         {
-            return self.edit_form(ui, item, index, campaign);
+            return self.edit_form(ui, item, index, campaign, region);
         }
 
         let file_line = !self.compact
@@ -4165,11 +4191,11 @@ impl Reader {
                 match result {
                     ReaderResult::Change(change) | ReaderResult::Name(change) => {
                         Said::new(said(&change.word))
-                            .undo(change.kind.undo_step().pressed_as(FooterAct::Undo))
+                            .undo(change.undo_step(&item.entry.name).pressed_as(FooterAct::Undo))
                             .into()
                     }
                     ReaderResult::Identity(_, change) => Said::new(said(change.message()))
-                        .undo(change.kind.undo_step().pressed_as(FooterAct::Undo))
+                        .undo(change.undo_step(&item.entry.name).pressed_as(FooterAct::Undo))
                         .into(),
                     ReaderResult::FileRename(rename) => Said::new(said(&rename.message()))
                         .undo(UndoStep::of(Verb::Rename, "file").pressed_as(FooterAct::Undo))
@@ -5467,10 +5493,13 @@ mod tests {
     #[test]
     fn i19_h1_world_notice_names_the_change_and_undo() {
         // A place change's Undo names its verb and its object, as the result's words do.
-        assert_eq!(ChangeKind::Place.undo_step().label(), "Undo change place");
         assert_eq!(
-            ChangeKind::PartOf.undo_step().label(),
-            "Undo change Part of"
+            ChangeKind::Place.undo_step("Rook").label(),
+            "Undo change place"
+        );
+        assert_eq!(
+            ChangeKind::PartOf.undo_step("Rook").label(),
+            "Undo change groups"
         );
     }
 
@@ -5989,7 +6018,7 @@ mod tests {
         );
         let line = reader.last_change().unwrap();
         assert_eq!(line.word, "Added to Hob’s Log.");
-        assert_eq!(line.kind.undo_step().label(), "Undo add Log line");
+        assert_eq!(line.undo_step("Hob").label(), "Undo add Log line");
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
         assert_eq!(
             index

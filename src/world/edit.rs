@@ -905,6 +905,7 @@ impl Reader {
         item: &Item,
         index: &ContentIndex,
         campaign: &Campaign,
+        region: Option<crate::design::pane::EditorRegion<'_>>,
     ) -> Option<Go> {
         let id = item.entry.id;
         // The draft leaves the map while the form draws, and goes back unless it closes.
@@ -1130,12 +1131,6 @@ impl Reader {
         let narrow = switch_reason_below(ui, switch);
         let text = design::field(ui, "Text", None, None, |ui| {
             let font = style::prose_type(ui).font(ui);
-            // The save row, and in a narrow form the reason's own line below it, end in the pane.
-            let below = Density::Read.control()
-                + design::L
-                + design::S
-                + if narrow { reason_line(ui) } else { 0.0 };
-            let height = (ui.available_height() - below).max(style::prose_type(ui).line() * 2.0);
             ui.scope(|ui| {
                 ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
                 // One field frame includes the editor and its standard scrollbar.
@@ -1148,25 +1143,26 @@ impl Reader {
                     .corner_radius(design::RADIUS_CONTROL)
                     .inner_margin(egui::Margin::same(design::S as i8))
                     .show(ui, |ui| {
-                        egui::ScrollArea::vertical()
-                            .id_salt(("world_edit_text_scroll", id))
-                            .max_height(height - 2.0 * (design::S + design::HAIRLINE_WIDTH))
-                            .auto_shrink([false, true])
-                            .show(ui, |ui| {
-                                let width = ui.available_width();
-                                super::EDIT_TEXT.id(self.compact, id).multi_line(
-                                    ui,
-                                    &mut draft.now.text,
-                                    |edit| {
-                                        edit.font(font)
-                                            .desired_width(width)
-                                            .desired_rows(8)
-                                            .frame(false)
-                                            .margin(egui::Vec2::ZERO)
-                                    },
-                                )
-                            })
-                            .inner
+                        let width = ui.available_width();
+                        let field = super::EDIT_TEXT.id(self.compact, id);
+                        let style = |edit: egui::TextEdit<'_>| {
+                            edit.font(font.clone())
+                                .desired_width(width)
+                                .desired_rows(8)
+                                .frame(false)
+                                .margin(egui::Vec2::ZERO)
+                        };
+                        match region {
+                            // The pane's editor region (round 28, P2): it grows with the text
+                            // and gives way, so Save stays in view under a long note.
+                            Some(region) => {
+                                region
+                                    .editor(ui, field, &mut draft.now.text, style)
+                                    .response
+                            }
+                            // No pane gave a region (a check that draws the reader alone).
+                            None => field.multi_line(ui, &mut draft.now.text, style),
+                        }
                     });
                 frame.response.widget_info(|| {
                     egui::WidgetInfo::labeled(

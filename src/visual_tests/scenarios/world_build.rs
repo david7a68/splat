@@ -601,13 +601,13 @@ pub fn broken(d: &mut Driver<'_>) {
         "iter-26-D-FG1",
         "Change Stat block",
         &rows,
-        Some("Undo change"),
+        Some("Undo change Repaired watchkeeper"),
     );
     d.state("repaired-note-saved", Sizes::Default);
-    d.click("Undo change");
+    d.click("Undo change Repaired watchkeeper");
     d.observe(
         "iter-17-D-FD1-undo",
-        fs::read_to_string(&path).unwrap() == fixed && !d.has("Undo change"),
+        fs::read_to_string(&path).unwrap() == fixed && !d.has("Undo change Repaired watchkeeper"),
         "Undo changes restores the repaired note",
     );
     // An edit's Undo from before the note broke does not hide the later repair's result. The
@@ -639,7 +639,7 @@ pub fn broken(d: &mut Driver<'_>) {
         "iter-17-D-repaired-after-edit",
         fs::read_to_string(&path).unwrap() == fixed
             && d.visible_text("Note repaired.")
-            && !d.has("Undo change"),
+            && !d.has("Undo change Repaired watchkeeper"),
         "A repair after an edit shows Note repaired., and the old edit's Undo is gone",
     );
     // Another note's rename Undo survives this repair.
@@ -1197,7 +1197,7 @@ pub fn broken(d: &mut Driver<'_>) {
             "With the file text again, the change saves and the editor link returns",
         );
         // Leave the page as the steps below expect it.
-        d.click("Undo change Part of");
+        d.click("Undo change groups");
         for path in [
             "NPCs/Mira Vell.md",
             "Factions/Lantern Guild.md",
@@ -2046,7 +2046,7 @@ pub fn facts(d: &mut Driver<'_>) {
         saved.contains("splat_part_of:") && saved.contains("Words kept across pane sizes."),
         "iter-7-D-FD6-save: text and groups save together"
     );
-    d.click("Undo change");
+    d.click("Undo change Horn Rings");
     assert_eq!(
         fs::read_to_string(&lore_path).unwrap(),
         unchanged,
@@ -2073,7 +2073,7 @@ pub fn facts(d: &mut Driver<'_>) {
                 .starts_with(crate::sessions::split_note(&external).unwrap().1),
         "iter-7-D-FD6-conflict: a group-only overwrite keeps the disk text"
     );
-    d.click("Undo change");
+    d.click("Undo change Horn Rings");
     assert_eq!(fs::read_to_string(&lore_path).unwrap(), external);
     fs::write(&lore_path, &unchanged).unwrap();
     reload(d);
@@ -2253,7 +2253,7 @@ pub fn facts(d: &mut Driver<'_>) {
         "A change in play writes the value and one Log line in the entry",
     );
     d.state("group-joined-with-log", Sizes::All);
-    d.click("Undo change Part of");
+    d.click("Undo change groups");
     d.observe(
         "T15.4",
         fs::read_to_string(&path).unwrap() == before,
@@ -2391,7 +2391,7 @@ pub fn facts(d: &mut Driver<'_>) {
         older.contains("- '[[The Arena]]'") && !older.contains("## Log"),
         "After the session's date, with no fight or recording, a Change writes no Log line",
     );
-    d.click("Undo change Part of");
+    d.click("Undo change groups");
     fs::write(&note, &dated).unwrap();
     fs::write(&path, &after).unwrap();
     d.app_mut().sessions.refresh();
@@ -2438,7 +2438,7 @@ pub fn facts(d: &mut Driver<'_>) {
     );
     d.state("open-questions", Sizes::All);
     // X45 of app round 2: a question is ticked where the DM reads it. Its box writes `[x]` to
-    // that line of its note at once, with `Undo: tick` in the pane's footer.
+    // that line of its note at once, with `Undo tick` in the pane's footer.
     let horn = root(d).join("Lore/Horn Rings.md");
     let open = fs::read_to_string(&horn).unwrap();
     let question = "Open: Can a horn ring be sold?";
@@ -2462,7 +2462,7 @@ pub fn facts(d: &mut Driver<'_>) {
     };
     let below_before = row_below(d);
     d.click(question);
-    d.expect("Undo: tick");
+    d.expect("Undo tick \u{201c}Can a horn ring be sold?\u{201d} in Horn Rings");
     // Round 28 FE4: the last question ticked, the row stays while its page is open, says that
     // none is open, and the row below keeps its place; the page says so too.
     let below_after = row_below(d);
@@ -2487,11 +2487,13 @@ pub fn facts(d: &mut Driver<'_>) {
         "The box ticks that line of its note, and the question leaves the list",
     );
     d.state("question-ticked", Sizes::Default);
-    d.click("Undo: tick");
+    d.click("Undo tick \u{201c}Can a horn ring be sold?\u{201d} in Horn Rings");
     d.observe(
         "T15.5",
-        fs::read_to_string(&horn).unwrap() == open && d.has(question) && !d.has("Undo: tick"),
-        "Undo: tick opens that box again",
+        fs::read_to_string(&horn).unwrap() == open
+            && d.has(question)
+            && !d.has("Undo tick \u{201c}Can a horn ring be sold?\u{201d} in Horn Rings"),
+        "Undo tick opens that box again",
     );
     // The line changed on disk since it was read: the tick writes nothing and says so.
     let changed = open.replace(
@@ -2504,7 +2506,7 @@ pub fn facts(d: &mut Driver<'_>) {
         "T15.5",
         fs::read_to_string(&horn).unwrap() == changed
             && d.visible_text("This question changed in Horn Rings. Nothing was written.")
-            && !d.has("Undo: tick"),
+            && !d.has("Undo tick \u{201c}Can a horn ring be sold?\u{201d} in Horn Rings"),
         "A question whose line changed on disk is not ticked, and the footer says why",
     );
     // Another note took the file's place outside Splat, with the same question on the same
@@ -2520,7 +2522,7 @@ pub fn facts(d: &mut Driver<'_>) {
         "T15.5",
         fs::read_to_string(&horn).unwrap() == other
             && d.visible_text("Horn Rings changed on disk. Nothing was written.")
-            && !d.has("Undo: tick"),
+            && !d.has("Undo tick \u{201c}Can a horn ring be sold?\u{201d} in Horn Rings"),
         "A note that took the question's file is not ticked",
     );
     fs::write(&horn, &open).unwrap();
@@ -3068,7 +3070,7 @@ pub fn round_trip(d: &mut Driver<'_>) {
         fs::read_to_string(&faction_path).unwrap().contains("ready"),
         "iter-6-D-ST1-shortcut: Ctrl+S must save the focused form",
     );
-    d.click("Undo change");
+    d.click("Undo change Rook");
     assert_eq!(fs::read_to_string(&faction_path).unwrap(), faction_before);
     go_campaign(d);
     d.click(TAB_ENTRIES);
@@ -3193,7 +3195,7 @@ pub fn round_trip(d: &mut Driver<'_>) {
         saved.contains(&unread_groups),
         "iter-8-D2-group-bytes: another field's save must keep the raw group block"
     );
-    d.click("Undo change");
+    d.click("Undo change Unread groups");
     assert_eq!(fs::read_to_string(&unread_path).unwrap(), before);
     // Removing the unread property leaves the parsed fields unchanged. The open form
     // must still notice its cleared flag and make the group picker available again.
@@ -4897,10 +4899,10 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         "iter-26-D-FJ3",
         "Add to fight",
         &add,
-        Some("Undo change"),
+        Some("Undo change Rook Ambry"),
     );
     d.state("npc-edit-saved-in-lookup", Sizes::All);
-    d.click("Undo change");
+    d.click("Undo change Rook Ambry");
     d.wait_for_text("Watch House");
     assert_eq!(fs::read_to_string(&path).unwrap(), before);
     body_kept(d, "iter-26-D-FJ3-undo", "Add to fight", &add, None);
@@ -9661,7 +9663,7 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     d.state("duplicate-world-files-in-lookup", Sizes::All);
     d.press(Key::Escape);
     d.click("Make Rook Ambry copy.md a separate note");
-    d.wait_for_text("Undo: separate note");
+    d.wait_for_text("Undo separate note");
     d.expect("Rook Ambry copy.md is now a separate note.");
     assert_eq!(
         crate::content_workspace::note_id(&fs::read_to_string(&original).unwrap()),
@@ -9674,7 +9676,7 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     assert_eq!(fs::read_to_string(&original).unwrap(), before);
     d.expect("Rook Ambry copy");
     d.state("world-copy-repaired", Sizes::All);
-    d.click("Undo: separate note");
+    d.click("Undo separate note");
     d.wait_for_text("Make Rook Ambry copy.md a separate note");
     assert_eq!(fs::read_to_string(&copy).unwrap(), before);
     d.expect_same("Undo restores the same copied files and identity warning.");
@@ -9692,7 +9694,7 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     d.click_starting("Rook Ambry.md ·");
     d.expect("Make Rook Ambry copy.md a separate note");
     d.click("Make Rook Ambry copy.md a separate note");
-    d.wait_for_text("Undo: separate note");
+    d.wait_for_text("Undo separate note");
     d.expect("Rook Ambry copy.md is now a separate note.");
     let same_name = before.replace("splat_name: Rook Ambry", "splat_name: Rook Ambry copy");
     fs::write(&original, same_name).unwrap();
@@ -10886,7 +10888,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
             .as_bytes(),
         "iter-10-D-SD1-add-raw: Overwrite saves A, B and C; A and C keep their raw text"
     );
-    d.click("Undo change");
+    d.click("Undo change Safe Rook");
     assert_eq!(fs::read(&path).unwrap(), outside.as_bytes());
     // The draft removes A while Obsidian adds C.
     fs::write(&path, &readable).unwrap();
@@ -10945,7 +10947,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         outside.replace(zarel, "").as_bytes(),
         "iter-10-D-SD1-remove-raw: Overwrite saves C alone, as raw text"
     );
-    d.click("Undo change");
+    d.click("Undo change Safe Rook");
     assert_eq!(fs::read(&path).unwrap(), outside.as_bytes());
     // The draft removes A while Obsidian respells it. Overwrite still removes it.
     let part_of_line = "splat_part_of: # Keep the stored groups.\n";
@@ -10973,7 +10975,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
             .as_bytes(),
         "iter-11-D-SD1-respelled-raw: Overwrite removes the group Obsidian respelled"
     );
-    d.click("Undo change");
+    d.click("Undo change Safe Rook");
     assert_eq!(fs::read(&path).unwrap(), respelled.as_bytes());
     // The draft adds B while Obsidian adds B in another spelling: one line, the note's own.
     let other_line = "- \"[[Factions/Added Guild|Guild]]\" # Added in Obsidian.\n";
@@ -11018,7 +11020,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         |d| {
             d.expect(ALREADY_SAVED);
             // Neighbour: the note's groups still show in the reader.
-            !d.has("Undo change")
+            !d.has("Undo change Safe Rook")
                 && !d.has("Changes saved.")
                 && !d.has("Save changes")
                 && !d.has("Overwrite with my draft")
@@ -11185,7 +11187,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         "Overwrite saves other fields, keeps disk groups, explains the refusal and closes the form",
         |d| {
             d.expect(reason);
-            d.expect("Undo change");
+            d.expect("Undo change Safe Rook");
             !d.has("Save changes")
         },
     );
@@ -11228,7 +11230,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     );
     d.expect_moves("Overwrite ends the disk-conflict choice, and the note's rows come back.");
     d.state("overwrite-keeps-unread-disk-groups", Sizes::All);
-    d.click("Undo change");
+    d.click("Undo change Safe Rook");
     // The rows keep their place when the result goes with its Undo.
     body_kept(d, "iter-26-D-FE2", "Change Status", &rows, None);
     assert_eq!(fs::read(&path).unwrap(), unread.as_bytes());
@@ -11379,8 +11381,8 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         ready_over_gone.as_bytes(),
         "iter-13-D-FD2-second-overwrite: Overwrite writes the DM's ready over gone"
     );
-    d.expect("Undo change");
-    d.click("Undo change");
+    d.expect("Undo change Safe Rook");
+    d.click("Undo change Safe Rook");
     assert_eq!(
         fs::read(&path).unwrap(),
         gone.as_bytes(),
@@ -11430,8 +11432,8 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
             expected,
             "iter-13-D-FD2-second-overwrite-{case}: only the DM's status goes over disk2"
         );
-        d.expect("Undo change");
-        d.click("Undo change");
+        d.expect("Undo change Safe Rook");
+        d.click("Undo change Safe Rook");
         assert_eq!(
             fs::read(&path).unwrap(),
             disk2.as_bytes(),
@@ -11465,7 +11467,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     // The group change did not go in, so the form does not say it is in the note.
     d.observe(
         "iter-12-D-AD2-refused",
-        !d.has(ALREADY_SAVED) && !d.has("Undo change"),
+        !d.has(ALREADY_SAVED) && !d.has("Undo change Safe Rook"),
         "A refused group change writes nothing, gives no Undo and does not say it is in the note",
     );
     d.expect(reason);
@@ -11547,7 +11549,7 @@ pub fn empty_links(d: &mut Driver<'_>) {
                 && saved.contains(&format!("splat_stat_block: {value}\n")),
             "iter-9-D-empty-bytes: unrelated save keeps both raw optional fields"
         );
-        d.click("Undo change");
+        d.click(&format!("Undo change {name}"));
         assert_eq!(fs::read(root(d).join(&path)).unwrap(), before);
     }
 }
