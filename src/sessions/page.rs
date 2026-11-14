@@ -3838,11 +3838,12 @@ impl Sessions {
             Some((first, label)) => fields
                 .dropdown(design::CreateDropdown::new(
                     "Template",
-                    design::Dropdown::new(
+                    design::layout::Selection::new(
                         SESSION_TEMPLATE.once(design::Once::CreateForm),
                         "Session template",
+                        first,
+                        label,
                     )
-                    .choice(first, label)
                     .choices(names),
                     &mut form.template,
                 ))

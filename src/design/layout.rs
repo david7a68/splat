@@ -15,7 +15,7 @@
 //! Each part's tests (`layout/tests.rs`) prove its rule once. A caller that uses a part, with no
 //! layer, clip, `Area` or raw interaction of its own, has no duty left for that rule, except
 //! where a part's doc names one.
-use std::{hash::Hash, marker::PhantomData, ops::Range};
+use std::{borrow::Cow, hash::Hash, marker::PhantomData, ops::Range};
 
 use eframe::egui::{
     self, Align, Id, Layout, Rect, Response, Sense, TextBuffer, TextEdit, Ui, UiBuilder,
@@ -1978,10 +1978,92 @@ impl<'a> CreateChoice<'a> {
     }
 }
 
-/// A drop-down of an [`InlineCreate`], after a text field: the form's [`Dropdown`] (its choices,
-/// words and reasons are the caller's, as for any drop-down), with its label above it. The part
-/// gives it the form's width. A form whose last part is a drop-down puts Create and Cancel on
-/// an action line of their own under it (see [`InlineCreate`]).
+/// The choices of an [`InlineCreate`]'s drop-down: values and their words, and reasons for
+/// choices that cannot be taken. It has no command row: a form's drop-down only chooses, so a
+/// press can never be lost (a [`Dropdown`] with `.command` does not fit [`CreateDropdown`]).
+///
+/// A command does not exist here:
+///
+/// ```compile_fail,E0599
+/// use splat::layout::{Once, Selection};
+/// let _ = Selection::new(splat::field_id!("doc_sel").once(Once::Example), "Template", 0_u8, "Standard")
+///     .command(splat::word!("New template"));
+/// ```
+#[must_use]
+pub struct Selection<'a, T> {
+    id: FieldId,
+    name: &'a str,
+    choices: Vec<(T, Cow<'a, str>, Option<&'a str>)>,
+}
+
+impl<'a, T> Selection<'a, T> {
+    /// `name` is the control's accessible name; a selection has at least one choice.
+    pub fn new(id: FieldId, name: &'a str, first: T, label: impl Into<Cow<'a, str>>) -> Self {
+        Self {
+            id,
+            name,
+            choices: vec![(first, label.into(), None)],
+        }
+    }
+
+    pub fn choices<L: Into<Cow<'a, str>>>(
+        mut self,
+        more: impl IntoIterator<Item = (T, L)>,
+    ) -> Self {
+        self.choices.extend(
+            more.into_iter()
+                .map(|(value, label)| (value, label.into(), None)),
+        );
+        self
+    }
+
+    /// A choice that cannot be taken now, with its reason on its row.
+    pub fn blocked_choice(
+        mut self,
+        value: T,
+        label: impl Into<Cow<'a, str>>,
+        reason: &'a str,
+    ) -> Self {
+        self.choices.push((value, label.into(), Some(reason)));
+        self
+    }
+
+    fn dropdown(self) -> Option<Dropdown<'a, T, HasChoices>> {
+        let mut choices = self.choices.into_iter();
+        let (value, label, reason) = choices.next()?;
+        let start = Dropdown::new(self.id, self.name);
+        let mut dropdown = match reason {
+            Some(reason) => start.blocked_choice(value, label, reason),
+            None => start.choice(value, label),
+        };
+        for (value, label, reason) in choices {
+            dropdown = match reason {
+                Some(reason) => dropdown.blocked_choice(value, label, reason),
+                None => dropdown.choice(value, label),
+            };
+        }
+        Some(dropdown)
+    }
+}
+
+/// A drop-down of an [`InlineCreate`], after a text field: a [`Selection`] (its choices, words
+/// and reasons are the caller's) with its label above it. The part gives it the form's width.
+/// A form whose last part is a drop-down puts Create and Cancel on an action line of their own
+/// under it (see [`InlineCreate`]).
+///
+/// A drop-down with a command row does not fit (its press would have no place):
+///
+/// ```compile_fail,E0308
+/// use splat::layout::{CreateDropdown, Dropdown, Once};
+/// let mut value = 0_u8;
+/// let _ = CreateDropdown::new(
+///     "Template",
+///     Dropdown::new(splat::field_id!("doc_cmd").once(Once::Example), "Template")
+///         .choice(0, "Standard")
+///         .command(splat::word!("New template")),
+///     &mut value,
+/// );
+/// ```
 #[must_use]
 pub struct CreateDropdown<'a> {
     label: &'a str,
@@ -1992,18 +2074,22 @@ pub struct CreateDropdown<'a> {
 }
 
 /// A [`CreateDropdown`]'s typed drop-down, drawn at the form's width.
-type DrawDropdown<'a> = Box<dyn FnOnce(&mut Ui, f32) -> Response + 'a>;
+type DrawDropdown<'a> = Box<dyn FnOnce(&mut Ui, f32) -> Option<Response> + 'a>;
 
 impl<'a> CreateDropdown<'a> {
     pub fn new<T: PartialEq + Clone + 'a>(
         label: &'a str,
-        dropdown: Dropdown<'a, T, HasChoices>,
+        selection: Selection<'a, T>,
         current: &'a mut T,
     ) -> Self {
         Self {
             label,
             help: None,
-            draw: Box::new(move |ui, width| dropdown.width(width).show(ui, current).response),
+            draw: Box::new(move |ui, width| {
+                selection
+                    .dropdown()
+                    .map(|dropdown| dropdown.width(width).show(ui, current).response)
+            }),
         }
     }
 
@@ -2061,8 +2147,8 @@ pub struct Empty;
 pub struct AfterChoice;
 /// Typestate of an [`InlineCreate`]: the last part is a text field; Create may follow.
 pub struct AfterField;
-/// Typestate of an [`InlineCreate`]: the last part is a drop-down after a text field; Create
-/// may follow, on an action line of its own.
+/// Typestate of an [`InlineCreate`]: the last part is the form's one drop-down, after a text
+/// field; only Create may follow, on an action line of its own.
 pub struct AfterDropdown;
 /// Typestate of an [`InlineCreate`]: Create is named; the kept line must follow.
 pub struct Named;
@@ -2153,15 +2239,14 @@ pub struct Complete;
 /// A form that ends with a drop-down, with Create and Cancel on its action line:
 ///
 /// ```
-/// use splat::layout::{Create, CreateDropdown, CreateField, Dropdown, InlineCreate, KeptLine, NoReason, Once};
+/// use splat::layout::{Create, CreateDropdown, CreateField, InlineCreate, KeptLine, NoReason, Once, Selection};
 /// fn form(ui: &mut eframe::egui::Ui, name: &mut String, template: &mut u8) {
 ///     let _ = InlineCreate::new()
 ///         .field(CreateField::new(splat::field_id!("doc_dd_name").once(Once::Example), "Title", name))
 ///         .dropdown(CreateDropdown::new(
 ///             "Template",
-///             Dropdown::new(splat::field_id!("doc_dd_template").once(Once::Example), "Template")
-///                 .choice(0, "Standard session")
-///                 .choice(1, "Short notes"),
+///             Selection::new(splat::field_id!("doc_dd_template").once(Once::Example), "Template", 0, "Standard session")
+///                 .choices([(1, "Short notes")]),
 ///             template,
 ///         ))
 ///         .create(Create::<NoReason>::primary(splat::word!("Create session")))
@@ -2173,13 +2258,13 @@ pub struct Complete;
 /// A form that ends with a drop-down and has no Create has no kept line and no `show`:
 ///
 /// ```compile_fail,E0599
-/// use splat::layout::{CreateDropdown, CreateField, Dropdown, InlineCreate, KeptLine, NoReason, Once};
+/// use splat::layout::{CreateDropdown, CreateField, InlineCreate, KeptLine, NoReason, Once, Selection};
 /// fn form(ui: &mut eframe::egui::Ui, name: &mut String, template: &mut u8) {
 ///     let _ = InlineCreate::<splat::layout::Empty, NoReason>::new()
 ///         .field(CreateField::new(splat::field_id!("doc_dd_name").once(Once::Example), "Title", name))
 ///         .dropdown(CreateDropdown::new(
 ///             "Template",
-///             Dropdown::new(splat::field_id!("doc_dd_template").once(Once::Example), "Template").choice(0, "Standard"),
+///             Selection::new(splat::field_id!("doc_dd_template").once(Once::Example), "Template", 0, "Standard"),
 ///             template,
 ///         ))
 ///         .kept_line(KeptLine::new())
@@ -2190,17 +2275,49 @@ pub struct Complete;
 /// A drop-down before any text field does not compile (it follows the name):
 ///
 /// ```compile_fail,E0599
-/// use splat::layout::{CreateDropdown, Dropdown, InlineCreate, NoReason, Once};
+/// use splat::layout::{CreateDropdown, InlineCreate, NoReason, Once, Selection};
 /// fn form(template: &mut u8) {
 ///     let _ = InlineCreate::<splat::layout::Empty, NoReason>::new().dropdown(CreateDropdown::new(
 ///         "Template",
-///         Dropdown::new(splat::field_id!("doc_dd_template").once(Once::Example), "Template").choice(0, "Standard"),
+///         Selection::new(splat::field_id!("doc_dd_template").once(Once::Example), "Template", 0, "Standard"),
 ///         template,
 ///     ));
 /// }
 /// ```
 ///
-/// A drop-down is a typed [`Dropdown`], never a closure that draws:
+/// A second drop-down, or any part after the drop-down, does not compile (only Create follows):
+///
+/// ```compile_fail,E0599
+/// use splat::layout::{CreateDropdown, CreateField, InlineCreate, NoReason, Once, Selection};
+/// fn form(name: &mut String, a: &mut u8, b: &mut u8) {
+///     let _ = InlineCreate::<splat::layout::Empty, NoReason>::new()
+///         .field(CreateField::new(splat::field_id!("doc_dd_name").once(Once::Example), "Title", name))
+///         .dropdown(CreateDropdown::new("A", Selection::new(splat::field_id!("doc_dd_a").once(Once::Example), "A", 0, "One"), a))
+///         .dropdown(CreateDropdown::new("B", Selection::new(splat::field_id!("doc_dd_b").once(Once::Example), "B", 0, "One"), b));
+/// }
+/// ```
+///
+/// ```compile_fail,E0599
+/// use splat::layout::{CreateDropdown, CreateField, InlineCreate, NoReason, Once, Selection};
+/// fn form(name: &mut String, more: &mut String, a: &mut u8) {
+///     let _ = InlineCreate::<splat::layout::Empty, NoReason>::new()
+///         .field(CreateField::new(splat::field_id!("doc_dd_name").once(Once::Example), "Title", name))
+///         .dropdown(CreateDropdown::new("A", Selection::new(splat::field_id!("doc_dd_a").once(Once::Example), "A", 0, "One"), a))
+///         .field(CreateField::new(splat::field_id!("doc_dd_more").once(Once::Example), "More", more));
+/// }
+/// ```
+///
+/// ```compile_fail,E0599
+/// use splat::layout::{CreateChoice, CreateDropdown, CreateField, InlineCreate, NoReason, Once, Selection};
+/// fn form(name: &mut String, used: &mut bool, a: &mut u8) {
+///     let _ = InlineCreate::<splat::layout::Empty, NoReason>::new()
+///         .field(CreateField::new(splat::field_id!("doc_dd_name").once(Once::Example), "Title", name))
+///         .dropdown(CreateDropdown::new("A", Selection::new(splat::field_id!("doc_dd_a").once(Once::Example), "A", 0, "One"), a))
+///         .choice(CreateChoice::new("Use", used));
+/// }
+/// ```
+///
+/// A drop-down is a typed [`Selection`], never a closure that draws:
 ///
 /// ```compile_fail,E0277
 /// use splat::layout::CreateDropdown;
@@ -2271,17 +2388,20 @@ macro_rules! add_parts {
         }
     )*};
 }
-add_parts!(Empty, AfterChoice, AfterField, AfterDropdown);
+add_parts!(Empty, AfterChoice, AfterField);
 
-macro_rules! add_after_field {
+impl<'a, R: CreateReasons> InlineCreate<'a, AfterField, R> {
+    /// The form's one drop-down, after the name field (a text field comes first). Only
+    /// `create` follows it: it is the form's last part.
+    pub fn dropdown(mut self, dropdown: CreateDropdown<'a>) -> InlineCreate<'a, AfterDropdown, R> {
+        self.parts.push(CreatePart::Dropdown(dropdown));
+        self.into()
+    }
+}
+
+macro_rules! add_create {
     ($($state:ty),*) => {$(
         impl<'a, R: CreateReasons> InlineCreate<'a, $state, R> {
-            /// A drop-down after the name field (a text field comes first).
-            pub fn dropdown(mut self, dropdown: CreateDropdown<'a>) -> InlineCreate<'a, AfterDropdown, R> {
-                self.parts.push(CreatePart::Dropdown(dropdown));
-                self.into()
-            }
-
             pub fn create(mut self, create: Create<R>) -> InlineCreate<'a, Named, R> {
                 self.create = Some(create);
                 self.into()
@@ -2289,7 +2409,7 @@ macro_rules! add_after_field {
         }
     )*};
 }
-add_after_field!(AfterField, AfterDropdown);
+add_create!(AfterField, AfterDropdown);
 
 impl<'a, R: CreateReasons> InlineCreate<'a, Named, R> {
     pub fn kept_line(mut self, kept: KeptLine<'a>) -> InlineCreate<'a, Complete, R> {
@@ -2348,6 +2468,39 @@ fn cancel_action(word: Word) -> Action<'static> {
     Action::quiet(word.as_str()).density(Density::Read)
 }
 
+/// Whole actions, in order, in rows of `room` from the form's text edge: an action that does
+/// not fit after the ones before it starts the next row. No action is split or cut to fit a
+/// row. The rows depend only on the actions' own widths and the room, never on a field's text,
+/// so they do not change while the DM types.
+fn action_rows(ui: &mut Ui, room: f32, widths: &[f32], mut draw: impl FnMut(&mut Ui, usize)) {
+    let mut rows: Vec<Vec<usize>> = Vec::new();
+    let mut used = 0.0;
+    for (at, width) in widths.iter().copied().enumerate() {
+        match rows.last_mut() {
+            Some(row) if used + S + width <= room => {
+                row.push(at);
+                used += S + width;
+            }
+            _ => {
+                rows.push(vec![at]);
+                used = width;
+            }
+        }
+    }
+    for row in rows {
+        ui.allocate_ui_with_layout(
+            vec2(room, Density::Read.control()),
+            Layout::left_to_right(Align::Center),
+            |ui| {
+                ui.spacing_mut().item_spacing.x = S;
+                for at in row {
+                    draw(ui, at);
+                }
+            },
+        );
+    }
+}
+
 /// What one text field's line gave back.
 struct FieldLine {
     response: Response,
@@ -2378,12 +2531,26 @@ fn field_line<R: CreateReasons>(
         side: false,
         create: false,
     };
-    let draw_actions = |ui: &mut Ui, line: &mut FieldLine| {
-        if let Some(side) = &part.side {
-            line.side = side.action().show(ui).clicked() && side.reason().is_none();
-        }
-        if let Some(create) = create {
-            line.create = create.action().show(ui).clicked();
+    // The actions in order: the side action, then Create (true for the side action).
+    let mut actions_in_order: Vec<bool> = Vec::new();
+    if part.side.is_some() {
+        actions_in_order.push(true);
+    }
+    if create.is_some() {
+        actions_in_order.push(false);
+    }
+    let side = part.side.as_ref();
+    let action_at = |at: usize| match (actions_in_order[at], side, create) {
+        (true, Some(side), _) => Some(side.action()),
+        (false, _, Some(create)) => Some(create.action()),
+        _ => None,
+    };
+    let draw_action = |ui: &mut Ui, line: &mut FieldLine, at: usize| {
+        let clicked = action_at(at).is_some_and(|action| action.show(ui).clicked());
+        if actions_in_order[at] {
+            line.side = clicked && side.is_some_and(|side| side.reason().is_none());
+        } else {
+            line.create = clicked;
         }
     };
     field(ui, part.label, help, None, |ui| {
@@ -2405,13 +2572,18 @@ fn field_line<R: CreateReasons>(
             };
             row(ui, &mut |ui| {
                 line.response = form_field(ui, part.id, part.label, part.text, width);
-                draw_actions(ui, &mut line);
+                for at in 0..actions_in_order.len() {
+                    draw_action(ui, &mut line, at);
+                }
             });
         } else {
-            // The actions do not fit beside the field: they take their own line under it, at
-            // the field's left edge, so neither is cut at the column's edge.
+            // The actions do not fit beside the field: they take whole rows under it, at the
+            // field's left edge, so none is cut at the column's edge.
             line.response = form_field(ui, part.id, part.label, part.text, room - 2.0 * S);
-            row(ui, &mut |ui| draw_actions(ui, &mut line));
+            let widths: Vec<f32> = (0..actions_in_order.len())
+                .map(|at| action_at(at).map_or(0.0, |action| action.natural_width(ui)))
+                .collect();
+            action_rows(ui, room, &widths, |ui, at| draw_action(ui, &mut line, at));
         }
     });
     if part.focus {
@@ -2448,6 +2620,28 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
                 _ => None,
             })
             .collect();
+        // Composition (an input method's text that is not committed yet) is the form's state
+        // from the frame before: during it, and in a frame with any IME event (its commit),
+        // Enter and Escape belong to the input method, never to Create or Cancel.
+        let ime_key = self.parts.iter().find_map(|part| match part {
+            CreatePart::Text(field) => Some(field.id.id().with("inline_create_ime")),
+            _ => None,
+        });
+        let was_composing =
+            ime_key.is_some_and(|key| ui.data(|data| data.get_temp::<bool>(key)).unwrap_or(false));
+        let (ime_event, composing) = ui.input(|input| {
+            let ime = || {
+                input.events.iter().filter_map(|event| match event {
+                    egui::Event::Ime(ime) => Some(ime),
+                    _ => None,
+                })
+            };
+            let composing = ime().fold(was_composing, |_, ime| {
+                matches!(ime, egui::ImeEvent::Enabled | egui::ImeEvent::Preedit(_))
+            });
+            (ime().next().is_some(), composing)
+        });
+        let keys_for_the_form = !was_composing && !ime_event;
         let mut last_help = None;
         for (at, part) in self.parts.into_iter().enumerate() {
             let last = at + 1 == count;
@@ -2482,7 +2676,7 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
                     let response = field(ui, dropdown.label, help, None, |ui| {
                         (dropdown.draw)(ui, room)
                     });
-                    out.dropdowns.push(response);
+                    out.dropdowns.extend(response);
                 }
             }
         }
@@ -2495,17 +2689,18 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
         if ends_with_dropdown {
             // The action line: Create, then Cancel, at the form's text edge. Above it every
             // part has a fixed height, so a chosen value never moves it.
-            ui.allocate_ui_with_layout(
-                vec2(room, Density::Read.control()),
-                Layout::left_to_right(Align::Center),
-                |ui| {
-                    ui.spacing_mut().item_spacing.x = S;
+            // Whole actions in rows: in a narrow column Cancel goes under Create.
+            let mut widths = vec![create.action().natural_width(ui)];
+            if let Some((word, true)) = self.kept.cancel {
+                widths.push(cancel_action(word).natural_width(ui));
+            }
+            action_rows(ui, room, &widths, |ui, at| {
+                if at == 0 {
                     out.create |= create.action().show(ui).clicked();
-                    if let Some((word, true)) = self.kept.cancel {
-                        out.cancel |= cancel_action(word).show(ui).clicked();
-                    }
-                },
-            );
+                } else if let Some((word, true)) = self.kept.cancel {
+                    out.cancel |= cancel_action(word).show(ui).clicked();
+                }
+            });
         }
         // Enter in a text field presses Create when nothing blocks it; Escape presses Cancel
         // when Cancel shows. egui takes the keyboard from a one-line field on both keys.
@@ -2515,12 +2710,18 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
                 input.key_pressed(egui::Key::Escape),
             )
         });
-        let left = out.fields.iter().any(Response::lost_focus);
+        let left = out.fields.iter().any(Response::lost_focus) && keys_for_the_form;
         if left && enter && create.blocked.is_none() && ui.is_enabled() {
             out.create = true;
         }
         if left && escape && cancel_shown {
             out.cancel = true;
+        }
+        // The composition ends with its commit, or when no field of the form has the keyboard
+        // (egui ends it then too).
+        if let Some(key) = ime_key {
+            let composing = composing && out.fields.iter().any(Response::has_focus);
+            ui.data_mut(|data| data.insert_temp(key, composing));
         }
         // The kept line: one fixed height for the life of the form, whatever it holds now.
         let kept_cancel = if ends_with_dropdown {
@@ -2580,9 +2781,15 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
 fn preview_line(ui: &mut Ui, preview: &str) {
     let font = Type::Small.font(ui);
     let room = ui.available_width();
-    let mut shown = preview.to_owned();
+    // One rendered row: a line break or a tab in the words is a space here (the hover and the
+    // accessible name keep the words as given).
+    let one_row: String = preview
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    let mut shown = one_row.clone();
     if number_width(ui, &shown, &font) > room {
-        let chars: Vec<char> = preview.chars().collect();
+        let chars: Vec<char> = one_row.chars().collect();
         let mut from = 0;
         while from < chars.len() {
             shown = format!("…{}", chars[from..].iter().collect::<String>());

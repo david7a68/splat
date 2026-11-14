@@ -577,35 +577,43 @@ fn inline_create_moves_nothing_while_the_dm_types() {
     // K4a gap 2: in a column whose clip is its text edge (a reader nested in a pane), the form
     // takes the column's width: the actions go under the field before they are cut, Cancel
     // does not hang past the clip, and every target is at least 24 px and inside the clip.
-    let in_column = |clip_left: f32, width: f32, cut: f32| {
-        let mut folder =
-            "/home/dm/Obsidian/a very long folder name that scrolls inside its field".to_owned();
-        let column = Rect::from_min_size(pos2(100.0, 20.0), vec2(width, 400.0));
-        // `cut`: the clip ends this far before the column's right edge (a pane's lane).
-        let clip = column
-            .with_min_x(clip_left)
-            .with_max_x(column.right() - cut);
-        let (nodes, _) = frame_with(&ctx, vec2(1000.0, 500.0), Vec::new(), |ui| {
-            ui.scope_builder(egui::UiBuilder::new().max_rect(column), |ui| {
-                ui.set_clip_rect(clip);
-                let _ = InlineCreate::new()
-                    .field(
-                        CreateField::new(
-                            crate::field_id!("test_create_column").once(Once::Example),
-                            "Folder",
-                            &mut folder,
+    let in_column_with =
+        |clip_left: f32, width: f32, cut: f32, side: Word, create: Word, text: &str| {
+            let mut folder = text.to_owned();
+            let column = Rect::from_min_size(pos2(100.0, 20.0), vec2(width, 400.0));
+            // `cut`: the clip ends this far before the column's right edge (a pane's lane).
+            let clip = column
+                .with_min_x(clip_left)
+                .with_max_x(column.right() - cut);
+            let (nodes, painted) = frame_with(&ctx, vec2(1000.0, 500.0), Vec::new(), |ui| {
+                ui.scope_builder(egui::UiBuilder::new().max_rect(column), |ui| {
+                    ui.set_clip_rect(clip);
+                    let _ = InlineCreate::new()
+                        .field(
+                            CreateField::new(
+                                crate::field_id!("test_create_column").once(Once::Example),
+                                "Folder",
+                                &mut folder,
+                            )
+                            .side_action(side),
                         )
-                        .side_action(BROWSE),
-                    )
-                    .create(Create::primary(CREATE).blocked(None::<TestReason>))
-                    .kept_line(KeptLine::new().cancel(CANCEL, true))
-                    .show(ui);
+                        .create(Create::primary(create).blocked(None::<TestReason>))
+                        .kept_line(KeptLine::new().cancel(CANCEL, true))
+                        .show(ui);
+                });
             });
-        });
-        (
-            clip,
-            ["Folder", "Browse…", "Add campaign", "Cancel"].map(|name| bounds(&nodes, name)),
-        )
+            (
+                clip,
+                ["Folder", side.as_str(), create.as_str(), "Cancel"]
+                    .map(|name| bounds(&nodes, name)),
+                painted,
+            )
+        };
+    const LONG_FOLDER: &str =
+        "/home/dm/Obsidian/a very long folder name that scrolls inside its field";
+    let in_column = |clip_left: f32, width: f32, cut: f32| {
+        let (clip, rects, _) = in_column_with(clip_left, width, cut, BROWSE, CREATE, LONG_FOLDER);
+        (clip, rects)
     };
     for (width, cut) in [
         (NARROWEST_PANE - 60.0, 0.0),
@@ -648,19 +656,55 @@ fn inline_create_moves_nothing_while_the_dm_types() {
         (cancel.left() - (100.0 - S)).abs() < 0.5,
         "Cancel hangs: {cancel:?}"
     );
+    // Review of PR 351, item 2: actions as long as a word may be, in the narrowest pane (the
+    // longest word's action is 283 px: it fits a pane, `the_longest_word_fits_the_narrowest_pane`,
+    // and no column narrower than the action can show it whole). Each
+    // stays whole (never cut, never split), inside the clip, in rows of whole actions; the
+    // rows are the same with a short and a long text (they never flip while the DM types).
+    const LONG_SIDE: Word = crate::word!("WWWWWWWWWWWWWWWWWWWW");
+    const LONG_CREATE: Word = crate::word!("WWWWWWWWWWWWWWWWWWWM");
+    let (clip, long, painted) = in_column_with(
+        100.0,
+        NARROWEST_PANE,
+        0.0,
+        LONG_SIDE,
+        LONG_CREATE,
+        LONG_FOLDER,
+    );
+    let [field, side, create, _] = long;
+    assert!(
+        side.width() + S + create.width() > clip.width(),
+        "the pressure: the two actions cannot share one row"
+    );
+    for (word, target) in [(LONG_SIDE, side), (LONG_CREATE, create)] {
+        assert!(
+            painted_whole(&painted, word.as_str()) && clip.expand(0.5).contains_rect(target),
+            "{} whole and inside the clip: {target:?} in {clip:?}",
+            word.as_str()
+        );
+    }
+    assert!(
+        side.top() >= field.bottom() && create.top() >= side.bottom() - 0.5,
+        "whole actions on rows of their own: {side:?} {create:?}"
+    );
+    let (_, short, _) = in_column_with(100.0, NARROWEST_PANE, 0.0, LONG_SIDE, LONG_CREATE, "/a");
+    assert_eq!(long, short, "the rows do not change while the DM types");
     // K4a gap 1: a form that ends with a drop-down. Create, then Cancel, on an action line
     // under the drop-down and its help; the action line keeps its y whatever is chosen,
     // whatever the preview's length and whatever reason shows; the reasons and the preview
     // are on the kept line under it.
     const SHORT: &str = "Short notes";
+    let lines = "x\n".repeat(40);
     const LONG_LABEL: &str =
         "A customized standard session template with a very long name that the control cuts";
+    // The title's words live across frames, so a test can see what a key did to them.
+    let typed = std::cell::RefCell::new(String::from("Ash on the Road"));
     let draw_form = |events: Vec<egui::Event>,
                      chosen: u8,
                      reason: Option<TestReason>,
                      preview: Option<&str>,
                      focus: bool| {
-        let mut title = String::from("Ash on the Road");
+        let mut title = typed.borrow().clone();
         let mut template = chosen;
         let mut out = InlineCreateResponse::default();
         let (nodes, painted) = frame_with(&ctx, vec2(800.0, 600.0), events, |ui| {
@@ -676,12 +720,13 @@ fn inline_create_moves_nothing_while_the_dm_types() {
                 .dropdown(
                     CreateDropdown::new(
                         "Template",
-                        Dropdown::new(
+                        Selection::new(
                             crate::field_id!("test_create_template").once(Once::Example),
                             "Session template",
+                            0,
+                            SHORT,
                         )
-                        .choice(0, SHORT)
-                        .choice(1, LONG_LABEL),
+                        .choices([(1, LONG_LABEL)]),
                         &mut template,
                     )
                     .help("What the note starts with."),
@@ -691,6 +736,7 @@ fn inline_create_moves_nothing_while_the_dm_types() {
                 .show(ui);
             let _ = Action::quiet("Below").show(ui);
         });
+        *typed.borrow_mut() = title;
         (out, nodes, painted)
     };
     let starting = |nodes: &Nodes, prefix: &str| {
@@ -732,7 +778,12 @@ fn inline_create_moves_nothing_while_the_dm_types() {
     );
     for chosen in [0, 1] {
         for reason in [None, Some(TestReason::NoFolder), Some(TestReason::Long)] {
-            for preview in [None, Some("Sessions/Session 1.md"), Some(PREVIEW)] {
+            for preview in [
+                None,
+                Some("Sessions/Session 1.md"),
+                Some(PREVIEW),
+                Some(lines.as_str()),
+            ] {
                 let (_, nodes, painted) = draw_form(Vec::new(), chosen, reason, preview, false);
                 assert_eq!(actions(&nodes), still, "{chosen} {reason:?} {preview:?}");
                 let kept = |words: &str| {
@@ -751,6 +802,26 @@ fn inline_create_moves_nothing_while_the_dm_types() {
                     );
                 } else if let Some(preview) = preview.filter(|preview| preview.len() < 40) {
                     assert!(kept(preview), "the preview is on the kept line");
+                }
+                // Review of PR 351, item 5: any preview is one rendered row on the kept line,
+                // also one with forty line breaks.
+                if reason.is_none()
+                    && let Some(preview) = preview
+                {
+                    let row = painted
+                        .iter()
+                        .find(|text| {
+                            text.text
+                                .ends_with(&preview.replace('\n', " ")[preview.len() - 6..])
+                        })
+                        .expect("the preview is painted");
+                    assert!(
+                        row.rect.height() < 1.5 * Type::Small.line()
+                            && row.rect.top() >= create.bottom()
+                            && row.rect.bottom() <= below.top() + 0.5,
+                        "one row on the kept line: {preview:?} {:?}",
+                        row.rect
+                    );
                 }
             }
         }
@@ -807,6 +878,81 @@ fn inline_create_moves_nothing_while_the_dm_types() {
         out.cancel && !out.create && focused(&nodes).is_none(),
         "Escape cancels"
     );
+    // Review of PR 351, item 1: keys during an input method's composition. Each frame's events
+    // reach the form in ONE pass (`frame_with` runs one `Context::run` with all of them): typed
+    // text and Enter in one frame both land.
+    let text = |words: &str| egui::Event::Text(words.to_owned());
+    let ime = |event: egui::ImeEvent| egui::Event::Ime(event);
+    let with = |mut events: Vec<egui::Event>, key_events: Vec<egui::Event>| {
+        events.extend(key_events);
+        events
+    };
+    let _ = draw_form(Vec::new(), 0, None, None, true);
+    let (out, _, _) = draw_form(
+        with(vec![text("!")], key(egui::Key::Enter)),
+        0,
+        None,
+        None,
+        false,
+    );
+    assert!(
+        out.create && typed.borrow().ends_with('!'),
+        "one pass: the text and Enter both land"
+    );
+    *typed.borrow_mut() = "Ash on the Road".to_owned();
+    let preedit = || {
+        vec![
+            ime(egui::ImeEvent::Enabled),
+            ime(egui::ImeEvent::Preedit("か".to_owned())),
+        ]
+    };
+    // A preedit and Enter in one pass, then a preedit before Enter or Escape alone: no Create,
+    // no Cancel, and the words stay.
+    for (events, then) in [
+        (with(preedit(), key(egui::Key::Enter)), None),
+        (with(preedit(), key(egui::Key::Escape)), None),
+        (preedit(), Some(egui::Key::Enter)),
+        (preedit(), Some(egui::Key::Escape)),
+    ] {
+        let _ = draw_form(Vec::new(), 0, None, None, true);
+        let (mut out, _, _) = draw_form(events, 0, None, None, false);
+        if let Some(then) = then {
+            out = draw_form(key(then), 0, None, None, false).0;
+        }
+        // The pressure: the key took the field's keyboard (egui keeps it only for an Enter
+        // after a preedit of an earlier frame).
+        assert!(
+            out.fields[0].lost_focus() || then == Some(egui::Key::Enter),
+            "the pressure: the key took the field’s keyboard: {then:?} {}",
+            typed.borrow()
+        );
+        assert!(
+            !out.create && !out.cancel && typed.borrow().starts_with("Ash on the Road"),
+            "no form command during composition: {then:?} {:?}",
+            typed.borrow()
+        );
+        *typed.borrow_mut() = "Ash on the Road".to_owned();
+    }
+    // The commit's own frame takes no command; after it, Enter creates.
+    let _ = draw_form(Vec::new(), 0, None, None, true);
+    let _ = draw_form(preedit(), 0, None, None, false);
+    let (out, _, _) = draw_form(
+        with(
+            vec![ime(egui::ImeEvent::Commit("か".to_owned()))],
+            key(egui::Key::Enter),
+        ),
+        0,
+        None,
+        None,
+        false,
+    );
+    assert!(
+        !out.create && typed.borrow().ends_with('か'),
+        "the commit frame"
+    );
+    let _ = draw_form(Vec::new(), 0, None, None, true);
+    let (out, _, _) = draw_form(key(egui::Key::Enter), 0, None, None, false);
+    assert!(out.create, "after the commit, Enter creates");
 }
 
 /// Whether `after` is `before` with `letter` inserted at one place: every letter of `before`
