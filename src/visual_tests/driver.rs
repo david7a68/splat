@@ -2336,6 +2336,32 @@ impl<'a> Driver<'a> {
 
     /// Press Tab until a control has focus. A person working by keyboard alone does
     /// the same. Returns false if Tab never reached it.
+    /// Shift+Tab from no focus until `name` has the focus: the reverse order, in which a pane's
+    /// footer (last in the reading order) comes first. The number of stops, or None.
+    pub fn shift_tab_to(&mut self, name: &str) -> Option<usize> {
+        let caption = format!("Keyboard: Shift+Tab to {name}");
+        self.film_caption(&caption);
+        self.clear_focus();
+        for stop in 1..=TAB_LIMIT {
+            self.harness
+                .key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::Tab);
+            self.harness.run_steps(4);
+            self.interactions += 1;
+            let focused = self
+                .harness
+                .root()
+                .children_recursive()
+                .find(|node| node.accesskit_node().is_focused())
+                .map(|node| node_name(&node));
+            if focused.as_deref() == Some(name) {
+                self.film_result(&caption);
+                return Some(stop);
+            }
+        }
+        self.clear_focus();
+        None
+    }
+
     pub fn tab_to(&mut self, name: &str) -> bool {
         let caption = format!("Keyboard: Tab to {name}");
         self.film_caption(&caption);
@@ -3299,6 +3325,25 @@ impl<'a> Driver<'a> {
     }
 
     /// Capture the current state with the pointer resting on a control.
+    /// The words on screen while the pointer rests on `target` until its tooltip shows; the
+    /// pointer then leaves. Not an act of the DM's task.
+    pub fn tip_words(&mut self, target: &str) -> String {
+        let Some(rect) = self
+            .nodes()
+            .into_iter()
+            .find(|node| node.name == target && node.in_view())
+            .map(|node| node.rect)
+        else {
+            return String::new();
+        };
+        self.harness.hover_at(rect.center());
+        self.harness.run_steps(6);
+        let words = self.painted_in(self.harness.ctx.content_rect());
+        self.harness.remove_cursor();
+        self.harness.run_steps(2);
+        words
+    }
+
     pub fn state_hovering(&mut self, name: &str, target: &str) {
         self.capture_hovering(name, target, 2);
     }
@@ -3447,7 +3492,7 @@ impl<'a> Driver<'a> {
         self.settle();
     }
 
-    fn clear_focus(&mut self) {
+    pub(super) fn clear_focus(&mut self) {
         self.harness.ctx.memory_mut(|memory| {
             if let Some(id) = memory.focused() {
                 memory.surrender_focus(id);

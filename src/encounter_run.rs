@@ -707,7 +707,9 @@ pub(crate) struct ArrivalSummary {
     pub above: bool,
 }
 /// What each group would make the fight, with the XP its members on the other side add.
-pub(crate) type ArrivalWords = BTreeMap<Uuid, (crate::difficulty::Rating, u64)>;
+/// Per group: the fight it makes (with its word: groups without one are not listed) and the
+/// XP it adds.
+pub(crate) type ArrivalWords = BTreeMap<Uuid, (crate::difficulty::Difficulty, u64)>;
 /// Each carried player's place in the roster, and HP and temporary HP from their sheet.
 type SheetValues = Vec<(usize, Option<i64>, i64)>;
 /// HP that came from the last fight, not from the sheets.
@@ -721,6 +723,41 @@ struct CarriedHp {
     /// just after it. A rest makes a new `CarriedHp`, so an older rest's use is never this one's.
     used_at: Option<usize>,
 }
+/// A run step as the owner of its footer result: this run, and the step's number in it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct StepOwner {
+    run: Uuid,
+    step: u64,
+}
+
+impl crate::design::results::Owner for StepOwner {
+    type Scope = Uuid;
+    fn scope(&self) -> &Uuid {
+        &self.run
+    }
+}
+
+/// The footer result of one step (the saved HP's use and its Undo, a recharge roll, an
+/// arrival). Its words are worked out from the run's state while it is the newest step's.
+pub(crate) struct StepResult {
+    owner: StepOwner,
+}
+
+impl crate::design::results::Kept for StepResult {
+    type Owner = StepOwner;
+    const ENDS: crate::design::results::Ends = crate::design::results::Ends {
+        // The step leaves the Undo stack: undone, dropped as the oldest, or taken out.
+        owner_changed: crate::design::results::OwnerChanged::Ends,
+        // A changed run file keeps the steps (the run chooses Save as new or Replace).
+        disk_changed: crate::design::results::DiskChanged::Stays,
+        // Its Undo is the step's Undo.
+        press: crate::design::results::Press::Undo,
+    };
+    fn owner(&self) -> StepOwner {
+        self.owner.clone()
+    }
+}
+
 pub(crate) struct Run {
     pub name: String,
     id: Uuid,
@@ -769,10 +806,19 @@ pub(crate) struct Run {
     /// a loot table, as `describe` made them. Undo shortens them from these parts, and never
     /// reads them back out of the label (a row named `2` is not the `2` of `DC 12`).
     history_targets: Vec<Option<String>>,
-    /// Beside each step: when it was done, the order a footer result of that step takes (the
-    /// saved HP's use, a recharge roll, an arrival). Not saved: a reopened run issues them in
-    /// its steps' order when it opens.
-    history_orders: Vec<crate::design::ResultOrder>,
+    /// Beside each step: its number in this run, the owner of the footer result that step
+    /// gives (the saved HP's use, a recharge roll, an arrival). Not saved: a reopened run
+    /// numbers its steps again when it opens.
+    history_steps: Vec<u64>,
+    /// The next step's number.
+    next_step: u64,
+    /// The footer results of the steps, one per step, each owned by its step of this run. Ends:
+    /// the step's Undo or its drop from the Undo stack (`owner_changed`), the run's close (the
+    /// run goes). Only the newest step's result shows.
+    step_results: crate::design::Results<StepOwner, StepResult>,
+    /// The scope of `step_results`: made when this run opens, and kept when its saved file
+    /// gets a new id (Save as a new run), so its results stay with the run on screen.
+    results_scope: Uuid,
     /// How many of the oldest steps came from the run file. Undo of an ending among them makes
     /// the fight live again by `continue_blocked`, as Continue fight does. Never saved.
     saved_steps: usize,
@@ -970,7 +1016,7 @@ const REST_STEP: &str = "full HP after long rest";
 /// The log's words for full HP after a restoring rest, wherever the run learns of it.
 const REST_LOG: &str = "Party HP is full after the long rest.";
 /// The Undo step that puts back the HP a Setup had before the rest.
-const SAVED_HP_STEP: &str = "use saved HP";
+pub(crate) const SAVED_HP_STEP: &str = "use saved HP";
 /// Why Continue fight is not offered: a fight or a rest has a later place in the order of play.
 pub(crate) const CONTINUE_LATER: &str = "A later fight or rest was played, so this fight cannot go on. Start a new run to play it again.";
 /// Why Continue fight is not offered: the Timeline has no event for this fight.
@@ -1309,7 +1355,10 @@ impl Run {
             history_labels: Vec::new(),
             history_from_sheet: Vec::new(),
             history_targets: Vec::new(),
-            history_orders: Vec::new(),
+            history_steps: Vec::new(),
+            next_step: 0,
+            step_results: crate::design::Results::new(),
+            results_scope: Uuid::new_v4(),
             saved_steps: 0,
             selected: 0,
             also: BTreeSet::new(),
@@ -1490,10 +1539,6 @@ impl Run {
     }
     /// Keep one more Undo step: the state before it, its name, and whether a sheet made it.
     /// Every step enters here, so the stack never holds more than the limit: the oldest goes.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     fn keep_step(&mut self, before: State, (label, target): Named, from_sheet: bool) {
         let extra = (self.history.len() + 1).saturating_sub(undo::LIMIT);
         self.saved_steps = self.saved_steps.saturating_sub(extra);
@@ -1502,11 +1547,15 @@ impl Run {
         self.history_from_sheet.drain(..extra);
         self.history_targets
             .drain(..extra.min(self.history_targets.len()));
-        self.history_orders
-            .drain(..extra.min(self.history_orders.len()));
+        let dropped: Vec<u64> = self
+            .history_steps
+            .drain(..extra.min(self.history_steps.len()))
+            .collect();
+        for step in dropped {
+            self.end_step_result(step);
+        }
         self.history.push(before);
-        self.history_orders
-            .push(crate::design::ResultOrder::issue());
+        self.record_step();
         self.history_labels.push(label);
         self.history_from_sheet.push(from_sheet);
         self.history_targets.push(target);
@@ -1517,12 +1566,39 @@ impl Run {
         self.keep_step(before, named, from_sheet);
         self.dm_steps += 1;
     }
-    /// When the newest Undo step was done: the order of a footer result that belongs to it.
-    pub(crate) fn newest_step_order(&self) -> Option<crate::design::ResultOrder> {
-        self.history_orders
-            .last()
-            .copied()
-            .filter(|_| self.history_orders.len() == self.history.len())
+    /// Number the newest step and keep its footer result: the store issues its order now.
+    fn record_step(&mut self) {
+        let step = self.next_step;
+        self.next_step += 1;
+        self.history_steps.push(step);
+        self.step_results.record(StepResult {
+            owner: StepOwner {
+                run: self.results_scope,
+                step,
+            },
+        });
+    }
+    /// A step left the Undo stack (undone, dropped as the oldest, or taken out by a sheet's
+    /// update): its result ends.
+    fn end_step_result(&mut self, step: u64) {
+        self.step_results.owner_changed(&StepOwner {
+            run: self.results_scope,
+            step,
+        });
+    }
+    /// The newest Undo step's footer result, the one a footer result of the newest step shows.
+    pub(crate) fn newest_step_result(
+        &self,
+    ) -> Option<crate::design::results::Shown<'_, StepResult>> {
+        let step = *self.history_steps.last()?;
+        (self.history_steps.len() == self.history.len())
+            .then(|| {
+                self.step_results.get(&StepOwner {
+                    run: self.results_scope,
+                    step,
+                })
+            })
+            .flatten()
     }
     /// The newest Undo step's name, if there is one.
     fn last_step(&self) -> Option<&str> {
@@ -1829,7 +1905,7 @@ impl Run {
                     .position(|i| *i == index)
                     .is_some_and(|at| at >= after.cursor);
             return format!(
-                "{name} moves to\u{a0}{total} when this turn ends ·\u{a0}acts {}.",
+                "{name} moves to\u{a0}{total} when this turn ends. It acts {}.",
                 if later {
                     "later this round"
                 } else {
@@ -1842,15 +1918,16 @@ impl Run {
         let when = if !state.participants[index].present {
             ""
         } else if passed {
-            " ·\u{a0}acts next round"
+            " It acts next round."
         } else if acted {
-            " ·\u{a0}acts again this round"
+            " It acts again this round."
         } else {
             ""
         };
-        // The change is done, so it says so in the past tense, as Arrivals does.
+        // The change is done, so it says so in the past tense, as Arrivals does. FJ8: in
+        // sentences, as every result is.
         let verb = if had { "moved to" } else { "joined at" };
-        format!("{name} {verb}\u{a0}{total}{when}.")
+        format!("{name} {verb}\u{a0}{total}.{when}")
     }
     /// Give the turn to the next present participant. A current row whose total changed in
     /// its turn goes to its new place first: if that is still to come in this round, it acts
@@ -2368,15 +2445,15 @@ impl Run {
                         .position(|i| *i == current)
                         .unwrap_or(next.cursor);
                 }
+                // FH6: the arrival as its `joined at` result names it. FI4: the row it passed
+                // by its own name (never its group's, which can be the arrival's too), in
+                // sentences.
                 format!(
-                    "{} moved before {target} at\u{a0}{}{}.",
+                    "{} moved before {} at\u{a0}{}.{}",
                     Self::arrival_name(&next, first, &target),
+                    next.participants[before].name,
                     display(next.participants[before].initiative),
-                    if waits {
-                        " ·\u{a0}acts next round"
-                    } else {
-                        ""
-                    }
+                    if waits { " It acts next round." } else { "" }
                 )
             }
             Command::Move(from, to) => {
@@ -2790,8 +2867,11 @@ impl Run {
             self.history_from_sheet.pop();
             self.history_targets
                 .truncate(self.history_labels.len().min(self.history_targets.len()));
-            self.history_orders
-                .truncate(self.history_labels.len().min(self.history_orders.len()));
+            let keep = self.history_labels.len().min(self.history_steps.len());
+            let undone: Vec<u64> = self.history_steps.drain(keep..).collect();
+            for step in undone {
+                self.end_step_result(step);
+            }
             // What D&D Beyond last confirmed is a fact, not a step that can be taken back.
             let confirmed: Vec<_> = self
                 .state
@@ -2877,7 +2957,13 @@ impl Run {
             Command::Loot(rolls) if rolls.len() == 1 => Some(rolls[0].roll.key.clone()),
             _ => named.into_inner(),
         }
-        .filter(|name| label.ends_with(name.as_str()) || label.starts_with(name.as_str()));
+        // Review of PR 338: a name between the act's words (`mark Ember Cultist absent`,
+        // `move Oren Thistlewick up`) is a target too, shortened in its place.
+        .filter(|name| {
+            label.ends_with(name.as_str())
+                || label.starts_with(name.as_str())
+                || label.contains(&format!(" {name} "))
+        });
         (label, target)
     }
     fn describe_with<'a>(&'a self, command: &Command, name: &dyn Fn(&usize) -> &'a str) -> String {
@@ -2893,7 +2979,15 @@ impl Run {
             Command::RollMode(i, _) => format!("roll mode on {}", name(i)),
             Command::Begin => "begin combat".into(),
             Command::Next => "next turn".into(),
-            Command::Move(..) => "tie order".into(),
+            // FJ5: the row and its direction, as Undo names every other step's act.
+            Command::Move(from, to) => {
+                let row = self.state.order.get(*from).copied().unwrap_or_default();
+                format!(
+                    "move {} {}",
+                    name(&row),
+                    if to < from { "up" } else { "down" }
+                )
+            }
             Command::MoveArrivalBefore(first, before) => {
                 let target = Self::roll_block_name(&self.state, &self.state.participants[*before]);
                 format!(
@@ -2911,8 +3005,9 @@ impl Run {
                 format!("initiative for {}", name(i))
             }
             Command::Bonus(i, _) => format!("initiative bonus on {}", name(i)),
+            // FK6: the act first, then the row.
             Command::Presence(i, present) => format!(
-                "{} {}",
+                "mark {} {}",
                 name(i),
                 if *present { "present" } else { "absent" }
             ),
@@ -2977,7 +3072,16 @@ impl Run {
                 if *value { "start" } else { "stop" },
                 name(i)
             ),
-            Command::DeathSaves(i, ..) => format!("death saves on {}", name(i)),
+            // FJ5: which save the step added, success or failure.
+            Command::DeathSaves(i, successes, failures) => {
+                let before = self.state.participants.get(*i);
+                let (had_s, had_f) = before.map_or((0, 0), |p| (p.successes, p.failures));
+                match (*successes > had_s, *failures > had_f) {
+                    (true, false) => format!("add death save success on {}", name(i)),
+                    (false, true) => format!("add death save failure on {}", name(i)),
+                    _ => format!("change death saves on {}", name(i)),
+                }
+            }
             Command::Note(i, _) => format!("note on {}", name(i)),
             Command::AddGroup(group, _) => format!("add {}", group.name),
             // Every row it adds is named: `add 2 × Wolf`, as its button said.
@@ -3741,7 +3845,7 @@ impl Run {
         let mut labels = Vec::new();
         let mut from_sheet = Vec::new();
         let mut targets = Vec::new();
-        let mut orders = Vec::new();
+        let mut steps = Vec::new();
         let mut dropped = Vec::new();
         // A multi-target step is atomic. If it also touched another participant, its
         // older steps cannot safely cross this boundary either. Say which steps were lost.
@@ -3797,13 +3901,21 @@ impl Run {
             labels.push(self.history_labels[at].clone());
             from_sheet.push(self.history_from_sheet[at]);
             targets.push(self.history_targets.get(at).cloned().flatten());
-            orders.extend(self.history_orders.get(at).copied());
+            steps.extend(self.history_steps.get(at).copied());
         }
         self.history = kept;
         self.history_labels = labels;
         self.history_from_sheet = from_sheet;
         self.history_targets = targets;
-        self.history_orders = orders;
+        for step in &self.history_steps {
+            if !steps.contains(step) {
+                self.step_results.owner_changed(&StepOwner {
+                    run: self.results_scope,
+                    step: *step,
+                });
+            }
+        }
+        self.history_steps = steps;
         self.saved_steps = saved;
         self.removed_steps = dropped.len();
         if !dropped.is_empty() {
@@ -4467,10 +4579,6 @@ impl Run {
         }
     }
     /// A saved run with its Undo steps, to go on with it.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     pub fn open(path: &Path, campaign: Uuid) -> Result<Self, String> {
         let (mut run, saved_undo) = Self::load(path, campaign)?;
         match saved_undo.map(|saved| undo::read(&saved, &run.state)) {
@@ -4481,11 +4589,9 @@ impl Run {
                     run.history_from_sheet,
                     run.history_targets,
                 ) = steps;
-                run.history_orders = run
-                    .history
-                    .iter()
-                    .map(|_| crate::design::ResultOrder::issue())
-                    .collect();
+                for _ in 0..run.history.len() {
+                    run.record_step();
+                }
                 run.saved_steps = run.history.len();
             }
             None => run.no_saved_undo = Some(UNDO_NOT_KEPT),
@@ -4569,7 +4675,10 @@ impl Run {
             history_labels: Vec::new(),
             history_from_sheet: Vec::new(),
             history_targets: Vec::new(),
-            history_orders: Vec::new(),
+            history_steps: Vec::new(),
+            next_step: 0,
+            step_results: crate::design::Results::new(),
+            results_scope: Uuid::new_v4(),
             saved_steps: 0,
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
@@ -4891,15 +5000,14 @@ pub struct DeletedRun {
 }
 
 impl DeletedRun {
-    pub const UNDO_LABEL: &str = "Undo delete run";
     /// One deletion warning on every page, including the way to keep unsent changes.
     pub fn message(&self) -> String {
         let name = &self.encounter;
         if self.unsent.is_empty() {
-            format!("Deleted the saved run of {name}.")
+            format!("Deleted the saved run of “{name}”.")
         } else {
             format!(
-                "Deleted the saved run of {name}. It held changes for {} that D&D Beyond does not have. Undo to keep them.",
+                "Deleted the saved run of “{name}”. It held changes for {} that D&D Beyond does not have. Undo to keep them.",
                 self.unsent.join(", ")
             )
         }
@@ -5135,7 +5243,9 @@ impl Run {
         self.history_labels.clear();
         self.history_from_sheet.clear();
         self.history_targets.clear();
-        self.history_orders.clear();
+        for step in std::mem::take(&mut self.history_steps) {
+            self.end_step_result(step);
+        }
         self.reopened = false;
         self.no_saved_undo = None;
         self.undo_stopped = false;
@@ -5548,6 +5658,37 @@ mod tests {
     fn creature() -> Entry {
         Entry::parse("monster.md", &splat::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_kind: creature\nsplat_name: Guard\nsplat_creature: {{type: humanoid}}\nsplat_stats:\n  max_hp: {{value: 20}}\n  armor_class: {{value: 16}}\n  initiative: {{value: 2}}\nsplat_initial:\n  hp: 17\n  temporary_hp: 3\n  conditions: [Poisoned]\n  death_saves: {{successes: 1, failures: 0}}\n", Uuid::new_v4()), "\n## Actions\nSpear attack.\n").expect("schema-2 fixture")).unwrap()
     }
+    /// Round 28 (R, step 2): a step's footer result is owned by its step of this run. A new
+    /// step's result is newer; Undo ends it and the step before shows its own result, with its
+    /// own order, again; with no step left there is none.
+    #[test]
+    fn a_steps_footer_result_belongs_to_its_step() {
+        let mut run = run();
+        run.apply(Command::Begin).ok();
+        run.apply(Command::Damage(0, 1)).unwrap();
+        let a = run.newest_step_result().map(|shown| shown.order());
+        run.apply(Command::Damage(1, 1)).unwrap();
+        let b = run.newest_step_result().map(|shown| shown.order());
+        assert!(
+            a.is_some() && b.is_some() && a != b,
+            "iter-28-R-steps: {a:?} {b:?}"
+        );
+        run.undo();
+        assert_eq!(
+            run.newest_step_result().map(|shown| shown.order()),
+            a,
+            "iter-28-R-steps: Undo of B shows A's own result"
+        );
+        while !run.history.is_empty() {
+            run.undo();
+        }
+        assert!(run.newest_step_result().is_none());
+        assert!(
+            run.step_results.is_empty(),
+            "iter-28-R-steps: every undone step's result ends"
+        );
+    }
+
     pub(super) fn run() -> Run {
         let entry = creature();
         Run::new(
@@ -6813,7 +6954,22 @@ mod tests {
         let before = run.timeline_fact();
         let mut story = crate::timeline::Book::default();
         story.record_change(None, &before, None, None);
+        // Review of PR 338 (P2): the newest step's result stays with the run through Save as
+        // a new run (its file gets a new id; the results keep their scope).
+        let shown = |run: &Run| run.newest_step_result().map(|shown| shown.order());
+        let result = shown(&run);
+        assert!(result.is_some(), "iter-28-R-P2: a result before");
         run.save_as_new_run().unwrap();
+        assert_eq!(shown(&run), result, "iter-28-R-P2: the same result after");
+        // A later step's Undo still works, and gives back that result.
+        run.apply(Command::Damage(1, 1)).unwrap();
+        assert_ne!(shown(&run), result);
+        run.undo();
+        assert_eq!(
+            shown(&run),
+            result,
+            "iter-28-R-P2: Undo of a later step gives it back"
+        );
         story.record_change(Some(&before), &run.timeline_fact(), None, None);
         assert_eq!(story.events.len(), 1);
         assert_eq!(story.events[0].run, Some(run.id));
@@ -8887,6 +9043,58 @@ mod tests {
         assert!(run.back_to_sheets().is_none());
         assert!(run.use_saved_hp().is_err(), "the press cannot repeat");
 
+        // Review of PR 338 (P1): A's footer Undo is pressed in the frame in which the body adds
+        // step B. The stack's Undo would take back B, so the press is refused: B's change
+        // stays, A's HP stays, and A's line stays in its store.
+        let a_step = *run.history_steps.last().unwrap();
+        let b_max = run.state.participants[2].max_hp;
+        let shared = std::rc::Rc::new(std::cell::RefCell::new((run, false)));
+        let inner = shared.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(600.0, 400.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let (run, add_b) = &mut *inner.borrow_mut();
+                    let frame = crate::design::outcome::PaneFrame::new(ui);
+                    let messages = run.run_messages(&frame, true, ui.available_width());
+                    let paned = messages.pane(ui, crate::design::pane::Body::Content, |_| {
+                        if std::mem::take(add_b) {
+                            run.apply(Command::Health(2, Some(2), b_max)).unwrap();
+                        }
+                    });
+                    run.run_press(paned.pressed, &mut None);
+                });
+            });
+        crate::design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        shared.borrow_mut().1 = true;
+        {
+            use egui_kittest::kittest::Queryable;
+            harness.get_by_label("Undo: use saved HP").click();
+        }
+        harness.run_steps(2);
+        drop(harness);
+        let (mut run, _) = std::rc::Rc::try_unwrap(shared)
+            .ok()
+            .expect("the harness is gone")
+            .into_inner();
+        assert_eq!(
+            run.state.participants[2].hp,
+            Some(2),
+            "iter-28-R-P1: B's change stays"
+        );
+        assert_eq!(hp(&run)[..2], saved[..2], "iter-28-R-P1: A's HP stays");
+        assert!(
+            run.step_results
+                .get(&StepOwner {
+                    run: run.results_scope,
+                    step: a_step,
+                })
+                .is_some(),
+            "iter-28-R-P1: A's line stays"
+        );
+        run.undo();
+
         run.undo();
         assert_eq!(hp(&run), full, "Undo gives back the full HP");
         assert!(!run.state.log.iter().any(|line| line == SAVED_HP_USED));
@@ -10075,13 +10283,10 @@ mod tests {
         assert_arrival_wraps(run.state.log.last().unwrap());
         assert_eq!(run.state.order, vec![0, 1, 5, 6, 3, 4, 2]);
         assert_eq!(run.current(), current);
-        assert!(
-            run.state
-                .log
-                .last()
-                .unwrap()
-                .contains("moved before First wave at\u{a0}15 ·\u{a0}acts next round")
-        );
+        assert!(run.state.log.last().unwrap().contains(&format!(
+            "moved before {} at\u{a0}15. It acts next round.",
+            run.state.participants[3].name
+        )));
         run.undo();
         assert_eq!(run.state.order, order);
         assert_eq!(run.current(), current);
@@ -10680,7 +10885,8 @@ mod tests {
         }));
         // 600 XP in the fight and 200 more: Low for five at level 4 (1,250). Counting the ally
         // (1,800) would make it Above High; the run's level-3 copies would make it Moderate.
-        let (rating, adds) = run.arrival_words().unwrap()[&group.id].clone();
+        let (fight, adds) = run.arrival_words().unwrap()[&group.id].clone();
+        let rating = fight.rating.unwrap();
         assert_eq!(
             (rating.word, rating.xp, rating.budgets[0], adds),
             (crate::difficulty::Word::Low, 800, 1250, 200)
@@ -10691,7 +10897,7 @@ mod tests {
             run.arrival_words().unwrap().get(&group.id).cloned()
         };
         run.state.participants[0].present = false;
-        let (rating, _) = weigh(&mut run).unwrap();
+        let rating = weigh(&mut run).unwrap().0.rating.unwrap();
         assert_eq!(
             (rating.characters, rating.budgets, rating.xp),
             (4, [1000, 1500, 2000], 800)
