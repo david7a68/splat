@@ -387,6 +387,40 @@ fn save_cached(
         drop(active);
     }
 }
+/// A sheet note moved aside when a force read replaced the DM's edits in it: its kept result,
+/// `<name>’s sheet now matches D&D Beyond. Your edited version is kept.`
+pub struct Archived {
+    /// Where the edited version is kept now.
+    pub path: std::sync::Arc<std::path::Path>,
+    /// The character whose sheet it was.
+    pub owner: String,
+}
+
+/// The archive a result is about: one result per moved-aside note.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ArchivedSheet(PathBuf);
+
+impl crate::design::results::Owner for ArchivedSheet {
+    type Scope = ();
+    fn scope(&self) -> &() {
+        &()
+    }
+}
+
+impl crate::design::results::Kept for Archived {
+    type Owner = ArchivedSheet;
+    const ENDS: crate::design::results::Ends = crate::design::results::Ends {
+        owner_changed: crate::design::results::OwnerChanged::Stays,
+        // The note stays where it was moved; a later read does not end what it says.
+        disk_changed: crate::design::results::DiskChanged::Stays,
+        // Its close icon uses it up.
+        press: crate::design::results::Press::Use,
+    };
+    fn owner(&self) -> ArchivedSheet {
+        ArchivedSheet(self.path.to_path_buf())
+    }
+}
+
 #[derive(Default)]
 pub struct Reader {
     portrait_failures: Arc<Mutex<BTreeMap<String, Instant>>>,
@@ -401,12 +435,9 @@ pub struct Reader {
     /// Characters whose campaign notes have local edits, each with the note that stopped its save.
     /// Shared, so the page's footer holds them each frame with no copy.
     pub conflicts: BTreeMap<String, std::sync::Arc<std::path::Path>>,
-    /// Archives that hold edits a force read replaced. They stay listed until dismissed. Shared,
-    /// so the page's footer holds them each frame with no copy.
-    pub archived: Vec<std::sync::Arc<std::path::Path>>,
-    pub archived_owners: BTreeMap<PathBuf, String>,
-    /// When each archive was made: its result's place in the footer.
-    pub archived_orders: BTreeMap<PathBuf, crate::design::ResultOrder>,
+    /// Archives that hold edits a force read replaced: one kept result each, with the order of
+    /// the read that made it. Each stays until its close icon.
+    pub archived: crate::design::Results<ArchivedSheet, Archived>,
     /// Characters whose next read replaces those edits. The DM asked for this.
     force: BTreeSet<String>,
     /// The characters that the running read replaces edits for.
@@ -925,22 +956,17 @@ impl Reader {
         }
     }
     /// A saved note clears its character's warnings, so moving a note aside clears them too.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     fn campaign_copy_saved(&mut self, id: String, result: Result<Vec<PathBuf>, CampaignCopyError>) {
         let what = Stored::CampaignCopy(id.clone());
         match result {
             Ok(archived) => {
                 self.conflicts.remove(&id);
-                for path in &archived {
-                    self.archived_owners.insert(path.clone(), id.clone());
-                    self.archived_orders
-                        .insert(path.clone(), crate::design::ResultOrder::issue());
+                for path in archived {
+                    self.archived.record(Archived {
+                        path: std::sync::Arc::from(path),
+                        owner: id.clone(),
+                    });
                 }
-                self.archived
-                    .extend(archived.into_iter().map(std::sync::Arc::from));
                 self.stored(what, Ok(()));
             }
             Err(CampaignCopyError::Conflict(path)) => {
@@ -1210,7 +1236,12 @@ mod tests {
         reader.campaign_copy_saved("12".into(), Ok(vec![path.clone()]));
         reader.campaign_copy_saved("13".into(), Ok(Vec::new()));
         assert!(reader.conflicts.is_empty());
-        assert_eq!(reader.archived, [std::sync::Arc::from(path)]);
+        let archived: Vec<_> = reader
+            .archived
+            .newest_first(&())
+            .map(|shown| shown.value().path.to_path_buf())
+            .collect();
+        assert_eq!(archived, [path.clone()]);
         assert_eq!(
             reader.warnings.keys().collect::<Vec<_>>(),
             [&Stored::Roster]

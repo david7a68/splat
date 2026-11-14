@@ -3932,8 +3932,10 @@ pub mod party {
                 let placed = match (words, connect, file) {
                     (Some(words), Some(connect), Some(file)) => {
                         // One line: the bordered button is taller than the link beside it.
+                        // The footer part places its choices `S` apart (Wave 2 d: it was the
+                        // page's own `L`); the check still holds the order and the one line.
                         (connect.top()..=connect.bottom()).contains(&file.center().y)
-                            && file.left() - connect.right() >= crate::design::L - 0.5
+                            && file.left() - connect.right() >= crate::design::S - 0.5
                             && connect.left() >= words.left() - 0.5
                     }
                     _ => false,
