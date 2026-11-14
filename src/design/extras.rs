@@ -254,9 +254,9 @@ fn choice_row(ui: &mut Ui, selected: bool, label: &str, lines: Lines<'_>) -> Res
         Lines::Wrap { blocked } => blocked,
     };
     let color = if blocked.is_some() { c.muted } else { c.text };
-    let words = number_width(ui, label, &font).max(
-        blocked.map_or(0.0, |reason| number_width(ui, reason, &Type::Small.font(ui))),
-    );
+    let words = number_width(ui, label, &font).max(blocked.map_or(0.0, |reason| {
+        number_width(ui, reason, &Type::Small.font(ui))
+    }));
     let width = choice_width(ui, S + ICON_SLOT + words + S);
     let height = match lines {
         Lines::One => Density::Read.control(),
@@ -507,7 +507,11 @@ mod tests {
                 words.push(text.visual_bounding_rect());
             }
         }
-        assert!(words.len() >= 5, "the rows painted their words: {}", words.len());
+        assert!(
+            words.len() >= 5,
+            "the rows painted their words: {}",
+            words.len()
+        );
         for word in words {
             assert!(
                 word.right() <= column.right() + 0.5,

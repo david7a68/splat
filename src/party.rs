@@ -865,12 +865,12 @@ impl Party {
             let _ = crate::field_id!("party_page_filter")
                 .once(crate::design::Once::PageSearch)
                 .search(
-                ui,
-                "Filter this page",
-                &mut self.search,
-                &format!("Filter {}…", SHEET_PAGES[self.page].1.to_lowercase()),
-                width,
-            );
+                    ui,
+                    "Filter this page",
+                    &mut self.search,
+                    &format!("Filter {}…", SHEET_PAGES[self.page].1.to_lowercase()),
+                    width,
+                );
         }
         if self.page == 0
             && self

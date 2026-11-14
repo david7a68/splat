@@ -395,12 +395,12 @@ impl Run {
             let _ = crate::field_id!("run_add_creature_search")
                 .once(crate::design::Once::PageSearch)
                 .search(
-                ui,
-                FIELD,
-                &mut self.ad_hoc.query,
-                "Find or name a creature…",
-                width,
-            );
+                    ui,
+                    FIELD,
+                    &mut self.ad_hoc.query,
+                    "Find or name a creature…",
+                    width,
+                );
             let typed = self.ad_hoc.query.trim().to_lowercase();
             // Show all lasts while the words stay the same: new words start a short list again.
             if self.ad_hoc.show_all.as_deref() != Some(typed.as_str()) {

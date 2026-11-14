@@ -973,7 +973,11 @@ fn a_search_field_always_draws_its_clear() {
         "n10-focus: the field has its focus back"
     );
     assert!(h.query_by_label("Clear").is_none(), "n10-empty: no Clear");
-    assert_eq!(h.state().field, Some(field), "x2-still: emptied, the field keeps its rect");
+    assert_eq!(
+        h.state().field,
+        Some(field),
+        "x2-still: emptied, the field keeps its rect"
+    );
     h.event(egui::Event::Text("W".to_owned()));
     h.run_steps(2);
     assert_eq!(h.state().query, "W");

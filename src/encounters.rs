@@ -2241,12 +2241,12 @@ fn replace_missing_creature(
     let _ = crate::field_id!("replacement_creature_search")
         .once(crate::design::Once::PageSearch)
         .search(
-        ui,
-        "Replacement creature",
-        &mut search,
-        "Choose another creature…",
-        width,
-    );
+            ui,
+            "Replacement creature",
+            &mut search,
+            "Choose another creature…",
+            width,
+        );
     let all_key = key.with("all");
     let mut all = ui
         .ctx()

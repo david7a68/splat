@@ -2581,13 +2581,15 @@ impl CampaignContent {
                         design::group_heading(ui, "Needed by your entries", closure.required.len());
                     });
                     let width = ui.available_width();
-                    let _ = crate::field_id!("needed_entry_search").of(active.id).search(
-                        ui,
-                        "Find a needed entry",
-                        &mut self.search,
-                        "Find an entry…",
-                        width,
-                    );
+                    let _ = crate::field_id!("needed_entry_search")
+                        .of(active.id)
+                        .search(
+                            ui,
+                            "Find a needed entry",
+                            &mut self.search,
+                            "Find an entry…",
+                            width,
+                        );
                     let query = self.search.to_lowercase();
                     let mut required: Vec<_> = closure
                         .required
@@ -2711,13 +2713,15 @@ impl CampaignContent {
                     }
                 });
                 let width = ui.available_width();
-                let _ = crate::field_id!("package_entry_search").of(module.id).search(
-                    ui,
-                    "Find an entry in this package",
-                    &mut self.search,
-                    "Find an entry…",
-                    width,
-                );
+                let _ = crate::field_id!("package_entry_search")
+                    .of(module.id)
+                    .search(
+                        ui,
+                        "Find an entry in this package",
+                        &mut self.search,
+                        "Find an entry…",
+                        width,
+                    );
                 let query = self.search.to_lowercase();
                 if self
                     .entry_matches

@@ -1045,7 +1045,8 @@ fn a_menu_of_long_choices_stays_beside_its_splitter() {
                         let opener = ui.with_layout(layout, |ui| ui.button("Roll")).inner;
                         rows.borrow_mut().clear();
                         crate::design::menu_popup(ui, &opener).show(|ui| {
-                            rows.borrow_mut().push(crate::design::choice(ui, true, label).rect);
+                            rows.borrow_mut()
+                                .push(crate::design::choice(ui, true, label).rect);
                             rows.borrow_mut()
                                 .push(crate::design::choice_wrapped(ui, false, label, None).rect);
                         });
