@@ -3161,7 +3161,7 @@ pub fn tables(d: &mut Driver<'_>) {
     d.observe_both(
         "W6",
         "Table faults appear in the World list and warning count",
-        |d| d.has_containing("3 table faults") && d.visible_text("1 note needs fixing"),
+        |d| d.has_containing("4 table faults") && d.visible_text("1 note needs fixing"),
     );
     // F9: a `per` word that Splat cannot read warns on its table, and the table still rolls.
     // Round 27 FE13: the warning quotes the word the DM wrote and names the words that work.
@@ -6236,15 +6236,12 @@ pub fn package_about(d: &mut Driver<'_>) {
             "The About row warns for the manifest problem the header counts",
         );
         // Round 23 FD8: the About row's warning icon has the warning colour too.
-        // Round 25 FF4: where the marked name would be cut, the row drops `About` first.
-        let about = format!("{} About Emberfall Watch", crate::icons::WARN);
-        let short = format!("{} Emberfall Watch", crate::icons::WARN);
+        // Ruling R13 (row 151): the row keeps `About`; the name may shorten by whole words.
+        let about = format!("{} About Emberfall", crate::icons::WARN);
         let mut marks = Vec::new();
         d.each_painted_text(|text, clip| {
             let job = &text.galley.job;
-            if (job.text == about || job.text == short)
-                && clip.intersects(text.visual_bounding_rect())
-            {
+            if job.text.starts_with(&about) && clip.intersects(text.visual_bounding_rect()) {
                 marks.push(painted_marks(job));
             }
         });
@@ -6512,18 +6509,17 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
                 .starts_with(&format!("{} ", design::icons::ERROR)),
             format!("The About row still shows its mark at {size:?}"),
         );
-        // Round 25 FF4: a marked row whose name would be cut drops `About` first, so the whole
-        // name shows with its mark: no `…`.
+        // Ruling R13 (row 151; it replaces round 25 FF4's "drop `About` first"): the marked row
+        // keeps `About` and its mark; the name is whole or cut by whole words.
         let painted = d.painted_in(about);
+        let after = painted
+            .trim()
+            .strip_prefix(&format!("{} About ", design::icons::ERROR))
+            .unwrap_or_default();
         d.observe(
-            "iter-25-L-FF4",
-            [
-                format!("{} About Ashen Marches", design::icons::ERROR),
-                format!("{} Ashen Marches", design::icons::ERROR),
-            ]
-            .iter()
-            .any(|whole| painted.trim() == whole.as_str()),
-            format!("The marked About row shows the whole name at {size:?}: {painted:?}"),
+            "iter-28-L-151",
+            after == "Ashen Marches" || after == "Ashen…",
+            format!("The marked About row keeps `About` at {size:?}: {painted:?}"),
         );
         // Round 24 FC2: the mark is the error icon in the error colour.
         let mut marks = Vec::new();
@@ -6532,8 +6528,7 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
                 .galley
                 .job
                 .text
-                .starts_with(&format!("{} ", design::icons::ERROR))
-                && text.galley.job.text.contains("Ashen Marches")
+                .starts_with(&format!("{} About Ashen", design::icons::ERROR))
                 && clip.intersects(text.visual_bounding_rect())
             {
                 marks.push(painted_marks(&text.galley.job));
@@ -6555,7 +6550,7 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
         if size == DEFAULT {
             let shortened = !d.visible_text(&warned_about);
             let hover = d.painted_tooltip_shows(
-                &format!("{} Ashen Marches", design::icons::ERROR),
+                &format!("{} About Ashen", design::icons::ERROR),
                 &warned_about,
             );
             d.observe(
@@ -8450,7 +8445,7 @@ pub fn book_to_package(d: &mut Driver<'_>) {
     search_library(d, "Aboleth");
     d.click_starting("Aboleth · ");
     d.click(COPY_TO);
-    d.click("Destination");
+    d.click_starting("Destination");
     d.click(&format!("Package · {MODULE}"));
     d.replace_text_in("Copy name", "Watch Aboleth");
     d.type_into("Folder", "Creatures");

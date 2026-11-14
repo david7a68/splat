@@ -843,23 +843,16 @@ impl Party {
         }
         design::rule(ui);
         if self.page > 0 && sheet_entries(record, self.page).len() > 8 {
-            ui.horizontal(|ui| {
-                design::search_field(
+            let width = 240.0_f32.min(ui.available_width());
+            let _ = crate::field_id!("party_page_filter")
+                .once(crate::design::Once::PageSearch)
+                .search(
                     ui,
                     "Filter this page",
                     &mut self.search,
                     &format!("Filter {}…", SHEET_PAGES[self.page].1.to_lowercase()),
-                    240.0_f32.min(ui.available_width() - 70.0),
+                    width,
                 );
-                if !self.search.is_empty()
-                    && Action::quiet("Clear")
-                        .density(Density::Scan)
-                        .show(ui)
-                        .clicked()
-                {
-                    self.search.clear();
-                }
-            });
         }
         if self.page == 0
             && self

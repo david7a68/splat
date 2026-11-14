@@ -868,14 +868,9 @@ fn about_row(ui: &mut egui::Ui, label: &str, selected: bool) -> egui::Response {
     let (head, name) = label
         .split_once("About ")
         .map_or(("", label), |(icon, name)| (icon, name));
-    // Round 25 FF4: when the whole name does not fit after `About` (a fault's mark takes its
-    // room), the row drops `About` before it cuts the name: the row is the package's own row.
-    let about = format!("{head}About ");
-    let head = if design::number_width(ui, &format!("{about}{name}"), &font.font(ui)) <= room {
-        about
-    } else {
-        head.to_owned()
-    };
+    // Ruling R13 (row 151): the row keeps `About`, the word that says what it opens; the name
+    // gives way, by whole words.
+    let head = format!("{head}About ");
     let name_room = room - design::number_width(ui, &head, &font.font(ui));
     let shown = format!(
         "{head}{}",
@@ -1035,6 +1030,20 @@ impl Note {
         self.entry
             .as_ref()
             .map_or(Section::Unreadable, Section::for_entry)
+    }
+    /// The key of this note's text fields (its Markdown, the read-only copy of the DM's draft),
+    /// with its owner's id. A file has no identity but its path, so the path is the key: a counted
+    /// escape (`Ban::RowKey`), the one place that builds it.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: a text key from data (design::results::STAGED_ALLOWS)"
+    )]
+    fn field_key(&self) -> design::TextKey {
+        design::TextKey::from_data(self.path.clone())
+    }
+    /// This note's Markdown editor.
+    fn markdown_field(&self) -> design::FieldId {
+        LIBRARY_MARKDOWN.of(self.owner.id()).with(self.field_key())
     }
     /// How the row matches, as `matching::with_other` ranks it, or None if it does not. Plain
     /// words match the name (in any order, or with a typo), path or section, or a creature's
@@ -2502,7 +2511,12 @@ const LIBRARY_SEARCH: design::FieldId =
     crate::field_id!("library_search").once(design::Once::PageSearch);
 const NEW_ENTRY_FOLDER: design::FieldId =
     crate::field_id!("new_entry_folder").once(design::Once::CreateForm);
+const NEW_ENTRY_KIND: design::FieldId =
+    crate::field_id!("new_entry_kind").once(design::Once::CreateForm);
+const NEW_ENTRY_PLACE: design::FieldId =
+    crate::field_id!("new_entry_place").once(design::Once::CreateForm);
 const DISK_DRAFT: design::FieldName = crate::field_id!("library_disk_draft");
+const LIBRARY_MARKDOWN: design::FieldName = crate::field_id!("library_markdown");
 /// A row's short cause for an entry whose identity or key another file claims too.
 pub(crate) const SAME_ENTRY: &str = "Same entry in two files";
 /// A row's short cause for a first heading that does not say the entry's name.
@@ -2734,9 +2748,9 @@ pub(crate) fn note_text(name: &str, kind: &str, namespace: Option<&str>) -> Stri
         if kind == "campaign" {
             "## Packages\n\n## Rule choices\n\n| Rule | Choice |\n| --- | --- |\n"
         } else if kind == "effect" {
-            "## Effect\n\nDescribe what changes and when it ends.\n"
+            "Describe what changes and when it ends.\n"
         } else if kind == "rule" {
-            "## Rule\n\nDescribe when and how this rule applies.\n"
+            "Describe when and how this rule applies.\n"
         } else if kind == "rule_group" {
             "## Rules\n\nDescribe the rules this group enables.\n"
         } else {
@@ -2841,10 +2855,6 @@ fn visit_folders(root: &Path, path: &Path, folders: &mut Vec<String>) {
     }
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub(crate) fn folder_field(
     ui: &mut egui::Ui,
     id: design::FieldId,
@@ -2930,7 +2940,7 @@ pub(crate) fn folder_field(
                                 ),
                             );
                             design::named(ui, &response, &format!("Suggestions for {label}"));
-                            egui::Popup::menu(&response).show(|ui| {
+                            design::menu_popup(&*ui, &response).show(|ui| {
                                 if design::extras::choice_wrapped(
                                     ui,
                                     value.is_empty(),
@@ -4664,7 +4674,7 @@ impl Library {
                 }
                 design::locked(ui, locked, |ui| {
                     let response = design::menu_button(ui, "Packages", false);
-                    egui::Popup::menu(&response).show(|ui| {
+                    design::menu_popup(&*ui, &response).show(|ui| {
                         if Action::quiet("Reload from disk")
                             .icon(icons::REFRESH)
                             .show(ui)
@@ -4722,7 +4732,7 @@ impl Library {
                     // Round 26 FB1: the menu is as wide as its content, up to the reader
                     // measure, and ends at the count's right edge, so it stays clear of the
                     // splitter between the list and the reader.
-                    egui::Popup::menu(&response)
+                    design::menu_popup(&*ui, &response)
                         .align(egui::RectAlign::BOTTOM_END)
                         .show(|ui| {
                             let link_label = |at: usize, count: usize| {
@@ -6112,7 +6122,7 @@ impl Library {
                                 {
                                     self.copy_name_open = false;
                                 }
-                                ui.add_space(design::L - ui.spacing().item_spacing.x);
+                                design::gap(ui, design::Gap::S); // With the line's item gap (`S`): `L`.
                                 design::blocked_reason(ui, reason);
                             });
                             clicked
@@ -6252,7 +6262,7 @@ impl Library {
                             self.package_folder_changed = false;
                         }
                         if !self.name.is_empty() || self.package_folder_changed {
-                            ui.add_space(design::L - ui.spacing().item_spacing.x);
+                            design::gap(ui, design::Gap::S); // With the line's item gap (`S`): `L`.
                         }
                         match (&root, reason) {
                             (_, Some(reason)) => design::blocked_reason(ui, Some(reason)),
@@ -6424,55 +6434,36 @@ impl Library {
                     self.new_kind = "creature".into();
                 }
                 let old_kind = self.new_kind.clone();
-                let combo = design::field(ui, "Kind", None, None, |ui| {
-                    form_control(ui, |ui| {
-                        egui::ComboBox::from_id_salt("new_kind")
-                            .width(ui.available_width())
-                            .icon(design::combo_icon)
-                            .selected_text(
-                                self.new_kind
-                                    .replace('_', " ")
-                                    .chars()
-                                    .enumerate()
-                                    .map(|(i, c)| if i == 0 { c.to_ascii_uppercase() } else { c })
-                                    .collect::<String>(),
-                            )
-                            .show_ui(ui, |ui| {
-                                for kind in
-                                    ["creature", "spell", "item", "effect", "rule", "rule_group"]
-                                {
-                                    let word = kind.replace('_', " ");
-                                    let word =
-                                        format!("{}{}", word[..1].to_uppercase(), &word[1..]);
-                                    design::choice_value(
-                                        ui,
-                                        &mut self.new_kind,
-                                        kind.into(),
-                                        &word,
-                                    );
-                                }
-                            })
-                    })
+                design::field(ui, "Kind", None, None, |ui| {
+                    let word = |kind: &str| {
+                        let word = kind.replace('_', " ");
+                        format!("{}{}", word[..1].to_uppercase(), &word[1..])
+                    };
+                    let mut kinds = ["spell", "item", "effect", "rule", "rule_group"]
+                        .into_iter()
+                        .map(|kind| (kind.to_owned(), word(kind)));
+                    design::Dropdown::new(NEW_ENTRY_KIND, "Kind of entry")
+                        .choice("creature".to_owned(), word("creature"))
+                        .choices(kinds.by_ref())
+                        .width(ui.available_width())
+                        .show(ui, &mut self.new_kind);
                 });
                 if self.new_kind != old_kind {
                     self.new_folder = kind_folder(&self.new_kind).into();
                 }
-                design::named(ui, &combo.response, "Kind of entry");
-                let combo = design::field(ui, "Destination", None, None, |ui| {
-                    form_control(ui, |ui| {
-                        egui::ComboBox::from_id_salt("new_place")
-                            .icon(design::combo_icon)
+                design::field(ui, "Destination", None, None, |ui| {
+                    let mut rows = places
+                        .iter()
+                        .enumerate()
+                        .map(|(i, owner)| (i, owner.label()));
+                    if let Some((first, label)) = rows.next() {
+                        design::Dropdown::new(NEW_ENTRY_PLACE, "Destination")
+                            .choice(first, label)
+                            .choices(rows)
                             .width(ui.available_width())
-                            .truncate()
-                            .selected_text(places[place].label())
-                            .show_ui(ui, |ui| {
-                                for (i, owner) in places.iter().enumerate() {
-                                    design::choice_value(ui, &mut place, i, &owner.label());
-                                }
-                            })
-                    })
+                            .show(ui, &mut place);
+                    }
                 });
-                design::named(ui, &combo.response, "Destination");
                 // Round 26 FB6: the choice comes before the last field, so Create entry follows
                 // that field on its line; Cancel and the reason are on the line below.
                 if matches!(places[place], Owner::Package(_))
@@ -6540,7 +6531,7 @@ impl Library {
                         self.new_form = false;
                         self.new_error = None;
                     }
-                    ui.add_space(design::L - ui.spacing().item_spacing.x);
+                    design::gap(ui, design::Gap::S); // With the line's item gap (`S`): `L`.
                     if blocked.is_some() {
                         design::blocked_reason(ui, blocked);
                     } else if !self.new_name.trim().is_empty() {
@@ -7686,7 +7677,12 @@ impl Library {
                             let dependency = &index.items[at].entry;
                             (
                                 dependency.id,
-                                format!("{} is in this campaign only.", dependency.name),
+                                // Row 145 (FC6): say what the link is and why it matters.
+                                format!(
+                                    "{} links to {}, which is in this campaign only. Another \
+                                     campaign that uses {} will not find it.",
+                                    entry.name, dependency.name, package.name
+                                ),
                                 format!("Copy {} to {}", dependency.name, package.name),
                             )
                         })
@@ -8084,7 +8080,7 @@ impl Library {
                             .density(Density::Read)
                             .show(ui)
                             .clicked();
-                        ui.add_space(design::L - ui.spacing().item_spacing.x);
+                        design::gap(ui, design::Gap::S); // With the line's item gap (`S`): `L`.
                         let reload = Action::destructive("Reload and lose my draft")
                             .density(Density::Read)
                             .show(ui)
@@ -8140,8 +8136,8 @@ impl Library {
                         .density(Density::Read)
                         .show(ui)
                         .clicked();
-                    // The layout adds its own item gap after each control; together they make `L`.
-                    ui.add_space(design::L - ui.spacing().item_spacing.x);
+                    // With the line's item gap (`S`), `L` before the destructive choice.
+                    design::gap(ui, design::Gap::S);
                     let reload = Action::destructive(if change.text.is_none() {
                         "Remove entry and lose draft"
                     } else {
@@ -8182,19 +8178,16 @@ impl Library {
                         .max_height(visible_height)
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
-                            let output = egui::TextEdit::multiline(&mut self.draft)
-                                .id(egui::Id::new((
-                                    "library_markdown",
-                                    note.owner.id(),
-                                    &note.path,
-                                )))
-                                .font(egui::TextStyle::Monospace)
-                                .frame(false)
-                                .margin(egui::Vec2::ZERO)
-                                .desired_width(ui.available_width())
-                                .min_size(egui::vec2(0.0, visible_height))
-                                .interactive(editable)
-                                .show(ui);
+                            let width = ui.available_width();
+                            let output =
+                                note.markdown_field().editor(ui, &mut self.draft, |edit| {
+                                    edit.font(egui::TextStyle::Monospace)
+                                        .frame(false)
+                                        .margin(egui::Vec2::ZERO)
+                                        .desired_width(width)
+                                        .min_size(egui::vec2(0.0, visible_height))
+                                        .interactive(editable)
+                                });
                             // Each edit is a new draft: a failed Save of the old words ends.
                             if output.response.changed() {
                                 self.draft_revision += 1;
@@ -8301,10 +8294,9 @@ impl Library {
                                             );
                                             let mut draft = self.draft.as_str();
                                             // The field belongs to this note: its owner and path key it.
-                                            let field = DISK_DRAFT.of(note.owner.id());
-                                            let field = field.with(design::TextKey::from_data(
-                                                note.path.clone(),
-                                            ));
+                                            let field = DISK_DRAFT
+                                                .of(note.owner.id())
+                                                .with(note.field_key());
                                             let response =
                                                 field.multi_line(ui, &mut draft, |edit| {
                                                     edit.font(egui::TextStyle::Monospace)
@@ -8699,6 +8691,12 @@ mod tests {
 
     #[test]
     fn duplicate_checks_keep_id_key_matches_and_refresh_after_edits() {
+        // Row 115 (FH10): a new rule or effect has no heading that repeats its kind line.
+        for (kind, word) in [("rule", "Rule"), ("effect", "Effect")] {
+            let text = note_text("Watch Orders", kind, None);
+            assert!(!text.contains(&format!("## {word}\n")), "{text}");
+            assert!(text.contains("\n# Watch Orders\n\nDescribe "), "{text}");
+        }
         let base = Entry::parse("Rule.md", &note_text("Rule", "rule", None)).unwrap();
         let mut loaded = Loaded::default();
         // Same ID, same key, both, no key, and unreadable notes all occur in a
@@ -10840,6 +10838,9 @@ mod tests {
         assert!(text.find("Arcane Recovery").unwrap() < text.find("Signature Spells").unwrap());
         assert!(text.contains("Wizard Spell List"), "{text}");
         assert!(text.contains("Wizard Progression"), "{text}");
+        // Row 107 (AG3): the table's own title is its one heading.
+        assert_eq!(text.matches("Wizard Features").count(), 1, "{text}");
+        assert!(!text.contains("Class table"), "{text}");
         // Tight rows in one case, as a spell's are, and each option on its own row.
         assert!(text.contains("Primary ability\nIntelligence"), "{text}");
         assert!(text.contains("Option A\n"), "{text}");
@@ -10856,6 +10857,39 @@ mod tests {
     #[test]
     fn class_reader_is_readable_and_opens_features() {
         let loaded = load(None).unwrap();
+        // Row 144 (FG6): no built-in name ends in a colon, which reads as a cut title.
+        let colons: Vec<_> = loaded
+            .notes
+            .iter()
+            .map(Note::name)
+            .filter(|name| name.ends_with(':'))
+            .collect();
+        assert!(loaded.notes.len() > 100 && colons.is_empty(), "{colons:?}");
+        // The old names stay aliases: a saved link `[[Bard Subclass:]]` opens the renamed entry,
+        // which shows its new name, and Lookup's search finds it by the old name too.
+        let index = crate::lookup::ContentIndex::load(&[], None).unwrap();
+        for (old, new) in [
+            ("Barbarian Subclass:", "Barbarian Subclass"),
+            ("Bard Subclass:", "Bard Subclass"),
+            ("Druid Subclass:", "Druid Subclass"),
+        ] {
+            let crate::world::Go::Item(at, _) = index.resolve_link(old, None) else {
+                panic!("row-144-link: [[{old}]] does not resolve");
+            };
+            assert_eq!(index.items[at].entry.name, new, "row-144-link");
+            let found = index.search(old);
+            assert!(
+                found
+                    .first()
+                    .is_some_and(|&at| index.items[at].entry.name == new),
+                "row-144-search: {old} finds {:?}",
+                found
+                    .iter()
+                    .take(3)
+                    .map(|&at| &index.items[at].entry.name)
+                    .collect::<Vec<_>>()
+            );
+        }
         let index = loaded
             .notes
             .iter()
@@ -10919,8 +10953,14 @@ mod tests {
         assert!(rendered.contains("Starting equipment"));
         assert!(!rendered.contains("dnd2024:class_features/"));
         assert!(rendered.find("Rage").unwrap() < rendered.find("Relentless Rage").unwrap());
-        // The class table names the feature too. The link is in the list below it.
-        assert!(rendered.contains("Class table"));
+        // The class table names the feature too. The link is in the list below it. Its own
+        // title is its heading, once (row 107).
+        assert_eq!(
+            rendered.matches("Barbarian Features").count(),
+            1,
+            "{rendered}"
+        );
+        assert!(!rendered.contains("Class table"), "{rendered}");
         let link = texts
             .iter()
             .rfind(|text| text.galley.job.text == "Relentless Rage")
@@ -11909,7 +11949,7 @@ mod tests {
         let ctx = egui::Context::default();
         crate::design::theme::install(&ctx);
         let note = &library.loaded.as_ref().unwrap().notes[library.selected.unwrap()];
-        let id = egui::Id::new(("library_markdown", note.owner.id(), &note.path));
+        let id = note.markdown_field().id();
         let input = |events, time| egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(
                 egui::Pos2::ZERO,

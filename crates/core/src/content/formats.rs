@@ -550,6 +550,21 @@ fn fence_value(text: &str, marker: &str) -> Result<Option<std::ops::Range<usize>
     Ok(Some(start..stop))
 }
 
+/// The other names an entry answers to: a World note's `aliases`, or the top-level `aliases`
+/// (Obsidian's property) of any other entry, such as a built-in rule's old name after a rename.
+pub fn aliases(entry: &Entry) -> Vec<&str> {
+    entry
+        .fields
+        .get("splat_world")
+        .and_then(|world| world.get("aliases"))
+        .or_else(|| entry.fields.get("aliases"))
+        .and_then(Value::as_sequence)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect()
+}
+
 /// Resolve a readable requirement without choosing an ambiguous catalogue name.
 pub fn resolve_readable<'a>(
     raw: &str,
@@ -597,7 +612,13 @@ pub fn resolve_readable<'a>(
     }
     let found: Vec<_> = entries
         .iter()
-        .filter(|entry| entry.name.eq_ignore_ascii_case(raw))
+        // An old name kept as an alias still resolves (lead exception, round 28 row 144).
+        .filter(|entry| {
+            entry.name.eq_ignore_ascii_case(raw)
+                || aliases(entry)
+                    .iter()
+                    .any(|alias| alias.eq_ignore_ascii_case(raw))
+        })
         .collect();
     match found.as_slice() {
         [entry] => Ok(entry.id),

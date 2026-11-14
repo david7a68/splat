@@ -16,7 +16,8 @@ pub(crate) enum Ban {
     /// Package M: `Sentence::outside`, the named escape for words from outside the app. Its rows
     /// need not reach 0, but a new one is a visible change of this table.
     Words,
-    /// Package M: the helpers of `sentence!` (only the macro and `outcome.rs` use them).
+    /// Package M: the helpers of `sentence!` and `choice!` (only the macros and `outcome.rs` use
+    /// them).
     Sentence,
     /// Package M: `Footer::outcome_at`, a result with a hand-issued order (staged).
     Order,
@@ -30,7 +31,7 @@ pub(crate) enum Ban {
     /// Package K: `RowIndex::from_data` and `TextKey::from_data`, row keys a reviewer reads; the
     /// number of uses in the item.
     RowKey(u16),
-    /// Package X: raw space, raw selectable choices, `search_field`, and the headings that do not
+    /// Package X: raw space, raw selectable choices, and the headings that do not
     /// add their own space (`clippy.toml`, section "Package X"). The number is how many of those
     /// calls the item holds, counted in its tokens as `Layout` is.
     Extras(u16),
@@ -55,6 +56,8 @@ impl Ban {
                 "__literal",
                 "check_template",
                 "check_literal",
+                "check_choice",
+                "__template",
             ],
             Self::Order => &["outcome_at"],
             Self::Body => &["banner", "row_fault", ".show("],

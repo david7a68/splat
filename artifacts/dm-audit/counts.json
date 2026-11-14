@@ -47,7 +47,7 @@
       "phase": "before",
       "task": "Back to the session plan, with tonight's encounter in it",
       "transitions": 1,
-      "interactions": 4,
+      "interactions": 3,
       "path": "Encounters > Session"
     },
     {

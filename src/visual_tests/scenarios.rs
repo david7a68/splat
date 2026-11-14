@@ -1302,6 +1302,7 @@ pub mod library_browse {
         );
 
         d.click("Section");
+
         d.click(&format!("Library section: {CREATURES_SECTION}"));
         d.expect(CREATURES_COUNT);
         d.state("creature-list", Sizes::Default);
@@ -1935,7 +1936,7 @@ pub mod library_navigation {
         d.wait_for_text("Captain Varra copied to Ashen Marches and linked.");
         d.observe(
             "W1",
-            !d.visible_text("Captain Varra is in this campaign only."),
+            !d.visible_text("Ash Exposure links to Captain Varra, which is in this campaign only. Another campaign that uses Ashen Marches will not find it."),
             "Copying the dependency also reconnects the package entry",
         );
         for size in [SMALL, DEFAULT, LARGE] {
@@ -1954,7 +1955,7 @@ pub mod library_navigation {
         }
         d.state("dependency-copy-reconnected", Sizes::All);
         d.click("Undo copy");
-        d.wait_for_text("Captain Varra is in this campaign only.");
+        d.wait_for_text("Ash Exposure links to Captain Varra, which is in this campaign only. Another campaign that uses Ashen Marches will not find it.");
         // A link in a paragraph is named by its words and where it goes (iter-16 AD1).
         d.click("Wiki watch spell (opens Ashfall)");
         d.wait_for_text("Hot ash falls");
@@ -2130,7 +2131,7 @@ pub mod library_navigation {
             && !d.has_containing("copied to Ember Reach");
         if a_alone {
             d.click("Undo copy");
-            d.wait_for_text("Captain Varra is in this campaign only.");
+            d.wait_for_text("Ash Exposure links to Captain Varra, which is in this campaign only. Another campaign that uses Ashen Marches will not find it.");
         }
         let a_back = std::fs::read_to_string(&path).unwrap() == a_text && copies_in(&a_folder) == 0;
         let b_kept = std::fs::read_to_string(&b_path).unwrap() == b_linked
@@ -2158,7 +2159,7 @@ pub mod reader_tables {
         go_library(d);
         d.click("New entry");
         d.type_into("Entry name", "Spell Progression");
-        d.click("Kind of entry");
+        d.click_starting("Kind of entry");
         d.click("Rule");
         d.click("Create entry");
         assert!(
@@ -5864,6 +5865,8 @@ pub mod dialogs {
         d.click(COPY_TO);
         d.expect(COPY_TITLE);
         d.expect("Type a new folder, or choose one. A new folder is made with the file.");
+        // Rows 135 and 137 (FA9, FF6): the dialog says in plain words that nothing else goes.
+        d.expect("Copies no other entry.");
         d.state("copy-dialog", Sizes::All);
         d.goal("open the copy dialog");
 
@@ -5875,7 +5878,20 @@ pub mod dialogs {
             d.visible_text(&format!("Campaign · {CAMPAIGN}")),
             "The dialog starts on the active campaign",
         );
-        d.click("Destination");
+        d.click_starting("Destination");
+        // Row 4 (AF1, SF1): the chosen destination has the check; another row has none.
+        d.observe_both(
+            "iter-28-L-4",
+            "The chosen destination row has a check mark and another row has none",
+            |d| {
+                let check = |name: &str| {
+                    d.place_of(name)
+                        .map(|row| d.painted_in(row).contains(crate::design::icons::OK))
+                };
+                check(&format!("Campaign · {CAMPAIGN}")) == Some(true)
+                    && check(&format!("Package · {MODULE}")) == Some(false)
+            },
+        );
         d.state("copy-destination-menu", Sizes::Default);
         d.click(&format!("Campaign · {CAMPAIGN}"));
         // The copy dialog has fixed bounds; its wide layout is captured before typing.
@@ -5892,6 +5908,18 @@ pub mod dialogs {
         );
         d.click(CREATE_COPY);
         d.expect("Copied to ");
+        // Row 4, must stay true: the copy is written to the destination the drop-down showed
+        // (the campaign), and not to the package that is the first row of its list.
+        let named = |root: &str| {
+            splat::content::read_directory(&d.root.join(root))
+                .map(|(entries, _)| entries.iter().any(|e| e.name == "Watch Aboleth"))
+                .unwrap_or(false)
+        };
+        d.observe(
+            "iter-28-L-4-written",
+            named("campaigns/emberfall") && !named("modules/ashen-marches"),
+            "The copy is written to the campaign the destination drop-down shows",
+        );
         d.state("copy-complete", Sizes::Default);
         d.click("Edit the copy");
         d.expect("Markdown editor");
@@ -15367,6 +15395,64 @@ pub mod session_recording {
                 && !d.has_containing("Save a key for it"),
             "The key warning does not repeat the footer's instruction",
         );
+        // Review of PR 334: two key faults at once each stay at their own key row, and the
+        // settings file's fault is in the tab's footer. Proof steps that end where they began.
+        d.aside(|d| {
+            const SPEECH: &str = "The speech keyring refused it.";
+            const LLM: &str = "The transcript keyring refused it.";
+            const FILE: &str = "The settings file is not JSON.";
+            let anchor =
+                |d: &Driver<'_>| d.place_of("Transcript and summary API key").map(|r| r.top());
+            let start = anchor(d);
+            d.app_mut()
+                .processing
+                .simulate_faults(Some(SPEECH), Some(LLM), Some(FILE));
+            d.settle();
+            let rect = |d: &Driver<'_>, words: &str| {
+                d.nodes()
+                    .into_iter()
+                    .find(|node| node.name.contains(words))
+                    .map(|node| node.rect)
+            };
+            let speech_field = d.place_of("Speech API key");
+            let llm_heading = d.place_of("TRANSCRIPT AND SUMMARY").or_else(|| d.place_of("Transcript and summary"));
+            let llm_field = d.place_of("Transcript and summary API key");
+            let (speech, llm, file) = (rect(d, SPEECH), rect(d, LLM), rect(d, FILE));
+            let bands = d.footer_bands();
+            d.observe(
+                "iter-28-S2-two-key-faults",
+                speech_field
+                    .zip(speech)
+                    .zip(llm_heading)
+                    .is_some_and(|((field, fault), heading)| {
+                        fault.top() >= field.bottom() && fault.bottom() <= heading.top()
+                    })
+                    && llm_field
+                        .zip(llm)
+                        .is_some_and(|(field, fault)| fault.top() >= field.bottom()),
+                format!(
+                    "Speech key {speech_field:?}, its fault {speech:?}, next heading {llm_heading:?}; transcript key {llm_field:?}, its fault {llm:?}"
+                ),
+            );
+            d.observe(
+                "iter-28-S2-settings-file-fault",
+                file.is_some_and(|file| {
+                    bands.iter().any(|band| band.expand(0.5).contains_rect(file))
+                }),
+                format!("The settings file's fault {file:?} is in a footer band {bands:?}"),
+            );
+            d.app_mut().processing.simulate_faults(None, None, None);
+            d.settle();
+            // The faults made the form taller for a moment: put it back where it was.
+            for _ in 0..4 {
+                match (start, anchor(d)) {
+                    (Some(start), Some(now)) if (now - start).abs() > 0.5 => {
+                        d.scroll_points_at(pos2(600.0, 400.0), now - start);
+                    }
+                    _ => break,
+                }
+            }
+        });
         d.expect("Remove speech key (OpenAI)");
         d.state_prepared("key-for-another-service", Sizes::All, |d| {
             d.scroll_until(
@@ -16095,6 +16181,26 @@ pub mod session_recording {
             "iter-13-R4",
             "Recording heading and input stay in view",
             |d| d.visible_text("RECORDING") && d.in_view_containing("Recording input: "),
+        );
+        // Round 28 FM11: the notice is in the tab's message footer, not in the form under
+        // Input, so it pushes no field down while a recording runs.
+        let notice = d
+            .nodes()
+            .into_iter()
+            .find(|node| {
+                node.name
+                    .contains("A new input applies to the next recording")
+            })
+            .map(|node| node.rect);
+        let bands = d.footer_bands();
+        d.observe(
+            "iter-28-S2-FM11",
+            notice.is_some_and(|notice| {
+                bands
+                    .iter()
+                    .any(|band| band.expand(0.5).contains_rect(notice))
+            }),
+            format!("The new-input notice {notice:?} is in a footer band {bands:?}"),
         );
         d.state("input-during-recording", Sizes::Default);
         d.click_containing("Recording 0:");
@@ -23392,7 +23498,7 @@ pub mod package_to_table {
         d.state("new-creature-read", Sizes::All);
         d.click("New entry");
         d.type_into("Entry name", "Copper Spark");
-        d.click("Kind of entry");
+        d.click_starting("Kind of entry");
         d.click("Spell");
         d.click("Create entry");
         let spell = d.editor_text().expect("new spell table");
@@ -23512,7 +23618,7 @@ pub mod share_to_package {
         d.type_into(SEARCH_LIBRARY, "Watch Orders");
         d.click_starting("Watch Orders · ");
         d.click(COPY_TO);
-        d.click("Destination");
+        d.click_starting("Destination");
         d.click(&format!("Package · {MODULE}"));
         d.wait_for_text("Ashen Marches/Captain Varra.md");
         d.expect("Also copies Captain Varra, because Watch Orders links to it.");

@@ -135,8 +135,22 @@ pub(super) fn show_source(ui: &mut egui::Ui, source: &str, name: &str) -> bool {
         style::facts(ui, &options);
     }
     if !remainder.is_empty() {
-        design::heading(ui, design::Heading::Section("Class table"));
-        style::markdown(ui, &presentation::overview_markdown(&remainder));
+        // The table's own title (`**Wizard Features**`) is its heading. Only a table with no
+        // title gets the generic one, so one block never has two headings.
+        let (first, rest) = remainder.split_once('\n').unwrap_or((&remainder, ""));
+        let title = first
+            .trim()
+            .trim_start_matches('#')
+            .trim()
+            .trim_matches('*')
+            .trim();
+        let (title, body) = if title.is_empty() || first.trim_start().starts_with('|') {
+            ("Class table", remainder.as_str())
+        } else {
+            (title, rest)
+        };
+        design::heading(ui, design::Heading::Section(title));
+        style::markdown(ui, &presentation::overview_markdown(body));
     }
     true
 }

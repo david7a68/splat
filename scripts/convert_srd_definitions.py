@@ -367,6 +367,20 @@ def generate(lines, require_complete=True):
     outputs={};records=[];keys=set();ids=set()
     sources=list(named_sources())+list(section_sources(lines))+list(equipment_tables())+list(progression_tables())
     names = {}
+    # Round 28 FG6: a section heading that ends in a colon is not a name. Each keeps its old name
+    # as an alias, so links and requirements that name it still resolve.
+    renamed = {
+        'Barbarian Subclass:': 'Barbarian Subclass',
+        'Bard Subclass:': 'Bard Subclass',
+        'Druid Subclass:': 'Druid Subclass',
+    }
+    for entry in sources:
+        if entry['name'] in renamed:
+            old, new = entry['name'], renamed[entry['name']]
+            entry['aliases'] = [old]
+            entry['name'] = new
+            if 'body' in entry:
+                entry['body'] = entry['body'].replace('# '+old+'\n', '# '+new+'\n', 1)
     for entry in sources:
         category=entry['category']
         folder={'creature':'creatures','spell':'spells','magic_item':'items','glossary':'glossary','equipment':'equipment','class':'classes','subclass':'subclasses','species':'species'}.get(category,category+'s')
@@ -393,6 +407,7 @@ def generate(lines, require_complete=True):
         except ValueError as error:
             fields={'splat_'+kind:{}};errors.append(str(error))
         fields.update(source.get('fields',{}))
+        if source.get('aliases'):fields['aliases']=source['aliases']
         habitat=None
         if kind=='creature':
             if key not in habitats:raise ValueError('Habitat not reviewed: '+key)
