@@ -288,7 +288,11 @@ fn missing_folders(
             let nodes = d.nodes();
             let message = nodes
                 .iter()
-                .find(|node| node.name.starts_with("Session folder not found:"));
+                // Routing row 136: a sentence that names the folder, not a label.
+                .find(|node| {
+                    node.name
+                        .starts_with("Splat cannot find the session folder ")
+                });
             let action = nodes.iter().find(|node| node.name == "Choose folder");
             !d.has_containing("1 session")
                 && d.visible_text("It may have been moved or renamed.")

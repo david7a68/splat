@@ -796,8 +796,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/carry.rs", "carry_in_messages", &[Ban::Order]),
         ("src/sessions/carry.rs", "record", &[Ban::Results]),
         ("src/sessions/page.rs", "banner_notices", &[Ban::Results]),
-        ("src/sessions/page.rs", "folder_messages", &[Ban::Results]),
-        ("src/sessions/page.rs", "folder_save_row", &[Ban::Results]),
         (
             "src/sessions/page.rs",
             "markers",

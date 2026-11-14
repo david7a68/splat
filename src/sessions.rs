@@ -61,7 +61,8 @@ fn resolve(campaign: &Campaign, name: &str) -> Result<PathBuf, String> {
     })
 }
 
-/// One wording for a folder that is gone, whatever it holds (`Session`, `Run`).
+/// The wording of a run folder that is gone. The session folder says it as a typed fault
+/// (`page::FolderFault::Missing`); the run's callers still read these words (routing row 136).
 pub(crate) fn missing_folder(what: &str, folder: &Path) -> String {
     format!(
         "{what} folder not found: {}. It may have been moved or renamed.",
@@ -70,22 +71,32 @@ pub(crate) fn missing_folder(what: &str, folder: &Path) -> String {
 }
 
 pub fn folder(campaign: &Campaign) -> Result<PathBuf, String> {
+    folder_typed(campaign).map_err(String::from)
+}
+
+/// The campaign's session folder, or why it cannot be used, as a typed fault.
+pub(crate) fn folder_typed(campaign: &Campaign) -> Result<PathBuf, page::FolderFault> {
     let path = resolve(campaign, &folder_setting(campaign)?)?;
     let document = CampaignDocument::load(campaign)?;
     let entry = Entry::parse(&document.path, &document.text)?;
     if entry.fields.contains_key(FOLDER_FIELD) && !path.is_dir() {
-        return Err(missing_folder("Session", &path));
+        return Err(page::FolderFault::Missing(path));
     }
     Ok(path)
 }
 
 pub(crate) fn open_folder(campaign: &Campaign) -> Result<PathBuf, String> {
+    open_folder_typed(campaign).map_err(String::from)
+}
+
+/// `open_folder` with its fault typed: the page shows it in its footer and on its page.
+pub(crate) fn open_folder_typed(campaign: &Campaign) -> Result<PathBuf, page::FolderFault> {
     let document = CampaignDocument::load(campaign)?;
     let entry = Entry::parse(&document.path, &document.text)?;
     if !entry.fields.contains_key(FOLDER_FIELD) {
-        write_folder(campaign, &folder_setting(campaign)?)
+        write_folder(campaign, &folder_setting(campaign)?).map_err(page::FolderFault::NotSaved)
     } else {
-        folder(campaign)
+        folder_typed(campaign)
     }
 }
 
@@ -2613,8 +2624,16 @@ mod tests {
         let path = save_folder(&campaign, "Meetings").unwrap();
         fs::create_dir_all(&path).unwrap();
         fs::rename(&path, dir.path().join("Moved meetings")).unwrap();
+        // Routing row 136: the fault is typed, and its words are a sentence that names the path.
+        let fault = folder_typed(&campaign).unwrap_err();
+        assert_eq!(fault, page::FolderFault::Missing(path.clone()));
         let error = folder(&campaign).unwrap_err();
-        assert!(error.contains("Session folder not found"));
+        assert!(
+            error.starts_with("Splat cannot find the session folder ")
+                && error.contains(&path.display().to_string())
+                && error.ends_with("It may have been moved or renamed."),
+            "{error}"
+        );
         assert!(!path.exists());
     }
 
