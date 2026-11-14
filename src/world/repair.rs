@@ -366,8 +366,7 @@ impl Repair {
                             Notice::new(crate::sentence!("{} draft discarded.", name)),
                             // `Undo discard of Broken.md`: the name every discarded draft's Undo
                             // has in the app.
-                            UndoStep::of(Verb::Discard, format!("of {name}"))
-                                .pressed_as(RepairAct::Undo),
+                            UndoStep::of(Verb::Discard, name.clone()).pressed_as(RepairAct::Undo),
                         ),
                         RepairUndo::Reload { .. } => KeptOutcome::Notice(
                             Notice::new(crate::sentence!(
