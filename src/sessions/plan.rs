@@ -3136,9 +3136,8 @@ impl Sessions {
                 ),
             );
         }
-        // The fold measures the room the rows have with an empty footer: the pane's whole room,
-        // so that a result coming or going never folds or unfolds the scenes.
-        let room = ui.available_height();
+        // The fold measures the room the rows have with an empty footer: the pane's whole room
+        // (below), so that a result coming or going never folds or unfolds the scenes.
         if let Some(id) = &added {
             if let Some(event) = book.events.iter_mut().find(|event| event.id == *id) {
                 event.title = event.kind.word().to_owned();
@@ -3218,7 +3217,11 @@ impl Sessions {
         // one column (`scene_box`). The pane starts that much before the rows, so the box lies
         // whole inside its scroll column, and the rows keep their place.
         let hang = box_hang();
-        let wide = ui.available_rect_before_wrap();
+        let full = ui.available_rect_before_wrap();
+        // The file's flags, with their file line, below the pane and outside its scroll.
+        let wide = timeline::page::file_flags_below(ui, book);
+        // The fold's room: the pane's, with an empty footer.
+        let room = wide.height();
         let wide = wide.with_min_x(wide.left() - hang);
         let mut pane_ui = ui.new_child(egui::UiBuilder::new().max_rect(wide).layout(*ui.layout()));
         pane_ui.set_clip_rect(ui.clip_rect().with_min_x(wide.left()));
@@ -3544,12 +3547,11 @@ impl Sessions {
                 reveal_opened_played(ui, opened_played, next_action);
                 reveal.finish(ui);
                 self.scene_field(ui, index.as_deref(), shown, &mut scene_act);
-                timeline::page::file_flags(ui, book);
                 let drawn = ui.min_rect();
                 outer.advance_cursor_after_rect(drawn);
             }
         });
-        ui.advance_cursor_after_rect(pane_ui.min_rect());
+        ui.advance_cursor_after_rect(pane_ui.min_rect().union(full));
         let pane = Some(room);
         if let Some(press) = paned.pressed {
             match press.id {

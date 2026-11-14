@@ -131,12 +131,20 @@ pub struct Removal {
     label: String,
     /// Its session's events once it was gone. A difference is an edit of that session.
     owned: Vec<Event>,
+    /// How many session notes still linked to it when it was removed: its result says so, for
+    /// as long as the removal stands (also over a campaign switch and back).
+    mentions: usize,
 }
 
 impl Removal {
     /// Its name where it was.
     pub fn label(&self) -> &str {
         &self.label
+    }
+
+    /// How many session notes still linked to it when it was removed.
+    pub fn mentions(&self) -> usize {
+        self.mentions
     }
 }
 
@@ -1680,6 +1688,12 @@ impl Book {
 
     /// One press and one step of undo, not a dialog.
     pub fn remove(&mut self, id: &str) {
+        self.remove_linked(id, 0);
+    }
+
+    /// `remove`, of an event that `mentions` session notes still link to: the removal keeps the
+    /// count, so its result can say so for as long as it stands.
+    pub fn remove_linked(&mut self, id: &str, mentions: usize) {
         if let Some(index) = self.events.iter().position(|event| event.id == id) {
             let label = self.events[index].label(day_numbers(&self.events)[index]);
             let after = index
@@ -1696,6 +1710,7 @@ impl Book {
                 owned: self.owned_events(event.session),
                 event,
                 label,
+                mentions,
             };
             self.results.removal.record(removal);
         }

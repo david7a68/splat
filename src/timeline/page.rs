@@ -150,7 +150,6 @@ pub struct TimelinePage {
         (design::memo::Revision, design::memo::Revision),
         std::sync::Arc<ListView>,
     >,
-    removed_mentions: usize,
     filter: Filter,
     search: String,
     session: Option<Uuid>,
@@ -490,14 +489,26 @@ pub fn file_messages<'f, A: 'static>(
 }
 
 /// The file's flags and a second timeline file, each with the file's line (its path, `Edit in
-/// Obsidian` and `Show file`) under the last, at the end of a pane's content: right above its
-/// footer, so they move no row. A typed footer message has no file line yet (a gap of the
-/// message part, sent to its owner), so they stay out of the footer.
-pub fn file_flags(ui: &mut egui::Ui, book: &Book) {
+/// Obsidian` and `Show file`) under the last, at the bottom of the room a pane would take, outside
+/// its scroll: on the footer's side, so they stay in view over long content and move no row. A
+/// typed footer message has no file line yet (a gap of the message part, sent to its owner), so
+/// they are not footer messages. Returns the room left above them for the pane (all of it with
+/// no flag).
+pub fn file_flags_below(ui: &mut egui::Ui, book: &Book) -> egui::Rect {
+    let room = ui.available_rect_before_wrap();
     if book.flags.is_empty() && book.duplicate.is_none() {
-        return;
+        return room;
     }
-    design::gap(ui, design::Gap::S);
+    let mut below = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(room)
+            .layout(egui::Layout::bottom_up(egui::Align::Min)),
+    );
+    below.vertical(|ui| file_flags(ui, book));
+    room.with_max_y((below.min_rect().top() - design::S).max(room.top()))
+}
+
+fn file_flags(ui: &mut egui::Ui, book: &Book) {
     let folder = book.path.as_deref().and_then(std::path::Path::parent);
     for (at, flag) in book.flags.iter().enumerate() {
         let text = flag_words(flag);
@@ -977,11 +988,13 @@ impl TimelinePage {
         let offer = open.and_then(|id| notes.event_link_offer(book, id));
         let frame = PaneFrame::new(ui);
         let messages = self.list_messages(&frame, ui, book, notes, open, offer.as_ref());
-        let paned = messages.pane(ui, design::Body::Content, |ui| {
-            let drawn = body(self, ui, book, notes);
-            file_flags(ui, book);
-            drawn
+        let full = ui.available_rect_before_wrap();
+        let room = file_flags_below(ui, book);
+        let mut pane_ui = ui.new_child(egui::UiBuilder::new().max_rect(room).layout(*ui.layout()));
+        let paned = messages.pane(&mut pane_ui, design::Body::Content, |ui| {
+            body(self, ui, book, notes)
         });
+        ui.advance_cursor_after_rect(full);
         if let Some(press) = paned.pressed {
             match press.id {
                 ListAct::UndoLinks => {
@@ -1044,7 +1057,8 @@ impl TimelinePage {
         }
         file_messages(frame, &mut messages, book, ListAct::File);
         if let Some(shown) = book.results.removal.get(&book.file()) {
-            let mentions = self.removed_mentions;
+            // The removal keeps its own count, so a campaign switch and back keeps the warning.
+            let mentions = shown.value().mentions();
             let words = as_sentence(&timeline_removal_words(
                 book,
                 shown.value().label(),
@@ -1620,11 +1634,11 @@ impl TimelinePage {
         }
         if removed {
             self.added.owner_changed(&book.file());
-            self.removed_mentions = sessions
+            let mentions = sessions
                 .iter()
                 .filter(|session| session.mentions.contains(&id))
                 .count();
-            book.remove(&id);
+            book.remove_linked(&id, mentions);
             self.selected = None;
         }
     }
@@ -2293,6 +2307,93 @@ mod tests {
     }
 
     /// An event with no session has no "other" event of its name: the sentence is left out.
+    #[test]
+    #[test]
+    /// Review of PR 340: a removal that notes link to keeps its warning when the DM opens
+    /// another campaign's Timeline, works there, and comes back: through the page's own `show`
+    /// and the book's campaign switch. B's file is not touched by A's Undo.
+    fn a_removal_keeps_its_linked_note_warning_over_a_campaign_switch() {
+        use egui_kittest::kittest::Queryable;
+        let (a, b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let mut book = Book::default();
+        book.open(Some(a.path()));
+        let id = book.add(Kind::Event, None);
+        book.events[0].title = "Toll gate".into();
+        book.save();
+        let (campaign_a, campaign_b) = (Uuid::from_u128(1), Uuid::from_u128(2));
+        let links = vec![SessionLink {
+            id: Uuid::from_u128(9),
+            label: "Session 1".into(),
+            mentions: vec![id.clone()],
+        }];
+        type State = (
+            TimelinePage,
+            Book,
+            crate::sessions::page::Sessions,
+            Uuid,
+            Vec<SessionLink>,
+        );
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1200.0, 800.0))
+            .build_state(
+                |ctx, (page, book, notes, campaign, links): &mut State| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        page.show(ui, book, *campaign, links, None, notes);
+                    });
+                },
+                (
+                    TimelinePage::default(),
+                    book,
+                    crate::sessions::page::Sessions::default(),
+                    campaign_a,
+                    links.clone(),
+                ),
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        harness.state_mut().0.selected = Some(id.clone());
+        harness.run_steps(2);
+        harness.get_by_label("Remove this event").click();
+        harness.run_steps(3);
+        let warned = |harness: &egui_kittest::Harness<'_, State>| {
+            harness
+                .query_all_by_label_contains("1 note still links to it")
+                .next()
+                .is_some()
+        };
+        assert!(warned(&harness), "A's removal says a note links to it");
+        // Campaign B: its own Timeline, and a day added there.
+        {
+            let state = harness.state_mut();
+            state.3 = campaign_b;
+            state.4 = Vec::new();
+            state.1.open(Some(b.path()));
+            state.1.add(Kind::Day, None);
+            state.1.save();
+        }
+        harness.run_steps(3);
+        let b_bytes = std::fs::read(b.path().join(super::super::FILE)).unwrap();
+        // Back to A: the removal and its warning are still A's.
+        {
+            let state = harness.state_mut();
+            state.3 = campaign_a;
+            state.4 = links;
+            state.1.open(Some(a.path()));
+        }
+        harness.run_steps(3);
+        assert!(warned(&harness), "A's warning came back with A's removal");
+        harness.get_by_label("Undo remove").click();
+        harness.run_steps(3);
+        assert!(
+            harness.state().1.events.iter().any(|event| event.id == id),
+            "the Undo puts back A's event"
+        );
+        assert_eq!(
+            std::fs::read(b.path().join(super::super::FILE)).unwrap(),
+            b_bytes
+        );
+    }
+
     #[test]
     fn iter12_c2_removal_without_a_session_names_no_other_event() {
         let mut book = Book::default();
