@@ -13,9 +13,10 @@ const SPELL: &str = "Fireball";
 const SESSION: &str = "The Vault";
 const UNREAD: &str = "Splat could not read this run’s saved Undo steps";
 const DISMISS: &str = crate::design::outcome::DISMISS_NAME;
-const LATER: &str = "A later fight or rest was played, so this fight cannot go on. Start a new run to play it again.";
+/// R23 (iter-29 G160): the result first, then its cause.
+const LATER: &str = crate::encounter_run::CONTINUE_LATER;
 /// The same reason for a fight whose encounter is deleted: only its cause.
-const LATER_GONE: &str = "A later fight or rest was played, so this fight cannot go on.";
+const LATER_GONE: &str = "This fight cannot go on: a later fight or rest was played.";
 const NO_TIMELINE: &str =
     "Splat cannot read Timeline.md. Fix it on the Timeline page to continue this fight.";
 const DISK_CHANGED: &str =
@@ -296,9 +297,10 @@ fn dock_name(d: &Driver<'_>) -> String {
         .map_or_else(String::new, |node| d.painted_in(node.rect))
 }
 
-/// X65, X53: beside Lookup a row at 0 HP has `Death saves` first on the tile line, over the
-/// dock, so the dock's toggles keep the places they have for a row with HP, and the selected
-/// name keeps its slot: `Vault Guard` whole, not `Vault…`.
+/// X65, X53: beside Lookup a row at 0 HP keeps the dock's toggles where they are for a row
+/// with HP, and the selected name keeps its slot: `Vault Guard` whole, not `Vault…`. A row
+/// whose panel has death saves has `Death saves` first on the tile line, over the dock;
+/// Vault Guard, an enemy with no save recorded, has none (iter-29 G130).
 fn death_saves_move_nothing(d: &mut Driver<'_>) {
     let toggles = |d: &Driver<'_>| [d.place_of("Concentrating"), d.place_of("Absent")];
     for size in [SMALL, DEFAULT] {
@@ -317,9 +319,10 @@ fn death_saves_move_nothing(d: &mut Driver<'_>) {
             "X65",
             down.iter().all(Option::is_some)
                 && down == up
-                && saves
-                    .zip(amount)
-                    .is_some_and(|(saves, amount)| saves.bottom() <= amount.top())
+                // iter-29 G130 (FK5): Vault Guard is an enemy at 0 HP with no save recorded,
+                // so its panel has no death saves and the tile line offers no `Death saves`.
+                && saves.is_none()
+                && amount.is_some()
                 && name == "Vault Guard",
             format!(
                 "At {size:?}: toggles at 0 HP {down:?}, with HP {up:?}; Death saves {saves:?} \
