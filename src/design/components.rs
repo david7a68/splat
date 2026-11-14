@@ -1639,19 +1639,293 @@ pub struct AddFieldResult<T> {
     pub field: Response,
     /// A suggestion, or a choice of the control beside the field.
     pub chosen: Option<T>,
-    /// Enter, as the field let go. With nothing `chosen`, the caller adds the typed words.
+    /// Enter, as the field let go, or `Add`. With nothing `chosen`, the caller adds the typed
+    /// words.
     pub enter: bool,
+    /// Escape with no chosen suggestion, or `Cancel`: the typed words are cleared, and the
+    /// caller closes the field.
+    pub cancel: bool,
 }
 
-/// Add typed words to a list: one field with no button. Enter adds. A suggestion adds by an arrow
-/// key and Enter, or a click. Escape clears the highlight, then the words. `beside` draws a
-/// control right of the field, `beside_width` wide, and can choose a value too. `suggest` lists
-/// the suggestions for the typed words, which show only while there are words.
+/// The room an add field keeps under its action line for its one-line result (R30): the gap
+/// before a message and one message line, as tall as a control at reading density.
+fn result_room() -> f32 {
+    XS + Density::Read.control()
+}
+
+/// Typestate of an [`AddFieldForm`]: its actions are not given yet, so it cannot show.
+pub struct NoActions;
+/// Typestate of an [`AddFieldForm`]: `Add` and `Cancel` are given.
+pub struct WithActions;
+
+/// The suggestions of an add field for its typed words.
+type Suggest<'a, T> = Box<dyn FnOnce(&str) -> Vec<Suggestions<T>> + 'a>;
+
+/// What draws an add field's result in the room the form keeps for it.
+type ResultDraw<'a> = Box<dyn FnOnce(&mut Ui) + 'a>;
+
+/// A field that an action opened, which adds typed words to a list (`Add to Log`, `Scene`): an
+/// [`InlineCreate`](super::layout::InlineCreate) form of one field, with its hint in place of a
+/// caption. `Add` (bordered, key `Enter`), then quiet `Cancel` (key `Esc`), are on the form's
+/// action line under the field (`InlineCreate::actions_under`), so the field keeps the whole
+/// room, as wide as a field without actions; in a narrow column `Cancel` wraps under `Add` at the
+/// text edge. So the DM sees how to finish without knowing the keys, and the form's layout, keys
+/// and input-method guard are the one form's. Suggestions for the typed words go under the
+/// action line: an arrow key and Enter, or a click, chooses one; Escape lets go of the chosen
+/// one first (`InlineCreate::escape_closes_above`). It shows only with its actions:
+///
+/// ```
+/// use splat::layout::doc_parts::{AddField, add_field};
+/// fn f(ui: &mut eframe::egui::Ui, state: &mut AddField) {
+///     let id = splat::field_id!("doc_add_line").once(splat::layout::Once::Example);
+///     let _ = add_field::<()>(id, "Log line for Hob", "What happened?")
+///         .actions(splat::word!("Add"), splat::word!("Cancel"))
+///         .show(ui, state);
+/// }
+/// ```
+///
+/// ```compile_fail,E0599
+/// use splat::layout::doc_parts::{AddField, add_field};
+/// fn f(ui: &mut eframe::egui::Ui, state: &mut AddField) {
+///     let id = splat::field_id!("doc_add_bare").once(splat::layout::Once::Example);
+///     let _ = add_field::<()>(id, "Log line for Hob", "What happened?").show(ui, state);
+/// }
+/// ```
+#[must_use = "give its actions, then call show"]
+pub struct AddFieldForm<'a, T, A> {
+    id: super::layout::FieldId,
+    name: &'a str,
+    hint: &'a str,
+    actions: Option<(super::layout::Word, super::layout::Word)>,
+    suggest: Option<Suggest<'a, T>>,
+    /// The caller's one-line result, drawn in the room the form keeps for it.
+    result: Option<ResultDraw<'a>>,
+    state: std::marker::PhantomData<A>,
+}
+
+/// An add field, `name` its accessible name and `hint` the words inside it. See
+/// [`AddFieldForm`].
+pub fn add_field<'a, T>(
+    id: super::layout::FieldId,
+    name: &'a str,
+    hint: &'a str,
+) -> AddFieldForm<'a, T, NoActions> {
+    AddFieldForm {
+        id,
+        name,
+        hint,
+        actions: None,
+        suggest: None,
+        result: None,
+        state: std::marker::PhantomData,
+    }
+}
+
+impl<'a, T> AddFieldForm<'a, T, NoActions> {
+    /// The named action that adds (`Add`), and the one that closes the field (`Cancel`).
+    pub fn actions(
+        self,
+        add: super::layout::Word,
+        cancel: super::layout::Word,
+    ) -> AddFieldForm<'a, T, WithActions> {
+        AddFieldForm {
+            id: self.id,
+            name: self.name,
+            hint: self.hint,
+            actions: Some((add, cancel)),
+            suggest: self.suggest,
+            result: self.result,
+            state: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<'a, T, A> AddFieldForm<'a, T, A> {
+    /// The suggestions for the typed words, which show only while there are words.
+    pub fn suggest(mut self, suggest: impl FnOnce(&str) -> Vec<Suggestions<T>> + 'a) -> Self {
+        self.suggest = Some(Box::new(suggest));
+        self
+    }
+
+    /// Ruling R30: room for the caller's one-line result (`Scene added to tonight.` with its
+    /// Undo) under the action line, kept while the field is open, whether or not a result shows,
+    /// so a press on `Add` moves nothing: the result comes in room that is already in view.
+    /// `draw` draws the result, or nothing, in that room; suggestions go under it.
+    pub fn result_room(mut self, draw: impl FnOnce(&mut Ui) + 'a) -> Self {
+        self.result = Some(Box::new(draw));
+        self
+    }
+}
+
+impl<T> AddFieldForm<'_, T, WithActions> {
+    /// The named action that adds, as the form draws it.
+    fn create(&self) -> super::layout::Create<super::layout::NoReason> {
+        let (add, _) = self.actions.expect("WithActions holds its actions");
+        super::layout::Create::secondary(add).key("Enter")
+    }
+
+    /// The text field's width, margins included, when the form has `room`, as the form lays it
+    /// out: all the room, since `Add` is on the action line under it. For a caller that puts
+    /// words before the field on its line (World's stamp), so it never measures `Add` itself.
+    pub fn field_width(&self, ui: &Ui, room: f32) -> f32 {
+        super::layout::create_field_width::<super::layout::NoReason>(ui, room, None)
+    }
+
+    pub fn show(self, ui: &mut Ui, state: &mut AddField) -> AddFieldResult<T> {
+        use super::layout::{CreateField, InlineCreate, KeptLine, NoReason};
+        let create = self.create();
+        let (_, cancel) = self.actions.expect("WithActions holds its actions");
+        let focus = std::mem::take(&mut state.focus);
+        let top = ui.cursor().top();
+        // The layout room the part is given: its width and the window's size. The paint clip
+        // changes when the DM scrolls (a pane's whole-row cut), so it is not the room.
+        let room_now = (ui.available_width(), ui.ctx().content_rect().size());
+        // A chosen suggestion is a layer above the form: Escape lets go of it first, through
+        // the form's input-method guard.
+        let out = InlineCreate::<_, NoReason>::new()
+            .field(
+                CreateField::new(self.id, self.name, &mut state.words)
+                    .placeholder(self.hint)
+                    .focus(focus),
+            )
+            .create(create)
+            .kept_line(KeptLine::new().cancel(cancel, true).cancel_key("Esc"))
+            .escape_closes_above(state.highlight.is_some())
+            .actions_under()
+            .show(ui);
+        if out.closed_above {
+            state.highlight = None;
+        }
+        let field = out
+            .fields
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| ui.response());
+        let (enter, cancel) = (out.create, out.cancel);
+        if cancel {
+            state.clear();
+        }
+        // The bottom of what the form drew: its room (with the result in it), else its actions.
+        let mut bottom = ui.min_rect().bottom();
+        if let Some(draw) = self.result {
+            let width = ui.available_width();
+            let room =
+                ui.allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
+                    ui.set_min_height(result_room());
+                    draw(ui);
+                });
+            // A trailing extent to the result's bottom rounded up to a whole physical pixel: the
+            // scroll area clamps its offset to the content and places the content on physical
+            // pixels, so the least whole-pixel scroll that holds the result needs this room.
+            let ppp = ui.ctx().pixels_per_point();
+            let end = (room.response.rect.bottom() * ppp).ceil() / ppp;
+            super::extras::space(ui, (end - ui.min_rect().bottom()).max(0.0));
+            bottom = end;
+        }
+        // R30: when the field takes the keyboard (it opens, or the caller gives it back after
+        // an act), and when its view changes size while it is open (a resize is not the DM's
+        // own scrolling), the least scroll that shows the field, its actions and the result's
+        // room. Already in view, nothing moves; only the DM's own scrolling can hide them.
+        let view = self.id.named_id(self.name).with("add_field_room");
+        let resized = ui
+            .data(|data| data.get_temp::<(f32, Vec2)>(view))
+            .is_some_and(|last| last != room_now);
+        ui.data_mut(|data| data.insert_temp(view, room_now));
+        if focus || resized {
+            reveal_least(ui, top..=bottom);
+        }
+        let chosen = suggestion_rows(ui, state, &field, enter, self.suggest);
+        AddFieldResult {
+            field,
+            chosen,
+            enter,
+            cancel,
+        }
+    }
+}
+
+/// R30: the least scroll, in whole physical pixels rounded up, that puts `block` (the field's top to the
+/// bottom of its result's room) inside the view. Its bottom wins when the block is taller than
+/// the view: the result is the answer to the act, and cut feedback is the worse fault. Already
+/// in view, nothing moves. The scroll is the block's own: no spacing is added to it.
+fn reveal_least(ui: &Ui, block: std::ops::RangeInclusive<f32>) {
+    let view = ui.clip_rect();
+    let (top, bottom) = (*block.start(), *block.end());
+    let ppp = ui.ctx().pixels_per_point();
+    let whole = |points: f32| (points * ppp).ceil() / ppp;
+    let down = if bottom > view.bottom() || bottom - top > view.height() {
+        whole((bottom - view.bottom()).max(0.0))
+    } else if top < view.top() {
+        -whole(view.top() - top)
+    } else {
+        0.0
+    };
+    if down != 0.0 {
+        // A positive delta moves the content down: the view goes down by `down`.
+        ui.scroll_with_delta(vec2(0.0, -down));
+    }
+}
+
+/// The suggestions under an add field, and the arrow keys that choose one: Enter takes the
+/// chosen one, as does a click. Shared by [`AddFieldForm`] and [`add_field_keys`].
 #[allow(
     clippy::disallowed_methods,
     reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
 )]
-pub fn add_field<T>(
+fn suggestion_rows<T>(
+    ui: &mut Ui,
+    state: &mut AddField,
+    field: &Response,
+    enter: bool,
+    suggest: Option<Suggest<'_, T>>,
+) -> Option<T> {
+    if field.changed() {
+        state.highlight = None;
+    }
+    let groups = match suggest {
+        Some(suggest) if !state.words.trim().is_empty() => suggest(&state.words),
+        _ => Vec::new(),
+    };
+    let count: usize = groups.iter().map(|group| group.rows.len()).sum();
+    if field.has_focus() && count > 0 {
+        ui.input_mut(|input| {
+            if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown) {
+                state.highlight = Some(state.highlight.map_or(0, |at| (at + 1).min(count - 1)));
+            }
+            if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp) {
+                state.highlight = state.highlight.and_then(|at| at.checked_sub(1));
+            }
+        });
+    }
+    // While there are typed words, so that a click on a suggestion lands after the field
+    // lets go of the keyboard.
+    let mut chosen = None;
+    let mut place = 0;
+    for group in groups.into_iter().filter(|group| !group.rows.is_empty()) {
+        group_label(ui, group.label);
+        for (title, detail, value) in group.rows {
+            let selected = state.highlight == Some(place);
+            let clicked = two_line_row(ui, XXL + S, selected, &title, &detail).clicked();
+            if clicked || (enter && selected) {
+                chosen = Some(value);
+            }
+            place += 1;
+        }
+    }
+    chosen
+}
+
+/// An add field with keys only and no actions: Enter adds, Escape clears the highlight, then
+/// the words. Staged: Clippy refuses it outside `src/design/` (`Ban::Extras`), and each use is a
+/// row of `design::results::STAGED_ALLOWS` with its reason. Two flows keep it as the design
+/// system describes them: the loot list's own field, which stays open, and the run's `Effect`
+/// field in a row's line two. Every other add field is [`add_field`], with its actions.
+/// `beside` draws a control right of the field, `beside_width` wide, and can choose a value too.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
+pub fn add_field_keys<T>(
     ui: &mut Ui,
     state: &mut AddField,
     name: &str,
@@ -1672,51 +1946,21 @@ pub fn add_field<T>(
     if std::mem::take(&mut state.focus) {
         field.request_focus();
     }
-    if field.changed() {
-        state.highlight = None;
-    }
-    let groups = if state.words.trim().is_empty() {
-        Vec::new()
-    } else {
-        suggest(&state.words)
-    };
-    let count: usize = groups.iter().map(|group| group.rows.len()).sum();
-    if field.has_focus() && count > 0 {
-        ui.input_mut(|input| {
-            if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown) {
-                state.highlight = Some(state.highlight.map_or(0, |at| (at + 1).min(count - 1)));
-            }
-            if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp) {
-                state.highlight = state.highlight.and_then(|at| at.checked_sub(1));
-            }
-        });
-    }
     let enter = field.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
     // Escape closes the top layer first: the chosen suggestion, then the typed words.
-    if ui.input(|input| input.key_pressed(egui::Key::Escape))
+    let cancel = ui.input(|input| input.key_pressed(egui::Key::Escape))
         && (field.has_focus() || field.lost_focus())
-        && state.highlight.take().is_none()
-    {
+        && state.highlight.take().is_none();
+    if cancel {
         state.words.clear();
     }
-    // While there are typed words, so that a click on a suggestion lands after the field
-    // lets go of the keyboard.
-    let mut place = 0;
-    for group in groups.into_iter().filter(|group| !group.rows.is_empty()) {
-        group_label(ui, group.label);
-        for (title, detail, value) in group.rows {
-            let selected = state.highlight == Some(place);
-            let clicked = two_line_row(ui, XXL + S, selected, &title, &detail).clicked();
-            if clicked || (enter && selected) {
-                chosen = Some(value);
-            }
-            place += 1;
-        }
-    }
+    let suggest: Suggest<'_, T> = Box::new(suggest);
+    let suggested = suggestion_rows(ui, state, &field, enter, Some(suggest));
     AddFieldResult {
         field,
-        chosen,
+        chosen: suggested.or(chosen),
         enter,
+        cancel,
     }
 }
 
@@ -7246,6 +7490,253 @@ mod tests {
                 "SD1-wide-look: words {left}+{width}, target {target:?}"
             );
         }
+    }
+
+    /// Round 29 P-1 (G167, G168, G180, G184; iter-28 row 146): an add field shows how to finish
+    /// it, as the `InlineCreate` form places its actions: `Add` after the field on its line, or
+    /// under it in a narrow column; quiet `Cancel` on the kept line under them, at the field's
+    /// left edge. Enter and `Add` add the words; Escape and `Cancel` clear them and say so.
+    /// During an input method's composition, Enter belongs to the input method: it adds nothing
+    /// and the commit lands in the field.
+    #[test]
+    fn iter29_p1_an_opened_add_field_shows_add_and_cancel() {
+        use egui_kittest::kittest::Queryable;
+        const NAME: &str = "Log line for Hob";
+        /// The field, and what each frame gave back: (enter, cancel, the words then).
+        type Seen = (AddField, Vec<(bool, bool, String)>);
+        let harness = |width: f32| {
+            let field = AddField {
+                focus: true,
+                ..AddField::default()
+            };
+            let id = crate::field_id!("test_add_field").once(super::super::layout::Once::Example);
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(width, 240.0))
+                .build_ui_state(
+                    move |ui, (field, seen): &mut Seen| {
+                        let result = add_field::<()>(id, NAME, "What happened?")
+                            .actions(crate::word!("Add"), crate::word!("Cancel"))
+                            .suggest(|words| {
+                                let rows = if words.starts_with("Ash") {
+                                    vec![("Ashfall Keep".into(), "Location".into(), ())]
+                                } else {
+                                    Vec::new()
+                                };
+                                vec![Suggestions {
+                                    label: "World",
+                                    rows,
+                                }]
+                            })
+                            .show(ui, field);
+                        if result.enter || result.cancel {
+                            seen.push((result.enter, result.cancel, field.words.clone()));
+                        }
+                    },
+                    (field, Vec::new()),
+                );
+            super::super::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            harness
+        };
+        // A reader's measure at 1200 px, where Cancel follows Add, and a column too narrow for
+        // both on one line, where Cancel wraps under Add. Either way the field keeps the whole
+        // room, and every action is whole and at least 24 px high.
+        for (width, one_line) in [(480.0, true), (160.0, false)] {
+            let harness = harness(width);
+            let field = harness.get_by_label(NAME).rect();
+            let (add, cancel) = (
+                harness.get_by_label("Add").rect(),
+                harness.get_by_label("Cancel").rect(),
+            );
+            let room = harness.ctx.content_rect().width();
+            assert!(
+                field.width() >= room - 2.0 * XL,
+                "{width}: the field keeps the room: field {field:?} in {room}"
+            );
+            assert!(
+                add.top() >= field.bottom() - 0.5 && (add.left() - field.left()).abs() <= 0.5,
+                "{width}: Add starts the action line under the field: field {field:?}, Add {add:?}"
+            );
+            assert!(
+                add.height() >= 24.0 && cancel.height() >= 24.0 && cancel.right() <= room,
+                "{width}: whole actions: Add {add:?}, Cancel {cancel:?}"
+            );
+            if one_line {
+                assert!(
+                    (cancel.center().y - add.center().y).abs() <= 0.5
+                        && cancel.left() >= add.right(),
+                    "{width}: quiet Cancel follows Add: Add {add:?}, Cancel {cancel:?}"
+                );
+            } else {
+                // Cancel that starts a line holds its words at the text edge (`line_start`).
+                assert!(
+                    cancel.top() >= add.bottom() - 0.5
+                        && cancel.left() <= field.left() + 0.5
+                        && cancel.left() >= field.left() - LINE_START_HANG - 0.5,
+                    "{width}: Cancel wraps under Add at the text edge: Add {add:?}, \
+                     Cancel {cancel:?}"
+                );
+            }
+        }
+        let mut harness = harness(480.0);
+        let act = |harness: &mut egui_kittest::Harness<'_, Seen>, words: &str, end: &str| {
+            harness.get_by_label(NAME).focus();
+            harness.run_steps(1);
+            harness.get_by_label(NAME).type_text(words);
+            harness.run_steps(1);
+            match end {
+                "Enter" => harness.key_press(egui::Key::Enter),
+                "Escape" => harness.key_press(egui::Key::Escape),
+                action => harness.get_by_label(action).click(),
+            }
+            harness.run_steps(2);
+            let seen = std::mem::take(&mut harness.state_mut().1);
+            harness.state_mut().0.clear();
+            seen
+        };
+        let added = |words: &str| vec![(true, false, words.to_owned())];
+        let cancelled = vec![(false, true, String::new())];
+        assert_eq!(
+            act(&mut harness, "Met the ferryman", "Enter"),
+            added("Met the ferryman")
+        );
+        assert_eq!(
+            act(&mut harness, "Paid the toll", "Add"),
+            added("Paid the toll")
+        );
+        assert_eq!(act(&mut harness, "Lost the map", "Escape"), cancelled);
+        assert_eq!(act(&mut harness, "Lost the map", "Cancel"), cancelled);
+        // A chosen suggestion is the layer Escape closes first, after the form's input-method
+        // guard: during a composition Escape is the input method's, and the choice stays.
+        harness.get_by_label(NAME).focus();
+        harness.run_steps(1);
+        harness.get_by_label(NAME).type_text("Ash");
+        harness.run_steps(1);
+        harness.key_press(egui::Key::ArrowDown);
+        harness.run_steps(1);
+        assert_eq!(
+            harness.state().0.highlight,
+            Some(0),
+            "Down chooses the suggestion"
+        );
+        harness.event(egui::Event::Ime(egui::ImeEvent::Enabled));
+        harness.step();
+        harness.key_press(egui::Key::Escape);
+        harness.run_steps(2);
+        assert_eq!(
+            (harness.state().0.highlight, harness.state().1.clone()),
+            (Some(0), Vec::new()),
+            "Escape of a composition keeps the choice and cancels nothing"
+        );
+        harness.event(egui::Event::Ime(egui::ImeEvent::Disabled));
+        harness.step();
+        harness.key_press(egui::Key::Escape);
+        harness.run_steps(2);
+        assert_eq!(
+            (harness.state().0.highlight, harness.state().1.clone()),
+            (None, Vec::new()),
+            "Escape lets go of the choice first, and cancels nothing"
+        );
+        assert!(
+            harness.get_by_label(NAME).is_focused() && harness.state().0.words == "Ash",
+            "the field keeps the keyboard and its words"
+        );
+        harness.key_press(egui::Key::Escape);
+        harness.run_steps(2);
+        assert_eq!(std::mem::take(&mut harness.state_mut().1), cancelled);
+        // An input method: a preedit, then Enter in the next frame to commit it, then the
+        // commit. Nothing is added or cancelled, the field keeps the keyboard and the commit,
+        // other words than the preedit, lands.
+        harness.get_by_label(NAME).focus();
+        harness.run_steps(1);
+        harness.get_by_label(NAME).type_text("Ash");
+        harness.run_steps(1);
+        harness.event(egui::Event::Ime(egui::ImeEvent::Enabled));
+        harness.event(egui::Event::Ime(egui::ImeEvent::Preedit("か".to_owned())));
+        harness.step();
+        harness.key_press(egui::Key::Enter);
+        harness.step();
+        harness.event(egui::Event::Ime(egui::ImeEvent::Commit("火".to_owned())));
+        harness.event(egui::Event::Ime(egui::ImeEvent::Disabled));
+        harness.run_steps(2);
+        assert_eq!(
+            harness.state().1,
+            Vec::new(),
+            "Enter of a composition adds nothing"
+        );
+        assert!(
+            harness.state().0.words.ends_with('火'),
+            "the commit lands: {:?}",
+            harness.state().0.words
+        );
+        assert!(
+            harness.get_by_label(NAME).is_focused(),
+            "the field keeps the keyboard"
+        );
+
+        // R30 review: the reveal follows the part's layout room, not its paint clip. A pane's
+        // whole-row cut changes the clip as the DM scrolls; here the clip's bottom moves by 6 px
+        // on every other frame. After the field opened (and revealed itself), the DM's wheel
+        // scroll stays where the wheel put it.
+        struct Scrolled {
+            field: AddField,
+            frame: u32,
+            offset: f32,
+        }
+        let mut wheel = egui_kittest::Harness::builder()
+            .with_size(vec2(480.0, 300.0))
+            .build_ui_state(
+                |ui, state: &mut Scrolled| {
+                    state.frame += 1;
+                    let cut = state.frame.is_multiple_of(2);
+                    let field = &mut state.field;
+                    let output = super::super::layout::ScrollColumn::new("iter29_p1_wheel")
+                        .max_height(240.0)
+                        .show(ui, |ui| {
+                            let mut clip = ui.clip_rect();
+                            if cut {
+                                clip.max.y -= 6.0;
+                            }
+                            ui.set_clip_rect(clip);
+                            space(ui, 400.0);
+                            let id = crate::field_id!("test_add_field_wheel")
+                                .once(super::super::layout::Once::Example);
+                            let _ = add_field::<()>(id, "Plan a scene", "Plan a scene")
+                                .actions(crate::word!("Add"), crate::word!("Cancel"))
+                                .result_room(|_| {})
+                                .show(ui, field);
+                        });
+                    state.offset = output.state.offset.y;
+                },
+                Scrolled {
+                    field: AddField {
+                        focus: true,
+                        ..AddField::default()
+                    },
+                    frame: 0,
+                    offset: 0.0,
+                },
+            );
+        super::super::theme::install(&wheel.ctx);
+        wheel.run_steps(6);
+        let opened = wheel.state().offset;
+        assert!(
+            opened > 100.0,
+            "the open field revealed itself: offset {opened}"
+        );
+        wheel.hover_at(egui::pos2(240.0, 120.0));
+        wheel.event(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: vec2(0.0, 60.0),
+            modifiers: egui::Modifiers::NONE,
+        });
+        wheel.run_steps(10);
+        let now = wheel.state().offset;
+        assert!(
+            (now - (opened - 60.0)).abs() <= 1.0,
+            "the DM's scroll stays: offset {opened} then {now}, the wheel put it at {}",
+            opened - 60.0
+        );
     }
 }
 
