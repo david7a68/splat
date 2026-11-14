@@ -6172,8 +6172,7 @@ impl Encounters {
                             snapshot,
                             search,
                             focus_search,
-                            peek,
-                            &separated,
+                            (peek, &separated),
                             compact,
                         ),
                     }
@@ -6227,8 +6226,7 @@ impl Encounters {
                             snapshot,
                             search,
                             focus_search,
-                            peek,
-                            &separated,
+                            (peek, &separated),
                             compact,
                         ),
                     }
@@ -6279,8 +6277,8 @@ impl Encounters {
         snapshot: &Snapshot,
         search: &mut String,
         focus_search: &mut bool,
-        peek: &mut Option<Uuid>,
-        separated: &std::cell::Cell<Option<Separated>>,
+        // Lookup's creature, and where a press of a copied note's repair says what it did (FF8).
+        (peek, separated): (&mut Option<Uuid>, &std::cell::Cell<Option<Separated>>),
         compact: bool,
     ) {
         if !compact {
