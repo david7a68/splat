@@ -5738,12 +5738,6 @@ pub mod settings {
             d.row_of("Campaign name");
             d.wait_for_text("Campaign name");
             assert_eq!(d.field_text("Campaign name").as_deref(), Some("Salt Road"));
-            // G137 (FE6): the folder Splat proposes is named whole on the kept line.
-            d.observe(
-                "iter-29-C-G137",
-                d.visible_text("Will add …/Salt Road"),
-                "`Will add …/Salt Road` whole under the Folder field",
-            );
             for _ in 0..4 {
                 let nodes = d.nodes();
                 if ["Add campaign", "Cancel"].iter().all(|name| {
@@ -5767,6 +5761,16 @@ pub mod settings {
             assert!(cancel.rect.top() >= add.rect.bottom() - 1.0);
             assert!(cancel.rect.center().x < add.rect.left());
             assert!(cancel.fully_in_view() && add.fully_in_view());
+            // G137 (FE6): the folder Splat proposes is named whole on the kept line, in view.
+            let preview = "Will add …/Salt Road";
+            d.observe(
+                "iter-29-C-G137",
+                d.visible_text(preview)
+                    && controls
+                        .iter()
+                        .any(|node| node.name == preview && node.fully_in_view()),
+                "`Will add …/Salt Road` whole and in view on Cancel’s line",
+            );
         });
         d.click(CANCEL);
         d.app_mut().settings.simulate(Account::NotConnected);
@@ -10917,6 +10921,19 @@ pub mod signed_in {
         // G138 (AO2, FO7): the kept line names the folder Splat proposes, whole, at every size.
         d.state_prepared("import-remote-campaign", Sizes::All, |d| {
             let preview = format!("Will add …/{REMOTE_NAME}");
+            // The form's kept line comes into view, as the DM scrolls to Add campaign.
+            for _ in 0..6 {
+                let nodes = d.nodes();
+                if ["Cancel", preview.as_str()].iter().all(|name| {
+                    nodes
+                        .iter()
+                        .any(|node| node.name == *name && node.fully_in_view())
+                }) {
+                    break;
+                }
+                let folder = d.row_of("Folder");
+                d.scroll_at(folder.center(), 1);
+            }
             let shown = d.visible_text(&preview)
                 && d.nodes()
                     .iter()
