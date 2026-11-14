@@ -2172,8 +2172,10 @@ impl Registration {
         {
             return Ok(None);
         }
-        // The file's writer keeps a package's line, unticked, when its choice goes; the copy's
-        // identity leaves the campaign file whole, with its `Only:` line.
+        // Only the copy's own task lines (with their `Only:` lines) leave the file, by the
+        // reader's ranges, from the file's own words. The file's writer (`text_with`) is not
+        // used: it would rewrite other packages' lines (a hand-written `Only: [[spell/aid]]`
+        // becomes a key reference), and this Undo touches nothing but the copy's lines.
         let links: Vec<&str> = document
             .selections
             .iter()
@@ -2182,7 +2184,7 @@ impl Registration {
             })
             .filter_map(|selection| selection.package.link.as_deref())
             .collect();
-        let text = without_package_lines(&document.text_with(&keep)?, self.copy.module.id, &links);
+        let text = without_package_lines(&document.text, self.copy.module.id, &links);
         // The guard after the removal, before the write: the file read back must hold exactly
         // the choices that stay. A form of the list that the change would alter otherwise (an
         // item that turns into a code block, say) refuses the Undo, and nothing is written.
@@ -12269,6 +12271,10 @@ mod tests {
         // is unsaved, so no reload can run: the clause ends in the same pass as the write. Point 2 (second pass): an outside edit that names the copy by
         // its key.
         let original_path = &paths[0];
+        const SRD: Uuid = uuid::uuid!("71871979-b5d2-59a8-81c8-2081b92bb2fe");
+        const SRD_TASK: &str =
+            "- [x] System Reference Document 5.2.1 ^71871979-b5d2-59a8-81c8-2081b92bb2fe\n";
+        const SRD_ONLY: &str = "  - Only: [[spell/aid]]\n";
         // Another package's choice and indented prose, written under the copy's task.
         let b_id = Uuid::new_v4();
         let nested = format!("  - [x] Package B ^{b_id}\n  Indented prose stays.\n");
@@ -12291,6 +12297,7 @@ mod tests {
             "outside nested choice",
             "outside nested four spaces",
             "outside fence in the copy's item",
+            "outside other package's hand-written Only",
             "outside indented task",
         ] {
             // The reader does not read a task line whose id has spaces after it (a fault on
@@ -12406,6 +12413,17 @@ mod tests {
                         "fixture: the reader reads the choices ({path})"
                     );
                 }
+                "outside other package's hand-written Only" => {
+                    let text = fs::read_to_string(&campaign_file).unwrap();
+                    assert!(text.contains(SRD_TASK), "fixture: the SRD's task\n{text}");
+                    let text = text.replacen(SRD_TASK, &format!("{SRD_TASK}{SRD_ONLY}"), 1);
+                    let text = text.replacen(
+                        "## Packages\n",
+                        &format!("## Packages\n- [x] {} ^{}\n", module.name, module.id),
+                        1,
+                    );
+                    fs::write(&campaign_file, text).unwrap();
+                }
                 "outside id, trailing spaces" => {
                     choose_by_hand(crate::content_workspace::EntryRef::id(module.id));
                     let mark = format!(" ^{}\n", module.id);
@@ -12464,6 +12482,42 @@ mod tests {
             }
             if path != "encounter search with a draft" {
                 reload(&mut library, &app.campaigns);
+            }
+            if path == "outside other package's hand-written Only" {
+                // Undo takes out the copy's choice and touches no other line: the SRD's
+                // hand-written `Only:` line stays byte for byte, its choice stays, and the guard
+                // has nothing to refuse.
+                library.apply_page_press(
+                    PagePress {
+                        registration: Some(d),
+                        ..Default::default()
+                    },
+                    &mut app.campaigns,
+                );
+                assert_eq!(library.error, None, "srd-only-undo-succeeds");
+                let text = fs::read_to_string(&campaign_file).unwrap();
+                assert!(
+                    text.contains(&format!("{SRD_TASK}{SRD_ONLY}"))
+                        && !text.contains(&d.package.to_string()),
+                    "srd-only-line-byte-equal\n{text}"
+                );
+                let srd = CampaignDocument::load(&campaign)
+                    .unwrap()
+                    .selections
+                    .into_iter()
+                    .find(|s| s.package.id == Some(SRD))
+                    .map(|s| s.selection);
+                assert!(
+                    matches!(
+                        &srd,
+                        Some(crate::content_workspace::Selection::Selected { entries })
+                            if entries.iter().any(|e| e.link.as_deref() == Some("[[spell/aid]]"))
+                    ),
+                    "srd-aid-choice-stays: {srd:?}"
+                );
+                fs::write(&campaign_file, text.replacen(SRD_ONLY, "", 1)).unwrap();
+                reload(&mut library, &app.campaigns);
+                continue;
             }
             if path == "outside fence in the copy's item" {
                 // Taking the copy's line out would put B (and every later line) inside a code
