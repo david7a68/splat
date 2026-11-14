@@ -4983,10 +4983,19 @@ mod tests {
             fresh.run_steps(8);
             fresh
         };
-        let fresh = |app: App| sized(app, height as f32);
+        // The reason lines, top to bottom.
+        let reasons_of = |h: &egui_kittest::Harness<'_, App>| {
+            let mut reasons: Vec<_> = h
+                .query_all_by_role_and_label(egui::accesskit::Role::Label, LOCK.as_str())
+                .map(|node| node.rect())
+                .collect();
+            reasons.sort_by(|a, b| a.top().total_cmp(&b.top()));
+            reasons
+        };
         let same = |h: &mut egui_kittest::Harness<'static, App>,
                     other: &mut egui_kittest::Harness<'static, App>,
-                    what: &str| {
+                    what: &str,
+                    count: usize| {
             let words: Vec<_> = ["Folder saved.", "Campaign link saved."]
                 .into_iter()
                 .filter(|words| h.query_all_by_label(words).next().is_some())
@@ -5003,32 +5012,71 @@ mod tests {
                 one.run_steps(6);
             }
             assert_eq!(state(h), state(other), "{what}: locked, as a fresh footer");
+            let (mine, theirs) = (reasons_of(h), reasons_of(other));
+            assert!(
+                mine.len() == count && mine == theirs,
+                "{what}: locked, {count} reasons as a fresh footer: {mine:?} and {theirs:?}"
+            );
             for one in [&mut *h, &mut *other] {
                 one.state_mut().run_live = false;
                 one.run_steps(6);
             }
         };
-        // Wider, just enough that a reason takes one line instead of two (found on a fresh
-        // footer, locked, so this one keeps the state it gave up its room in): the reservation
-        // now wants half the room, so the footer has room for it again.
+        let with = |width: f32, live: bool| {
+            let mut app = two();
+            app.narrow = Some(width);
+            app.run_live = live;
+            app
+        };
+        // Wider, just enough that each reason takes one line instead of two: a measured change
+        // of wrapping, on fresh footers, locked, with room, so this footer keeps the state it
+        // gave its room up in.
+        let narrow = reasons_of(&sized(with(320.0, true), 800.0));
+        assert!(
+            narrow.len() == 2
+                && narrow
+                    .iter()
+                    .all(|reason| reason.height() >= 2.0 * line - 1.0),
+            "at 320 px each of the two reasons takes two lines: {narrow:?}"
+        );
         let width = (330..=900)
             .step_by(10)
             .map(|width| width as f32)
             .find(|width| {
-                let mut probe = two();
-                probe.narrow = Some(*width);
-                probe.run_live = true;
-                let probe = fresh(probe);
-                probe
-                    .query_all_by_role_and_label(egui::accesskit::Role::Label, LOCK.as_str())
-                    .all(|node| node.rect().height() < 1.5 * line)
+                let wide = reasons_of(&sized(with(*width, true), 800.0));
+                assert_eq!(wide.len(), 2, "two reasons at {width}: {wide:?}");
+                wide.iter().all(|reason| reason.height() < 1.5 * line)
             })
-            .expect("a width where the reason takes one line");
+            .expect("a width where each reason takes one line");
+        // A cap that holds the wide footer with its reservations, and not the narrow one: a
+        // little taller than the wide footer needs, found by shrinking the pane at 320 px.
+        let needs = view(&sized(with(width, false), 800.0)).height();
+        let narrow_needs = view(&sized(with(320.0, false), 800.0)).height();
+        let mut wide_cap = height;
+        while wide_cap > 200 {
+            h.set_size(egui::vec2(960.0, wide_cap as f32));
+            h.run_steps(8);
+            if view(&h).height() <= needs + 4.0 {
+                break;
+            }
+            wide_cap -= 2;
+        }
+        let cap = view(&h).height();
+        assert!(
+            cap >= needs && cap < narrow_needs,
+            "a cap {cap} that holds the wide footer ({needs}) and not the narrow one ({narrow_needs})"
+        );
         h.state_mut().narrow = Some(width);
         h.run_steps(8);
-        let mut wide = two();
-        wide.narrow = Some(width);
-        same(&mut h, &mut fresh(wide), "wider");
+        same(
+            &mut h,
+            &mut sized(with(width, false), wide_cap as f32),
+            "wider",
+            2,
+        );
+        h.state_mut().narrow = Some(320.0);
+        h.set_size(egui::vec2(960.0, height as f32));
+        h.run_steps(8);
         // Back at 320 px, in a pane whose cap is a little taller than one message with its
         // reservation (a fresh footer of that one message, with room, tells how tall): the
         // footer holding both has given its reservations' room up. Then one message goes: the
@@ -5066,6 +5114,7 @@ mod tests {
             &mut h,
             &mut sized(alone(), low as f32),
             "one message removed",
+            1,
         );
     }
 }
