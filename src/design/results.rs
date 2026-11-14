@@ -866,13 +866,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Results, Ban::Layout(1), Ban::Pane(1)],
         ),
         ("src/world/page.rs", "show", &[Ban::Results, Ban::Layout(3)]),
-        ("src/world/repair.rs", "choose", &[Ban::Results]),
-        ("src/world/repair.rs", "edit", &[Ban::Results]),
-        (
-            "src/world/repair.rs",
-            "footer",
-            &[Ban::Results, Ban::Pane(1)],
-        ),
         ("src/world.rs", "draw_footer", &[Ban::Results, Ban::Pane(1)]),
         ("src/world.rs", "entry_controls", &[Ban::Results]),
         ("src/world.rs", "stamp", &[Ban::Results]),
@@ -1015,7 +1008,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/timeline/page.rs", "new_events_line", &[Ban::Layout(1)]),
         ("src/trackers/view.rs", "amount_field", &[Ban::RowKey(3)]),
-        ("src/world/repair.rs", "editor_events", &[Ban::RowKey(1)]),
+        ("src/world/repair.rs", "source_editor", &[Ban::RowKey(1)]),
         // Package M (round 28): the escapes of `design::outcome`, and its own helpers.
         ("src/design/outcome.rs", "__literal", &[Ban::Sentence]),
         ("src/design/outcome.rs", "check_literal", &[Ban::Sentence]),
@@ -1074,6 +1067,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/timeline/checks.rs", "check_fault", &[Ban::Body]),
         ("src/timeline/checks.rs", "check_notice", &[Ban::Body]),
         ("src/trackers.rs", "act_words", &[Ban::Words]),
+        ("src/world/repair.rs", "cause", &[Ban::Words]),
         ("src/combat_sync.rs", "cause", &[Ban::Words]),
         ("src/party.rs", "cause", &[Ban::Words]),
         ("src/trackers.rs", "cause", &[Ban::Words]),
@@ -1400,7 +1394,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/world.rs", 2),
             ("src/world/edit.rs", 4),
             ("src/world/page.rs", 3),
-            ("src/world/repair.rs", 2),
         ],
     ),
     (
@@ -1413,7 +1406,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/design/gallery.rs", 2),
             ("src/encounters.rs", 3),
             ("src/world/edit.rs", 1),
-            ("src/world/repair.rs", 1),
         ],
     ),
     (

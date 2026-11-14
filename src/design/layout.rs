@@ -1093,7 +1093,7 @@ impl ScrollColumn {
         if super::pane::column_in_content(ui) {
             return self.inline(ui, add);
         }
-        let (sideways, full) = (self.sideways, self.full_width);
+        let (sideways, full, id) = (self.sideways, self.full_width, self.id);
         Self::styled(ui, |ui, width| {
             self.area().show(ui, |ui| {
                 if !sideways {
@@ -1102,6 +1102,21 @@ impl ScrollColumn {
                 if full {
                     ui.set_min_width(width);
                 }
+                super::pane::whole_rows(ui, id, add)
+            })
+        })
+    }
+
+    /// The scroll of a pane's editor region (`pane::EditorRegion`), the one scroll a `Content`
+    /// pane holds: the region refuses a scroll inside it, so it is never refused itself.
+    pub(super) fn show_in_region<R>(
+        self,
+        ui: &mut Ui,
+        add: impl FnOnce(&mut Ui) -> R,
+    ) -> ScrollAreaOutput<R> {
+        Self::styled(ui, |ui, width| {
+            self.area().show(ui, |ui| {
+                ui.set_max_width(width);
                 add(ui)
             })
         })
@@ -1119,13 +1134,13 @@ impl ScrollColumn {
             return self.inline(ui, |ui| add(ui, 0..rows));
         }
         Self::styled(ui, |ui, width| {
-            let full = self.full_width;
+            let (full, id) = (self.full_width, self.id);
             self.area().show_rows(ui, row_height, rows, |ui, range| {
                 ui.set_max_width(width);
                 if full {
                     ui.set_min_width(width);
                 }
-                add(ui, range)
+                super::pane::whole_rows(ui, id, |ui| add(ui, range))
             })
         })
     }
@@ -1143,13 +1158,13 @@ impl ScrollColumn {
             return self.inline(ui, |ui| add(ui, all));
         }
         Self::styled(ui, |ui, width| {
-            let full = self.full_width;
+            let (full, id) = (self.full_width, self.id);
             self.area().show_viewport(ui, |ui, viewport| {
                 ui.set_max_width(width);
                 if full {
                     ui.set_min_width(width);
                 }
-                add(ui, viewport)
+                super::pane::whole_rows(ui, id, |ui| add(ui, viewport))
             })
         })
     }

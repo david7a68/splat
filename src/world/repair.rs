@@ -1,12 +1,22 @@
 //! The same source editor for broken notes in Campaign and World.
-#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
+#![warn(deprecated)] // Its old message functions are gone; the parent file still allows them.
 use super::file_fault::FileFault;
+use crate::design::memo::Changed;
 use crate::{
-    design::{self, colors},
+    design::{
+        self, colors,
+        outcome::{
+            Fault, FaultMessage, KeptOutcome, Messages, Notice, PaneFrame, Sentence, Severity,
+            UndoStep, Verb,
+        },
+        pane::EditorRegion,
+        save_row::{DraftState, Primary},
+    },
     library::write_note,
     persistence::Campaign,
 };
 use eframe::egui;
+use uuid::Uuid;
 
 /// The repair editor's accessible name. It names the file, so a DM who tabs between two open
 /// repairs hears which is which. Selectors that ask for `Note text` still find it.
@@ -18,12 +28,70 @@ pub(crate) fn editor_name(path: &str) -> String {
 /// does not parse), so its path is its owner: two repairs open at once are two fields.
 const REPAIR_TEXT: design::layout::FieldName = crate::field_id!("world_repair_text");
 
-/// The source editor, with its two events apart: the DM changed the text, and focus moved into
-/// it. A caller that keeps a result for one draft ends it on a change, not on focus.
+/// The source editor's face: the note's text in monospace, as wide as its room.
+fn source_style(edit: egui::TextEdit<'_>) -> egui::TextEdit<'_> {
+    edit.font(egui::TextStyle::Monospace)
+        .desired_width(f32::INFINITY)
+}
+
+/// The source editor itself: the note's text in the editor's face, named for its file, with the
+/// error line marked. In a pane's editor region (World) or where the caller puts it (Campaign,
+/// in a scroll of its own). Its two events (changed, gained focus) and its id.
 #[allow(
     clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    reason = "staged: a path is a broken note’s only identity (design::results::STAGED_ALLOWS)"
 )]
+fn source_editor(
+    ui: &mut egui::Ui,
+    region: Option<EditorRegion<'_>>,
+    path: &str,
+    draft: &mut String,
+    error_line: Option<usize>,
+) -> ((bool, bool), egui::Id) {
+    let field = REPAIR_TEXT.of(design::TextKey::from_data(path));
+    let output = match region {
+        Some(region) => region.editor(ui, field, draft, source_style),
+        None => field.editor(ui, draft, source_style),
+    };
+    design::named(ui, &output.response, &editor_name(path));
+    let active = (output.response.changed(), output.response.gained_focus());
+    if let Some(line) = error_line {
+        let position = draft
+            .lines()
+            .take(line.saturating_sub(1))
+            .map(|line| line.chars().count() + 1)
+            .sum();
+        let row = output
+            .galley
+            .pos_from_cursor(egui::text::CCursor::new(position));
+        let y = output.galley_pos.y + row.top();
+        let painter = ui.painter().with_clip_rect(output.text_clip_rect);
+        painter.vline(
+            output.response.rect.left() + design::XS,
+            y..=y + row.height(),
+            egui::Stroke::new(design::FOCUS_WIDTH, colors().result.error),
+        );
+    }
+    (active, output.response.id)
+}
+
+/// The same source editor in its pane's editor region (World's repair pane): as tall as its
+/// text while the pane's content fits; when it does not, the region gives way and scrolls the
+/// editor, so the save row under it and the footer stay in view. Its two events: the DM changed
+/// the text, and focus moved into it.
+fn editor_in_pane(
+    ui: &mut egui::Ui,
+    region: EditorRegion<'_>,
+    path: &str,
+    draft: &mut String,
+    error_line: Option<usize>,
+) -> (bool, bool) {
+    source_editor(ui, Some(region), path, draft, error_line).0
+}
+
+/// The source editor, with its two events apart: the DM changed the text, and focus moved into
+/// it. A caller that keeps a result for one draft ends it on a change, not on focus. Campaign's
+/// repair keeps it in a scroll of its own, up to six rows high.
 pub(crate) fn editor_events(
     ui: &mut egui::Ui,
     path: &str,
@@ -31,36 +99,10 @@ pub(crate) fn editor_events(
     error_line: Option<usize>,
 ) -> (bool, bool) {
     const MAX_HEIGHT: f32 = design::XXL * 6.0 + design::L + design::S + design::XS;
-    let field = REPAIR_TEXT.of(design::TextKey::from_data(path));
     let editor = design::ScrollColumn::new(("repair", path))
         .max_height(MAX_HEIGHT)
         .fit_height()
-        .show(ui, |ui| {
-            let output = field.editor(ui, draft, |edit| {
-                edit.font(egui::TextStyle::Monospace)
-                    .desired_width(f32::INFINITY)
-            });
-            design::named(ui, &output.response, &editor_name(path));
-            let active = (output.response.changed(), output.response.gained_focus());
-            if let Some(line) = error_line {
-                let position = draft
-                    .lines()
-                    .take(line.saturating_sub(1))
-                    .map(|line| line.chars().count() + 1)
-                    .sum();
-                let row = output
-                    .galley
-                    .pos_from_cursor(egui::text::CCursor::new(position));
-                let y = output.galley_pos.y + row.top();
-                let painter = ui.painter().with_clip_rect(output.text_clip_rect);
-                painter.vline(
-                    output.response.rect.left() + design::XS,
-                    y..=y + row.height(),
-                    egui::Stroke::new(design::FOCUS_WIDTH, colors().result.error),
-                );
-            }
-            (active, output.response.id)
-        });
+        .show(ui, |ui| source_editor(ui, None, path, draft, error_line));
     let (active, id) = editor.inner;
     // The editor's own scroll area takes a scroll target set inside it, so a page that scrolls
     // around the editor never sees it. When the editor gains focus or a screen reader asks to
@@ -134,35 +176,95 @@ pub(super) enum OpenError {
     Words(String),
 }
 
-/// The reload result in the repair's message space. It is shorter than
-/// `design::reloaded_draft`'s sentence, so `Undo reload` fits on the space's first line at 960.
-const RELOADED: &str = "Reloaded from disk. Your draft is kept until you edit.";
-
-/// The result in the message space whose Undo is still live.
-#[derive(Clone, Copy)]
-enum UndoResult {
-    Discard,
-    Reload,
+/// The repair whose draft a kept result belongs to: one file of one campaign.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct RepairOwner {
+    campaign: Uuid,
+    path: String,
 }
 
-impl UndoResult {
-    /// The result's words, as its message shows them, for the space's accessible name.
-    fn words(self, name: &str) -> String {
+impl design::results::Owner for RepairOwner {
+    type Scope = Uuid;
+    fn scope(&self) -> &Uuid {
+        &self.campaign
+    }
+}
+
+/// A result of the repair's draft with a live Undo: the draft that Discard or Reload let go.
+/// One per draft: a Discard after a Reload replaces it (`Results::record`). It ends at an edit
+/// or a Save (`owner_changed`), at a newer file on disk (`disk_changed`), and at its Undo.
+enum RepairUndo {
+    Discard { owner: RepairOwner, draft: String },
+    Reload { owner: RepairOwner, draft: String },
+}
+
+impl RepairUndo {
+    fn draft(&self) -> &str {
         match self {
-            Self::Discard => format!("{name} draft discarded."),
-            Self::Reload => RELOADED.to_owned(),
+            Self::Discard { draft, .. } | Self::Reload { draft, .. } => draft,
         }
     }
 }
 
+impl design::results::Kept for RepairUndo {
+    type Owner = RepairOwner;
+    const ENDS: design::results::Ends = design::results::Ends {
+        owner_changed: design::results::OwnerChanged::Ends,
+        disk_changed: design::results::DiskChanged::Ends,
+        press: design::results::Press::Undo,
+    };
+    fn owner(&self) -> RepairOwner {
+        match self {
+            Self::Discard { owner, .. } | Self::Reload { owner, .. } => owner.clone(),
+        }
+    }
+}
+
+/// Why the repair's Save would not write, or did not: the footer's one reason. Its kind gives
+/// its tone: a draft Save's check refuses is a note that cannot be read; a write the disk refused
+/// is not saved.
+enum RepairFault {
+    /// Save's own check: a path rule, a fault in the text, an identity the campaign refuses.
+    Refused(String),
+    /// The disk refused the last Save of this draft.
+    NotSaved(String),
+}
+
+impl Fault for RepairFault {
+    fn severity(&self) -> Severity {
+        match self {
+            Self::Refused(_) => Severity::CannotRead,
+            Self::NotSaved(_) => Severity::NotSaved,
+        }
+    }
+
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "Save’s check and the disk give the parser’s and the system’s words"
+    )]
+    fn cause(&self) -> Sentence {
+        match self {
+            Self::Refused(words) => Sentence::outside(words.as_str())
+                .unwrap_or(crate::sentence!("This note cannot be read.")),
+            Self::NotSaved(words) => Sentence::outside(words.as_str())
+                .unwrap_or(crate::sentence!("The note was not saved.")),
+        }
+    }
+}
+
+/// What the DM can press in the repair's footer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RepairAct {
+    Undo,
+}
+
 pub(super) struct Repair {
     pub path: String,
+    campaign: Uuid,
     baseline: String,
     draft: String,
-    discarded: Option<String>,
-    reloaded: Option<String>,
-    /// When the Discard or the Reload that `discarded` or `reloaded` holds was done.
-    undo_order: design::ResultOrder,
+    /// The Undo of the last Discard or Reload of this draft.
+    undos: design::Results<RepairOwner, RepairUndo>,
     disk: Option<String>,
     /// Save's failure on the disk (read only, missing, a write error): the draft it tried to
     /// write and Save's reason. This draft owns it. Each end event clears it: an edit, Discard
@@ -179,14 +281,20 @@ impl Repair {
             .map_err(|error| OpenError::Unread(FileFault::read(path, &error)))?;
         Ok(Self {
             path: path.into(),
+            campaign: campaign.id,
             baseline: text.clone(),
             draft: text,
-            discarded: None,
-            reloaded: None,
-            undo_order: design::ResultOrder::default(),
+            undos: design::Results::new(),
             disk: None,
             failed: None,
         })
+    }
+
+    fn owner(&self) -> RepairOwner {
+        RepairOwner {
+            campaign: self.campaign,
+            path: self.path.clone(),
+        }
     }
 
     pub fn entry_id(&self) -> Option<uuid::Uuid> {
@@ -219,9 +327,9 @@ impl Repair {
             } else {
                 self.baseline = text.clone();
                 self.draft = text;
-                self.discarded = None;
-                // A newer file ends the reload's Undo, so Undo never hides that change.
-                self.reloaded = None;
+                // A newer file ends the Undo of Discard and of Reload, so Undo never hides that
+                // change.
+                self.undos.disk_changed(|_| false);
                 self.failed = None;
             }
         }
@@ -236,25 +344,82 @@ impl Repair {
         }
         // Save's own checks: the state word, its cause and Save's availability all come from them.
         let (problem, line) = refusal(campaign, &self.path, &self.draft);
-        // The y where the body ends: `S` above the footer, or the pane's bottom.
-        let mut bottom = ui.max_rect().bottom();
-        if self.disk.is_none() && {
-            let (pressed, end) = self.footer(ui, problem.as_deref());
-            bottom = end;
-            pressed
-        } {
-            let back = if self.discarded.is_some() {
-                self.discarded.take()
-            } else {
-                self.reloaded.take()
-            };
-            if let Some(back) = back {
-                self.draft = back;
+        // The pane's footer (round 26 FA1): a result with a live Undo (Undo discard or Undo
+        // reload), then Save's reason. The comparison of a changed file owns the pane alone.
+        let frame = PaneFrame::new(ui);
+        let mut messages = Messages::new(
+            &frame,
+            ("world_repair_footer", &self.path),
+            ui.available_width().min(design::LIST_MEASURE),
+        );
+        if self.disk.is_none() {
+            let name = self
+                .path
+                .rsplit('/')
+                .next()
+                .unwrap_or(&self.path)
+                .to_owned();
+            if let Some(shown) = self.undos.get(&self.owner()) {
+                messages.kept(shown.outcome(&frame, |undo| {
+                    match undo {
+                        RepairUndo::Discard { .. } => KeptOutcome::Notice(
+                            Notice::new(crate::sentence!("{} draft discarded.", name)),
+                            // `Undo discard of Broken.md`: the name every discarded draft's Undo
+                            // has in the app.
+                            UndoStep::of(Verb::Discard, name.clone()).pressed_as(RepairAct::Undo),
+                        ),
+                        RepairUndo::Reload { .. } => KeptOutcome::Notice(
+                            Notice::new(crate::sentence!(
+                                "Reloaded from disk. Your draft is kept until you edit."
+                            )),
+                            UndoStep::verb(Verb::Reload).pressed_as(RepairAct::Undo),
+                        ),
+                    }
+                }));
             }
-            self.failed = None;
-            // The draft changed, so Save's check runs again on the words now in the editor.
-            ui.ctx().request_repaint();
+            let fault = match (&problem, self.failure()) {
+                (Some(problem), _) => Some(RepairFault::Refused(problem.clone())),
+                (None, Some(failure)) => Some(RepairFault::NotSaved(failure.to_owned())),
+                (None, None) => None,
+            };
+            if let Some(fault) = &fault {
+                messages.outcome(FaultMessage::new(fault));
+            }
         }
+        let paned = messages.pane_editor(ui, |ui, region| {
+            self.body(ui, region, campaign, run_open, problem, line)
+        });
+        if let Some(press) = paned.pressed {
+            match press.id {
+                RepairAct::Undo => {
+                    let Some(ticket) = press.ticket else {
+                        return paned.body;
+                    };
+                    // A replaced or ended result (`Gone`) does nothing.
+                    if let Ok((undo, ())) = self.undos.undo_by(ticket, |_| Ok::<_, ()>(())) {
+                        self.draft = undo.draft().to_owned();
+                        self.failed = None;
+                        // The draft changed, so Save's check runs again on the words now in the
+                        // editor.
+                        ui.ctx().request_repaint();
+                    }
+                }
+            }
+        }
+        paned.body
+    }
+
+    /// The pane's body: the title, the file line, then the comparison of a changed file, or the
+    /// editor (in the pane's editor region) and its save row. True when Save or Overwrite saved.
+    fn body(
+        &mut self,
+        ui: &mut egui::Ui,
+        region: EditorRegion<'_>,
+        campaign: &Campaign,
+        run_open: bool,
+        problem: Option<String>,
+        line: Option<usize>,
+    ) -> bool {
         design::reader::title(
             ui,
             std::path::Path::new(&self.path)
@@ -276,17 +441,13 @@ impl Repair {
         // save row end together at `LIST_MEASURE`, so Save stays near the state and Discard.
         ui.scope(|ui| {
             ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
-            self.edit(ui, campaign, run_open, problem, line, bottom)
+            self.edit(ui, region, campaign, run_open, problem, line)
         })
         .inner
     }
 
     /// The DM's choice after the file changed on disk under a changed draft. True when an
     /// Overwrite saved. `refused`: Save's own check refuses the draft.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     fn choose(
         &mut self,
         campaign: &Campaign,
@@ -296,11 +457,14 @@ impl Repair {
     ) -> bool {
         self.baseline = disk;
         self.disk = None;
-        self.discarded = None;
         match choice {
             design::DiskConflictChoice::Reload => {
-                self.reloaded = Some(std::mem::replace(&mut self.draft, self.baseline.clone()));
-                self.undo_order = design::ResultOrder::issue();
+                let draft = std::mem::replace(&mut self.draft, self.baseline.clone());
+                // Reload replaces Discard's Undo: one Undo per draft.
+                self.undos.record(RepairUndo::Reload {
+                    owner: self.owner(),
+                    draft,
+                });
                 // Reload ends the failure even when the file holds the draft's words.
                 self.failed = None;
                 false
@@ -308,169 +472,68 @@ impl Repair {
             // An unfinished repair stays editable; only valid text can be written. The disk
             // did not fail, so the editor shows only the cause, from the same check as the
             // state word: `Not saved.` is for a disk failure.
-            design::DiskConflictChoice::Overwrite if refused => false,
+            design::DiskConflictChoice::Overwrite if refused => {
+                self.undos.owner_changed(&self.owner());
+                false
+            }
             design::DiskConflictChoice::Overwrite => self.save(campaign),
         }
     }
 
-    /// The pane's message footer (round 26 FA1): a result with a live Undo first (Undo discard
-    /// or Undo reload), then Save's reason. It sits at the bottom of the pane, as tall as what it
-    /// holds, so the editor never moves and both messages show whole. Returns whether Undo is
-    /// pressed, and the y where the body ends.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
-    fn footer(&self, ui: &mut egui::Ui, problem: Option<&str>) -> (bool, f32) {
-        let name = self.path.rsplit('/').next().unwrap_or(&self.path);
-        let undo = if self.discarded.is_some() {
-            Some(UndoResult::Discard)
-        } else if self.reloaded.is_some() {
-            Some(UndoResult::Reload)
-        } else {
-            None
-        };
-        let reason = problem.or(self.failure());
-        let result = undo.map(|undo| undo.words(name));
-        let pressed = std::cell::Cell::new(false);
-        let mut footer = design::Footer::new(
-            ("world_repair_footer", &self.path),
-            ui.available_width().min(design::LIST_MEASURE),
-        );
-        if let (Some(undo), Some(words)) = (undo, &result) {
-            let pressed = &pressed;
-            footer.result(self.undo_order, words.as_str(), true, move |ui| {
-                let undone = match undo {
-                    UndoResult::Discard => design::draft_discarded(ui, name),
-                    UndoResult::Reload => {
-                        design::undo_message(ui, design::Tone::Info, RELOADED, "Undo reload")
-                    }
-                };
-                pressed.set(undone);
-            });
-        }
-        if let Some(reason) = reason {
-            footer.reason(reason, move |ui| {
-                design::message(ui, design::Tone::Error, reason);
-            });
-        }
-        let bottom = footer.show_by_hand(ui);
-        (pressed.get(), bottom)
-    }
-
-    /// The editor and its save row.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
+    /// The editor and its save row; the footer follows the save row (round 27 FE2). A long note
+    /// keeps Save in view: the editor's region gives way and scrolls (round 28, P2).
     fn edit(
         &mut self,
         ui: &mut egui::Ui,
+        region: EditorRegion<'_>,
         campaign: &Campaign,
         run_open: bool,
         problem: Option<String>,
         line: Option<usize>,
-        bottom: f32,
     ) -> bool {
         // Nothing above the editor comes and goes: its reason and its results are in the pane's
-        // footer (round 26), so the editor never moves. The editor leaves room for the save row
-        // above `bottom`, where the footer's room starts.
-        let save_row = design::Density::Read.control() + ui.spacing().item_spacing.y;
-        let (changed, _) = ui
-            .scope(|ui| {
-                let room = bottom.min(ui.max_rect().bottom()) - ui.cursor().top();
-                ui.set_max_height((room - save_row).max(design::XXL));
-                editor_events(ui, &self.path, &mut self.draft, line)
-            })
-            .inner;
+        // footer (round 26), so the editor never moves.
+        let (changed, _) = editor_in_pane(ui, region, &self.path, &mut self.draft, line);
         if changed {
             // An edit ends both Undo results: Undo would replace the words just typed.
-            self.reloaded = None;
-            self.discarded = None;
+            self.undos.owner_changed(&self.owner());
             self.failed = None;
         }
+        // One rule for the save row (`DraftState`): a draft Save refuses is Invalid, changed or
+        // not; after Save failed on the disk it stays open to try again, but is not primary; an
+        // open run owns the primary action.
+        let mut state = DraftState::new(
+            Changed::from(self.dirty()),
+            if run_open {
+                Primary::Elsewhere
+            } else {
+                Primary::Draft
+            },
+        )
+        .locks_campaign();
+        if let Some(problem) = &problem {
+            state = state.refused(problem.as_str());
+        }
+        if self.failure().is_some() {
+            state = state.not_saved();
+        }
+        let pressed = design::save_row(ui, &state, "Save repaired note");
+        let save = pressed.save
+            || (state.can_save()
+                && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)));
         let mut saved = false;
-        let mut discarded_now = false;
-        ui.horizontal(|ui| {
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                // Save's refusal first, as the state word: `No changes to save.` is only for a
-                // readable unchanged draft.
-                let reason = problem
-                    .as_deref()
-                    .or((self.draft == self.baseline).then_some("No changes to save."));
-                // One weight for a save row: primary while the draft has changes Save can
-                // write, unless an open run owns `Next turn`. After Save failed on the disk it
-                // stays available to try again, but is not primary.
-                let failed = self.failure().is_some();
-                if (if reason.is_none() && !run_open && !failed {
-                    design::Action::primary("Save repaired note")
-                } else {
-                    design::Action::secondary("Save repaired note")
-                })
-                .blocked(reason)
-                .show(ui)
-                .clicked()
-                    || (reason.is_none()
-                        && ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)))
-                {
-                    saved = self.save(campaign);
-                }
-                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                    let dirty = self.dirty();
-                    // A draft that Save refuses is Invalid, changed or not, as in Campaign and
-                    // Library; the message above names the cause. `No changes` is only for a
-                    // readable unchanged draft, and Unsaved means Save would write.
-                    let state = if problem.is_some() {
-                        design::Status {
-                            icon: design::icons::ERROR,
-                            word: "Invalid",
-                            color: colors().document.invalid,
-                        }
-                    } else if dirty && failed {
-                        // Save failed on the disk; the message above gives Save's reason.
-                        design::Status {
-                            icon: design::icons::ERROR,
-                            word: "Not saved",
-                            color: colors().document.invalid,
-                        }
-                    } else if dirty {
-                        design::Status {
-                            icon: design::icons::DRAFT,
-                            word: "Unsaved",
-                            color: colors().document.unsaved,
-                        }
-                    } else {
-                        design::Status {
-                            icon: design::icons::OK,
-                            word: "No changes",
-                            color: colors().muted,
-                        }
-                    };
-                    if design::save_row_state(ui, state, dirty, None) {
-                        self.discarded = Some(self.draft.clone());
-                        self.undo_order = design::ResultOrder::issue();
-                        self.draft = self.baseline.clone();
-                        self.failed = None;
-                        // A Discard after a reload ends the reload's Undo: one Undo per draft.
-                        self.reloaded = None;
-                        discarded_now = true;
-                    }
-                    if self.dirty() {
-                        // Save refuses this draft, so Discard is the one way to switch (FB6).
-                        design::blocked_reason(
-                            ui,
-                            Some(if problem.is_some() {
-                                crate::encounters::blocked_draft_switch_reason()
-                            } else {
-                                crate::encounters::draft_switch_reason()
-                            }),
-                        );
-                    }
-                });
+        if save {
+            saved = self.save(campaign);
+        }
+        if pressed.discard {
+            let draft = std::mem::replace(&mut self.draft, self.baseline.clone());
+            // Discard replaces Reload's Undo: one Undo per draft.
+            self.undos.record(RepairUndo::Discard {
+                owner: self.owner(),
+                draft,
             });
-        });
-        if discarded_now {
-            // The footer drawn above this frame showed the draft before Discard.
+            self.failed = None;
+            // The footer drawn before this body showed the draft before Discard.
             ui.ctx().request_repaint();
         }
         saved
@@ -489,7 +552,8 @@ impl Repair {
         match result {
             Ok(_) => {
                 self.baseline = self.draft.clone();
-                self.reloaded = None;
+                // A saved draft ends its Undo results.
+                self.undos.owner_changed(&self.owner());
                 self.failed = None;
                 true
             }
@@ -778,11 +842,10 @@ mod tests {
         // read: Invalid, Save's reason, and nothing written.
         let mut outside = Repair {
             path: "../Outside.md".into(),
+            campaign: campaign.id,
             baseline: before.into(),
             draft: draft.clone(),
-            discarded: None,
-            reloaded: None,
-            undo_order: design::ResultOrder::default(),
+            undos: design::Results::new(),
             disk: None,
             failed: None,
         };

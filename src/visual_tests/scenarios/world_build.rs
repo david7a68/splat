@@ -150,6 +150,7 @@ pub fn broken(d: &mut Driver<'_>) {
     d.state_prepared("broken-note-repair", Sizes::All, |d| {
         repair_footer_follows(d, "Line 3 opens a list", "iter-27-A-FE2");
     });
+    long_repair_keeps_save(d);
     let external = "---\nsplat_schema: 2\nsplat_id: [\n---\n\nOutside edit kept.\n";
     fs::write(&path, external).unwrap();
     d.settle();
@@ -12022,6 +12023,124 @@ fn package_list_tops(d: &mut Driver<'_>) -> [Option<f32>; 3] {
 
 /// iter-27-A: a short repair's footer (the one whose words hold `words`) sits `S` below its
 /// save row, clear of the pane's bottom, and draws no hairline, as it cuts no body.
+/// Round 28, P2 (the review of PR 329): a 600-line broken note at 960x640. The DM edits a
+/// middle line: the editor's region gives way and scrolls, so Save and Discard stay whole in
+/// view above the footer, with the edited line in view. Discard works and the footer gains its
+/// Undo line: Save stays whole in view. Undo works. A valid long draft saves through Save. A
+/// second broken note holds the check, so `Notes/Broken.md`'s own steps go on unchanged; it is
+/// removed after, and the scenario goes back to `Broken.md`'s repair.
+fn long_repair_keeps_save(d: &mut Driver<'_>) {
+    const REASON: &str = "Line 3 opens a list with [ that never closes.";
+    const SAVE: &str = "Save repaired note";
+    let path = root(d).join("Notes/Long.md");
+    let lines: String = (1..=600).map(|n| format!("Long line {n}.\n")).collect();
+    let long = format!("---\nsplat_schema: 2\nsplat_id: [\n---\n\n{lines}");
+    fs::write(&path, &long).unwrap();
+    reload(d);
+    d.set_base(SMALL);
+    d.click("2 notes cannot be read");
+    d.click_starting("Notes/Long.md · ");
+    d.expect(SAVE);
+    assert_eq!(d.editor_text().as_deref(), Some(long.as_str()));
+    let editor_name = crate::world::repair::editor_name("Notes/Long.md");
+    // The wheel over the editor brings line 300 into view; the DM clicks after it and types.
+    let editor = d.place_of(&editor_name).expect("the long repair's editor");
+    let over = egui::pos2(editor.left() + design::XXL, editor.top() + design::XXL);
+    for _ in 0..120 {
+        if d.visible_passage("Long line 300.") {
+            break;
+        }
+        d.scroll_at(over, 1);
+    }
+    d.click_line_end("Long line 300.");
+    d.type_text(" Edited.");
+    // Save, Discard and the reason in the footer: each whole in view, Save above the reason.
+    // Discard shows only while the draft has changes.
+    let in_view = |d: &Driver<'_>, changed: bool| {
+        let nodes = d.nodes();
+        let find = |name: &str, role: Role| {
+            nodes
+                .iter()
+                .find(|node| node.name == name && node.role == role)
+                .map(|node| (node.rect, node.fully_in_view()))
+        };
+        let (save, discard, reason) = (
+            find(SAVE, Role::Button),
+            find("Discard", Role::Button),
+            find(REASON, Role::Label),
+        );
+        let whole = [save, reason]
+            .iter()
+            .all(|found| found.is_some_and(|(_, whole)| whole))
+            && (!changed || discard.is_some_and(|(_, whole)| whole))
+            && save
+                .zip(reason)
+                .is_some_and(|((save, _), (reason, _))| save.bottom() <= reason.top());
+        (
+            whole,
+            format!("Save {save:?}, Discard {discard:?}, reason {reason:?}"),
+        )
+    };
+    let (whole, detail) = in_view(d, true);
+    d.observe(
+        "iter-28-P2-long-repair-save",
+        whole
+            && d.visible_passage("Long line 300. Edited.")
+            && !d.visible_passage("Long line 1.\n")
+            && d.editor_text().is_some_and(|text| text.contains("Long line 300. Edited.")),
+        format!("At 960x640, editing line 300 of 600 keeps Save and Discard whole in view, with the edited line: {detail}"),
+    );
+    d.state("long-repair-middle-line-edited", Sizes::Small);
+    // Discard works, and the footer gains its Undo line: Save stays whole in view.
+    d.click("Discard");
+    let (whole, detail) = in_view(d, false);
+    d.observe(
+        "iter-28-P2-long-repair-discard",
+        whole
+            && d.editor_text().as_deref() == Some(long.as_str())
+            && d.has("Undo discard of Long.md"),
+        format!("Discard gives the file's text back; with its Undo in the footer: {detail}"),
+    );
+    d.click("Undo discard of Long.md");
+    d.observe(
+        "iter-28-P2-long-repair-undo",
+        d.editor_text()
+            .is_some_and(|text| text.contains("Long line 300. Edited.")),
+        "Undo discard brings the edited long draft back",
+    );
+    // A valid long draft: Save is whole in view and writes it.
+    let valid = format!(
+        "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: world\nsplat_name: Long\nsplat_type: npc\n---\n\n{lines}",
+        splat::character::stable_id("long-repair")
+    );
+    d.replace_text_in(&editor_name, &valid);
+    let (whole, detail) = in_view(d, true);
+    let save_whole = d
+        .nodes()
+        .iter()
+        .any(|node| node.name == SAVE && node.role == Role::Button && node.fully_in_view());
+    d.observe(
+        "iter-28-P2-long-repair-save-valid",
+        save_whole && !whole && !d.is_disabled(SAVE),
+        format!(
+            "The valid long draft has no reason, and Save is whole in view and enabled: {detail}"
+        ),
+    );
+    d.click(SAVE);
+    d.settle();
+    d.observe(
+        "iter-28-P2-long-repair-saved",
+        fs::read_to_string(&path).ok().as_deref() == Some(valid.as_str()),
+        "Save writes the valid long draft",
+    );
+    fs::remove_file(&path).unwrap();
+    reload(d);
+    d.click("1 note cannot be read");
+    d.click_starting("Notes/Broken.md · ");
+    d.expect(SAVE);
+    d.set_base(DEFAULT);
+}
+
 fn repair_footer_follows(d: &mut Driver<'_>, words: &str, id: &str) {
     let size = d.window_size();
     let save = d.place_of("Save repaired note");
