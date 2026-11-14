@@ -17601,14 +17601,18 @@ pub mod encounter_groups {
             );
         });
         d.check_tab_order("run, group panel");
-        // R1: the heading's line is the fight after; the group's own XP is its hover and
-        // accessible description, and the member count is on the line where it fits.
+        // R1: the heading's line is the fight after; the group's own totals (`3 members ·
+        // XP 150`) are its hover (review of PR 338), and the member count is on the line where
+        // it fits.
         let members = d.at_size(DEFAULT, |d| {
             d.painted_in(egui::Rect::EVERYTHING).contains("3 members")
         });
+        let hover = d.hover_words("Drag Goblin Wave to the initiative list");
         d.observe(
             "T13.1",
-            d.has_containing("3\u{a0}×\u{a0}Goblin\u{a0}Warrior") && members,
+            d.has_containing("3\u{a0}×\u{a0}Goblin\u{a0}Warrior")
+                && members
+                && hover.contains("3 members · XP 150"),
             "The panel lists each group's members, and the line says the fight after",
         );
         // T5.7 in Arrivals: after a group's XP, what the fight becomes when it joins. Bridge
@@ -17652,9 +17656,21 @@ pub mod encounter_groups {
                 }),
             format!("Each group heading says what the fight becomes: {joins:?}"),
         );
+        // Review of PR 338: EVERY Arrivals heading (every drag handle in view) holds it.
+        let headings = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .filter(|node| node.name.starts_with("Drag ") && node.in_view())
+                .map(|node| node.name)
+                .collect::<Vec<_>>()
+        };
+        let all = (
+            d.at_size(SMALL, |d| headings(d)),
+            d.at_size(DEFAULT, |d| headings(d)),
+        );
         d.observe(
             "iter-28-R-R1",
-            joins.len() >= 2 && names(&narrow) == names(&joins),
+            joins.len() >= 2 && names(&narrow) == all.0 && names(&joins) == all.1,
             format!("At 960 and 1200 the same headings say Fight after: {narrow:?} / {joins:?}"),
         );
         // The words are worked out after a step, not on each frame of the panel.
