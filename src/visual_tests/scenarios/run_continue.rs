@@ -12,7 +12,7 @@ const ROLL_LOOT: &str = "Roll 2 × gems for Sunken Vault";
 const SPELL: &str = "Fireball";
 const SESSION: &str = "The Vault";
 const UNREAD: &str = "Splat could not read this run’s saved Undo steps";
-const DISMISS: &str = "Dismiss the Undo message";
+const DISMISS: &str = crate::design::outcome::DISMISS_NAME;
 const LATER: &str = "A later fight or rest was played, so this fight cannot go on. Start a new run to play it again.";
 /// The same reason for a fight whose encounter is deleted: only its cause.
 const LATER_GONE: &str = "A later fight or rest was played, so this fight cannot go on.";

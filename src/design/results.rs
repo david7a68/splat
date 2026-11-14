@@ -644,11 +644,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Results, Ban::Layout(1), Ban::Pane(1)],
         ),
         (
-            "src/encounter_run/view.rs",
-            "message_footer",
-            &[Ban::Results, Ban::Extras(1), Ban::Pane(1)],
-        ),
-        (
             "src/encounters/groups.rs",
             "group_editor_view",
             &[Ban::Results, Ban::Extras(1), Ban::Pane(1)],
@@ -859,7 +854,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/view.rs",
             "ended_view",
-            &[Ban::Layout(2), Ban::Extras(1)],
+            &[Ban::Layout(2), Ban::Extras(1), Ban::Pane(1)],
         ),
         ("src/encounter_run/view.rs", "group_row", &[Ban::Extras(2)]),
         ("src/encounter_run/view.rs", "log_tab", &[Ban::Layout(1)]),
@@ -883,7 +878,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/view.rs",
             "setup_body",
-            &[Ban::Layout(1), Ban::Extras(5)],
+            &[Ban::Layout(1), Ban::Extras(4), Ban::Pane(1)],
         ),
         (
             "src/encounter_run/view.rs",
@@ -1035,6 +1030,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "one_fault_has_one_tone_in_every_place",
             &[Ban::Body],
         ),
+        ("src/encounter_run/view.rs", "outside_words", &[Ban::Words]),
         ("src/trackers.rs", "act_words", &[Ban::Words]),
         ("src/trackers.rs", "cause", &[Ban::Words]),
         ("src/trackers/history.rs", "show", &[Ban::Body]),
@@ -1055,12 +1051,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "correction_reason",
             &[Ban::Extras(1)],
         ),
-        (
-            "src/encounter_run/view.rs",
-            "dismissable",
-            &[Ban::Extras(1)],
-        ),
-        ("src/encounter_run/view.rs", "live_view", &[Ban::Extras(1)]),
+        ("src/encounter_run/view.rs", "live_view", &[Ban::Pane(1)]),
         ("src/encounter_run/view.rs", "toggle", &[Ban::Extras(1)]),
         (
             "src/encounter_run/view.rs",

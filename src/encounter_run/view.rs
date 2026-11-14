@@ -3,8 +3,8 @@
 //! Rows never move when the selection changes: the entry controls have a fixed dock.
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{
-    Command, END_STEP, MAX_FROM_SHEET, Panel, Participant, PartySync, Phase, Run, SAVED_HP_USED,
-    SHEET_SOURCE, Unend, display, effect::Time, mode_label,
+    Command, END_STEP, MAX_FROM_SHEET, Panel, Participant, PartySync, Phase, Run, SHEET_SOURCE,
+    Unend, display, effect::Time, mode_label,
 };
 use crate::{
     combat_sync::SyncState,
@@ -843,215 +843,170 @@ impl Run {
         ui.add(egui::Label::new(Type::Title.rich(ui, what).color(colors().text)).truncate());
     }
 
-    /// FI2: the run's one message footer. The notices that come by themselves (a changed file,
-    /// an error, Undo steps that could not be read) and, in setup, the rest and carry-over
-    /// offers and their result, sit in it, pinned below the roster, so a row the DM aims at
-    /// never moves when one comes or goes. It is drawn in a child of `ui` over `rect`, at its
-    /// bottom, and the y where the body above it ends is returned. A stat-block error is one
-    /// of them: its whole fault wraps there, with its repair place under its words.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
-    fn message_footer(
-        &mut self,
-        ui: &mut egui::Ui,
-        rect: Rect,
+    /// FI2: the run's one message footer, typed (round 28, package M2). The notices that come by
+    /// themselves (a changed file, an error, Undo steps that could not be read) and, in setup,
+    /// the rest and carry-over offers and their result. The pane (`Messages::pane`) places it
+    /// under the body, so a row the DM aims at never moves when one comes or goes. A stat-block
+    /// error is one of them: its whole fault wraps there, with its repair place as a choice.
+    /// Owners: the step's result is its step's (`step_results`); the reasons and notices are
+    /// worked out again each frame from the run's own state, which owns them.
+    fn run_messages<'f>(
+        &self,
+        frame: &'f design::outcome::PaneFrame,
         setup: bool,
-        command: &mut Option<Command>,
-    ) -> f32 {
-        use std::cell::Cell;
-        let mut child = ui.new_child(
-            egui::UiBuilder::new()
-                .max_rect(rect)
-                .layout(Layout::top_down(Align::LEFT)),
-        );
-        let save_new = Cell::new(false);
-        let replace = Cell::new(false);
-        let dismiss_error = Cell::new(false);
-        let dismiss_unread = Cell::new(false);
-        let use_saved = Cell::new(false);
-        let undo_saved = Cell::new(false);
-        let use_sheets = Cell::new(false);
+        width: f32,
+    ) -> design::outcome::Messages<'f, RunPress> {
+        use design::outcome::{
+            Choice, FaultMessage, Lost, MessageChoice, Messages, Notice, Said, UndoStep,
+        };
+        let mut messages = Messages::new(frame, ("run_messages", self.id), width);
         let disk = self.has_disk_conflict();
-        let error = self.error.clone().filter(|_| !disk);
-        let to_packages = Cell::new(false);
-        // Astra 3 (FI11, AI1): a stat-block error says its whole fault, wrapped, with its repair
-        // place as a bordered button under its words. Nothing is cut, so nothing hides in hover.
-        let repair = error
-            .as_deref()
-            .filter(|error| error.contains(STAT_BLOCK_UNREAD))
-            .map(|error| {
+        let rest = setup && self.rest_filled_saved_hp();
+        let used = setup && !rest && self.saved_hp_used();
+        // The result of the DM's own press, with its Undo: the newest step's kept result.
+        if used && let Some(shown) = self.newest_step_result() {
+            messages.kept(shown.outcome(frame, |_| {
+                Said::new(crate::sentence!("Party HP set to the saved values."))
+                    .undo(UndoStep::act(super::SAVED_HP_STEP).pressed_as(RunPress::UndoStep))
+                    .into()
+            }));
+        }
+        // X4: a recharge roll's result, until the next act. Its Undo is the header's.
+        if !setup
+            && let Some(recharged) = self.recharge_result()
+            && let Some(words) = outside_words(recharged.words.clone())
+            && let Some(shown) = self.newest_step_result()
+        {
+            messages.kept(shown.outcome(frame, |_| Said::new(words).into()));
+        }
+        if disk {
+            // The run cannot save until the DM chooses, so this cannot be dismissed. The safe
+            // choice first; the one that loses the file's changes after it.
+            messages.outcome(
+                FaultMessage::new(&RunFault::DiskConflict)
+                    .choice(Choice::new(
+                        MessageChoice::Choice("Save as a new run"),
+                        RunPress::SaveAsNew,
+                    ))
+                    .choice(Choice::new(
+                        MessageChoice::Lose("Replace the file with this run"),
+                        RunPress::Replace,
+                    )),
+            );
+        }
+        if let Some(error) = self.error.as_deref().filter(|_| !disk) {
+            // Astra 3 (FI11, AI1): a stat-block error says its whole fault, wrapped, with its
+            // repair place as a choice under its words. Nothing is cut.
+            let repair = error.contains(STAT_BLOCK_UNREAD);
+            let words = if repair {
                 let first = error
                     .split_once(" Its row")
                     .map_or(error, |(first, _)| first);
                 format!("{first} Its row still works.")
-            });
-        let unread = !disk && self.undo_unread;
-        let carry = setup.then(|| self.carry_missing()).flatten();
-        let rest = setup && self.rest_filled_saved_hp();
-        let used = setup && !rest && self.saved_hp_used();
-        let back = (setup && !rest && !used)
-            .then(|| self.back_to_sheets())
-            .flatten();
-        let back_words = back
-            .as_ref()
-            .map(|(from, _)| format!("Party HP carries over from {from}."));
-        let recharged = self
-            .recharge_result()
-            .filter(|_| !setup)
-            .map(|recharged| recharged.words.clone());
-        // Both results belong to the newest step: its kept result (the step's store issued its
-        // order when the step was done).
-        let used_line = used
-            .then(|| {
-                self.newest_step_result()
-                    .map(|shown| shown.footer(|_| SAVED_HP_USED.to_owned()))
-            })
-            .flatten();
-        let recharged_line = recharged.as_ref().and_then(|words| {
-            self.newest_step_result()
-                .map(|shown| shown.footer(|_| words.clone()))
-        });
-        // After the words its messages borrow, so it is dropped first.
-        let mut footer = design::Footer::new(("run_messages", self.id), rect.width());
-        if let Some(line) = &used_line {
-            // The result of the DM's own press, with its Undo: it leads the footer.
-            footer.kept_line(line, true, |_, ui| {
-                if design::undo_message(ui, Tone::Success, SAVED_HP_USED, "Undo use saved HP") {
-                    undo_saved.set(true);
-                }
-            });
-        }
-        // X4: a recharge roll's result, until the next act. Its Undo is the header's.
-        if let Some(line) = &recharged_line {
-            footer.kept_line(line, false, |words, ui| {
-                design::message(ui, Tone::Info, words);
-            });
-        }
-        if disk {
-            // The run cannot save until the DM chooses, so this cannot be dismissed. The
-            // choices start at the message text, like every other message with choices.
-            footer.reason(super::DISK_CONFLICT, |ui| {
-                let choice =
-                    design::message_with_actions(ui, Tone::Error, super::DISK_CONFLICT, |ui| {
-                        design::gap(ui, design::Gap::XS);
-                        ui.horizontal(|ui| {
-                            // Neither action is filled: the safe one comes first, and the red one
-                            // keeps an `L` gap.
-                            let save_new = Action::secondary("Save as a new run")
-                                .density(Density::Read)
-                                .hint("Keep the changed file as it is, and save this run beside it")
-                                .show(ui)
-                                .clicked();
-                            // egui adds its item spacing too, so the whole gap is exactly `L`.
-                            ui.add_space(design::L - ui.spacing().item_spacing.x);
-                            let replace = Action::destructive("Replace the file with this run")
-                                .density(Density::Read)
-                                .hint("The changes in the file on disk are lost")
-                                .show(ui)
-                                .clicked();
-                            (save_new, replace)
-                        })
-                        .inner
-                    });
-                save_new.set(choice.0);
-                replace.set(choice.1);
-            });
-        }
-        if let Some(error) = &error {
-            // A stat-block error keeps its own name, apart from the sheet notice's.
-            let close = if repair.is_some() {
-                "Dismiss this error"
             } else {
-                "Dismiss this message"
+                error.to_owned()
             };
-            footer.reason(error.as_str(), |ui| {
-                let dismissed = dismissable(ui, close, |ui| {
-                    if let Some(words) = &repair {
-                        // Top down, so the repair goes under the words.
-                        let clicked = ui
-                            .vertical(|ui| {
-                                design::message_with_actions(ui, Tone::Error, words, |ui| {
-                                    Action::secondary("Campaign → Packages")
-                                        .name("Repair in Campaign → Packages")
-                                        .density(Density::Read)
-                                        .show(ui)
-                                        .clicked()
-                                })
-                            })
-                            .inner;
-                        to_packages.set(clicked);
-                    } else {
-                        design::message(ui, Tone::Error, error);
-                    }
-                });
-                dismiss_error.set(dismissed);
-            });
+            if let Some(words) = outside_words(words) {
+                let mut message = FaultMessage::new(&RunFault::Error(words));
+                if repair {
+                    message = message.choice(Choice::new(
+                        MessageChoice::Choice("Campaign → Packages"),
+                        RunPress::ToPackages,
+                    ));
+                }
+                messages.outcome(message.choice(Choice::new(
+                    MessageChoice::Dismiss(Lost::Nothing),
+                    RunPress::DismissError,
+                )));
+            }
         }
         // Said once: the Log keeps the line, and the next save leaves the steps out.
-        if unread {
-            footer.notice(super::UNDO_UNREAD, |ui| {
-                let dismissed = dismissable(ui, "Dismiss the Undo message", |ui| {
-                    design::message(ui, Tone::Warning, super::UNDO_UNREAD);
-                });
-                dismiss_unread.set(dismissed);
-            });
+        if !disk && self.undo_unread {
+            messages.outcome(FaultMessage::new(&RunFault::UndoUnread).choice(Choice::new(
+                MessageChoice::Dismiss(Lost::Nothing),
+                RunPress::DismissUnread,
+            )));
         }
-        if let Some(words) = &carry {
-            footer.notice(words.as_str(), |ui| {
-                design::message(ui, Tone::Warning, words);
-            });
+        if setup
+            && let Some(words) = self.carry_missing()
+            && let Some(words) = outside_words(words)
+        {
+            messages.outcome(FaultMessage::new(&RunFault::Carry(words)));
         }
-        const REST_FULL: &str = "Party HP is full after the long rest.";
         if rest {
-            footer.notice(REST_FULL, |ui| {
-                if design::message_with_action(ui, Tone::Info, REST_FULL, "Use the saved HP") {
-                    use_saved.set(true);
-                }
-            });
+            messages.outcome(
+                Notice::new(crate::sentence!("Party HP is full after the long rest.")).choice(
+                    Choice::new(
+                        MessageChoice::Choice("Use the saved HP"),
+                        RunPress::UseSaved,
+                    ),
+                ),
+            );
         }
-        if let Some(words) = &back_words {
-            footer.notice(words.as_str(), |ui| {
-                if design::message_with_action(ui, Tone::Info, words, "Use the sheets’ HP") {
-                    use_sheets.set(true);
-                }
-            });
+        if setup
+            && !rest
+            && !used
+            && let Some((from, _)) = self.back_to_sheets()
+        {
+            messages.outcome(
+                Notice::new(crate::sentence!("Party HP carries over from {}.", from)).choice(
+                    Choice::new(
+                        MessageChoice::Choice("Use the sheets’ HP"),
+                        RunPress::UseSheets,
+                    ),
+                ),
+            );
         }
-        let bottom = footer.show_by_hand(&mut child);
-        let outcome = if save_new.get() {
-            Some(self.save_as_new_run())
-        } else if replace.get() {
-            Some(self.keep_this_run())
-        } else {
-            None
+        messages
+    }
+
+    /// What a press in the run's footer does, in its frame. The step's Undo goes by its ticket:
+    /// a step that is gone (undone, or no longer the newest) does nothing.
+    fn run_press(
+        &mut self,
+        press: Option<design::outcome::Press<RunPress>>,
+        command: &mut Option<Command>,
+    ) {
+        let Some(press) = press else {
+            return;
         };
-        if let Some(Err(error)) = outcome {
-            self.error = Some(error);
+        match press.id {
+            RunPress::UndoStep => {
+                let Some(ticket) = press.ticket else {
+                    return;
+                };
+                if self
+                    .step_results
+                    .undo_by(ticket, |_| Ok::<(), ()>(()))
+                    .is_ok()
+                {
+                    self.undo();
+                }
+            }
+            RunPress::SaveAsNew => {
+                if let Err(error) = self.save_as_new_run() {
+                    self.error = Some(error);
+                }
+            }
+            RunPress::Replace => {
+                if let Err(error) = self.keep_this_run() {
+                    self.error = Some(error);
+                }
+            }
+            RunPress::DismissError => self.error = None,
+            RunPress::ToPackages => self.wants_packages = true,
+            RunPress::DismissUnread => self.undo_unread = false,
+            RunPress::UseSaved => {
+                if let Err(error) = self.use_saved_hp() {
+                    self.error = Some(error);
+                }
+            }
+            RunPress::UseSheets => {
+                if let Some((_, back)) = self.back_to_sheets() {
+                    *command = Some(back);
+                }
+            }
         }
-        if dismiss_error.get() {
-            self.error = None;
-        }
-        if to_packages.get() {
-            self.wants_packages = true;
-        }
-        if dismiss_unread.get() {
-            self.undo_unread = false;
-        }
-        if use_saved.get()
-            && let Err(e) = self.use_saved_hp()
-        {
-            self.error = Some(e);
-        }
-        if undo_saved.get() {
-            self.undo();
-        }
-        if use_sheets.get()
-            && let Some((_, back)) = back
-        {
-            *command = Some(back);
-        }
-        bottom
     }
 
     /// Beside a panel the roster reaches it, wherever the DM drags it. Alone, it keeps its cap.
@@ -1108,189 +1063,268 @@ impl Run {
                         - self.strip_height()
                         - self.footer_height();
                     // FI2: notices that come by themselves sit in the message footer at the
-                    // bottom of the roster's room, so the roster keeps its top.
-                    let region = Rect::from_min_size(
-                        ui.cursor().min,
-                        vec2(ui.available_width(), room.max(0.0)),
-                    );
-                    let body_bottom = self.message_footer(ui, region, false, &mut None);
-                    let footer_room = (region.bottom() - body_bottom).max(0.0);
-                    let room = room - footer_room;
-                    // A message goes in the room under the list, so it moves no row while
-                    // the DM's eye is on them. The next action clears it. A long one wraps.
-                    let notice = self
-                        .notice
-                        .as_ref()
-                        .filter(|_| !sheet_notice_in_header)
-                        .map(|detail| {
-                            let summary = self
-                                .notice_summary
-                                .clone()
-                                .unwrap_or_else(|| detail.clone());
-                            let boundaries: Vec<_> = self
-                                .state
-                                .participants
-                                .iter()
-                                .filter(|p| {
-                                    detail.contains(&format!("Undo for {} stops here", p.name))
-                                })
-                                .map(|p| {
-                                    format!(
-                                        "Undo for {} stops here",
-                                        p.name.split_whitespace().next().unwrap_or(&p.name)
-                                    )
-                                })
-                                .collect();
-                            let full = format!("{summary} · {}", boundaries.join(" · "));
-                            if !boundaries.is_empty()
-                                && design::number_width(ui, &full, &Type::Small.font(ui))
-                                    <= ui.available_width() - design::L * 6.0
-                            {
-                                full
-                            } else {
-                                summary
-                            }
-                        });
-                    let width = ui.available_width();
-                    let notice_height = notice.as_ref().map_or(0.0, |notice| {
-                        let font = Type::Small.font(ui);
-                        ui.fonts_mut(|fonts| {
-                            fonts.layout(
-                                notice.clone(),
-                                font,
-                                egui::Color32::PLACEHOLDER,
-                                width - 32.0,
-                            )
-                        })
-                        .size()
-                        .y
-                        .max(MESSAGE_ROOM)
-                    });
-                    // A list that would have to scroll to make room gets it back: the message
-                    // keeps its point on one line, with the whole of it on hover and in the log.
-                    let tightest = self.tightest_roster(ui, width, room);
-                    let compact = notice.is_some() && tightest > room - notice_height;
-                    let notice_height = if compact || self.notice_summary.is_some() {
-                        MESSAGE_LINE
-                    } else {
-                        notice_height
-                    };
-                    // With an error line up too, one more line would scroll even a compressed
-                    // list. The error comes first, and the message returns when it is dismissed.
-                    let notice = notice.filter(|_| tightest <= room - notice_height);
-                    let notice_height = if notice.is_some() { notice_height } else { 0.0 };
-                    let list = room - notice_height;
-                    let roster = ui.allocate_ui_with_layout(
-                        vec2(ui.available_width(), list),
-                        Layout::top_down(Align::LEFT),
-                        |ui| {
-                            ui.set_min_height(list);
-                            self.roster(ui, list, notice_height, footer_room);
-                        },
-                    );
-                    self.group_drop_zone(ui, roster.response.rect);
-                    if let Some(notice) = notice {
-                        // All the height the list gave up, so the dock stays where it was.
-                        ui.allocate_ui_with_layout(
-                            vec2(ui.available_width(), notice_height),
-                            Layout::left_to_right(if compact || self.notice_summary.is_some() {
-                                Align::Center
-                            } else {
-                                Align::TOP
-                            }),
+                    // bottom of the roster's room, so the roster keeps its top. The roster is
+                    // the footer's pane, and it fills its room (`FillsReason::LiveRoster`).
+                    let frame = design::outcome::PaneFrame::new(ui);
+                    let messages = self.run_messages(&frame, false, ui.available_width());
+                    let full = room.max(0.0);
+                    let pressed = ui
+                        .allocate_ui_with_layout(
+                            vec2(ui.available_width(), full),
+                            Layout::top_down(Align::LEFT),
                             |ui| {
-                                ui.set_min_height(notice_height);
-                                let words = self
-                                    .notice_summary
-                                    .clone()
-                                    .filter(|summary| {
-                                        design::number_width(ui, summary, &Type::Small.font(ui))
-                                            <= ui.available_width() - design::L * 6.0
-                                    })
-                                    .unwrap_or_else(|| {
-                                        format!(
-                                            "{} changed",
-                                            design::count(self.notice_changes, "sheet", "sheets")
-                                        )
-                                    });
-                                let shown = if self.notice_summary.is_some()
-                                    || (compact
-                                        && design::number_width(ui, &notice, &Type::Small.font(ui))
-                                            > ui.available_width() - design::L * 6.0)
-                                {
-                                    words.as_str()
-                                } else {
-                                    notice.as_str()
-                                };
-                                // Centre a compact message with Log and Dismiss. A wrapped
-                                // notice keeps its top alignment and its reserved height.
-                                // small_message draws its bar and icon before the words.
-                                let lead = design::S
-                                    + design::HAIRLINE_WIDTH
-                                    + design::number_width(ui, icons::WARN, &Type::Small.font(ui))
-                                    - design::XS;
-                                let text_room =
-                                    ui.available_width() - design::L * 6.0 - design::S - lead;
-                                let fitted = sheet_notice_words(
-                                    ui,
-                                    self.notice_summary.as_deref().unwrap_or(shown),
-                                    &Type::Small.font(ui),
-                                    text_room,
-                                );
-                                let shown = if self.notice_summary.is_some() {
-                                    fitted.as_str()
-                                } else {
-                                    shown
-                                };
-                                // FJ4: the words get `text_room`; the message's bar, icon and
-                                // their gaps take room before them. A fitted notice then keeps
-                                // one line, and its band the height the list gave up.
-                                let message_width =
-                                    text_room + lead + ui.spacing().item_spacing.x * 2.0;
-                                let response = ui
-                                    .allocate_ui_with_layout(
-                                        vec2(
-                                            message_width,
-                                            if compact || self.notice_summary.is_some() {
-                                                Type::Small.line()
-                                            } else {
-                                                notice_height
-                                            },
-                                        ),
-                                        Layout::left_to_right(Align::TOP),
+                                ui.set_min_height(full);
+                                messages
+                                    .pane(
+                                        ui,
+                                        design::pane::Body::Fills(design::pane::Fills::because(
+                                            design::pane::FillsReason::LiveRoster,
+                                        )),
                                         |ui| {
-                                            // One form for every result: the tone marks
-                                            // the icon and bar, the words keep text colour.
-                                            let tone = if self.notice_summary.is_some() {
-                                                Tone::Warning
-                                            } else {
-                                                Tone::Success
-                                            };
-                                            design::small_message(ui, tone, shown)
+                                            ui.spacing_mut().item_spacing.y = 0.0;
+                                            let room = ui.available_height();
+                                            let footer_room = (full - room).max(0.0);
+                                            // A message goes in the room under the list, so it moves no row while
+                                            // the DM's eye is on them. The next action clears it. A long one wraps.
+                                            let notice = self
+                                                .notice
+                                                .as_ref()
+                                                .filter(|_| !sheet_notice_in_header)
+                                                .map(|detail| {
+                                                    let summary = self
+                                                        .notice_summary
+                                                        .clone()
+                                                        .unwrap_or_else(|| detail.clone());
+                                                    let boundaries: Vec<_> = self
+                                                        .state
+                                                        .participants
+                                                        .iter()
+                                                        .filter(|p| {
+                                                            detail.contains(&format!(
+                                                                "Undo for {} stops here",
+                                                                p.name
+                                                            ))
+                                                        })
+                                                        .map(|p| {
+                                                            format!(
+                                                                "Undo for {} stops here",
+                                                                p.name
+                                                                    .split_whitespace()
+                                                                    .next()
+                                                                    .unwrap_or(&p.name)
+                                                            )
+                                                        })
+                                                        .collect();
+                                                    let full = format!(
+                                                        "{summary} · {}",
+                                                        boundaries.join(" · ")
+                                                    );
+                                                    if !boundaries.is_empty()
+                                                        && design::number_width(
+                                                            ui,
+                                                            &full,
+                                                            &Type::Small.font(ui),
+                                                        ) <= ui.available_width()
+                                                            - design::L * 6.0
+                                                    {
+                                                        full
+                                                    } else {
+                                                        summary
+                                                    }
+                                                });
+                                            let width = ui.available_width();
+                                            let notice_height =
+                                                notice.as_ref().map_or(0.0, |notice| {
+                                                    let font = Type::Small.font(ui);
+                                                    ui.fonts_mut(|fonts| {
+                                                        fonts.layout(
+                                                            notice.clone(),
+                                                            font,
+                                                            egui::Color32::PLACEHOLDER,
+                                                            width - 32.0,
+                                                        )
+                                                    })
+                                                    .size()
+                                                    .y
+                                                    .max(MESSAGE_ROOM)
+                                                });
+                                            // A list that would have to scroll to make room gets it back: the message
+                                            // keeps its point on one line, with the whole of it on hover and in the log.
+                                            let tightest = self.tightest_roster(ui, width, room);
+                                            let compact =
+                                                notice.is_some() && tightest > room - notice_height;
+                                            let notice_height =
+                                                if compact || self.notice_summary.is_some() {
+                                                    MESSAGE_LINE
+                                                } else {
+                                                    notice_height
+                                                };
+                                            // With an error line up too, one more line would scroll even a compressed
+                                            // list. The error comes first, and the message returns when it is dismissed.
+                                            let notice =
+                                                notice.filter(|_| tightest <= room - notice_height);
+                                            let notice_height =
+                                                if notice.is_some() { notice_height } else { 0.0 };
+                                            let list = room - notice_height;
+                                            let roster = ui.allocate_ui_with_layout(
+                                                vec2(ui.available_width(), list),
+                                                Layout::top_down(Align::LEFT),
+                                                |ui| {
+                                                    ui.set_min_height(list);
+                                                    self.roster(
+                                                        ui,
+                                                        list,
+                                                        notice_height,
+                                                        footer_room,
+                                                    );
+                                                },
+                                            );
+                                            self.group_drop_zone(ui, roster.response.rect);
+                                            if let Some(notice) = notice {
+                                                // All the height the list gave up, so the dock stays where it was.
+                                                ui.allocate_ui_with_layout(
+                                                    vec2(ui.available_width(), notice_height),
+                                                    Layout::left_to_right(
+                                                        if compact || self.notice_summary.is_some()
+                                                        {
+                                                            Align::Center
+                                                        } else {
+                                                            Align::TOP
+                                                        },
+                                                    ),
+                                                    |ui| {
+                                                        ui.set_min_height(notice_height);
+                                                        let words = self
+                                                            .notice_summary
+                                                            .clone()
+                                                            .filter(|summary| {
+                                                                design::number_width(
+                                                                    ui,
+                                                                    summary,
+                                                                    &Type::Small.font(ui),
+                                                                ) <= ui.available_width()
+                                                                    - design::L * 6.0
+                                                            })
+                                                            .unwrap_or_else(|| {
+                                                                format!(
+                                                                    "{} changed",
+                                                                    design::count(
+                                                                        self.notice_changes,
+                                                                        "sheet",
+                                                                        "sheets"
+                                                                    )
+                                                                )
+                                                            });
+                                                        let shown = if self.notice_summary.is_some()
+                                                            || (compact
+                                                                && design::number_width(
+                                                                    ui,
+                                                                    &notice,
+                                                                    &Type::Small.font(ui),
+                                                                ) > ui.available_width()
+                                                                    - design::L * 6.0)
+                                                        {
+                                                            words.as_str()
+                                                        } else {
+                                                            notice.as_str()
+                                                        };
+                                                        // Centre a compact message with Log and Dismiss. A wrapped
+                                                        // notice keeps its top alignment and its reserved height.
+                                                        // small_message draws its bar and icon before the words.
+                                                        let lead = design::S
+                                                            + design::HAIRLINE_WIDTH
+                                                            + design::number_width(
+                                                                ui,
+                                                                icons::WARN,
+                                                                &Type::Small.font(ui),
+                                                            )
+                                                            - design::XS;
+                                                        let text_room = ui.available_width()
+                                                            - design::L * 6.0
+                                                            - design::S
+                                                            - lead;
+                                                        let fitted = sheet_notice_words(
+                                                            ui,
+                                                            self.notice_summary
+                                                                .as_deref()
+                                                                .unwrap_or(shown),
+                                                            &Type::Small.font(ui),
+                                                            text_room,
+                                                        );
+                                                        let shown = if self.notice_summary.is_some()
+                                                        {
+                                                            fitted.as_str()
+                                                        } else {
+                                                            shown
+                                                        };
+                                                        // FJ4: the words get `text_room`; the message's bar, icon and
+                                                        // their gaps take room before them. A fitted notice then keeps
+                                                        // one line, and its band the height the list gave up.
+                                                        let message_width = text_room
+                                                            + lead
+                                                            + ui.spacing().item_spacing.x * 2.0;
+                                                        let response = ui
+                                                            .allocate_ui_with_layout(
+                                                                vec2(
+                                                                    message_width,
+                                                                    if compact
+                                                                        || self
+                                                                            .notice_summary
+                                                                            .is_some()
+                                                                    {
+                                                                        Type::Small.line()
+                                                                    } else {
+                                                                        notice_height
+                                                                    },
+                                                                ),
+                                                                Layout::left_to_right(Align::TOP),
+                                                                |ui| {
+                                                                    // One form for every result: the tone marks
+                                                                    // the icon and bar, the words keep text colour.
+                                                                    let tone = if self
+                                                                        .notice_summary
+                                                                        .is_some()
+                                                                    {
+                                                                        Tone::Warning
+                                                                    } else {
+                                                                        Tone::Success
+                                                                    };
+                                                                    design::small_message(
+                                                                        ui, tone, shown,
+                                                                    )
+                                                                },
+                                                            )
+                                                            .inner;
+                                                        let detail =
+                                                            self.notice.as_deref().unwrap_or(shown);
+                                                        design::named(ui, &response, detail);
+                                                        response.on_hover_text(detail);
+                                                        let log = log_link(ui);
+                                                        design::named(ui, &log, "Log");
+                                                        if log.clicked() {
+                                                            self.panel = Panel::Log;
+                                                            self.close_lookup = true;
+                                                        }
+                                                        let dismiss = design::icon_button(
+                                                            ui,
+                                                            icons::CLOSE,
+                                                            "Dismiss this message",
+                                                        )
+                                                        .clicked();
+                                                        if dismiss {
+                                                            self.notice = None;
+                                                            self.return_focus = self.lookup_open;
+                                                        }
+                                                    },
+                                                );
+                                            }
                                         },
                                     )
-                                    .inner;
-                                let detail = self.notice.as_deref().unwrap_or(shown);
-                                design::named(ui, &response, detail);
-                                response.on_hover_text(detail);
-                                let log = log_link(ui);
-                                design::named(ui, &log, "Log");
-                                if log.clicked() {
-                                    self.panel = Panel::Log;
-                                    self.close_lookup = true;
-                                }
-                                let dismiss =
-                                    design::icon_button(ui, icons::CLOSE, "Dismiss this message")
-                                        .clicked();
-                                if dismiss {
-                                    self.notice = None;
-                                    self.return_focus = self.lookup_open;
-                                }
+                                    .pressed
                             },
-                        );
-                    }
-                    // Past the message footer, which the roster's room left free.
-                    ui.add_space(footer_room);
+                        )
+                        .inner;
+                    self.run_press(pressed, &mut None);
                     // Each control band starts with fresh bounds. A child above can widen
                     // its parent's minimum rect, which set_width cannot shrink again.
                     // With the panel hidden, its action tiles keep one line above the dock.
@@ -4972,80 +5006,138 @@ impl Run {
                 .position(|p| p.initiative.is_none() && p.present);
         }
         let room = ui.available_height() - self.footer_height() - design::M;
-        let region =
-            Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), room.max(0.0)));
-        let body_bottom = self.message_footer(ui, region, true, &mut command);
-        let footer_room = (region.bottom() - body_bottom).max(0.0);
-        let room = room - footer_room;
-        let rows = ui.allocate_ui_with_layout(
-            vec2(ui.available_width(), room),
-            Layout::top_down(Align::LEFT),
-            |ui| {
-                ui.set_min_height(room);
-                let mut spans = Vec::new();
-                // SJ1 (iter-27-R): the roster keeps the scroll bar's lane whether or not the
-                // bar shows, as Arrivals does, so adding arrivals moves no field, Absent or menu.
-                let lane = (ui.available_width() - ui.spacing().scroll.allocated_width()).max(0.0);
-                let output = egui::ScrollArea::vertical()
-                    .id_salt("run_setup_rows")
-                    .max_height((room - OVERFLOW_LINE).max(0.0))
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        ui.set_max_width(lane);
-                        // Include the heading when comparing rows with the scroll viewport.
-                        let origin = ui.cursor().min.y;
-                        ui.spacing_mut().item_spacing.y = 0.0;
-                        let (_, right) = self.setup_slots(ui, false);
-                        let number = design::L * 3.0;
-                        ui.horizontal(|ui| {
-                            ui.add_space((ui.available_width() - right - number).max(0.0));
-                            ui.label(Type::Label.rich(ui, "INITIATIVE").color(colors().muted));
-                        });
-                        // Roster order. Rows hold still while the DM types (T4.3).
-                        for index in 0..self.state.participants.len() {
-                            let row = ui.push_id(index, |ui| {
-                                if let Some(picked) = self.setup_row(ui, index) {
-                                    command = Some(picked);
-                                }
-                            });
-                            spans.push((
-                                row.response.rect.top() - origin,
-                                row.response.rect.bottom() - origin,
-                                index,
-                            ));
-                        }
-                        let mut shared: std::collections::BTreeMap<&str, Vec<Rect>> =
-                            std::collections::BTreeMap::new();
-                        for p in &self.state.participants {
-                            if let Some(key) = p.shared_roll.as_deref()
-                                && let Some(field) = ui.ctx().read_response(design::focus_id(
-                                    &format!("Initiative for {}", p.name),
-                                ))
-                            {
-                                shared.entry(key).or_default().push(field.rect);
-                            }
-                        }
-                        for fields in shared.values().filter(|fields| fields.len() > 1) {
-                            let top = fields.iter().map(Rect::top).fold(f32::INFINITY, f32::min);
-                            let bottom = fields
-                                .iter()
-                                .map(Rect::bottom)
-                                .fold(f32::NEG_INFINITY, f32::max);
-                            let x = fields[0].left() - design::XS;
-                            let stroke = egui::Stroke::new(design::HAIRLINE_WIDTH, colors().muted);
-                            for field in fields {
-                                ui.painter().vline(x, field.y_range(), stroke);
-                            }
-                            ui.painter().hline(x..=x + design::XS, top, stroke);
-                            ui.painter().hline(x..=x + design::XS, bottom, stroke);
-                        }
-                    });
-                self.overflow_note(ui, &output, &spans);
-            },
-        );
-        self.group_drop_zone(ui, rows.response.rect);
-        // Past the message footer, which the rows' room left free.
-        ui.add_space(footer_room);
+        // The setup roster is the footer's pane and fills its room, as the live one does.
+        let frame = design::outcome::PaneFrame::new(ui);
+        let messages = self.run_messages(&frame, true, ui.available_width());
+        let full = room.max(0.0);
+        let pressed = ui
+            .allocate_ui_with_layout(
+                vec2(ui.available_width(), full),
+                Layout::top_down(Align::LEFT),
+                |ui| {
+                    ui.set_min_height(full);
+                    messages
+                        .pane(
+                            ui,
+                            design::pane::Body::Fills(design::pane::Fills::because(
+                                design::pane::FillsReason::LiveRoster,
+                            )),
+                            |ui| {
+                                let room = ui.available_height();
+                                let rows = ui.allocate_ui_with_layout(
+                                    vec2(ui.available_width(), room),
+                                    Layout::top_down(Align::LEFT),
+                                    |ui| {
+                                        ui.set_min_height(room);
+                                        let mut spans = Vec::new();
+                                        // SJ1 (iter-27-R): the roster keeps the scroll bar's lane whether or not the
+                                        // bar shows, as Arrivals does, so adding arrivals moves no field, Absent or menu.
+                                        let lane = (ui.available_width()
+                                            - ui.spacing().scroll.allocated_width())
+                                        .max(0.0);
+                                        let output = egui::ScrollArea::vertical()
+                                            .id_salt("run_setup_rows")
+                                            .max_height((room - OVERFLOW_LINE).max(0.0))
+                                            .auto_shrink([false, false])
+                                            .show(ui, |ui| {
+                                                ui.set_max_width(lane);
+                                                // Include the heading when comparing rows with the scroll viewport.
+                                                let origin = ui.cursor().min.y;
+                                                ui.spacing_mut().item_spacing.y = 0.0;
+                                                let (_, right) = self.setup_slots(ui, false);
+                                                let number = design::L * 3.0;
+                                                ui.horizontal(|ui| {
+                                                    ui.add_space(
+                                                        (ui.available_width() - right - number)
+                                                            .max(0.0),
+                                                    );
+                                                    ui.label(
+                                                        Type::Label
+                                                            .rich(ui, "INITIATIVE")
+                                                            .color(colors().muted),
+                                                    );
+                                                });
+                                                // Roster order. Rows hold still while the DM types (T4.3).
+                                                for index in 0..self.state.participants.len() {
+                                                    let row = ui.push_id(index, |ui| {
+                                                        if let Some(picked) =
+                                                            self.setup_row(ui, index)
+                                                        {
+                                                            command = Some(picked);
+                                                        }
+                                                    });
+                                                    spans.push((
+                                                        row.response.rect.top() - origin,
+                                                        row.response.rect.bottom() - origin,
+                                                        index,
+                                                    ));
+                                                }
+                                                let mut shared: std::collections::BTreeMap<
+                                                    &str,
+                                                    Vec<Rect>,
+                                                > = std::collections::BTreeMap::new();
+                                                for p in &self.state.participants {
+                                                    if let Some(key) = p.shared_roll.as_deref()
+                                                        && let Some(field) = ui.ctx().read_response(
+                                                            design::focus_id(&format!(
+                                                                "Initiative for {}",
+                                                                p.name
+                                                            )),
+                                                        )
+                                                    {
+                                                        shared
+                                                            .entry(key)
+                                                            .or_default()
+                                                            .push(field.rect);
+                                                    }
+                                                }
+                                                for fields in shared
+                                                    .values()
+                                                    .filter(|fields| fields.len() > 1)
+                                                {
+                                                    let top = fields
+                                                        .iter()
+                                                        .map(Rect::top)
+                                                        .fold(f32::INFINITY, f32::min);
+                                                    let bottom = fields
+                                                        .iter()
+                                                        .map(Rect::bottom)
+                                                        .fold(f32::NEG_INFINITY, f32::max);
+                                                    let x = fields[0].left() - design::XS;
+                                                    let stroke = egui::Stroke::new(
+                                                        design::HAIRLINE_WIDTH,
+                                                        colors().muted,
+                                                    );
+                                                    for field in fields {
+                                                        ui.painter().vline(
+                                                            x,
+                                                            field.y_range(),
+                                                            stroke,
+                                                        );
+                                                    }
+                                                    ui.painter().hline(
+                                                        x..=x + design::XS,
+                                                        top,
+                                                        stroke,
+                                                    );
+                                                    ui.painter().hline(
+                                                        x..=x + design::XS,
+                                                        bottom,
+                                                        stroke,
+                                                    );
+                                                }
+                                            });
+                                        self.overflow_note(ui, &output, &spans);
+                                    },
+                                );
+                                self.group_drop_zone(ui, rows.response.rect);
+                            },
+                        )
+                        .pressed
+                },
+            )
+            .inner;
+        self.run_press(pressed, &mut command);
         design::rule(ui);
         design::gap(ui, design::Gap::XS);
         ui.horizontal(|ui| {
@@ -5694,227 +5786,248 @@ impl Run {
         design::rule(ui);
         // FI2: errors and a changed file sit in the message footer at the bottom of the view,
         // below the final state and the panel, so neither moves when one comes or goes.
-        let region = ui.available_rect_before_wrap();
-        let body_bottom = self.message_footer(ui, region, false, &mut None);
-        if body_bottom < region.bottom() {
-            let top = ui.cursor().top();
-            ui.set_max_height((body_bottom - top).max(0.0));
-        }
-        if self.closing {
-            ui.horizontal(|ui| {
-                closed = self.close_confirmation(ui, "The run stays saved.");
-            });
-        }
-        // Beside a panel, the final state comes first.
-        if !self.hide_panel {
-            let width = design::side_panel_width(ui.ctx().content_rect().width());
-            design::Column::panel("run_ended_log", width)
-                .page_keeps(design::RUN_LIST_KEEPS)
-                .frame(side_frame())
-                .show_inside(ui, |ui| {
-                    // With choices to make, they have the column, and the log waits behind a
-                    // heading. Never a pair of choices cut by a second scroll.
-                    let choosing = self.conflict_count() > 0;
-                    let room = if choosing {
-                        ui.available_height() - Density::Read.control() - design::M
-                    } else {
-                        ui.available_height() * 0.6
-                    };
-                    // A quiet action at the text edge (`Stop sync for …`) reaches `S` into the
-                    // panel's gutter. The scroll area starts there too, so it shows the whole
-                    // target, and its margin keeps the text where it was.
-                    let area = ui.available_rect_before_wrap();
-                    ui.scope_builder(
-                        egui::UiBuilder::new().max_rect(area.with_min_x(area.min.x - design::S)),
-                        |ui| {
-                            egui::ScrollArea::vertical()
-                                .id_salt("run_ended_sync")
-                                .max_height(room)
-                                .auto_shrink([false, true])
-                                .show(ui, |ui| {
-                                    egui::Frame::new()
-                                        .inner_margin(egui::Margin {
-                                            left: design::S as i8,
-                                            ..egui::Margin::ZERO
-                                        })
-                                        .show(ui, |ui| {
-                                            self.sync_block(ui);
-                                            if !self.setup_details.is_empty() {
-                                                design::section(ui, "Prep", |ui| {
-                                                    self.notes_tab(ui);
-                                                });
-                                            }
-                                        });
-                                });
-                        },
-                    );
-                    // The scroll area's margin, so `Combat log` starts where `Prep` does.
-                    egui::Frame::new()
-                        .inner_margin(egui::Margin {
-                            left: design::S as i8,
-                            ..egui::Margin::ZERO
-                        })
-                        .show(ui, |ui| {
-                            if choosing {
-                                design::section(ui, "Combat log", |ui| self.log_tab(ui));
-                            } else {
-                                design::heading(ui, design::Heading::Label("Combat log"));
-                                self.log_tab(ui);
-                            }
-                        });
-                });
-        }
-        let mut roster_right = ui.available_rect_before_wrap().left();
-        egui::CentralPanel::default()
-            // The panel's drag handle lies on this edge, so the rows stop short of it.
-            .frame(egui::Frame::new().inner_margin(egui::Margin {
-                right: design::S as i8,
-                ..egui::Margin::ZERO
-            }))
-            .show_inside(ui, |ui| {
-                let scale = RunScale::fit(
-                    ui.available_height(),
-                    ui.available_width(),
-                    self.state.order.len(),
-                );
-                egui::ScrollArea::vertical()
-                    .id_salt("run_final_state")
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        ui.set_max_width(ui.available_width().min(scale.max_width));
-                        // SI1: how everyone ended comes first, so the whole party's HP is in
-                        // view; what the party takes follows.
-                        design::heading(ui, design::Heading::Label("Final state"));
-                        let spacing = ui.spacing().item_spacing.y;
-                        ui.spacing_mut().item_spacing.y = 0.0;
-                        roster_right = ui.available_rect_before_wrap().right();
-                        for index in &self.state.order {
-                            let p = &self.state.participants[*index];
-                            let sync = self.row_sync_word(*index);
-                            let name = row_name(p, TurnMark::None, sync);
-                            let layout = RowLayout::new(
-                                ui,
-                                ui.available_width(),
-                                p,
-                                sync,
-                                scale,
-                                RowFit::Natural,
-                                0.0,
-                            )
-                            .with_art(self.row_art(ui.ctx(), p));
-                            let response =
-                                design::row(ui, layout.height(scale), false, &name, |ui, rect| {
-                                    paint_row(
-                                        ui,
-                                        rect,
-                                        p,
-                                        TurnMark::None,
-                                        sync,
-                                        scale,
-                                        &layout,
-                                        None,
-                                        None,
-                                    );
-                                });
-                            if layout.name_cut {
-                                response.on_hover_text(&p.name);
-                            }
-                        }
-                        ui.spacing_mut().item_spacing.y = spacing;
-                        design::gap(ui, design::Gap::L);
-                        self.loot_section(ui);
-                    });
-            });
-        let mut header_ui = ui.new_child(
-            egui::UiBuilder::new()
-                .id_salt("ended_header")
-                .max_rect(header_rect.with_max_y(header_rect.top() + first_line)),
-        );
-        header_ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            ui.set_min_height(60.0);
-            let close_reason = self.close_reason();
-            let close_width = close_reason.as_ref().map_or_else(
-                || {
-                    Action::primary("Close run")
-                        .density(Density::Glance)
-                        .natural_width(ui)
-                },
-                |reason| {
-                    design::number_width(ui, reason, &Type::Small.font(ui))
-                        .min(ui.available_width() / 2.0)
-                },
-            );
-            ui.allocate_ui_with_layout(
-                vec2(
-                    close_width,
-                    Density::Glance.control()
-                        + if close_reason.is_some() {
-                            Type::Small.line() + ui.spacing().item_spacing.y
-                        } else {
-                            0.0
-                        },
-                ),
-                Layout::top_down(Align::RIGHT),
+        // The ended view is the footer's pane: the final state and the panel's column, each
+        // with its own scroll (`FillsReason::Columns`).
+        let frame = design::outcome::PaneFrame::new(ui);
+        let messages = self.run_messages(&frame, false, ui.available_width());
+        let pressed = messages
+            .pane(
+                ui,
+                design::pane::Body::Fills(design::pane::Fills::because(
+                    design::pane::FillsReason::Columns,
+                )),
                 |ui| {
-                    if Action::primary(if self.close_block().is_some() {
-                        "Close after sync"
-                    } else {
-                        "Close run"
-                    })
-                    .name("Close run")
-                    .density(Density::Glance)
-                    .blocked(self.close_block())
-                    .show(ui)
-                    .clicked()
-                    {
-                        closed = self.request_close();
+                    if self.closing {
+                        ui.horizontal(|ui| {
+                            closed = self.close_confirmation(ui, "The run stays saved.");
+                        });
                     }
-                    design::blocked_reason(ui, close_reason.as_deref());
+                    // Beside a panel, the final state comes first.
+                    if !self.hide_panel {
+                        let width = design::side_panel_width(ui.ctx().content_rect().width());
+                        design::Column::panel("run_ended_log", width)
+                            .page_keeps(design::RUN_LIST_KEEPS)
+                            .frame(side_frame())
+                            .show_inside(ui, |ui| {
+                                // With choices to make, they have the column, and the log waits behind a
+                                // heading. Never a pair of choices cut by a second scroll.
+                                let choosing = self.conflict_count() > 0;
+                                let room = if choosing {
+                                    ui.available_height() - Density::Read.control() - design::M
+                                } else {
+                                    ui.available_height() * 0.6
+                                };
+                                // A quiet action at the text edge (`Stop sync for …`) reaches `S` into the
+                                // panel's gutter. The scroll area starts there too, so it shows the whole
+                                // target, and its margin keeps the text where it was.
+                                let area = ui.available_rect_before_wrap();
+                                ui.scope_builder(
+                                    egui::UiBuilder::new()
+                                        .max_rect(area.with_min_x(area.min.x - design::S)),
+                                    |ui| {
+                                        egui::ScrollArea::vertical()
+                                            .id_salt("run_ended_sync")
+                                            .max_height(room)
+                                            .auto_shrink([false, true])
+                                            .show(ui, |ui| {
+                                                egui::Frame::new()
+                                                    .inner_margin(egui::Margin {
+                                                        left: design::S as i8,
+                                                        ..egui::Margin::ZERO
+                                                    })
+                                                    .show(ui, |ui| {
+                                                        self.sync_block(ui);
+                                                        if !self.setup_details.is_empty() {
+                                                            design::section(ui, "Prep", |ui| {
+                                                                self.notes_tab(ui);
+                                                            });
+                                                        }
+                                                    });
+                                            });
+                                    },
+                                );
+                                // The scroll area's margin, so `Combat log` starts where `Prep` does.
+                                egui::Frame::new()
+                                    .inner_margin(egui::Margin {
+                                        left: design::S as i8,
+                                        ..egui::Margin::ZERO
+                                    })
+                                    .show(ui, |ui| {
+                                        if choosing {
+                                            design::section(ui, "Combat log", |ui| {
+                                                self.log_tab(ui)
+                                            });
+                                        } else {
+                                            design::heading(
+                                                ui,
+                                                design::Heading::Label("Combat log"),
+                                            );
+                                            self.log_tab(ui);
+                                        }
+                                    });
+                            });
+                    }
+                    let mut roster_right = ui.available_rect_before_wrap().left();
+                    egui::CentralPanel::default()
+                        // The panel's drag handle lies on this edge, so the rows stop short of it.
+                        .frame(egui::Frame::new().inner_margin(egui::Margin {
+                            right: design::S as i8,
+                            ..egui::Margin::ZERO
+                        }))
+                        .show_inside(ui, |ui| {
+                            let scale = RunScale::fit(
+                                ui.available_height(),
+                                ui.available_width(),
+                                self.state.order.len(),
+                            );
+                            egui::ScrollArea::vertical()
+                                .id_salt("run_final_state")
+                                .auto_shrink([false, false])
+                                .show(ui, |ui| {
+                                    ui.set_max_width(ui.available_width().min(scale.max_width));
+                                    // SI1: how everyone ended comes first, so the whole party's HP is in
+                                    // view; what the party takes follows.
+                                    design::heading(ui, design::Heading::Label("Final state"));
+                                    let spacing = ui.spacing().item_spacing.y;
+                                    ui.spacing_mut().item_spacing.y = 0.0;
+                                    roster_right = ui.available_rect_before_wrap().right();
+                                    for index in &self.state.order {
+                                        let p = &self.state.participants[*index];
+                                        let sync = self.row_sync_word(*index);
+                                        let name = row_name(p, TurnMark::None, sync);
+                                        let layout = RowLayout::new(
+                                            ui,
+                                            ui.available_width(),
+                                            p,
+                                            sync,
+                                            scale,
+                                            RowFit::Natural,
+                                            0.0,
+                                        )
+                                        .with_art(self.row_art(ui.ctx(), p));
+                                        let response = design::row(
+                                            ui,
+                                            layout.height(scale),
+                                            false,
+                                            &name,
+                                            |ui, rect| {
+                                                paint_row(
+                                                    ui,
+                                                    rect,
+                                                    p,
+                                                    TurnMark::None,
+                                                    sync,
+                                                    scale,
+                                                    &layout,
+                                                    None,
+                                                    None,
+                                                );
+                                            },
+                                        );
+                                        if layout.name_cut {
+                                            response.on_hover_text(&p.name);
+                                        }
+                                    }
+                                    ui.spacing_mut().item_spacing.y = spacing;
+                                    design::gap(ui, design::Gap::L);
+                                    self.loot_section(ui);
+                                });
+                        });
+                    let mut header_ui = ui.new_child(
+                        egui::UiBuilder::new()
+                            .id_salt("ended_header")
+                            .max_rect(header_rect.with_max_y(header_rect.top() + first_line)),
+                    );
+                    header_ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        ui.set_min_height(60.0);
+                        let close_reason = self.close_reason();
+                        let close_width = close_reason.as_ref().map_or_else(
+                            || {
+                                Action::primary("Close run")
+                                    .density(Density::Glance)
+                                    .natural_width(ui)
+                            },
+                            |reason| {
+                                design::number_width(ui, reason, &Type::Small.font(ui))
+                                    .min(ui.available_width() / 2.0)
+                            },
+                        );
+                        ui.allocate_ui_with_layout(
+                            vec2(
+                                close_width,
+                                Density::Glance.control()
+                                    + if close_reason.is_some() {
+                                        Type::Small.line() + ui.spacing().item_spacing.y
+                                    } else {
+                                        0.0
+                                    },
+                            ),
+                            Layout::top_down(Align::RIGHT),
+                            |ui| {
+                                if Action::primary(if self.close_block().is_some() {
+                                    "Close after sync"
+                                } else {
+                                    "Close run"
+                                })
+                                .name("Close run")
+                                .density(Density::Glance)
+                                .blocked(self.close_block())
+                                .show(ui)
+                                .clicked()
+                                {
+                                    closed = self.request_close();
+                                }
+                                design::blocked_reason(ui, close_reason.as_deref());
+                            },
+                        );
+                        if one_line {
+                            self.ended_continue(ui, f32::INFINITY);
+                            let room = ui.available_width() - title_width - gap;
+                            // Undo stays at the roster's right edge, but never gives its target to it.
+                            let align =
+                                (ui.available_rect_before_wrap().right() - roster_right).max(0.0);
+                            let align = match self.ended_undo_whole(ui) {
+                                Some(whole) => align.min((room - whole).max(0.0)),
+                                None => align,
+                            };
+                            ui.add_space(align);
+                            self.ended_undo(ui, room - align);
+                        }
+                        self.save_status(ui);
+                        ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
+                            ui.spacing_mut().item_spacing.y = 0.0;
+                            self.run_title(ui, &self.state_words(false));
+                            ui.label(
+                                Type::Small
+                                    .rich(ui, format!("Outcome: {outcome}"))
+                                    .color(c.muted),
+                            );
+                        });
+                    });
+                    if !one_line {
+                        let mut second = ui.new_child(
+                            egui::UiBuilder::new()
+                                .id_salt("ended_header_actions")
+                                .max_rect(
+                                    header_rect
+                                        .with_min_y(header_rect.top() + first_line)
+                                        .with_max_x(if self.hide_panel {
+                                            header_rect.right()
+                                        } else {
+                                            roster_right
+                                        }),
+                                ),
+                        );
+                        second.with_layout(Layout::right_to_left(Align::Min), |ui| {
+                            self.ended_continue(ui, reason_room);
+                            let room = ui.available_width();
+                            self.ended_undo(ui, room);
+                        });
+                    }
                 },
-            );
-            if one_line {
-                self.ended_continue(ui, f32::INFINITY);
-                let room = ui.available_width() - title_width - gap;
-                // Undo stays at the roster's right edge, but never gives its target to it.
-                let align = (ui.available_rect_before_wrap().right() - roster_right).max(0.0);
-                let align = match self.ended_undo_whole(ui) {
-                    Some(whole) => align.min((room - whole).max(0.0)),
-                    None => align,
-                };
-                ui.add_space(align);
-                self.ended_undo(ui, room - align);
-            }
-            self.save_status(ui);
-            ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
-                ui.spacing_mut().item_spacing.y = 0.0;
-                self.run_title(ui, &self.state_words(false));
-                ui.label(
-                    Type::Small
-                        .rich(ui, format!("Outcome: {outcome}"))
-                        .color(c.muted),
-                );
-            });
-        });
-        if !one_line {
-            let mut second = ui.new_child(
-                egui::UiBuilder::new()
-                    .id_salt("ended_header_actions")
-                    .max_rect(
-                        header_rect
-                            .with_min_y(header_rect.top() + first_line)
-                            .with_max_x(if self.hide_panel {
-                                header_rect.right()
-                            } else {
-                                roster_right
-                            }),
-                    ),
-            );
-            second.with_layout(Layout::right_to_left(Align::Min), |ui| {
-                self.ended_continue(ui, reason_room);
-                let room = ui.available_width();
-                self.ended_undo(ui, room);
-            });
-        }
+            )
+            .pressed;
+        self.run_press(pressed, &mut None);
 
         closed
     }
@@ -6151,29 +6264,63 @@ fn snapshot_values_line(notice_shown: bool) -> &'static str {
     }
 }
 
-/// The action names what it does, so its label cannot be read as a state.
-/// What an encounter or group changed on this creature: the value it replaced and the new
-/// one, each marked. It stays out in the open, above the stat block that keeps its own values.
-/// A footer message with its dismiss cross at its end (AI1). The cross is a `Read` target,
-/// taller than the message's first line, so the message starts lower by half the difference:
-/// the cross is centred on the first line, not on the top of the words. True when the DM
-/// dismisses it.
+/// Words from outside the app's own: a write's or the system's error, a stat block's file
+/// name, the DM's names in a recharge roll or a carry-over. `Sentence::outside` gives them a
+/// capital and an end mark; blank words give `None`.
 #[allow(
     clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+    reason = "the run’s errors carry the system’s words, and its results the DM’s names"
 )]
-fn dismissable(ui: &mut egui::Ui, close: &str, message: impl FnOnce(&mut egui::Ui)) -> bool {
-    ui.horizontal_top(|ui| {
-        let width = ui.available_width() - Density::Read.control() - design::S;
-        let lift = ((Density::Read.control() - Type::Body.line()) / 2.0).max(0.0);
-        ui.vertical(|ui| {
-            ui.set_max_width(width);
-            ui.add_space(lift);
-            message(ui);
-        });
-        design::icon_button(ui, icons::CLOSE, close).clicked()
-    })
-    .inner
+fn outside_words(words: String) -> Option<design::outcome::Sentence> {
+    design::outcome::Sentence::outside(words)
+}
+
+/// What the run's message footer can press.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RunPress {
+    /// The Undo of the newest step's result (the saved HP's use).
+    UndoStep,
+    SaveAsNew,
+    Replace,
+    DismissError,
+    ToPackages,
+    DismissUnread,
+    UseSaved,
+    UseSheets,
+}
+
+/// The run's faults in its footer. The kind decides the tone.
+enum RunFault {
+    /// The run's file changed on disk: saving has stopped until the DM chooses.
+    DiskConflict,
+    /// The run's own error (a write, a stat block that cannot be read), in its own words.
+    Error(design::outcome::Sentence),
+    /// The saved Undo steps could not be read.
+    UndoUnread,
+    /// Party HP that a carry-over could not bring.
+    Carry(design::outcome::Sentence),
+}
+
+impl design::outcome::Fault for RunFault {
+    fn severity(&self) -> design::outcome::Severity {
+        use design::outcome::Severity;
+        match self {
+            Self::DiskConflict => Severity::NotSaved,
+            Self::Error(_) => Severity::CannotRead,
+            Self::UndoUnread | Self::Carry(_) => Severity::NeedsFixing,
+        }
+    }
+    fn cause(&self) -> design::outcome::Sentence {
+        match self {
+            Self::DiskConflict => crate::sentence!(
+                "This run changed on disk, perhaps from another copy of Splat or a sync tool. Your run is safe until you choose. Saving has stopped."
+            ),
+            Self::Error(words) | Self::Carry(words) => words.clone(),
+            Self::UndoUnread => crate::sentence!(
+                "Splat could not read this run’s saved Undo steps, so Undo starts again from here. No turn, HP or condition was lost."
+            ),
+        }
+    }
 }
 
 fn snapshot_notice(snapshot: &Entry, current: Option<&Entry>, unreadable: bool) -> Option<String> {

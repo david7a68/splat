@@ -1011,7 +1011,7 @@ const REST_STEP: &str = "full HP after long rest";
 /// The log's words for full HP after a restoring rest, wherever the run learns of it.
 const REST_LOG: &str = "Party HP is full after the long rest.";
 /// The Undo step that puts back the HP a Setup had before the rest.
-const SAVED_HP_STEP: &str = "use saved HP";
+pub(crate) const SAVED_HP_STEP: &str = "use saved HP";
 /// Why Continue fight is not offered: a fight or a rest has a later place in the order of play.
 pub(crate) const CONTINUE_LATER: &str = "A later fight or rest was played, so this fight cannot go on. Start a new run to play it again.";
 /// Why Continue fight is not offered: the Timeline has no event for this fight.
@@ -5628,7 +5628,10 @@ mod tests {
         let a = run.newest_step_result().map(|shown| shown.order());
         run.apply(Command::Damage(1, 1)).unwrap();
         let b = run.newest_step_result().map(|shown| shown.order());
-        assert!(a.is_some() && b.is_some() && a != b, "iter-28-R-steps: {a:?} {b:?}");
+        assert!(
+            a.is_some() && b.is_some() && a != b,
+            "iter-28-R-steps: {a:?} {b:?}"
+        );
         run.undo();
         assert_eq!(
             run.newest_step_result().map(|shown| shown.order()),
@@ -5639,7 +5642,10 @@ mod tests {
             run.undo();
         }
         assert!(run.newest_step_result().is_none());
-        assert!(run.step_results.is_empty(), "iter-28-R-steps: every undone step's result ends");
+        assert!(
+            run.step_results.is_empty(),
+            "iter-28-R-steps: every undone step's result ends"
+        );
     }
 
     pub(super) fn run() -> Run {

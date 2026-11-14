@@ -10155,10 +10155,10 @@ pub mod run_roster_conflict {
                     .any(|node| node.name == fault && node.is_link())
                 // iter-26-R FI11, SI2: the repair is a bordered button, as in Arrivals.
                 && d.nodes().iter().any(|node| {
-                    node.name == "Repair in Campaign → Packages"
+                    node.name == "Campaign → Packages"
                         && node.role == egui::accesskit::Role::Button
                 })
-                && d.control_frame("Repair in Campaign → Packages")
+                && d.control_frame("Campaign → Packages")
                     .is_some_and(|frame| frame.stroke.width > 0.0)
                 && d.visible_text("Campaign → Packages"),
             "A stat-block error is an error message, and its repair place is a bordered button",
@@ -10170,8 +10170,8 @@ pub mod run_roster_conflict {
             let places = d.at_size(size, |d| {
                 (
                     fault_words(d),
-                    d.place_of("Repair in Campaign → Packages"),
-                    d.place_of("Dismiss this error"),
+                    d.place_of("Campaign → Packages"),
+                    d.place_of(crate::design::outcome::DISMISS_NAME),
                     d.place_of(NEXT_TURN),
                 )
             });
@@ -10192,7 +10192,7 @@ pub mod run_roster_conflict {
         }
         // Astra 3: at 960 the whole fault is read in view, reached by the keyboard alone.
         let full_fault = "Ember Cultist's stat block could not be read. Its row still works.";
-        let reached = d.tab_to("Repair in Campaign → Packages");
+        let reached = d.tab_to("Campaign → Packages");
         d.observe(
             "iter-26-R-AI1-whole",
             d.window_size() == SMALL && reached && d.visible_text(full_fault),
@@ -22527,7 +22527,7 @@ pub mod session_plan {
         );
         d.state("resumed-setup-after-long-rest", Sizes::All);
         const SAVED_HP_SET: &str = crate::encounter_run::SAVED_HP_USED;
-        const SAVED_HP_UNDO: &str = "Undo use saved HP";
+        const SAVED_HP_UNDO: &str = "Undo: use saved HP";
         let notice_top = d
             .place_of("Party HP is full after the long rest.")
             .map(|rect| rect.top());
@@ -22579,7 +22579,7 @@ pub mod session_plan {
         d.observe(
             "iter-24-R-FJ4",
             d.has(SAVED_HP_UNDO) && !d.has("Undo"),
-            "The saved-HP result's Undo says Undo use saved HP, not a bare Undo",
+            "The saved-HP result's Undo says Undo: use saved HP, not a bare Undo",
         );
         let rows_result = row_tops(d);
         d.state("saved-hp-restored", Sizes::All);
