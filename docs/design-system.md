@@ -1239,19 +1239,20 @@ the line is as before. A row with an unfinished run shows no word. Arrivals name
 heading ends `· Fight after: XP 450 · Low`, the fight once the group joins, without the limit. The answer is worked out when the encounter, the saved sheets or the rules
 change, and when the editor's draft changes; never on a frame with no change.
 
-A Ready row's menu has `Remove…` after Edit encounter, only for an encounter with no saved run (unfinished,
+A Ready row's menu has `Remove` after Edit encounter, only for an encounter with no saved run (unfinished,
 ended, or unreadable but named), so it is never blocked. It removes the encounter's file and says `Removed
-encounter <name>.` with `Undo remove encounter`, as a saved group's `Remove…` does; the Undo writes the file
+encounter <name>.` with `Undo remove encounter`, as a saved group's `Remove` does; the Undo writes the file
 back only where no file has its path. A plan line that linked it gets no row, and its link in the note has the
 hover `Not found in this campaign`.
 
 History opens read-only final state and log in place, outside the live-run slot. When a run opens there, by `Open`
-or by `Whole run` from the plan, the list scrolls at that act so the run's row is at its top and the outcome,
-the line under Read-only and the whole Final state are in view below it; the log follows. The top is a clean edge: the
-row's top less its own gap, so no letters of the line above show cut. While the run is open, the list keeps room
-below its end, so the row reaches the top also when little follows it, and stays there when the list's visible height
-changes (a smaller window, a run opened beside it). After the DM scrolls, the DM's scroll wins. `COMBAT LOG` is `M` below the last Final state row, as `FINAL STATE` is below the
-line above it. Final state has one name column, as
+or by `Whole run` from the plan, the list scrolls once at that act, by the least distance that brings the run's row,
+the line under Read-only and the whole Final state into view; the log follows. A run already whole in view does not
+move the list, so `In progress` and `Ready to run` stay in view when they fit. Only a run taller than the list's view
+goes to its top, at a clean edge: the row's top less its own gap, so no letters of the line above show cut. The list
+keeps no room below its end. After the DM scrolls, the DM's scroll wins. The open run ends with an `L` gap before the
+next row, so that row does not read as a line of the log. `COMBAT LOG` is `L` below the last Final state row, as `FINAL STATE` is below the
+line above it: the heading part's space. Final state has one name column, as
 wide as the longest name up to half the room, so every HP starts at one x. HP and temporary HP follow in columns of
 their own, each as wide as its widest value, kept where a row has none; Absent, a saved concentration (its icon and
 `Conc` in its colour, the mark of the run's rows) and the conditions start after them and wrap inside the last column. Each row's values sit on its name's baseline. Rows put outcome before ended
@@ -1325,7 +1326,7 @@ for groups of controls and sentence-case field labels over single inputs; tabbed
 search says `Adding to <name>` as read-only text. The frame's Add slot keeps the width of `Adding here` with its
 check in every frame, so every name field ends at one edge and does not move with the Add target. Each encounter group has a frame below the roster with name,
 side, members and notes. The target frame has an accent outline. The Encounters page keeps groups in one
-closed section. Frames use Move to… for ownership; full editors use Belongs to, whose open menu is as wide as its control, as
+closed section. Frames use Move to for ownership; full editors use Belongs to, whose open menu is as wide as its control, as
 Library's scope menu is. A group that no fight can offer
 says so below Belongs to as a warning `small_message`, not as muted field help.
 
@@ -1333,9 +1334,10 @@ says so below Belongs to as a warning `small_message`, not as muted field help.
 
 Member rows and Group notes end at the members column's right edge (at most `LIST_MEASURE`), inside the scroll
 content and anchored left. The column keeps the scroll bar's lane whether or not the bar shows, so no field or
-action moves when a long list starts to scroll. The group editor's header is one block that ends at that column's
-edge: the name on line one with Save group after it at the column's edge, as Save encounter is on the encounter
-editor's title line; then the save row with the state and Discard at its start and the reasons. A reason without
+action moves when a long list starts to scroll. The group editor's header starts with the way back, then the name, which
+ends at that column's edge. Save group follows on that line and ends at the editor's right edge, above the Add
+creatures column, where Save encounter ends on the encounter editor's title line: one place in both editors. Then
+the save row with the state and Discard at its start and the reasons. A reason without
 room on the save row takes its own line below it. A group draft that Save's check refuses (a member's change that
 cannot stand, a missing creature, an empty group) says `Invalid`, changed or not, and Save group is not primary;
 the check runs when the draft, the campaign's read or the open group changes, never on an unchanged frame. The fault
@@ -1366,7 +1368,7 @@ Groups has one level of headings: For any encounter, each encounter, then Encoun
 group has `M` more room above it than below it, so it reads as the start of its groups. Rows keep Edit
 and a Remove menu action with Undo. Planned groups use Remove from tonight and Undo remove. Remove isolated
 plan links; retain words inside sentences. Moving an encounter group to any encounter says `<name> moves to
-any encounter when you save.`, with Undo move until save, in the info tone in the editor's footer: nothing is written until Save. Move to… lists named encounters only. Make available
+any encounter when you save.`, with Undo move until save, in the info tone in the editor's footer: nothing is written until Save. Move to lists named encounters only. Make available
 to any encounter is the direct way to remove ownership; keep it distinct from Delete group, with Undo before
 saving.
 
