@@ -2661,6 +2661,9 @@ pub struct InlineCreateResponse {
     /// Escape closed the layer above the form ([`InlineCreate::escape_closes_above`]) and not
     /// the form: no Cancel, and the field keeps the keyboard.
     pub closed_above: bool,
+    /// The named Create action as drawn this frame, for a caller that holds its press in place
+    /// (`pane::hold_press`).
+    pub create_control: Option<Response>,
 }
 
 impl<'a, State, R: CreateReasons> InlineCreate<'a, State, R> {
@@ -2889,6 +2892,7 @@ struct FieldLine {
     response: Response,
     side: bool,
     create: bool,
+    create_control: Option<Response>,
 }
 
 /// One text field with its side action and, when Create follows it, Create: beside the field
@@ -2907,6 +2911,7 @@ fn field_line<R: CreateReasons>(
         response: ui.response(),
         side: false,
         create: false,
+        create_control: None,
     };
     // The actions in order: the side action, then Create (true for the side action).
     let mut actions_in_order: Vec<bool> = Vec::new();
@@ -2923,11 +2928,15 @@ fn field_line<R: CreateReasons>(
         _ => None,
     };
     let draw_action = |ui: &mut Ui, line: &mut FieldLine, at: usize| {
-        let clicked = action_at(at).is_some_and(|action| action.show(ui).clicked());
+        let Some(response) = action_at(at).map(|action| action.show(ui)) else {
+            return;
+        };
+        let clicked = response.clicked();
         if actions_in_order[at] {
             line.side = clicked && side.is_some_and(|side| side.reason().is_none());
         } else {
             line.create = clicked;
+            line.create_control = Some(response);
         }
     };
     // A field with its hint inside it has no caption: its label is its accessible name.
@@ -3120,6 +3129,9 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
                     let line = field_line(ui, part, None, room, beside);
                     out.side |= line.side;
                     out.create |= line.create;
+                    if line.create_control.is_some() {
+                        out.create_control = line.create_control;
+                    }
                     out.fields.push(line.response);
                 }
                 CreatePart::Dropdown(dropdown) => {
@@ -3150,7 +3162,9 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
             }
             action_rows(ui, room, &widths, |ui, at, starts_row| {
                 if at == 0 {
-                    out.create |= create.action().show(ui).clicked();
+                    let response = create.action().show(ui);
+                    out.create |= response.clicked();
+                    out.create_control = Some(response);
                 } else if let Some((word, true)) = self.kept.cancel {
                     // Cancel that wraps to a row of its own starts the line at the text edge.
                     let action = if starts_row {

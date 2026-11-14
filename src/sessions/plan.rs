@@ -3225,7 +3225,10 @@ impl Sessions {
         let wide = wide.with_min_x(wide.left() - hang);
         let mut pane_ui = ui.new_child(egui::UiBuilder::new().max_rect(wide).layout(*ui.layout()));
         pane_ui.set_clip_rect(ui.clip_rect().with_min_x(wide.left()));
-        let paned = messages.pane(&mut pane_ui, design::Body::Content, |outer| {
+        // The pane holds a pressed control in place through the change its press makes above
+        // it: the Scene field's `Add` adds a row above the field (R30).
+        let scroll = design::pane::ContentScroll::default().holds_presses();
+        let paned = messages.pane_content(&mut pane_ui, scroll, |outer| {
             // The pane is the rows' scroll column; its lane is kept, so a row's actions keep
             // their x when the plan grows long enough to scroll.
             let lane_width = outer.available_width();

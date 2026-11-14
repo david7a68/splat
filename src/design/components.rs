@@ -1793,6 +1793,15 @@ impl<T> AddFieldForm<'_, T, WithActions> {
         if out.closed_above {
             state.highlight = None;
         }
+        // R30: `Add` adds a line above the field (the list grows), so a pane that holds presses
+        // keeps the pressed `Add` under the pointer; in any other pane these calls do nothing.
+        if let Some(add) = &out.create_control {
+            let key = self.id.named_id(self.name).with("add_field_add");
+            if add.clicked() {
+                super::pane::hold_press(ui, key, add);
+            }
+            super::pane::held_seen(ui, key, add.rect.top());
+        }
         let field = out
             .fields
             .into_iter()
