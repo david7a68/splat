@@ -6341,6 +6341,98 @@ mod tests {
             "the guarded words have a field after the session is renamed"
         );
 
+        // Round 29 P-1 review: the same entry open in World's page and in Lookup, each with its
+        // own Log draft. Two fields with their own ids; typing, Add and Cancel change only the
+        // chosen draft.
+        {
+            use egui_kittest::kittest::Queryable;
+            let name = "Log line for Hob";
+            let page = Reader {
+                played: Some("[[Session 1]]".into()),
+                ..Default::default()
+            };
+            let compact = Reader {
+                played: Some("[[Session 1]]".into()),
+                compact: true,
+                ..Default::default()
+            };
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(egui::vec2(560.0, 1200.0))
+                .build_ui_state(
+                    |ui, (page, compact): &mut (Reader, Reader)| {
+                        page.played = Some("[[Session 1]]".into());
+                        compact.played = Some("[[Session 1]]".into());
+                        page.read(ui, item, &index, Some(&campaign));
+                        compact.read(ui, item, &index, Some(&campaign));
+                    },
+                    (page, compact),
+                );
+            crate::design::theme::install(&harness.ctx);
+            harness.state_mut().0.open_log(campaign.id, hob, "Hob", "");
+            harness.state_mut().1.open_log(campaign.id, hob, "Hob", "");
+            harness.run_steps(2);
+            assert!(
+                crate::design::layout::field_id_clashes(&harness.ctx).is_empty(),
+                "the two readers' Log fields have their own ids"
+            );
+            assert_eq!(
+                harness.query_all_by_label(name).count(),
+                2,
+                "two Log fields"
+            );
+            let words = |harness: &egui_kittest::Harness<'_, (Reader, Reader)>| {
+                let state = harness.state();
+                [&state.0, &state.1].map(|reader| {
+                    reader
+                        .held
+                        .log_fields
+                        .get(&key)
+                        .map(|open| open.field.words.clone())
+                })
+            };
+            harness.query_all_by_label(name).nth(1).unwrap().focus();
+            harness.run_steps(1);
+            harness
+                .query_all_by_label(name)
+                .nth(1)
+                .unwrap()
+                .type_text("Paid the ferryman.");
+            harness.run_steps(1);
+            assert_eq!(
+                words(&harness),
+                [Some(String::new()), Some("Paid the ferryman.".into())],
+                "typing changes Lookup's draft only"
+            );
+            harness.query_all_by_label(name).next().unwrap().focus();
+            harness.run_steps(1);
+            harness
+                .query_all_by_label(name)
+                .next()
+                .unwrap()
+                .type_text("Lost the map.");
+            harness.run_steps(1);
+            harness.query_all_by_label("Add").nth(1).unwrap().click();
+            harness.run_steps(2);
+            let text = fs::read_to_string(&path).unwrap();
+            assert!(
+                text.contains("Paid the ferryman.") && !text.contains("Lost the map."),
+                "Lookup's Add writes Lookup's words only: {text}"
+            );
+            assert_eq!(
+                words(&harness),
+                [Some("Lost the map.".into()), None],
+                "Add closes Lookup's draft only"
+            );
+            harness.query_all_by_label("Cancel").next().unwrap().click();
+            harness.run_steps(2);
+            assert_eq!(
+                words(&harness),
+                [None, None],
+                "Cancel closes the page's draft"
+            );
+            assert!(!fs::read_to_string(&path).unwrap().contains("Lost the map."));
+        }
+
         // An entry that is gone: its draft waits for no guard, and the pane's footer says the
         // words, so nothing is lost without a word.
         let hob_text = fs::read_to_string(&path).unwrap();

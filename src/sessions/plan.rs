@@ -1640,8 +1640,9 @@ pub(super) struct Scenes {
     fold: Fold,
     /// The Scene field had focus on the last frame.
     typing: bool,
-    /// A scene was just added from the Scene field: its result under the field scrolls whole
-    /// into view, on each frame until it is (another scroll of the same frame may win once).
+    /// A scene was just added from the Scene field: its result under the field is kept whole in
+    /// view (also when the window changes size) until the DM moves the view, types in the
+    /// field, or the result goes.
     reveal_added: bool,
 }
 
@@ -3957,6 +3958,9 @@ impl Sessions {
         let typed = state.words.trim().to_owned();
         let emptied = state.words.is_empty();
         self.scenes.typing = result.field.has_focus();
+        if result.field.changed() || user_moved_the_view(ui) {
+            self.scenes.reveal_added = false;
+        }
         self.field_result(ui, result.field.rect, reveal, shown, act);
         if let Some(link) = result.chosen {
             *act = Some(SceneAct::Add(link));
@@ -4006,19 +4010,21 @@ impl Sessions {
         }
         // Round 29 P-1: after Add, the result and its Undo, the answer to the act, are whole in
         // view, with the field above them while both fit; else the result wins. The least
-        // scroll that shows them, on each frame until they show.
+        // scroll that shows them, while the reveal holds (`Scenes::reveal_added`).
         match added {
             Some(result) if self.scenes.reveal_added => {
-                if ui.clip_rect().contains_rect(result) {
-                    self.scenes.reveal_added = false;
-                } else if field.union(result).height() <= ui.clip_rect().height() {
-                    ui.scroll_to_rect(field.union(result), None);
-                } else {
-                    ui.scroll_to_rect(result, None);
+                let clip = ui.clip_rect();
+                if !clip.contains_rect(result) {
+                    if field.union(result).height() <= clip.height() {
+                        ui.scroll_to_rect(field.union(result), None);
+                    } else {
+                        ui.scroll_to_rect(result, None);
+                    }
                 }
             }
-            // Not drawn under the field in this frame: the next Add sets it again.
-            _ => {}
+            Some(_) => {}
+            // The result went (Undo, another act, the field closed).
+            None => self.scenes.reveal_added = false,
         }
     }
 
