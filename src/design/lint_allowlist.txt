@@ -7,7 +7,6 @@ src/npc_generator.rs straight-apostrophe 3
 # the compiler finds every call, import and alias. Wave 2 moves each file to `design::outcome` and
 # deletes its line. When none is left, the old functions become private. A count raised together
 # with its allowance passes this test: a reviewer reads every raised line.
-src/campaign_content.rs allow-deprecated 1
 src/campaigns.rs allow-deprecated 1
 src/copy_dialog.rs allow-deprecated 1
 src/dndbeyond.rs allow-deprecated 1

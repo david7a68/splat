@@ -2442,40 +2442,6 @@ pub fn linked_sentence(ui: &mut Ui, names: &[&str], suffix: &str) -> Option<usiz
     clicked
 }
 
-/// A message whose first words are entry links, such as the encounters a package removal leaves
-/// without creatures. Capped at `LIST_MEASURE` like every notice. Round 27 FE5: a result's Undo
-/// stays on its own success sentence (`undo_message`), and this message follows it, so it has no
-/// action of its own. The pressed link's index.
-#[deprecated(
-    note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."
-)]
-pub fn message_with_links(ui: &mut Ui, tone: Tone, names: &[&str], suffix: &str) -> Option<usize> {
-    let (icon, color) = tone.parts();
-    ui.scope(|ui| {
-        ui.set_max_width(ui.available_width().min(LIST_MEASURE));
-        ui.horizontal_top(|ui| {
-            let start = ui.cursor().min;
-            space(ui, S + 1.0);
-            // The sentence starts with a link, so its first line is a link's height. The icon
-            // centres on that line, as `message` centres it on its words.
-            let first_line = XL.max(Type::Body.line());
-            ui.allocate_ui_with_layout(
-                vec2(number_width(ui, icon, &Type::Body.font(ui)), first_line),
-                Layout::left_to_right(Align::Center),
-                |ui| ui.label(Type::Body.rich(ui, icon).color(color)),
-            );
-            space(ui, -XS);
-            let content = ui.vertical(|ui| linked_sentence(ui, names, suffix));
-            let bar =
-                Rect::from_min_max(start, pos2(start.x + 3.0, content.response.rect.bottom()));
-            ui.painter().rect_filled(bar, 0.0, color);
-            content.inner
-        })
-        .inner
-    })
-    .inner
-}
-
 /// A message with several actions below it, aligned with the message text.
 #[deprecated(
     note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."
@@ -5012,16 +4978,14 @@ mod tests {
             right - left <= LIST_MEASURE + 0.5 && words.height() > Type::Body.line(),
             "the message spans {left}..{right}: words {words:?}, action {action:?}"
         );
-        // The same cap holds for the Undo message and the message with links.
-        for links in [false, true] {
+        // The same cap holds for the Undo message (the message with links is gone: its last
+        // caller, Campaign content, moved to the typed footer).
+        {
+            let links = false;
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(1800.0, 240.0))
                 .build_ui(move |ui| {
-                    if links {
-                        message_with_links(ui, Tone::Warning, &["Ashen Marches"], LONG);
-                    } else {
-                        undo_message(ui, Tone::Success, LONG, "Undo");
-                    }
+                    undo_message(ui, Tone::Success, LONG, "Undo");
                 });
             super::super::theme::install(&harness.ctx);
             harness.run_steps(2);
