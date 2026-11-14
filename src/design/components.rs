@@ -1355,10 +1355,12 @@ pub(super) fn search_box(
     // then `kept` px for `Clear` and the frame's own margin at the right. When the row is
     // narrower than all of that, the text area gives way first, then the right margin: the frame
     // never leaves the row.
+    // egui's margins are whole pixels: the right one is rounded down and the text area takes
+    // the rest, so the margins and the text area add up to exactly the row.
     let width = width.max(0.0);
-    let left = SEARCH_LEFT.min(width);
-    let text_room = (width - SEARCH_LEFT - SEARCH_RIGHT - kept).max(0.0);
-    let right = (width - left - text_room).max(0.0);
+    let left = SEARCH_LEFT.min(width).floor();
+    let right = (SEARCH_RIGHT + kept).min(width - left).max(0.0).floor();
+    let text_room = (width - left - right).max(0.0);
     // The hint keeps whole words inside the text area: a narrow field cuts it with an
     // ellipsis, never past the area. It shows only while the field is empty, so it is measured
     // only then.
@@ -1373,8 +1375,8 @@ pub(super) fn search_box(
             .desired_width(text_room)
             .min_size(vec2(width, height))
             .margin(egui::Margin {
-                left: left.round() as i8,
-                right: right.round().min(i8::MAX as f32) as i8,
+                left: left as i8,
+                right: right.min(i8::MAX as f32) as i8,
                 top: 6,
                 bottom: 6,
             })

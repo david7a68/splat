@@ -1000,8 +1000,9 @@ fn a_search_field_always_draws_its_clear() {
     for (width, query, hint) in [
         (50.0, "", "Search by name…"),
         (50.0, "Wolf", "Search by name…"),
-        (150.0, "", LONG_WORD),
-        (150.0, "", UNSPACED),
+        (150.4, "", LONG_WORD),
+        (150.4, "", UNSPACED),
+        (150.4, "Wolf", UNSPACED),
     ] {
         let ctx = context();
         let mut query = query.to_owned();
@@ -1023,8 +1024,8 @@ fn a_search_field_always_draws_its_clear() {
             .1;
         }
         assert!(
-            field.width() <= width + 0.5,
-            "x2-narrow: the frame {field:?} keeps inside the {width} px row"
+            field.width() <= width + 0.01,
+            "x2-narrow: the frame {field:?} keeps inside the {width} px row (not even half a pixel past it)"
         );
         if !query.is_empty() {
             let clear = painted
