@@ -8138,16 +8138,14 @@ pub mod run_sync_conflict {
         };
         for size in [SMALL, DEFAULT] {
             let (conflict, review, undo, reminders) = d.at_size(size, line);
-            // The reminders, when they show at all, are in the room between Review and Undo.
-            let clear = conflict
-                .zip(review)
-                .zip(undo)
-                .is_some_and(|((conflict, review), undo)| {
-                    // X69: the conflict's name ends `S` before `Review`.
-                    conflict.right() + crate::design::S <= review.left() + 1.0
-                        && review.right() < undo.left()
+            // The reminders, when they show at all, are in the room between the conflict and
+            // Undo. Q-j (iter-29 G134, FP2): the conflict's words are its one review link, so
+            // no `Review` link follows them.
+            let clear = review.is_none()
+                && conflict.zip(undo).is_some_and(|(conflict, undo)| {
+                    conflict.right() < undo.left()
                         && reminders.is_none_or(|place| {
-                            place.left() > review.right() && place.right() < undo.left()
+                            place.left() > conflict.right() && place.right() < undo.left()
                         })
                 });
             d.observe(
@@ -8400,6 +8398,25 @@ pub mod party_from_run {
         d.click(SHEET_PAGE);
         d.wait_for_text("This row moves. The current turn stays.");
         d.state("correct-tab", Sizes::Default);
+        // iter-29 G127 (FJ8): the note already added has its own label between the reason and
+        // the note, so it does not read as the reason's second sentence.
+        let place = |d: &Driver<'_>, wanted: &str| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name == wanted)
+                .map(|node| node.rect)
+        };
+        let order = (
+            place(d, "Type a note first."),
+            place(d, "Notes so far"),
+            place(d, "Holding the bridge."),
+        );
+        d.observe(
+            "iter-29-R1-G127",
+            matches!(order, (Some(reason), Some(label), Some(note))
+                if reason.bottom() <= label.top() && label.bottom() <= note.top()),
+            format!("Reason, label and saved note in that order: {order:?}"),
+        );
         // FI3, FJ2: every reason sits on its own line below its field, at the field's left, and
         // the note field takes the form's width up to Add note.
         let correct = |d: &Driver<'_>| {
@@ -9752,6 +9769,30 @@ pub mod run_edge_states {
         d.state_prepared("changed-on-disk", Sizes::Default, |d| {
             conflict_choices_read_height(d, "iter-15-B2-density-run", SAVE_AS_NEW, KEEP_RUN);
         });
+        // iter-29 G131 (R25, FK2): the notice cannot be dismissed, so the roster's room ends
+        // above it. At 1200 every row of this roster fits there: no `N below` while the DM
+        // chooses.
+        let below = d.at_size(DEFAULT, |d| {
+            let mut found = None;
+            d.each_painted_text(|text, clip| {
+                let words = &text.galley.job.text;
+                if clip.intersects(text.visual_bounding_rect())
+                    && words.ends_with(" below")
+                    && words
+                        .split(' ')
+                        .next()
+                        .is_some_and(|count| count.parse::<u32>().is_ok())
+                {
+                    found = Some(words.clone());
+                }
+            });
+            found
+        });
+        d.observe(
+            "iter-29-R1-G131",
+            below.is_none(),
+            format!("Every roster row shows above the notice that cannot be dismissed: {below:?}"),
+        );
         d.goal("see the run changed on disk");
         // The state cannot be dismissed, and closing tells the truth about it.
         d.observe(
@@ -10071,9 +10112,11 @@ pub mod run_sync_states {
         );
         // iter-28-R FL4: the pending block says what waits, that Splat tries again, and how to
         // close now; the conflict block beside it keeps `Choose which values to keep`.
+        // iter-29 G178 (AL2, FL2, SL3): it names the change that waits, in the HP form of the
+        // conflict's buttons: `Its change to 49/62 HP has not reached D&D Beyond yet.`
         let pending = d.nodes().into_iter().find(|node| {
-            node.name
-                .contains("changes have not reached D&D Beyond yet")
+            node.name.starts_with("Its change to ")
+                && node.name.contains(" HP has not reached D&D Beyond yet")
         });
         d.observe(
             "iter-28-R-FL4",
@@ -11530,6 +11573,16 @@ pub mod signed_in {
         d.click(CLOSE_RUN);
         d.app_mut().encounters.simulate_sync_conflict(OTHER);
         d.settle();
+        // iter-29 G44 (FO2): this is the close dialog's second opening in this view. It gives
+        // Keep running the default focus again, as the first did.
+        d.observe(
+            "iter-29-R1-G44",
+            d.focused_name().as_deref() == Some("Keep running"),
+            format!(
+                "The second opening focuses Keep running: {:?}",
+                d.focused_name()
+            ),
+        );
         for size in [SMALL, DEFAULT, LARGE] {
             let pair = d.at_size(size, |d| {
                 let connect = line_and_action_below(d, CHOOSE, "Connect to sync");
@@ -14172,7 +14225,12 @@ pub mod session_notes {
             .encounters
             .simulate_sync_conflict("Iselle Marrowind");
         d.settle();
-        d.click("Review");
+        // Q-j (iter-29 G134): the conflict's words are its review link.
+        if d.has("Sync conflict: Iselle Marrowind") {
+            d.click("Sync conflict: Iselle Marrowind");
+        } else {
+            d.click("Conflict: Iselle Marrowind");
+        }
         d.observe(
             "T11.8",
             !d.has("Close notes"),

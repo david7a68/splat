@@ -241,10 +241,10 @@ impl Run {
                     )
                 } else if let Some(alert) = &sync_alert {
                     // Measure only what is painted: no space after a notice with no link.
+                    // Q-j (iter-29 G134, FP2): a conflict's words are its review link, so no
+                    // second `Review` link follows them.
                     let link = if needs_connection {
                         "Connect to sync"
-                    } else if self.hide_panel && strip.conflict.is_some() {
-                        "Review"
                     } else {
                         ""
                     };
@@ -454,9 +454,7 @@ impl Run {
                         )
                         .on_hover_text(NOBODY_PRESENT);
                     } else if let Some(alert) = &sync_alert {
-                        let link = if strip.conflict.is_some() && self.hide_panel {
-                            "Review"
-                        } else if needs_connection {
+                        let link = if needs_connection {
                             "Connect to sync"
                         } else {
                             ""
@@ -531,11 +529,7 @@ impl Run {
                             design::gap(ui, design::Gap::XS);
                         }
                         if !link.is_empty() && fits_link && design::small_link(ui, link).clicked() {
-                            if link == "Review" {
-                                review_conflict = true;
-                            } else {
-                                self.wants_sign_in = true;
-                            }
+                            self.wants_sign_in = true;
                         }
                     } else if self.recording_notice.is_none() {
                         let text = if nobody_present {
@@ -827,8 +821,9 @@ mod tests {
             "three long reminders are their count"
         );
         assert_eq!(undo(&harness), Some(before));
-        // A conflict comes first: a long name shortens beside the bare Undo, `Review` stays,
-        // and the reminders have no room.
+        // A conflict comes first: a long name shortens beside the bare Undo, and the reminders
+        // have no room. Q-j (iter-29 G134): the conflict's words are its one review link; no
+        // `Review` link follows them.
         let mut conflict = super::super::tests::conflicted();
         conflict.state.participants[0].name =
             "Oren Thistlewick, Keeper of the Southern Road".into();
@@ -837,8 +832,8 @@ mod tests {
         conflict.hide_panel = true;
         let harness = header(conflict, 442.0);
         assert!(
-            harness.query_by_label("Review").is_some(),
-            "{:?}",
+            harness.query_by_label("Review").is_none(),
+            "iter-29-R1-G134: {:?}",
             harness.root()
         );
         let shown = harness

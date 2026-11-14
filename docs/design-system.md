@@ -1260,14 +1260,20 @@ character). It has one form on every line that shows it (`Rating::parts`, drawn 
 `XP 1,050 · Moderate (up to 1,125)`. The number in brackets is the word's limit; `Above High` has none
 (`XP 2,400 · Above High`). The editor's `ROSTER 8` heading ends `· XP 1,050 · Moderate (up to 1,125)`; below 760 px
 the tab row ends at its right with the same form. A Ready to run row's summary and a planned fight's row end with it
-too. The word never gives way. Where a line has no room, the limit goes first (`XP 1,050 · Moderate`), then the
-summary before it, from its end, by whole facts and members (`5 party · 1 × Cinder Tyrant, … · XP 6,300 · High`);
-the row's hover and its accessible name keep the whole line. A fight with no word because an input is not known says
-`XP not known` in the word's place (`Difficulty::form`). With no table or no party, or nothing against the party,
-the line is as before. A row with an unfinished run shows no word. Arrivals names what the XP is for: a group's
-heading says `Fight after: XP 450 · Low`, the fight once the group joins, without the limit. R1: `Fight after` and
-its word never give way: the member count goes first, then the side, then the XP number, through the one difficulty
-line (`difficulty::Line::fight_after`); the heading never adds a line. The answer is worked out when the encounter, the saved sheets or the rules
+too. The word never gives way. Where a line has no room (Q-s), `5 party` goes first (it is the same on every row),
+then the limit (`XP 1,050 · Moderate`), then the XP number, then the creature summary from its end, by whole facts
+and members (`1 × Cinder Tyrant, … · High`): the row answers "what can I run?", so the creatures stay longest. The
+row's hover and its accessible name keep the whole line. A fight with no word because an input is not known says
+`XP not known` in the word's place (`Difficulty::form`), with whose input it is only where the line does not show
+that name already (`1 × Nameless Thing · XP not known`, never `… Nameless Thing · XP not known: Nameless Thing`).
+With no table or no party, or nothing against the party, the line is as before. A row with an unfinished run shows
+no word. Arrivals names what the XP is for: a group's heading says its side, its member count, then `Fight after:
+XP 450 · Low`, the fight once the group joins (`Enemies · 3 members · Fight after: XP 450 · Low`, the order of the
+Encounters list and the plan). R1: every group that can join says `Fight after`, also a group of allies and a fight
+with no word (`Fight after: XP not known: Ghost of the Mill`); with no form at all the heading says the group's own
+XP after its count instead. `Fight after` and its word never give way: the limit goes first, then the member count,
+then the side, then the XP number, through the one difficulty line (`difficulty::Line::fight_after`); the heading
+never adds a line. The answer is worked out when the encounter, the saved sheets or the rules
 change, and when the editor's draft changes; never on a frame with no change.
 
 A Ready row's menu has `Remove` after Edit encounter, only for an encounter with no saved run (unfinished,
@@ -1852,7 +1858,7 @@ labels (`Undo: 2 loot rolls`), with the full action in hover and its accessible 
 secondary `Continue fight` on its own line under Read-only, blocked with `Close the open run first.` while another
 run is open. Continue fight is offered only for the fight that was played last (`README.md`, Running an encounter
 as DM). For any other ended fight the control is absent, and one muted `Small` sentence stands in its place and says
-why: `A later fight or rest was played, so this fight cannot go on. Start a new run to play it again.` It is a sentence and not a blocked
+why, the result first (R23): `This fight cannot go on: a later fight or rest was played. Start a new run to play it again.` It is a sentence and not a blocked
 button, because no step in this view makes the control work. In the ended header the sentence wraps to at most
 `15 × L` wide, so Close run and the title keep their places; on the two-line header it follows Undo on the second
 line. In History it is the line under Read-only, `S` below it and `M` above `FINAL STATE`. Neither is modal, and Undo names the step: `Undo: continue fight`. After Continue fight, the

@@ -101,6 +101,43 @@ pub(crate) struct AddedFrom {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group_id: Option<Uuid>,
 }
+/// A second step that the DM opened: the close dialog. Each opening owes the dialog's default
+/// focus once (FO2): the first frame that draws the default control gives it the focus, and the
+/// next opening is a new value that owes it again. No flag outlives the opening it was for.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum Opening {
+    #[default]
+    Shut,
+    Open {
+        focus_owed: bool,
+    },
+}
+
+impl Opening {
+    /// Open the step. A step that is already open stays the same opening.
+    pub(crate) fn open(&mut self) {
+        if !self.is_open() {
+            *self = Self::Open { focus_owed: true };
+        }
+    }
+
+    pub(crate) fn shut(&mut self) {
+        *self = Self::Shut;
+    }
+
+    pub(crate) fn is_open(self) -> bool {
+        matches!(self, Self::Open { .. })
+    }
+
+    /// True once for each opening: the frame that draws the default control gives it focus.
+    pub(crate) fn take_focus(&mut self) -> bool {
+        match self {
+            Self::Open { focus_owed } => std::mem::take(focus_owed),
+            Self::Shut => false,
+        }
+    }
+}
+
 /// One line of an encounter group, as a run adds it.
 #[derive(Clone, Debug)]
 pub(crate) struct GroupMember {
@@ -885,7 +922,7 @@ pub(crate) struct Run {
     syncs: BTreeMap<usize, crate::combat_sync::CombatSync>,
     sync_shadows: BTreeMap<usize, SheetShadow>,
     panel: Panel,
-    closing: bool,
+    closing: Opening,
     ending: bool,
     focus_amount: bool,
     /// The row whose effect the dock's field is open for, by key.
@@ -1018,13 +1055,15 @@ const REST_LOG: &str = "Party HP is full after the long rest.";
 /// The Undo step that puts back the HP a Setup had before the rest.
 pub(crate) const SAVED_HP_STEP: &str = "use saved HP";
 /// Why Continue fight is not offered: a fight or a rest has a later place in the order of play.
-pub(crate) const CONTINUE_LATER: &str = "A later fight or rest was played, so this fight cannot go on. Start a new run to play it again.";
+/// R23 (Q-n, AJ3, SJ4): the result first, then its cause.
+pub(crate) const CONTINUE_LATER: &str =
+    "This fight cannot go on: a later fight or rest was played. Start a new run to play it again.";
 /// Why Continue fight is not offered: the Timeline has no event for this fight.
 const CONTINUE_NO_EVENT: &str =
-    "This fight is not on the Timeline, so it cannot go on. Start a new run to play it again.";
+    "This fight cannot go on: it is not on the Timeline. Start a new run to play it again.";
 /// The cause alone, for a fight whose encounter is deleted: no new run can start from it.
-const CONTINUE_LATER_GONE: &str = "A later fight or rest was played, so this fight cannot go on.";
-const CONTINUE_NO_EVENT_GONE: &str = "This fight is not on the Timeline, so it cannot go on.";
+const CONTINUE_LATER_GONE: &str = "This fight cannot go on: a later fight or rest was played.";
+const CONTINUE_NO_EVENT_GONE: &str = "This fight cannot go on: it is not on the Timeline.";
 /// The words for a `continue_blocked` reason. A reason's next step, `Start a new run …`, is
 /// true only while the fight's encounter exists; for a deleted encounter only the cause stays.
 pub(crate) fn continue_reason(reason: &'static str, encounter_exists: bool) -> &'static str {
@@ -1393,7 +1432,7 @@ impl Run {
             syncs: BTreeMap::new(),
             sync_shadows: BTreeMap::new(),
             panel: Panel::Encounter,
-            closing: false,
+            closing: Opening::Shut,
             ending: false,
             focus_amount: false,
             effect_open: None,
@@ -3031,6 +3070,15 @@ impl Run {
                     }
                     (Condition::Effect(effect), _) => {
                         format!("add effect {} on {}", effect.name, name(i))
+                    }
+                    // FK11 (iter-29 G22, `docs/design-system.md:1576`): words that are not an
+                    // official condition are an effect of the OTHER EFFECTS list, timed or
+                    // not, so their Undo has the one form `add effect <words>`.
+                    (Condition::Label(words), _)
+                        if recognized_condition(&words).is_none()
+                            && !words.starts_with("Exhaustion") =>
+                    {
+                        format!("add effect {words} on {}", name(i))
                     }
                     (Condition::Label(words), _) => format!("add {words} on {}", name(i)),
                 }
@@ -4711,7 +4759,7 @@ impl Run {
             syncs,
             sync_shadows: BTreeMap::new(),
             panel,
-            closing: false,
+            closing: Opening::Shut,
             ending: false,
             focus_amount: true,
             effect_open: None,
@@ -6055,6 +6103,18 @@ mod tests {
         ] {
             run.apply(Command::Condition(1, words.into())).unwrap();
         }
+        // FK11 (iter-29 G22): words with no time are an effect too: one Undo form,
+        // `add effect <words>`. An official condition stays `add <condition>`.
+        run.apply(Command::Condition(0, "Wreathed in the cinders".into()))
+            .unwrap();
+        assert_eq!(
+            run.undo_label(),
+            format!("Undo: add effect Wreathed in the cinders on {}", names[0])
+        );
+        run.undo();
+        run.apply(Command::Condition(0, "Prone".into())).unwrap();
+        assert_eq!(run.undo_label(), format!("Undo: add Prone on {}", names[0]));
+        run.undo();
         run.apply(Command::Condition(2, "Legendary actions 3 uses".into()))
             .unwrap();
         let reminders = |run: &Run| run.turn_reminders().map(|(whole, ..)| whole);
@@ -9491,11 +9551,11 @@ mod tests {
         for (reason, gone) in [
             (
                 CONTINUE_LATER,
-                "A later fight or rest was played, so this fight cannot go on.",
+                "This fight cannot go on: a later fight or rest was played.",
             ),
             (
                 CONTINUE_NO_EVENT,
-                "This fight is not on the Timeline, so it cannot go on.",
+                "This fight cannot go on: it is not on the Timeline.",
             ),
             (CONTINUE_NEEDS_TIMELINE, CONTINUE_NEEDS_TIMELINE),
             (CONTINUE_DISK_CHANGED, CONTINUE_DISK_CHANGED),
@@ -9514,6 +9574,10 @@ mod tests {
                     "the reason says the fight cannot go on: {shown}"
                 );
                 assert!(!shown.ends_with("first."), "{shown}");
+                // R23 (iter-29 G160): a reason that says the fight cannot go on says it first.
+                if shown.contains("cannot go on") {
+                    assert!(shown.starts_with("This fight cannot go on: "), "{shown}");
+                }
             }
         }
         // The app starts again with A open, as A was when the app closed. A's ending comes
@@ -10913,21 +10977,71 @@ mod tests {
             p.present = true;
         }
         assert!(weigh(&mut run).is_some());
+        // R1, FJ3 (iter-29 G121): a group of allies only still says the fight after it joins:
+        // the fight as it is, since an ally that is not a character adds no XP.
+        let allies = group_of(
+            "Watch Detail",
+            "party",
+            vec![(cr1.clone(), 1, Overrides::default())],
+        );
+        run.groups = Some(Arc::new(vec![group.clone(), allies.clone()]));
+        let word = |run: &mut Run, id| {
+            run.revision += 1;
+            run.arrival_words().unwrap()[&id]
+                .0
+                .rating
+                .as_ref()
+                .map(|rating| (rating.word, rating.xp))
+        };
+        assert_eq!(
+            word(&mut run, allies.id),
+            Some((crate::difficulty::Word::Low, 600))
+        );
+        // FK3, SK3 (iter-29 G129): after a made-up creature joins, its XP is not known; every
+        // joining group keeps its fight, with no word and whose XP it is.
+        let made_up = with("splat_creature", "{type: undead}");
+        run.state.participants.push(
+            Participant::new(
+                "Ghost of the Mill".into(),
+                "enemies".into(),
+                made_up,
+                &Mapping::new(),
+                true,
+            )
+            .unwrap(),
+        );
+        let missing = |run: &mut Run, id| {
+            run.revision += 1;
+            let (fight, _) = &run.arrival_words().unwrap()[&id];
+            (
+                fight.rating.is_some(),
+                fight.missing.as_ref().and_then(|missing| missing.words()),
+            )
+        };
+        let ghost = run.state.participants.last().unwrap().name.clone();
+        for id in [group.id, allies.id] {
+            assert_eq!(
+                missing(&mut run, id),
+                (false, Some(format!("XP not known: {ghost}")))
+            );
+        }
+        run.state.participants.pop();
         // A saved sheet that is gone or cannot be read after the run started: the run's old
-        // copy never gives the level, so the word does not show.
+        // copy never gives the level, so the word does not show; the line names whose level.
+        let hero = format!("Level not known: {}", run.state.participants[0].name);
         let mut scale = (**run.scale.as_ref().unwrap()).clone();
         scale.party.remove(&heroes[0].id);
         run.scale = Some(Arc::new(scale.clone()));
         assert_eq!(
-            weigh(&mut run),
-            None,
+            missing(&mut run, group.id),
+            (false, Some(hero.clone())),
             "a missing saved sheet hides the word"
         );
         scale.party.insert(heroes[0].id, None);
         run.scale = Some(Arc::new(scale));
         assert_eq!(
-            weigh(&mut run),
-            None,
+            missing(&mut run, group.id),
+            (false, Some(hero.clone())),
             "an unreadable saved sheet hides the word"
         );
     }
