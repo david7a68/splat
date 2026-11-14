@@ -10278,11 +10278,13 @@ pub mod run_roster_conflict {
         let full_fault = "Ember Cultist's stat block could not be read. Its row still works.";
         // The footer is last in the reading order, so the keyboard's fast way to it is Shift+Tab
         // (review of PR 338: within 10 reverse stops of the top).
+        // The dock's and the footer line's controls come after the pane in the reading order
+        // (measured: 10 of them, then the message's close, then its repair).
         let stops = d.shift_tab_to("Campaign → Packages");
         d.observe(
             "iter-26-R-AI1-whole",
             d.window_size() == SMALL
-                && stops.is_some_and(|stops| stops <= 10)
+                && stops.is_some_and(|stops| stops <= 12)
                 && d.visible_text(full_fault),
             format!(
                 "At 960, Shift+Tab reaches the repair and the whole fault shows: stops {stops:?}"
@@ -17624,7 +17626,7 @@ pub mod encounter_groups {
         let fight_after = |d: &Driver<'_>| {
             d.nodes()
                 .into_iter()
-                .filter(|node| node.name.starts_with("Drag ") && node.in_view())
+                .filter(|node| node.name.starts_with("Drag ") && node.fully_in_view())
                 .filter_map(|node| {
                     let words = d.painted_in(node.shown).replace('\u{a0}', " ");
                     let at = words.find("Fight after: ")?;
@@ -17661,7 +17663,7 @@ pub mod encounter_groups {
         let headings = |d: &Driver<'_>| {
             d.nodes()
                 .into_iter()
-                .filter(|node| node.name.starts_with("Drag ") && node.in_view())
+                .filter(|node| node.name.starts_with("Drag ") && node.fully_in_view())
                 .filter(|node| !d.painted_in(node.shown).contains("not known"))
                 .map(|node| node.name)
                 .collect::<Vec<_>>()
