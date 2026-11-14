@@ -2218,7 +2218,6 @@ impl Splat {
                                 blocked,
                             );
                             self.dndbeyond.footer_messages(&mut footer, true);
-                            let details_open = campaigns.borrow().form_open();
                             let sessions = &mut self.sessions;
                             let timeline = &self.timeline;
                             let dndbeyond = &mut self.dndbeyond;
@@ -2226,7 +2225,7 @@ impl Splat {
                                 // A child that starts empty, so the form narrows itself
                                 // (`set_max_width`) as it did in its own scroll area.
                                 ui.vertical(|ui| {
-                                    sessions.folder_block(ui, timeline, blocked, details_open);
+                                    sessions.folder_block(ui, timeline, blocked);
                                     design::rule(ui);
                                     let mut campaigns = campaigns.borrow_mut();
                                     campaigns.show_active(ui, session, dndbeyond, blocked);

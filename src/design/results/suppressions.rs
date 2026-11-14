@@ -21,8 +21,8 @@ pub(crate) enum Ban {
     Sentence,
     /// Package M: `Footer::outcome_at`, a result with a hand-issued order (staged).
     Order,
-    /// Package M: the body places `banner`, `row_fault` and `PagePlaceholder::show`. A named
-    /// escape: a body message is a review decision.
+    /// Package M: the body places `banner`, `row_fault`, `PagePlaceholder::show`, `BodyFault::show`
+    /// and `RowMessages::new` (ruling R24). A named escape: a body message is a review decision.
     Body,
     /// Package K: raw egui calls that a layout part replaces. The number is how many calls of
     /// `clippy.toml`'s package K paths the item holds, counted in its tokens
@@ -62,7 +62,7 @@ impl Ban {
                 "__checked",
             ],
             Self::Order => &["outcome_at"],
-            Self::Body => &["banner", "row_fault", ".show("],
+            Self::Body => &["banner", "row_fault", ".show(", "RowMessages::new"],
             // Counted in the item's tokens instead (`check`).
             Self::Layout(_)
             | Self::RowKey(_)

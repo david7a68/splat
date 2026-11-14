@@ -3149,6 +3149,47 @@ fn preview_line(ui: &mut Ui, preview: &str) {
     named(ui, &response, preview);
 }
 
+/// A help line that names a path (`Now: …/campaigns/emberfall/Sessions`): one `Small` muted
+/// line whatever the path, so a longer or a shorter path never moves what follows it. A path
+/// that does not fit gives way from the front at a folder boundary and keeps its last part whole
+/// (the path rule); its hover and its accessible description keep it whole.
+pub fn path_help(ui: &mut Ui, lead: &str, path: &str) -> Response {
+    let font = Type::Small.font(ui);
+    let room = ui.available_width();
+    let whole = format!("{lead}{path}");
+    let one_row = |text: &str| -> String {
+        text.chars()
+            .map(|c| if c.is_control() { ' ' } else { c })
+            .collect()
+    };
+    let mut shown = one_row(&whole);
+    if number_width(ui, &shown, &font) > room {
+        // Each cut starts after a separator, so the shown path starts with a whole folder.
+        let cuts = path
+            .char_indices()
+            .filter(|(_, c)| *c == '/' || *c == '\\')
+            .map(|(at, _)| at);
+        let mut last = None;
+        for at in cuts {
+            let tail = &path[at..];
+            last = Some(tail);
+            shown = one_row(&format!("{lead}…{tail}"));
+            if number_width(ui, &shown, &font) <= room {
+                break;
+            }
+        }
+        if let Some(tail) = last {
+            shown = one_row(&format!("{lead}…{tail}"));
+        }
+    }
+    let response = ui
+        .add(egui::Label::new(Type::Small.rich(ui, shown).color(colors().muted)).truncate())
+        .on_hover_text(&whole);
+    ui.ctx()
+        .accesskit_node_builder(response.id, |node| node.set_description(whole.clone()));
+    response
+}
+
 /// A menu that opens under `response`, for a row or a control with more actions. The one place
 /// a menu popup is made outside `row_menu`, so a placement rule for menus has one home.
 ///
