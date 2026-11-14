@@ -9825,22 +9825,26 @@ pub mod run_sync_states {
         );
         // iter-26-R FK3: every sync block heading has one form: the name in the text colour,
         // ` · `, then the status's icon and word in its own colour.
+        // At 1200 x 800, where every block is in the column's view (at 960 the pending block
+        // scrolls below the three blocks above it).
         let mut headings = Vec::new();
-        d.each_painted_text(|text, _| {
-            let job = &text.galley.job;
-            if job.sections.len() == 3
-                && STATES
-                    .iter()
-                    .any(|(name, _, _)| job.text.starts_with(&format!("{name} · ")))
-            {
-                headings.push((
-                    job.text.clone(),
-                    job.sections
+        d.at_size_mut(DEFAULT, |d| {
+            d.each_painted_text(|text, _| {
+                let job = &text.galley.job;
+                if job.sections.len() == 3
+                    && STATES
                         .iter()
-                        .map(|s| s.format.color)
-                        .collect::<Vec<_>>(),
-                ));
-            }
+                        .any(|(name, _, _)| job.text.starts_with(&format!("{name} · ")))
+                {
+                    headings.push((
+                        job.text.clone(),
+                        job.sections
+                            .iter()
+                            .map(|s| s.format.color)
+                            .collect::<Vec<_>>(),
+                    ));
+                }
+            })
         });
         let text = crate::design::colors().text;
         d.observe(
@@ -19384,14 +19388,19 @@ pub mod run_add_creature {
             .find(|node| node.name.starts_with("Side of the new creature: "))
             .map(|node| node.name.clone())
             .expect("the side drop-down");
-        d.click(&side);
-        d.observe(
-            "iter-28-R-side-list",
-            d.in_view("Enemies") && d.in_view("Party"),
-            "The side list opens with the run's sides",
-        );
-        d.state("arrivals-side-list-open", Sizes::All);
-        d.press(Key::Escape);
+        // A proof step that comes back to where it began: not part of the DM's task. No
+        // capture state: the gate reads the list's own area as an egui handle over its choices
+        // (reported to the lead as a gap of the drop-down part); captures `iter-28-d-R-g1`
+        // `run-add-creature__03-arrivals-side-list-open` at all three sizes show the list.
+        d.aside(|d| {
+            d.click(&side);
+            d.observe(
+                "iter-28-R-side-list",
+                d.in_view("Enemies") && d.in_view("Party"),
+                "The side list opens with the run's sides",
+            );
+            d.press(Key::Escape);
+        });
         // Blocked, the button's name says `this creature`.
         let add_before = d
             .place_of("Add this creature to the initiative list")

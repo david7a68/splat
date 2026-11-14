@@ -113,7 +113,9 @@ impl Run {
                 };
                 // FK8: with Lookup open the key letter hides (the keys do not work then), but its
                 // room stays, so `Add to fight` keeps its x when Lookup opens and closes.
-                let kept = (keeps_room && !next_key).then(|| next().key("N").natural_width(ui));
+                // Only on a roster wide enough for every word, so the room does not come and go
+                // with the turn's name (a pressed Next turn would move).
+                let kept = (self.lookup_open && words).then(|| next().key("N").natural_width(ui));
                 let action = next().key(if next_key { "N" } else { "" });
                 let action = match kept {
                     Some(width) => action.min_width(width),

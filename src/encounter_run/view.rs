@@ -2803,14 +2803,7 @@ impl Run {
                     );
                     if sync.state() == SyncState::Pending {
                         // FL4: say what waits, that it needs no step, and the way to close now.
-                        ui.add(
-                            egui::Label::new(
-                                Type::Small
-                                    .rich(ui, pending_words(&name))
-                                    .color(colors().muted),
-                            )
-                            .wrap(),
-                        );
+                        design::help(ui, &pending_words(&name));
                     }
                 }
                 if Action::quiet(&format!("Stop sync for {name}"))
@@ -7527,8 +7520,9 @@ impl RowLayout {
     }
 
     /// R8: this row (with no effect and no save DC) with fewer condition words shown, the
-    /// rest in its `N more`: the first form, from the most words down, that keeps the row's
-    /// height and in which `fits` holds. Each form is laid out once and kept by its input.
+    /// rest in its `N more`, and last with no words on its second line: the first form, from
+    /// the most words down, that keeps the row's height and in which `fits` holds. Each form
+    /// is laid out once and kept by its input.
     fn with_fewer_conditions(&self, ui: &egui::Ui, fits: impl Fn(&Self) -> bool) -> Option<Self> {
         let input = self.input.as_ref()?;
         let shown = self
@@ -7537,7 +7531,14 @@ impl RowLayout {
             .filter(|(name, _)| !["Run conditions", "Run changes"].contains(&name.as_str()))
             .count();
         let scale = input.scale;
-        (0..shown).rev().find_map(|count| {
+        // Keyed by this row's input and the form, so a frame that changes nothing lays out no
+        // form and builds no input.
+        let line_font = self
+            .second_line
+            .as_ref()
+            .and_then(|line| line.job.sections.first())
+            .map(|section| section.format.font_id.clone());
+        let form = |count: Option<usize>| {
             let key = {
                 use std::hash::{Hash, Hasher};
                 let mut hash = std::collections::hash_map::DefaultHasher::new();
@@ -7558,8 +7559,41 @@ impl RowLayout {
                         as_plain: true,
                         ..Extra::default()
                     };
-                    let mut layout = Self::measured(ui, input, (count, BonusFit::All, &extra));
-                    layout.input = Some(input.clone());
+                    // `None`: every word of the second line gives way (state words too); the
+                    // hover and the accessible name keep them.
+                    let input = match count {
+                        Some(_) => Arc::clone(input),
+                        None => Arc::new(RowInput {
+                            words: RowWords {
+                                hp_word: None,
+                                initiative: true,
+                                concentration: false,
+                                conditions: Vec::new(),
+                                as_name: None,
+                                bonuses: None,
+                                loot: false,
+                                ..input.words.clone()
+                            },
+                            ..(**input).clone()
+                        }),
+                    };
+                    let bare = count.is_none();
+                    let mut layout =
+                        Self::measured(ui, &input, (count.unwrap_or(0), BonusFit::All, &extra));
+                    if bare {
+                        // The result is this row's second line: the line keeps its height (an
+                        // empty line of the row's own type), and the row is not name-only.
+                        layout.tight = false;
+                        if let Some(font) = line_font.clone() {
+                            layout.second_line = Some(ui.fonts_mut(|fonts| {
+                                fonts.layout_job(egui::text::LayoutJob::single_section(
+                                    String::new(),
+                                    egui::TextFormat::simple(font, colors().muted),
+                                ))
+                            }));
+                        }
+                    }
+                    layout.input = Some(input);
                     ui.data_mut(|data| {
                         data.get_temp_mut_or_default::<RowCache>(cache)
                             .0
@@ -7568,7 +7602,12 @@ impl RowLayout {
                     layout
                 });
             (layout.height(scale) == self.height(scale) && fits(&layout)).then_some(layout)
-        })
+        };
+        (0..shown)
+            .rev()
+            .map(Some)
+            .chain(std::iter::once(None))
+            .find_map(form)
     }
 
     /// The second line and, when they have their own, the roll words' line under it.
@@ -11058,25 +11097,20 @@ mod tests {
                     )
                     .with_badge(ui, badge)
                 };
-                // iter-28-R R8 changes this on purpose: the result is never cut. Bloodied and
-                // Conc are state words and do not give way, so at 442 px the whole result takes
-                // a line of its own and the row grows by it (before R8 it was cut to `Saved…`).
+                // iter-28-R R8: the result is never cut (before R8 it was cut to `Saved…`);
+                // the row's words give way, so the row keeps its height.
                 let saved = row(Some("Saved · 1 damage (half)"));
+                assert!(!saved.badge_below, "iter-27-R-FI2");
+                assert_eq!(
+                    saved.height(scale),
+                    row(None).height(scale),
+                    "iter-27-R-FI2"
+                );
                 let (_, _, room) = badge_place(&saved, 0.0);
                 assert_eq!(
                     badge_words(ui, "Saved · 1 damage (half)", &font, room).as_deref(),
                     Some("Saved · 1 damage (half)"),
                     "iter-28-R-R8: the result is whole in {room}"
-                );
-                assert_eq!(
-                    saved.height(scale),
-                    row(None).height(scale)
-                        + if saved.badge_below {
-                            Type::Small.line()
-                        } else {
-                            0.0
-                        },
-                    "iter-27-R-FI2: the row grows only by the result's own line"
                 );
             });
         });
