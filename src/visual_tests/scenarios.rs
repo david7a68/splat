@@ -21982,13 +21982,19 @@ pub mod session_plan {
             d.visible_text(&notice),
             format!("The removal notice names the removed fight by its state: {notice}"),
         );
+        // Round 28 (slice 4): the removal is the Timeline's kept result, so its Undo is in the
+        // plan's footer, which follows the rows (its press carries the store's ticket); it was
+        // at the removed row's place. It stays with its notice, below the remaining row.
         d.observe(
             "iter-10-C-AT2-undo",
             d.in_view("Undo remove")
                 && d.place_of("Undo remove")
+                    .zip(d.place_of(&notice))
                     .zip(d.place_of(FIRST))
-                    .is_some_and(|(undo, row)| undo.bottom() <= row.top()),
-            "Undo remove stays with the notice, above the remaining row",
+                    .is_some_and(|((undo, words), row)| {
+                        undo.top() >= words.top() && words.top() > row.bottom()
+                    }),
+            "Undo remove stays with the notice, in the footer below the remaining row",
         );
         d.click(&format!("More actions for {FIRST}"));
         assert!(d.in_view("Delete the saved run"));
