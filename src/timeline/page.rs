@@ -499,26 +499,27 @@ pub fn file_flags_below(ui: &mut egui::Ui, book: &Book) -> egui::Rect {
     if book.flags.is_empty() && book.duplicate.is_none() {
         return room;
     }
-    // Their height first, in a pass that paints nothing, then the flags at the room's bottom.
-    let layout = egui::Layout::top_down(egui::Align::Min);
-    let mut measure = ui.new_child(
-        egui::UiBuilder::new()
-            .id_salt("file_flags_measure")
-            .max_rect(room)
-            .layout(layout)
-            .sizing_pass()
-            .invisible(),
-    );
-    file_flags(&mut measure, book);
-    let height = measure.min_rect().height().min(room.height());
+    // At the room's bottom, by the height they took in the last pass; a pass whose height
+    // differs is drawn again (`request_discard`), so no shown frame has them misplaced.
+    let key = ui.id().with("file_flags_height");
+    let height = ui
+        .ctx()
+        .data(|data| data.get_temp::<f32>(key))
+        .unwrap_or(0.0)
+        .min(room.height());
     let at = egui::Rect::from_min_max(egui::pos2(room.left(), room.bottom() - height), room.max);
     let mut below = ui.new_child(
         egui::UiBuilder::new()
             .id_salt("file_flags")
-            .max_rect(at)
-            .layout(layout),
+            .max_rect(at.with_max_y(f32::INFINITY))
+            .layout(egui::Layout::top_down(egui::Align::Min)),
     );
     file_flags(&mut below, book);
+    let used = below.min_rect().height();
+    if (used - height).abs() > 0.5 {
+        ui.ctx().data_mut(|data| data.insert_temp(key, used));
+        ui.ctx().request_discard("the file flags changed height");
+    }
     room.with_max_y((at.top() - design::S).max(room.top()))
 }
 
