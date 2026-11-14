@@ -21776,14 +21776,14 @@ pub mod session_plan {
         d.observe(
             "iter-24-S-FL3",
             undos == ["Undo delete run"]
-                && d.visible_text(&format!("Deleted the saved run of {FIRST}."))
+                && d.visible_text(&format!("Deleted the saved run of “{FIRST}”."))
                 && !d.visible_text(&notice),
             format!("The plan shows one result and one Undo after two steps: {undos:?}"),
         );
         // iter-25-S family: deleting a saved run is a finished change, in the success tone.
         d.observe(
             "iter-25-S-success-run-deleted",
-            d.place_of(&format!("Deleted the saved run of {FIRST}."))
+            d.place_of(&format!("Deleted the saved run of “{FIRST}”."))
                 .is_some_and(|words| d.has_tone_bar(words, crate::design::colors().result.success)),
             "The deleted run's result has the success tone",
         );

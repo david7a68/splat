@@ -4987,10 +4987,10 @@ impl DeletedRun {
     pub fn message(&self) -> String {
         let name = &self.encounter;
         if self.unsent.is_empty() {
-            format!("Deleted the saved run of {name}.")
+            format!("Deleted the saved run of “{name}”.")
         } else {
             format!(
-                "Deleted the saved run of {name}. It held changes for {} that D&D Beyond does not have. Undo to keep them.",
+                "Deleted the saved run of “{name}”. It held changes for {} that D&D Beyond does not have. Undo to keep them.",
                 self.unsent.join(", ")
             )
         }
