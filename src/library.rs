@@ -3939,6 +3939,9 @@ pub struct Library {
     /// When each kept result's action was done (`stamp_result`), so the message footer lists
     /// results newest first. The next action of the same kind replaces its entry.
     result_orders: ResultOrders,
+    /// Test only: how often the registration results were checked (`reconcile_registrations`).
+    #[cfg(test)]
+    reconciles: usize,
 }
 
 /// A kept result of the Library's panes, for its footer order. A copy result has its own order
@@ -4277,6 +4280,10 @@ impl Library {
     /// It reads the campaign file and the copied files, so it runs once per reload, never per
     /// frame.
     fn reconcile_registrations(&mut self, campaigns: &Campaigns) {
+        #[cfg(test)]
+        {
+            self.reconciles += 1;
+        }
         let registered = |package: Uuid| campaigns.modules().iter().any(|m| m.id == package);
         self.registrations
             .disk_changed(|registration| registered(registration.copy.module.id));
@@ -12483,6 +12490,48 @@ mod tests {
             "undo-newest-only"
         );
         assert_eq!(count(&library), 0);
+
+        // The check runs at events, never per frame: with a registration and its source change
+        // kept, idle frames of the page after the load leave its count as it was.
+        let i = register(&mut library, &mut app.campaigns, &copied, false);
+        library.apply_page_press(
+            PagePress {
+                use_copy: Some(i),
+                ..Default::default()
+            },
+            &mut app.campaigns,
+        );
+        assert!(
+            library.rosters.get(&i).is_some(),
+            "fixture: the work's state is there"
+        );
+        let ctx = egui::Context::default();
+        crate::design::theme::install(&ctx);
+        let mut frame = |library: &mut Library, campaigns: &mut Campaigns| {
+            let _ = ctx.run(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| library.show(ui, campaigns));
+            });
+        };
+        for _ in 0..400 {
+            frame(&mut library, &mut app.campaigns);
+            if library.loaded.is_some() && library.pending.is_none() && !library.stale {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(
+            library.loaded.is_some() && library.pending.is_none(),
+            "the load settled"
+        );
+        frame(&mut library, &mut app.campaigns);
+        let settled = library.reconciles;
+        for _ in 0..20 {
+            frame(&mut library, &mut app.campaigns);
+        }
+        assert_eq!(
+            library.reconciles, settled,
+            "idle-frames-do-no-registration-work"
+        );
     }
 
     #[test]
