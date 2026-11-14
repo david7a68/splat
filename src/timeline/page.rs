@@ -2306,8 +2306,6 @@ mod tests {
         );
     }
 
-    /// An event with no session has no "other" event of its name: the sentence is left out.
-    #[test]
     #[test]
     /// Review of PR 340: a removal that notes link to keeps its warning when the DM opens
     /// another campaign's Timeline, works there, and comes back: through the page's own `show`
@@ -2394,6 +2392,7 @@ mod tests {
         );
     }
 
+    /// An event with no session has no "other" event of its name: the sentence is left out.
     #[test]
     fn iter12_c2_removal_without_a_session_names_no_other_event() {
         let mut book = Book::default();
