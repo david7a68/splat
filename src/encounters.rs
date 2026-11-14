@@ -113,8 +113,8 @@ fn named_note_path(root: &std::path::Path, folder: &str, name: &str) -> Result<S
 
 mod disk;
 mod groups;
-mod held;
 mod history;
+mod results_key;
 // The one member-fault form and its row, for Arrivals in the run (Contract B, R).
 use groups::GroupDraft;
 pub(crate) use groups::{ENCOUNTER_DELETED, NO_MAX_HP_CAUSE, member_fault, member_fault_row};
@@ -459,7 +459,7 @@ struct Draft {
     /// This draft's content, as the owner of its results: a fresh one at each open, kept by a
     /// clone, so a discarded draft and the clean draft that replaces it (same note, same `id`)
     /// never share a result.
-    results_key: Uuid,
+    results_key: results_key::ResultsKey,
 }
 impl Draft {
     fn new() -> Self {
@@ -495,7 +495,7 @@ impl Draft {
             groups_written: false,
             new_results: Vec::new(),
             results_ended: false,
-            results_key: crate::hermetic::new_uuid(),
+            results_key: results_key::ResultsKey::new(),
         }
     }
     fn open(root: &std::path::Path, path: &str) -> Result<Self, String> {
@@ -548,7 +548,7 @@ impl Draft {
             groups_written: false,
             new_results: Vec::new(),
             results_ended: false,
-            results_key: crate::hermetic::new_uuid(),
+            results_key: results_key::ResultsKey::new(),
         })
     }
     fn dirty(&self) -> bool {
@@ -2555,6 +2555,8 @@ impl design::results::Owner for EditorOwner {
 /// in the frame of a press cannot be what an older result's Undo restores.
 struct EditorMark {
     owner: EditorOwner,
+    /// Its draft's key: the result ends when no copy of its draft is left.
+    draft: results_key::KeyWatch,
     undo: DraftUndo,
 }
 
@@ -2784,6 +2786,8 @@ impl design::results::Owner for MemberOwner {
 /// by the body in the frame of a press cannot be what an older result's Undo restores.
 struct MemberMark {
     owner: MemberOwner,
+    /// Its group draft's key: the result ends when no copy of its draft is left.
+    draft: results_key::KeyWatch,
     undo: groups::MemberUndo,
 }
 
@@ -2818,7 +2822,7 @@ pub struct Encounters {
     pending: Option<mpsc::Receiver<Result<Snapshot, String>>>,
     /// The load in progress keeps the open draft and any edited settings.
     refreshing: bool,
-    draft: held::Held<Draft>,
+    draft: Option<Draft>,
     search: String,
     /// The campaign whose run folder this page has seen hold runs, or fail to read (AB1).
     runs_known: Option<Uuid>,
@@ -2851,7 +2855,7 @@ pub struct Encounters {
     difficulty_counts: (usize, usize),
     message: Option<String>,
     /// The draft `Discard changes` last dropped, for one step of undo.
-    discarded: held::Held<Draft>,
+    discarded: Option<Draft>,
     discarded_options: Option<crate::encounter_settings::Options>,
     /// When `discarded_options` was discarded, for the footer's order.
     discarded_options_order: Option<design::ResultOrder>,
@@ -2879,9 +2883,9 @@ pub struct Encounters {
     focus_search: bool,
     editor_pane: EditorPane,
     expanded: Option<String>,
-    group_draft: held::Held<GroupDraft>,
+    group_draft: Option<GroupDraft>,
     /// The group draft `Discard changes` last dropped, for one step of undo.
-    discarded_group: held::Held<GroupDraft>,
+    discarded_group: Option<GroupDraft>,
     /// When that discard was made, for the plan's footer order.
     discarded_group_order: Option<design::ResultOrder>,
     /// A creature made the campaign's own, with its text open beside the roster.
@@ -2925,9 +2929,6 @@ pub struct Encounters {
     /// Why the last separation, or its Undo, failed, with its campaign and copy. A new
     /// separation or a working Undo ends it; it shows only in its campaign.
     separation_error: Option<SeparationFailure>,
-    /// An editor result was recorded or ended since the last sweep: a group held only by a
-    /// removed group's Undo may have lost its last holder (`end_unreachable_results`).
-    editor_results_changed: bool,
     /// Each group draft's member result (`MemberMark`), for both editors. It lives with the page,
     /// so a Discard and its Undo, which move the draft, keep the order.
     member_results: design::Results<MemberOwner, MemberMark>,
@@ -3004,8 +3005,8 @@ const ENCOUNTER_LOOT_HELP: &str =
 thread_local! {
     /// How often this thread ran an encounter draft's full check.
     static VALIDATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    /// How often this thread ran `end_unreachable_results`.
-    static SWEEPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// How many result keys this thread checked (`KeyWatch::alive`).
+    static KEY_CHECKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// Whether this frame has an input that can change a draft: a key, text, a press, a wheel, a
@@ -3476,8 +3477,8 @@ impl Encounters {
     /// Assemble a group where the plan is, with the session's note still beside it.
     pub fn new_group_in_plan(&mut self) {
         self.clear_notice();
-        self.group_draft.set(Some(GroupDraft::new()));
-        self.discarded_group.set(None);
+        self.group_draft = Some(GroupDraft::new());
+        self.discarded_group = None;
         self.group_in_plan = true;
         self.search.clear();
         self.focus_name = true;
@@ -3498,8 +3499,8 @@ impl Encounters {
                 {
                     self.search.clear();
                 }
-                self.group_draft.set(Some(draft));
-                self.discarded_group.set(None);
+                self.group_draft = Some(draft);
+                self.discarded_group = None;
                 self.group_in_plan = true;
                 self.editor_pane = EditorPane::Roster;
                 self.expanded = None;
@@ -3532,7 +3533,7 @@ impl Encounters {
     }
     pub fn undo_group_discard_in_plan(&mut self) {
         if self.group_discarded_in_plan() {
-            self.group_draft.set(self.discarded_group.take());
+            self.group_draft = self.discarded_group.take();
             self.message = None;
             self.error = None;
         }
@@ -3580,7 +3581,7 @@ impl Encounters {
                 draft.add(creature.id, true);
             }
         }
-        self.draft.set(Some(draft));
+        self.draft = Some(draft);
         self.focus_name = true;
         self.error = None;
         self.message = None;
@@ -3594,7 +3595,7 @@ impl Encounters {
         match Draft::open(&active.path, path) {
             Ok(draft) => {
                 self.search.clear();
-                self.draft.set(Some(draft));
+                self.draft = Some(draft);
                 self.from_session = None;
                 self.plan_on_save = false;
                 self.error = None;
@@ -3641,9 +3642,9 @@ impl Encounters {
         }
         self.clear_notice();
         self.search.clear();
-        self.group_draft.set(None);
+        self.group_draft = None;
         self.group_in_plan = false;
-        self.draft.set(Some(draft));
+        self.draft = Some(draft);
         self.from_session = session;
         self.plan_on_save = false;
         self.error = None;
@@ -3671,9 +3672,9 @@ impl Encounters {
         self.creature = None;
         match Draft::open(&active.path, path) {
             Ok(d) => {
-                self.draft.set(Some(d));
+                self.draft = Some(d);
                 self.open_run(active, modules);
-                self.draft.set(None);
+                self.draft = None;
             }
             Err(e) => self.error = Some(e),
         }
@@ -3783,9 +3784,9 @@ impl Encounters {
                 self.error = Some(error);
                 return;
             }
-            self.draft.set(Some(draft));
+            self.draft = Some(draft);
             self.open_run(active, modules);
-            self.draft.set(None);
+            self.draft = None;
             self.reload_snapshot(active, modules);
         }
         if fight.creature.is_none()
@@ -3847,8 +3848,8 @@ impl Encounters {
 
         // A discarded draft belongs to its campaign. Undo must not save it into another.
         if self.active.as_ref().is_none_or(|old| old.id != campaign.id) {
-            self.discarded.set(None);
-            self.discarded_group.set(None);
+            self.discarded = None;
+            self.discarded_group = None;
             self.discarded_options = None;
         }
         // Its path can be out of date after this, so undo could put it where nothing lists it.
@@ -3856,8 +3857,8 @@ impl Encounters {
         self.removed_saved_group = None;
         self.removed_encounter = None;
         self.active = Some(campaign.clone());
-        self.draft.set(None);
-        self.group_draft.set(None);
+        self.draft = None;
+        self.group_draft = None;
         self.group_in_plan = false;
         self.snapshot = None;
         self.error = None;
@@ -3929,56 +3930,19 @@ impl Encounters {
                 Err(mpsc::TryRecvError::Empty) => {}
             }
         }
-        // Only a change of which draft a holder holds can leave results with no draft.
-        if self.draft_holders_changed() {
-            self.end_unreachable_results();
-        }
+        self.end_dead_results();
     }
-    /// Whether a draft holder changed the draft it holds (`Held::set`, `take`, `replace`), or
-    /// an editor result that holds a group was recorded or ended, since the last look. Each
-    /// flag is read and cleared.
-    fn draft_holders_changed(&mut self) -> bool {
-        let changed = [
-            self.draft.take_changed(),
-            self.discarded.take_changed(),
-            self.group_draft.take_changed(),
-            self.discarded_group.take_changed(),
-            std::mem::take(&mut self.editor_results_changed),
-        ];
-        changed.contains(&true)
-    }
-    /// The one end of the draft results whose draft can never come back. A draft's member and
-    /// editor results live while some holder keeps that draft: the open draft, a discard that
-    /// Undo discard restores, a deleted group the draft keeps, a group held by a removed group's
-    /// Undo. Close, an expired discard, a new draft and a campaign change only change a holder
-    /// (`held::Held`, which marks it); `poll` runs this after such a change, never on a frame
-    /// with none.
-    fn end_unreachable_results(&mut self) {
-        #[cfg(test)]
-        SWEEPS.with(|count| count.set(count.get() + 1));
-        let drafts: Vec<&Draft> = self.draft.iter().chain(self.discarded.iter()).collect();
-        let mut groups: Vec<Uuid> = self
-            .group_draft
-            .iter()
-            .chain(self.discarded_group.iter())
-            .chain(
-                drafts
-                    .iter()
-                    .flat_map(|draft| draft.groups.iter().chain(draft.deleted_groups.iter())),
-            )
-            .map(GroupDraft::results_key)
-            .collect();
-        self.editor_results.end_unreachable(|mark| {
-            let reachable = drafts
-                .iter()
-                .any(|draft| draft.results_key == mark.owner.draft);
-            if reachable && let DraftUndo::RemovedGroup { group, .. } = &mark.undo {
-                groups.push(group.results_key());
-            }
-            reachable
-        });
+    /// The member and editor results whose draft no longer exists end. A result watches its
+    /// draft's key (`results_key`), which every copy of the draft shares: the open draft, a
+    /// discard that Undo discard restores, a group a removed group's Undo holds. A draft that is
+    /// dropped (closed, discarded for good, read again, another campaign's) drops its key with
+    /// it, so nothing marks that end. The cost is the number of stored results, a few. The
+    /// editor results go first: a removed group's Undo holds that group's key.
+    fn end_dead_results(&mut self) {
+        self.editor_results
+            .end_unreachable(|mark| mark.draft.alive());
         self.member_results
-            .end_unreachable(|mark| groups.contains(&mark.owner.draft));
+            .end_unreachable(|mark| mark.draft.alive());
     }
     /// Ctrl+S on this page saves the open encounter.
     pub fn save_shortcut(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
@@ -4657,7 +4621,7 @@ impl Encounters {
         }
         if draft.baseline.is_some() {
             match Draft::open(&active.path, &draft.path) {
-                Ok(d) => self.draft.set(Some(d)),
+                Ok(d) => self.draft = Some(d),
                 Err(e) => self.error = Some(e),
             }
         }
@@ -4668,13 +4632,13 @@ impl Encounters {
         }
         self.validation_error = None;
         self.validated = None;
-        self.discarded.set(Some(draft));
-        self.discarded_group.set(None);
+        self.discarded = Some(draft);
+        self.discarded_group = None;
         self.stamp_kept(KeptResult::Discarded);
     }
     /// The undo of `discard_draft`.
     fn undo_discard(&mut self) {
-        self.draft.set(self.discarded.take());
+        self.draft = self.discarded.take();
         self.message = None;
         self.error = None;
     }
@@ -4682,10 +4646,10 @@ impl Encounters {
     /// changes and a group's are not this encounter's, and leave its undo alone.
     fn expire_discards(&mut self) {
         if self.draft.as_ref().is_some_and(Draft::dirty) {
-            self.discarded.set(None);
+            self.discarded = None;
         }
         if self.group_draft.as_ref().is_some_and(GroupDraft::dirty) {
-            self.discarded_group.set(None);
+            self.discarded_group = None;
         }
     }
 
@@ -4915,7 +4879,8 @@ impl Encounters {
         let Some(draft) = self.draft.as_mut() else {
             return;
         };
-        let key = draft.results_key;
+        let key = draft.results_key.id();
+        let watch = draft.results_key.clone();
         let owner = |kind| EditorOwner {
             root: root.clone(),
             draft: key,
@@ -4923,15 +4888,14 @@ impl Encounters {
         };
         // A Save ends the results from before it; a result made after it is new.
         if std::mem::take(&mut draft.results_ended) {
-            self.editor_results_changed = true;
             for kind in [DraftResult::RemovedGroup, DraftResult::Replacement] {
                 self.editor_results.owner_changed(&owner(kind));
             }
         }
         for undo in draft.take_new_results() {
-            self.editor_results_changed = true;
             self.editor_results.record(EditorMark {
                 owner: owner(undo.kind()),
+                draft: watch.watch(),
                 undo,
             });
         }
@@ -4943,7 +4907,6 @@ impl Encounters {
                 .get(&owner)
                 .is_some_and(|shown| !shown.value().undo.holds(draft))
             {
-                self.editor_results_changed = true;
                 self.editor_results.owner_changed(&owner);
             }
         }
@@ -4963,7 +4926,7 @@ impl Encounters {
                 self.editor_results
                     .get(&EditorOwner {
                         root: root.path.clone(),
-                        draft: draft.results_key,
+                        draft: draft.results_key.id(),
                         kind,
                     })
                     .map(|shown| shown.outcome(frame, |mark| mark.undo.outcome()))
@@ -5059,14 +5022,13 @@ impl Encounters {
             // The check runs at the press, on the draft as the body left it: a roster change
             // made in this pass (a move, a removal, an added row) refuses the restore, so the
             // newer change stays.
-            Some(draft) if draft.results_key == mark.owner.draft && mark.undo.holds(draft) => {
+            Some(draft) if draft.results_key.id() == mark.owner.draft && mark.undo.holds(draft) => {
                 draft.undo_result(&mark.undo);
                 Ok(())
             }
             _ => Err(()),
         });
         self.editor_results = results;
-        self.editor_results_changed = true;
         // An open form is keyed by place; the place may now hold another row or member.
         self.expanded = None;
     }
@@ -5093,6 +5055,7 @@ impl Encounters {
             if let Some(undo) = draft.take_member_new() {
                 self.member_results.record(MemberMark {
                     owner: owner.clone(),
+                    draft: draft.results_watch(),
                     undo,
                 });
             }
@@ -5217,7 +5180,7 @@ impl Encounters {
                 true
             }
             KeptResult::GroupDiscarded => {
-                self.group_draft.set(self.discarded_group.take());
+                self.group_draft = self.discarded_group.take();
                 self.message = None;
                 self.error = None;
                 true
@@ -5366,7 +5329,7 @@ impl Encounters {
             if create_group {
                 self.search.clear();
                 self.group_in_plan = false;
-                self.group_draft.set(Some(GroupDraft::new()));
+                self.group_draft = Some(GroupDraft::new());
                 self.expanded = None;
                 self.focus_name = true;
             }
@@ -5551,7 +5514,7 @@ impl Encounters {
         if new_group {
             self.search.clear();
             self.group_in_plan = false;
-            self.group_draft.set(Some(GroupDraft::new()));
+            self.group_draft = Some(GroupDraft::new());
             self.expanded = None;
             self.focus_name = true;
             self.error = None;
@@ -5636,7 +5599,7 @@ impl Encounters {
                 Ok(draft) => {
                     self.search.clear();
                     self.group_in_plan = false;
-                    self.group_draft.set(Some(draft));
+                    self.group_draft = Some(draft);
                     self.expanded = None;
                     self.error = None;
                     self.message = None;
@@ -5709,7 +5672,7 @@ impl Encounters {
             ListAction::Edit(path) => match Draft::open(&active.path, &path) {
                 Ok(d) => {
                     self.search.clear();
-                    self.draft.set(Some(d));
+                    self.draft = Some(d);
                     self.from_session = None;
                     self.plan_on_save = false;
                     self.error = None;
@@ -6089,7 +6052,7 @@ impl Encounters {
         design::rule(ui);
         if back {
             self.clear_notice();
-            self.draft.set(None);
+            self.draft = None;
             self.message = None;
             self.error = None;
             self.creature = None;
@@ -6116,7 +6079,7 @@ impl Encounters {
                 }
                 // A fight started from the session goes back there, not to this editor.
                 if self.from_session.is_some() && self.run.is_some() {
-                    self.draft.set(None);
+                    self.draft = None;
                     self.from_session = None;
                     self.run_from_session = true;
                     return;
@@ -6142,7 +6105,7 @@ impl Encounters {
         let mut unread = design::Footer::new(
             (
                 "encounter_unread_rows",
-                self.draft.as_ref().map(|draft| draft.results_key),
+                self.draft.as_ref().map(|draft| draft.results_key.id()),
             ),
             ui.available_width(),
         );
@@ -8796,7 +8759,7 @@ mod tests {
         let mut encounters = Encounters {
             snapshot: Some(snapshot),
             validation_path: Some(draft.path.clone()),
-            draft: Some(draft).into(),
+            draft: Some(draft),
             error: Some(error.text.clone()),
             validation_error: Some(error),
             refusal_watch: true,
@@ -8997,7 +8960,7 @@ mod tests {
         let (first, second) = (campaign(a.path()), campaign(b.path()));
         let ctx = egui::Context::default();
         let mut encounters = Encounters {
-            discarded: Some(Draft::new()).into(),
+            discarded: Some(Draft::new()),
             active: Some(first.clone()),
             ..Default::default()
         };
@@ -9028,7 +8991,7 @@ mod tests {
         saved.save(&active, &[]).unwrap();
         let mut page = Encounters {
             active: Some(active.clone()),
-            draft: Some(Draft::open(dir.path(), &saved.path).unwrap()).into(),
+            draft: Some(Draft::open(dir.path(), &saved.path).unwrap()),
             ..Default::default()
         };
         // A replacement as `Use` makes it: its data on the draft, and the mark.
@@ -9043,7 +9006,7 @@ mod tests {
         });
         let owner = EditorOwner {
             root: active.path.clone(),
-            draft: draft.results_key,
+            draft: draft.results_key.id(),
             kind: DraftResult::Replacement,
         };
         page.record_editor_results();
@@ -9058,7 +9021,7 @@ mod tests {
             "the discarded draft keeps its result while it waits for Undo discard"
         );
         let clean = EditorOwner {
-            draft: page.draft.as_ref().unwrap().results_key,
+            draft: page.draft.as_ref().unwrap().results_key.id(),
             ..owner.clone()
         };
         assert!(
@@ -9136,6 +9099,8 @@ mod tests {
                             page.editor_press(ui.ctx(), press, &campaign, &[]);
                         }
                     });
+                    // Each frame, as the app does (review 2 of PR 347).
+                    page.poll(ctx, &crate::campaigns::Campaigns::default());
                 },
                 page,
             );
@@ -9152,6 +9117,33 @@ mod tests {
             .body
             .push_str("Ash falls on the ford.");
         harness.run_steps(2);
+        // Review 2 of PR 347 (P2-1): frames that build the real footer and run `poll`, with the
+        // draft dirty, no discard held and nothing ended, check only the stored results' keys:
+        // the work is the number of results, and the groups the page holds add nothing to it.
+        let checks = || KEY_CHECKS.with(std::cell::Cell::get);
+        let start = checks();
+        harness.run_steps(4);
+        let idle = checks() - start;
+        harness
+            .state_mut()
+            .draft
+            .as_mut()
+            .unwrap()
+            .groups
+            .extend((0..20).map(|_| GroupDraft::new()));
+        let start = checks();
+        harness.run_steps(4);
+        assert_eq!(
+            checks() - start,
+            idle,
+            "20 more groups add no work to an unchanged frame"
+        );
+        assert!(
+            idle <= 8,
+            "one key check per stored result and pass: {idle}"
+        );
+        harness.state_mut().draft.as_mut().unwrap().groups.clear();
+        harness.run_steps(1);
         *hold.borrow_mut() = Some(None);
         harness.get_by_label("Undo replace").click();
         harness.run_steps(1);
@@ -9180,11 +9172,20 @@ mod tests {
         );
         // The same for a move and a removal of a row in the pass of the press. Each starts
         // from a new replacement of the roster as it is.
+        // Each case starts from the same two rows (A and C), whatever the case before it did.
+        let two = {
+            let mut two = roster.clone();
+            let mut c = two[0].clone();
+            c.key = "c".into();
+            two.push(c);
+            two
+        };
         for (change, words) in [
             (RosterChange::Move, "Rows replaced before a move."),
             (RosterChange::Remove, "Rows replaced before a removal."),
         ] {
             let draft = harness.state_mut().draft.as_mut().unwrap();
+            draft.setup.roster = two.clone();
             let after = draft.setup.roster.clone();
             let mut before = after.clone();
             before[0].initial.insert("hp".into(), 1.into());
@@ -9220,24 +9221,14 @@ mod tests {
             );
         }
 
-        // Review 2 of PR 347: a draft's results live while some holder can bring the draft
-        // back, in both stores, and end when none can. All through `poll`, as the app calls it
-        // each frame. A group held only by a removed group's Undo keeps its member result.
-        // Discard keeps them all. Edit the clean draft: Undo discard expires, and they end.
-        // Repeated, no entry builds up. A frame with no change of holder does no sweep.
+        // Review 2 of PR 347: a draft's results live while some copy of the draft exists, in
+        // both stores, and end when none does. All through `poll`, as the app calls it each
+        // frame. A group held only by a removed group's Undo keeps its member result. Discard
+        // keeps them all. Edit the clean draft: Undo discard expires, and they end. Repeated,
+        // no entry builds up.
         let ctx = harness.ctx.clone();
         let campaigns = crate::campaigns::Campaigns::default();
-        let sweeps = || SWEEPS.with(std::cell::Cell::get);
         let page = harness.state_mut();
-        page.poll(&ctx, &campaigns);
-        let idle = sweeps();
-        page.poll(&ctx, &campaigns);
-        page.poll(&ctx, &campaigns);
-        assert_eq!(
-            sweeps(),
-            idle,
-            "a frame with no change of holder does no sweep"
-        );
         let unread = || groups::MemberUndo::Unread {
             line: 1,
             row: "| 1 | Wolf |\n".into(),
@@ -9250,6 +9241,7 @@ mod tests {
                 root: active.path.clone(),
                 draft: group.results_key(),
             });
+            let watches = [group.results_watch(), removed.results_watch()];
             draft.groups.push(group);
             let roster = draft.setup.roster.clone();
             draft.new_results.push(DraftUndo::Replacement {
@@ -9265,22 +9257,21 @@ mod tests {
             });
             let owner = EditorOwner {
                 root: active.path.clone(),
-                draft: draft.results_key,
+                draft: draft.results_key.id(),
                 kind: DraftResult::Replacement,
             };
-            for owner in [&member_owner, &removed_owner] {
+            for (owner, draft) in [member_owner.clone(), removed_owner.clone()]
+                .into_iter()
+                .zip(watches)
+            {
                 page.member_results.record(MemberMark {
-                    owner: owner.clone(),
+                    owner,
+                    draft,
                     undo: unread(),
                 });
             }
             page.record_editor_results();
-            let before = sweeps();
             page.poll(&ctx, &campaigns);
-            assert!(
-                sweeps() > before,
-                "a recorded editor result is a change of holder"
-            );
             assert!(
                 page.member_results.get(&removed_owner).is_some(),
                 "a group held only by a removed group's Undo keeps its member result"
@@ -9301,8 +9292,7 @@ mod tests {
                 page.editor_results.is_empty() && page.member_results.is_empty(),
                 "its draft cannot come back: both stores end its results"
             );
-            page.draft
-                .set(Some(Draft::open(dir.path(), &saved.path).unwrap()));
+            page.draft = Some(Draft::open(dir.path(), &saved.path).unwrap());
         }
     }
     /// Older notes do not change, and a note says so only when the DM turned this on.
@@ -9320,8 +9310,8 @@ mod tests {
     #[test]
     fn a_dirty_draft_of_the_other_kind_does_not_end_an_undo() {
         let mut encounters = Encounters {
-            discarded: Some(Draft::new()).into(),
-            group_draft: Some(GroupDraft::new()).into(),
+            discarded: Some(Draft::new()),
+            group_draft: Some(GroupDraft::new()),
             ..Default::default()
         };
         assert!(encounters.draft_dirty());
@@ -9354,21 +9344,21 @@ mod tests {
     #[test]
     fn undo_discard_waits_while_the_other_kind_of_draft_is_open() {
         let mut encounters = Encounters {
-            discarded: Some(Draft::new()).into(),
-            group_draft: Some(GroupDraft::new()).into(),
+            discarded: Some(Draft::new()),
+            group_draft: Some(GroupDraft::new()),
             ..Default::default()
         };
         assert!(!encounters.encounter_undo_ready());
-        encounters.group_draft.set(None);
+        encounters.group_draft = None;
         assert!(encounters.encounter_undo_ready(), "back at the list");
 
         let mut encounters = Encounters {
-            discarded_group: Some(GroupDraft::new()).into(),
-            draft: Some(Draft::new()).into(),
+            discarded_group: Some(GroupDraft::new()),
+            draft: Some(Draft::new()),
             ..Default::default()
         };
         assert!(!encounters.group_undo_ready());
-        encounters.draft.set(None);
+        encounters.draft = None;
         assert!(encounters.group_undo_ready(), "back at the list");
     }
     fn campaign(root: &std::path::Path) -> Campaign {
@@ -9549,7 +9539,7 @@ mod tests {
 
         // Blocked as the editor's Start fight is, with its words, and nothing is written.
         let mut encounters = fresh();
-        encounters.draft.set(Some(Draft::new()));
+        encounters.draft = Some(Draft::new());
         let before = fs::read_dir(dir.path().join("Encounters")).unwrap().count();
         encounters.start_fight_with(&with_bandit, &active, &[]);
         assert!(encounters.run.is_none());
@@ -9937,7 +9927,7 @@ mod tests {
         let editor = Encounters {
             // The kept results are the campaign's (`KeptOwner`).
             active: Some(campaign.clone()),
-            draft: Some(draft).into(),
+            draft: Some(draft),
             snapshot: Some(Snapshot::load(&campaign, &[]).unwrap()),
             ..Default::default()
         };
@@ -10004,7 +9994,7 @@ mod tests {
         assert!(draft.save(&campaign, &[]).is_err());
         let snapshot = Snapshot::load(&campaign, &[]).unwrap();
         let editor = Encounters {
-            draft: Some(draft).into(),
+            draft: Some(draft),
             snapshot: Some(Snapshot::load(&campaign, &[]).unwrap()),
             ..Default::default()
         };
@@ -10147,7 +10137,7 @@ mod tests {
         let mut editor = Encounters {
             active: Some(campaign.clone()),
             snapshot: Some(Snapshot::load(&campaign, &[]).unwrap()),
-            draft: Some(draft).into(),
+            draft: Some(draft),
             ..Default::default()
         };
         let ctx = egui::Context::default();
@@ -10185,7 +10175,7 @@ mod tests {
         draft.add(id, true);
         let mut editor = Encounters {
             active: Some(campaign.clone()),
-            draft: Some(draft).into(),
+            draft: Some(draft),
             ..Default::default()
         };
         assert!(editor.start_run(&campaign, &[]).is_err());
@@ -10248,7 +10238,7 @@ mod tests {
         let mut encounters = Encounters {
             snapshot: Some(deleted),
             validation_path: Some(draft.path.clone()),
-            draft: Some(draft).into(),
+            draft: Some(draft),
             error: Some(invalid.text.clone()),
             validation_error: Some(invalid.clone()),
             refusal_watch: true,
@@ -10289,7 +10279,7 @@ mod tests {
         assert!(invalid.tone == missing_creature_tone(unread));
         assert_eq!(missing_creature_mark(unread).0, icons::ERROR);
         encounters.snapshot = Some(snapshot);
-        encounters.draft.set(Some(draft));
+        encounters.draft = Some(draft);
         encounters.error = Some(invalid.text.clone());
         encounters.validation_error = Some(invalid);
         assert!(encounters.error_tone() == Tone::Error);
@@ -10403,7 +10393,7 @@ mod tests {
         // A fault found when the fight starts names the row too.
         let mut editor = Encounters {
             active: Some(active.clone()),
-            draft: Some(draft).into(),
+            draft: Some(draft),
             ..Default::default()
         };
         editor.draft.as_mut().unwrap().setup.roster[1]
@@ -10493,7 +10483,7 @@ mod tests {
             [1]
         );
         let mut editor = Encounters {
-            draft: Some(draft).into(),
+            draft: Some(draft),
             ..Default::default()
         };
         let error = editor
@@ -10512,9 +10502,7 @@ mod tests {
         assert_eq!(fs::read_to_string(dir.path().join(&path)).unwrap(), flagged);
         fs::set_permissions(dir.path().join(&path), permissions).unwrap();
         fs::write(dir.path().join(&path), &saved).unwrap();
-        editor
-            .draft
-            .set(Some(Draft::open(dir.path(), &path).unwrap()));
+        editor.draft = Some(Draft::open(dir.path(), &path).unwrap());
         let run = editor.start_run(&active, &[]).unwrap();
         let saved: serde_json::Value =
             serde_json::from_slice(&fs::read(run.path().unwrap()).unwrap()).unwrap();
@@ -10546,7 +10534,7 @@ mod tests {
             Encounters {
                 active: Some(active.clone()),
                 snapshot: Some(Snapshot::load(&active, &[]).unwrap()),
-                draft: Some(Draft::open(dir.path(), &path).unwrap()).into(),
+                draft: Some(Draft::open(dir.path(), &path).unwrap()),
                 ..Default::default()
             }
         };
@@ -10670,7 +10658,7 @@ mod tests {
         let template = draft.path.clone();
         let mut editor = Encounters {
             active: Some(campaign.clone()),
-            draft: Some(draft).into(),
+            draft: Some(draft),
             ..Default::default()
         };
         let ended = editor.start_run(&campaign, &[]).unwrap();
@@ -10793,7 +10781,7 @@ mod tests {
         draft.save(&campaign, &[]).unwrap();
         let mut editor = Encounters {
             active: Some(campaign.clone()),
-            draft: Some(draft).into(),
+            draft: Some(draft),
             ..Default::default()
         };
         let run = editor.start_run(&campaign, &[]).unwrap();
@@ -10868,7 +10856,7 @@ mod tests {
         draft.save(&campaign, &[]).unwrap();
         let mut editor = Encounters {
             active: Some(campaign.clone()),
-            draft: Some(draft).into(),
+            draft: Some(draft),
             ..Default::default()
         };
         let run = editor.start_run(&campaign, &[]).unwrap();
@@ -10919,7 +10907,7 @@ mod tests {
         assert_eq!(reopened.setup, d.setup, "the block survives its note");
         let editor = Encounters {
             active: Some(campaign.clone()),
-            draft: Some(reopened).into(),
+            draft: Some(reopened),
             ..Default::default()
         };
         let mut run = editor.start_run(&campaign, &[]).unwrap();
@@ -11052,7 +11040,7 @@ mod tests {
         slot_override(&mut d, 0, "{side: party}");
         let editor = Encounters {
             active: Some(campaign.clone()),
-            draft: Some(Draft::open(dir.path(), &d.path).unwrap()).into(),
+            draft: Some(Draft::open(dir.path(), &d.path).unwrap()),
             ..Default::default()
         };
         assert!(editor.start_run(&campaign, &[]).is_ok());
@@ -11161,7 +11149,7 @@ mod tests {
         draft.save(&campaign, &[]).unwrap();
         let mut editor = Encounters {
             active: Some(campaign.clone()),
-            draft: Some(draft).into(),
+            draft: Some(draft),
             ..Default::default()
         };
         let run = editor.start_run(&campaign, &[]).unwrap();

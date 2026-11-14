@@ -459,9 +459,8 @@ impl super::Encounters {
             } else {
                 let path = draft.path.clone();
                 let old = self.draft.take();
-                self.draft
-                    .set(super::Draft::open(&campaign.path, &path).ok());
-                self.discarded.set(old);
+                self.draft = super::Draft::open(&campaign.path, &path).ok();
+                self.discarded = old;
                 self.stamp_kept(super::KeptResult::Discarded);
                 self.error = None;
             }
