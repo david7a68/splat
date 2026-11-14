@@ -721,6 +721,41 @@ struct CarriedHp {
     /// just after it. A rest makes a new `CarriedHp`, so an older rest's use is never this one's.
     used_at: Option<usize>,
 }
+/// A run step as the owner of its footer result: this run, and the step's number in it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct StepOwner {
+    run: Uuid,
+    step: u64,
+}
+
+impl crate::design::results::Owner for StepOwner {
+    type Scope = Uuid;
+    fn scope(&self) -> &Uuid {
+        &self.run
+    }
+}
+
+/// The footer result of one step (the saved HP's use and its Undo, a recharge roll, an
+/// arrival). Its words are worked out from the run's state while it is the newest step's.
+pub(crate) struct StepResult {
+    owner: StepOwner,
+}
+
+impl crate::design::results::Kept for StepResult {
+    type Owner = StepOwner;
+    const ENDS: crate::design::results::Ends = crate::design::results::Ends {
+        // The step leaves the Undo stack: undone, dropped as the oldest, or taken out.
+        owner_changed: crate::design::results::OwnerChanged::Ends,
+        // A changed run file keeps the steps (the run chooses Save as new or Replace).
+        disk_changed: crate::design::results::DiskChanged::Stays,
+        // Its Undo is the step's Undo.
+        press: crate::design::results::Press::Undo,
+    };
+    fn owner(&self) -> StepOwner {
+        self.owner.clone()
+    }
+}
+
 pub(crate) struct Run {
     pub name: String,
     id: Uuid,
@@ -769,10 +804,16 @@ pub(crate) struct Run {
     /// a loot table, as `describe` made them. Undo shortens them from these parts, and never
     /// reads them back out of the label (a row named `2` is not the `2` of `DC 12`).
     history_targets: Vec<Option<String>>,
-    /// Beside each step: when it was done, the order a footer result of that step takes (the
-    /// saved HP's use, a recharge roll, an arrival). Not saved: a reopened run issues them in
-    /// its steps' order when it opens.
-    history_orders: Vec<crate::design::ResultOrder>,
+    /// Beside each step: its number in this run, the owner of the footer result that step
+    /// gives (the saved HP's use, a recharge roll, an arrival). Not saved: a reopened run
+    /// numbers its steps again when it opens.
+    history_steps: Vec<u64>,
+    /// The next step's number.
+    next_step: u64,
+    /// The footer results of the steps, one per step, each owned by its step of this run. Ends:
+    /// the step's Undo or its drop from the Undo stack (`owner_changed`), the run's close (the
+    /// run goes). Only the newest step's result shows.
+    step_results: crate::design::Results<StepOwner, StepResult>,
     /// How many of the oldest steps came from the run file. Undo of an ending among them makes
     /// the fight live again by `continue_blocked`, as Continue fight does. Never saved.
     saved_steps: usize,
@@ -1309,7 +1350,9 @@ impl Run {
             history_labels: Vec::new(),
             history_from_sheet: Vec::new(),
             history_targets: Vec::new(),
-            history_orders: Vec::new(),
+            history_steps: Vec::new(),
+            next_step: 0,
+            step_results: crate::design::Results::new(),
             saved_steps: 0,
             selected: 0,
             also: BTreeSet::new(),
@@ -1490,10 +1533,6 @@ impl Run {
     }
     /// Keep one more Undo step: the state before it, its name, and whether a sheet made it.
     /// Every step enters here, so the stack never holds more than the limit: the oldest goes.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     fn keep_step(&mut self, before: State, (label, target): Named, from_sheet: bool) {
         let extra = (self.history.len() + 1).saturating_sub(undo::LIMIT);
         self.saved_steps = self.saved_steps.saturating_sub(extra);
@@ -1502,11 +1541,15 @@ impl Run {
         self.history_from_sheet.drain(..extra);
         self.history_targets
             .drain(..extra.min(self.history_targets.len()));
-        self.history_orders
-            .drain(..extra.min(self.history_orders.len()));
+        let dropped: Vec<u64> = self
+            .history_steps
+            .drain(..extra.min(self.history_steps.len()))
+            .collect();
+        for step in dropped {
+            self.end_step_result(step);
+        }
         self.history.push(before);
-        self.history_orders
-            .push(crate::design::ResultOrder::issue());
+        self.record_step();
         self.history_labels.push(label);
         self.history_from_sheet.push(from_sheet);
         self.history_targets.push(target);
@@ -1517,12 +1560,29 @@ impl Run {
         self.keep_step(before, named, from_sheet);
         self.dm_steps += 1;
     }
-    /// When the newest Undo step was done: the order of a footer result that belongs to it.
-    pub(crate) fn newest_step_order(&self) -> Option<crate::design::ResultOrder> {
-        self.history_orders
-            .last()
-            .copied()
-            .filter(|_| self.history_orders.len() == self.history.len())
+    /// Number the newest step and keep its footer result: the store issues its order now.
+    fn record_step(&mut self) {
+        let step = self.next_step;
+        self.next_step += 1;
+        self.history_steps.push(step);
+        self.step_results.record(StepResult {
+            owner: StepOwner { run: self.id, step },
+        });
+    }
+    /// A step left the Undo stack (undone, dropped as the oldest, or taken out by a sheet's
+    /// update): its result ends.
+    fn end_step_result(&mut self, step: u64) {
+        self.step_results
+            .owner_changed(&StepOwner { run: self.id, step });
+    }
+    /// The newest Undo step's footer result, the one a footer result of the newest step shows.
+    pub(crate) fn newest_step_result(
+        &self,
+    ) -> Option<crate::design::results::Shown<'_, StepResult>> {
+        let step = *self.history_steps.last()?;
+        (self.history_steps.len() == self.history.len())
+            .then(|| self.step_results.get(&StepOwner { run: self.id, step }))
+            .flatten()
     }
     /// The newest Undo step's name, if there is one.
     fn last_step(&self) -> Option<&str> {
@@ -2790,8 +2850,11 @@ impl Run {
             self.history_from_sheet.pop();
             self.history_targets
                 .truncate(self.history_labels.len().min(self.history_targets.len()));
-            self.history_orders
-                .truncate(self.history_labels.len().min(self.history_orders.len()));
+            let keep = self.history_labels.len().min(self.history_steps.len());
+            let undone: Vec<u64> = self.history_steps.drain(keep..).collect();
+            for step in undone {
+                self.end_step_result(step);
+            }
             // What D&D Beyond last confirmed is a fact, not a step that can be taken back.
             let confirmed: Vec<_> = self
                 .state
@@ -3741,7 +3804,7 @@ impl Run {
         let mut labels = Vec::new();
         let mut from_sheet = Vec::new();
         let mut targets = Vec::new();
-        let mut orders = Vec::new();
+        let mut steps = Vec::new();
         let mut dropped = Vec::new();
         // A multi-target step is atomic. If it also touched another participant, its
         // older steps cannot safely cross this boundary either. Say which steps were lost.
@@ -3797,13 +3860,21 @@ impl Run {
             labels.push(self.history_labels[at].clone());
             from_sheet.push(self.history_from_sheet[at]);
             targets.push(self.history_targets.get(at).cloned().flatten());
-            orders.extend(self.history_orders.get(at).copied());
+            steps.extend(self.history_steps.get(at).copied());
         }
         self.history = kept;
         self.history_labels = labels;
         self.history_from_sheet = from_sheet;
         self.history_targets = targets;
-        self.history_orders = orders;
+        for step in &self.history_steps {
+            if !steps.contains(step) {
+                self.step_results.owner_changed(&StepOwner {
+                    run: self.id,
+                    step: *step,
+                });
+            }
+        }
+        self.history_steps = steps;
         self.saved_steps = saved;
         self.removed_steps = dropped.len();
         if !dropped.is_empty() {
@@ -4467,10 +4538,6 @@ impl Run {
         }
     }
     /// A saved run with its Undo steps, to go on with it.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     pub fn open(path: &Path, campaign: Uuid) -> Result<Self, String> {
         let (mut run, saved_undo) = Self::load(path, campaign)?;
         match saved_undo.map(|saved| undo::read(&saved, &run.state)) {
@@ -4481,11 +4548,9 @@ impl Run {
                     run.history_from_sheet,
                     run.history_targets,
                 ) = steps;
-                run.history_orders = run
-                    .history
-                    .iter()
-                    .map(|_| crate::design::ResultOrder::issue())
-                    .collect();
+                for _ in 0..run.history.len() {
+                    run.record_step();
+                }
                 run.saved_steps = run.history.len();
             }
             None => run.no_saved_undo = Some(UNDO_NOT_KEPT),
@@ -4569,7 +4634,9 @@ impl Run {
             history_labels: Vec::new(),
             history_from_sheet: Vec::new(),
             history_targets: Vec::new(),
-            history_orders: Vec::new(),
+            history_steps: Vec::new(),
+            next_step: 0,
+            step_results: crate::design::Results::new(),
             saved_steps: 0,
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
@@ -5135,7 +5202,9 @@ impl Run {
         self.history_labels.clear();
         self.history_from_sheet.clear();
         self.history_targets.clear();
-        self.history_orders.clear();
+        for step in std::mem::take(&mut self.history_steps) {
+            self.end_step_result(step);
+        }
         self.reopened = false;
         self.no_saved_undo = None;
         self.undo_stopped = false;
@@ -5548,6 +5617,31 @@ mod tests {
     fn creature() -> Entry {
         Entry::parse("monster.md", &splat::content::formats::fixture("Fixture.md", &format!("splat_id: {}\nsplat_kind: creature\nsplat_name: Guard\nsplat_creature: {{type: humanoid}}\nsplat_stats:\n  max_hp: {{value: 20}}\n  armor_class: {{value: 16}}\n  initiative: {{value: 2}}\nsplat_initial:\n  hp: 17\n  temporary_hp: 3\n  conditions: [Poisoned]\n  death_saves: {{successes: 1, failures: 0}}\n", Uuid::new_v4()), "\n## Actions\nSpear attack.\n").expect("schema-2 fixture")).unwrap()
     }
+    /// Round 28 (R, step 2): a step's footer result is owned by its step of this run. A new
+    /// step's result is newer; Undo ends it and the step before shows its own result, with its
+    /// own order, again; with no step left there is none.
+    #[test]
+    fn a_steps_footer_result_belongs_to_its_step() {
+        let mut run = run();
+        run.apply(Command::Begin).ok();
+        run.apply(Command::Damage(0, 1)).unwrap();
+        let a = run.newest_step_result().map(|shown| shown.order());
+        run.apply(Command::Damage(1, 1)).unwrap();
+        let b = run.newest_step_result().map(|shown| shown.order());
+        assert!(a.is_some() && b.is_some() && a != b, "iter-28-R-steps: {a:?} {b:?}");
+        run.undo();
+        assert_eq!(
+            run.newest_step_result().map(|shown| shown.order()),
+            a,
+            "iter-28-R-steps: Undo of B shows A's own result"
+        );
+        while !run.history.is_empty() {
+            run.undo();
+        }
+        assert!(run.newest_step_result().is_none());
+        assert!(run.step_results.is_empty(), "iter-28-R-steps: every undone step's result ends");
+    }
+
     pub(super) fn run() -> Run {
         let entry = creature();
         Run::new(

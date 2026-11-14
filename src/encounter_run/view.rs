@@ -901,22 +901,31 @@ impl Run {
             .recharge_result()
             .filter(|_| !setup)
             .map(|recharged| recharged.words.clone());
-        // Both results belong to the newest step, so they take its order (issued when the step
-        // was done, `newest_step_order`).
-        let step_order = self.newest_step_order();
+        // Both results belong to the newest step: its kept result (the step's store issued its
+        // order when the step was done).
+        let used_line = used
+            .then(|| {
+                self.newest_step_result()
+                    .map(|shown| shown.footer(|_| SAVED_HP_USED.to_owned()))
+            })
+            .flatten();
+        let recharged_line = recharged.as_ref().and_then(|words| {
+            self.newest_step_result()
+                .map(|shown| shown.footer(|_| words.clone()))
+        });
         // After the words its messages borrow, so it is dropped first.
         let mut footer = design::Footer::new(("run_messages", self.id), rect.width());
-        if used && let Some(order) = step_order {
+        if let Some(line) = &used_line {
             // The result of the DM's own press, with its Undo: it leads the footer.
-            footer.result(order, SAVED_HP_USED, true, |ui| {
+            footer.kept_line(line, true, |_, ui| {
                 if design::undo_message(ui, Tone::Success, SAVED_HP_USED, "Undo use saved HP") {
                     undo_saved.set(true);
                 }
             });
         }
         // X4: a recharge roll's result, until the next act. Its Undo is the header's.
-        if let (Some(words), Some(order)) = (recharged.as_deref(), step_order) {
-            footer.result(order, words, false, |ui| {
+        if let Some(line) = &recharged_line {
+            footer.kept_line(line, false, |words, ui| {
                 design::message(ui, Tone::Info, words);
             });
         }
@@ -3047,12 +3056,16 @@ impl Run {
         // neither clip nor push the list. The result's Undo is live in the header while its
         // step is the newest, so it leads; the reasons follow.
         // The message names itself; the footer's own name never takes the Log's words.
-        let words = String::new();
-        // The result belongs to the newest step, so it takes that step's order.
-        let order = self.newest_step_order();
+        // The result belongs to the newest step: its line is that step's kept result.
+        let line = result
+            .then(|| {
+                self.newest_step_result()
+                    .map(|shown| shown.footer(|_| String::new()))
+            })
+            .flatten();
         let mut footer = design::Footer::new(("arrival_footer", self.id), ui.available_width());
-        if result && let Some(order) = order {
-            footer.result(order, words, true, |ui| self.arrival_result(ui));
+        if let Some(line) = &line {
+            footer.kept_line(line, true, |_, ui| self.arrival_result(ui));
         }
         for reason in reasons.iter() {
             footer.reason(reason.as_str(), move |ui| {

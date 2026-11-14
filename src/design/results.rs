@@ -638,8 +638,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/design/results.rs", "record", &[Ban::Results]),
         ("src/dndbeyond.rs", "footer_messages", &[Ban::Results]),
         ("src/dndbeyond.rs", "show", &[Ban::Results]),
-        ("src/encounter_run.rs", "keep_step", &[Ban::Results]),
-        ("src/encounter_run.rs", "open", &[Ban::Results]),
         (
             "src/encounter_run/view.rs",
             "groups_tab",
@@ -1363,7 +1361,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/combat_sync.rs", 1),
             ("src/design/components.rs", 16),
             ("src/dndbeyond.rs", 1),
-            ("src/encounter_run.rs", 2),
             ("src/encounters.rs", 4),
             ("src/encounters/groups.rs", 2),
             ("src/library.rs", 16),
