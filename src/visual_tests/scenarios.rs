@@ -16779,11 +16779,15 @@ pub mod encounter_groups {
                     d.painted_rect_in("Unsaved", egui::Rect::EVERYTHING),
                 )
             });
-            // At the editor's content edge, within 0.5 px, as Save encounter ends there.
+            // At the editor's content edge, within 0.5 px, as Save encounter ends there; and
+            // that edge is the page's (the window less its `M` margin), so a Save that pushes
+            // the editor wider fails too.
+            let page = size.0 - crate::design::M;
             d.observe(
                 "iter-28-B-FB7",
-                save.zip(edge)
-                    .is_some_and(|(save, edge)| (save.right() - edge).abs() <= 0.5),
+                save.zip(edge).is_some_and(|(save, edge)| {
+                    (save.right() - edge).abs() <= 0.5 && (edge - page).abs() <= 0.5
+                }),
                 format!("At {size:?}: Save group {save:?}, the editor's content edge {edge:?}"),
             );
             d.observe(
