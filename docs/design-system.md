@@ -845,8 +845,9 @@ subfolder on save. New packages default to the parent of the last registered pac
 beside Folder and the full destination below it. Creating a package opens its first entry form.
 
 A copied package folder names the original under Add folder and puts its ID in Technical details. Add folder
-is blocked; the warning is its reason, so the reason line under it stays empty, and `This folder is a copy.` is
-Add folder's hover and accessible description. Bordered `Register as a new package` sits on the warning's action
+is blocked. The warning says the fact once; the kept line under Add folder says the next step, `Register it as a
+new package to add it.`, and the same words are Add folder's hover and accessible description. `This folder is a
+copy.` shows nowhere. Bordered `Register as a new package` sits on the warning's action
 line, above Technical details. It asks for a name, writes independent package and entry identities, and has
 one Undo for all files. Registration names the copy and what the registration chose, not what the campaign
 uses later: `Ashen Reaches is registered, with no entries chosen for this campaign.` (or `with every entry

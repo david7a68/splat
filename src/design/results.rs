@@ -778,7 +778,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/library.rs",
             "editor_pane",
-            &[Ban::Results, Ban::Layout(3), Ban::Extras(1), Ban::Pane(3)],
+            &[Ban::Results, Ban::Layout(3), Ban::Extras(1), Ban::Pane(1)],
         ),
         ("src/library.rs", "field_key", &[Ban::RowKey(1)]),
         ("src/library.rs", "give_new_identity", &[Ban::Results]),
@@ -919,19 +919,13 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/encounters/list.rs", "row_menu", &[Ban::Layout(1)]),
         ("src/encounters/list.rs", "side_control", &[Ban::Layout(2)]),
-        ("src/library.rs", "above_footer", &[Ban::Layout(1)]),
         (
             "src/library.rs",
             "new_entry",
             &[Ban::Layout(1), Ban::Extras(1)],
         ),
-        (
-            "src/library.rs",
-            "package_form",
-            &[Ban::Layout(5), Ban::Extras(3)],
-        ),
         ("src/library.rs", "scope_menu", &[Ban::Layout(1)]),
-        ("src/library.rs", "show", &[Ban::Layout(4)]),
+        ("src/library.rs", "show", &[Ban::Layout(2)]),
         ("src/lookup.rs", "written_reader", &[Ban::Extras(1)]),
         (
             "src/loot_editor.rs",
@@ -1108,7 +1102,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Extras(2)],
         ),
         ("src/library.rs", "duplicate_choices", &[Ban::Extras(2)]),
-        ("src/library.rs", "form_heading", &[Ban::Extras(1)]),
         ("src/library.rs", "kept_undo_message", &[Ban::Extras(2)]),
         ("src/library.rs", "recovery_action", &[Ban::Extras(2)]),
         ("src/library.rs", "repair_notice", &[Ban::Extras(1)]),
@@ -1145,7 +1138,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "integrity_d8_a_changed_encounter_compares_and_keeps_unknown_fields",
             &[Ban::Pane(1)],
         ),
-        ("src/library.rs", "form_footer", &[Ban::Pane(1)]),
         ("src/campaign_content.rs", "show", &[Ban::Pane(1)]),
         ("src/party.rs", "show", &[Ban::Pane(1)]),
     ]

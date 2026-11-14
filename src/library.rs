@@ -447,38 +447,20 @@ fn add_results<'a>(
 }
 
 /// The pane's message footer when it has no reader: below a form, or below the empty state of a
-/// scope with no entries. It holds the page's results and its error. Returns what was pressed.
-#[allow(clippy::disallowed_methods)]
-fn form_footer(
-    ui: &mut egui::Ui,
-    id: &str,
-    results: &ReaderResults,
-    orders: &ResultOrders,
-    (form_error, error): (Option<&str>, Option<&str>),
-) -> (ResultPress, f32) {
-    let pressed = std::cell::Cell::new(ResultPress::default());
-    let mut footer = design::Footer::new(id, ui.available_width().min(design::READER_MEASURE));
-    add_results(&mut footer, results, orders, &pressed);
+/// scope with no entries. It holds the page's results and its error; `pressed` gets the press.
+/// The caller draws its body through the footer's `pane`, so the footer follows a short form.
+fn form_footer<'a>(
+    width: f32,
+    results: &'a ReaderResults,
+    orders: &'a ResultOrders,
+    (form_error, error): (Option<&'a str>, Option<&'a str>),
+    pressed: &'a std::cell::Cell<ResultPress>,
+) -> design::Footer<'a> {
+    let mut footer = design::Footer::new("library_form_footer", width.min(design::READER_MEASURE));
+    add_results(&mut footer, results, orders, pressed);
     page_error(&mut footer, form_error);
     page_error(&mut footer, error);
-    let bottom = footer.show_by_hand(ui);
-    (pressed.get(), bottom)
-}
-
-/// The form above a form footer, in a scroll area that ends at the footer's top, so a long form
-/// never runs under the footer.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
-fn above_footer<R>(ui: &mut egui::Ui, bottom: f32, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    let height = (bottom - ui.cursor().top()).max(0.0);
-    egui::ScrollArea::vertical()
-        .id_salt("library_form_body")
-        .max_height(height)
-        .auto_shrink([false, true])
-        .show(ui, add)
-        .inner
+    footer
 }
 
 /// What the DM pressed in the reader's messages in the pane's message footer.
@@ -2799,35 +2781,6 @@ fn moved_file_parts(ui: &mut egui::Ui, root: &Path, relative: &str, from: &str, 
     crate::world::entry_file_links(ui, &path, obsidian);
 }
 
-/// `Will create <path>` on one line of a creation form's kept line. When the line is short, the
-/// path's start gives way (`Will create …/modules/copper_coast`), so its end, the new folder,
-/// stays in view; the hover and the accessible name keep the whole path.
-fn will_create(ui: &mut egui::Ui, path: &Path) {
-    let full = format!("Will create {}", path.display());
-    let font = Type::Small.font(ui);
-    let width = ui.available_width();
-    let mut shown = full.clone();
-    let path = path.display().to_string();
-    let starts: Vec<usize> = path.char_indices().map(|(at, _)| at).collect();
-    if starts.len() > 1 && design::number_width(ui, &full, &font) > width {
-        let fitted = |start: usize| format!("Will create …{}", &path[starts[start]..]);
-        // The fewest characters cut that fit, by halves: a few measures, not one per character.
-        let (mut low, mut high) = (1, starts.len() - 1);
-        while low < high {
-            let middle = (low + high) / 2;
-            if design::number_width(ui, &fitted(middle), &font) <= width {
-                high = middle;
-            } else {
-                low = middle + 1;
-            }
-        }
-        shown = fitted(low);
-    }
-    let response = ui.label(Type::Small.rich(ui, shown).color(colors().muted));
-    design::named(ui, &response, &full);
-    response.on_hover_text(full);
-}
-
 /// Existing folders, with an optional kind folder as the first suggestion.
 fn kind_folder(kind: &str) -> &'static str {
     match kind {
@@ -3004,9 +2957,33 @@ pub(crate) fn use_checkbox(
     ui.add_space(design::L - ui.spacing().item_spacing.y);
 }
 
-/// The commit of `Register a copy`: one word, so the button keeps its width while the DM types
-/// the name (round 27 FD2).
-const REGISTER_COPY: &str = "Register";
+crate::create_reasons! {
+    /// Why a creation form of Manage packages waits: every reason it can show, so its kept line
+    /// keeps room for the tallest (round 28 FA7: one inline creation form for all three).
+    enum PackageReason {
+        ChangedFile => "Choose what to do with the changed file first.",
+        CampaignDraft => "Save or discard to copy, add an entry, change packages or switch campaign.",
+        Draft => "Save or discard to copy, add an entry or change packages.",
+        Loading => "Wait for the Library to load.",
+        NoFolder => "Choose a folder first.",
+        Copy => "Register it as a new package to add it.",
+        NoName => "Type a name first.",
+    }
+}
+const PACKAGE_FOLDER: design::FieldId =
+    crate::field_id!("package_folder").once(design::Once::CreateForm);
+const COPY_NAME: design::FieldId =
+    crate::field_id!("package_copy_name").once(design::Once::CreateForm);
+const NEW_PACKAGE_NAME: design::FieldId =
+    crate::field_id!("new_package_name").once(design::Once::CreateForm);
+const NEW_PACKAGE_FOLDER: design::FieldId =
+    crate::field_id!("new_package_folder").once(design::Once::CreateForm);
+const ADD_FOLDER: design::Word = crate::word!("Add folder");
+const REGISTER: design::Word = crate::word!("Register");
+const CREATE_PACKAGE: design::Word = crate::word!("Create package");
+const BROWSE: design::Word = crate::word!("Browse…");
+const CANCEL: design::Word = crate::word!("Cancel");
+const CLEAR: design::Word = crate::word!("Clear");
 
 fn create_module(path: &Path, name: &str, namespace: &str) -> Result<Module, String> {
     if !path.is_absolute()
@@ -3710,19 +3687,6 @@ fn natural_key(name: &str) -> Vec<(String, u64)> {
 }
 
 pub(crate) const EDITOR_MAX_WIDTH: f32 = 720.0;
-
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
-fn form_heading(ui: &mut egui::Ui, title: &str) {
-    ui.add_space(design::L);
-    ui.label(
-        Type::Label
-            .rich(ui, title.to_uppercase())
-            .color(colors().text),
-    );
-}
 
 fn obsidian_for(root: &Path, owner: &Owner) -> bool {
     matches!(owner, Owner::Campaign(_))
@@ -4480,6 +4444,25 @@ impl Library {
         parsed
     }
 
+    /// Why Manage packages' forms wait, as the form's own reasons (`draft_reason` and loading).
+    fn package_lock(&self) -> Option<PackageReason> {
+        if self.disk_change.is_some() {
+            Some(PackageReason::ChangedFile)
+        } else if self.dirty() {
+            let campaign = self
+                .selected
+                .and_then(|i| self.loaded.as_ref().map(|l| &l.notes[i].owner))
+                .is_some_and(|owner| matches!(owner, Owner::Campaign(_)));
+            Some(if campaign {
+                PackageReason::CampaignDraft
+            } else {
+                PackageReason::Draft
+            })
+        } else {
+            self.pending.is_some().then_some(PackageReason::Loading)
+        }
+    }
+
     fn draft_reason(&self) -> Option<&'static str> {
         if self.disk_change.is_some() {
             Some("Choose what to do with the changed file first.")
@@ -4762,8 +4745,9 @@ impl Library {
                                 .fold(design::XL, f32::max)
                                 .min(design::READER_MEASURE)
                                 .ceil();
-                            ui.set_width(width);
-                            egui::ScrollArea::vertical()
+                            // The scroll column keeps its lane beside the widest line.
+                            ui.set_width(width + design::lane_width());
+                            design::ScrollColumn::new("library_file_issues")
                                 .max_height(design::XXL * 6.0)
                                 .show(ui, |ui| {
                                     for message in loaded
@@ -4974,53 +4958,58 @@ impl Library {
                 page: std::mem::take(&mut self.page_results),
                 ..Default::default()
             };
-            let (pressed, bottom) = form_footer(
-                ui,
-                "library_form_footer",
+            let pressed = std::cell::Cell::new(ResultPress::default());
+            let (new_error, error) = (self.new_error.clone(), self.error.clone());
+            // The footer reads a copy: the body below changes the Library.
+            let orders = self.result_orders.clone();
+            let footer = form_footer(
+                ui.available_width(),
                 &results,
-                &self.result_orders,
+                &orders,
                 (
-                    self.new_form.then_some(self.new_error.as_deref()).flatten(),
-                    self.error.as_deref(),
+                    self.new_form.then_some(new_error.as_deref()).flatten(),
+                    error.as_deref(),
                 ),
+                &pressed,
             );
-            self.page_pressed = pressed.page;
-            if self.new_form {
-                above_footer(ui, bottom, |ui| self.new_entry(ui, dirty, campaigns));
-            } else {
-                // The empty state is short; the pane already ends at the footer's top.
-                let mut can_use = false;
-                design::empty_state_with_body(
-                    ui,
-                    icons::LIBRARY,
-                    "No entries of your own yet",
-                    |ui| {
-                        ui.horizontal_wrapped(|ui| {
-                            ui.spacing_mut().item_spacing.x = 0.0;
-                            ui.label(Type::Body.rich(ui, "Copy an ").color(colors().muted));
-                            can_use = design::link(ui, "entry you can use").clicked();
-                            ui.label(
-                                Type::Body
-                                    .rich(ui, ", or make a new one here.")
-                                    .color(colors().muted),
-                            );
-                        });
-                    },
-                    |ui| {
-                        if Action::primary("New entry")
-                            .icon(icons::ADD)
-                            .show(ui)
-                            .clicked()
-                        {
-                            self.new_form = true;
-                            self.new_folder = kind_folder(&self.new_kind).into();
-                        }
-                    },
-                );
-                if can_use {
-                    self.scope = Scope::Uses;
+            let mut can_use = false;
+            footer.pane(ui, design::Body::Content, |ui| {
+                if self.new_form {
+                    self.new_entry(ui, dirty, campaigns);
+                } else {
+                    design::empty_state_with_body(
+                        ui,
+                        icons::LIBRARY,
+                        "No entries of your own yet",
+                        |ui| {
+                            ui.horizontal_wrapped(|ui| {
+                                ui.spacing_mut().item_spacing.x = 0.0;
+                                ui.label(Type::Body.rich(ui, "Copy an ").color(colors().muted));
+                                can_use = design::link(ui, "entry you can use").clicked();
+                                ui.label(
+                                    Type::Body
+                                        .rich(ui, ", or make a new one here.")
+                                        .color(colors().muted),
+                                );
+                            });
+                        },
+                        |ui| {
+                            if Action::primary("New entry")
+                                .icon(icons::ADD)
+                                .show(ui)
+                                .clicked()
+                            {
+                                self.new_form = true;
+                                self.new_folder = kind_folder(&self.new_kind).into();
+                            }
+                        },
+                    );
                 }
+            });
+            if can_use {
+                self.scope = Scope::Uses;
             }
+            self.page_pressed = pressed.get().page;
             let pressed = std::mem::take(&mut self.page_pressed);
             self.apply_page_press(pressed, campaigns);
             return;
@@ -5413,9 +5402,13 @@ impl Library {
                     }
                 }
                 ui.spacing_mut().item_spacing.y = 0.0;
-                let mut list = egui::ScrollArea::vertical()
-                    .id_salt(("entry_list", self.section.label(), &query, scope))
-                    .auto_shrink([false, false]);
+                // The list's own scroll column, which keeps its lane; only the rows in view draw.
+                let mut list = design::ScrollColumn::new((
+                    "entry_list",
+                    self.section.label(),
+                    &query,
+                    scope,
+                ));
                 if std::mem::take(&mut self.reveal_row)
                     && let Some(row) =
                         selected.and_then(|selected| matches.iter().position(|i| *i == selected))
@@ -5512,31 +5505,35 @@ impl Library {
                 bottom: 0,
             }))
             .show_inside(ui, |ui| {
-                let mut form_bottom = f32::INFINITY;
                 if self.form || self.new_form {
                     // A form has no reader: the page's results sit in the pane's message footer,
-                    // below the form, so they never move it (round 26).
+                    // `S` below a short form, pinned under a long one (round 26; round 28 pane).
                     let results = ReaderResults {
                         page: std::mem::take(&mut self.page_results),
                         ..Default::default()
                     };
-                    let (pressed, bottom) = form_footer(
-                        ui,
-                        "library_form_footer",
+                    let pressed = std::cell::Cell::new(ResultPress::default());
+                    let (new_error, error) = (self.new_error.clone(), self.error.clone());
+                    // The footer reads a copy: the form below changes the Library.
+                    let orders = self.result_orders.clone();
+                    let footer = form_footer(
+                        ui.available_width(),
                         &results,
-                        &self.result_orders,
+                        &orders,
                         (
-                            self.new_form.then_some(self.new_error.as_deref()).flatten(),
-                            self.error.as_deref(),
+                            self.new_form.then_some(new_error.as_deref()).flatten(),
+                            error.as_deref(),
                         ),
+                        &pressed,
                     );
-                    self.page_pressed = pressed.page;
-                    form_bottom = bottom;
-                }
-                if self.form {
-                    above_footer(ui, form_bottom, |ui| self.package_form(ui, campaigns));
-                } else if self.new_form {
-                    above_footer(ui, form_bottom, |ui| self.new_entry(ui, dirty, campaigns));
+                    footer.pane(ui, design::Body::Content, |ui| {
+                        if self.form {
+                            self.package_form(ui, campaigns);
+                        } else {
+                            self.new_entry(ui, dirty, campaigns);
+                        }
+                    });
+                    self.page_pressed = pressed.get().page;
                 } else {
                     self.editor(ui, &subtitle, campaigns);
                 }
@@ -5921,10 +5918,6 @@ impl Library {
     }
 
     /// Registering a package is a form in the page, not a window over it.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn package_form(&mut self, ui: &mut egui::Ui, campaigns: &mut Campaigns) {
         let c = colors();
         let locked = self.draft_reason().or(self
@@ -5934,10 +5927,8 @@ impl Library {
         if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
             self.form = false;
         }
-        egui::ScrollArea::vertical()
-            .id_salt("package_form")
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
+        // The pane scrolls the form; it has no scroll area of its own.
+        ui.scope(|ui| {
                 ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
                 design::gap(ui, design::Gap::L);
                 ui.horizontal(|ui| {
@@ -5956,54 +5947,45 @@ impl Library {
                         }
                     });
                 });
-                form_heading(ui, "Add a package folder");
+                design::heading(
+                    ui,
+                    design::Heading::Group {
+                        title: "Add a package folder",
+                        count: 0,
+                    },
+                );
                 if self.copied_package.as_ref().is_some_and(|copy| {
                     Path::new(self.path.trim()).canonicalize().ok().as_ref() != Some(&copy.path)
                 }) {
                     self.copied_package = None;
                     self.copy_name_open = false;
                 }
-                let copy_reason = self
-                    .copied_package
-                    .is_some()
-                    .then_some("This folder is a copy.");
-                let add_reason = locked
-                    .or(copy_reason)
+                let lock = self.package_lock();
+                let add_reason = lock
+                    .or(self.copied_package.is_some().then_some(PackageReason::Copy))
                     .or(self
                         .path
                         .trim()
                         .is_empty()
-                        .then_some("Choose a folder first."));
-                // Round 26 FB6: Add folder follows the field on its line; the reason is below.
-                let add = ui
-                    .horizontal(|ui| {
-                    // As tall as the buttons, so the field and its actions share one centre.
-                    ui.set_min_height(Density::Scan.control());
-                    design::text_input(
-                        ui,
-                        "Package folder",
-                        &mut self.path,
-                        "Choose a folder",
-                        (ui.available_width()
-                            - Action::secondary("Browse…").natural_width(ui)
-                            - Action::secondary("Add folder").natural_width(ui)
-                            - 2.0 * ui.spacing().item_spacing.x)
-                            .max(design::XXL),
-                    );
-                    if Action::secondary("Browse…")
-                        .blocked(locked)
-                        .show(ui)
-                        .clicked()
-                        && let Some(path) = crate::hermetic::pick_folder()
-                    {
-                        self.path = path.display().to_string();
-                    }
-                    Action::secondary("Add folder")
-                        .blocked(add_reason)
-                        .show(ui)
-                        .clicked()
-                    })
-                    .inner;
+                        .then_some(PackageReason::NoFolder));
+                // Round 26 FB6 and round 28 FA7: the one inline creation form. Add folder follows
+                // the field (after Browse…) on its line; the control-high kept line holds the
+                // reason. For a copy, the reason is the next step: the warning below says the fact.
+                let form = design::InlineCreate::new()
+                    .field(
+                        design::CreateField::new(PACKAGE_FOLDER, "Package folder", &mut self.path)
+                            .side_action(BROWSE),
+                    )
+                    .create(design::Create::secondary(ADD_FOLDER).blocked(add_reason))
+                    .kept_line(design::KeptLine::new())
+                    .show(ui);
+                if form.side
+                    && lock.is_none()
+                    && let Some(path) = crate::hermetic::pick_folder()
+                {
+                    self.path = path.display().to_string();
+                }
+                let add = form.create;
                 {
                     if add {
                         match local_module(Path::new(self.path.trim())).and_then(|module| {
@@ -6039,14 +6021,6 @@ impl Library {
                         }
                     }
                 }
-                // Round 27 FA7, FD6: while the copy warning shows below, it is the reason; the
-                // kept line stays empty, and Add folder's hover and accessible description keep
-                // `This folder is a copy.`
-                crate::campaigns::creation_reason(
-                    ui,
-                    add_reason.filter(|_| locked.is_some() || copy_reason.is_none()),
-                );
-
                 if let Some(copy) = self.copied_package.clone() {
                     if Path::new(self.path.trim()).canonicalize().ok().as_ref() != Some(&copy.path)
                     {
@@ -6063,69 +6037,61 @@ impl Library {
                                 .then_some("Type a name first."));
                         let register = if self.copy_name_open {
                             design::message(ui, Tone::Warning, &warning);
-                            form_heading(ui, "Register a copy");
-                            // Round 27 FD2: the inline creation form's one order. The choice
+                            design::heading(
+                                ui,
+                                design::Heading::Group {
+                                    title: "Register a copy",
+                                    count: 0,
+                                },
+                            );
+                            // Round 27 FD2, round 28 FA7: the inline creation form. The choice
                             // first, then the name with `Register` at the end of its line, then
-                            // one kept line: quiet Cancel at its start, the reason after it. The
+                            // the kept line: quiet Cancel at its start, the reason after it. The
                             // commit keeps one word, so typing moves nothing.
-                            if campaigns.active_campaign().is_some() {
-                                use_checkbox(ui, &mut self.copy_not_used, |chosen| {
-                                    if chosen {
-                                        "Uses every entry in this package, including future entries."
-                                    } else {
-                                        "This campaign keeps the original. The copy is registered but not chosen."
-                                    }
-                                });
-                            }
+                            let register_reason = self.package_lock().or(self
+                                .copy_name
+                                .trim()
+                                .is_empty()
+                                .then_some(PackageReason::NoName));
                             // The commit of an inline creation form has one weight: primary, as
                             // `Create package` is, unless a run owns the primary.
-                            let register_action = || {
-                                if self.run_open {
-                                    Action::secondary(REGISTER_COPY)
-                                } else {
-                                    Action::primary(REGISTER_COPY)
-                                }
+                            let commit = if self.run_open {
+                                design::Create::secondary(REGISTER)
+                            } else {
+                                design::Create::primary(REGISTER)
+                            }
+                            .blocked(register_reason);
+                            let field =
+                                design::CreateField::new(COPY_NAME, "New package name", &mut self.copy_name);
+                            let kept = design::KeptLine::new().cancel(CANCEL, true);
+                            let mut chosen = !self.copy_not_used;
+                            let help = if chosen {
+                                "Uses every entry in this package, including future entries."
+                            } else {
+                                "This campaign keeps the original. The copy is registered but not chosen."
                             };
-                            let register_width = register_action().natural_width(ui);
-                            let mut clicked = false;
-                            ui.horizontal_top(|ui| {
-                                let width = ui.available_width()
-                                    - register_width
-                                    - ui.spacing().item_spacing.x;
-                                ui.allocate_ui_with_layout(
-                                    egui::vec2(width, 0.0),
-                                    egui::Layout::top_down(egui::Align::Min),
-                                    |ui| {
-                                        design::text_field(
-                                            ui,
-                                            "New package name",
-                                            &mut self.copy_name,
-                                            None,
-                                            None,
-                                        );
-                                    },
-                                );
-                                ui.vertical(|ui| {
-                                    ui.add_space(design::L + design::XS);
-                                    clicked =
-                                        register_action().blocked(reason).show(ui).clicked();
-                                });
-                            });
-                            ui.horizontal(|ui| {
-                                // As tall as Cancel, kept when the reason is empty.
-                                ui.set_min_height(Density::Read.control());
-                                if Action::quiet("Cancel")
-                                    .density(Density::Read)
-                                    .line_start()
+                            let form = if campaigns.active_campaign().is_some() {
+                                design::InlineCreate::new()
+                                    .choice(
+                                        design::CreateChoice::new("Choose for this campaign", &mut chosen)
+                                            .help(help),
+                                    )
+                                    .field(field)
+                                    .create(commit)
+                                    .kept_line(kept)
                                     .show(ui)
-                                    .clicked()
-                                {
-                                    self.copy_name_open = false;
-                                }
-                                design::gap(ui, design::Gap::S); // With the line's item gap (`S`): `L`.
-                                design::blocked_reason(ui, reason);
-                            });
-                            clicked
+                            } else {
+                                design::InlineCreate::new()
+                                    .field(field)
+                                    .create(commit)
+                                    .kept_line(kept)
+                                    .show(ui)
+                            };
+                            self.copy_not_used = !chosen;
+                            if form.cancel {
+                                self.copy_name_open = false;
+                            }
+                            form.create
                         } else {
                             design::locked(ui, reason, |ui| {
                                 design::message_with_action(
@@ -6152,30 +6118,17 @@ impl Library {
                 }
 
                 if !self.copy_name_open {
-                    form_heading(ui, "New package");
-                    let response = design::text_field(ui, "Name", &mut self.name, None, None);
-                    if std::mem::take(&mut self.focus_package_name) {
-                        response.request_focus();
-                    }
-                    // Round 26 FB6: the choice comes before the last field, so Create package can
-                    // follow that field on its line.
-                    if campaigns.active_campaign().is_some() {
-                        use_checkbox(ui, &mut self.package_not_used, |_| {
-                            "Uses every entry in this package, including future entries."
-                        });
-                    }
-                    let reason =
-                        locked.or(self.name.trim().is_empty().then_some("Type a name first."));
-                    let create_action = || {
-                        if self.run_open {
-                            Action::secondary("Create package")
-                        } else {
-                            Action::primary("Create package")
-                        }
-                    };
-                    let create_width = create_action().natural_width(ui);
-                    let mut create = false;
-                    let parent = self.package_path.get_or_insert_with(|| {
+                    design::heading(
+                        ui,
+                        design::Heading::Group {
+                            title: "New package",
+                            count: 0,
+                        },
+                    );
+                    let reason = self
+                        .package_lock()
+                        .or(self.name.trim().is_empty().then_some(PackageReason::NoName));
+                    let default_parent = || {
                         campaigns
                             .modules()
                             .last()
@@ -6188,41 +6141,8 @@ impl Library {
                                     .and_then(|p| p.parent().map(Path::to_path_buf))
                             })
                             .unwrap_or_default()
-                    });
-                    ui.horizontal_top(|ui| {
-                        let width = ui.available_width()
-                            - Action::secondary("Browse…").natural_width(ui)
-                            - create_width
-                            - 2.0 * ui.spacing().item_spacing.x;
-                        ui.allocate_ui_with_layout(
-                            egui::vec2(width, 0.0),
-                            egui::Layout::top_down(egui::Align::Min),
-                            |ui| {
-                                let mut path = parent.display().to_string();
-                                if design::text_field(ui, "Folder", &mut path, None, None).changed()
-                                {
-                                    *parent = PathBuf::from(path);
-                                    self.package_folder_changed = true;
-                                }
-                            },
-                        );
-                        ui.vertical(|ui| {
-                            ui.add_space(design::L + design::XS);
-                            if Action::secondary("Browse…")
-                                .name("Choose new package folder")
-                                .show(ui)
-                                .clicked()
-                                && let Some(chosen) = crate::hermetic::pick_folder()
-                            {
-                                *parent = chosen;
-                                self.package_folder_changed = true;
-                            }
-                        });
-                        ui.vertical(|ui| {
-                            ui.add_space(design::L + design::XS);
-                            create = create_action().blocked(reason).show(ui).clicked();
-                        });
-                    });
+                    };
+                    let parent = self.package_path.get_or_insert_with(default_parent).clone();
                     let namespace: String = self
                         .name
                         .trim()
@@ -6230,48 +6150,70 @@ impl Library {
                         .chars()
                         .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
                         .collect();
-                    let root = self
-                        .package_path
+                    let root: Result<PathBuf, String> = Ok(parent.join(&namespace));
+                    // Round 27: what Create package will make is the kept line's preview, so
+                    // typing moves nothing below the form.
+                    let preview = root
                         .as_ref()
-                        .map(|parent| Ok(parent.join(&namespace)))
-                        .unwrap_or_else(|| {
-                            campaigns
-                                .modules()
-                                .last()
-                                .and_then(|module| module.path.parent())
-                                .map(|parent| Ok(parent.join(&namespace)))
-                                .unwrap_or_else(|| campaigns.package_folder(&namespace))
-                        });
-                    // One kept line below, as tall as a control: quiet Clear at its start when
-                    // there is something to clear, then the reason, or the folder Create package
-                    // will make. Round 27: the preview lives in this line, so typing moves
-                    // nothing below the form.
-                    ui.horizontal(|ui| {
-                        // As tall as Clear, so Clear coming moves nothing.
-                        ui.set_min_height(Density::Read.control());
-                        if (!self.name.is_empty() || self.package_folder_changed)
-                            && Action::quiet("Clear")
-                                .name("Clear the new package fields")
-                                .density(Density::Read)
-                                .line_start()
-                                .show(ui)
-                                .clicked()
-                        {
-                            self.name.clear();
-                            self.package_path = None;
-                            self.package_folder_changed = false;
-                        }
-                        if !self.name.is_empty() || self.package_folder_changed {
-                            design::gap(ui, design::Gap::S); // With the line's item gap (`S`): `L`.
-                        }
-                        match (&root, reason) {
-                            (_, Some(reason)) => design::blocked_reason(ui, Some(reason)),
-                            (Ok(root), None) if !self.name.trim().is_empty() => {
-                                will_create(ui, root);
-                            }
-                            _ => {}
-                        }
-                    });
+                        .ok()
+                        .filter(|_| !self.name.trim().is_empty())
+                        .map(|root| format!("Will create {}", root.display()));
+                    let commit = if self.run_open {
+                        design::Create::secondary(CREATE_PACKAGE)
+                    } else {
+                        design::Create::primary(CREATE_PACKAGE)
+                    }
+                    .blocked(reason);
+                    let clear = !self.name.is_empty() || self.package_folder_changed;
+                    let mut folder = parent.display().to_string();
+                    let focus = std::mem::take(&mut self.focus_package_name);
+                    let name = design::CreateField::new(NEW_PACKAGE_NAME, "Name", &mut self.name)
+                        .focus(focus);
+                    let folder_field =
+                        design::CreateField::new(NEW_PACKAGE_FOLDER, "Folder", &mut folder)
+                            .side_action(BROWSE);
+                    let kept = design::KeptLine::new()
+                        .cancel(CLEAR, clear)
+                        .preview(preview.as_deref());
+                    let mut chosen = !self.package_not_used;
+                    // Round 26 FB6: the choice comes before the last field, so Create package
+                    // follows that field on its line.
+                    let form = if campaigns.active_campaign().is_some() {
+                        design::InlineCreate::new()
+                            .field(name)
+                            .choice(
+                                design::CreateChoice::new("Choose for this campaign", &mut chosen)
+                                    .help("Uses every entry in this package, including future entries."),
+                            )
+                            .field(folder_field)
+                            .create(commit)
+                            .kept_line(kept)
+                            .show(ui)
+                    } else {
+                        design::InlineCreate::new()
+                            .field(name)
+                            .field(folder_field)
+                            .create(commit)
+                            .kept_line(kept)
+                            .show(ui)
+                    };
+                    self.package_not_used = !chosen;
+                    if folder != parent.display().to_string() {
+                        self.package_path = Some(PathBuf::from(folder));
+                        self.package_folder_changed = true;
+                    }
+                    if form.side
+                        && let Some(chosen) = crate::hermetic::pick_folder()
+                    {
+                        self.package_path = Some(chosen);
+                        self.package_folder_changed = true;
+                    }
+                    if form.cancel {
+                        self.name.clear();
+                        self.package_path = None;
+                        self.package_folder_changed = false;
+                    }
+                    let create = form.create;
                     {
                         if create {
                             let namespace: String = self
@@ -6321,7 +6263,13 @@ impl Library {
                         }
                     }
                 }
-                form_heading(ui, "Registered packages");
+                design::heading(
+                    ui,
+                    design::Heading::Group {
+                        title: "Registered packages",
+                        count: 0,
+                    },
+                );
                 design::rule(ui);
                 if campaigns.modules().is_empty() {
                     ui.label(Type::Body.rich(ui, "None yet.").color(c.muted));
@@ -6415,7 +6363,13 @@ impl Library {
             .unwrap_or(default_place);
         ui.vertical(|ui| {
             ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
-            form_heading(ui, "New entry");
+            design::heading(
+                ui,
+                design::Heading::Group {
+                    title: "New entry",
+                    count: 0,
+                },
+            );
             ui.label(
                 Type::Small
                     .rich(ui, "Creates the entry, then opens it in the editor.")
@@ -6962,9 +6916,20 @@ impl Library {
             }
             add_results(&mut footer, &results, &self.result_orders, &pressed);
             page_error(&mut footer, self.error.as_deref());
-            // The empty reader below holds nothing past the cursor, so the pane ends at the
-            // footer's top.
-            let _ = footer.show_by_hand(ui);
+            // The empty reader is the pane's body; the footer follows it (round 28 pane).
+            footer.pane(ui, design::Body::Content, |ui| {
+                design::empty_state(
+                    ui,
+                    icons::LIBRARY,
+                    "No entry open",
+                    if campaigns.active_campaign().is_some() || !campaigns.modules().is_empty() {
+                        "Choose one from the list, or make a new one."
+                    } else {
+                        "Choose one from the list."
+                    },
+                    |_| {},
+                );
+            });
             self.apply_package_results(&pressed.get());
         }
         let recovery = self
@@ -7012,19 +6977,11 @@ impl Library {
                 fault: None,
             });
             self.invalidate();
+            // This frame drew the empty reader's pane; the next one draws the entry.
+            ui.ctx().request_repaint();
+            return;
         }
         let Some(i) = self.selected else {
-            design::empty_state(
-                ui,
-                icons::LIBRARY,
-                "No entry open",
-                if campaigns.active_campaign().is_some() || !campaigns.modules().is_empty() {
-                    "Choose one from the list, or make a new one."
-                } else {
-                    "Choose one from the list."
-                },
-                |_| {},
-            );
             return;
         };
         // Overwrite was chosen: what is on disk now becomes what this save replaces.
@@ -8034,9 +7991,15 @@ impl Library {
                 self.draft_revision += 1;
             }
         }
+        // In Read the pane draws the body and then this footer (`Footer::pane`), so the footer
+        // follows a short body; its presses are read after the pane (round 28, row G6).
+        let mut read_footer = None;
         if choices_in_reader && !slot_row {
-            let mut footer =
-                design::Footer::new("library_footer", editor_width.min(design::READER_MEASURE));
+            // Keyed by the entry, as the old body scroll was: each entry keeps its own offset.
+            let mut footer = design::Footer::new(
+                ("library_footer", note.owner.id(), &note.path),
+                editor_width.min(design::READER_MEASURE),
+            );
             reader_messages(
                 &mut footer,
                 Some(&heading),
@@ -8049,14 +8012,8 @@ impl Library {
                 &mut reader_press,
             );
             page_error(&mut footer, self.error.as_deref());
-            body_bottom = footer.show_by_hand(ui);
-            heading_pressed = reader_press.heading;
-            // Presses come only from the footer that drew the results: this one in Read. With a
-            // save row, Edit Markdown's list drew them and `pressed` already holds them.
-            pressed = reader_press.results.get();
+            read_footer = Some(footer);
         }
-        new_identity = new_identity.or(reader_press.new_identity.take());
-        new_identities = new_identities.or(reader_press.new_identities.take());
         let mut reload_from_disk = false;
         let mut read_disk_again = false;
         if let Some(fault) = self
@@ -8155,8 +8112,6 @@ impl Library {
         }
         let mut open_link = None;
         let mut pressed_link = None;
-        let copy_dependency = reader_press.copy_dependency;
-        let undo_dependency = reader_press.undo_dependency.get();
         if self.source && self.disk_change.is_none() {
             egui::Frame::new()
                 .fill(colors().well)
@@ -8248,141 +8203,157 @@ impl Library {
                         });
                 });
         } else {
-            // The body takes the whole pane, so a wide table can use it; prose keeps its
-            // measure. A draft's comparison keeps the pane it had.
+            // The body's words, in Read (in the pane) and beside an open conflict (in its own
+            // scroll area, as Edit Markdown's form keeps until the pane part P2).
             let right = pane_right
                 .filter(|_| self.disk_change.is_none())
                 .unwrap_or(ui.max_rect().right())
                 .max(ui.max_rect().right());
-            // It starts `S` left of the text, with an `S` margin, so a quiet `line_start` action
-            // that hangs its icon left of the message words (an Undo below its result) is not
-            // clipped at the pane's edge. The text stays where it was.
-            let body = egui::Rect::from_min_max(
-                egui::pos2(ui.cursor().min.x - design::S, ui.cursor().min.y),
-                egui::pos2(right, ui.max_rect().bottom().min(body_bottom)),
-            );
-            ui.scope_builder(egui::UiBuilder::new().max_rect(body), |ui| {
-                crate::markdown_view::with_wide_tables(ui, |ui| {
-                    egui::ScrollArea::vertical()
-                        .id_salt(("entry_body", note.owner.id(), &note.path))
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| {
-                            egui::Frame::new()
-                                .inner_margin(egui::Margin {
-                                    left: design::S as i8,
-                                    ..Default::default()
-                                })
-                                .show(ui, |ui| {
-                                    if let Some(change) = &mut self.disk_change {
-                                        if let Some(text) = &change.text {
-                                            // The side-by-side comparison is the one state that takes the full width.
-                                            ui.set_max_width(editor_width);
-                                            design::grouped_draft_comparison(
-                                                ui,
-                                                &self.draft,
-                                                text,
-                                                (&note.path, text),
-                                                true,
-                                            );
-                                        } else {
-                                            design::heading(
-                                                ui,
-                                                design::Heading::Group {
-                                                    title: "Your draft",
-                                                    count: 0,
-                                                },
-                                            );
-                                            let mut draft = self.draft.as_str();
-                                            // The field belongs to this note: its owner and path key it.
-                                            let field = DISK_DRAFT
-                                                .of(note.owner.id())
-                                                .with(note.field_key());
-                                            let response =
-                                                field.multi_line(ui, &mut draft, |edit| {
-                                                    edit.font(egui::TextStyle::Monospace)
-                                                        .margin(egui::vec2(design::S, design::S))
-                                                        .desired_width(
-                                                            editor_width - 2.0 * design::S,
-                                                        )
-                                                        .interactive(false)
-                                                });
-                                            design::named(ui, &response, "Your draft");
-                                        }
-                                        return;
-                                    }
-                                    // A failed parse must never render YAML properties as book prose.
-                                    let body = parsed.as_ref().map_or("", |e| e.body.as_str());
-                                    ui.push_id(&note.path, |ui| {
-                                        reader_style::measure(ui, |ui| {
-                                            design::gap(ui, design::Gap::XS);
-                                            let reading_subtitle =
-                                                reader_kind_line(&note.owner, &reading_subtitle);
-                                            let subtitle = reading_subtitle.as_str();
-                                            let subtitle = subtitle
-                                                .strip_suffix(" · Campaign")
-                                                .unwrap_or(subtitle);
-                                            let subtitle = if note.error.is_some() {
-                                                match note.unreadable_kind() {
-                                                    Section::Unreadable | Section::Other => "",
-                                                    Section::PackageDetails => "Package",
-                                                    kind => kind.label().trim_end_matches('s'),
-                                                }
-                                            } else if subtitle == "Campaign" {
-                                                note.section().label().trim_end_matches('s')
-                                            } else {
-                                                subtitle
-                                            };
-                                            view::title_with_art(
-                                                ui,
-                                                title,
-                                                subtitle,
-                                                parsed.as_ref().ok(),
-                                            );
-                                            // Round 27 FH9: `L` between the kind line and its
-                                            // first warning, as between a kind line and prose,
-                                            // so the kind word does not read as the warning's.
-                                            if fault.is_some() || repair_problem.is_some() {
-                                                ui.add_space(
-                                                    design::L - ui.spacing().item_spacing.y,
-                                                );
-                                            }
-                                            if let Some(fault) = &fault {
-                                                read_again = fault_notice(ui, fault);
-                                            }
-                                            // A read fault has no repair problem: there is no text to repair.
-                                            if let Some(problem) = &repair_problem {
-                                                repair_pressed = repair_notice(
-                                                    ui,
-                                                    problem,
-                                                    recovery.as_ref(),
-                                                    draft_reason,
-                                                    false,
-                                                );
-                                            }
-                                        });
-                                        open_link = view::show_with_related(
-                                            ui,
-                                            note.name(),
-                                            parsed.as_ref().ok(),
-                                            body,
-                                            &view::Origin {
-                                                path: &note.path,
-                                                owner: &note.owner.label(),
-                                                builtin: note.owner == Owner::Builtin,
-                                            },
-                                            self.loaded.as_ref().unwrap(),
-                                            // The Library draws no value block above the entry.
-                                            false,
-                                            // A package entry's campaign links sit in the
-                                            // pane's message footer (round 26).
-                                            |_| None,
-                                        );
-                                    });
-                                });
+            let mut content = |ui: &mut egui::Ui| {
+                if let Some(change) = &mut self.disk_change {
+                    if let Some(text) = &change.text {
+                        // The side-by-side comparison is the one state that takes the full width.
+                        ui.set_max_width(editor_width);
+                        design::grouped_draft_comparison(
+                            ui,
+                            &self.draft,
+                            text,
+                            (&note.path, text),
+                            true,
+                        );
+                    } else {
+                        design::heading(
+                            ui,
+                            design::Heading::Group {
+                                title: "Your draft",
+                                count: 0,
+                            },
+                        );
+                        let mut draft = self.draft.as_str();
+                        // The field belongs to this note: its owner and path key it.
+                        let field = DISK_DRAFT.of(note.owner.id()).with(note.field_key());
+                        let response = field.multi_line(ui, &mut draft, |edit| {
+                            edit.font(egui::TextStyle::Monospace)
+                                .margin(egui::vec2(design::S, design::S))
+                                .desired_width(editor_width - 2.0 * design::S)
+                                .interactive(false)
                         });
+                        design::named(ui, &response, "Your draft");
+                    }
+                    return;
+                }
+                // A failed parse must never render YAML properties as book prose.
+                let body = parsed.as_ref().map_or("", |e| e.body.as_str());
+                ui.push_id(&note.path, |ui| {
+                    reader_style::measure(ui, |ui| {
+                        design::gap(ui, design::Gap::XS);
+                        let reading_subtitle = reader_kind_line(&note.owner, &reading_subtitle);
+                        let subtitle = reading_subtitle.as_str();
+                        let subtitle = subtitle.strip_suffix(" · Campaign").unwrap_or(subtitle);
+                        let subtitle = if note.error.is_some() {
+                            match note.unreadable_kind() {
+                                Section::Unreadable | Section::Other => "",
+                                Section::PackageDetails => "Package",
+                                kind => kind.label().trim_end_matches('s'),
+                            }
+                        } else if subtitle == "Campaign" {
+                            note.section().label().trim_end_matches('s')
+                        } else {
+                            subtitle
+                        };
+                        view::title_with_art(ui, title, subtitle, parsed.as_ref().ok());
+                        // Round 27 FH9: `L` between the kind line and its
+                        // first warning, as between a kind line and prose,
+                        // so the kind word does not read as the warning's.
+                        if fault.is_some() || repair_problem.is_some() {
+                            ui.add_space(design::L - ui.spacing().item_spacing.y);
+                        }
+                        if let Some(fault) = &fault {
+                            read_again = fault_notice(ui, fault);
+                        }
+                        // A read fault has no repair problem: there is no text to repair.
+                        if let Some(problem) = &repair_problem {
+                            repair_pressed =
+                                repair_notice(ui, problem, recovery.as_ref(), draft_reason, false);
+                        }
+                    });
+                    open_link = view::show_with_related(
+                        ui,
+                        note.name(),
+                        parsed.as_ref().ok(),
+                        body,
+                        &view::Origin {
+                            path: &note.path,
+                            owner: &note.owner.label(),
+                            builtin: note.owner == Owner::Builtin,
+                        },
+                        self.loaded.as_ref().unwrap(),
+                        // The Library draws no value block above the entry.
+                        false,
+                        // A package entry's campaign links sit in the
+                        // pane's message footer (round 26).
+                        |_| None,
+                    );
                 });
-            });
+            };
+            // The body takes the whole pane, so a wide table can use it; prose keeps its
+            // measure. A draft's comparison keeps the pane it had.
+            if !slot_row {
+                // Read: the pane draws the body, then its message footer `S` below a short body,
+                // or pinned when the body scrolls (round 28 rows 17, 50, 53, 54; G6).
+                let footer = read_footer.take().unwrap_or_else(|| {
+                    design::Footer::new(
+                        ("library_footer", note.owner.id(), &note.path),
+                        editor_width.min(design::READER_MEASURE),
+                    )
+                });
+                let body = egui::Rect::from_min_max(
+                    ui.cursor().min,
+                    egui::pos2(right, ui.max_rect().bottom()),
+                );
+                ui.scope_builder(egui::UiBuilder::new().max_rect(body), |ui| {
+                    crate::markdown_view::with_wide_tables(ui, |ui| {
+                        footer.pane(ui, design::Body::Content, |ui| content(ui));
+                    });
+                });
+            } else {
+                // It starts `S` left of the text, with an `S` margin, so a quiet `line_start`
+                // action that hangs its icon left of the message words is not clipped at the
+                // pane's edge. The text stays where it was.
+                let body = egui::Rect::from_min_max(
+                    egui::pos2(ui.cursor().min.x - design::S, ui.cursor().min.y),
+                    egui::pos2(right, ui.max_rect().bottom().min(body_bottom)),
+                );
+                ui.scope_builder(egui::UiBuilder::new().max_rect(body), |ui| {
+                    crate::markdown_view::with_wide_tables(ui, |ui| {
+                        egui::ScrollArea::vertical()
+                            .id_salt(("entry_body", note.owner.id(), &note.path))
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
+                                egui::Frame::new()
+                                    .inner_margin(egui::Margin {
+                                        left: design::S as i8,
+                                        ..Default::default()
+                                    })
+                                    .show(ui, |ui| content(ui));
+                            });
+                    });
+                });
+            }
         }
+        // The Read footer's presses, after the pane drew it. (With a save row, no Read footer was
+        // drawn; its borrows end here.)
+        drop(read_footer);
+        if choices_in_reader && !slot_row {
+            heading_pressed = reader_press.heading;
+            // Presses come only from the footer that drew the results: this one in Read. With a
+            // save row, Edit Markdown's list drew them and `pressed` already holds them.
+            pressed = reader_press.results.get();
+        }
+        new_identity = new_identity.or(reader_press.new_identity.take());
+        new_identities = new_identities.or(reader_press.new_identities.take());
+        let copy_dependency = reader_press.copy_dependency;
+        let undo_dependency = reader_press.undo_dependency.get();
         if heading_pressed.0 || heading_pressed.1 {
             self.draft_revision += 1;
         }
@@ -9281,10 +9252,12 @@ mod tests {
                 .accesskit_node()
                 .is_disabled()
         );
-        harness.get_by_label("Package folder").focus();
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::TextInput, "Package folder")
+            .focus();
         harness.key_press_modifiers(egui::Modifiers::CTRL, egui::Key::A);
         harness
-            .get_by_label("Package folder")
+            .get_by_role_and_label(egui::accesskit::Role::TextInput, "Package folder")
             .type_text(&other.path().display().to_string());
         harness.run_steps(2);
         assert!(
