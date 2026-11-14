@@ -17042,7 +17042,7 @@ pub mod encounter_groups {
         d.state("invalid-arrival-total", Sizes::All);
         // AH1 at the captured sizes: one Add edge for every group, within the shared block.
         for size in [SMALL, DEFAULT, LARGE] {
-            let (adds, pane) = d.at_size(size, |d| {
+            let (adds, pane, search) = d.at_size(size, |d| {
                 let adds: Vec<_> = d
                     .nodes()
                     .into_iter()
@@ -17054,7 +17054,11 @@ pub mod encounter_groups {
                     })
                     .map(|node| node.rect.right())
                     .collect();
-                (adds, d.place_of("Find or name a creature"))
+                (
+                    adds,
+                    d.place_of("Find or name a creature"),
+                    d.search_row_of("Find or name a creature"),
+                )
             });
             d.observe(
                 "iter-23-R-AH1",
@@ -17067,13 +17071,15 @@ pub mod encounter_groups {
                     }),
                 format!("At {size:?} every group's Add ends at one x inside the block: {adds:?} from {pane:?}"),
             );
-            // FH2: the search field is as wide as the group block: one right edge.
+            // FH2: the search is as wide as the group block: one right edge. X2: the search's
+            // row (the field and Clear's kept place) ends there.
             d.observe(
                 "iter-24-R-FH2",
-                pane.zip(adds.first())
-                    .is_some_and(|(pane, add)| (pane.right() - add).abs() <= 1.0),
+                search
+                    .zip(adds.first())
+                    .is_some_and(|(search, add)| (search.right() - add).abs() <= 1.0),
                 format!(
-                    "At {size:?} the search field ends at the Add column: {pane:?} and {adds:?}"
+                    "At {size:?} the search row ends at the Add column: {search:?} and {adds:?}"
                 ),
             );
         }

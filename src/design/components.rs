@@ -1327,6 +1327,14 @@ pub(super) fn search_box(
 ) -> Response {
     let c = colors();
     let height = Density::Scan.control();
+    // The hint keeps whole words inside the field's text room (its margins are 28 and 8): a
+    // narrow field cuts it with an ellipsis, never past its edge. It shows only while the field
+    // is empty, so it is measured only then.
+    let hint = if text.is_empty() {
+        words_that_fit(ui, hint, &Type::Body.font(ui), width - 36.0)
+    } else {
+        String::new()
+    };
     let response = ui.add(
         egui::TextEdit::singleline(text)
             .id(id)
