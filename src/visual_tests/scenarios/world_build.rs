@@ -607,7 +607,8 @@ pub fn broken(d: &mut Driver<'_>) {
     d.click("Undo change to Repaired watchkeeper");
     d.observe(
         "iter-17-D-FD1-undo",
-        fs::read_to_string(&path).unwrap() == fixed && !d.has("Undo change to Repaired watchkeeper"),
+        fs::read_to_string(&path).unwrap() == fixed
+            && !d.has("Undo change to Repaired watchkeeper"),
         "Undo changes restores the repaired note",
     );
     // An edit's Undo from before the note broke does not hide the later repair's result. The
@@ -3072,6 +3073,46 @@ pub fn round_trip(d: &mut Driver<'_>) {
     );
     d.click("Undo change to Ashfall Faction");
     assert_eq!(fs::read_to_string(&faction_path).unwrap(), faction_before);
+    // Round 28 P2 (lead): the edit form takes the pane's editor form. With a text longer than
+    // the view, Save and Discard stay whole in view and the text region keeps at least 64 px, at
+    // 960 and at a short height; opening and closing the form moves no title.
+    let title = |d: &Driver<'_>| d.place_of("Ashfall Faction").map(|rect| rect.top());
+    let before = title(d);
+    d.click("Edit Ashfall Faction");
+    let opened = title(d);
+    let long: String = (1..=120)
+        .map(|n| format!("Line {n} of the watch's long ledger.\n"))
+        .collect();
+    d.replace_text_in("Text", &long);
+    for size in [SMALL, (960.0, 480.0)] {
+        let (save, discard, region) = d.at_size(size, |d| {
+            let whole = |name: &str| {
+                d.nodes()
+                    .iter()
+                    .any(|node| node.name == name && node.fully_in_view())
+            };
+            (
+                whole("Save changes"),
+                whole("Discard"),
+                d.place_of("Text field").map(|rect| rect.height()),
+            )
+        });
+        d.observe(
+            "iter-28-D-P2-edit-form",
+            save && discard && region.is_some_and(|height| height >= 64.0),
+            format!("At {size:?}: Save whole in view {save}, Discard {discard}, text region {region:?} px"),
+        );
+    }
+    d.click("Discard");
+    let closed = title(d);
+    d.observe(
+        "iter-28-D-P2-title",
+        before.is_some()
+            && [opened, closed]
+                .iter()
+                .all(|top| top.zip(before).is_some_and(|(a, b)| (a - b).abs() <= 0.5)),
+        format!("The title's y: before {before:?}, form open {opened:?}, closed {closed:?}"),
+    );
     go_campaign(d);
     d.click(TAB_ENTRIES);
     d.click_containing("Captain Varra · Creature");
