@@ -2838,7 +2838,10 @@ impl Sessions {
         ui: &mut egui::Ui,
         book: &mut Book,
         plan: &Plan<'_>,
-        page: Option<(&crate::processing::settings::ProcessingSettings, &crate::sessions::Note)>,
+        page: Option<(
+            &crate::processing::settings::ProcessingSettings,
+            &crate::sessions::Note,
+        )>,
     ) {
         let session = self.selected;
         let here = self.group_session == session;
@@ -3022,14 +3025,21 @@ impl Sessions {
             Some((settings, note)) => {
                 self.session_messages(&frame, settings, book, plan, note, ui.available_width())
             }
-            None => Messages::new(&frame, ("session_plan_footer", session), ui.available_width()),
+            None => Messages::new(
+                &frame,
+                ("session_plan_footer", session),
+                ui.available_width(),
+            ),
         };
         if plan.group_open && self.not_being_played().is_none() {
             let label = self
                 .notes
                 .iter()
                 .find(|note| Some(note.id) == self.group_session)
-                .map_or_else(|| "another session".to_owned(), |note| format!("“{}”", note.label()));
+                .map_or_else(
+                    || "another session".to_owned(),
+                    |note| format!("“{}”", note.label()),
+                );
             messages.outcome(
                 Notice::new(crate::sentence!(
                     "A group is being assembled in the plan of {}.",
@@ -3051,14 +3061,17 @@ impl Sessions {
                 order,
                 KeptOutcome::Notice(
                     Notice::new(crate::sentence!("{} draft discarded.", name)),
-                    UndoStep::of(Verb::Discard, name).pressed_as(pressed(FooterAct::UndoGroupDiscard)),
+                    UndoStep::of(Verb::Discard, name)
+                        .pressed_as(pressed(FooterAct::UndoGroupDiscard)),
                 ),
             );
         }
         if let Some(problem) = &self.rename_problem {
             messages.outcome(Outcome::Refused(as_sentence(problem)));
         }
-        file_messages(&frame, &mut messages, book, |act| pressed(FooterAct::File(act)));
+        file_messages(&frame, &mut messages, book, |act| {
+            pressed(FooterAct::File(act))
+        });
         self.plan_messages(
             &frame,
             ui,
@@ -3073,7 +3086,8 @@ impl Sessions {
         // Round 27 FN1, FK3, SK2: rewards results and their fault are the footer's, by fight.
         self.rewards.see(self.draft.as_ref(), session, book);
         if let (Some(note), Some(draft)) = (session, self.draft.as_ref()) {
-            self.rewards.in_footer(&mut messages, note, draft.revision());
+            self.rewards
+                .in_footer(&mut messages, note, draft.revision());
         }
         // Round 27 FE7: `Plan “<name>”`'s result and `Undo plan line`, in the plan of its
         // journey's session, while the note is as the act left it.
@@ -3087,8 +3101,10 @@ impl Sessions {
             kept_at(
                 &mut messages,
                 self.travel.planned_order,
-                Said::new(as_sentence(&line.words()))
-                    .undo(UndoStep::of(Verb::Add, "plan line").pressed_as(pressed(FooterAct::UndoPlanLine))),
+                Said::new(as_sentence(&line.words())).undo(
+                    UndoStep::of(Verb::Add, "plan line")
+                        .pressed_as(pressed(FooterAct::UndoPlanLine)),
+                ),
             );
         }
         // The fold measures the room the rows have with an empty footer: the pane's whole room,
@@ -3836,8 +3852,10 @@ impl Sessions {
             kept_at(
                 messages,
                 self.scenes.added_order,
-                Said::new(crate::sentence!("Scene added to tonight."))
-                    .undo(UndoStep::of(Verb::Add, "scene").pressed_as(pressed(FooterAct::Scene(SceneAct::UndoAdd)))),
+                Said::new(crate::sentence!("Scene added to tonight.")).undo(
+                    UndoStep::of(Verb::Add, "scene")
+                        .pressed_as(pressed(FooterAct::Scene(SceneAct::UndoAdd))),
+                ),
             );
         }
         if shown.removed == Some(Place::Footer)
@@ -3848,8 +3866,9 @@ impl Sessions {
                 messages,
                 self.scenes.removed_order,
                 Said::new(crate::sentence!("Removed “{}” from tonight.", words)).undo(
-                    UndoStep::verb(Verb::Remove)
-                        .pressed_as(pressed(FooterAct::Scene(SceneAct::UndoRemove(Place::Footer)))),
+                    UndoStep::verb(Verb::Remove).pressed_as(pressed(FooterAct::Scene(
+                        SceneAct::UndoRemove(Place::Footer),
+                    ))),
                 ),
             );
         }
@@ -4116,10 +4135,15 @@ impl Sessions {
 
     fn deleted_run_message(&self, messages: &mut PlanMessages<'_>) {
         if let Some((tone, words)) = self.deleted_run_words() {
-            let undo = UndoStep::of(Verb::Delete, "run").pressed_as(pressed(FooterAct::UndoDeletedRun));
+            let undo =
+                UndoStep::of(Verb::Delete, "run").pressed_as(pressed(FooterAct::UndoDeletedRun));
             let words = as_sentence(&words);
             if tone == Tone::Success {
-                kept_at(messages, self.deleted_run_order, Said::new(words).undo(undo));
+                kept_at(
+                    messages,
+                    self.deleted_run_order,
+                    Said::new(words).undo(undo),
+                );
             } else {
                 kept_at(
                     messages,
@@ -4176,8 +4200,10 @@ impl Sessions {
             kept_at(
                 messages,
                 just.order,
-                Said::new(words)
-                    .undo(UndoStep::verb(Verb::Add).pressed_as(pressed(FooterAct::UndoAdd(just.id.clone())))),
+                Said::new(words).undo(
+                    UndoStep::verb(Verb::Add)
+                        .pressed_as(pressed(FooterAct::UndoAdd(just.id.clone()))),
+                ),
             );
         } else if !self.removal_superseded(book)
             && let Some(shown) = book.results.removal.get(&book.file())
@@ -4195,10 +4221,11 @@ impl Sessions {
                     .into()
             }));
         }
-        if let Some(rest) = book
-            .rest_undo_id()
-            .filter(|id| book.events.iter().any(|event| event.id == *id && event.is_in(session)))
-        {
+        if let Some(rest) = book.rest_undo_id().filter(|id| {
+            book.events
+                .iter()
+                .any(|event| event.id == *id && event.is_in(session))
+        }) {
             timeline::page::ruling_line(
                 frame,
                 messages,
@@ -5147,7 +5174,8 @@ mod tests {
                         party: &[],
                         tables: &[],
                     };
-                    egui::CentralPanel::default().show(ctx, |ui| page.plan_pane(ui, book, &plan, None));
+                    egui::CentralPanel::default()
+                        .show(ctx, |ui| page.plan_pane(ui, book, &plan, None));
                 },
                 (page, book, vec![other, saved.clone()], None),
             );
@@ -5765,7 +5793,8 @@ mod tests {
                         party: &[],
                         tables: &[],
                     };
-                    egui::CentralPanel::default().show(ctx, |ui| page.plan_pane(ui, book, &plan, None));
+                    egui::CentralPanel::default()
+                        .show(ctx, |ui| page.plan_pane(ui, book, &plan, None));
                 },
                 (page, Book::default()),
             );
@@ -6479,7 +6508,8 @@ mod tests {
                         party: &[],
                         tables: &[],
                     };
-                    egui::CentralPanel::default().show(ctx, |ui| page.plan_pane(ui, book, &plan, None));
+                    egui::CentralPanel::default()
+                        .show(ctx, |ui| page.plan_pane(ui, book, &plan, None));
                 },
                 (page, book),
             );

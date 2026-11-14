@@ -2003,7 +2003,9 @@ impl Sessions {
         self.plan_notice_state = None;
         self.removed_event_in_plan = false;
         self.updated_links = None;
-        self.link_updates.owner_changed(&kept::Page { root: self.folder.clone().unwrap_or_default() });
+        self.link_updates.owner_changed(&kept::Page {
+            root: self.folder.clone().unwrap_or_default(),
+        });
         self.link_undo_state = None;
         self.removed_fight = None;
         self.scenes = plan::Scenes::default();
@@ -2534,7 +2536,9 @@ impl Sessions {
             });
         if ends || changed {
             self.updated_links = None;
-            self.link_updates.owner_changed(&kept::Page { root: self.folder.clone().unwrap_or_default() });
+            self.link_updates.owner_changed(&kept::Page {
+                root: self.folder.clone().unwrap_or_default(),
+            });
             self.link_undo_state = None;
             self.link_problem = None;
         }
@@ -2544,7 +2548,9 @@ impl Sessions {
         // A new update ends the last one's result: its warning, its Undo and its hold.
         self.link_problem = None;
         self.updated_links = None;
-        self.link_updates.owner_changed(&kept::Page { root: self.folder.clone().unwrap_or_default() });
+        self.link_updates.owner_changed(&kept::Page {
+            root: self.folder.clone().unwrap_or_default(),
+        });
         self.link_partial = false;
         // Every target is checked before the first write: its draft, the open draft of the same
         // note (its owner here), and its file on disk. One blocked target writes nothing.
@@ -2567,7 +2573,9 @@ impl Sessions {
             ));
             // As before, a new update ends the last one's Undo.
             self.updated_links = None;
-            self.link_updates.owner_changed(&kept::Page { root: self.folder.clone().unwrap_or_default() });
+            self.link_updates.owner_changed(&kept::Page {
+                root: self.folder.clone().unwrap_or_default(),
+            });
             return;
         }
         // Each note is written by its own save, which checks the file once more right before
@@ -6265,7 +6273,13 @@ impl Sessions {
         let view = self.session_header(ui, book, plan, &note, title_on_own_line);
         // The plan's views: the plan's pane holds the page's messages too, in its one footer,
         // which follows the plan's rows.
-        if matches!(view, SessionView::Tab { shown: Tab::Plan, .. }) {
+        if matches!(
+            view,
+            SessionView::Tab {
+                shown: Tab::Plan,
+                ..
+            }
+        ) {
             self.session_content(ui, settings, book, plan, view, &note);
             return;
         }

@@ -531,7 +531,9 @@ pub fn file_messages<'f, A: 'static>(
         ))));
     }
     if let Some(warning) = &book.duplicate {
-        messages.outcome(FaultMessage::new(&FileFault::Duplicate(as_sentence(warning))));
+        messages.outcome(FaultMessage::new(&FileFault::Duplicate(as_sentence(
+            warning,
+        ))));
     }
     if book.unreadable.is_none()
         && !book.conflict
@@ -995,7 +997,12 @@ impl TimelinePage {
         book: &mut Book,
         notes: &mut crate::sessions::page::Sessions,
         open: Option<&str>,
-        body: impl FnOnce(&mut Self, &mut egui::Ui, &mut Book, &mut crate::sessions::page::Sessions) -> R,
+        body: impl FnOnce(
+            &mut Self,
+            &mut egui::Ui,
+            &mut Book,
+            &mut crate::sessions::page::Sessions,
+        ) -> R,
     ) -> R {
         let open = open.filter(|id| book.events.iter().any(|event| event.id == *id));
         let offer = open.and_then(|id| notes.event_link_offer(book, id));
@@ -1065,7 +1072,11 @@ impl TimelinePage {
         file_messages(frame, &mut messages, book, ListAct::File);
         if let Some(shown) = book.results.removal.get(&book.file()) {
             let mentions = self.removed_mentions;
-            let words = as_sentence(&timeline_removal_words(book, shown.value().label(), mentions));
+            let words = as_sentence(&timeline_removal_words(
+                book,
+                shown.value().label(),
+                mentions,
+            ));
             messages.kept(shown.outcome(frame, |_| {
                 let undo = UndoStep::verb(Verb::Remove).pressed_as(ListAct::UndoRemove);
                 // A finished change has the success tone; links left to it make it a warning.
@@ -1613,7 +1624,6 @@ impl TimelinePage {
                     placed = Some(after);
                 }
             });
-
         });
         if changed {
             book.touch();
@@ -1768,10 +1778,10 @@ impl TimelinePage {
                 self.reveal(&id, book);
                 self.focus_title = true;
                 self.added.record(JustAdded {
-                file: book.file(),
-                id,
-                at: Instant::now(),
-            });
+                    file: book.file(),
+                    id,
+                    at: Instant::now(),
+                });
             }
             return;
         }

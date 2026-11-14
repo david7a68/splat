@@ -1699,7 +1699,9 @@ impl Book {
                 Err(())
             }
         }) {
-            let event = self.event_mut(&ruling.before.id).expect("the unchanged rest");
+            let event = self
+                .event_mut(&ruling.before.id)
+                .expect("the unchanged rest");
             *event = ruling.before;
             self.touch();
         }
@@ -1860,10 +1862,9 @@ impl Book {
         };
         // The removed event's own run back on the timeline also ends it: its Undo would give
         // that run a second event.
-        if entered
-            .as_ref()
-            .is_some_and(|event| owned_by(event, session) || (event.run.is_some() && event.run == run))
-        {
+        if entered.as_ref().is_some_and(|event| {
+            owned_by(event, session) || (event.run.is_some() && event.run == run)
+        }) {
             self.results.removal.owner_changed(&file);
             return;
         }
