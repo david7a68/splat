@@ -2875,7 +2875,7 @@ impl Sessions {
             .iter()
             .zip(&days)
             .filter(|(event, _)| event.session == Some(session))
-            .map(|(event, day)| format!("- {}", event.label(*day)))
+            .map(|(event, day)| format!("- {}", timeline::Stored::of(event).name(*day)))
             .collect();
         let context = format!(
             "{note}\n\n{}\n\nEvents the DM already recorded:\n{}",

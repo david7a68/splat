@@ -7442,6 +7442,12 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         d.has_containing("Cinder Wolf") && !d.has_containing("actor_wolf_"),
         "Deleted entries keep their last known name and hide reference keys",
     );
+    // iter-28-B FC3: the roster heading's reason names the deleted creature as its rows do.
+    d.observe(
+        "iter-28-B-FC3",
+        d.has_containing("XP not known: Cinder Wolf") && !d.has_containing("Unknown creature"),
+        "The difficulty reason names the rows' creature, Cinder Wolf",
+    );
     d.state("deleted-package-entry-in-encounter", Sizes::All);
     d.click("More actions for Bridge Ambush");
     d.click("Start another fight");
