@@ -6801,9 +6801,7 @@ impl Sessions {
                 self.list_pane(ui);
             } else {
                 if self.form.is_none()
-                    && Action::quiet("All sessions")
-                        .icon(icons::LEGACY_BACK)
-                        .density(Density::Read)
+                    && design::TitleLine::back(crate::word!("All sessions"), design::BackEdge::Text)
                         .show(ui)
                         .clicked()
                 {
@@ -6883,9 +6881,7 @@ impl Sessions {
                 self.draft_press(press, true);
             }
         } else if narrow {
-            if Action::quiet("All templates")
-                .icon(icons::LEGACY_BACK)
-                .density(Density::Read)
+            if design::TitleLine::back(crate::word!("All templates"), design::BackEdge::Text)
                 .show(ui)
                 .clicked()
             {
@@ -6972,8 +6968,7 @@ impl Sessions {
 
     /// The template list's head: the way back to the sessions. It never scrolls.
     fn template_list_head(&mut self, ui: &mut egui::Ui) {
-        if Action::quiet("Sessions")
-            .icon(icons::LEGACY_BACK)
+        if design::TitleLine::back(crate::word!("Sessions"), design::BackEdge::Text)
             .show(ui)
             .clicked()
         {
