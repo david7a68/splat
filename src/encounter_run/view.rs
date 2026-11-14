@@ -406,6 +406,12 @@ fn arrival_add_word(group: &super::RunGroup) -> String {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Test builds: how often a pending line was worked out (Astra, PR 371: not each frame).
+    static PENDING_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// FL4: the line under a pending sync block's heading in the ended view. The heading above it
 /// names the character, and `Stop sync for …` under it is the way to close now, so the line
 /// says only what waits and that it needs no step (two lines at 960, not three).
@@ -417,17 +423,36 @@ const PENDING_WORDS: &str =
 /// D&D Beyond yet. Splat tries again by itself.` HP has the form of the conflict's buttons.
 /// With nothing to compare, the general words.
 fn pending_words(sync: &crate::combat_sync::CombatSync) -> String {
+    #[cfg(test)]
+    PENDING_WORK.with(|work| work.set(work.get() + 1));
     let max = sync.max_hp().unwrap_or(0);
     let mut changed: Vec<String> = Vec::new();
+    let mut add = |words: String| {
+        if !changed.contains(&words) {
+            changed.push(words);
+        }
+    };
     for (key, value) in sync.values() {
-        if sync.confirmed().and_then(|sheet| sheet.get(key)) == Some(value) {
+        let sheet = sync.confirmed().and_then(|sheet| sheet.get(key));
+        if sheet == Some(value) {
+            continue;
+        }
+        // HP holds two values; each one that waits is named, and only those (Astra, PR 371).
+        if key == "hp" {
+            let field = |value: Option<&serde_json::Value>, name: &str| {
+                value.and_then(|value| value[name].as_i64())
+            };
+            let removed = field(Some(value), "removedHitPoints");
+            if removed != field(sheet, "removedHitPoints") {
+                add(format!("{}/{max} HP", (max - removed.unwrap_or(0)).max(0)));
+            }
+            let temporary = field(Some(value), "temporaryHitPoints");
+            if temporary != field(sheet, "temporaryHitPoints") {
+                add(format!("{} temporary HP", temporary.unwrap_or(0)));
+            }
             continue;
         }
         let words = match key.as_str() {
-            "hp" => format!(
-                "{}/{max} HP",
-                (max - value["removedHitPoints"].as_i64().unwrap_or(0)).max(0)
-            ),
             "death" => "death saves".to_owned(),
             "conditions" => "conditions".to_owned(),
             "slots" => "spell slots".to_owned(),
@@ -439,9 +464,7 @@ fn pending_words(sync: &crate::combat_sync::CombatSync) -> String {
             key if key.starts_with("creature/") => "companion HP".to_owned(),
             _ => "a limited-use resource".to_owned(),
         };
-        if !changed.contains(&words) {
-            changed.push(words);
-        }
+        add(words);
     }
     let tail = "D&D Beyond yet. Splat tries again by itself.";
     match changed.as_slice() {
@@ -3006,7 +3029,17 @@ impl Run {
                     );
                     if sync.state() == SyncState::Pending {
                         // FL4: say what waits, that it needs no step, and the way to close now.
-                        design::help(ui, &pending_words(sync));
+                        // Worked out again only when the values or the sheet changed.
+                        let revision = sync.values_revision();
+                        let line = match self.pending_lines.get(&index) {
+                            Some((kept, line)) if *kept == revision => line.clone(),
+                            _ => {
+                                let line = pending_words(sync);
+                                self.pending_lines.insert(index, (revision, line.clone()));
+                                line
+                            }
+                        };
+                        design::help(ui, &line);
                     }
                 }
                 if Action::quiet(&format!("Stop sync for {name}"))
@@ -14051,6 +14084,69 @@ mod tests {
         );
         let same = CombatSync::simulated_state(SyncState::Error, 7, 62, 8);
         assert_eq!(pending_words(&same), PENDING_WORDS);
+        // Astra, PR 371: HP holds two values; only those that wait are named. Temporary HP
+        // alone, then with HP.
+        let changed = |removed: i64, temporary: i64| {
+            let mut sync = CombatSync::simulated_state(SyncState::Pending, 7, 62, 8);
+            let mut hp = sync.values()["hp"].clone();
+            hp["removedHitPoints"] = removed.into();
+            hp["temporaryHitPoints"] = temporary.into();
+            sync.set_group("hp", hp);
+            sync
+        };
+        assert_eq!(
+            pending_words(&changed(8, 5)),
+            "Its change to 5 temporary HP has not reached D&D Beyond yet. Splat tries again by itself."
+        );
+        assert_eq!(
+            pending_words(&changed(9, 5)),
+            "Its changes to 53/62 HP and 5 temporary HP have not reached D&D Beyond yet. Splat tries again by itself."
+        );
+        // Not each frame: the ended view works the line out again only when the sync's values
+        // or the sheet change (`values_revision`).
+        use egui_kittest::kittest::NodeT;
+        use std::{cell::RefCell, rc::Rc};
+        let mut run = super::super::tests::run();
+        run.state.phase = super::super::Phase::Ended {
+            outcome: "Party won".into(),
+        };
+        run.syncs.insert(0, changed(8, 5));
+        run.hide_panel = false;
+        let work = || PENDING_WORK.with(std::cell::Cell::get);
+        let start = work();
+        let run = Rc::new(RefCell::new(run));
+        let shown = run.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(1200.0, 800.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    shown.borrow_mut().show(ui);
+                });
+            });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(3);
+        let first = work();
+        assert!(
+            first > start,
+            "the ended view shows the pending line: {:?}",
+            harness
+                .root()
+                .children_recursive()
+                .filter_map(|node| node.accesskit_node().label())
+                .filter(|label| label.contains("sync") || label.contains("Sync"))
+                .collect::<Vec<_>>()
+        );
+        harness.run_steps(5);
+        assert_eq!(
+            work(),
+            first,
+            "iter-29-R1-G178: an unchanged frame works nothing out"
+        );
+        // A new read of the sheet or a changed value gives a new revision; here the row's sync
+        // is replaced, as a new start does.
+        run.borrow_mut().syncs.insert(0, changed(8, 6));
+        harness.run_steps(2);
+        assert!(work() > first, "a changed value works the line out again");
     }
 
     /// iter-29 G44, through the WHOLE run view (as the app draws it, dock included): after the

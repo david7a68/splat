@@ -873,6 +873,9 @@ pub(crate) struct Run {
     arrival_lines: crate::difficulty::Kept<Uuid>,
     /// The groups' revision that `arrival_lines` was last trimmed to.
     arrival_lines_seen: Option<u64>,
+    /// Each pending sync's line in the ended view, by row, with the sync values' revision it
+    /// was worked out from (G178).
+    pending_lines: BTreeMap<usize, (u64, String)>,
     /// How often frames asked for the Arrivals words, and how often they were worked out.
     #[cfg(test)]
     pub(crate) arrival_counts: (usize, usize),
@@ -1405,6 +1408,7 @@ impl Run {
             arrival_words: None,
             arrival_lines: crate::difficulty::Kept::default(),
             arrival_lines_seen: None,
+            pending_lines: BTreeMap::new(),
             #[cfg(test)]
             arrival_counts: (0, 0),
             arrival_summaries: None,
@@ -4735,6 +4739,7 @@ impl Run {
             arrival_words: None,
             arrival_lines: crate::difficulty::Kept::default(),
             arrival_lines_seen: None,
+            pending_lines: BTreeMap::new(),
             #[cfg(test)]
             arrival_counts: (0, 0),
             arrival_summaries: None,
