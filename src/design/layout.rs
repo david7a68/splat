@@ -319,12 +319,11 @@ impl FieldId {
         hint: &str,
         width: f32,
     ) -> Search {
-        let clear = || Action::quiet("Clear").density(Density::Scan);
         let mut cleared = false;
         let row = ui.horizontal(|ui| {
             // Clear's place, kept whether or not Clear shows: its width and the gap before it.
-            let place = clear().natural_width(ui);
-            let room = place + ui.spacing().item_spacing.x;
+            let room = search_clear_room(ui);
+            let place = room - ui.spacing().item_spacing.x;
             let field = super::components::search_box(
                 ui,
                 self.id(),
@@ -336,7 +335,7 @@ impl FieldId {
             record_field(ui, &field);
             if text.is_empty() {
                 super::extras::space(ui, place);
-            } else if clear().show(ui).clicked() {
+            } else if search_clear().show(ui).clicked() {
                 text.clear();
                 field.request_focus();
                 cleared = true;
@@ -365,6 +364,22 @@ impl FieldId {
         record_field(ui, &response);
         response
     }
+}
+
+/// The row width to give [`FieldId::search`] for a field `field` px wide: the field and the
+/// place it keeps for `Clear`.
+pub fn search_row_width(ui: &Ui, field: f32) -> f32 {
+    field + search_clear_room(ui)
+}
+
+/// The place a search row keeps for `Clear`: its width and the gap before it.
+fn search_clear_room(ui: &Ui) -> f32 {
+    search_clear().natural_width(ui) + ui.spacing().item_spacing.x
+}
+
+/// The search row's `Clear`.
+fn search_clear() -> Action<'static> {
+    Action::quiet("Clear").density(Density::Scan)
 }
 
 /// What [`FieldId::search`] drew: the field, and whether `Clear` emptied it this frame.

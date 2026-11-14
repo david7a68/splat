@@ -732,7 +732,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/ad_hoc.rs",
             "add_creature_form",
-            &[Ban::Layout(2), Ban::Extras(1)],
+            &[Ban::Layout(2)],
         ),
         (
             "src/encounter_run/rolling.rs",
@@ -791,7 +791,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters.rs",
             "creature_search_with_summary",
-            &[Ban::Layout(1), Ban::Extras(1)],
+            &[Ban::Layout(1)],
         ),
         (
             "src/encounters.rs",
@@ -866,7 +866,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "wide_tables_keep_whole_words_and_can_scroll_to_the_last_column",
             &[Ban::Layout(1)],
         ),
-        ("src/party.rs", "sheet_view", &[Ban::Extras(3)]),
+        ("src/party.rs", "sheet_view", &[Ban::Extras(2)]),
         ("src/party_bar.rs", "more_players", &[Ban::Layout(2)]),
         ("src/party_bar.rs", "paint", &[Ban::Layout(1)]),
         (
@@ -1039,11 +1039,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/sessions/plan.rs", "word_link", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "plan_row_with", &[Ban::Extras(1)]),
-        (
-            "src/encounters.rs",
-            "replace_missing_creature",
-            &[Ban::Extras(1)],
-        ),
         ("src/encounters.rs", "add_pane", &[Ban::Extras(1)]),
         ("src/encounters.rs", "loot_field", &[Ban::Extras(1)]),
         ("src/encounters/list.rs", "heading", &[Ban::Extras(1)]),

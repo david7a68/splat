@@ -861,23 +861,14 @@ impl Party {
         }
         design::rule(ui);
         if self.page > 0 && sheet_entries(record, self.page).len() > 8 {
-            ui.horizontal(|ui| {
-                design::search_field(
-                    ui,
-                    "Filter this page",
-                    &mut self.search,
-                    &format!("Filter {}…", SHEET_PAGES[self.page].1.to_lowercase()),
-                    240.0_f32.min(ui.available_width() - 70.0),
-                );
-                if !self.search.is_empty()
-                    && Action::quiet("Clear")
-                        .density(Density::Scan)
-                        .show(ui)
-                        .clicked()
-                {
-                    self.search.clear();
-                }
-            });
+            let width = design::search_row_width(ui, 240.0).min(ui.available_width());
+            let _ = crate::field_id!("party_page_filter").search(
+                ui,
+                "Filter this page",
+                &mut self.search,
+                &format!("Filter {}…", SHEET_PAGES[self.page].1.to_lowercase()),
+                width,
+            );
         }
         if self.page == 0
             && self

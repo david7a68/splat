@@ -392,7 +392,7 @@ impl Run {
             // As wide as the group block below, so the panel has one right edge.
             let width = block
                 .unwrap_or_else(|| (ui.available_width() - design::M).min(design::LIST_MEASURE));
-            design::search_field(
+            let _ = crate::field_id!("run_add_creature_search").search(
                 ui,
                 FIELD,
                 &mut self.ad_hoc.query,

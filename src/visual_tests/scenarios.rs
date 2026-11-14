@@ -19829,11 +19829,12 @@ pub mod session_plan_groups {
             format!("Find a creature top, empty {empty:?}, with members {assembled:?}"),
         );
         d.state("plan-group-assembled", Sizes::All);
-        // iter-27-B FL3: the search field ends where each result's Add ends, at the scroll
-        // lane, with or without the bar.
+        // iter-27-B FL3: the search ends where each result's Add ends, at the scroll lane, with
+        // or without the bar. X2: the search's row (the field and Clear's kept place) ends
+        // there; the field ends at Clear's place.
         for size in [SMALL, DEFAULT, LARGE] {
             let edges = d.at_size(size, |d| {
-                let search = d.place_of(FIND_CREATURE)?;
+                let search = d.search_row_of(FIND_CREATURE)?;
                 let adds: Vec<f32> = d
                     .nodes()
                     .into_iter()
@@ -19871,7 +19872,7 @@ pub mod session_plan_groups {
             let gap = d
                 .place_of("Group name: Ash Pack")
                 .zip(d.place_of("Save group"))
-                .zip(d.place_of(FIND_CREATURE))
+                .zip(d.search_row_of(FIND_CREATURE))
                 .map(|((name, save), search)| {
                     (
                         save.left() - name.right(),

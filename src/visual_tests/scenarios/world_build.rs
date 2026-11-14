@@ -4258,8 +4258,9 @@ fn painted_marks(job: &egui::text::LayoutJob) -> Vec<(String, egui::Color32)> {
 /// `both`: the page must show both counts, as with one unreadable and one warning note.
 pub(super) fn world_fault_marks(d: &Driver<'_>, both: bool) -> (bool, String) {
     let c = design::colors();
+    // The list's column: the search's row (X2: the field ends at Clear's kept place).
     let search = d
-        .place_of("Search the world")
+        .search_row_of("Search the world")
         .unwrap_or(egui::Rect::NOTHING);
     let list = egui::Rect::from_x_y_ranges(search.x_range(), search.bottom()..=f32::INFINITY);
     let mut errors = 0;
