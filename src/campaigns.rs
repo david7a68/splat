@@ -761,6 +761,17 @@ impl Campaigns {
         }
     }
 
+    /// The Link and folder page's lock, in its own words: a run's lock names what it keeps.
+    pub fn link_lock(blocked: Option<&str>) -> Option<&str> {
+        blocked.map(|reason| {
+            if reason == "Close the run to change campaigns." {
+                "Close the run to change the folder, the session folder or the link."
+            } else {
+                reason
+            }
+        })
+    }
+
     /// The active campaign's folder and D&D Beyond link.
     pub fn show_active(
         &mut self,
@@ -785,13 +796,7 @@ impl Campaigns {
             design::HeadingRow::new("Folder")
                 .action(Action::quiet("Edit details").blocked(blocked)),
         );
-        let link_blocked = blocked.map(|reason| {
-            if reason == "Close the run to change campaigns." {
-                "Close the run to change the folder, the session folder or the link."
-            } else {
-                reason
-            }
-        });
+        let link_blocked = Self::link_lock(blocked);
         let (block, _) = block.field(|ui| {
             design::blocked_reason(ui, link_blocked);
             ui.add(egui::Label::new(campaign.path.display().to_string()).wrap());

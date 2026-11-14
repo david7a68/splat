@@ -7346,9 +7346,12 @@ impl Sessions {
         // The listing the footer read this frame (`folder_scan`, kept until the next scan).
         let files = self.folder_files();
         let has_files = self.folder_move_counts(book, &files).is_some();
-        let blocked = self
-            .folder_wait(book, changed, &files)
-            .map(FolderWait::words)
+        // The page's lock first: while it holds, the warning offers no choice, so Save never
+        // points at choices that are not there.
+        let blocked = locked
+            .or(self
+                .folder_wait(book, changed, &files)
+                .map(FolderWait::words))
             .or(has_files.then_some("Choose below to move the files or not."));
         ui.horizontal_wrapped(|ui| {
             if changed {
@@ -7518,8 +7521,9 @@ impl Sessions {
     /// Round 26 FN2, FN5, ruling R24: the Session folder form's messages, `S` below its save row
     /// (`folder_block`), so a typed letter, a refusal or a result never moves the save row: why
     /// the folder cannot be used or a write failed (`FolderFault`), what Save without moving
-    /// would hide (`Notice::warning`), and the open campaign's move result from its store.
-    /// Nothing here can be pressed. The folder's listing is read once per disk scan
+    /// would hide (`Notice::warning`, with the two choices `Move files and save` and `Save
+    /// without moving`, none while the page is locked), and the open campaign's move result from
+    /// its store; a choice's press comes back from `ValueBlock::messages`. The folder's listing is read once per disk scan
     /// (`folder_scan`).
     fn folder_messages<'f>(
         &mut self,
@@ -9011,17 +9015,18 @@ mod tests {
             .unwrap();
             campaign
         });
-        type State = (Sessions, Book, Campaign);
+        // The fourth value is the page's lock (a run), as the Link and folder page passes it.
+        type State = (Sessions, Book, Campaign, Option<&'static str>);
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(900.0, 700.0))
             .build_state(
-                |ctx, (sessions, book, campaign): &mut State| {
+                |ctx, (sessions, book, campaign, lock): &mut State| {
                     sessions.poll(ctx, Some(campaign), book);
                     egui::CentralPanel::default().show(ctx, |ui| {
-                        sessions.folder_block(ui, book, None);
+                        sessions.folder_block(ui, book, *lock);
                     });
                 },
-                (Sessions::default(), Book::default(), a.clone()),
+                (Sessions::default(), Book::default(), a.clone(), None),
             );
         design::theme::install(&harness.ctx);
         harness.run_steps(2);
@@ -9306,6 +9311,42 @@ mod tests {
             now.rect().height() <= Type::Small.line() + 1.0,
             "the Now: line is one line: {:?}",
             now.rect()
+        );
+        // Validation of bbadb689, point 1: while the page is locked (a run) and the folder keeps
+        // files, the warning offers no choice, and the disabled Save's reason is the lock's,
+        // never a pointer at choices that are not there.
+        const LOCK: &str = "Close the run to change the folder, the session folder or the link.";
+        harness.state_mut().0.folder_text = "Elsewhere".to_owned();
+        harness.state_mut().3 = Some(LOCK);
+        harness.run_steps(3);
+        let save = harness.get_by_label("Save folder");
+        assert!(
+            save.accesskit_node().is_disabled()
+                && save.accesskit_node().description().as_deref() == Some(LOCK),
+            "the locked Save says the lock's reason: {:?}",
+            save.accesskit_node().description()
+        );
+        assert!(
+            shows(&harness, "The current folder keeps 1 note.")
+                && !shows(&harness, "Choose below")
+                && !shows(&harness, MOVE_FILES)
+                && !shows(&harness, "Save without moving"),
+            "under the lock the warning stays, with no choice and no pointer to one"
+        );
+        // The hover says the lock's reason alone (a tooltip waits half a second).
+        harness.hover_at(harness.get_by_label("Save folder").rect().center());
+        harness.run_steps(8);
+        assert!(
+            shows(&harness, LOCK) && !shows(&harness, "Choose below"),
+            "the locked Save's hover names the lock, not the choices"
+        );
+        harness.remove_cursor();
+        harness.state_mut().3 = None;
+        harness.run_steps(3);
+        assert!(
+            shows(&harness, MOVE_FILES)
+                && shows(&harness, "Choose below to move the files or not."),
+            "the lock gone, the choices come back"
         );
     }
 
