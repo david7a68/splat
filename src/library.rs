@@ -7034,8 +7034,6 @@ impl Library {
             self.source = false;
         }
         let conflict = self.disk_change.is_some();
-        // Read: the reader's messages sit in the pane's message footer, below the body.
-        let choices_in_reader = !self.source && !conflict;
         let mut duplicate_indices = self.loaded.as_ref().unwrap().duplicates(i);
         if !duplicate_indices.is_empty() {
             duplicate_indices.push(i);
@@ -7220,10 +7218,7 @@ impl Library {
         }
         // Overwrite was chosen in the comparison: it saves whatever the draft holds.
         let mut save = overwrite || (save_key && draft_state.can_save());
-        let save_row = editable && (self.source || dirty);
         let mut step = history::take_if(ui.ctx(), |_| true);
-        // Edit Markdown's save row, with the pane's message footer below the editor.
-        let slot_row = save_row && !conflict;
         let can_copy = note
             .entry
             .as_ref()
@@ -7382,6 +7377,13 @@ impl Library {
                 });
             }
         });
+        // The mode's flags, after the toggle above: the pass that opens Edit Markdown draws the
+        // editor's pane (its footer identity and scroll) from the start, not Read's.
+        // Read: the reader's messages sit in the pane's message footer, below the body.
+        let choices_in_reader = !self.source && !conflict;
+        let save_row = editable && (self.source || dirty);
+        // Edit Markdown's save row, with the pane's message footer below the editor.
+        let slot_row = save_row && !conflict;
         if choose_clicked && let Owner::Package(module) = &note.owner {
             if about {
                 use_every = Some(module.clone());
@@ -8148,8 +8150,8 @@ impl Library {
                         if std::mem::take(&mut self.focus_markdown) {
                             response.request_focus();
                         }
-                        // The caret goes to the broken line. (The region has no way to scroll its
-                        // editor to a line: a part gap, reported with PR 341's follow-up.)
+                        // The caret goes to the broken line; the region reveals a caret that
+                        // moved outside its view, centred (P2).
                         if std::mem::take(&mut self.focus_repair)
                             && let Some(line) = repair_line
                         {
@@ -8317,19 +8319,42 @@ impl Library {
                 pressed = shown;
             }
             let draft_before = self.draft_revision;
+            // A press acts on the draft as it is now, not as the footer saw it: the body may
+            // have changed it in this same frame (a key and a screen reader's activation in one
+            // frame). A fix is computed again from the current text; an Undo acts only while the
+            // draft is still the text its action left, else it does nothing and its entry stays
+            // (its line comes back with its own draft). Typed text is never replaced.
             if discard_undo.get()
+                && self.draft == note.text
                 && let Some((_, _, text)) = self.discarded.take()
             {
                 self.draft = text;
                 // The draft changed: a failed Save of the old words no longer owns it.
                 self.draft_revision += 1;
             }
-            let pressed_heading = (heading_fix, heading_undo.get());
+            let current = (heading_fix || vital_use.is_some())
+                .then(|| Entry::parse(&note.path, &self.draft).ok())
+                .flatten()
+                .filter(|_| editable && !conflict);
+            let heading_now = HeadingChoice::new(
+                current.as_ref(),
+                &self.draft,
+                self.heading_undo.as_ref(),
+                &note.path,
+            );
+            let pressed_heading = (
+                heading_fix && heading_now.fix.is_some(),
+                heading_undo.get()
+                    && self
+                        .heading_undo
+                        .as_ref()
+                        .is_some_and(|(at, _, after)| *at == note.path && *after == self.draft),
+            );
             if pressed_heading.0 || pressed_heading.1 {
                 self.draft_revision += 1;
             }
             let fixed = pressed_heading.0;
-            save |= heading.apply(
+            save |= heading_now.apply(
                 pressed_heading,
                 &note.path,
                 &mut self.draft,
@@ -8339,8 +8364,18 @@ impl Library {
                 self.result_orders
                     .insert(OrderKey::Heading, design::ResultOrder::issue());
             }
-            if let (Some((key, label, value)), Ok(entry)) = (vital_use, &parsed) {
-                match creature::use_vital(&self.draft, entry, key, value) {
+            // The stat fix again from the current text: its check must still say this value.
+            let current = vital_use.and_then(|(key, label, value)| {
+                let entry = Entry::parse(&note.path, &self.draft)
+                    .ok()
+                    .filter(|_| editable)?;
+                creature::vital_checks(&entry)
+                    .iter()
+                    .any(|(at, _, now, _)| *at == key && *now == value)
+                    .then_some((key, label, value, entry))
+            });
+            if let Some((key, label, value, entry)) = current {
+                match creature::use_vital(&self.draft, &entry, key, value) {
                     Ok(after) => {
                         self.result_orders
                             .insert(OrderKey::Vital, design::ResultOrder::issue());
@@ -8358,6 +8393,10 @@ impl Library {
                 }
             }
             if vital_undo.get()
+                && self
+                    .vital_undo
+                    .as_ref()
+                    .is_some_and(|(path, _, after, _)| *path == note.path && *after == self.draft)
                 && let Some((_, before, _, _)) = self.vital_undo.take()
             {
                 self.draft = before;
