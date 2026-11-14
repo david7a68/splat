@@ -6916,9 +6916,20 @@ impl Library {
             }
             add_results(&mut footer, &results, &self.result_orders, &pressed);
             page_error(&mut footer, self.error.as_deref());
-            // The empty reader below holds nothing past the cursor, so the pane ends at the
-            // footer's top.
-            let _ = footer.show_by_hand(ui);
+            // The empty reader is the pane's body; the footer follows it (round 28 pane).
+            footer.pane(ui, design::Body::Content, |ui| {
+                design::empty_state(
+                    ui,
+                    icons::LIBRARY,
+                    "No entry open",
+                    if campaigns.active_campaign().is_some() || !campaigns.modules().is_empty() {
+                        "Choose one from the list, or make a new one."
+                    } else {
+                        "Choose one from the list."
+                    },
+                    |_| {},
+                );
+            });
             self.apply_package_results(&pressed.get());
         }
         let recovery = self
@@ -6966,19 +6977,11 @@ impl Library {
                 fault: None,
             });
             self.invalidate();
+            // This frame drew the empty reader's pane; the next one draws the entry.
+            ui.ctx().request_repaint();
+            return;
         }
         let Some(i) = self.selected else {
-            design::empty_state(
-                ui,
-                icons::LIBRARY,
-                "No entry open",
-                if campaigns.active_campaign().is_some() || !campaigns.modules().is_empty() {
-                    "Choose one from the list, or make a new one."
-                } else {
-                    "Choose one from the list."
-                },
-                |_| {},
-            );
             return;
         };
         // Overwrite was chosen: what is on disk now becomes what this save replaces.
