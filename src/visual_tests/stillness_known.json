@@ -19,7 +19,7 @@
     ["G1b/pressed-control-moved","15-missing-campaign-manifest-needs-explicit-write","960x640","Button \"Discard\"",5],
     ["G1b/pressed-control-moved","15-missing-campaign-manifest-needs-explicit-write","960x640","Button \"Save repaired note\"",2],
     ["G1b/pressed-control-moved","15-missing-campaign-manifest-needs-explicit-write","960x640","CheckBox \"Use Ash Wraith\"",2],
-    ["G1b/pressed-control-moved","15-missing-campaign-manifest-needs-explicit-write","960x640","MultilineTextInput \"Note text: Notes/Cracked.md\"",4],
+    ["G1b/pressed-control-moved","15-missing-campaign-manifest-needs-explicit-write","960x640","MultilineTextInput \"Note text: Notes/Cracked.md\"",3],
     ["G1b/pressed-control-moved","17-campaign-manifest-write-undone","960x640","Button \"Undo write Campaign.md\"",1]
   ],
   "column-resize": [
@@ -346,6 +346,8 @@
     ["N2/icon-off-text-centre","02-log-line-added-in-lookup","960x640","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
     ["N2/icon-off-text-centre","03-status-changed-in-lookup","960x640","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
     ["N2/icon-off-text-centre","04-log-field-from-scene","1920x1080","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
+    ["N2/icon-off-text-centre","02-log-line-added-in-lookup","960x640","Button \"More actions for Ashfall Keep\"",1],
+    ["N2/icon-off-text-centre","03-status-changed-in-lookup","960x640","Button \"More actions for Ashfall Keep\"",1],
     ["N2/icon-off-text-centre","04-log-field-from-scene","960x640","Button \"More actions for Ashfall Keep\"",1],
     ["N2/icon-off-text-centre","04-log-field-from-scene","960x640","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
     ["N2/icon-off-text-centre","05-log-header-long-title","1920x1080","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],

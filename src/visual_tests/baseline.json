@@ -2,7 +2,7 @@
   "violations": {
     "accessible-name/egui-chrome": {
       "book-to-package": 18,
-      "campaign-content": 20,
+      "campaign-content": 21,
       "campaign-copy-registered": 2,
       "column-resize": 30,
       "creature-filter": 5,
@@ -101,7 +101,7 @@
     },
     "target-size/egui-chrome": {
       "book-to-package": 50,
-      "campaign-content": 91,
+      "campaign-content": 92,
       "campaign-copy-registered": 8,
       "column-resize": 129,
       "creature-filter": 15,
