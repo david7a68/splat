@@ -984,22 +984,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "wide_tables_keep_whole_words_and_can_scroll_to_the_last_column",
             &[Ban::Layout(1)],
         ),
-        (
-            "src/processing/settings.rs",
-            "input_section",
-            &[Ban::Layout(1)],
-        ),
-        ("src/processing/settings.rs", "key_row", &[Ban::Extras(1)]),
-        (
-            "src/processing/settings.rs",
-            "llm_section",
-            &[Ban::Layout(3), Ban::Extras(1)],
-        ),
-        (
-            "src/processing/settings.rs",
-            "speech_section",
-            &[Ban::Layout(3), Ban::Extras(1)],
-        ),
         ("src/rolls.rs", "mode_menu", &[Ban::Layout(1)]),
         ("src/rolls.rs", "more_actions", &[Ban::Layout(1)]),
         ("src/rolls.rs", "outcome_line", &[Ban::Layout(1)]),
@@ -1028,14 +1012,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/plan.rs", "plan_menu", &[Ban::Layout(1)]),
         ("src/sessions/slash.rs", "note", &[Ban::Layout(1)]),
         ("src/sessions/slash.rs", "popup_at", &[Ban::Layout(1)]),
-        ("src/timeline/checks.rs", "table_line", &[Ban::Layout(1)]),
         (
             "src/timeline/page.rs",
             "detail",
             // `ByOwner`: `checks::Results::undo(id, book)`, not the footer store's; counted by name.
-            &[Ban::Layout(7), Ban::ByOwner(1)],
+            &[Ban::Layout(1), Ban::ByOwner(1)],
         ),
-        ("src/timeline/page.rs", "filters", &[Ban::Layout(1)]),
         ("src/timeline/page.rs", "list", &[Ban::Layout(1)]),
         ("src/timeline/page.rs", "new_events_line", &[Ban::Layout(1)]),
         (
@@ -1163,11 +1145,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/library/creature.rs", "show", &[Ban::Extras(1)]),
         ("src/library/reader.rs", "show", &[Ban::Extras(1)]),
         ("src/markdown_view.rs", "flush", &[Ban::Extras(1)]),
-        (
-            "src/processing/settings.rs",
-            "field_reason",
-            &[Ban::Extras(2)],
-        ),
         ("src/rolls.rs", "armed_hint", &[Ban::Extras(2)]),
         ("src/sessions/carry.rs", "last_time_line", &[Ban::Extras(1)]),
         ("src/sessions/page.rs", "draft_warning", &[Ban::Extras(2)]),
@@ -1181,12 +1158,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/plan.rs", "plan_details", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "scene_words", &[Ban::Extras(1)]),
         ("src/timeline/checks.rs", "result", &[Ban::Extras(1)]),
-        ("src/timeline/page.rs", "problems", &[Ban::Extras(1)]),
-        (
-            "src/timeline/page.rs",
-            "rest_ruling_line",
-            &[Ban::Extras(1)],
-        ),
         ("src/world.rs", "draw", &[Ban::Extras(4)]),
         ("src/world.rs", "missing_link", &[Ban::Extras(1)]),
         ("src/world.rs", "unread_groups_message", &[Ban::Extras(1)]),
