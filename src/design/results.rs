@@ -1241,6 +1241,7 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/design/layout.rs", "sideways_scroll", &[Ban::Layout(1)]),
         ("src/design/layout.rs", "single_line", &[Ban::Layout(1)]),
         ("src/design/layout.rs", "word! statement", &[Ban::Layout(1)]),
+        ("src/design/layout.rs", "key! statement", &[Ban::Layout(1)]),
         (
             "src/design/layout/tests.rs",
             "a_field_id_keeps_focus_across_a_layout_branch",
