@@ -867,27 +867,36 @@ message line; after an outside change that Undo is blocked with its reason.
 
 Unavailable packages keep their last known display name. Older unnamed selections say `A package that is no
 longer on this computer`. Count affected campaign entries when references are known, with Remove from this
-campaign and Find the folder… beside the message. Only Technical details shows IDs. Removing an unavailable
-package has Undo and keeps links to affected encounters; the message's icon centres on its first line, whose
-words are those links. Unregister keeps the last folder in Settings. Library
+campaign and Find the folder… beside the message. Only Technical details shows IDs: on Campaign it is a link
+among the message's choices, and while it is open the message's words end with `Package reference: <id>.`.
+Removing an unavailable package has Undo and offers each affected encounter as a choice; the message's icon
+centres on its first line. Unregister keeps the last folder in Settings. Library
 offers Undo unregister in its success result, which sits in the pane's message footer (below the form that takes the
 reader's place), so the scope, the search and the list never move; Campaign offers Register it again.
 
 Missing-package recovery searches beside known package folders. A unique match gets bordered secondary Use
 this folder before Find the folder…; every action on the message, Remove from this campaign too, is bordered
-secondary. Show one warning naming the old and new folders, followed by
-the affected encounter links with word spaces. After `Remove from this campaign`, the result says what was done
-first, a success with its Undo (`Ashen Marches removed from this campaign.` with `Undo package removal`); the
-warning about the encounters it leaves without creatures follows it, with their links (`message_with_links`). Align Use this folder, Find the folder… and Remove from this
-campaign on one action line with the warning text. Technical details follows below. Say Splat cannot find the
+secondary. Each package fault is one typed message in the page's footer (`FaultMessage`), so the package
+list keeps one place. Show one warning naming the old and new folders, `It was in <folder>/.`, and the
+encounters that use its creatures in its words (`Bridge Ambush and Shrine of Cinders use its creatures.`); each
+encounter is a safe choice of the message, `Open <name>`, which opens it in Lookup. After `Remove from this
+campaign`, the result says what was done first, a success with its Undo (`Ashen Marches removed from this
+campaign.` with `Undo remove Ashen Marches`); the warning about the encounters it leaves without creatures
+follows it (`Bridge Ambush and Shrine of Cinders now have creatures Splat cannot find.`), with one `Open <name>`
+choice per encounter. A recovery's result names the folder (`Ashen Marches found in <folder>/.` with
+`Undo recover <folder>`). The choices (Use this folder, Find the folder…, Remove from this campaign, the
+`Open <name>` choices, Technical details) start at the warning text, below its words. Say Splat cannot find the
 package only when there is no match. Use Body text throughout the missing-package sentence. The picker
 starts beside the old folder and checks identity before restoring registration. A folder that holds another
-package says the fault first and names both: `<folder>/ holds a different package. Choose the folder that holds
-Ashen Marches.` Both recovery paths have Undo.
+package says the fault first and names both: `The folder <folder>/ holds a different package. Choose the folder
+that holds Ashen Marches.` Both recovery paths have Undo. Each Undo belongs to its own result, with that
+result's folder and registration: a later recovery of the same package, in any campaign, ends it.
 
 A broken or deleted package manifest leaves its entries available and names the manifest fault. Campaign offers
 bordered Open in Library first for unreadable manifests, then `Replace with a basic <file>`. Name the real file,
-Package.md or Module.md. Align the first action and the replacement's consequence below the actions with the warning text.
+Package.md or Module.md. The replacement's consequence is in the message's words, after the fault; the actions
+start at the warning text, below the words. While campaign changes wait, each write's choice is blocked with its
+reason.
 Campaign Packages and the Library details row say `The package manifest was deleted. Entries are still available.
 Write it again, or restore it from a backup.` and offer `Write the manifest again` for a missing file. The old
 file name is not stored. An existing file offers `Replace with a basic <file>` and warns that other fields

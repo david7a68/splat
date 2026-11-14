@@ -625,28 +625,16 @@ impl<'a> Driver<'a> {
     }
 
     /// A tone bar beside a linked message, rather than a hand-built warning row.
-    pub fn has_message_bar(&self, first: egui::Rect, color: egui::Color32) -> bool {
-        fn contains(shape: &egui::Shape, first: egui::Rect, color: egui::Color32) -> bool {
-            match shape {
-                egui::Shape::Vec(shapes) => {
-                    shapes.iter().any(|shape| contains(shape, first, color))
-                }
-                egui::Shape::Rect(bar) => {
-                    bar.fill == color
-                        && bar.rect.width() <= crate::design::XS
-                        && bar.rect.right() < first.left()
-                        && first.left() - bar.rect.right() <= crate::design::XXL
-                        && (bar.rect.top() - first.top()).abs() <= crate::design::S
-                        && bar.rect.height() >= crate::design::Type::Body.line()
-                }
-                _ => false,
-            }
-        }
-        self.harness
-            .output()
-            .shapes
-            .iter()
-            .any(|shape| contains(&shape.shape, first, color))
+    /// The typed messages drawn this frame (package M's registry): each one's rect, place and
+    /// tone, which the part takes from the message's kind.
+    pub fn typed_messages(
+        &self,
+    ) -> Vec<(
+        egui::Rect,
+        crate::design::outcome::MessagePlace,
+        crate::design::Tone,
+    )> {
+        crate::design::outcome::message_rects(&self.harness.ctx)
     }
 
     /// A message's tone bar beside one line of its painted words: the bar is as tall as the
@@ -1181,6 +1169,66 @@ impl<'a> Driver<'a> {
         } else {
             panic!("{message}");
         }
+    }
+
+    /// Click the control named `name` and run `look` on the first frame shown after the click,
+    /// before the app settles; then settle.
+    pub fn first_frame_after_click<T>(&mut self, name: &str, look: impl FnOnce(&Self) -> T) -> T {
+        let rect = self.aim(&format!("control {name:?}"), |node| {
+            node.name == name && Self::is_control(node)
+        });
+        let pos = rect.center();
+        self.harness.hover_at(pos);
+        self.harness.step();
+        for pressed in [true, false] {
+            self.harness.event(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
+        self.harness.step();
+        self.harness.remove_cursor();
+        self.interactions += 1;
+        let seen = look(self);
+        self.settle();
+        seen
+    }
+
+    /// Text typed into the focused field and a screen reader's Click on the control named
+    /// `name`, in ONE pass. `Harness::step` runs one pass per queued event, so both events go
+    /// straight into the next frame's input (the queue drained first) and one frame runs. egui
+    /// applies an AccessKit Click when the control is drawn, without moving the focus: a field
+    /// drawn before the control takes the text in the pass where the control is clicked
+    /// (proved by `driver_tests::text_and_reader_click_meet_in_one_pass`).
+    pub fn type_and_reader_click(&mut self, text: &str, name: &str) {
+        let target = self
+            .nodes()
+            .into_iter()
+            .find(|node| node.name == name && Self::is_control(node) && node.in_view())
+            .map(|node| node.id)
+            .unwrap_or_else(|| {
+                panic!(
+                    "{}: no visible control {name:?}.\n{}",
+                    self.scenario,
+                    self.describe()
+                )
+            });
+        // Drain the queue: the next step must run exactly one pass.
+        self.harness.step();
+        let input = self.harness.input_mut();
+        input.events.push(egui::Event::Text(text.to_owned()));
+        input.events.push(egui::Event::AccessKitActionRequest(
+            accesskit::ActionRequest {
+                target,
+                action: accesskit::Action::Click,
+                data: None,
+            },
+        ));
+        self.harness.step();
+        self.interactions += 2;
+        self.settle();
     }
 
     pub(super) fn click_rect(&mut self, rect: egui::Rect, caption: &str) {
@@ -3608,3 +3656,64 @@ fn save_png(image: &image::RgbaImage, path: &Path) -> image::ImageResult<()> {
 }
 
 const FILTER: image::codecs::png::FilterType = image::codecs::png::FilterType::Paeth;
+
+#[cfg(test)]
+mod driver_tests {
+    use eframe::egui::{self, accesskit};
+
+    #[derive(Default)]
+    struct Pass {
+        text: String,
+        button: Option<egui::Id>,
+        /// The field's text in the pass where the button was clicked.
+        seen_at_click: Option<String>,
+        passes: usize,
+    }
+
+    /// The input path of `Driver::type_and_reader_click`: `Event::Text` and an AccessKit Click
+    /// pushed into one frame's input (the queue empty), then one `step`, run ONE pass in which
+    /// the focused field has the text AND the button is clicked.
+    #[test]
+    fn text_and_reader_click_meet_in_one_pass() {
+        const FIELD: crate::design::layout::FieldName = crate::field_id!("driver_one_pass");
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(400.0, 200.0))
+            .build_ui_state(
+                |ui, state: &mut Pass| {
+                    state.passes += 1;
+                    let field = FIELD
+                        .once(crate::design::layout::Once::Example)
+                        .single_line(ui, &mut state.text, |edit| edit);
+                    if state.passes == 1 {
+                        field.request_focus();
+                    }
+                    let button = ui.button("Fix");
+                    state.button = Some(button.id);
+                    if button.clicked() {
+                        state.seen_at_click = Some(state.text.clone());
+                    }
+                },
+                Pass::default(),
+            );
+        harness.run_steps(2);
+        let target = accesskit::NodeId(harness.state().button.expect("the button draws").value());
+        let before = harness.state().passes;
+        let input = harness.input_mut();
+        input.events.push(egui::Event::Text("typed".into()));
+        input.events.push(egui::Event::AccessKitActionRequest(
+            accesskit::ActionRequest {
+                target,
+                action: accesskit::Action::Click,
+                data: None,
+            },
+        ));
+        harness.step();
+        let state = harness.state();
+        assert_eq!(state.passes, before + 1, "one-pass: one step runs one pass");
+        assert_eq!(
+            state.seen_at_click.as_deref(),
+            Some("typed"),
+            "one-pass: the button is clicked in the pass where the field took the text"
+        );
+    }
+}

@@ -1,12 +1,11 @@
 //! What a campaign uses: package selections, and the repair of invalid notes. This is
 //! a rare setup task, so it stays calm, with one scrolling list at 2,000+ rows.
-#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use crate::{
     campaigns::Campaigns,
     content_workspace::{
         CampaignDocument, Catalogue, Closure, EntryRef, PackageSelection, Selection,
     },
-    design::{self, Action, Density, Tone, Type, colors, icons},
+    design::{self, Action, Density, Type, colors, icons},
     library::{note_path, write_note},
     persistence::{Campaign, Module},
 };
@@ -118,7 +117,6 @@ struct Reconcile {
     /// Proposals that the DM unticked.
     declined: BTreeSet<String>,
     error: Option<String>,
-    message: Option<String>,
 }
 /// The error that says Campaign.md is missing, as `Campaigns` words it.
 const MISSING_CAMPAIGN: &str = "Campaign.md is missing";
@@ -142,47 +140,348 @@ enum PageResult {
     Applied,
 }
 
-impl PageResult {
-    fn has_undo(self) -> bool {
-        !matches!(self, PageResult::Saved | PageResult::Applied)
+/// Who a Campaign page result belongs to: its campaign, and what it is about. One result per
+/// kind and object (a package's manifest write, a repair's discarded draft), so a newer one of
+/// the same kind and object replaces it, and a campaign switch hides it.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+struct PageOwner {
+    campaign: Uuid,
+    kind: PageResult,
+}
+
+impl design::results::Owner for PageOwner {
+    type Scope = Uuid;
+    fn scope(&self) -> &Uuid {
+        &self.campaign
     }
 }
 
-/// A new result comes first, with the order its action takes. It ends the plain results, never
-/// another action's Undo. A macro, so it runs while other fields of the page are borrowed.
+/// What a kept result's action left: its words and its Undo come from it, and only from it. The
+/// store holds it with the result's ticket (one owner), so an Undo acts on the data its own
+/// line showed, never on a newer action's.
+enum Payload {
+    CampaignWrite(crate::content_workspace::ManifestWrite),
+    /// The found folder, and the registration it replaced.
+    Recovered {
+        module: Module,
+        previous: Option<Module>,
+    },
+    /// What `Discard` dropped, and the Campaign.md text it was a draft of.
+    Discarded {
+        selections: Vec<PackageSelection>,
+        baseline: Option<String>,
+    },
+    ManifestWrite {
+        package: Uuid,
+        name: String,
+        write: crate::content_workspace::ManifestWrite,
+    },
+    Removed(RemovedPackage),
+    /// A repair's discarded draft: its path and words, by the stamp its Discard took.
+    RepairDiscard {
+        stamp: u64,
+        path: String,
+        text: String,
+    },
+    Saved,
+    /// How many changes the apply made.
+    Applied(usize),
+}
+
+impl Payload {
+    fn kind(&self) -> PageResult {
+        match self {
+            Self::CampaignWrite(_) => PageResult::CampaignWrite,
+            Self::Recovered { module, .. } => PageResult::Recovered(module.id),
+            Self::Discarded { .. } => PageResult::Discarded,
+            Self::ManifestWrite { package, .. } => PageResult::ManifestWrite(*package),
+            Self::Removed(_) => PageResult::Removed,
+            Self::RepairDiscard { stamp, .. } => PageResult::RepairDiscard(*stamp),
+            Self::Saved => PageResult::Saved,
+            Self::Applied(_) => PageResult::Applied,
+        }
+    }
+}
+
+/// A kept Campaign page result: its campaign and what its action left. Its words come from its
+/// own payload; it lives until an end event of its own ends it.
+struct PageKept {
+    campaign: Uuid,
+    payload: Payload,
+}
+
+impl design::results::Kept for PageKept {
+    type Owner = PageOwner;
+    const ENDS: design::results::Ends = design::results::Ends {
+        // A newer action of another kind ends a plain result (`new_result!`), and the page
+        // ends a result whose state went (`end_results`).
+        owner_changed: design::results::OwnerChanged::Ends,
+        // A reload checks each result against the files (`end_results` at the load).
+        disk_changed: design::results::DiskChanged::Stays,
+        // Its Undo leaves the store only when it works (`undo_by`).
+        press: design::results::Press::Undo,
+    };
+    fn owner(&self) -> PageOwner {
+        PageOwner {
+            campaign: self.campaign,
+            kind: self.payload.kind(),
+        }
+    }
+}
+
+/// The removal result of `campaign`, if it has one.
+fn removal_of(
+    results: &design::Results<PageOwner, PageKept>,
+    campaign: Uuid,
+) -> Option<&RemovedPackage> {
+    let owner = PageOwner {
+        campaign,
+        kind: PageResult::Removed,
+    };
+    results
+        .get(&owner)
+        .and_then(|shown| match &shown.value().payload {
+            Payload::Removed(removed) => Some(removed),
+            _ => None,
+        })
+}
+
+/// End the results of one campaign whose payload `ends` names.
+fn end_results(
+    results: &mut design::Results<PageOwner, PageKept>,
+    campaign: Uuid,
+    ends: impl Fn(&Payload) -> bool,
+) {
+    let owners: Vec<PageOwner> = results
+        .newest_first(&campaign)
+        .map(|shown| shown.value())
+        .filter(|kept| ends(&kept.payload))
+        .map(design::results::Kept::owner)
+        .collect();
+    for owner in owners {
+        results.owner_changed(&owner);
+    }
+}
+
+/// A new result comes first, with the order its store issues at the action, and with its
+/// payload. It ends the plain results, never another action's Undo. A macro, so it runs while
+/// other fields of the page are borrowed.
 macro_rules! new_result {
-    ($page:expr, $kind:expr) => {
-        let _ = $page.message.take();
-        let _ = $page.reconcile.message.take();
-        $page
-            .result_order
-            .retain(|(kind, _): &(PageResult, design::ResultOrder)| {
-                *kind != $kind && kind.has_undo()
+    ($page:expr, $payload:expr) => {
+        let campaign = $page
+            .active
+            .as_ref()
+            .map_or(Uuid::nil(), |active| active.id);
+        for plain in [PageResult::Saved, PageResult::Applied] {
+            $page.results.owner_changed(&PageOwner {
+                campaign,
+                kind: plain,
             });
-        #[allow(
-            clippy::disallowed_methods,
-            reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-        )]
-        $page
-            .result_order
-            .insert(0, ($kind, design::ResultOrder::issue()));
+        }
+        $page.results.record(PageKept {
+            campaign,
+            payload: $payload,
+        });
     };
 }
 
-/// What the DM pressed in the page's result.
-enum ResultPress {
+/// What the DM pressed in the page's footer: a result's Undo (its ticket names the result), an
+/// encounter that a removal left without creatures, or the write of a missing Campaign.md.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ContentPress {
     Undo,
-    Link(usize),
+    WriteCampaign,
+    /// A broken manifest's choices, by its package.
+    OpenManifest(Uuid),
+    WriteManifest(Uuid),
+    /// An unavailable package's choices, by its place among the campaign's selections.
+    UseFolder(usize),
+    Register(usize),
+    Find(usize),
+    Remove(usize),
+    /// An encounter: one that uses an unavailable package's creatures, or one that a removal
+    /// left without creatures.
+    OpenEntry(Uuid),
+    /// An unavailable package's details link: it shows or hides the package's reference.
+    Details(usize),
+}
+
+/// What the Campaign page says is wrong, in its footer or its body. The tone comes from the
+/// severity, as everywhere.
+enum ContentFault<'a> {
+    /// Save's or a load's error, or the change check's (the system's or the workspace's words).
+    Error(&'a str),
+    /// Campaign.md is missing: what Splat can write (the campaigns' preview words).
+    MissingCampaign(&'a str),
+    /// The campaign folder is not on disk.
+    NoFolder,
+    /// A note the page needs cannot be read; `problem` is Save's refusal or that the repair is
+    /// not saved, while the repair is closed.
+    Unreadable {
+        path: &'a str,
+        problem: Option<&'a str>,
+    },
+    /// A repair's Save failed on the disk.
+    RepairNotSaved { path: &'a str, cause: &'a str },
+    /// Save's own check refuses an open repair's draft.
+    RepairRefused { path: &'a str, cause: &'a str },
+    /// A package manifest that cannot be used; `on_disk`: it is there but broken (the error
+    /// tone), else it is gone (a warning).
+    Manifest {
+        package: &'a str,
+        problem: &'a str,
+        /// The manifest's path in its package, for what Replace keeps and replaces.
+        path: &'a str,
+        on_disk: bool,
+    },
+    /// A chosen package that is not available, and where it was.
+    Unavailable {
+        message: &'a str,
+        it_was: Option<&'a str>,
+        /// The encounters that use its creatures (`A and B`), and how many.
+        used_by: Option<(&'a str, usize)>,
+        /// The package's reference, while its Technical details are open.
+        reference: Option<&'a str>,
+    },
+    /// A Campaign.md flag or a missing dependency (the content layer's words).
+    Flag(&'a str),
+    /// Encounters a package removal left without creatures.
+    LeftWithout(&'a design::outcome::Sentence),
+}
+
+impl design::outcome::Fault for ContentFault<'_> {
+    fn severity(&self) -> design::outcome::Severity {
+        use design::outcome::Severity;
+        match self {
+            Self::Error(_) | Self::MissingCampaign(_) | Self::Unreadable { .. } => {
+                Severity::CannotRead
+            }
+            Self::RepairNotSaved { .. } => Severity::NotSaved,
+            Self::Manifest { on_disk: true, .. } => Severity::CannotRead,
+            Self::NoFolder
+            | Self::RepairRefused { .. }
+            | Self::Manifest { on_disk: false, .. }
+            | Self::Unavailable { .. }
+            | Self::Flag(_)
+            | Self::LeftWithout(_) => Severity::NeedsFixing,
+        }
+    }
+
+    fn place(&self) -> Option<design::outcome::FaultPlace<'_>> {
+        match self {
+            Self::RepairRefused { path, .. } => Some(design::outcome::FaultPlace {
+                name: (*path).into(),
+                line: None,
+            }),
+            _ => None,
+        }
+    }
+
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "errors, refusals, manifest problems and flags carry the system’s, the workspace’s or the content layer’s own words"
+    )]
+    fn cause(&self) -> design::outcome::Sentence {
+        use design::outcome::Sentence;
+        // `Sentence::outside` makes the first letter a capital. Words that start with a small
+        // letter most often start with a path or a file name (`notes/a.md: …`, `package.md
+        // changed on disk.`), so checked words come first and the path keeps its spelling.
+        let outside = |words: &str| {
+            let words = words.trim();
+            if words.chars().next()?.is_lowercase() {
+                Sentence::outside(format!("Problem: {words}"))
+            } else {
+                Sentence::outside(words)
+            }
+        };
+        match self {
+            Self::Error(error) => {
+                outside(error).unwrap_or(crate::sentence!("Something went wrong."))
+            }
+            Self::MissingCampaign(preview) => {
+                outside(preview).unwrap_or(crate::sentence!("Campaign.md is missing."))
+            }
+            Self::NoFolder => crate::sentence!("This campaign folder does not exist yet."),
+            Self::Unreadable { path, problem } => {
+                let first = crate::sentence!("{} cannot be read. Fix it here or in World.", path);
+                match problem.and_then(outside) {
+                    Some(problem) => first.then(problem),
+                    None => first,
+                }
+            }
+            Self::RepairNotSaved { path, cause } => {
+                let first = crate::sentence!("{} is not saved.", path);
+                match outside(cause) {
+                    Some(cause) => first.then(cause),
+                    None => first,
+                }
+            }
+            Self::RepairRefused { cause, .. } | Self::Flag(cause) => {
+                outside(cause).unwrap_or(crate::sentence!("This needs fixing."))
+            }
+            Self::Manifest {
+                package,
+                problem,
+                path,
+                on_disk,
+            } => {
+                let words = outside(&manifest_message(package, problem))
+                    .unwrap_or(crate::sentence!("The package manifest cannot be used."));
+                // What Replace keeps and replaces, in the Library's words (one owner).
+                match on_disk
+                    .then(|| {
+                        outside(&crate::content_workspace::manifest_replace_consequence(
+                            path,
+                        ))
+                    })
+                    .flatten()
+                {
+                    Some(consequence) => words.then(consequence),
+                    None => words,
+                }
+            }
+            Self::Unavailable {
+                message,
+                it_was,
+                used_by,
+                reference,
+            } => {
+                let mut words =
+                    outside(message).unwrap_or(crate::sentence!("This package is not available."));
+                if let Some(folder) = it_was {
+                    words = words.then(crate::sentence!("It was in {}/.", folder));
+                }
+                words = match used_by {
+                    Some((names, 1)) => {
+                        words.then(crate::sentence!("{} uses its creatures.", names))
+                    }
+                    Some((names, _)) => {
+                        words.then(crate::sentence!("{} use its creatures.", names))
+                    }
+                    None => words,
+                };
+                match reference {
+                    Some(reference) => {
+                        words.then(crate::sentence!("Package reference: {}.", reference))
+                    }
+                    None => words,
+                }
+            }
+            Self::LeftWithout(words) => (*words).clone(),
+        }
+    }
 }
 
 #[derive(Default)]
 pub struct CampaignContent {
+    /// The unavailable packages whose Technical details are open, by their reference.
+    details: BTreeSet<String>,
     /// Where each open repair's editor sits this frame. Focus scrolling leaves them to the
     /// editor, which scrolls the page to its own viewport.
     editor_rects: Vec<egui::Rect>,
-    /// The page's results, newest first, each with the order its action took. Each lives while
-    /// its own field holds it.
-    result_order: Vec<(PageResult, design::ResultOrder)>,
+    /// The page's kept results, each with the order its action took (newest first) and what
+    /// its action left (`Payload`): the one owner of each result's words and Undo.
+    results: design::Results<PageOwner, PageKept>,
     /// How often the page prepared a package removal's words: once per removal.
     removal_text_preparations: usize,
     reconcile: Reconcile,
@@ -201,40 +500,27 @@ pub struct CampaignContent {
     pub open_run_settings: bool,
     pub found_package: Option<Module>,
     pub forget_package: Option<Uuid>,
-    /// Each found package folder and the registration it replaced, by the package: one result
-    /// and one Undo per package.
-    recovered: Vec<(Uuid, (Module, Option<Module>))>,
     error: Option<String>,
-    message: Option<String>,
     disabled_selections: std::collections::BTreeMap<Uuid, Selection>,
     refresh_pending: bool,
-    removed_package: Option<RemovedPackage>,
-    /// Each package manifest written again, with its package's name, by the package: one result
-    /// and one Undo per package.
-    manifest_writes: Vec<(Uuid, String, crate::content_workspace::ManifestWrite)>,
-    campaign_write: Option<crate::content_workspace::ManifestWrite>,
     repairs: Vec<Repair>,
     /// How often a frame checked a repair draft again. Only an edit, Discard or Undo discard does.
     repair_checks: usize,
-    /// What `Discard` last dropped, for one step of undo, and the Campaign.md text it was a draft
-    /// of. A missing or changed Campaign.md ends it.
-    discarded_selections: Option<(Vec<PackageSelection>, Option<String>)>,
-    /// Each repair's discarded draft (its path and words), newest first. Round 26: one per
-    /// repair, so a second repair's Discard keeps the first one's Undo.
-    discarded_repairs: Vec<(String, String, u64)>,
-    /// The next stamp for a repair's Discard.
+    /// The next stamp for a repair's Discard. Round 26: one result per repair, so a second
+    /// repair's Discard keeps the first one's Undo.
     repair_stamp: u64,
     /// The repair the DM edited or focused last. It owns the primary Save while it is open and
     /// changed; other changed repairs keep their drafts with a secondary Save.
     active_repair: Option<String>,
 }
 struct RemovedPackage {
-    campaign: Uuid,
+    /// The removed package's name, for its Undo (`Undo remove <name>`).
+    name: String,
     /// The result's words, prepared once when the removal succeeds.
-    words: String,
+    words: design::outcome::Sentence,
     /// The warning's words after the result's, when encounters lose creatures; prepared with
     /// `words`.
-    warning: Option<String>,
+    warning: Option<design::outcome::Sentence>,
     before: Vec<PackageSelection>,
     after: Vec<PackageSelection>,
     users: Vec<(Uuid, String)>,
@@ -328,7 +614,7 @@ fn find_package_folder(
             |name| name.to_string_lossy().into_owned(),
         );
         return Err(format!(
-            "{picked}/ holds a different package. Choose the folder that holds {}.",
+            "The folder {picked}/ holds a different package. Choose the folder that holds {}.",
             name.unwrap_or("this package")
         ));
     }
@@ -360,20 +646,43 @@ fn relocated_package(module: &Module, registered: &[Module]) -> Option<Module> {
 /// A package removal's result words, and the warning's words when the removal leaves encounters
 /// without creatures. Round 27 FE5: the result is a success sentence in every case; the warning
 /// follows it. Prepared once, when the removal succeeds.
-fn removal_words(name: &str, users: &[(Uuid, String)]) -> (String, Option<String>) {
+fn removal_words(
+    name: &str,
+    users: &[(Uuid, String)],
+) -> (design::outcome::Sentence, Option<design::outcome::Sentence>) {
     let warning = (!users.is_empty()).then(|| {
-        let names: Vec<_> = users.iter().map(|(_, name)| name.as_str()).collect();
-        format!("{} {}", names.join(", "), removed_suffix(names.len()))
+        let names = and_list(users.iter().map(|(_, name)| name.as_str()));
+        if users.len() == 1 {
+            crate::sentence!("{} now has creatures Splat cannot find.", names)
+        } else {
+            crate::sentence!("{} now have creatures Splat cannot find.", names)
+        }
     });
-    (format!("{name} removed from this campaign."), warning)
+    (
+        crate::sentence!("{} removed from this campaign.", name),
+        warning,
+    )
 }
 
-/// The words after the encounter names when a removed package leaves them without creatures.
-fn removed_suffix(names: usize) -> &'static str {
-    if names == 1 {
-        "now has creatures Splat cannot find."
+/// Names as one phrase: `A`, `A and B`, `A, B and C`.
+fn and_list<'a>(names: impl Iterator<Item = &'a str>) -> String {
+    let names: Vec<&str> = names.collect();
+    match names.split_last() {
+        None => String::new(),
+        Some((last, [])) => (*last).to_owned(),
+        Some((last, before)) => format!("{} and {last}", before.join(", ")),
+    }
+}
+
+/// An apply's result: how many changes it made, and where the old notes are.
+fn applied_words(count: usize) -> design::outcome::Sentence {
+    if count == 1 {
+        crate::sentence!("1 change applied. The old note is archived beside its path.")
     } else {
-        "now have creatures Splat cannot find."
+        crate::sentence!(
+            "{} applied. The old notes are archived beside their paths.",
+            design::count(count, "change", "changes")
+        )
     }
 }
 
@@ -403,24 +712,7 @@ struct Unavailable {
 /// The page's package warnings, gathered once a frame (round 26 FD1).
 #[derive(Default)]
 struct PackageWarnings {
-    /// Each faulty manifest's words.
-    manifests: Vec<String>,
     unavailable: Vec<Unavailable>,
-}
-
-impl PackageWarnings {
-    fn is_empty(&self) -> bool {
-        self.manifests.is_empty() && self.unavailable.is_empty()
-    }
-
-    fn words(&self) -> String {
-        self.manifests
-            .iter()
-            .chain(self.unavailable.iter().map(|u| &u.message))
-            .map(String::as_str)
-            .collect::<Vec<_>>()
-            .join(" ")
-    }
 }
 
 /// A package row's count, in one form: `All chosen · 2,065 entries`, `None chosen · 6 entries`,
@@ -497,6 +789,60 @@ fn package_row(
             );
         },
     )
+}
+
+/// A failed Undo, as the page's error: checked words first, so a path at the start of the
+/// cause (`package.md changed on disk.`) keeps its spelling (`Sentence::outside` would make its
+/// first letter a capital).
+fn undo_failed(cause: &str) -> String {
+    format!("Undo did not work: {}", cause.trim())
+}
+
+/// One kept result as the footer says it, from its own payload: its words, and its Undo. While a
+/// draft waits, a manifest write's Undo is locked (`locked`): the write happened, so its words
+/// stay.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "a manifest write’s words are the content workspace’s own (`ManifestWrite::message`)"
+)]
+fn outcome_of(payload: &Payload, locked: bool) -> design::outcome::KeptOutcome<ContentPress> {
+    use design::outcome::{KeptOutcome, Notice, Said, Sentence, UndoStep, Verb};
+    let undo = |verb: Verb, object: &str| {
+        UndoStep::of(verb, object.to_owned()).pressed_as(ContentPress::Undo)
+    };
+    let discarded = |name: &str| {
+        KeptOutcome::Notice(
+            Notice::new(crate::sentence!("{} draft discarded.", name)),
+            undo(Verb::Discard, name),
+        )
+    };
+    match payload {
+        Payload::CampaignWrite(_) => Said::new(crate::sentence!("Campaign.md was written again."))
+            .undo(undo(Verb::Write, "Campaign.md"))
+            .into(),
+        Payload::Recovered { module, .. } => {
+            let folder = folder_words(&module.path);
+            Said::new(crate::sentence!("{} found in {}/.", module.name, folder))
+                .undo(undo(Verb::Recover, &folder))
+                .into()
+        }
+        Payload::Discarded { .. } => discarded("Campaign packages"),
+        Payload::RepairDiscard { path, .. } => discarded(path.rsplit('/').next().unwrap_or(path)),
+        Payload::ManifestWrite { name, write, .. } => Said::new(
+            Sentence::outside(format!("{name}: {}", write.message()))
+                .unwrap_or(crate::sentence!("The manifest was written again.")),
+        )
+        .undo(undo(Verb::Write, write.path()).locked_when(
+            locked,
+            crate::sentence!("Save or discard campaign changes first."),
+        ))
+        .into(),
+        Payload::Removed(removed) => Said::new(removed.words.clone())
+            .undo(undo(Verb::Remove, &removed.name))
+            .into(),
+        Payload::Saved => Said::new(crate::sentence!("Campaign selections saved.")).into(),
+        Payload::Applied(count) => Said::new(applied_words(*count)).into(),
+    }
 }
 
 fn folder_words(path: &std::path::Path) -> String {
@@ -594,14 +940,7 @@ impl CampaignContent {
         // Round 26: a campaign change ends the Undos of the campaign that was open, at the
         // change, even while this page is hidden; a page reload is not the only end.
         let active = campaigns.active_campaign();
-        if let Some(active) = &active {
-            self.forget_discards_of_other_campaigns(active);
-        } else if self.active.is_some() {
-            self.discarded_selections = None;
-            self.discarded_repairs.clear();
-            self.removed_package = None;
-            self.campaign_write = None;
-        }
+        self.forget_discards_of_other_campaigns(active.as_ref());
         if cfg!(test) {
             return;
         }
@@ -644,12 +983,7 @@ impl CampaignContent {
         }
         match checked.applied {
             Some(Ok(count)) => {
-                new_result!(self, PageResult::Applied);
-                self.reconcile.message = Some(design::count(
-                    count,
-                    "change applied. The old note is archived beside its path.",
-                    "changes applied. The old notes are archived beside their paths.",
-                ));
+                new_result!(self, Payload::Applied(count));
                 self.refresh_pending = !self.dirty();
             }
             Some(Err(error)) => self.reconcile.error = Some(error),
@@ -697,42 +1031,63 @@ impl CampaignContent {
             self.refresh_pending = true;
         }
     }
-    /// Discarded work belongs to its campaign. Undo must not save it into another.
-    fn forget_discards_of_other_campaigns(&mut self, campaign: &Campaign) {
-        if self.active.as_ref().is_none_or(|old| old.id != campaign.id) {
-            self.discarded_selections = None;
-            self.discarded_repairs.clear();
-            self.removed_package = None;
-            self.campaign_write = None;
+    /// Discarded work belongs to its campaign. Undo must not save it into another: a change of
+    /// campaign ends the open campaign's discards, removal and Campaign.md write.
+    fn forget_discards_of_other_campaigns(&mut self, campaign: Option<&Campaign>) {
+        if let Some(old) = &self.active
+            && campaign.is_none_or(|campaign| campaign.id != old.id)
+        {
+            end_results(&mut self.results, old.id, |payload| {
+                matches!(
+                    payload,
+                    Payload::Discarded { .. }
+                        | Payload::RepairDiscard { .. }
+                        | Payload::Removed(_)
+                        | Payload::CampaignWrite(_)
+                )
+            });
         }
     }
     /// Undo package removal checks the package choices only. If the file's choices changed since
-    /// the removal, that Undo would refuse: the result and its Undo go.
+    /// the removal, that Undo would refuse: the result and its Undo go. Only the removal of the
+    /// file's own campaign is judged.
     fn forget_changed_removal(&mut self, document: &crate::content_workspace::CampaignDocument) {
-        if self.removed_package.as_ref().is_some_and(|removed| {
-            removed.campaign == document.campaign.id && removed.after != document.selections
-        }) {
-            self.removed_package = None;
-        }
+        end_results(
+            &mut self.results,
+            document.campaign.id,
+            |payload| matches!(payload, Payload::Removed(removed) if removed.after != document.selections),
+        );
     }
     /// `Undo discard` of the package choices belongs to Campaign.md as it was. When the file goes
     /// missing or changes on disk, the discarded draft and its Undo go.
-    fn forget_discard_of_changed_file(&mut self, loaded: Result<&CampaignDocument, &String>) {
-        if self
-            .discarded_selections
-            .as_ref()
-            .is_some_and(|(_, baseline)| {
-                !loaded.is_ok_and(|document| document.baseline == *baseline)
-            })
-        {
-            self.discarded_selections = None;
+    fn forget_discard_of_changed_file(
+        &mut self,
+        campaign: Uuid,
+        loaded: Result<&CampaignDocument, &String>,
+    ) {
+        end_results(&mut self.results, campaign, |payload| {
+            matches!(payload, Payload::Discarded { baseline, .. }
+                if !loaded.is_ok_and(|document| document.baseline == *baseline))
+        });
+    }
+    /// A plain result's state went (a new draft, a reload): its line goes.
+    fn end_plain(&mut self, plain: PageResult) {
+        if let Some(active) = &self.active {
+            end_results(&mut self.results, active.id, |payload| {
+                payload.kind() == plain
+            });
         }
     }
     fn reload(&mut self, ctx: &egui::Context, campaigns: &Campaigns, campaign: Campaign) {
-        self.forget_discards_of_other_campaigns(&campaign);
-        // A write whose file changed since is stale: its Undo would only refuse.
-        self.manifest_writes.retain(|(_, _, write)| write.on_disk());
-        crate::content_workspace::ManifestWrite::forget_if_changed(&mut self.campaign_write);
+        self.forget_discards_of_other_campaigns(Some(&campaign));
+        // A write whose file changed since is stale: its Undo would only refuse. A switch back
+        // to a campaign reloads it, so its own writes are checked here.
+        end_results(&mut self.results, campaign.id, |payload| match payload {
+            Payload::CampaignWrite(write) | Payload::ManifestWrite { write, .. } => {
+                !write.on_disk()
+            }
+            _ => false,
+        });
         self.refresh_pending = false;
         self.reconcile.checked_at = None;
         self.disabled_selections.clear();
@@ -742,7 +1097,7 @@ impl CampaignContent {
         self.snapshot = None;
         self.entry_matches = None;
         self.error = None;
-        self.message = None;
+        self.end_plain(PageResult::Saved);
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
         let ctx = ctx.clone();
@@ -752,7 +1107,7 @@ impl CampaignContent {
         });
     }
     pub fn clear_notice(&mut self) {
-        self.message = None;
+        self.end_plain(PageResult::Saved);
     }
 
     #[allow(
@@ -802,9 +1157,15 @@ impl CampaignContent {
                     // A repair's discard result ends with its repair: Saved, fixed in World or
                     // deleted. It lives through a reload that finds the repair again.
                     let repairs = &self.repairs;
-                    self.discarded_repairs
-                        .retain(|(path, ..)| repairs.iter().any(|repair| &repair.path == path));
-                    self.forget_discard_of_changed_file(result.as_ref().map(|s| &s.document));
+                    let campaign = active.id;
+                    end_results(&mut self.results, campaign, |payload| {
+                        matches!(payload, Payload::RepairDiscard { path, .. }
+                            if !repairs.iter().any(|repair| &repair.path == path))
+                    });
+                    self.forget_discard_of_changed_file(
+                        campaign,
+                        result.as_ref().map(|s| &s.document),
+                    );
                     match result {
                         Ok(snapshot) => {
                             campaigns.remember_campaign_document(&snapshot.document);
@@ -826,7 +1187,7 @@ impl CampaignContent {
             }
         }
         if self.dirty() {
-            self.message = None;
+            self.end_plain(PageResult::Saved);
         }
         // Round 25 review: the page scrolls, as the other pages do, so every repair and its Save
         // stay in reach at any window size. The page keeps the scroll bar's lane whether or not
@@ -837,25 +1198,21 @@ impl CampaignContent {
         // places it. With the package list, the page's columns fill the room and each scrolls
         // (`Fills`), so the footer is pinned; without it (an error, a missing folder), the
         // footer follows the page's content (row 39).
-        let press = std::cell::Cell::new(None);
-        let write = std::cell::Cell::new(false);
         let fills = self.snapshot.is_some();
-        let me = std::cell::RefCell::new(&mut *self);
-        let footer = Self::page_footer(
-            &me,
+        let frame = design::outcome::PaneFrame::new(ui);
+        let footer = self.page_footer(
+            &frame,
             ui,
             campaigns,
             &active,
             width.min(design::LIST_MEASURE),
-            (&press, &write),
         );
         let body = if fills {
             design::Body::Fills(design::Fills::because(design::FillsReason::Columns))
         } else {
             design::Body::Content
         };
-        footer.pane(ui, body, |ui| {
-            let mut this = me.borrow_mut();
+        let paned = footer.pane(ui, body, |ui| {
             if fills {
                 let page_height = ui.available_height();
                 design::ScrollColumn::new("campaign_packages_page").show(ui, |ui| {
@@ -863,21 +1220,27 @@ impl CampaignContent {
                     // it (a repair editor, a list) would shrink below the fold. The page's
                     // content has all the height it needs; the page scrolls instead.
                     ui.allocate_ui(egui::vec2(width, f32::INFINITY), |ui| {
-                        this.editor_rects.clear();
-                        this.page(ui, campaigns, &active, page_height);
-                        this.scroll_to_focus(ui);
+                        self.editor_rects.clear();
+                        self.page(ui, campaigns, &active, page_height);
+                        self.scroll_to_focus(ui);
                     });
                 });
             } else {
-                this.editor_rects.clear();
-                this.page(ui, campaigns, &active, 0.0);
-                this.scroll_to_focus(ui);
+                self.editor_rects.clear();
+                self.page(ui, campaigns, &active, 0.0);
+                self.scroll_to_focus(ui);
             }
         });
-        let this = me.into_inner();
-        this.press_result(press.take());
-        if write.get() {
-            this.write_campaign(campaigns, &active);
+        let write = matches!(
+            paned.pressed,
+            Some(design::outcome::Press {
+                id: ContentPress::WriteCampaign,
+                ..
+            })
+        );
+        self.press_result(ui.ctx(), campaigns, paned.pressed);
+        if write {
+            self.write_campaign(campaigns, &active);
         }
     }
 
@@ -911,6 +1274,10 @@ impl CampaignContent {
     }
 
     /// The Packages page below the tabs, inside its scroll area.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "a missing campaign folder is the page’s fault with its repair, at the top of the body"
+    )]
     fn page(
         &mut self,
         ui: &mut egui::Ui,
@@ -926,27 +1293,26 @@ impl CampaignContent {
         if self.body_missing() {
             // Round 27 FB3, AB1: a page with no package list draws its errors as its content,
             // where an empty state starts, so the DM does not look past a blank page for them.
-            let mut write = false;
-            ui.scope(|ui| {
-                ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
-                self.draw_reason(ui, campaigns, &active, &mut write);
-            });
+            let write = ui
+                .scope(|ui| {
+                    ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
+                    self.draw_reason(ui, campaigns, &active)
+                })
+                .inner;
             if write {
                 self.write_campaign(campaigns, &active);
             }
         }
         self.repair_section(ui, campaigns, &active);
-        if !active.path.exists() {
-            design::message(
-                ui,
-                Tone::Warning,
-                "This campaign folder does not exist yet.",
-            );
-            if Action::primary("Create campaign folder").show(ui).clicked() {
-                match fs::create_dir_all(&active.path) {
-                    Ok(()) => self.reload(ui.ctx(), campaigns, active.clone()),
-                    Err(e) => self.error = Some(e.to_string()),
-                }
+        if !active.path.exists()
+            && design::outcome::BodyFault::new(&ContentFault::NoFolder)
+                .repair(design::outcome::Repair::new("Create campaign folder", ()))
+                .show(ui)
+                .is_some()
+        {
+            match fs::create_dir_all(&active.path) {
+                Ok(()) => self.reload(ui.ctx(), campaigns, active.clone()),
+                Err(e) => self.error = Some(e.to_string()),
             }
         }
         if self.pending.is_some() {
@@ -973,103 +1339,90 @@ impl CampaignContent {
         }
     }
 
-    /// The page's one message footer (round 26): results with a live Undo first (the page's,
-    /// newest first, then a repair's discarded draft), then reasons (each repair's failed Save
-    /// or refusal, then the page's errors), then the plain results and the package warnings.
-    /// Each message keeps its owner and end event: a repair's messages name its file and end with
-    /// that repair's state, as before.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
-    fn page_footer<'a>(
-        me: &'a std::cell::RefCell<&mut Self>,
+    /// The page's one message footer (round 26), made before the body: the kept results (one
+    /// with a live Undo first, newest first, as the store's orders say), then the reasons (each
+    /// repair's failed Save or refusal, the page's errors), then the plain results and the
+    /// warning about encounters a removal left without creatures. Each keeps its owner and end
+    /// event: a repair's message names its file and ends with that repair's state; a kept
+    /// result lives while its state does (`live`) and in its own campaign only.
+    fn page_footer<'f>(
+        &self,
+        frame: &'f design::outcome::PaneFrame,
         ui: &egui::Ui,
-        campaigns: &'a Campaigns,
-        active: &'a Campaign,
+        campaigns: &Campaigns,
+        active: &Campaign,
         width: f32,
-        (press, write): (&'a FooterPress, &'a std::cell::Cell<bool>),
-    ) -> design::Footer<'a> {
-        let this = me.borrow();
-        let locked = this
-            .dirty()
-            .then_some("Save or discard campaign changes first.");
-        let results = this.live_results(active);
+    ) -> design::outcome::Messages<'f, ContentPress> {
+        use design::outcome::{Choice, ChoiceKind, FaultMessage, MessageChoice};
+        let mut messages =
+            design::outcome::Messages::new(frame, ("campaign_page_footer", active.id), width);
+        let locked = self.dirty();
+        for shown in self.results.newest_first(&active.id) {
+            let line = shown.outcome(frame, |kept| outcome_of(&kept.payload, locked));
+            messages.kept(line);
+        }
+        // Round 27 FE5: the encounters a removal leaves without creatures, each a way to open it.
+        if let Some((removed, warning)) = self
+            .removal(active.id)
+            .and_then(|removed| removed.warning.as_ref().map(|warning| (removed, warning)))
+        {
+            let mut fault = FaultMessage::new(&ContentFault::LeftWithout(warning));
+            for (id, name) in &removed.users {
+                fault = fault.choice(Choice::named_as(
+                    ChoiceKind::Safe,
+                    crate::choice!("Open {}", name),
+                    ContentPress::OpenEntry(*id),
+                ));
+            }
+            messages.outcome(fault);
+        }
+        // A failed Save or a refusal belongs to its repair: its words name the file (round 27
+        // FB5: two notes can share a name in different folders). Round 27 FB1, AB2: a refusal's
+        // cause shows once. While the repair is closed the message above says it; only an open
+        // repair's message drops it, and then the footer says it.
+        for repair in &self.repairs {
+            let open = ui.data(|data| {
+                data.get_temp::<bool>(egui::Id::new(("repair_open", repair.path.as_str())))
+                    .unwrap_or(false)
+            });
+            if let Some(failure) = &repair.failure {
+                messages.outcome(FaultMessage::new(&ContentFault::RepairNotSaved {
+                    path: &repair.path,
+                    cause: failure,
+                }));
+            } else if let Some(refusal) = repair.refusal.as_ref().filter(|_| open) {
+                messages.outcome(FaultMessage::new(&ContentFault::RepairRefused {
+                    path: &repair.path,
+                    cause: refusal,
+                }));
+            }
+        }
+        // The package faults come before the page's errors: an error that a package choice brings
+        // (a wrong folder) comes below the pressed choice, so it does not move.
+        let warnings = self.package_warnings_of(campaigns);
+        self.package_messages(&mut messages, campaigns, &warnings.unavailable);
         // Round 27 FB3, AB1: with no package list to show, the page's errors are its content, at
         // the top of the page (`page`), not in the footer.
-        let reason = if this.body_missing() {
-            String::new()
-        } else {
-            this.reason_words(campaigns, active)
-        };
-        let warnings = this.package_warnings_of(campaigns);
-        let warning_words = warnings.words();
-        // What each repair says, by its path, as the message above and Save's reason name it
-        // (round 27 FB5: two notes can share a name in different folders). Round 27 FB1, AB2:
-        // a refusal's cause shows once. While the repair is closed the message above says it;
-        // only an open repair's message drops it, and then the footer says it.
-        let repair_messages: Vec<(String, Option<String>, Option<String>)> = this
-            .repairs
-            .iter()
-            .map(|repair| {
-                let open = ui.data(|data| {
-                    data.get_temp::<bool>(egui::Id::new(("repair_open", repair.path.as_str())))
-                        .unwrap_or(false)
-                });
-                (
-                    repair.path.clone(),
-                    repair.refusal.clone().filter(|_| open),
-                    repair.failure.clone(),
-                )
-            })
-            .collect();
-        drop(this);
-        {
-            let mut footer = design::Footer::new(("campaign_page_footer", active.id), width);
-            for (kind, order) in results.iter().copied().filter(|(kind, _)| kind.has_undo()) {
-                let words = me.borrow().words_of(kind);
-                footer.result(order, words, true, move |ui| {
-                    if let Some(pressed) = me.borrow().draw_one(ui, kind, locked) {
-                        press.set(Some((kind, pressed)));
-                    }
-                });
-            }
-            for (path, refusal, failure) in &repair_messages {
-                // A failed Save or a refusal belongs to its repair: its words name the file.
-                let words = if let Some(failure) = failure {
-                    format!("{path} is not saved. {failure}")
-                } else if let Some(refusal) = refusal {
-                    format!("{path}: {refusal}")
+        if !self.body_missing() {
+            if let Some(error) = &self.error {
+                // One cause, one message: a missing Campaign.md says what Splat can write and
+                // offers it on the same line.
+                if error.contains(MISSING_CAMPAIGN) {
+                    let (preview, action) = campaigns.campaign_write_preview(active);
+                    messages.outcome(
+                        FaultMessage::new(&ContentFault::MissingCampaign(&preview)).choice(
+                            Choice::new(MessageChoice::Choice(action), ContentPress::WriteCampaign),
+                        ),
+                    );
                 } else {
-                    continue;
-                };
-                footer.reason(words.clone(), move |ui| {
-                    design::message(ui, Tone::Error, &words);
-                });
+                    messages.outcome(FaultMessage::new(&ContentFault::Error(error)));
+                }
             }
-            if !reason.is_empty() {
-                footer.reason(reason, move |ui| {
-                    let mut wants = false;
-                    me.borrow().draw_reason(ui, campaigns, active, &mut wants);
-                    write.set(wants);
-                });
+            if let Some(error) = &self.reconcile.error {
+                messages.outcome(FaultMessage::new(&ContentFault::Error(error)));
             }
-            for (kind, order) in results.iter().copied().filter(|(kind, _)| !kind.has_undo()) {
-                let words = me.borrow().words_of(kind);
-                footer.result(order, words, false, move |ui| {
-                    if let Some(pressed) = me.borrow().draw_one(ui, kind, locked) {
-                        press.set(Some((kind, pressed)));
-                    }
-                });
-            }
-            if !warnings.is_empty() {
-                footer.notice(warning_words, move |ui| {
-                    me.borrow_mut()
-                        .package_warnings(ui, campaigns, active, warnings.unavailable);
-                });
-            }
-            footer
         }
+        messages
     }
 
     /// The package list cannot show: no load is waiting and none gave a snapshot (a missing
@@ -1078,293 +1431,131 @@ impl CampaignContent {
         self.snapshot.is_none() && self.pending.is_none()
     }
 
-    /// The page's errors, in one part: Save's or a load's error and the change check's error.
-    /// Their words, for the part's accessible name.
-    fn reason_words(&self, campaigns: &Campaigns, active: &Campaign) -> String {
-        let error = self.error.as_deref().map(|error| {
-            if error.contains(MISSING_CAMPAIGN) {
-                campaigns.campaign_write_preview(active).0
-            } else {
-                error.to_owned()
-            }
-        });
-        [error.as_deref(), self.reconcile.error.as_deref()]
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>()
-            .join(" ")
-    }
-
-    /// Draw the page's errors. `write` is set when the DM asks to write Campaign.md again.
-    fn draw_reason(
-        &self,
-        ui: &mut egui::Ui,
-        campaigns: &Campaigns,
-        active: &Campaign,
-        write: &mut bool,
-    ) {
+    /// The page's errors as its content (no package list to show): each a fault in the body, a
+    /// missing Campaign.md with the way to write it. True when the DM asks to write it again.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "with no package list, the page’s errors are its content: body faults (round 27 FB3, AB1)"
+    )]
+    fn draw_reason(&self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) -> bool {
+        use design::outcome::{BodyFault, Repair};
+        let mut write = false;
         if let Some(error) = &self.error {
-            // One cause, one message: a missing Campaign.md says what Splat can write
-            // and offers it on the same line.
             if error.contains(MISSING_CAMPAIGN) {
                 let (preview, action) = campaigns.campaign_write_preview(active);
-                *write = design::message_with_action(ui, Tone::Error, &preview, action);
+                write = BodyFault::new(&ContentFault::MissingCampaign(&preview))
+                    .repair(Repair::new(action, ()))
+                    .show(ui)
+                    .is_some();
             } else {
-                design::message(ui, Tone::Error, error);
+                let _ = BodyFault::<()>::new(&ContentFault::Error(error)).show(ui);
             }
         }
         if let Some(error) = &self.reconcile.error {
-            design::message(ui, Tone::Error, error);
+            let _ = BodyFault::<()>::new(&ContentFault::Error(error)).show(ui);
         }
+        write
     }
 
-    /// The page's live results, newest first, each with its order: only results that
-    /// `new_result!` made, so each has the order of its own action. The footer puts those with a
-    /// live Undo first, so every Undo stays in view while it lives.
-    fn live_results(&self, active: &Campaign) -> Vec<(PageResult, design::ResultOrder)> {
-        let live = |kind: &PageResult| match kind {
-            PageResult::CampaignWrite => self.campaign_write.is_some(),
-            PageResult::Recovered(package) => self.recovered.iter().any(|(id, _)| id == package),
-            PageResult::Discarded => self.discarded_selections.is_some(),
-            PageResult::ManifestWrite(package) => {
-                self.manifest_writes.iter().any(|(id, _, _)| id == package)
-            }
-            PageResult::Removed => self
-                .removed_package
-                .as_ref()
-                .is_some_and(|removed| removed.campaign == active.id),
-            PageResult::RepairDiscard(stamp) => {
-                self.discarded_repairs.iter().any(|(.., s)| s == stamp)
-            }
-            PageResult::Saved => self.message.is_some(),
-            PageResult::Applied => self.reconcile.message.is_some(),
+    /// The removal result of `campaign`, if it has one.
+    fn removal(&self, campaign: Uuid) -> Option<&RemovedPackage> {
+        removal_of(&self.results, campaign)
+    }
+
+    /// Act on a press in the page's footer. An Undo acts on the result its line showed, by its
+    /// ticket, with that result's own payload: a result that a newer one replaced is gone, and
+    /// nothing happens. A failed Undo keeps its result and its Undo, with the failure in the
+    /// page's errors.
+    fn press_result(
+        &mut self,
+        ctx: &egui::Context,
+        campaigns: &Campaigns,
+        pressed: Option<design::outcome::Press<ContentPress>>,
+    ) {
+        let Some(design::outcome::Press { id, ticket }) = pressed else {
+            return;
         };
-        self.result_order
-            .iter()
-            .copied()
-            .filter(|(kind, _)| live(kind))
-            .collect()
-    }
-
-    /// The file name of a repair's discarded draft, by its stamp.
-    fn discarded_repair(&self, stamp: u64) -> Option<&str> {
-        self.discarded_repairs
-            .iter()
-            .find(|(.., s)| *s == stamp)
-            .map(|(path, ..)| path.rsplit('/').next().unwrap_or(path))
-    }
-
-    /// One live result's words.
-    fn words_of(&self, kind: PageResult) -> String {
-        match kind {
-            PageResult::CampaignWrite => "Campaign.md was written again.".into(),
-            PageResult::Recovered(package) => self
-                .recovered
-                .iter()
-                .find(|(id, _)| *id == package)
-                .map(|(_, (module, _))| {
-                    format!("{} found in {}/.", module.name, folder_words(&module.path))
-                })
-                .unwrap_or_default(),
-            PageResult::Discarded => "Campaign packages draft discarded.".into(),
-            PageResult::RepairDiscard(stamp) => self
-                .discarded_repair(stamp)
-                .map(|name| format!("{name} draft discarded."))
-                .unwrap_or_default(),
-            PageResult::ManifestWrite(package) => self
-                .manifest_writes
-                .iter()
-                .find(|(id, _, _)| *id == package)
-                .map(|(_, name, write)| format!("{name}: {}", write.message()))
-                .unwrap_or_default(),
-            PageResult::Removed => self
-                .removed_package
-                .as_ref()
-                .map(|removed| match &removed.warning {
-                    Some(warning) => format!("{} {warning}", removed.words),
-                    None => removed.words.clone(),
-                })
-                .unwrap_or_default(),
-            PageResult::Saved => self.message.clone().unwrap_or_default(),
-            PageResult::Applied => self.reconcile.message.clone().unwrap_or_default(),
+        match (id, ticket) {
+            (ContentPress::Undo, Some(ticket)) => {
+                let mut results = std::mem::take(&mut self.results);
+                let _ = results.undo_by(ticket, |kept| self.undo_result(&kept.payload));
+                self.results = results;
+            }
+            // An encounter opens in Lookup by its id, whatever the page holds now.
+            (ContentPress::OpenEntry(id), _) => self.open_lookup = Some(id),
+            (ContentPress::Undo, None) | (ContentPress::WriteCampaign, _) => {}
+            (press, _) => self.package_press(ctx, campaigns, press),
         }
     }
 
-    /// Draw one live result. While a draft waits, a manifest write's Undo greys (`locked`): the
-    /// write happened, so its words keep the text colour.
-    fn draw_one(
-        &self,
-        ui: &mut egui::Ui,
-        kind: PageResult,
-        locked: Option<&str>,
-    ) -> Option<ResultPress> {
-        let undo = |pressed: bool| pressed.then_some(ResultPress::Undo);
-        match kind {
-            PageResult::CampaignWrite => undo(design::undo_message(
-                ui,
-                Tone::Success,
-                "Campaign.md was written again.",
-                "Undo write Campaign.md",
-            )),
-            PageResult::Recovered(_) => undo(design::undo_message(
-                ui,
-                Tone::Success,
-                &self.words_of(kind),
-                "Undo folder recovery",
-            )),
-            PageResult::Discarded => undo(design::draft_discarded(ui, "Campaign packages")),
-            PageResult::RepairDiscard(stamp) => self
-                .discarded_repair(stamp)
-                .and_then(|name| undo(design::draft_discarded(ui, name))),
-            PageResult::ManifestWrite(package) => self
-                .manifest_writes
-                .iter()
-                .find(|(id, _, _)| *id == package)
-                .and_then(|(_, _, write)| {
-                    undo(crate::library::kept_undo_message(
-                        ui,
-                        Tone::Success,
-                        &self.words_of(kind),
-                        &format!("Undo write {}", write.path()),
-                        locked,
-                        false,
-                    ))
-                }),
-            PageResult::Removed => self.removed_package.as_ref().and_then(|removed| {
-                // Round 27 FE5: the result says what was done, a success with its Undo; the
-                // warning about the encounters it leaves without creatures follows it.
-                let pressed =
-                    design::undo_message(ui, Tone::Success, &removed.words, "Undo package removal");
-                let link = if removed.users.is_empty() {
-                    None
+    /// Undo one result with its own payload: `Ok` when it worked (the store then drops it),
+    /// `Err` when it failed (the failure is in the page's errors, and the result and its Undo
+    /// stay).
+    fn undo_result(&mut self, payload: &Payload) -> Result<(), ()> {
+        match payload {
+            Payload::CampaignWrite(write) => match write.undo() {
+                Ok(_) => self.refresh_pending = true,
+                Err(error) => {
+                    self.error = Some(undo_failed(&error));
+                    return Err(());
+                }
+            },
+            Payload::Recovered { module, previous } => {
+                if let Some(previous) = previous {
+                    self.found_package = Some(previous.clone());
                 } else {
-                    // Borrowed names, for the links; the words were prepared at the removal.
-                    let names: Vec<_> = removed
-                        .users
-                        .iter()
-                        .map(|(_, name)| name.as_str())
-                        .collect();
-                    design::message_with_links(
-                        ui,
-                        Tone::Warning,
-                        &names,
-                        removed_suffix(names.len()),
-                    )
-                };
-                link.map(ResultPress::Link).or(undo(pressed))
-            }),
-            PageResult::Saved | PageResult::Applied => {
-                design::message(ui, Tone::Success, &self.words_of(kind));
-                None
-            }
-        }
-    }
-
-    /// Act on a press in one of the page's results.
-    fn press_result(&mut self, press: Option<(PageResult, ResultPress)>) {
-        match press {
-            Some((_, ResultPress::Link(at))) => {
-                if let Some(removed) = &self.removed_package {
-                    self.open_lookup = Some(removed.users[at].0);
+                    self.forget_package = Some(module.id);
                 }
             }
-            Some((kind, ResultPress::Undo)) => self.undo_result(kind),
-            None => {}
-        }
-    }
-
-    /// Undo one result. Each Undo ends only after it worked: a failed Undo keeps its result
-    /// and its Undo, with the failure in the page's errors.
-    fn undo_result(&mut self, kind: PageResult) {
-        match kind {
-            PageResult::CampaignWrite => {
-                if let Some(write) = &self.campaign_write {
-                    match write.undo() {
-                        Ok(_) => {
-                            self.campaign_write = None;
-                            self.refresh_pending = true;
-                        }
-                        Err(error) => self.error = Some(error),
-                    }
-                }
-            }
-            PageResult::Recovered(package) => {
-                if let Some(at) = self.recovered.iter().position(|(id, _)| *id == package) {
-                    let (_, (module, previous)) = self.recovered.remove(at);
-                    if let Some(previous) = previous {
-                        self.found_package = Some(previous);
-                    } else {
-                        self.forget_package = Some(module.id);
-                    }
-                }
-            }
-            PageResult::RepairDiscard(stamp) => {
-                if let Some(at) = self
-                    .discarded_repairs
-                    .iter()
-                    .position(|(.., s)| *s == stamp)
+            Payload::RepairDiscard { path, text, .. } => {
+                if let Some(repair) = self.repairs.iter_mut().find(|r| &r.path == path)
+                    && let Some(active) = self.active.clone()
                 {
-                    let (path, text, _) = self.discarded_repairs.remove(at);
-                    if let Some(repair) = self.repairs.iter_mut().find(|r| r.path == path)
-                        && let Some(active) = self.active.clone()
-                    {
-                        repair.draft = text;
-                        repair.draft_changed(&active, &mut self.repair_checks);
-                    }
+                    repair.draft = text.clone();
+                    repair.draft_changed(&active, &mut self.repair_checks);
                 }
             }
-            PageResult::Discarded => {
-                if let Some((selections, _)) = self.discarded_selections.take()
-                    && let Some(snapshot) = self.snapshot.as_mut()
-                {
-                    snapshot.document.selections = selections;
+            Payload::Discarded { selections, .. } => {
+                if let Some(snapshot) = self.snapshot.as_mut() {
+                    snapshot.document.selections = selections.clone();
                 }
             }
-            PageResult::ManifestWrite(package) => {
-                // This package's write only; the others keep theirs.
-                if let Some((_, _, write)) = self
-                    .manifest_writes
-                    .iter()
-                    .find(|(id, _, _)| *id == package)
-                {
-                    match write.undo() {
-                        Ok(_) => {
-                            self.manifest_writes.retain(|(id, _, _)| *id != package);
-                            self.refresh_pending = true;
-                        }
-                        Err(error) => self.error = Some(error),
-                    }
+            // This package's write only; the others keep theirs.
+            Payload::ManifestWrite { write, .. } => match write.undo() {
+                Ok(_) => self.refresh_pending = true,
+                Err(error) => {
+                    self.error = Some(undo_failed(&error));
+                    return Err(());
                 }
-            }
-            PageResult::Removed => {
-                if let Some(removed) = &self.removed_package
-                    && let Some(snapshot) = self.snapshot.as_mut()
-                {
+            },
+            Payload::Removed(removed) => {
+                if let Some(snapshot) = self.snapshot.as_mut() {
                     let document = &mut snapshot.document;
                     if document.selections != removed.after {
                         self.error = Some(
                             "Campaign choices changed. Keep them and edit the package choices here."
                                 .into(),
                         );
-                    } else {
-                        let after = document.selections.clone();
-                        document.selections = removed.before.clone();
-                        match document.save() {
-                            Ok(()) => {
-                                self.saved_selections = document.selections.clone();
-                                self.removed_package = None;
-                                self.reconcile.checked_at = None;
-                            }
-                            Err(error) => {
-                                document.selections = after;
-                                self.error = Some(error);
-                            }
+                        return Err(());
+                    }
+                    let after = document.selections.clone();
+                    document.selections = removed.before.clone();
+                    match document.save() {
+                        Ok(()) => {
+                            self.saved_selections = document.selections.clone();
+                            self.reconcile.checked_at = None;
+                        }
+                        Err(error) => {
+                            document.selections = after;
+                            self.error = Some(undo_failed(&error));
+                            return Err(());
                         }
                     }
                 }
             }
-            PageResult::Saved | PageResult::Applied => {}
+            Payload::Saved | Payload::Applied(_) => {}
         }
+        Ok(())
     }
 
     /// How often the page prepared a package removal's words.
@@ -1377,8 +1568,7 @@ impl CampaignContent {
     fn write_campaign(&mut self, campaigns: &Campaigns, active: &Campaign) {
         match campaigns.write_campaign_again(active) {
             Ok(write) => {
-                new_result!(self, PageResult::CampaignWrite);
-                self.campaign_write = Some(write);
+                new_result!(self, Payload::CampaignWrite(write));
                 self.refresh_pending = true;
             }
             Err(error) => self.error = Some(error),
@@ -1466,7 +1656,7 @@ impl CampaignContent {
             .show(ui)
             .clicked();
         if apply && self.reconcile.pending.is_none() {
-            self.reconcile.message = None;
+            self.end_plain(PageResult::Applied);
             self.start_check(ui.ctx(), campaigns, active.clone(), Some(keys));
         }
         design::gap(ui, design::Gap::S);
@@ -1481,7 +1671,7 @@ impl CampaignContent {
 
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
+        reason = "staged: a raw heading that a design part replaces; a note that cannot be read is a fault with its repair, where the repair opens (design::results::STAGED_ALLOWS)"
     )]
     fn repair_section_content(
         &mut self,
@@ -1534,21 +1724,17 @@ impl CampaignContent {
                 (None, Some(_)) => None,
                 (None, None) => Some("The repair has not been saved".into()),
             };
-            if design::message_with_action(
-                ui,
-                Tone::Error,
-                &match problem {
-                    Some(problem) => {
-                        let mut text = problem.trim_end_matches('.').to_owned();
-                        if let Some(first) = text.get_mut(..1) {
-                            first.make_ascii_uppercase();
-                        }
-                        format!("{path} cannot be read. Fix it here or in World. {text}.")
-                    }
-                    None => format!("{path} cannot be read. Fix it here or in World."),
-                },
+            if design::outcome::BodyFault::new(&ContentFault::Unreadable {
+                path,
+                problem: problem.as_deref(),
+            })
+            .repair(design::outcome::Repair::new(
                 if open { "Close repair" } else { "Repair" },
-            ) {
+                (),
+            ))
+            .show(ui)
+            .is_some()
+            {
                 open = !open;
             }
             ui.data_mut(|data| data.insert_temp(id, open));
@@ -1568,6 +1754,22 @@ impl CampaignContent {
                     });
                     self.editor_rects.push(editor.response.rect);
                     let (edited, focused) = editor.inner;
+                    // A click into the editor does not scroll the page: the DM clicked what was
+                    // in view. The editor's reveal (`world::repair::editor_events`) asks the page
+                    // to show the editor's whole viewport when it gains focus; after a pointer
+                    // press, this frame's scroll target becomes the part already in view, which
+                    // moves nothing. Keyboard and screen-reader focus keep the reveal.
+                    let shown = editor.response.rect.intersect(ui.clip_rect());
+                    if focused
+                        && shown.is_positive()
+                        && ui.input(|input| input.pointer.any_pressed() || input.pointer.any_released())
+                    {
+                        ui.scroll_to_rect_animation(
+                            shown,
+                            None,
+                            egui::style::ScrollAnimation::none(),
+                        );
+                    }
                     if edited || focused {
                         self.active_repair = Some(path.clone());
                     }
@@ -1575,112 +1777,62 @@ impl CampaignContent {
                         repair.draft_changed(active, checks);
                     }
 
-                    // Save first, at the right edge, so a long state or reason wraps beside it
-                    // and never cuts it.
-                    ui.horizontal(|ui| {
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            // One weight for a save row: primary while the draft has
-                            // changes, unless an open run owns `Next turn` or another
-                            // repair is the active one. After Save failed on the disk it
-                            // stays open to try again, but `owner` skips it until the next edit.
-                            let writes = repair.dirty() && repair.refusal.is_none();
-                            let pressed = (if writes && owner.as_deref() == Some(path.as_str()) {
-                                Action::primary("Save repaired note")
-                            } else {
-                                Action::secondary("Save repaired note")
-                            })
-                            .density(Density::Read)
-                            .blocked(
-                                repair
-                                    .refusal
-                                    .as_deref()
-                                    .or((!repair.dirty()).then_some("No changes to save.")),
-                            )
-                            .show(ui)
-                            .clicked();
-
-                            if pressed
-                                || (writes
-                                    && ui.input_mut(|i| {
-                                        i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)
-                                    }))
-                            {
-                                repaired |= repair.save(active);
+                    // One save row (`DraftState`): the word, Discard and the switch reason at
+                    // the left, Save at the right. Primary while the draft has changes that
+                    // Save would write, unless an open run owns `Next turn` or another repair
+                    // is the active one. After Save failed on the disk it stays open to try
+                    // again, but `owner` skips it until the next edit.
+                    let mut state = design::DraftState::new(
+                        if repair.dirty() {
+                            design::save_row::Changed::Yes
+                        } else {
+                            design::save_row::Changed::No
+                        },
+                        if owner.as_deref() == Some(path.as_str()) {
+                            design::save_row::Primary::Draft
+                        } else {
+                            design::save_row::Primary::Elsewhere
+                        },
+                    )
+                    .locks_campaign();
+                    if let Some(refusal) = &repair.refusal {
+                        state = state.refused(refusal.as_str());
+                    }
+                    if repair.failure.is_some() {
+                        state = state.not_saved();
+                    }
+                    let row = design::save_row(ui, &state, "Save repaired note");
+                    if row.save
+                        || (state.can_save()
+                            && ui.input_mut(|i| {
+                                i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)
+                            }))
+                    {
+                        repaired |= repair.save(active);
+                    }
+                    // One discard result per repair: its next Discard or edit ends its own
+                    // result only.
+                    let of_this = |payload: &Payload| {
+                        matches!(payload, Payload::RepairDiscard { path: p, .. } if p == path)
+                    };
+                    if row.discard {
+                        end_results(&mut self.results, active.id, of_this);
+                        let stamp = self.repair_stamp;
+                        self.repair_stamp += 1;
+                        new_result!(
+                            self,
+                            Payload::RepairDiscard {
+                                stamp,
+                                path: path.clone(),
+                                text: repair.draft.clone(),
                             }
-                            ui.with_layout(
-                                egui::Layout::left_to_right(egui::Align::Center),
-                                |ui| {
-                                    let dirty = repair.dirty();
-                                    // The Library rule: the draft is checked as Save checks it. While Save
-                                    // would refuse it, the state says Invalid and Save names the cause.
-                                    let c = colors();
-                                    // An action-time failure on the disk holds this repair's slot until its
-                                    // draft changes or a Save of it works. Round 26 FA3: the slot holds
-                                    // the state word; the cause is a reason in the page's footer.
-                                    design::save_row_state(
-                                        ui,
-                                        if repair.failure.is_some() {
-                                            design::Status {
-                                                icon: icons::ERROR,
-                                                word: "Not saved",
-                                                color: c.document.invalid,
-                                            }
-                                        } else if repair.refusal.is_some() {
-                                            design::Status {
-                                                icon: icons::ERROR,
-                                                word: "Invalid",
-                                                color: c.document.invalid,
-                                            }
-                                        } else if dirty {
-                                            design::Status {
-                                                icon: icons::DRAFT,
-                                                word: "Unsaved",
-                                                color: c.document.unsaved,
-                                            }
-                                        } else {
-                                            design::Status {
-                                                icon: icons::OK,
-                                                word: "No changes",
-                                                color: c.muted,
-                                            }
-                                        },
-                                        false,
-                                        None,
-                                    );
-                                    if repair.dirty()
-                                        && Action::quiet("Discard")
-                                            .density(Density::Read)
-                                            .show(ui)
-                                            .clicked()
-                                    {
-                                        self.discarded_repairs.retain(|(p, ..)| p != path);
-                                        let stamp = self.repair_stamp;
-                                        self.repair_stamp += 1;
-                                        self.discarded_repairs
-                                            .insert(0, (path.clone(), repair.draft.clone(), stamp));
-                                        new_result!(self, PageResult::RepairDiscard(stamp));
-                                        repair.draft = repair.baseline.clone();
-                                        repair.draft_changed(active, checks);
-                                    }
-                                    // This repair's next edit ends its own result only.
-                                    if repair.dirty() {
-                                        self.discarded_repairs.retain(|(p, ..)| p != path);
-                                    }
-                                    if repair.dirty() {
-                                        // Save refuses the draft: Discard is the one way to switch.
-                                        design::blocked_reason(
-                                            ui,
-                                            Some(if repair.refusal.is_some() {
-                                                crate::encounters::blocked_draft_switch_reason()
-                                            } else {
-                                                crate::encounters::draft_switch_reason()
-                                            }),
-                                        );
-                                    }
-                                },
-                            );
-                        });
-                    });
+                        );
+                        repair.draft = repair.baseline.clone();
+                        repair.draft_changed(active, checks);
+                    }
+                    if repair.dirty() {
+                        end_results(&mut self.results, active.id, of_this);
+                    }
                 });
             }
         }
@@ -1747,17 +1899,24 @@ impl CampaignContent {
                         color: c.document.unsaved,
                     },
                 );
-                self.discarded_selections = None;
+                end_results(&mut self.results, active.id, |payload| {
+                    matches!(payload, Payload::Discarded { .. })
+                });
                 if Action::quiet("Discard")
                     .density(Density::Read)
                     .show(ui)
                     .clicked()
                 {
-                    new_result!(self, PageResult::Discarded);
-                    self.discarded_selections = Some((
-                        std::mem::replace(&mut document.selections, self.saved_selections.clone()),
-                        document.baseline.clone(),
-                    ));
+                    new_result!(
+                        self,
+                        Payload::Discarded {
+                            selections: std::mem::replace(
+                                &mut document.selections,
+                                self.saved_selections.clone(),
+                            ),
+                            baseline: document.baseline.clone(),
+                        }
+                    );
                 }
             } else {
                 design::save_row_state(
@@ -1828,8 +1987,7 @@ impl CampaignContent {
                     Ok(()) => {
                         self.saved_selections = document.selections.clone();
                         self.reconcile.checked_at = None;
-                        new_result!(self, PageResult::Saved);
-                        self.message = Some("Campaign selections saved.".into());
+                        new_result!(self, Payload::Saved);
                         self.error = None;
                     }
                     Err(e) => self.error = Some(e),
@@ -1858,16 +2016,6 @@ impl CampaignContent {
             return PackageWarnings::default();
         };
         let catalogue = &snapshot.catalogue;
-        let manifests = campaigns
-            .modules()
-            .iter()
-            .filter_map(|module| {
-                catalogue
-                    .manifest_problems
-                    .get(&module.id)
-                    .map(|problem| manifest_message(&module.name, problem))
-            })
-            .collect();
         let unavailable = snapshot
             .document
             .selections
@@ -1923,205 +2071,278 @@ impl CampaignContent {
                 }
             })
             .collect();
-        PackageWarnings {
-            manifests,
-            unavailable,
+        PackageWarnings { unavailable }
+    }
+
+    /// The package faults in the page's footer (round 26 FD1: so the package list keeps one y):
+    /// each broken manifest and each chosen package that is not available, with its choices. A
+    /// choice that writes waits for the page's unsaved changes (`locked_when`: its reason's room
+    /// stays, so nothing moves).
+    fn package_messages(
+        &self,
+        messages: &mut design::outcome::Messages<'_, ContentPress>,
+        campaigns: &Campaigns,
+        unavailable: &[Unavailable],
+    ) {
+        use design::outcome::{Choice, ChoiceKind, FaultMessage, MessageChoice};
+        let Some(snapshot) = &self.snapshot else {
+            return;
+        };
+        let catalogue = &snapshot.catalogue;
+        let unsaved = self.dirty();
+        let wait = || crate::sentence!("Save or discard campaign changes first.");
+        for module in campaigns.modules() {
+            let Some(problem) = catalogue.manifest_problems.get(&module.id) else {
+                continue;
+            };
+            let path = &catalogue.entries[&module.id].entry.path;
+            let exists = manifest_on_disk(module, path, problem);
+            let fault = FaultMessage::new(&ContentFault::Manifest {
+                package: &module.name,
+                problem,
+                path,
+                on_disk: exists,
+            });
+            let fault = if exists {
+                fault
+                    .choice(Choice::new(
+                        MessageChoice::Choice("Open in Library"),
+                        ContentPress::OpenManifest(module.id),
+                    ))
+                    .choice(
+                        Choice::named_as(
+                            ChoiceKind::Safe,
+                            crate::choice!("Replace with a basic {}", path),
+                            ContentPress::WriteManifest(module.id),
+                        )
+                        .locked_when(unsaved, wait()),
+                    )
+            } else {
+                fault.choice(
+                    Choice::new(
+                        MessageChoice::Choice("Write the manifest again"),
+                        ContentPress::WriteManifest(module.id),
+                    )
+                    .locked_when(unsaved, wait()),
+                )
+            };
+            messages.outcome(fault);
+        }
+        let unsaved_any = unsaved || self.repairs.iter().any(Repair::dirty);
+        for Unavailable {
+            index: i,
+            selection,
+            known,
+            unregistered,
+            relocated,
+            message,
+            ..
+        } in unavailable
+        {
+            let it_was = known
+                .as_ref()
+                .filter(|_| relocated.is_none())
+                .map(|known| folder_words(&known.path));
+            let users = selection.campaign_users(catalogue);
+            let used_by = (!users.is_empty()).then(|| {
+                (
+                    and_list(users.iter().map(|(_, name)| name.as_str())),
+                    users.len(),
+                )
+            });
+            let reference = selection.package.label();
+            let mut fault = FaultMessage::new(&ContentFault::Unavailable {
+                message,
+                it_was: it_was.as_deref(),
+                used_by: used_by
+                    .as_ref()
+                    .map(|(names, count)| (names.as_str(), *count)),
+                reference: self
+                    .details
+                    .contains(reference.as_str())
+                    .then_some(reference.as_str()),
+            });
+            if relocated.is_some() {
+                fault = fault.choice(
+                    Choice::new(
+                        MessageChoice::Choice("Use this folder"),
+                        ContentPress::UseFolder(*i),
+                    )
+                    .locked_when(unsaved, wait()),
+                );
+            }
+            if *unregistered && relocated.is_none() && known.is_some() {
+                fault = fault.choice(
+                    Choice::new(
+                        MessageChoice::Choice("Register it again"),
+                        ContentPress::Register(*i),
+                    )
+                    .locked_when(unsaved, wait()),
+                );
+            }
+            // Round 25 family: a message action without an icon has the secondary border.
+            fault = fault
+                .choice(
+                    Choice::new(
+                        MessageChoice::Choice("Find the folder…"),
+                        ContentPress::Find(*i),
+                    )
+                    .locked_when(
+                        unsaved_any,
+                        crate::sentence!("Save or discard changes before finding the folder."),
+                    ),
+                )
+                .choice(Choice::new(
+                    MessageChoice::Choice("Remove from this campaign"),
+                    ContentPress::Remove(*i),
+                ));
+            // The encounters that use its creatures, each a way to open it.
+            for (id, name) in users {
+                fault = fault.choice(Choice::named_as(
+                    ChoiceKind::Safe,
+                    crate::choice!("Open {}", name),
+                    ContentPress::OpenEntry(id),
+                ));
+            }
+            // The package's identifier stays out of the words until the DM opens its details.
+            fault = fault.choice(Choice::new(
+                MessageChoice::Link {
+                    word: "Technical details",
+                    hover: None,
+                },
+                ContentPress::Details(*i),
+            ));
+            messages.outcome(fault);
         }
     }
 
-    /// Draw the package warnings, in the page's footer.
-    fn package_warnings(
-        &mut self,
-        ui: &mut egui::Ui,
-        campaigns: &Campaigns,
-        active: &Campaign,
-        unavailable: Vec<Unavailable>,
-    ) {
-        let manifest_locked = self
-            .dirty()
-            .then_some("Save or discard campaign changes first.");
+    /// Do a package fault's choice from the footer: on the state this frame reads, by the
+    /// package's id or the selection's place.
+    fn package_press(&mut self, ctx: &egui::Context, campaigns: &Campaigns, press: ContentPress) {
+        let unavailable = self.package_warnings_of(campaigns).unavailable;
         let Some(snapshot) = self.snapshot.as_mut() else {
             return;
         };
         let catalogue = &snapshot.catalogue;
         let document = &mut snapshot.document;
-        for module in campaigns.modules() {
-            if let Some(problem) = catalogue.manifest_problems.get(&module.id) {
-                let path = &catalogue.entries[&module.id].entry.path;
-                let exists = manifest_on_disk(module, path, problem);
-                let label = if exists {
-                    format!("Replace with a basic {path}")
-                } else {
-                    "Write the manifest again".into()
+        let mut remove = None;
+        match press {
+            ContentPress::OpenManifest(id) | ContentPress::WriteManifest(id) => {
+                let Some(module) = campaigns.modules().iter().find(|module| module.id == id) else {
+                    return;
                 };
-                let message = manifest_message(&module.name, problem);
-                let mut open = false;
-                let tone = crate::content_workspace::manifest_fault_tone(exists);
-                let pressed = if exists {
-                    design::message_with_actions(ui, tone, &message, |ui| {
-                        let mut pressed = false;
-                        ui.horizontal_wrapped(|ui| {
-                            open = Action::secondary("Open in Library").show(ui).clicked();
-                            pressed = design::locked(ui, manifest_locked, |ui| {
-                                Action::secondary(&label).show(ui).clicked()
-                            });
-                        });
-                        design::help(
-                            ui,
-                            &crate::content_workspace::manifest_replace_consequence(path),
-                        );
-                        pressed
-                    })
-                } else {
-                    design::locked(ui, manifest_locked, |ui| {
-                        design::message_with_action(ui, tone, &message, &label)
-                    })
+                let (Some(problem), Some(entry)) = (
+                    catalogue.manifest_problems.get(&id),
+                    catalogue.entries.get(&id),
+                ) else {
+                    return;
                 };
-                if pressed {
-                    match crate::content_workspace::ManifestWrite::write_as(module, path, exists) {
-                        Ok(write) => {
-                            new_result!(self, PageResult::ManifestWrite(module.id));
-                            self.manifest_writes.retain(|(id, _, _)| *id != module.id);
-                            self.manifest_writes
-                                .push((module.id, module.name.clone(), write));
-                            self.refresh_pending = true;
-                        }
-                        Err(error) => self.error = Some(error),
-                    }
-                }
-                if open {
-                    ui.ctx().data_mut(|data| {
+                let path = entry.entry.path.clone();
+                if press == ContentPress::OpenManifest(id) {
+                    ctx.data_mut(|data| {
                         data.insert_temp(
                             egui::Id::new("open_library_repair"),
-                            module.path.join(path),
+                            module.path.join(&path),
                         )
                     });
+                    return;
                 }
+                let exists = manifest_on_disk(module, &path, problem);
+                match crate::content_workspace::ManifestWrite::write_as(module, &path, exists) {
+                    Ok(write) => {
+                        // The package's manifest is one file for every campaign: a write here
+                        // ends another campaign's write of it, whose Undo would undo this one.
+                        for campaign in campaigns.all() {
+                            self.results.owner_changed(&PageOwner {
+                                campaign: campaign.id,
+                                kind: PageResult::ManifestWrite(module.id),
+                            });
+                        }
+                        new_result!(
+                            self,
+                            Payload::ManifestWrite {
+                                package: module.id,
+                                name: module.name.clone(),
+                                write,
+                            }
+                        );
+                        self.refresh_pending = true;
+                    }
+                    Err(error) => self.error = Some(error),
+                }
+                return;
             }
+            _ => {}
         }
-        // Unavailable registrations and references remain explicit and editable.
-        let mut remove = None;
-        for Unavailable {
+        if let ContentPress::Details(at) = press {
+            if let Some(reference) = unavailable
+                .iter()
+                .find(|unavailable| unavailable.index == at)
+                .map(|unavailable| unavailable.selection.package.label())
+                && !self.details.remove(&reference)
+            {
+                self.details.insert(reference);
+            }
+            return;
+        }
+        let at = match press {
+            ContentPress::UseFolder(at)
+            | ContentPress::Register(at)
+            | ContentPress::Find(at)
+            | ContentPress::Remove(at) => at,
+            _ => return,
+        };
+        let Some(Unavailable {
             index: i,
             selection,
             registered,
             known,
-            unregistered,
             relocated,
-            message,
-        } in unavailable
-        {
-            ui.push_id(i, |ui| {
-                let text = design::message(ui, Tone::Warning, &message);
-                let remaining = egui::Rect::from_min_max(
-                    egui::pos2(text.rect.left(), ui.cursor().top()),
-                    ui.max_rect().max,
+            ..
+        }) = unavailable
+            .into_iter()
+            .find(|unavailable| unavailable.index == at)
+        else {
+            return;
+        };
+        let found = match press {
+            ContentPress::UseFolder(_) => relocated.map(Ok),
+            ContentPress::Register(_) => known.as_ref().map(|known| {
+                find_package_folder(&selection.package, selection.name.as_deref(), &known.path)
+            }),
+            ContentPress::Find(_) => crate::hermetic::pick_folder_from(
+                known.as_ref().and_then(|module| module.path.parent()),
+            )
+            .map(|folder| {
+                find_package_folder(&selection.package, selection.name.as_deref(), &folder)
+            }),
+            _ => {
+                remove = Some(i);
+                None
+            }
+        };
+        match found {
+            Some(Ok(module)) => {
+                // A package's registration is one for every campaign: a recovery here ends
+                // another campaign's recovery of it, whose Undo would put back a registration
+                // this one replaced.
+                for campaign in campaigns.all() {
+                    self.results.owner_changed(&PageOwner {
+                        campaign: campaign.id,
+                        kind: PageResult::Recovered(module.id),
+                    });
+                }
+                new_result!(
+                    self,
+                    Payload::Recovered {
+                        module: module.clone(),
+                        previous: registered.clone(),
+                    }
                 );
-                ui.scope_builder(egui::UiBuilder::new().max_rect(remaining), |ui| {
-                    let users = selection.campaign_users(catalogue);
-                    if !users.is_empty() {
-                        let names: Vec<_> = users.iter().map(|(_, name)| name.as_str()).collect();
-                        if let Some(at) = design::linked_sentence(
-                            ui,
-                            &names,
-                            if names.len() == 1 {
-                                "uses its creatures."
-                            } else {
-                                "use its creatures."
-                            },
-                        ) {
-                            self.open_lookup = Some(users[at].0);
-                        }
-                    }
-                    if relocated.is_none()
-                        && let Some(known) = &known
-                    {
-                        design::help(ui, &format!("It was in {}/.", folder_words(&known.path)));
-                    }
-                    ui.horizontal_wrapped(|ui| {
-                        if let Some(module) = &relocated
-                            && Action::secondary("Use this folder")
-                                .blocked(manifest_locked)
-                                .density(Density::Read)
-                                .show(ui)
-                                .clicked()
-                        {
-                            new_result!(self, PageResult::Recovered(module.id));
-                            self.recovered.retain(|(id, _)| *id != module.id);
-                            self.recovered
-                                .push((module.id, (module.clone(), registered.clone())));
-                            self.found_package = Some(module.clone());
-                        }
-                        if unregistered
-                            && relocated.is_none()
-                            && Action::secondary("Register it again")
-                                .blocked(manifest_locked)
-                                .density(Density::Read)
-                                .show(ui)
-                                .clicked()
-                            && let Some(known) = &known
-                        {
-                            match find_package_folder(
-                                &selection.package,
-                                selection.name.as_deref(),
-                                &known.path,
-                            ) {
-                                Ok(module) => {
-                                    new_result!(self, PageResult::Recovered(module.id));
-                                    self.recovered.retain(|(id, _)| *id != module.id);
-                                    self.recovered
-                                        .push((module.id, (module.clone(), registered.clone())));
-                                    self.found_package = Some(module);
-                                }
-                                Err(error) => self.error = Some(error),
-                            }
-                        }
-                        // Round 25 family: a message action without an icon has the
-                        // secondary border, beside `Use this folder` too.
-                        if Action::secondary("Find the folder…")
-                            .blocked_if(
-                                document.selections != self.saved_selections
-                                    || self.repairs.iter().any(Repair::dirty),
-                                "Save or discard changes before finding the folder.",
-                            )
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked()
-                            && let Some(folder) = crate::hermetic::pick_folder_from(
-                                known.as_ref().and_then(|module| module.path.parent()),
-                            )
-                        {
-                            match find_package_folder(
-                                &selection.package,
-                                selection.name.as_deref(),
-                                &folder,
-                            ) {
-                                Ok(module) => {
-                                    new_result!(self, PageResult::Recovered(module.id));
-                                    self.recovered.retain(|(id, _)| *id != module.id);
-                                    self.recovered
-                                        .push((module.id, (module.clone(), registered.clone())));
-                                    self.found_package = Some(module);
-                                }
-                                Err(error) => self.error = Some(error),
-                            }
-                        }
-                        if Action::secondary("Remove from this campaign")
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked()
-                        {
-                            remove = Some(i);
-                        }
-                    });
-                    design::quiet_section(ui, "Technical details", |ui| {
-                        ui.label(Type::Mono.rich(
-                            ui,
-                            format!("Package reference: {}", selection.package.label()),
-                        ));
-                    });
-                });
-            });
+                self.found_package = Some(module);
+            }
+            Some(Err(error)) => self.error = Some(error),
+            None => {}
         }
         if let Some(i) = remove {
             let selection = document.selections[i].clone();
@@ -2131,18 +2352,20 @@ impl CampaignContent {
             match document.save() {
                 Ok(()) => {
                     self.saved_selections = document.selections.clone();
-                    new_result!(self, PageResult::Removed);
                     self.removal_text_preparations += 1;
                     let name = selection.display_name().to_owned();
                     let (words, warning) = removal_words(&name, &users);
-                    self.removed_package = Some(RemovedPackage {
-                        campaign: active.id,
-                        words,
-                        warning,
-                        before,
-                        after: document.selections.clone(),
-                        users,
-                    });
+                    new_result!(
+                        self,
+                        Payload::Removed(RemovedPackage {
+                            name,
+                            words,
+                            warning,
+                            before,
+                            after: document.selections.clone(),
+                            users,
+                        })
+                    );
                     self.reconcile.checked_at = None;
                 }
                 Err(error) => {
@@ -2160,6 +2383,10 @@ impl CampaignContent {
         });
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "Campaign.md flags and missing dependencies are faults in the issue list, each with its repairs"
+    )]
     fn packages_content(&mut self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) {
         // Review round 26: egui panels set their own clip to the panel's rect, so their rows would
         // paint and take clicks below the page's viewport, under the footer. Each column clips
@@ -2212,34 +2439,28 @@ impl CampaignContent {
         });
         let issues_shown = self.repairs.is_empty()
             && !missing_package
-            && !self
-                .removed_package
-                .as_ref()
-                .is_some_and(|removed| removed.campaign == active.id && !removed.users.is_empty());
+            && removal_of(&self.results, active.id).is_none_or(|removed| removed.users.is_empty());
         let flag_lines = |ui: &mut egui::Ui, open_run_settings: &mut bool| {
             for (at, flag) in campaign_flags.iter().enumerate() {
                 // Every flag is about Campaign.md, so one file line follows the last of them.
                 let last = at + 1 == campaign_flags.len();
                 ui.scope(|ui| {
                     ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
-                    let words = flag.message.clone();
-                    let choice = flag.kind == splat::content::layout::FlagKind::RuleChoice;
-                    if !choice && !last {
-                        design::message(ui, Tone::Warning, &words);
-                        return;
+                    let mut fault =
+                        design::outcome::BodyFault::new(&ContentFault::Flag(&flag.message));
+                    if flag.kind == splat::content::layout::FlagKind::RuleChoice {
+                        fault = fault
+                            .repair(design::outcome::Repair::new("Choose in Rules and runs", ()));
                     }
-                    // The repair choice and the file line start at the warning's words.
-                    design::message_with_actions(ui, Tone::Warning, &words, |ui| {
-                        if choice {
-                            *open_run_settings |= Action::secondary("Choose in Rules and runs")
-                                .density(Density::Read)
-                                .show(ui)
-                                .clicked();
-                        }
-                        if last {
-                            crate::encounters::file_line(ui, &active.path, &document.path);
-                        }
-                    });
+                    *open_run_settings |= fault.show(ui).is_some();
+                    if last {
+                        // The file line starts at the warning's words, as its repairs do.
+                        design::message_choice_row(ui, design::Tone::Warning, |ui| {
+                            ui.vertical(|ui| {
+                                crate::encounters::file_line(ui, &active.path, &document.path)
+                            });
+                        });
+                    }
                 });
             }
         };
@@ -2295,30 +2516,20 @@ impl CampaignContent {
                             for issue in &closure.missing_dependencies {
                                 ui.push_id(&issue.reference, |ui| {
                                     // FA6: a dependency issue is a warning like the flags above
-                                    // it, and its repairs start at its words. Round 24 FA2: a
-                                    // message action without an icon has the secondary border,
-                                    // as the flag's `Choose in Rules and runs` does.
-                                    let repair = design::message_with_actions(
-                                        ui,
-                                        Tone::Warning,
-                                        &issue.message,
-                                        |ui| {
-                                            let mut repair = None;
-                                            for id in &issue.owners {
-                                                let owner = &catalogue.entries[id];
-                                                let action = format!("Repair {}", owner.entry.name);
-                                                if let Some(path) = catalogue.file_path_of(*id)
-                                                    && Action::secondary(&action)
-                                                        .density(Density::Read)
-                                                        .show(ui)
-                                                        .clicked()
-                                                {
-                                                    repair = Some(path.to_path_buf());
-                                                }
-                                            }
-                                            repair
-                                        },
+                                    // it, and its repairs start at its words, one per owner.
+                                    let mut fault = design::outcome::BodyFault::new(
+                                        &ContentFault::Flag(&issue.message),
                                     );
+                                    for id in &issue.owners {
+                                        if let Some(path) = catalogue.file_path_of(*id) {
+                                            let owner = &catalogue.entries[id];
+                                            fault = fault.repair(design::outcome::Repair::new(
+                                                crate::choice!("Repair {}", owner.entry.name),
+                                                path.to_path_buf(),
+                                            ));
+                                        }
+                                    }
+                                    let repair = fault.show(ui);
                                     if let Some(path) = repair {
                                         ui.ctx().data_mut(|data| {
                                             data.insert_temp(
@@ -2436,7 +2647,9 @@ impl CampaignContent {
                                         ));
                                     design::named(ui, &check, &format!("Use {}", module.name));
                                     if check.changed() {
-                                        self.message = None;
+                                        end_results(&mut self.results, active.id, |payload| {
+                                            matches!(payload, Payload::Saved)
+                                        });
                                         if enabled {
                                             if let Some(i) = existing {
                                                 document.selections.remove(i);
@@ -2883,7 +3096,6 @@ pub(crate) fn load_snapshot(campaign: &Campaign, modules: &[Module]) -> Loaded {
 
 /// What the DM pressed in the Packages page's footer: the result and its press, done after the
 /// pane returns (`CampaignContent::press_result`).
-type FooterPress = std::cell::Cell<Option<(PageResult, ResultPress)>>;
 /// `needed by Ember Cultist, Arena Final`: the one form of what keeps an entry selected, in the
 /// package list's rows and in `Needed by your entries` (round 28 FB7).
 fn needed_by(reasons: impl Iterator<Item = String>) -> String {
@@ -2935,6 +3147,33 @@ mod tests {
         campaign
     }
 
+    /// What `pick` reads from each kept result of `campaign`, newest first.
+    fn kinds_and<T>(
+        content: &CampaignContent,
+        campaign: Uuid,
+        pick: impl Fn(&Payload) -> Option<T>,
+    ) -> Vec<T> {
+        content
+            .results
+            .newest_first(&campaign)
+            .filter_map(|shown| pick(&shown.value().payload))
+            .collect()
+    }
+
+    fn has(content: &CampaignContent, campaign: Uuid, kind: PageResult) -> bool {
+        !kinds_and(content, campaign, |payload| {
+            (payload.kind() == kind).then_some(())
+        })
+        .is_empty()
+    }
+
+    fn repair_discards(content: &CampaignContent, campaign: Uuid) -> Vec<String> {
+        kinds_and(content, campaign, |payload| match payload {
+            Payload::RepairDiscard { path, .. } => Some(path.clone()),
+            _ => None,
+        })
+    }
+
     fn finished(content: &mut CampaignContent, checked: Checked) {
         let (tx, rx) = mpsc::channel();
         content.reconcile.pending = Some(rx);
@@ -2981,8 +3220,14 @@ mod tests {
                     |ctx| {
                         egui::CentralPanel::default().show(ctx, |ui| {
                             // Round 26 FD1: the page's footer draws the warnings.
+                            let frame = design::outcome::PaneFrame::new(ui);
+                            let mut messages =
+                                design::outcome::Messages::new(&frame, "warnings", 800.0);
                             let unavailable = content.package_warnings_of(&campaigns).unavailable;
-                            content.package_warnings(ui, &campaigns, &active, unavailable);
+                            content.package_messages(&mut messages, &campaigns, &unavailable);
+                            // The footer, then the package list beside it (a Content pane
+                            // refuses the list's own scroll column).
+                            let _ = messages.pane(ui, design::Body::Content, |_| ());
                             content.packages_content(ui, &campaigns, &active);
                         });
                     },
@@ -3012,6 +3257,29 @@ mod tests {
                 assert!(!rendered.contains(guess), "{rendered}");
             }
         }
+    }
+
+    /// Wave 2 d (C) review: outside words that start with a path or a file name keep its
+    /// spelling (`Sentence::outside` makes a first letter a capital): checked words come first.
+    #[test]
+    fn outside_words_keep_a_path_s_spelling() {
+        use design::outcome::Fault;
+        let words = |fault: ContentFault<'_>| fault.cause().as_str().to_owned();
+        // `ManifestWrite::undo`'s refusal, as a failed Undo puts it in the page's errors.
+        let undo = undo_failed("package.md changed on disk. Reload before undoing.");
+        assert_eq!(
+            words(ContentFault::Error(&undo)),
+            "Undo did not work: package.md changed on disk. Reload before undoing."
+        );
+        // A content layer's flag or a load error that starts with the note's path.
+        assert_eq!(
+            words(ContentFault::Flag("notes/a.md: Missing YAML frontmatter")),
+            "Problem: notes/a.md: Missing YAML frontmatter."
+        );
+        assert_eq!(
+            words(ContentFault::Error("No such file (os error 2)")),
+            "No such file (os error 2)."
+        );
     }
 
     #[test]
@@ -3142,14 +3410,11 @@ mod tests {
         );
         assert!(content.refresh_pending);
         assert_eq!(content.review_detail(), None);
-        assert!(
-            content
-                .reconcile
-                .message
-                .as_deref()
-                .unwrap()
-                .starts_with("2 changes")
-        );
+        let applied = kinds_and(&content, Uuid::nil(), |payload| match payload {
+            Payload::Applied(count) => Some(*count),
+            _ => None,
+        });
+        assert!(applied_words(applied[0]).as_str().starts_with("2 changes"));
         finished(
             &mut content,
             Checked {
@@ -3222,20 +3487,70 @@ mod tests {
         let ctx = egui::Context::default();
         let mut content = CampaignContent {
             active: Some(first.clone()),
-            discarded_selections: Some((Vec::new(), None)),
-            // Round 26: two repairs' discards, each with its own Undo.
-            discarded_repairs: vec![
-                ("note.md".into(), "words".into(), 0),
-                ("other.md".into(), "more".into(), 1),
-            ],
             ..Default::default()
         };
-        content.reload(&ctx, &campaigns, first);
-        assert!(content.discarded_selections.is_some(), "a refresh keeps it");
-        assert_eq!(content.discarded_repairs.len(), 2, "a refresh keeps both");
+        let repair_discard = |stamp, path: &str, text: &str| Payload::RepairDiscard {
+            stamp,
+            path: path.into(),
+            text: text.into(),
+        };
+        new_result!(
+            content,
+            Payload::Discarded {
+                selections: Vec::new(),
+                baseline: None,
+            }
+        );
+        // Wave 2 d (C): each discard is a kept result with its own Undo, in the store's order.
+        // Round 26: two repairs' discards, each with its own Undo. A (note.md), then B
+        // (other.md); Undo of A in the real footer restores A only: B's result and its Undo stay.
+        new_result!(content, repair_discard(0, "note.md", "words"));
+        new_result!(content, repair_discard(1, "other.md", "more"));
+        {
+            use egui_kittest::kittest::Queryable;
+            let active = first.clone();
+            let campaigns = Campaigns::at(temp.path().join("settings.json"));
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(egui::vec2(960.0, 640.0))
+                .build_ui_state(
+                    move |ui, content: &mut CampaignContent| {
+                        let frame = design::outcome::PaneFrame::new(ui);
+                        let messages = content.page_footer(&frame, ui, &campaigns, &active, 600.0);
+                        let paned = messages.pane(ui, design::Body::Content, |_| ());
+                        content.press_result(ui.ctx(), &campaigns, paned.pressed);
+                    },
+                    content,
+                );
+            harness.run_steps(2);
+            assert!(harness.query_by_label("Undo discard of other.md").is_some());
+            harness.get_by_label("Undo discard of note.md").click();
+            harness.run_steps(3);
+            assert_eq!(
+                repair_discards(harness.state(), first.id),
+                ["other.md"],
+                "Undo of A ends A only"
+            );
+            assert!(
+                harness.query_by_label("Undo discard of note.md").is_none()
+                    && harness.query_by_label("Undo discard of other.md").is_some(),
+                "B keeps its result and its Undo"
+            );
+            content = std::mem::take(harness.state_mut());
+        }
+        new_result!(content, repair_discard(2, "note.md", "words"));
+        content.reload(&ctx, &campaigns, first.clone());
+        assert!(
+            has(&content, first.id, PageResult::Discarded),
+            "a refresh keeps it"
+        );
+        assert_eq!(
+            repair_discards(&content, first.id).len(),
+            2,
+            "a refresh keeps both"
+        );
         content.reload(&ctx, &campaigns, second);
-        assert!(content.discarded_selections.is_none());
-        assert!(content.discarded_repairs.is_empty());
+        assert!(!has(&content, first.id, PageResult::Discarded));
+        assert!(repair_discards(&content, first.id).is_empty());
 
         // Round 23 FA8: the discard belongs to Campaign.md as it was read. The same file keeps
         // it; a changed or missing file ends it.
@@ -3243,11 +3558,18 @@ mod tests {
         fs::create_dir(&folder).unwrap();
         let active = campaign(&folder);
         let document = CampaignDocument::load(&active).unwrap();
-        let discarded = || Some((Vec::new(), document.baseline.clone()));
-        content.discarded_selections = discarded();
-        content.forget_discard_of_changed_file(Ok(&CampaignDocument::load(&active).unwrap()));
+        content.active = Some(active.clone());
+        let discarded = || Payload::Discarded {
+            selections: Vec::new(),
+            baseline: document.baseline.clone(),
+        };
+        new_result!(content, discarded());
+        content.forget_discard_of_changed_file(
+            active.id,
+            Ok(&CampaignDocument::load(&active).unwrap()),
+        );
         assert!(
-            content.discarded_selections.is_some(),
+            has(&content, active.id, PageResult::Discarded),
             "the same file keeps it"
         );
         let file = active.path.join(&document.path);
@@ -3256,20 +3578,180 @@ mod tests {
             format!("{}\nA later note.\n", fs::read_to_string(&file).unwrap()),
         )
         .unwrap();
-        content.forget_discard_of_changed_file(Ok(&CampaignDocument::load(&active).unwrap()));
+        content.forget_discard_of_changed_file(
+            active.id,
+            Ok(&CampaignDocument::load(&active).unwrap()),
+        );
         assert!(
-            content.discarded_selections.is_none(),
+            !has(&content, active.id, PageResult::Discarded),
             "a changed file ends it"
         );
-        content.discarded_selections = discarded();
+        new_result!(content, discarded());
         fs::remove_file(&file).unwrap();
         let missing = CampaignDocument::load(&active).map(|_| ()).unwrap_err();
-        content.forget_discard_of_changed_file(Err(&missing));
+        content.forget_discard_of_changed_file(active.id, Err(&missing));
         assert!(
-            content.discarded_selections.is_none(),
+            !has(&content, active.id, PageResult::Discarded),
             "a missing file ends it"
         );
     }
+    /// Wave 2 d (C) review: each recovery's Undo owns its own folder and registration. A finds
+    /// P and Q; B finds P again; back in A, A's P result is gone (its Undo would put back the
+    /// registration B's replaced), A's Q line names A's folder and its Undo acts on A's data, and
+    /// B keeps its result.
+    #[test]
+    fn a_recovery_undo_keeps_its_own_campaign_and_folder() {
+        use crate::content_workspace::{EntryRef, PackageSelection, Selection};
+        use egui_kittest::kittest::Queryable;
+        struct Page {
+            content: CampaignContent,
+            campaigns: Campaigns,
+        }
+        crate::hermetic::closed::clear_next_folder();
+        let temp = tempfile::tempdir().unwrap();
+        let packages = temp.path().join("packages");
+        let package = |folder: &str, name: &str| {
+            let path = packages.join(folder);
+            fs::create_dir_all(&path).unwrap();
+            fs::write(
+                path.join("Package.md"),
+                crate::library::note_text(name, "package", Some(&name.to_lowercase())),
+            )
+            .unwrap();
+            crate::library::local_module(&path).unwrap()
+        };
+        let (watch, toll) = (package("watch", "Watch"), package("toll", "Toll"));
+        let mut campaigns = Campaigns::at(temp.path().join("settings.json"));
+        campaigns.register_module(watch.clone()).unwrap();
+        campaigns.register_module(toll.clone()).unwrap();
+        let open = |folder: &str| {
+            let root = temp.path().join(folder);
+            fs::create_dir(&root).unwrap();
+            let active = campaign(&root);
+            let mut document = CampaignDocument::load(&active).unwrap();
+            for module in [&watch, &toll] {
+                document.selections.push(PackageSelection {
+                    name: Some(module.name.clone()),
+                    package: EntryRef::id(module.id),
+                    selection: Selection::All,
+                });
+            }
+            document.save().unwrap();
+            active
+        };
+        let (first, second) = (open("a"), open("b"));
+        campaigns.open_for_test(&second);
+        campaigns.open_for_test(&first);
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1200.0, 900.0))
+            .build_ui_state(
+                |ui, page: &mut Page| {
+                    page.content.tick(ui.ctx(), &page.campaigns);
+                    page.content.show(ui, &page.campaigns);
+                    // The app's own steps after the page (`lib.rs`).
+                    if let Some(module) = page.content.found_package.take() {
+                        let result = page.campaigns.restore_module(module);
+                        page.content.package_restored(result);
+                    }
+                    if let Some(id) = page.content.forget_package.take() {
+                        let result = page.campaigns.unregister_module(id);
+                        page.content.package_restored(result);
+                    }
+                },
+                Page {
+                    content: CampaignContent::default(),
+                    campaigns,
+                },
+            );
+        let settle = |harness: &mut egui_kittest::Harness<'_, Page>| {
+            for _ in 0..200 {
+                harness.run_steps(2);
+                let content = &harness.state().content;
+                if content.pending.is_none() && !content.refresh_pending {
+                    harness.run_steps(2);
+                    return;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            panic!("the page did not load");
+        };
+        let find = |harness: &mut egui_kittest::Harness<'_, Page>, from: &str, to: &str| {
+            let to = packages.join(to);
+            fs::rename(packages.join(from), &to).unwrap();
+            harness.state_mut().content.refresh_destination(&to);
+            settle(harness);
+            crate::hermetic::closed::next_folder(to);
+            harness.get_by_label("Find the folder…").click();
+            settle(harness);
+        };
+        let registered = |harness: &egui_kittest::Harness<'_, Page>, id: Uuid| {
+            harness
+                .state()
+                .campaigns
+                .modules()
+                .iter()
+                .find(|module| module.id == id)
+                .map(|module| module.path.clone())
+        };
+        settle(&mut harness);
+        // A finds Watch in watch-a/ and Toll in toll-a/.
+        find(&mut harness, "watch", "watch-a");
+        find(&mut harness, "toll", "toll-a");
+        assert!(
+            harness
+                .query_by_label("Undo recover packages/watch-a")
+                .is_some()
+        );
+        assert!(
+            harness
+                .query_by_label("Undo recover packages/toll-a")
+                .is_some()
+        );
+        // B: Watch moved again, and B finds it in watch-b/.
+        harness.state_mut().campaigns.open_for_test(&second);
+        settle(&mut harness);
+        find(&mut harness, "watch-a", "watch-b");
+        assert!(
+            harness
+                .query_by_label("Undo recover packages/watch-b")
+                .is_some()
+        );
+        // Back in A: no line names B's folder, and A's Watch result ended with B's recovery.
+        harness.state_mut().campaigns.open_for_test(&first);
+        settle(&mut harness);
+        for gone in [
+            "Undo recover packages/watch-b",
+            "Undo recover packages/watch-a",
+        ] {
+            assert!(
+                harness.query_by_label(gone).is_none(),
+                "A shows {gone}: an Undo that is not A's to act on"
+            );
+        }
+        // A's Toll line names A's folder, and its Undo acts on A's data: Toll's registration
+        // goes back to toll/; Watch stays where B found it.
+        harness.get_by_label("Undo recover packages/toll-a").click();
+        settle(&mut harness);
+        assert_eq!(registered(&harness, toll.id), Some(toll.path.clone()));
+        assert_eq!(
+            registered(&harness, watch.id),
+            Some(packages.join("watch-b"))
+        );
+        assert!(
+            harness
+                .query_by_label("Undo recover packages/toll-a")
+                .is_none()
+        );
+        // B keeps its result and its Undo.
+        harness.state_mut().campaigns.open_for_test(&second);
+        settle(&mut harness);
+        assert!(
+            harness
+                .query_by_label("Undo recover packages/watch-b")
+                .is_some()
+        );
+    }
+
     /// AD1: `Undo package removal` goes when the file's package choices changed after it.
     #[test]
     fn iter14_e_changed_choices_end_undo_package_removal() {
@@ -3289,8 +3771,8 @@ mod tests {
         let before = vec![selection("Gone")];
         document.selections = Vec::new();
         document.save().unwrap();
-        let removed = |campaign: &Campaign| RemovedPackage {
-            campaign: campaign.id,
+        let removed = || RemovedPackage {
+            name: "Gone".into(),
             words: removal_words("Gone", &[]).0,
             warning: None,
             before: before.clone(),
@@ -3298,27 +3780,29 @@ mod tests {
             users: Vec::new(),
         };
         let mut content = CampaignContent {
-            removed_package: Some(removed(&active)),
+            active: Some(active.clone()),
             ..Default::default()
         };
+        new_result!(content, Payload::Removed(removed()));
         // A reload of the file as the removal left it keeps Undo, and other edits keep it too.
         let file = active.path.join(&document.path);
         let text = format!("{}\nA later note.\n", fs::read_to_string(&file).unwrap());
         fs::write(&file, &text).unwrap();
         content.forget_changed_removal(&CampaignDocument::load(&active).unwrap());
-        assert!(content.removed_package.is_some());
+        assert!(content.removal(active.id).is_some());
         // The file's package choices changed outside Splat: the result and its Undo go.
         let mut changed = CampaignDocument::load(&active).unwrap();
         changed.selections.push(selection("Added in Obsidian"));
         changed.save().unwrap();
         let bytes = fs::read(&file).unwrap();
         content.forget_changed_removal(&CampaignDocument::load(&active).unwrap());
-        assert!(content.removed_package.is_none());
+        assert!(content.removal(active.id).is_none());
         assert_eq!(fs::read(&file).unwrap(), bytes, "the check writes nothing");
         // A removal from another campaign is not judged by this campaign's file.
-        content.removed_package = Some(removed(&other));
+        content.active = Some(other.clone());
+        new_result!(content, Payload::Removed(removed()));
         content.forget_changed_removal(&CampaignDocument::load(&active).unwrap());
-        assert!(content.removed_package.is_some());
+        assert!(content.removal(other.id).is_some());
     }
 
     #[test]
@@ -3344,7 +3828,7 @@ mod tests {
         assert_eq!(
             find_package_folder(&reference, Some("Ashen Marches"), &other).unwrap_err(),
             format!(
-                "{folder}/ holds a different package. Choose the folder that holds Ashen Marches."
+                "The folder {folder}/ holds a different package. Choose the folder that holds Ashen Marches."
             )
         );
     }

@@ -4092,21 +4092,89 @@ fn fixed_part_scrolls(d: &mut Driver<'_>, message: &str) -> (bool, bool, bool, [
     };
     let tabbed = d.tab_to(message);
     // Astra re-check 3: the part's focus ring keeps clear of its own scroll bar at each size.
-    let ring_clear = [SMALL, DEFAULT, LARGE].map(|size| {
-        d.at_size(size, |d| {
-            let lanes = d.chrome_lanes();
-            let rings = d.focus_rings();
-            !rings.is_empty()
-                && rings
-                    .iter()
-                    // Painted over: an overlap with area, not a shared edge.
-                    .all(|(ring, _)| {
-                        lanes
-                            .iter()
-                            .all(|lane| !lane.intersect(*ring).is_positive())
-                    })
+    // Round 28 P2: where the footer follows a short draft (1920 here), its part may hold every
+    // message whole. Then, and only when the group does not have focus, no ring is allowed, after
+    // a proof that the content fits (the group's accessible name is the whole message even when
+    // its words need a scroll, and egui paints no label outside the part's clip). A focused group
+    // always needs its ring.
+    // PR 343 re-check: the proof starts from a known position, the part's top (wheel up over a
+    // point inside the part's visible rect). From there a downward step moves no words anywhere
+    // on screen (so neither the part nor a scroll around it had anything to scroll), and the
+    // upward step after it leaves every word where it was. The proof is held to what the part
+    // does: wheeled from its top to its bottom over the same point, an overflowing part's words
+    // move (so the part takes the wheel there), and the proof, run from that bottom where a
+    // single downward step moves nothing (the old proof's fault), must then say it does not fit;
+    // a part whose words did not move must fit. The proof ends at the part's top; the steps after
+    // it start from the top (Page Up).
+    fn part_fits(d: &mut Driver<'_>, part: egui::Rect) -> bool {
+        let at = part.center();
+        let tops = |d: &Driver<'_>| {
+            let (mut inside, mut all) = (Vec::new(), Vec::new());
+            d.each_painted_text(|text, _| {
+                all.push((text.pos.x, text.pos.y));
+                if text.visual_bounding_rect().intersects(part) {
+                    inside.push(text.pos.y);
+                }
+            });
+            (inside, all)
+        };
+        d.scroll_up_at(at, 8);
+        let top = tops(d);
+        d.scroll_at(at, 1);
+        let down = tops(d);
+        d.scroll_up_at(at, 1);
+        let back = tops(d);
+        !top.0.is_empty() && down == top && back == top
+    }
+    /// (the proof says the part fits, the part overflows): wheeled from its top to its bottom
+    /// over a point inside its visible rect, an overflowing part's words move; the proof then
+    /// runs from that bottom. In an `aside`: the part ends at its top.
+    fn fit_against_wheel(d: &mut Driver<'_>, part: egui::Rect) -> (bool, bool) {
+        d.aside(|d| {
+            let words = |d: &Driver<'_>| {
+                let mut tops = Vec::new();
+                d.each_painted_text(|text, _| {
+                    if text.visual_bounding_rect().intersects(part) {
+                        tops.push(text.pos.y);
+                    }
+                });
+                tops
+            };
+            d.scroll_up_at(part.center(), 8);
+            let top = words(d);
+            d.scroll_at(part.center(), 8);
+            let overflows = words(d) != top;
+            (part_fits(d, part), overflows)
         })
-    });
+    }
+    let ring_clear =
+        [SMALL, DEFAULT, LARGE].map(|size| {
+            d.act_at_size(size, |d| {
+                let lanes = d.chrome_lanes();
+                let rings = d.focus_rings();
+                let Some(group) = d.nodes().into_iter().find(|node| {
+                    node.role == Role::GenericContainer && node.name.contains(message)
+                }) else {
+                    return false;
+                };
+                let focused = d.focused_name().as_deref() == Some(group.name.as_str());
+                let (fits, overflows) = fit_against_wheel(d, group.shown);
+                // The proof, run from the part's bottom, agrees with what the wheel did.
+                let proof = fits != overflows;
+                let fits = fits && rings.is_empty() && !focused;
+                proof && fits
+                    || proof
+                        && !rings.is_empty()
+                        && rings
+                            .iter()
+                            // Painted over: an overlap with area, not a shared edge.
+                            .all(|(ring, _)| {
+                                lanes
+                                    .iter()
+                                    .all(|lane| !lane.intersect(*ring).is_positive())
+                            })
+            })
+        });
     // Tab passes the part's own Undo first, and egui scrolls the part to show it: start from the
     // part's top.
     d.press(egui::Key::PageUp);
@@ -4136,7 +4204,24 @@ fn fixed_part_scrolls(d: &mut Driver<'_>, message: &str) -> (bool, bool, bool, [
         }
         _ => false,
     };
-    (tabbed, key_scrolled, wheel_scrolled, ring_clear)
+    // The same proof in a short window (960 x 300), where a Library part's words need a scroll
+    // (at 960, 1200 and 1920 these parts hold their messages whole): an overflowing part at its
+    // bottom must not count as fitting, and a part that fits must. A fault here clears every
+    // size's ring result.
+    let here = d.act_at_size((960.0, SHORT_EDITOR), |d| {
+        let group = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.role == Role::GenericContainer && node.name.contains(message))?;
+        Some(fit_against_wheel(d, group.shown))
+    });
+    let proof_here = here.is_some_and(|(fits, overflows)| fits != overflows);
+    (
+        tabbed,
+        key_scrolled,
+        wheel_scrolled,
+        ring_clear.map(|clear| clear && proof_here),
+    )
 }
 
 /// Wheel the message space that holds `words` until `control` is fully in view, at the current size.
@@ -5329,6 +5414,11 @@ fn undo_follows_message(d: &mut Driver<'_>, id: &str, message: &str, undo: &str)
     }
 }
 
+/// A short window for the editor region's least height (P2): the region keeps 64 px.
+const SHORT_EDITOR: f32 = 300.0;
+/// Words typed in the same frame as a footer press (PR 343 review, P1).
+const SAME_FRAME: &str = "Typed with the press.";
+
 /// A rename on disk keeps an identity-based package link working.
 pub fn package_rename(d: &mut Driver<'_>) {
     let package = d.root.join("modules/ashen-marches");
@@ -5453,8 +5543,35 @@ pub fn package_rename(d: &mut Driver<'_>) {
     search_library(d, "Cinder Wolf");
     d.click_starting("Cinder Wolf · ");
     // Round 26 FD2: the stat block's kind line with no message in the reader.
+    // PR 343 review, P3: the pass that opens Edit Markdown already draws the editor's pane, so
+    // it never takes Read's footer identity and scroll: Read's offset is kept when the DM comes
+    // back, as on main.
+    let read_offset = d.aside(|d| {
+        let top = d.scroll_position_of_reader("Cinder Wolf");
+        d.scroll_at(READER, 2);
+        let left = d.scroll_position_of_reader("Cinder Wolf");
+        d.click(EDIT_MARKDOWN);
+        d.click("Read");
+        let back = d.scroll_position_of_reader("Cinder Wolf");
+        d.scroll_up_at(READER, 8);
+        (top, left, back)
+    });
+    d.observe(
+        "iter-28-L-P3-read-offset",
+        read_offset
+            .0
+            .zip(read_offset.1)
+            .is_some_and(|(top, left)| left < top - 1.0)
+            && read_offset.2 == read_offset.1,
+        format!("Read's title at (top, scrolled, after Edit Markdown and back): {read_offset:?}"),
+    );
     let clean_body = kind_line_tops(d);
-    d.click(EDIT_MARKDOWN);
+    // PR 343 review, P3: the first frame after Edit Markdown opens on a clean draft is already
+    // the editor's pane: its save row and the editor are drawn (the mode's flags follow the
+    // toggle in the same pass).
+    let first_clean = d.first_frame_after_click(EDIT_MARKDOWN, |d| {
+        (d.in_view("Save"), d.in_view("Markdown editor"))
+    });
     let draft = d.editor_text().unwrap();
     // Round 25 AC3, FC1, SC2: the editor's place with nothing in the message space.
     let clean_tops = editor_frame_tops(d);
@@ -5485,10 +5602,36 @@ pub fn package_rename(d: &mut Driver<'_>) {
     // The warning wraps at 960, so `Use 24` is below the first two lines: the wheel over the
     // message space brings it into view, as a DM would scroll there.
     reveal_in_space(d, "Hit Points line says 24", "Use 24");
+    // PR 343 review, P1: a key and a click on a footer fix or Undo in one frame.
+    // The editor draws first and takes the text; the press then acts on the draft as it is, so
+    // the typed words stay: the stat fix, its Undo (refused: the draft is no longer the text the
+    // fix left), and below, Discard's Undo and the heading fix.
+    let same_frame_stat = d.aside(|d| {
+        assert!(d.reader_focus("Markdown editor"), "the editor takes focus");
+        d.type_and_reader_click(SAME_FRAME, "Use 24");
+        let fix = d.editor_text().unwrap_or_default();
+        let fix_kept = fix.contains(SAME_FRAME) && d.has("Undo stat change");
+        assert!(d.reader_focus("Markdown editor"), "the editor takes focus");
+        d.type_and_reader_click(SAME_FRAME, "Undo stat change");
+        let undo = d.editor_text().unwrap_or_default();
+        let undo_kept = undo.matches(SAME_FRAME).count() == 2;
+        // Back to the typed draft for the steps below.
+        d.replace_editor_text(&typed);
+        d.wait_for_text("Use 24");
+        reveal_in_space(d, "Hit Points line says 24", "Use 24");
+        (fix_kept, undo_kept)
+    });
     d.click("Use 24");
     d.wait_for_text("Undo stat change");
     let fixed = d.editor_text().unwrap();
     assert_ne!(fixed, typed, "Use 24 did not change the draft");
+    // Round 28 P2 (the Library editor on `pane_editor`): the footer's presses are applied after
+    // the pane draws the editor, and the DM's unsent line stays in the draft the fix changed.
+    d.observe(
+        "iter-28-L-P2-unsent",
+        fixed.contains("Hit Points 24 (4d8 + 4)"),
+        "After Use 24 in the footer, the draft keeps the typed Hit Points line and has the fix",
+    );
     undo_follows_message(
         d,
         "iter-19-E-AD3-stat",
@@ -5496,6 +5639,54 @@ pub fn package_rename(d: &mut Driver<'_>) {
         "Undo stat change",
     );
     d.state("stat-fix-undo-message", Sizes::All);
+    // Round 28 P2: in the pane's editor region, Save (above the pane), the editor and the
+    // footer's Undo stay in view; the region keeps at least 64 px (`REGION_LEAST`) and ends above
+    // the footer. Settled at 960x640, 1280x800 and 1920x1080, and at a short height (300) at 960,
+    // 1280 and 1920 wide, there both in the first frame after Edit Markdown opens and settled.
+    fn editor_room(d: &Driver<'_>) -> Option<(bool, bool, f32, f32, bool)> {
+        let editor = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name == "Markdown editor")?
+            .shown;
+        let (frame, _) = d.input_frame("Markdown editor")?;
+        let undo = d.place_of("Undo stat change")?;
+        Some((
+            d.in_view("Save"),
+            d.in_view("Undo stat change"),
+            frame.height() - 2.0 * (design::S + design::HAIRLINE_WIDTH),
+            editor.height(),
+            editor.bottom() <= undo.top() + 0.5,
+        ))
+    }
+    let mut regions = Vec::new();
+    for size in [SMALL, (1280.0, 800.0), LARGE] {
+        regions.push((size, "settled", d.at_size(size, editor_room)));
+    }
+    for width in [960.0, 1280.0, 1920.0] {
+        let size = (width, SHORT_EDITOR);
+        let (first, settled) = d.aside(|d| {
+            d.act_at_size(size, |d| {
+                d.click("Read");
+                let first = d.first_frame_after_click(EDIT_MARKDOWN, editor_room);
+                (first, editor_room(d))
+            })
+        });
+        regions.push((size, "first frame", first));
+        regions.push((size, "settled", settled));
+    }
+    d.observe(
+        "iter-28-L-P2-save-in-view",
+        first_clean == (true, true)
+            && regions.iter().all(|(_, _, room)| {
+                room.is_some_and(|(save, undo, region, shown, above)| {
+                    save && undo && region >= 64.0 - 0.5 && shown > 0.0 && above
+                })
+            }),
+        format!(
+            "First frame of Edit Markdown on a clean draft (Save, editor): {first_clean:?}; (size, frame, (Save, Undo, region, editor view, editor above the footer)): {regions:?}"
+        ),
+    );
     // Round 25 AC3, FC1, SC2 and the message-space contract: the stat warning, its result, a
     // reason that hides the result, Discard, Undo discard and the result again all keep the
     // editor still. The hidden result comes back while its owner (this draft) lives.
@@ -5509,6 +5700,20 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.click("Discard");
     d.expect("Undo discard of Cinder Wolf");
     let discard_tops = editor_frame_tops(d);
+    // P1 (above): Discard's Undo with a key in the same frame. The typed words stay; the edit
+    // ends Discard's Undo, as any edit does. Then Discard again for the steps below.
+    let same_frame_discard = d.aside(|d| {
+        assert!(d.reader_focus("Markdown editor"), "the editor takes focus");
+        d.type_and_reader_click(SAME_FRAME, "Undo discard of Cinder Wolf");
+        let kept = d
+            .editor_text()
+            .is_some_and(|text| text.contains(SAME_FRAME) && text != invalid);
+        d.replace_editor_text(&invalid);
+        d.wait_for_text("Invalid");
+        d.click("Discard");
+        d.expect("Undo discard of Cinder Wolf");
+        kept
+    });
     d.click("Undo discard of Cinder Wolf");
     assert_eq!(d.editor_text().as_deref(), Some(invalid.as_str()));
     let undo_discard_tops = editor_frame_tops(d);
@@ -6115,19 +6320,23 @@ pub fn package_rename(d: &mut Driver<'_>) {
     assert!(!d.has_containing("Splat cannot find Ashen Marches"));
     assert!(!d.has_containing("Ashen Marches is now in"));
     d.state_prepared("package-folder-moved-on-disk", Sizes::All, |d| {
-        let warning = d.place_of("Ashen Marches moved from modules/ashen-marches/ to modules/watch-package/.");
+        // Wave 2 d (C): the warning's words go on with the encounters that use its creatures
+        // (`… Bridge Ambush and Shrine of Cinders use its creatures.`), and each encounter is a
+        // choice; `check_link_spaces` holds the names' phrase.
+        let warning = d
+            .nodes()
+            .into_iter()
+            .find(|node| {
+                node.name
+                    .starts_with("Ashen Marches moved from modules/ashen-marches/ to modules/watch-package/.")
+            })
+            .map(|node| node.rect);
         let action = d.place_of("Use this folder");
-        let first = d.place_of("Bridge Ambush");
-        let second = d.place_of("Shrine of Cinders");
-        let and = d.nodes().into_iter().find(|node| node.name == "and");
         check_link_spaces(d);
         let aligned = warning.zip(action).is_some_and(|(text, action)| {
             (text.left() - action.left()).abs() < 1.0 && action.top() > text.bottom()
         });
-        let spaced = first.zip(second).zip(and).is_some_and(|((first, second), and)| {
-            (and.rect.left() - first.right() - (second.left() - and.rect.right())).abs() < 1.0
-                && and.rect.left() - first.right() < crate::design::S
-        });
+        let spaced = d.has("Open Bridge Ambush") && d.has("Open Shrine of Cinders");
         d.observe("iter-4-C-FD1-FD14", aligned && spaced,
             "One moved-folder warning aligns its recovery action and uses word spaces between affected links");
         // Round 25 family: every action on the message has the secondary border.
@@ -6150,20 +6359,20 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.click("Find the folder…");
     // Round 23 FE3: the fault comes first, and it names the picked folder and the package.
     d.expect(
-        "wrong-package/ holds a different package. Choose the folder that holds Ashen Marches.",
+        "The folder wrong-package/ holds a different package. Choose the folder that holds Ashen Marches.",
     );
     d.state("package-wrong-folder-picked", Sizes::All);
     crate::hermetic::closed::next_folder(moved.clone());
     d.click("Find the folder…");
-    d.wait_for_text("Undo folder recovery");
+    d.wait_for_text("Undo recover modules/watch-package");
     d.expect("Ashen Marches found in modules/watch-package/.");
     d.state_prepared("package-correct-folder-picked", Sizes::All, |d| {
-        check_undo_icon(d, "Undo folder recovery", "iter-6-C-AD3");
+        check_undo_icon(d, "Undo recover modules/watch-package", "iter-6-C-AD3");
     });
-    d.click("Undo folder recovery");
+    d.click("Undo recover modules/watch-package");
     d.wait_for_text("Use this folder");
     d.click("Use this folder");
-    d.wait_for_text("Undo folder recovery");
+    d.wait_for_text("Undo recover modules/watch-package");
     go_library(d);
     d.click("Packages");
     d.click("Reload from disk");
@@ -6247,6 +6456,33 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.state("draft-saved-at-moved-path", Sizes::All);
     assert_ne!(saved, before_save);
     assert!(!d.has("Undo save"));
+    // P1 (above): the heading fix with a key in the same frame, last, because a heading fix
+    // replaces the one heading Undo an earlier state shows. The fix is made again from the
+    // current text, so the typed words stay and the heading is fixed.
+    let current = d.editor_text().unwrap();
+    assert!(
+        current.contains("# Ash Exposure\n"),
+        "fixture: the entry's heading"
+    );
+    d.replace_text_in(
+        "Markdown editor",
+        &current.replacen("# Ash Exposure\n", "# Ash Exposures\n", 1),
+    );
+    d.wait_for_text("Use Ash Exposure");
+    assert!(d.reader_focus("Markdown editor"), "the editor takes focus");
+    d.type_and_reader_click(SAME_FRAME, "Use Ash Exposure");
+    let same_frame_heading = d.editor_text().is_some_and(|text| {
+        text.contains(SAME_FRAME)
+            && text.contains("# Ash Exposure\n")
+            && !text.contains("# Ash Exposures")
+    });
+    d.observe(
+        "iter-28-L-P1-same-frame",
+        same_frame_stat == (true, true) && same_frame_discard && same_frame_heading,
+        format!(
+            "A key and a footer press in one frame keep the typed words: stat fix and its Undo {same_frame_stat:?}, Undo discard {same_frame_discard}, heading fix {same_frame_heading}"
+        ),
+    );
 }
 
 fn check_read_repair(d: &mut Driver<'_>, title: &str) {
@@ -7345,6 +7581,70 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.expect("Ashen Marches · Chosen for this campaign");
     d.state("package-yaml-repaired", Sizes::All);
 
+    // PR 343 review, P2: a fault deep in a long file. Edit Markdown puts the caret on the broken
+    // line, and the editor region reveals it (main scrolled the editor's own area to it).
+    let deep = d.aside(|d| {
+        let valid = fs::read_to_string(&path).unwrap();
+        let filler: String = (0..146)
+            .map(|n| format!("splat_note_{n}: filler\n"))
+            .collect();
+        let long = valid.replacen(
+            "splat_kind: creature\n",
+            &format!("splat_kind: creature\n{filler}splat_size: [\n"),
+            1,
+        );
+        assert_ne!(long, valid, "fixture: the front matter names its kind");
+        let line = long
+            .lines()
+            .position(|line| line == "splat_size: [")
+            .map(|at| at + 1);
+        fs::write(&path, &long).unwrap();
+        d.focus_window(false);
+        d.focus_window(true);
+        d.wait_for_text("Cannot be read");
+        // The broken row as painted: inside the clip of the editor's text (the region's view).
+        let row_shown = |d: &Driver<'_>| {
+            let mut shown = false;
+            d.each_painted_text(|text, clip| {
+                for row in &text.galley.rows {
+                    let words: String = row.glyphs.iter().map(|glyph| glyph.chr).collect();
+                    if words.contains("splat_size: [") {
+                        let rect = row.rect().translate(text.pos.to_vec2());
+                        shown |= clip.contains_rect(rect.shrink2(egui::vec2(0.0, 1.0)));
+                    }
+                }
+            });
+            shown
+        };
+        d.click(EDIT_MARKDOWN);
+        d.expect("Markdown editor");
+        let first = row_shown(d);
+        // The DM wheels the editor to its top, reads, and chooses Edit Markdown again: the caret
+        // goes to the broken line again, and the region shows it.
+        let (editor, _) = d
+            .input_frame("Markdown editor")
+            .expect("the editor's frame");
+        d.scroll_up_at(editor.center(), 60);
+        let wheeled_away = !row_shown(d);
+        d.click("Read");
+        d.click(EDIT_MARKDOWN);
+        d.expect("Markdown editor");
+        let shown = (first, wheeled_away, row_shown(d));
+        fs::write(&path, &valid).unwrap();
+        d.focus_window(false);
+        d.focus_window(true);
+        d.click("Read");
+        d.wait_for_text("Ash Bite");
+        (line, long.lines().count(), shown)
+    });
+    d.observe(
+        "iter-28-L-P2-broken-line",
+        deep.0.is_some_and(|line| line >= 140) && deep.2 == (true, true, true),
+        format!(
+            "Edit Markdown on a file whose fault is on line {:?} of {}: (in view when opened, out of view after the wheel, in view when opened again) {:?}",
+            deep.0, deep.1, deep.2
+        ),
+    );
     // Keep the original repair proof at step 08; repeat the break for its consumers.
     fs::write(&path, &broken).unwrap();
     d.focus_window(false);
@@ -8201,7 +8501,8 @@ pub(super) fn reader_title_tops(d: &mut Driver<'_>, title: &str) -> Vec<Option<f
 /// per pane, pinned below the editor). With `words`, at each size: one footer holds them all, it
 /// starts at least `S` below the editor frame and ends in the window, it is at most a third of
 /// the window high, and each of `words` is painted inside it, in this order from the top. With
-/// no `words`: no footer, and the editor runs to the pane's bottom.
+/// no `words`: no footer, and the editor either runs to the pane's bottom or, as tall as its text
+/// (round 28 P2: the pane's editor region fits a short draft), shows all of it.
 fn footer_in_order(d: &mut Driver<'_>, words: &[&str]) -> [bool; 3] {
     [SMALL, DEFAULT, LARGE].map(|size| {
         d.at_size(size, |d| {
@@ -8219,7 +8520,12 @@ fn footer_in_order(d: &mut Driver<'_>, words: &[&str]) -> [bool; 3] {
                 })
                 .collect();
             if words.is_empty() {
-                return below.is_empty() && editor.bottom() > size.1 - crate::design::XXL * 2.0;
+                let whole = d
+                    .nodes()
+                    .iter()
+                    .any(|node| node.name == "Markdown editor" && node.fully_in_view());
+                return below.is_empty()
+                    && (editor.bottom() > size.1 - crate::design::XXL * 2.0 || whole);
             }
             let Some(footer) = below
                 .iter()
