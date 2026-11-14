@@ -886,7 +886,7 @@ reader's place), so the scope, the search and the list never move; Campaign offe
 
 Missing-package recovery searches beside known package folders. A unique match gets bordered secondary Use
 this folder before Find the folder…; these repairs are bordered secondary. Remove from this campaign is a red
-choice that loses something: it comes last, with exactly `L` before it (ruling R21). Each package fault is one typed message in the page's footer (`FaultMessage`), so the package
+choice that loses something: it comes last (ruling R21), with the destructive-choice gap of the message rule before it: `L` when it shares the line, `M` above it when it starts its own line. Each package fault is one typed message in the page's footer (`FaultMessage`), so the package
 list keeps one place. Show one warning naming the old and new folders, `It was in <folder>/.`, and the
 encounters that use its creatures in its words (`Bridge Ambush and Shrine of Cinders use its creatures.`); each
 encounter is a safe choice of the message, `Open <name>`, which opens it in Lookup. After `Remove from this
