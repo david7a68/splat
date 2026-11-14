@@ -12058,7 +12058,8 @@ pub mod world {
         );
         // Round 28 FF1: the NPC's `Add to fight` is on its title line, as a creature's is, not
         // a bordered button under Status. With no stat block, it opens the form that asks for
-        // one, and while the form is open it says that the form adds them.
+        // one; while the form is open, the form is the one way to add them (review of PR 355),
+        // and Cancel gives the title line its action back in its place.
         let add = format!("Add {NPC} to the fight");
         for size in [SMALL, DEFAULT, LARGE] {
             let (placed, detail) = d.at_size(size, |d| world_build::npc_add_on_title_line(d, NPC));
@@ -12072,14 +12073,27 @@ pub mod world {
         let title_place = d.place_of(&add);
         d.click(&add);
         d.expect("Stat block");
-        let blocked = d.is_disabled(&add)
-            && d.place_of(&add) == title_place
-            && d.tooltip_contains(&add, crate::world::NPC_FORM_ADDS);
+        // One way to add: no title action, and one painted `Add to fight` in Lookup, the form's.
+        let lookup = d.place_of(SEARCH_LOOKUP).map(|search| {
+            egui::Rect::from_min_max(
+                egui::pos2(search.left(), 0.0),
+                egui::pos2(f32::INFINITY, f32::INFINITY),
+            )
+        });
+        let painted = lookup
+            .map(|lookup| d.painted_in(lookup).matches("Add to fight").count())
+            .unwrap_or(0);
+        let one_way = !d.has(&add) && painted == 1;
+        d.click("Cancel");
+        let back = d.place_of(&add);
+        d.click(&add);
+        d.expect("Stat block");
         d.observe(
             "iter-28-D-FF1-form",
-            blocked,
+            one_way && title_place.is_some() && back == title_place,
             format!(
-                "With the form open, the title line's Add to fight keeps its place {title_place:?} and says the form adds them"
+                "With the form open: title action shown {}, painted Add to fight in Lookup {painted}; after Cancel it is at {back:?}, before {title_place:?}",
+                d.has(&add)
             ),
         );
         d.type_into("Stat block", "Guard");

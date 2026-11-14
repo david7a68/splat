@@ -4746,6 +4746,34 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         "npc",
         &format!("  creature: {{id: {guard}}}\n"),
     );
+    // Review of PR 355: an NPC of the package that holds Guard, with no stat block.
+    const PACKAGE_NPC: &str = "Varn the Ferryman";
+    let guard_owner = catalogue
+        .entries
+        .values()
+        .find(|i| i.entry.id == guard)
+        .unwrap()
+        .owner;
+    let package_npc = modules
+        .iter()
+        .find(|module| module.id == guard_owner)
+        .expect("Guard's package")
+        .path
+        .join(format!("NPCs/{PACKAGE_NPC}.md"));
+    fs::create_dir_all(package_npc.parent().unwrap()).unwrap();
+    fs::write(
+        &package_npc,
+        splat::content::formats::fixture(
+            "World.md",
+            &format!(
+                "splat_id: {}\nsplat_kind: world\nsplat_name: {PACKAGE_NPC}\nsplat_world:\n  type: npc\n",
+                splat::character::stable_id("package-npc-varn")
+            ),
+            &format!("\n# {PACKAGE_NPC}\n\nPoles the ferry at the ford.\n"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
     reload(d);
     resume_run_from_cold_start(d);
     look_up(d, "Rook Ambry");
@@ -4826,33 +4854,6 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         ),
     );
     d.click_containing("Undo: add Rook Ambry");
-    // A long name at 960 wraps by whole words on at most two lines (ruling R15), and its
-    // actions stay whole in view, on their own row under it.
-    look_up_again(d, LONG);
-    d.wait_for_text("Stat block");
-    for size in [SMALL, DEFAULT, LARGE] {
-        let (placed, detail) = d.at_size(size, |d| {
-            let mut rows = 0;
-            d.each_painted_text(|text, _| {
-                if text.galley.job.text == LONG {
-                    rows = rows.max(text.galley.rows.len());
-                }
-            });
-            let (placed, detail) = npc_add_on_title_line(d, LONG);
-            (
-                placed && (1..=2).contains(&rows),
-                format!("title rows {rows}; {detail}"),
-            )
-        });
-        d.observe(
-            "iter-28-D-FJ7-long",
-            placed,
-            format!("At {size:?}, the long name and its Add to fight: {detail}"),
-        );
-    }
-    d.state("npc-long-name-add-to-fight", Sizes::All);
-    look_up_again(d, "Rook Ambry");
-    d.wait_for_text("Watch House");
     d.begin_task();
     d.click("Guard");
     d.wait_for_text("ARMOR CLASS");
@@ -5395,6 +5396,54 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         "T12.12",
         count() == before && !encounters.join("Fight with Rook Ambry 2.md").exists(),
         "After Close run, Start fight starts the same encounter, and no second one is saved",
+    );
+    // Round 28 FJ7, kept last so that no earlier state changes its number: with this run in
+    // setup, a long name at 960 wraps by whole words on at most two lines (ruling R15), and its
+    // actions stay whole in view, on their own row under it.
+    show(d, LONG);
+    d.wait_for_text("Stat block");
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (placed, detail) = d.at_size(size, |d| {
+            let mut rows = 0;
+            d.each_painted_text(|text, _| {
+                if text.galley.job.text == LONG {
+                    rows = rows.max(text.galley.rows.len());
+                }
+            });
+            let (placed, detail) = npc_add_on_title_line(d, LONG);
+            (
+                placed && (1..=2).contains(&rows),
+                format!("title rows {rows}; {detail}"),
+            )
+        });
+        d.observe(
+            "iter-28-D-FJ7-long",
+            placed,
+            format!("At {size:?}, the long name and its Add to fight: {detail}"),
+        );
+    }
+    d.state("npc-long-name-add-to-fight", Sizes::All);
+    // Review of PR 355: a package's NPC with no stat block joins through the form that asks for
+    // one, and its package note is not written.
+    show(d, PACKAGE_NPC);
+    d.wait_for_text(PACKAGE_NPC);
+    let package_text = fs::read_to_string(&package_npc).unwrap();
+    d.click(&format!("Add {PACKAGE_NPC} to the fight"));
+    d.type_into("Stat block", "Guard");
+    d.click("Guard");
+    let one_save = !d.has("Save this as their stat block");
+    d.click("Add to fight");
+    d.settle();
+    let joined = roster_places(d)
+        .iter()
+        .filter(|(name, _)| name == PACKAGE_NPC)
+        .count();
+    d.observe(
+        "iter-28-D-FJ7-package",
+        joined == 1 && one_save && fs::read_to_string(&package_npc).unwrap() == package_text,
+        format!(
+            "{PACKAGE_NPC} rows {joined}; no Save checkbox {one_save}; the package note is unchanged"
+        ),
     );
     close_run(d);
 }

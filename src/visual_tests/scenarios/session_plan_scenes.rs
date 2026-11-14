@@ -938,6 +938,34 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     fs::write(&path, &before).unwrap();
     d.app_mut().lookup.refresh();
     d.settle();
+    // Review of PR 355: a new title in Session details reaches Lookup at once, through the
+    // app's own refresh: its link names the session as the Sessions page now does.
+    let session_links = |d: &Driver<'_>| -> Vec<String> {
+        d.nodes()
+            .into_iter()
+            .filter(|node| {
+                node.role == egui::accesskit::Role::Link && node.name.starts_with("Session 1")
+            })
+            .map(|node| node.name)
+            .collect()
+    };
+    let named_before = session_links(d);
+    d.click("Edit session details");
+    d.replace_text_in("Session title", "The Long Crossing");
+    d.click("Save details");
+    d.settle();
+    let named_after = session_links(d);
+    d.observe(
+        "iter-28-D-FC8-title",
+        named_before == [label.clone()] && named_after == ["Session 1: The Long Crossing"],
+        format!(
+            "Lookup's session link before {named_before:?}, after the new title {named_after:?}"
+        ),
+    );
+    d.click("Edit session details");
+    d.replace_text_in("Session title", "The Crossing");
+    d.click("Save details");
+    d.settle();
 
     // From the long scene's menu: the field starts with the scene's words outside its link,
     // selected, so typing replaces them.

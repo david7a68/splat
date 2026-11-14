@@ -2223,11 +2223,12 @@ impl Sessions {
         self.folder_error = None;
         let notes = list_notes(folder);
         // A new, renamed or removed note: the campaign's content holds session notes too, so
-        // Lookup and Read's links find it.
-        let place = |notes: &[Note]| -> Vec<(Uuid, PathBuf)> {
+        // Lookup and Read's links find it. A new number or title too: Lookup and World name a
+        // session by its label (round 28 FC8).
+        let place = |notes: &[Note]| -> Vec<(Uuid, PathBuf, String)> {
             notes
                 .iter()
-                .map(|note| (note.id, note.path.clone()))
+                .map(|note| (note.id, note.path.clone(), note.label()))
                 .collect()
         };
         self.wants_index_refresh |= place(&notes) != place(&self.notes);

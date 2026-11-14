@@ -384,9 +384,11 @@ pub fn with_links(body: &str, images: &HashMap<String, PathBuf>) -> String {
 /// gives it (`Session 1: The Crossing`, from `names`, `ContentIndex::session_names`), else its
 /// heading or its target. A link to a heading of a session shows that heading.
 pub(crate) fn link_words(target: &str, names: &HashMap<String, String>) -> String {
+    // By the whole link, folder and all: `[[Notes/Session 1]]` is not the session's
+    // `Sessions/Session 1`, and a bare stem is in `names` only when one note has it.
     if !target.contains('#') {
-        let file = target.rsplit('/').next().unwrap_or(target).to_lowercase();
-        if let Some(name) = names.get(file.trim_end_matches(".md")) {
+        let link = target.trim_start_matches('/').to_lowercase();
+        if let Some(name) = names.get(link.trim_end_matches(".md")) {
             return name.clone();
         }
     }
@@ -2199,10 +2201,6 @@ pub struct AddToFight {
     pub npc: bool,
 }
 
-/// What a blocked NPC `Add to fight` on the title line says while the form under the reader's
-/// values, which asks for a stat block, is open.
-pub(crate) const NPC_FORM_ADDS: &str = "The form below adds them to the fight.";
-
 /// Why the run refused a reader's `Add to fight`, and whose refusal it is.
 #[derive(Clone, Debug, PartialEq)]
 struct Refusal {
@@ -2831,18 +2829,21 @@ impl Reader {
         // one press (FJ5; round 28 FJ7, FF1: one form for both), through the run's own add. An
         // NPC already in the fight has its status link instead, and an NPC in its edit form has
         // none, as `Start fight`. An NPC with no stat block opens the form below that asks for
-        // one; while that form is open, the action says that the form adds them.
+        // one (also a package's NPC: the form adds them and writes nothing to the note); while
+        // that form is open it is the one way to add them, and the title line has no
+        // `Add to fight` until the form adds them or Cancel closes it (review of PR 355).
         let editing_entry = campaign.is_some_and(|c| self.editing(id, c));
         let add = self
             .sides
             .is_some()
             .then(|| start_fight(item, index))
             .flatten()
-            .filter(|fight| !fight.npc || (!self.in_run.contains_key(&id) && !editing_entry));
-        let add_blocked = add
-            .as_ref()
-            .is_some_and(|add| add.creature.is_none() && self.adding.is_some())
-            .then_some(NPC_FORM_ADDS);
+            .filter(|fight| {
+                !fight.npc
+                    || (!self.in_run.contains_key(&id)
+                        && !editing_entry
+                        && !(fight.creature.is_none() && self.adding.is_some()))
+            });
         {
             let width = ui.available_width();
             let cell = ui
@@ -2906,8 +2907,7 @@ impl Reader {
                     Action::quiet("Add to fight")
                         .icon(design::icons::ADD)
                         .density(Density::Read)
-                        .name(name)
-                        .blocked(add_blocked),
+                        .name(name),
                 );
             }
             if edit.is_some() {
@@ -4644,7 +4644,11 @@ impl Reader {
         index: &ContentIndex,
         campaign: Option<&Campaign>,
     ) -> Option<Go> {
-        let campaign = campaign.filter(|_| item.is_private())?;
+        // A package's NPC has no values to change here, but its join form, from `Add to fight`
+        // on the title line, adds them all the same.
+        let Some(campaign) = campaign.filter(|_| item.is_private()) else {
+            return self.join_form(ui, item, index, None);
+        };
         let mut go = None;
         if self.compact {
             let mut targets = vec![
@@ -4859,12 +4863,36 @@ impl Reader {
             }
             return None;
         }
+        self.join_form(ui, item, index, Some(campaign))
+    }
+
+    /// The form that adds an NPC with no stat block to the run, open from `Add to fight` on the
+    /// title line. `campaign` is the NPC's own campaign when its note is the campaign's: only
+    /// then can the form save the chosen stat block to the note. A package's NPC joins, and its
+    /// note is not written.
+    fn join_form(
+        &mut self,
+        ui: &mut egui::Ui,
+        item: &Item,
+        index: &ContentIndex,
+        campaign: Option<&Campaign>,
+    ) -> Option<Go> {
         let sides = self.sides.as_ref()?;
-        // An NPC with no stat block opens this form from `Add to fight` on the title line.
         let Some(adding) = &mut self.adding else {
             return None;
         };
-        match add_form(ui, item, index, sides, adding, self.compact)? {
+        if campaign.is_none() {
+            adding.save = false;
+        }
+        match add_form(
+            ui,
+            item,
+            index,
+            sides,
+            adding,
+            self.compact,
+            campaign.is_some(),
+        )? {
             FormEnd::Cancel => self.adding = None,
             FormEnd::Add => {
                 let stat_block = &index.items[adding.stat_block?].entry;
@@ -4879,7 +4907,7 @@ impl Reader {
                     },
                 };
                 let saved = adding.save && index.world_target(&item.entry, "creature").is_none();
-                if saved {
+                if saved && let Some(campaign) = campaign {
                     match set_world_field(
                         campaign,
                         &item.entry,
@@ -4915,6 +4943,7 @@ fn add_form(
     sides: &[String],
     adding: &mut Adding,
     compact: bool,
+    can_save: bool,
 ) -> Option<FormEnd> {
     ui.label(Type::Strong.rich(ui, format!("Add {} to the fight", item.entry.name)));
     match adding.stat_block.map(|at| &index.items[at].entry) {
@@ -4948,7 +4977,7 @@ fn add_form(
             }
         }
     }
-    if creature(&item.entry).is_none() {
+    if can_save && creature(&item.entry).is_none() {
         ui.checkbox(&mut adding.save, "Save this as their stat block");
     }
     if let Some((first, rest)) = sides.split_first()
