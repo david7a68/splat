@@ -4,8 +4,8 @@ use super::{Book, Event, Kind, checks, clock, clock_now, clock_words, day_number
 use crate::design::{
     self, Action, Density, Status, Tone, Type, colors, icons,
     outcome::{
-        Choice, Fault, FaultMessage, FaultPlace, KeptOutcome, MessageChoice, Messages, Notice,
-        PaneFrame, Said, Sentence, Severity, UndoStep, Verb,
+        Choice, Fault, FaultMessage, KeptOutcome, MessageChoice, Messages, Notice, PaneFrame, Said,
+        Sentence, Severity, UndoStep, Verb,
     },
 };
 use eframe::egui;
@@ -293,33 +293,24 @@ impl design::results::Kept for JustAdded {
     }
 }
 
-/// A fault of the Timeline file that blocks nothing: a flag on one of its lines, another
-/// timeline file beside it, or a save that failed. The kind gives the tone.
+/// A footer fault of the Timeline: a save that failed, or a removal that notes still link to.
+/// The kind gives the tone.
 enum FileFault {
-    Flag(Sentence),
-    Duplicate(Sentence),
+    /// Notes still link to the removed event: the DM checks them.
+    Linked(Sentence),
     NotSaved(Sentence),
 }
 
 impl Fault for FileFault {
     fn severity(&self) -> Severity {
         match self {
-            Self::Flag(_) | Self::Duplicate(_) => Severity::NeedsFixing,
+            Self::Linked(_) => Severity::NeedsFixing,
             Self::NotSaved(_) => Severity::NotSaved,
-        }
-    }
-    fn place(&self) -> Option<FaultPlace<'_>> {
-        match self {
-            Self::Flag(_) => Some(FaultPlace {
-                name: super::FILE.into(),
-                line: None,
-            }),
-            _ => None,
         }
     }
     fn cause(&self) -> Sentence {
         match self {
-            Self::Flag(words) | Self::Duplicate(words) | Self::NotSaved(words) => words.clone(),
+            Self::Linked(words) | Self::NotSaved(words) => words.clone(),
         }
     }
 }
@@ -485,16 +476,6 @@ pub fn file_messages<'f, A: 'static>(
             )
         }));
     }
-    for flag in &book.flags {
-        messages.outcome(FaultMessage::new(&FileFault::Flag(as_sentence(
-            &flag_words(flag),
-        ))));
-    }
-    if let Some(warning) = &book.duplicate {
-        messages.outcome(FaultMessage::new(&FileFault::Duplicate(as_sentence(
-            warning,
-        ))));
-    }
     if book.unreadable.is_none()
         && !book.conflict
         && let Some(error) = &book.error
@@ -505,6 +486,34 @@ pub fn file_messages<'f, A: 'static>(
                 wrap(FileAct::SaveAgain),
             )),
         );
+    }
+}
+
+/// The file's flags and a second timeline file, each with the file's line (its path, `Edit in
+/// Obsidian` and `Show file`) under the last, at the end of a pane's content: right above its
+/// footer, so they move no row. A typed footer message has no file line yet (a gap of the
+/// message part, sent to its owner), so they stay out of the footer.
+pub fn file_flags(ui: &mut egui::Ui, book: &Book) {
+    if book.flags.is_empty() && book.duplicate.is_none() {
+        return;
+    }
+    design::gap(ui, design::Gap::S);
+    let folder = book.path.as_deref().and_then(std::path::Path::parent);
+    for (at, flag) in book.flags.iter().enumerate() {
+        let text = flag_words(flag);
+        match folder {
+            Some(folder) if at + 1 == book.flags.len() => {
+                design::message_with_actions(ui, Tone::Warning, &text, |ui| {
+                    crate::encounters::file_line(ui, folder, super::FILE);
+                });
+            }
+            _ => {
+                design::message(ui, Tone::Warning, &text);
+            }
+        }
+    }
+    if let Some(warning) = &book.duplicate {
+        design::message(ui, Tone::Warning, warning);
     }
 }
 
@@ -968,7 +977,11 @@ impl TimelinePage {
         let offer = open.and_then(|id| notes.event_link_offer(book, id));
         let frame = PaneFrame::new(ui);
         let messages = self.list_messages(&frame, ui, book, notes, open, offer.as_ref());
-        let paned = messages.pane(ui, design::Body::Content, |ui| body(self, ui, book, notes));
+        let paned = messages.pane(ui, design::Body::Content, |ui| {
+            let drawn = body(self, ui, book, notes);
+            file_flags(ui, book);
+            drawn
+        });
         if let Some(press) = paned.pressed {
             match press.id {
                 ListAct::UndoLinks => {
@@ -1041,7 +1054,7 @@ impl TimelinePage {
                 let undo = UndoStep::verb(Verb::Remove).pressed_as(ListAct::UndoRemove);
                 // A finished change has the success tone; links left to it make it a warning.
                 if mentions > 0 {
-                    KeptOutcome::Fault(FaultMessage::new(&FileFault::Duplicate(words)), undo)
+                    KeptOutcome::Fault(FaultMessage::new(&FileFault::Linked(words)), undo)
                 } else {
                     Said::new(words).undo(undo).into()
                 }

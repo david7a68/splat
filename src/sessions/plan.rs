@@ -3544,6 +3544,7 @@ impl Sessions {
                 reveal_opened_played(ui, opened_played, next_action);
                 reveal.finish(ui);
                 self.scene_field(ui, index.as_deref(), shown, &mut scene_act);
+                timeline::page::file_flags(ui, book);
                 let drawn = ui.min_rect();
                 outer.advance_cursor_after_rect(drawn);
             }

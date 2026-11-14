@@ -21324,9 +21324,11 @@ pub mod session_plan_groups {
         d.state_prepared("plan-group-no-member-can-join", Sizes::All, |d| {
             show_plan(d);
             // At 960 the plan scrolls to show both new groups.
+            // The wheel goes over the rows: the footer, with the page's messages, holds the
+            // pane's bottom.
             if !d.in_view("Edit group Mill Watch") && !d.in_view_containing("Mill Watch to fight") {
-                d.scroll_until(pos2(650.0, 500.0), "Mill Watch", 10);
-                d.scroll_at(pos2(650.0, 500.0), 1);
+                d.scroll_until(pos2(650.0, 300.0), "Mill Watch", 10);
+                d.scroll_at(pos2(650.0, 300.0), 1);
             }
             let size = d.window_size();
             let tones = (
