@@ -8857,8 +8857,10 @@ pub mod column_resize {
         d.place_of(NAV_LIBRARY).map_or(0.0, |rect| rect.right() + S)
     }
 
+    /// The Library search's row: it spans the entries column (X2: the field ends at Clear's
+    /// kept place, the row at the column's edge).
     fn search(d: &Driver<'_>) -> egui::Rect {
-        d.place_of(SEARCH_LIBRARY).unwrap_or(egui::Rect::ZERO)
+        d.search_row_of(SEARCH_LIBRARY).unwrap_or(egui::Rect::ZERO)
     }
 
     fn sections_edge(d: &Driver<'_>) -> f32 {
