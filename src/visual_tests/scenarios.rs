@@ -17656,11 +17656,13 @@ pub mod encounter_groups {
                 }),
             format!("Each group heading says what the fight becomes: {joins:?}"),
         );
-        // Review of PR 338: EVERY Arrivals heading (every drag handle in view) holds it.
+        // Review of PR 338: EVERY Arrivals heading (every drag handle in view) holds it, but a
+        // group whose fight has no word (`XP not known`: the line has nothing to say).
         let headings = |d: &Driver<'_>| {
             d.nodes()
                 .into_iter()
                 .filter(|node| node.name.starts_with("Drag ") && node.in_view())
+                .filter(|node| !d.painted_in(node.shown).contains("not known"))
                 .map(|node| node.name)
                 .collect::<Vec<_>>()
         };
