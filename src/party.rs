@@ -626,22 +626,28 @@ impl Party {
             for (at, (id, path)) in reader.conflicts.iter().enumerate() {
                 let name = reader.member_name(id);
                 let fault = FaultMessage::new(&PartyFault::LocalEdits { name, connected });
-                // The warning asks the DM to connect, so the way to connect is on its line.
                 let fault = if connected {
-                    fault.choice(
+                    // Safe first: Show file, then Replace, which changes the active sheet (the
+                    // part puts `L` before it). Its lock keeps its reason's room while the
+                    // forced read waits and after, so nothing in the footer moves.
+                    fault.choice(show_file(path)).choice(
                         Choice::new(
-                            MessageChoice::Choice("Replace with D&D Beyond sheet"),
+                            MessageChoice::Lose("Replace with D&D Beyond sheet"),
                             PartyPress::Replace(several.then_some(at)),
                         )
-                        .blocked(waiting.then_some(crate::sentence!("Waiting for D&D Beyond."))),
+                        .locked_when(waiting, crate::sentence!("Waiting for D&D Beyond.")),
                     )
                 } else {
-                    fault.choice(
-                        Choice::new(MessageChoice::Choice(CONNECT), PartyPress::Connect)
-                            .hover("Opens Settings to connect your D&D Beyond account".to_owned()),
-                    )
+                    // The warning asks the DM to connect, so the way to connect is first.
+                    fault
+                        .choice(
+                            Choice::new(MessageChoice::Choice(CONNECT), PartyPress::Connect).hover(
+                                "Opens Settings to connect your D&D Beyond account".to_owned(),
+                            ),
+                        )
+                        .choice(show_file(path))
                 };
-                messages.outcome(fault.choice(show_file(path)));
+                messages.outcome(fault);
             }
             let warnings: std::collections::BTreeSet<_> = reader.warnings.values().collect();
             for warning in warnings {
@@ -2669,45 +2675,138 @@ mod sheet_now_tests {
             });
         design::theme::install(&harness.ctx);
         harness.run_steps(3);
+        const REPLACE: &str = "Replace with D&D Beyond sheet";
+        // Every Replace and Show file, top to bottom: the footer's controls.
+        let controls = |harness: &egui_kittest::Harness<'_>| {
+            let mut rects: Vec<egui::Rect> = harness
+                .get_all_by_label(REPLACE)
+                .chain(harness.get_all_by_label("Show file"))
+                .map(|node| node.rect())
+                .collect();
+            rects.sort_by(|x, y| {
+                x.top()
+                    .total_cmp(&y.top())
+                    .then(x.left().total_cmp(&y.left()))
+            });
+            rects
+        };
+        // A press with the pointer, and the URLs that frame asked to open.
+        let click = |harness: &mut egui_kittest::Harness<'_>, at: egui::Pos2| {
+            let mut urls = Vec::new();
+            harness.event(egui::Event::PointerMoved(at));
+            for pressed in [true, false] {
+                harness.event(egui::Event::PointerButton {
+                    pos: at,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers::NONE,
+                });
+                harness.run_steps(1);
+                for command in &harness.output().platform_output.commands {
+                    if let egui::OutputCommand::OpenUrl(url) = command {
+                        urls.push(url.url.clone());
+                    }
+                }
+            }
+            harness.run_steps(2);
+            urls
+        };
         let replaces: Vec<_> = harness
-            .get_all_by_label("Replace with D&D Beyond sheet")
+            .get_all_by_label(REPLACE)
+            .map(|node| node.rect())
+            .collect();
+        let files: Vec<_> = harness
+            .get_all_by_label("Show file")
             .map(|node| node.rect())
             .collect();
         assert_eq!(replaces.len(), 2, "each local-edit notice has its Replace");
+        // Review of PR 330: safe first. Each warning has Show file, then Replace (the
+        // destructive choice) on its line, exactly `L` after it.
+        for replace in &replaces {
+            let file = files
+                .iter()
+                .find(|file| (file.center().y - replace.center().y).abs() <= design::S)
+                .copied();
+            assert!(
+                file.is_some_and(|file| file.right() <= replace.left()
+                    && (replace.left() - file.right() - design::L).abs() <= 0.5),
+                "Show file {file:?} comes first, `L` before Replace {replace:?}"
+            );
+        }
+        let before = controls(&harness);
         let second = replaces
             .iter()
             .max_by(|x, y| x.top().total_cmp(&y.top()))
             .copied()
             .unwrap();
-        harness.event(egui::Event::PointerMoved(second.center()));
-        for pressed in [true, false] {
-            harness.event(egui::Event::PointerButton {
-                pos: second.center(),
-                button: egui::PointerButton::Primary,
-                pressed,
-                modifiers: egui::Modifiers::NONE,
-            });
-            harness.run_steps(1);
-        }
-        harness.run_steps(2);
+        let first = replaces
+            .iter()
+            .min_by(|x, y| x.top().total_cmp(&y.top()))
+            .copied()
+            .unwrap();
+        click(&mut harness, second.center());
         assert_eq!(
             party.borrow().reader.forced(),
             ["b"],
             "Replace on the second notice forces a read of B only; A is unchanged"
         );
+        // While the forced read waits, Replace is locked with its reason, and no control in
+        // the footer moves: the lock's line keeps its room before, during and after.
+        assert!(party.borrow().reader.force_waiting());
+        let during = controls(&harness);
+        assert_eq!(
+            before, during,
+            "the footer's controls stay while the read waits"
+        );
+        click(&mut harness, first.center());
+        harness
+            .get_all_by_label(REPLACE)
+            .min_by(|x, y| x.rect().top().total_cmp(&y.rect().top()))
+            .unwrap()
+            .focus();
+        harness.run_steps(1);
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(2);
+        assert_eq!(
+            party.borrow().reader.forced(),
+            ["b"],
+            "a locked Replace takes no pointer press and no key"
+        );
+        party.borrow_mut().reader.end_forced_read();
+        harness.run_steps(3);
+        assert_eq!(before, controls(&harness), "and stay after the read");
         // Wave 2 d (C): two moved-aside sheets, A then B, each a kept result with its own close
-        // icon. B's (the newest, first in the footer) ends B's result only; A's stays.
+        // icon. They are the page's, not the selected sheet's: they stay when the DM selects
+        // another character, and each acts on its own file. With B selected, A's Show file
+        // opens A's file; B's close icon (the newest, first in the footer) ends B's result only.
         {
             let mut party = party.borrow_mut();
             party.reader.conflicts.clear();
+            party.reader.select("a".into());
             for (owner, path) in [("a", "/campaign/a-old.md"), ("b", "/campaign/b-old.md")] {
                 party.reader.archived.record(crate::party_sync::Archived {
                     path: std::path::Path::new(path).into(),
                     owner: owner.into(),
                 });
             }
+            party.reader.select("b".into());
         }
         harness.run_steps(3);
+        let files: Vec<_> = harness
+            .get_all_by_label("Show file")
+            .map(|node| node.rect())
+            .collect();
+        assert_eq!(files.len(), 2, "both results stay when B is selected");
+        let oldest = files
+            .iter()
+            .max_by(|x, y| x.top().total_cmp(&y.top()))
+            .copied()
+            .unwrap();
+        let urls = click(&mut harness, oldest.center());
+        assert!(
+            urls.len() == 1 && urls[0].ends_with("/campaign/a-old.md"),
+            "A’s Show file opens A’s file only: {urls:?}"
+        );
         let closes: Vec<_> = harness
             .get_all_by_label(design::outcome::DISMISS_NAME)
             .map(|node| node.rect())
@@ -2718,17 +2817,7 @@ mod sheet_now_tests {
             .min_by(|x, y| x.top().total_cmp(&y.top()))
             .copied()
             .unwrap();
-        harness.event(egui::Event::PointerMoved(newest.center()));
-        for pressed in [true, false] {
-            harness.event(egui::Event::PointerButton {
-                pos: newest.center(),
-                button: egui::PointerButton::Primary,
-                pressed,
-                modifiers: egui::Modifiers::NONE,
-            });
-            harness.run_steps(1);
-        }
-        harness.run_steps(2);
+        click(&mut harness, newest.center());
         let left: Vec<_> = party
             .borrow()
             .reader

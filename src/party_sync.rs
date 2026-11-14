@@ -996,6 +996,12 @@ impl Reader {
     pub fn forced(&self) -> Vec<&str> {
         self.force.iter().map(String::as_str).collect()
     }
+    /// For tests: the forced read has finished.
+    #[cfg(test)]
+    pub fn end_forced_read(&mut self) {
+        self.force.clear();
+        self.forcing.clear();
+    }
     pub fn force_waiting(&self) -> bool {
         !self.force.is_empty() || !self.forcing.is_empty()
     }
