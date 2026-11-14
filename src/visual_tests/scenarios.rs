@@ -3458,9 +3458,11 @@ pub mod campaign_content {
         let a_back = draft(d, "Notes/Broken.md").contains("First draft.")
             && !d.has("Undo discard of Broken.md");
         let b_kept = draft(d, "Notes/Cracked.md").contains("Kept B line.");
-        // The displayed words too: each editor scrolled into view shows its own draft.
+        // The displayed words too: each editor scrolled into view shows its own draft. Wave 2 d
+        // (C) review: a click into an editor no longer scrolls the page (the DM clicked what was
+        // in view), so screen-reader focus brings each editor into view, as it must.
         let shown = |d: &mut Driver<'_>, editor: &str, words: &str| {
-            d.type_into(editor, "");
+            assert!(d.reader_focus(editor), "{editor} takes screen-reader focus");
             d.settle();
             let shown = d.visible_passage(words);
             d.press(Key::Escape);
