@@ -6560,7 +6560,7 @@ impl Sessions {
                         icons::EXPAND,
                         &format!("More actions for {}", template.name),
                     );
-                    egui::Popup::menu(&more).show(|ui| {
+                    design::menu_popup(&more).show(|ui| {
                         let built_in = super::BUILT_IN_TEMPLATES
                             .iter()
                             .any(|(name, _)| *name == template.name);

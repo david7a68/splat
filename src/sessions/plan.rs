@@ -555,7 +555,9 @@ fn plan_row_with(
     mut summary: impl FnMut(&mut egui::Ui),
     mut action: impl FnMut(&mut egui::Ui),
 ) {
-    ui.horizontal_top(|ui| {
+    // Review of PR 312: the row registers its whole rect, so a footer never cuts through it (N12,
+    // R4). The gate's far-action lines this adds at 1920 px wait for ruling R14.
+    let row = ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = design::S;
         // Round 27 FL4: the lead is centred in its `XL` slot, which is where a title's first
         // line is centred: a fight's link in its `XL` target, a scene's line in its `XL` band
@@ -612,6 +614,7 @@ fn plan_row_with(
             ui.expand_to_include_rect(action_rect.union(action_ui.min_rect()));
         });
     });
+    design::register_row(ui, row.response.rect);
 }
 
 /// A paused run needs its state here; the whole saved-run record stays in Encounters.
@@ -1042,7 +1045,7 @@ fn plan_menu(
         *focus = true;
     }
     let mut choice = None;
-    egui::Popup::menu(&response)
+    design::menu_popup(&response)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .show(|ui| {
             // A fixed place, whatever the list's length.
@@ -1101,21 +1104,27 @@ fn plan_menu(
     choice
 }
 
-/// The fields of one event, in place in a session's plan. Returns whether any changed.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
+/// The fields of one event, in place in a session's plan. Returns whether any changed. Each is
+/// keyed by its event (`TextKey::of`), so a cursor or text Undo never crosses to another row's
+/// event (review of PR 312).
 fn event_fields(ui: &mut egui::Ui, event: &mut timeline::Event) -> bool {
-    let title = design::text_field(ui, "Title", &mut event.title, None, None);
+    let key = design::TextKey::of(&*event);
+    let title = design::labelled_field(
+        ui,
+        EVENT_TITLE.of(key.clone()),
+        "Title",
+        &mut event.title,
+        None,
+        None,
+    );
     let mut changed = title.changed();
     design::field(ui, "Notes", None, None, |ui| {
-        let response = ui.add(
-            egui::TextEdit::multiline(&mut event.notes)
-                .desired_width(ui.available_width() - 2.0 * design::S)
+        let width = ui.available_width() - 2.0 * design::S;
+        let response = EVENT_NOTES.of(key).multi_line(ui, &mut event.notes, |edit| {
+            edit.desired_width(width)
                 .desired_rows(2)
-                .margin(egui::vec2(design::S, design::S)),
-        );
+                .margin(egui::vec2(design::S, design::S))
+        });
         design::named(ui, &response, "Notes on this event");
         changed |= response.changed();
     });
@@ -1125,14 +1134,23 @@ fn event_fields(ui: &mut egui::Ui, event: &mut timeline::Event) -> bool {
 /// A played fight's `Where`, in place under its opened row's links (W2-D3): the Timeline detail's
 /// own field on the same event, so the typed place has one owner, the Timeline, and saves as
 /// any edit of an event does. Returns whether it changed.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn place_field(ui: &mut egui::Ui, event: &mut timeline::Event) -> bool {
     design::gap(ui, design::Gap::XS);
-    design::text_field(ui, "Where", &mut event.place, None, None).changed()
+    let key = design::TextKey::of(&*event);
+    design::labelled_field(
+        ui,
+        EVENT_PLACE.of(key),
+        "Where",
+        &mut event.place,
+        None,
+        None,
+    )
+    .changed()
 }
+
+const EVENT_TITLE: design::FieldName = crate::field_id!("plan_event_title");
+const EVENT_NOTES: design::FieldName = crate::field_id!("plan_event_notes");
+const EVENT_PLACE: design::FieldName = crate::field_id!("plan_event_place");
 
 /// The removal action a deletion of this run follows: the book's live removal, when its event
 /// is that same run's. A deletion in another fight or session replaces no removal.
@@ -3220,7 +3238,7 @@ impl Sessions {
                             } else {
                                 // Overflow is always at the row's right edge.
                                 let more = design::icon_button(ui, icons::EXPAND, &format!("More actions for {label}"));
-                                egui::Popup::menu(&more).show(|ui| {
+                                design::menu_popup(&more).show(|ui| {
                                     if checks::offered(event, plan.tables) && Action::quiet("Roll for encounters").show(ui).clicked() {
                                         travel_act = Some((event.id.clone(), checks::Act::Start)); ui.close();
                                     }
