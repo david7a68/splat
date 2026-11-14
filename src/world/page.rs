@@ -1273,8 +1273,7 @@ impl WorldPage {
                 (0, _) => "No suggestions".to_owned(),
                 _ => detail,
             };
-            if (count > 0 || open)
-                && design::two_line_row(ui, ROW, open, title, &detail).clicked()
+            if (count > 0 || open) && design::two_line_row(ui, ROW, open, title, &detail).clicked()
             {
                 self.view = view;
                 self.keep_repair();

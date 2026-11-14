@@ -11779,9 +11779,9 @@ pub mod world {
         );
         // Round 28 FF4: `Nothing written yet.` stands where prose starts, `L` below the row
         // above it, so it does not read as that row's reason.
-        let gap = d.place_of("Change Status").zip(
-            d.painted_rect_in("Nothing written yet.", egui::Rect::EVERYTHING),
-        );
+        let gap = d
+            .place_of("Change Status")
+            .zip(d.painted_rect_in("Nothing written yet.", egui::Rect::EVERYTHING));
         d.observe(
             "iter-28-D-FF4",
             gap.is_some_and(|(row, words)| words.top() - row.bottom() >= crate::design::L - 1.0),
@@ -13967,7 +13967,8 @@ pub mod session_notes {
         for size in [SMALL, DEFAULT, LARGE] {
             let places = d.at_size(size, |d| {
                 let action = d.place_of("Open this session")?;
-                let title = d.painted_word_rect("Session 4: Ferry Watch", egui::Rect::EVERYTHING)?;
+                let title =
+                    d.painted_word_rect("Session 4: Ferry Watch", egui::Rect::EVERYTHING)?;
                 Some((action, title))
             });
             d.observe(

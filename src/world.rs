@@ -1423,11 +1423,15 @@ pub(crate) fn folder_file_line(ui: &mut egui::Ui, root: &Path, relative: &str, o
     let links = entry_file_links_width(ui, obsidian);
     let beside = ui.available_width() - links - design::L;
     // The folder takes its own row only when not even a short end of it fits beside the links.
-    let own_row = folder
-        .as_ref()
-        .is_some_and(|folder| beside < design::number_width(ui, folder, &font).min(design::XXL * 3.0));
+    let own_row = folder.as_ref().is_some_and(|folder| {
+        beside < design::number_width(ui, folder, &font).min(design::XXL * 3.0)
+    });
     let shown = folder.map(|folder| {
-        let room = if own_row { ui.available_width() } else { beside };
+        let room = if own_row {
+            ui.available_width()
+        } else {
+            beside
+        };
         let mut shown = folder.clone();
         let chars: Vec<char> = folder.chars().collect();
         let mut from = 0;
@@ -2741,8 +2745,8 @@ impl Reader {
             campaign.filter(|campaign| edit::editable(item, index) && !self.editing(id, campaign));
         // Lookup has no file line. While the repair message names the fault, the kind line
         // names the open file in place of the fault.
-        let kind = ReaderStatus::of(item, index, campaign.is_some(), self.status_editing)
-            .kind_words(item);
+        let kind =
+            ReaderStatus::of(item, index, campaign.is_some(), self.status_editing).kind_words(item);
         let kind_line = if self.compact
             && campaign.is_some()
             && index.duplicate_world.contains_key(&item.entry.path)
@@ -4581,8 +4585,8 @@ impl Reader {
                     "In",
                     width,
                     |ui| {
-                        open = warning_link(ui, &place_choices_words(&name, choices.len()))
-                            .clicked();
+                        open =
+                            warning_link(ui, &place_choices_words(&name, choices.len())).clicked();
                     },
                     None,
                 );
@@ -4623,9 +4627,7 @@ impl Reader {
         // Status and its Change show in both readers, World's and Lookup's: one act, one write
         // and one Undo wherever the DM reads the entry.
         let value_width = self.relationship_value_width(ui, item, index);
-        if !self.status_editing
-            && ReaderStatus::of(item, index, true, false) == ReaderStatus::Row
-        {
+        if !self.status_editing && ReaderStatus::of(item, index, true, false) == ReaderStatus::Row {
             let value = status(&item.entry);
             let unread = status_unread(&item.entry);
             let changed = Self::relationship_row(
@@ -5361,15 +5363,27 @@ mod tests {
         let id = create_entry(&campaign, "Rook", "npc").unwrap();
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
         let item = &index.items[index.position(id).unwrap()];
-        assert_eq!(status(&item.entry), "alive", "R9-fixture: a new NPC is alive");
+        assert_eq!(
+            status(&item.entry),
+            "alive",
+            "R9-fixture: a new NPC is alive"
+        );
         // A campaign NPC in a reader that may change it: the Status row shows the status.
         let place = ReaderStatus::of(item, &index, true, false);
         assert_eq!(place, ReaderStatus::Row, "R9-row");
-        assert_eq!(place.kind_words(item), "NPC", "R9-row: no status on the kind line");
+        assert_eq!(
+            place.kind_words(item),
+            "NPC",
+            "R9-row: no status on the kind line"
+        );
         // The same entry where no Status row is drawn: the kind line keeps its status.
         let place = ReaderStatus::of(item, &index, false, false);
         assert_eq!(place, ReaderStatus::KindLine, "R9-kind-line");
-        assert_eq!(place.kind_words(item), "NPC · alive", "R9-kind-line: the status stays");
+        assert_eq!(
+            place.kind_words(item),
+            "NPC · alive",
+            "R9-kind-line: the status stays"
+        );
     }
 
     #[test]

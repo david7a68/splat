@@ -1843,13 +1843,16 @@ impl Lookup {
     /// The unsaved NPC that Lookup holds, for the app's list of unsaved work (the rail, the
     /// campaign-switch reason, the close dialog), as `WorldPage::held_npc` is for the World
     /// page's (row 126). It ends when the DM saves it, lets it go, or World takes it.
-    #[expect(dead_code, reason = "package C's rail and close checks read it (row 126)")]
+    #[expect(
+        dead_code,
+        reason = "package C reads it for the rail and the close checks (row 126)"
+    )]
     pub fn held_npc(&self) -> Option<&str> {
         self.generated_name()
     }
 
     /// The rail's link to Lookup's held NPC: Lookup opens on its card, as its own `Show` does.
-    #[expect(dead_code, reason = "package C's rail link calls it (row 126)")]
+    #[expect(dead_code, reason = "the rail link of package C calls it (row 126)")]
     pub fn open_held(&mut self) {
         if self.generated.is_none() {
             return;
