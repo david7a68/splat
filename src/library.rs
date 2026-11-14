@@ -4958,10 +4958,12 @@ impl Library {
             };
             let pressed = std::cell::Cell::new(ResultPress::default());
             let (new_error, error) = (self.new_error.clone(), self.error.clone());
+            // The footer reads a copy: the body below changes the Library.
+            let orders = self.result_orders.clone();
             let footer = form_footer(
                 ui.available_width(),
                 &results,
-                &self.result_orders,
+                &orders,
                 (
                     self.new_form.then_some(new_error.as_deref()).flatten(),
                     error.as_deref(),
@@ -5507,10 +5509,12 @@ impl Library {
                     };
                     let pressed = std::cell::Cell::new(ResultPress::default());
                     let (new_error, error) = (self.new_error.clone(), self.error.clone());
+                    // The footer reads a copy: the form below changes the Library.
+                    let orders = self.result_orders.clone();
                     let footer = form_footer(
                         ui.available_width(),
                         &results,
-                        &self.result_orders,
+                        &orders,
                         (
                             self.new_form.then_some(new_error.as_deref()).flatten(),
                             error.as_deref(),
