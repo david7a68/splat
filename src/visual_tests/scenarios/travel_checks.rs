@@ -530,12 +530,86 @@ pub fn run(d: &mut Driver<'_>) {
         faults.is_empty() && seen && before.is_some() && before == after,
         format!("Timeline: the result is in view on its kept line ({seen}), and moves no line ({before:?}, {after:?}): {faults:?}"),
     );
-    d.state("travel-checks-timeline", Sizes::Default);
+    // Round 29 G142, final review 4a: after the roll, the result and the plan line under it
+    // are in view at 960 px (the detail scrolls least to show them).
+    let line_in_view = d
+        .nodes()
+        .iter()
+        .any(|node| node.name.contains("In the plan") && node.fully_in_view());
+    d.observe(
+        "iter-29-S1-G142-reveal",
+        line_in_view,
+        "Timeline at 960: the rolled result's plan line is in view after the roll",
+    );
+    // Row 123 (iter-29 G142): a rolled result on Timeline offers its fight to the plan of the
+    // journey's session, as on the plan. Bridge Ambush is in that plan already.
+    d.observe(
+        "iter-29-S1-G142",
+        d.has_containing("In the plan") && !d.has(PLAN_AMBUSH),
+        "Timeline: the rolled Bridge Ambush says In the plan, as the plan of its session does",
+    );
+    // Point 4: frames with nothing changed copy no names and read no plan.
+    let counts = || {
+        (
+            crate::timeline::page::PLAN_NAMES_MADE.with(std::cell::Cell::get),
+            crate::timeline::page::JOURNEY_PLAN_READS.with(std::cell::Cell::get),
+        )
+    };
+    let before = counts();
+    for _ in 0..3 {
+        d.settle();
+    }
+    let after = counts();
+    d.observe(
+        "iter-29-S1-G142",
+        before == after,
+        format!("Unchanged frames copy no names and read no plan: {before:?}, {after:?}"),
+    );
+    // Final review 2, 4b: at each size the rolled result's plan line is in view.
+    let seen = [SMALL, DEFAULT, LARGE].map(|size| {
+        d.at_size(size, |d| {
+            d.nodes()
+                .iter()
+                .any(|node| node.name.contains("In the plan") && node.fully_in_view())
+        })
+    });
+    d.observe(
+        "iter-29-S1-G142-reveal",
+        seen.iter().all(|seen| *seen),
+        format!("Timeline: In the plan is in view at 960, 1200 and 1920: {seen:?}"),
+    );
+    // The same, at each capture as it is taken.
+    d.state_prepared("travel-checks-timeline", Sizes::All, |d| {
+        // The capture's resize puts the form back at its top; the scenario scrolls to the line
+        // (the reveal at the roll is proved above).
+        show_plan_line(d);
+        let seen = d
+            .nodes()
+            .iter()
+            .any(|node| node.name.contains("In the plan") && node.fully_in_view());
+        d.observe(
+            "iter-29-S1-G142-reveal",
+            seen,
+            "The capture of state 06 shows In the plan whole",
+        );
+    });
     d.state_prepared("travel-checks-timeline-lookup", Sizes::Small, |d| {
         if !d.has("Close Lookup") {
             d.click(NAV_LOOKUP);
         }
         d.expect("Encounter checks");
+        // Final review 2, 4d: beside Lookup the form is narrower; the scenario scrolls to the
+        // plan line so the capture shows it whole.
+        show_plan_line(d);
+        let seen = d
+            .nodes()
+            .iter()
+            .any(|node| node.name.contains("In the plan") && node.fully_in_view());
+        d.observe(
+            "iter-29-S1-G142-reveal",
+            seen,
+            "Beside Lookup, the capture shows In the plan whole",
+        );
     });
     if d.has("Close Lookup") {
         d.click("Close Lookup");
@@ -560,6 +634,7 @@ pub fn run(d: &mut Driver<'_>) {
             && journey(d, "Journey B").checks_table.as_deref() == Some("road"),
         "Timeline: Undo roll takes back only this journey's roll",
     );
+    timeline_plans_a_result(d);
     field_history_belongs_to_its_event(d);
     // The same on the plan.
     d.click(NAV_SESSIONS);
@@ -645,6 +720,100 @@ pub fn run(d: &mut Driver<'_>) {
 /// Review of PR 313: egui keeps a field's cursor and text Undo under its id, so each event's
 /// **How long** and **Notes** have an id of their own. Edit journey A, open journey B, focus its
 /// field, press Ctrl+Z: B never gets A's words, and A keeps what it had.
+/// Row 123 (iter-29 G142): on Timeline, `Plan “<name>”` under a result writes the plan line into
+/// the note of the journey's session; its result and Undo are in the list's footer, and the
+/// offer becomes `In the plan`. Undo there takes the line back. The journey ends with no check.
+fn timeline_plans_a_result(d: &mut Driver<'_>) {
+    const PLAN_SHRINE: &str = "Plan “Shrine of Cinders”";
+    const PLANNED: &str = "“Shrine of Cinders” is in tonight’s plan.";
+    let dir = folder(d);
+    d.click_starting("Travel ·");
+    d.type_into("Enter a roll for Day 1", "19");
+    d.press(Key::Enter);
+    d.expect("1 travel check rolled.");
+    d.observe(
+        "iter-29-S1-G142",
+        d.has(PLAN_SHRINE) && !note_file(&dir).contains("[[Shrine of Cinders]]"),
+        "Timeline: a result that links a fight not in the plan offers it",
+    );
+    // Final review 2, 4c: no field or row moves when the result comes.
+    let places = |d: &Driver<'_>| {
+        (
+            d.place_of("Title"),
+            d.place_of(&d.name_starting("Travel ·")),
+            d.place_of("Clear the check for Day 1"),
+        )
+    };
+    let unmoved = places(d);
+    d.click(PLAN_SHRINE);
+    let moved = places(d);
+    d.observe(
+        "iter-29-S1-G142-planned",
+        unmoved.0.is_some() && unmoved.1.is_some() && unmoved == moved,
+        format!("The result moves no field or row: {unmoved:?}, {moved:?}"),
+    );
+    let whole = [SMALL, DEFAULT, LARGE].map(|size| {
+        d.at_size(size, |d| {
+            let nodes = d.nodes();
+            let whole = |name: &str| {
+                nodes
+                    .iter()
+                    .any(|node| node.name == name && node.fully_in_view())
+            };
+            whole(PLANNED) && whole("Undo add plan line")
+        })
+    });
+    d.observe(
+        "iter-29-S1-G142-planned",
+        whole.iter().all(|whole| *whole),
+        format!("The footer's result and its Undo are whole at each size: {whole:?}"),
+    );
+    let note = note_file(&dir);
+    d.observe(
+        "iter-29-S1-G142",
+        note.contains("- [[Shrine of Cinders]]")
+            && d.has(PLANNED)
+            && d.has("Undo add plan line")
+            && d.has_containing("In the plan")
+            && !d.has(PLAN_SHRINE),
+        format!("Timeline: the press writes the plan line, and the footer says so: {note}"),
+    );
+    // Final review point 4: with the result in the footer, quiet frames check no note words,
+    // copy no names and read no plan.
+    let counts = || {
+        (
+            crate::timeline::page::PLAN_LINE_CHECKS.with(std::cell::Cell::get),
+            crate::timeline::page::PLAN_NAMES_MADE.with(std::cell::Cell::get),
+            crate::timeline::page::JOURNEY_PLAN_READS.with(std::cell::Cell::get),
+        )
+    };
+    let before = counts();
+    for _ in 0..3 {
+        d.settle();
+    }
+    let after = counts();
+    d.observe(
+        "iter-29-S1-G142",
+        before == after && d.has(PLANNED),
+        format!("Quiet frames after a Plan check nothing again: {before:?}, {after:?}"),
+    );
+    d.click("Undo add plan line");
+    d.observe(
+        "iter-29-S1-G142",
+        !note_file(&dir).contains("[[Shrine of Cinders]]")
+            && d.has(PLAN_SHRINE)
+            && !d.has(PLANNED)
+            && journey(d, "Travel").checks.len() == 1,
+        "Timeline: Undo add plan line takes back only the line; the result stays",
+    );
+    d.click("Clear the check for Day 1");
+    d.observe(
+        "iter-29-S1-G142",
+        journey(d, "Travel").checks.is_empty(),
+        "The journey has no check again",
+    );
+}
+
 fn field_history_belongs_to_its_event(d: &mut Driver<'_>) {
     const A_LENGTH: &str = "5 days";
     const A_NOTES: &str = "Wolves on the road.";
@@ -868,4 +1037,215 @@ fn begin_shrine(d: &mut Driver<'_>) {
     }
     d.click("Begin combat");
     d.expect(NEXT_TURN);
+}
+
+/// Round 29 G142, final review 2: the plan act on Timeline, in a scenario of its own so that no
+/// state of `travel-checks` is renumbered. A journey's rolled result offers its fight; the press
+/// puts the result and `Undo add plan line` in the list's footer (state `plan-on-timeline`, all
+/// sizes). Then Timeline's own footer press of an Undo that fails, for a journey that is not
+/// open: the line stays, the footer says why (state `plan-undo-failed`), and the fault ends with
+/// its journey. The suite runs in a namespace where a folder's permission bits do not stop a
+/// save, so the Undo fails the way a changed note makes it fail: the note changes outside Splat
+/// just before the press (`hold_disk_check` keeps the next disk check from ending the result
+/// first).
+pub fn plan_act(d: &mut Driver<'_>) {
+    const FORD: &str = "Ford crossing";
+    const PLAN_SHRINE: &str = "Plan “Shrine of Cinders”";
+    const PLANNED: &str = "“Shrine of Cinders” is in tonight’s plan.";
+    const OUTSIDE: &str = "Written in Obsidian.";
+    let campaign = d.root.join("campaigns/emberfall");
+    fs::write(campaign.join("Road.md"), ROAD).unwrap();
+    d.app_mut().lookup.refresh();
+    d.settle();
+    d.click(NAV_SESSIONS);
+    d.click("New session");
+    d.type_into("Session title", "The Crossing");
+    d.click("Create session");
+    d.expect("Session 1: The Crossing");
+    let dir = folder(d);
+    d.click(NAV_TIMELINE);
+    d.click_add_event("Add Travel");
+    d.type_text(FORD);
+    d.click(&format!("More actions for {FORD}"));
+    d.click(ROLL_FOR_ENCOUNTERS);
+    d.expect("Encounter checks added to this journey.");
+    if d.has("Choose a table") {
+        d.click("Choose a table");
+        d.click("On the road");
+    }
+    d.type_into("Enter a roll for This journey", "19");
+    d.press(Key::Enter);
+    d.expect(PLAN_SHRINE);
+    d.click(PLAN_SHRINE);
+    d.expect(PLANNED);
+    let whole = [SMALL, DEFAULT, LARGE].map(|size| {
+        d.at_size(size, |d| {
+            let nodes = d.nodes();
+            let whole = |name: &str| {
+                nodes
+                    .iter()
+                    .any(|node| node.name == name && node.fully_in_view())
+            };
+            whole(PLANNED)
+                && whole("Undo add plan line")
+                && nodes
+                    .iter()
+                    .any(|node| node.name.contains("In the plan") && node.fully_in_view())
+        })
+    });
+    d.observe(
+        "iter-29-S1-G142-planned",
+        whole.iter().all(|whole| *whole) && note_file(&dir).contains("- [[Shrine of Cinders]]"),
+        format!("The footer's result, its Undo and In the plan are whole at each size: {whole:?}"),
+    );
+    d.state_prepared("plan-on-timeline", Sizes::All, |d| {
+        // The capture's resize puts the form back at its top; the scenario scrolls to the line.
+        show_plan_line(d);
+        let nodes = d.nodes();
+        let whole = |name: &str| {
+            nodes
+                .iter()
+                .any(|node| node.name == name && node.fully_in_view())
+        };
+        let shown = whole(PLANNED)
+            && whole("Undo add plan line")
+            && nodes
+                .iter()
+                .any(|node| node.name.contains("In the plan") && node.fully_in_view());
+        d.observe(
+            "iter-29-S1-G142-planned",
+            shown,
+            "The capture after the press shows the result, its Undo and In the plan whole",
+        );
+    });
+    let note_path = fs::read_dir(&dir)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|file| file.path())
+        .find(|path| {
+            fs::read_to_string(path).is_ok_and(|text| text.contains("## Plan for tonight"))
+        })
+        .expect("the session note");
+    let ford = journey(d, FORD).id;
+    // The journey closes: another event opens.
+    d.click_add_event("Add Day");
+    d.app_mut().sessions.hold_disk_check();
+    fs::write(&note_path, format!("{}{OUTSIDE}\n", note_file(&dir))).unwrap();
+    d.click("Undo add plan line");
+    let refused = d
+        .nodes()
+        .iter()
+        .any(|node| node.name.starts_with("Plan line not removed.") && node.fully_in_view());
+    d.observe(
+        "iter-29-S1-G142-undo-fault",
+        refused && note_file(&dir).contains("[[Shrine of Cinders]]"),
+        format!(
+            "Timeline's footer says the line was not removed ({refused}), and the line stays: {:?}",
+            d.nodes()
+                .iter()
+                .filter(|node| node.name.contains("not removed"))
+                .map(|node| (node.name.clone(), node.fully_in_view()))
+                .collect::<Vec<_>>()
+        ),
+    );
+    d.state("plan-undo-failed", Sizes::Default);
+    // Final review 3, point 1: a block taller than the view. A check near the view's bottom is
+    // rolled: its result's plan line comes whole into view (the reveal is the check's row, not
+    // the block).
+    const LONG: &str = "Long road";
+    d.set_base(SMALL);
+    d.click_add_event("Add Travel");
+    d.type_text(LONG);
+    d.click(&format!("More actions for {LONG}"));
+    d.click(ROLL_FOR_ENCOUNTERS);
+    d.expect("Encounter checks added to this journey.");
+    if d.has("Choose a table") {
+        d.click("Choose a table");
+        d.click("On the road");
+    }
+    d.replace_text_in("How long", "20 days");
+    d.press(Key::Enter);
+    d.type_into("Enter a roll for Day 1", "5");
+    d.press(Key::Enter);
+    // A point low in the detail column's scroll body, wherever a roll left the block.
+    let column = egui::pos2(
+        d.place_of("Title").expect("the form").center().x,
+        SMALL.1 - 80.0,
+    );
+    d.scroll_until(column, "Enter a roll for Day 15", 40);
+    // Day 15's line at the view's lower edge, so its result and offer reach below it, and
+    // the block reaches above and below the view.
+    let field = d
+        .place_of("Enter a roll for Day 15")
+        .expect("Day 15's field");
+    d.scroll_points_at(column, field.bottom() - (SMALL.1 - 10.0));
+    d.type_into("Enter a roll for Day 15", "19");
+    d.press(Key::Enter);
+    let offer = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name.contains("In the plan") || node.name == PLAN_SHRINE);
+    d.observe(
+        "iter-29-S1-G142-reveal-long",
+        offer.as_ref().is_some_and(|node| node.fully_in_view()),
+        format!(
+            "A long block: the rolled check's plan line is in view: {:?}",
+            offer
+                .as_ref()
+                .map(|node| (node.name.clone(), node.rect, node.fully_in_view()))
+        ),
+    );
+    // Final review 3, point 2: a reveal left pending by journey A (Ford crossing) when the DM
+    // leaves it before its next draw is A's alone: journey B (Long road) opens where it opens.
+    // B has a result on Day 20, below its opening view, at the offset A's reveal names.
+    d.scroll_until(column, "Enter a roll for Day 20", 40);
+    d.type_into("Enter a roll for Day 20", "3");
+    d.press(Key::Enter);
+    let long = format!("{LONG} ·");
+    d.click(NAV_LOOKUP);
+    d.click("All events");
+    d.click_starting(&long);
+    // A place inside the detail's scroll body (Title is above it).
+    let opening = d.place_of("Encounter checks");
+    d.click("All events");
+    d.app_mut()
+        .timeline_page
+        .simulate_pending_reveal(&ford, 19 * 24);
+    d.click_starting(&long);
+    let after = d.place_of("Encounter checks");
+    d.observe(
+        "iter-29-S1-G142-reveal-owner",
+        opening.is_some() && opening == after,
+        format!("Journey B keeps its opening place: {opening:?}, {after:?}"),
+    );
+    d.click("Close Lookup");
+    d.app_mut().timeline.remove(&ford);
+    d.settle();
+    d.observe(
+        "iter-29-S1-G142-undo-fault",
+        !d.has_containing("Plan line not removed."),
+        "The fault ends with its journey",
+    );
+}
+
+/// Before a capture: the open journey's `In the plan` line whole in view. A capture's resize puts
+/// the form back at its top, and beside Lookup the form is narrower; the scenario scrolls the
+/// form, a few points at a time, until the line is whole. The reveal at the roll is proved by
+/// its own checks.
+fn show_plan_line(d: &mut Driver<'_>) {
+    let whole = |d: &Driver<'_>| {
+        d.nodes()
+            .iter()
+            .any(|node| node.name.contains("In the plan") && node.fully_in_view())
+    };
+    let Some(block) = d.place_of("Encounter checks") else {
+        return;
+    };
+    d.scroll_until(block.center(), "In the plan", 6);
+    for _ in 0..8 {
+        if whole(d) {
+            return;
+        }
+        d.scroll_points_at(block.center(), 24.0);
+    }
 }
