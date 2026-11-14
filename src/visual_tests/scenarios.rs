@@ -23832,21 +23832,23 @@ pub mod remove_package_in_use {
         d.click("Technical details");
         d.click("Remove from this campaign");
         d.wait_for_text("now have creatures Splat cannot find.");
-        d.expect("Bridge Ambush");
-        d.expect("Shrine of Cinders");
+        d.expect("Open Bridge Ambush");
+        d.expect("Open Shrine of Cinders");
         d.state_prepared("missing-package-removed-with-undo", Sizes::All, |d| {
             check_link_spaces(d);
-            check_undo_icon(d, "Undo package removal", "iter-6-C-FD3-Undo");
+            check_undo_icon(d, "Undo remove Ashen Marches", "iter-6-C-FD3-Undo");
+            // Wave 2 d (C): each encounter is a choice of the warning (`Open <name>`), under its
+            // words, in the typed footer.
             let first = d
-                .place_of("Bridge Ambush")
-                .expect("First affected encounter link");
+                .place_of("Open Bridge Ambush")
+                .expect("First affected encounter's choice");
             // Round 27 FE5: the result says what was done, in the success tone, before the
             // warning; Undo sits on the result's line.
             let done = d.painted_rect_in(
                 "Ashen Marches removed from this campaign.",
                 egui::Rect::EVERYTHING,
             );
-            let undo = d.place_of("Undo package removal");
+            let undo = d.place_of("Undo remove Ashen Marches");
             d.observe(
                 "iter-27-C-FE5",
                 done.zip(undo).is_some_and(|(done, undo)| {
@@ -23861,20 +23863,9 @@ pub mod remove_package_in_use {
                 d.has_message_bar(first, crate::design::colors().result.warning),
                 "The linked missing-creatures warning keeps the shared warning bar and icon",
             );
-            // Round 23 FF4: the warning icon centres on the first line, whose words are the
-            // links'. A link's press area is centred on its words.
-            let band = egui::Rect::from_min_max(
-                egui::pos2(first.left() - crate::design::XXL, first.top() - crate::design::S),
-                egui::pos2(first.left(), first.bottom() + crate::design::S),
-            );
-            let icon = d.painted_word_rect(crate::design::icons::WARN, band);
-            d.observe(
-                "iter-23-L-FF4",
-                icon.is_some_and(|icon| (icon.center().y - first.center().y).abs() <= 1.0),
-                format!(
-                    "The warning icon {icon:?} centres on the first line of the message, beside {first:?}"
-                ),
-            );
+            // Round 23 FF4 (the icon centred on a first line of links) is gone with the links:
+            // the warning's first line is words now, and the gate's N2 invariant holds every
+            // message icon on its first line's centre.
         });
         // Round 25 review: the removal's words are prepared once, at the removal. Unchanged
         // frames at two sizes prepare nothing.
@@ -23888,7 +23879,7 @@ pub mod remove_package_in_use {
             prepared == 1 && unchanged == prepared,
             format!("Removal words prepared {prepared} times at the removal, {unchanged} after unchanged frames"),
         );
-        d.click("Undo package removal");
+        d.click("Undo remove Ashen Marches");
         d.wait_for_text("Find the folder…");
         d.expect_same("Undo restores the missing-package choice shown before removal.");
         d.assert_state_matches(

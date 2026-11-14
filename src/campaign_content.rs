@@ -1255,7 +1255,7 @@ impl CampaignContent {
     /// missing Campaign.md with the way to write it. True when the DM asks to write it again.
     #[allow(
         clippy::disallowed_methods,
-        reason = "with no package list, the page's errors are its content: body faults (round 27 FB3, AB1)"
+        reason = "with no package list, the page’s errors are its content: body faults (round 27 FB3, AB1)"
     )]
     fn draw_reason(&self, ui: &mut egui::Ui, campaigns: &Campaigns, active: &Campaign) -> bool {
         use design::outcome::{BodyFault, Repair};
@@ -1311,7 +1311,7 @@ impl CampaignContent {
     /// manifest write's Undo is locked (`locked`): the write happened, so its words stay.
     #[allow(
         clippy::disallowed_methods,
-        reason = "a manifest write's words are the content workspace’s own (`ManifestWrite::message`)"
+        reason = "a manifest write’s words are the content workspace’s own (`ManifestWrite::message`)"
     )]
     fn outcome_of(
         &self,
