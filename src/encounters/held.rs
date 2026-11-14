@@ -6,6 +6,7 @@
 //! Both mark the change, and the page ends the results of a draft that no
 //! holder keeps (`Encounters::end_unreachable_results`) only after such a change. There is no
 //! `DerefMut`, so `Option::take` or an assignment of an `Option` does not compile on a holder.
+#![warn(deprecated)]
 
 /// A draft holder that marks each change of the draft it holds.
 pub(super) struct Held<T> {
