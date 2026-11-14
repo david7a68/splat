@@ -40,14 +40,125 @@ pub fn fights_that_keep_hp(
         .collect()
 }
 
+/// The Timeline file of one campaign: the owner of the Timeline's kept results that both pages
+/// show (the Timeline page and a session's plan). The book is not replaced by a reload, and keeps
+/// its stores over a campaign switch (`Book::open`), so a result outlives both pages and shows
+/// again when its campaign does.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TimelineFile(pub PathBuf);
+
+impl crate::design::results::Owner for TimelineFile {
+    type Scope = Path;
+    fn scope(&self) -> &Path {
+        &self.0
+    }
+}
+
+/// One event of a campaign's Timeline file.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EventIn {
+    pub file: PathBuf,
+    pub id: String,
+}
+
+impl crate::design::results::Owner for EventIn {
+    type Scope = Path;
+    fn scope(&self) -> &Path {
+        &self.file
+    }
+}
+
+/// `Reloaded. Your version, with <n> events, is gone unless you undo.`: the events a reload
+/// replaced, for `Undo reload`.
+pub struct Reloaded {
+    file: TimelineFile,
+    events: Vec<Event>,
+}
+
+impl Reloaded {
+    /// How many events the reload replaced.
+    pub fn count(&self) -> usize {
+        self.events.len()
+    }
+}
+
+impl crate::design::results::Kept for Reloaded {
+    type Owner = TimelineFile;
+    const ENDS: crate::design::results::Ends = crate::design::results::Ends {
+        // The next edit ends it (`touch`).
+        owner_changed: crate::design::results::OwnerChanged::Ends,
+        // Another reload makes a new one (`record`).
+        disk_changed: crate::design::results::DiskChanged::Stays,
+        press: crate::design::results::Press::Undo,
+    };
+    fn owner(&self) -> TimelineFile {
+        self.file.clone()
+    }
+}
+
+/// One change of a long rest's full-HP ruling, until the next edit or its Undo.
+pub struct Ruling {
+    file: TimelineFile,
+    before: Event,
+    after: Event,
+}
+
+impl Ruling {
+    /// The rest it changed, as it is now.
+    pub fn rest(&self) -> &Event {
+        &self.after
+    }
+}
+
+impl crate::design::results::Kept for Ruling {
+    type Owner = TimelineFile;
+    const ENDS: crate::design::results::Ends = crate::design::results::Ends {
+        // The next edit or a reload of its file ends it (`touch`, `reload`); another
+        // campaign's ruling stays.
+        owner_changed: crate::design::results::OwnerChanged::Ends,
+        disk_changed: crate::design::results::DiskChanged::Stays,
+        press: crate::design::results::Press::Undo,
+    };
+    fn owner(&self) -> TimelineFile {
+        self.file.clone()
+    }
+}
+
+/// An event's rename made its old links out of date: the offer to update them, one per event.
+/// The words come from the session page's offer (`Sessions::event_link_offer`); the store keeps
+/// the offer's order from the rename.
+pub struct Renamed {
+    owner: EventIn,
+}
+
+impl crate::design::results::Kept for Renamed {
+    type Owner = EventIn;
+    const ENDS: crate::design::results::Ends = crate::design::results::Ends {
+        // A newer rename of the event replaces it (`record`).
+        owner_changed: crate::design::results::OwnerChanged::Ends,
+        disk_changed: crate::design::results::DiskChanged::Stays,
+        // Update links uses it.
+        press: crate::design::results::Press::Use,
+    };
+    fn owner(&self) -> EventIn {
+        self.owner.clone()
+    }
+}
+
+/// The Timeline's kept results, each kind in its own store, owned by the book's file.
+#[derive(Default)]
+pub struct BookResults {
+    pub reloaded: crate::design::Results<TimelineFile, Reloaded>,
+    pub removal: crate::design::Results<TimelineFile, Removal>,
+    pub ruling: crate::design::Results<TimelineFile, Ruling>,
+    pub renamed: crate::design::Results<EventIn, Renamed>,
+}
+
 /// One removed event, until its session changes or Undo puts it back.
-#[derive(Clone)]
-struct Removal {
+pub struct Removal {
+    file: TimelineFile,
     /// This removal's own identity: a new removal, even of the same event, has another.
     action: u64,
-    /// When this removal was done: its result's place in every footer that shows it (Timeline
-    /// and the plan).
-    order: crate::design::ResultOrder,
     index: usize,
     /// The event that was before it, which it goes back after.
     after: Option<String>,
@@ -56,6 +167,33 @@ struct Removal {
     label: String,
     /// Its session's events once it was gone. A difference is an edit of that session.
     owned: Vec<Event>,
+}
+
+impl Removal {
+    /// Its name where it was.
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+
+    /// The event Undo puts back.
+    pub fn event(&self) -> &Event {
+        &self.event
+    }
+}
+
+impl crate::design::results::Kept for Removal {
+    type Owner = TimelineFile;
+    const ENDS: crate::design::results::Ends = crate::design::results::Ends {
+        // An edit of its event's session ends it (`end_removal_if_its_session_changed`); a
+        // newer removal, in any session, replaces it (`record`).
+        owner_changed: crate::design::results::OwnerChanged::Ends,
+        // Events read from the file are checked as an edit is (`accept_events`).
+        disk_changed: crate::design::results::DiskChanged::Stays,
+        press: crate::design::results::Press::Undo,
+    };
+    fn owner(&self) -> TimelineFile {
+        self.file.clone()
+    }
 }
 
 /// Each removal action gets a number unique in this run of the app, across reloaded books.
@@ -824,10 +962,10 @@ pub(crate) fn next_result_order() -> crate::design::ResultOrder {
 /// A campaign's events, kept in step with its file. Edits save shortly after they stop.
 #[derive(Default)]
 pub struct Book {
-    /// When the reload result was made (`next_result_order`).
-    pub dropped_order: crate::design::ResultOrder,
-    /// When the rest ruling's result was made (`next_result_order`).
-    pub rest_undo_order: crate::design::ResultOrder,
+    /// The Timeline's kept results: a reload, a removal, a ruling, a rename's link offer.
+    pub results: BookResults,
+    /// While a run's update applies, a removal keeps its place (`apply_run_keeping_removal`).
+    keep_removal: bool,
     path: Option<PathBuf>,
     pub events: Vec<Event>,
     pub flags: Vec<splat::content::layout::Flag>,
@@ -839,8 +977,6 @@ pub struct Book {
     pub duplicate: Option<String>,
     saved_events: Vec<Event>,
     pub renamed_links: BTreeMap<String, Vec<String>>,
-    /// When each event's rename made its link offer: the offer's footer order, one per event.
-    pub renamed_orders: BTreeMap<String, crate::design::ResultOrder>,
     link_titles: BTreeMap<String, (String, String)>,
     reordered: Vec<String>,
     dirty: bool,
@@ -857,12 +993,6 @@ pub struct Book {
     /// The file was here, and it is gone. Its events stay in memory until the DM chooses.
     pub gone: bool,
     pub error: Option<String>,
-    /// What was removed, where it was, and the name it had there.
-    removed: Option<Removal>,
-    /// What a reload replaced, until the next edit.
-    dropped: Option<Vec<Event>>,
-    /// One ruling change, until the next edit.
-    rest_undo: Option<(Event, Event)>,
     /// Each session's note name, for links in the file's body.
     pub session_links: BTreeMap<Uuid, String>,
     /// The length being typed in a journey's **How long**, on whichever page. One owner, so a
@@ -909,9 +1039,12 @@ impl Book {
             });
             return;
         }
+        // The stores stay: each result is scoped by its file, so another campaign shows none,
+        // and coming back shows them again.
         *self = Self {
             path,
             session_links: std::mem::take(&mut self.session_links),
+            results: std::mem::take(&mut self.results),
             ..Default::default()
         };
         self.reload();
@@ -933,7 +1066,8 @@ impl Book {
     pub fn reload(&mut self) {
         self.changes += 1;
         self.revision.advance();
-        self.rest_undo = None;
+        let file = self.file();
+        self.results.ruling.owner_changed(&file);
         self.dirty = false;
         self.reordered.clear();
         self.conflict = false;
@@ -1000,16 +1134,13 @@ impl Book {
     }
 
     /// Note an edit. It saves after a short pause, or at the next `save`.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     pub fn touch(&mut self) {
         self.changes += 1;
         self.revision.advance();
         self.run_write = false;
         self.merged_outside = false;
-        self.rest_undo = None;
+        let file = self.file();
+        self.results.ruling.owner_changed(&file);
         self.end_removal_if_its_session_changed();
         let days = day_numbers(&self.events);
         for (at, event) in self.events.iter().enumerate() {
@@ -1023,13 +1154,21 @@ impl Book {
                 if !labels.contains(&old_label) {
                     labels.push(old_label);
                 }
-                self.renamed_orders
-                    .insert(event.id.clone(), crate::design::ResultOrder::issue());
+                let owner = EventIn {
+                    file: file.0.clone(),
+                    id: event.id.clone(),
+                };
+                self.results.renamed.record(Renamed { owner });
             }
         }
         self.dirty = true;
         self.last_edit = Some(Instant::now());
-        self.dropped = None;
+        self.results.reloaded.owner_changed(&file);
+    }
+
+    /// The book's file: the owner of its kept results.
+    pub fn file(&self) -> TimelineFile {
+        TimelineFile(self.path.clone().unwrap_or_default())
     }
 
     /// Events from the file, or merged with it, replace the ones in memory. A change there to
@@ -1044,12 +1183,15 @@ impl Book {
     /// A removal belongs to its event's session. An edit of that session's events ends its
     /// result and Undo; another session's edit leaves them.
     fn end_removal_if_its_session_changed(&mut self) {
-        if self
-            .removed
-            .as_ref()
-            .is_some_and(|removal| self.owned_events(removal.event.session) != removal.owned)
-        {
-            self.removed = None;
+        if self.keep_removal {
+            return;
+        }
+        let file = self.file();
+        if self.results.removal.get(&file).is_some_and(|shown| {
+            let removal = shown.value();
+            self.owned_events(removal.event.session) != removal.owned
+        }) {
+            self.results.removal.owner_changed(&file);
         }
     }
 
@@ -1313,17 +1455,23 @@ impl Book {
     pub fn reload_keeping_undo(&mut self) {
         let events = self.events.clone();
         self.reload();
-        self.dropped = Some(events);
-        self.dropped_order = next_result_order();
+        self.results.reloaded.record(Reloaded {
+            file: self.file(),
+            events,
+        });
     }
 
     pub fn dropped(&self) -> Option<usize> {
-        self.dropped.as_ref().map(Vec::len)
+        self.results
+            .reloaded
+            .get(&self.file())
+            .map(|shown| shown.value().count())
     }
 
-    pub fn undo_reload(&mut self) {
-        if let Some(events) = self.dropped.take() {
-            self.events = events;
+    /// `Undo reload`, pressed on the result its ticket names.
+    pub fn undo_reload(&mut self, ticket: crate::design::results::Ticket) {
+        if let Ok((reloaded, ())) = self.results.reloaded.undo_by(ticket, |_| Ok::<(), ()>(())) {
+            self.events = reloaded.events;
             self.touch();
         }
     }
@@ -1524,24 +1672,35 @@ impl Book {
         event.restores = restores;
         let after = event.clone();
         self.touch();
-        self.rest_undo = Some((before, after));
-        self.rest_undo_order = next_result_order();
+        self.results.ruling.record(Ruling {
+            file: self.file(),
+            before,
+            after,
+        });
     }
 
     pub fn rest_undo_id(&self) -> Option<&str> {
-        self.rest_undo
-            .as_ref()
-            .filter(|(_, after)| self.events.contains(after))
-            .map(|(_, after)| after.id.as_str())
+        self.results
+            .ruling
+            .get(&self.file())
+            .map(|shown| shown.value())
+            .filter(|ruling| self.events.contains(&ruling.after))
+            .map(|ruling| ruling.after.id.as_str())
     }
 
-    pub fn undo_restores(&mut self) {
-        if self.rest_undo_id().is_none() {
-            return;
-        }
-        if let Some((before, _)) = self.rest_undo.take() {
-            let event = self.event_mut(&before.id).expect("the unchanged rest");
-            *event = before;
+    /// `Undo ruling`, pressed on the result its ticket names: the rest as it was, while it is
+    /// still as the ruling left it.
+    pub fn undo_restores(&mut self, ticket: crate::design::results::Ticket) {
+        let events = &self.events;
+        if let Ok((ruling, ())) = self.results.ruling.undo_by(ticket, |ruling| {
+            if events.contains(&ruling.after) {
+                Ok(())
+            } else {
+                Err(())
+            }
+        }) {
+            let event = self.event_mut(&ruling.before.id).expect("the unchanged rest");
+            *event = ruling.before;
             self.touch();
         }
     }
@@ -1563,10 +1722,6 @@ impl Book {
     }
 
     /// One press and one step of undo, not a dialog.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     pub fn remove(&mut self, id: &str) {
         if let Some(index) = self.events.iter().position(|event| event.id == id) {
             let label = self.events[index].label(day_numbers(&self.events)[index]);
@@ -1576,50 +1731,59 @@ impl Book {
             let event = self.events.remove(index);
             self.touch();
             // One Undo remove at a time: a newer removal, in any session, replaces it.
-            self.removed = Some(Removal {
+            let removal = Removal {
+                file: self.file(),
                 action: REMOVAL_ACTIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
-                order: crate::design::ResultOrder::issue(),
                 index,
                 after,
                 owned: self.owned_events(event.session),
                 event,
                 label,
-            });
+            };
+            self.results.removal.record(removal);
         }
     }
 
+    fn removal(&self) -> Option<&Removal> {
+        self.results
+            .removal
+            .get(&self.file())
+            .map(|shown| shown.value())
+    }
+
     pub fn removed_row(&self) -> Option<(usize, String)> {
-        self.removed
-            .as_ref()
+        self.removal()
             .map(|removal| (removal.index, removal.label.clone()))
     }
 
     /// The identity of the removal that Undo would reverse. A result that follows this action
     /// keeps it, so a later removal of the same event is told apart.
     pub fn removal_action(&self) -> Option<u64> {
-        self.removed.as_ref().map(|removal| removal.action)
+        self.removal().map(|removal| removal.action)
     }
 
     /// The event that Undo would put back.
     pub fn removed_event(&self) -> Option<&Event> {
-        self.removed.as_ref().map(|removal| &removal.event)
-    }
-
-    /// When the removal that Undo would reverse was done: its result's footer order.
-    pub fn removal_order(&self) -> Option<crate::design::ResultOrder> {
-        self.removed.as_ref().map(|removal| removal.order)
+        self.removal().map(|removal| &removal.event)
     }
 
     pub fn removed(&self) -> Option<&str> {
-        self.removed.as_ref().map(|removal| removal.label.as_str())
+        self.removal().map(|removal| removal.label.as_str())
     }
 
     /// The event goes back after the event that was before it, so edits in other sessions since
     /// do not move it. An event that came back another way is not added twice.
-    pub fn undo_remove(&mut self) -> Option<String> {
-        let removal = self.removed.take()?;
+    pub fn undo_remove(&mut self, ticket: crate::design::results::Ticket) -> Option<String> {
+        let events = &self.events;
+        // An event that came back another way is not added twice: the entry ends.
+        let (removal, back) = match self.results.removal.undo_by(ticket, |removal| {
+            Ok::<bool, ()>(events.iter().any(|event| event.id == removal.event.id))
+        }) {
+            Ok(done) => done,
+            Err(_) => return None,
+        };
         let id = removal.event.id.clone();
-        if self.events.iter().any(|event| event.id == id) {
+        if back {
             return None;
         }
         let at = match &removal.after {
@@ -1680,38 +1844,58 @@ impl Book {
             return;
         }
         let before = on_timeline(&self.events);
-        let removed = self.removed.clone();
+        self.keep_removal = true;
         self.apply_run(fact, session, played, road);
+        self.keep_removal = false;
         let entered = (!before)
             .then(|| self.events.iter().find(|event| event.run == Some(fact.id)))
             .flatten()
             .cloned();
-        self.removed = removed
-            .filter(|removal| {
-                // The removed event's own run back on the timeline also ends it: its Undo
-                // would give that run a second event.
-                !entered.as_ref().is_some_and(|event| {
-                    owned_by(event, removal.event.session)
-                        || (event.run.is_some() && event.run == removal.event.run)
-                })
-            })
-            .map(|removal| Removal {
-                // The run's own changes are the session's new state, not an edit after it.
-                owned: self.owned_events(removal.event.session),
-                ..removal
-            });
+        let file = self.file();
+        let Some((session, run)) = self
+            .removal()
+            .map(|removal| (removal.event.session, removal.event.run))
+        else {
+            return;
+        };
+        // The removed event's own run back on the timeline also ends it: its Undo would give
+        // that run a second event.
+        if entered
+            .as_ref()
+            .is_some_and(|event| owned_by(event, session) || (event.run.is_some() && event.run == run))
+        {
+            self.results.removal.owner_changed(&file);
+            return;
+        }
+        // The run's own changes are the session's new state, not an edit after it.
+        self.removal_follows_run(&file, session);
+    }
+
+    /// The kept removal takes its session's events after a run's update as the state an edit
+    /// is told from. It holds no ticket here (the run's update is no press): by owner, counted.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: a run's update revises the one kept removal by its owner (design::results::STAGED_ALLOWS)"
+    )]
+    fn removal_follows_run(&mut self, file: &TimelineFile, session: Option<Uuid>) {
+        let owned = self.owned_events(session);
+        let _ = self
+            .results
+            .removal
+            .revise(file, |removal| removal.owned = owned);
     }
 
     /// The removal's result and Undo end: its session's note was edited after it.
     pub fn forget_removed(&mut self) {
-        self.removed = None;
+        let file = self.file();
+        self.results.removal.owner_changed(&file);
     }
 
     /// The order for what is played or ruled on next.
     pub fn next_order(&self) -> u64 {
         self.events
             .iter()
-            .chain(self.removed.iter().map(|removal| &removal.event))
+            .chain(self.removal().map(|removal| &removal.event))
             .map(|event| event.played_order)
             .max()
             .unwrap_or(0)
