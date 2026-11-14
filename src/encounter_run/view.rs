@@ -14199,15 +14199,16 @@ mod tests {
                     let owner = egui::Id::new("close_run_test");
                     egui::CentralPanel::default().show(ctx, |ui| {
                         let mut page = shown.borrow_mut();
+                        // Amount stays drawn, so only the newer focus choice (not a gone
+                        // control) can keep the return from taking it back.
+                        let amount = Action::secondary("Amount").show(ui);
+                        if std::mem::take(&mut page.focus_amount) {
+                            amount.request_focus();
+                        }
                         if page.settings {
                             let cookie = Action::secondary("Paste session cookie").show(ui);
                             if std::mem::take(&mut page.focus_cookie) {
                                 cookie.request_focus();
-                            }
-                        } else {
-                            let amount = Action::secondary("Amount").show(ui);
-                            if std::mem::take(&mut page.focus_amount) {
-                                amount.request_focus();
                             }
                         }
                     });
