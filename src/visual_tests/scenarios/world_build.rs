@@ -5442,9 +5442,13 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     // The form's own button, not the run header's.
     d.click_below("Leave empty to roll it.", "Add to fight");
     d.settle();
-    let joined = roster_places(d)
-        .iter()
-        .filter(|(name, _)| name == PACKAGE_NPC)
+    // The run is in setup: its rows read `<name> · <side> · HP …`.
+    let joined = d
+        .nodes()
+        .into_iter()
+        .filter(|node| {
+            node.role == Role::Button && node.name.starts_with(&format!("{PACKAGE_NPC} · "))
+        })
         .count();
     d.observe(
         "iter-28-D-FJ7-package",
