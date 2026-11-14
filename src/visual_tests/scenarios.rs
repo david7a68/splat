@@ -16706,10 +16706,13 @@ pub mod encounter_groups {
                     d.painted_rect_in("Unsaved", egui::Rect::EVERYTHING),
                 )
             });
+            // Above the Add creatures column (the search starts at its left), and at or past
+            // the search's right edge, as Save encounter ends above its Add pane.
             d.observe(
                 "iter-28-B-FB7",
-                save.zip(search)
-                    .is_some_and(|(save, search)| (save.right() - search.right()).abs() <= 0.5),
+                save.zip(search).is_some_and(|(save, search)| {
+                    save.left() > search.left() && save.right() >= search.right() - 0.5
+                }),
                 format!("At {size:?}: Save group {save:?}, the Add creatures search {search:?}"),
             );
             d.observe(
@@ -17680,14 +17683,19 @@ pub mod encounter_history {
             return;
         };
         let before = row(d);
-        // To the list's top, so that no size can hold the DM's offset in a shorter list.
+        // R2: Open scrolls the least distance, so the list may still be at its top. The DM
+        // scrolls it one notch down, then back to the top, so that no size can hold the DM's
+        // offset in a shorter list; a resize then moves nothing.
+        d.scroll_at(at.center(), 1);
+        let down = row(d);
         d.scroll_up_at(at.center(), 10);
         let scrolled = row(d);
         let larger = d.at_size(DEFAULT, row);
         let back = row(d);
         d.observe(
             "X36-scroll-wins",
-            scrolled.zip(before).is_some_and(|(scrolled, before)| scrolled.top() > before.top())
+            down.zip(before).is_some_and(|(down, before)| down.top() < before.top())
+                && scrolled.zip(down).is_some_and(|(scrolled, down)| scrolled.top() > down.top())
                 && back.map(|r| r.top().round()) == scrolled.map(|r| r.top().round()),
             format!("The row before {before:?}, after the DM's scroll {scrolled:?}, at {DEFAULT:?} {larger:?}, back {back:?}"),
         );

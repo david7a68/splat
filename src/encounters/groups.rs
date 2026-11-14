@@ -2381,6 +2381,7 @@ impl Encounters {
             // FL7: the way back says where it goes, as Timeline's `← All events` does.
             back = Action::quiet(back_word)
                 .icon(icons::BACK)
+                .line_start()
                 .name(back_name)
                 .blocked_if(dirty, "Save or discard this group first.")
                 .show(ui)

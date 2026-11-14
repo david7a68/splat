@@ -55,10 +55,22 @@ pub(super) fn row_menu(ui: &mut egui::Ui, name: &str, add: impl FnOnce(&mut egui
     }
     let size = egui::AreaState::load(ui.ctx(), popup.get_id()).and_then(|state| state.size);
     let aligns = menu_aligns(button.interact_rect, size, inside);
-    popup
+    // FM1: a choice with an icon marks the menu (`menu_slot_icon`). When a later choice marks it
+    // during this pass, the choices before it had no icon slot: the pass is drawn again, so no
+    // choice is cut to the width of the pass that lacked the slot (`Edit encounter` above
+    // `Remove`, R12).
+    let mark = popup.get_id().with("menu has icons");
+    let marked = |ui: &egui::Ui| ui.data(|data| data.get_temp::<bool>(mark)).unwrap_or(false);
+    let before = marked(ui);
+    let shown = popup
         .align(aligns[0])
         .align_alternatives(&aligns[1..])
         .show(add);
+    if shown.is_some() && marked(ui) != before {
+        // egui keeps a popup's first size: the remembered sizes go, as for FB8.
+        ui.ctx().memory_mut(egui::Memory::reset_areas);
+        ui.ctx().request_discard("a menu choice's icon slot");
+    }
 }
 
 /// Where a row menu may open: below or above its button, ending at the button's right edge, or
@@ -285,16 +297,21 @@ pub(super) fn list_row(
                             } else {
                                 0.0
                             };
-                        // F1, FB2, FB6: the difficulty ends the line in its one form, and the
-                        // detail gives way first. Hover and the accessible name keep the whole
-                        // line (V7).
-                        let parts = difficulty.and_then(crate::difficulty::Difficulty::parts);
-                        let form = difficulty.and_then(crate::difficulty::Difficulty::form);
-                        let form_width = form.as_ref().map_or(0.0, |form| {
-                            design::number_width(ui, &format!(" · {form}"), &Type::Small.font(ui))
+                        // F1, FB2, FB6: the difficulty ends the line in its one form. N7, FG1:
+                        // `difficulty::Line` decides what gives way: the word's limit first,
+                        // then the detail from its end by whole facts and members, then the XP
+                        // number. Hover and the accessible name keep the whole line (V7).
+                        let font = Type::Small.font(ui);
+                        let fitted = difficulty.and_then(|difficulty| {
+                            crate::difficulty::Line::new(difficulty)
+                                .summary(detail)
+                                .fit(|text| design::number_width(ui, text, &font) <= room)
                         });
-                        let visible_detail =
-                            fit_detail(ui, detail, &Type::Small.font(ui), room - form_width);
+                        let form = difficulty.and_then(crate::difficulty::Difficulty::form);
+                        let (visible_detail, parts) = match fitted {
+                            Some(fitted) => (fitted.lead, Some(fitted.form)),
+                            None => (fit_detail(ui, detail, &font, room), None),
+                        };
                         let whole = match &form {
                             Some(form) => format!("{detail} · {form}"),
                             None => detail.to_owned(),

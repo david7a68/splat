@@ -648,7 +648,7 @@ pub fn run(d: &mut Driver<'_>) {
                 {
                     pencil = Some(rect);
                 }
-                if words.contains("CR ")
+                if words.replace('\u{a0}', " ").contains("CR ")
                     && rect.top() <= link.center().y
                     && rect.bottom() >= link.center().y
                 {
