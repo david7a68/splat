@@ -7,7 +7,7 @@ use super::{
 use crate::{
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, Catalogue, EntryRef},
-    design::{self, Action, Density, Status, Tone, Type, colors, icons},
+    design::{self, Action, Density, Tone, Type, colors, icons},
     difficulty::creature_xp,
     encounter_run::{FaultKind, GroupMember, MemberFault, RunGroup, change_rows},
     library::{note_path, write_note},
