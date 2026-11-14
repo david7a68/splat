@@ -6240,9 +6240,7 @@ pub fn package_about(d: &mut Driver<'_>) {
         let mut marks = Vec::new();
         d.each_painted_text(|text, clip| {
             let job = &text.galley.job;
-            if job.text.starts_with(&about)
-                && clip.intersects(text.visual_bounding_rect())
-            {
+            if job.text.starts_with(&about) && clip.intersects(text.visual_bounding_rect()) {
                 marks.push(painted_marks(job));
             }
         });
