@@ -14731,8 +14731,9 @@ pub mod session_recording {
     }
 
     fn choose_view(d: &mut Driver<'_>, name: &str) {
-        if d.has("Recording view") {
-            d.click("Recording view");
+        // The drop-down's name says its chosen view: `Recording view: Summary`.
+        if !d.name_starting("Recording view:").is_empty() {
+            d.click_starting("Recording view:");
         }
         d.click(name);
     }

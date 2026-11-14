@@ -2071,7 +2071,7 @@ fight with <name>`), blocked as the editor's is; then `Add to Log` when it is no
 tonight last (`icons::REMOVE`). Remove from tonight says `Removed “<words>” from tonight.` with Undo remove, in
 the success tone, at the removed row's place while that place is drawn. The Undo is the note's: when that
 place is folded, or no longer among the rows (the fight before it was played), the result and its Undo show in
-the plan's message footer. A done scene does not count in Tonight. Read leaves scenes out as it
+the plan's message footer. Tonight counts the rows under it, a done scene too, as every group heading counts its rows. Read leaves scenes out as it
 leaves out link-only plan lines, and its count line names them: `1 fight, 1 group and 2 scenes, in the plan`.
 Scenes fold first, so that the next fight's row and its primary action stay in view. Each row counts as it is
 when closed: when the closed rows, with the scenes, do not fit the pane, every scene folds. An opened row
