@@ -2231,13 +2231,18 @@ fn preview_line(ui: &mut Ui, preview: &str) {
 /// Its room (X2): the menu stays inside the pane that `ui` draws in (its clip), one scroll
 /// lane (`lane_width`, at least `S`) clear of the pane's edges, so it lies over neither a
 /// splitter nor a scroll bar. It starts at the control's left edge and may reach that inner
-/// edge; when the control's right edge leaves more room on its left, it ends there instead. The room is the menu's largest width: its choices ask for their words'
-/// width inside it, so a long choice is cut or wrapped and never pushes the menu past the pane.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
-)]
-pub fn menu_popup<'a>(ui: &Ui, response: &'a Response) -> egui::Popup<'a> {
+/// edge; when the control's right edge leaves more room on its left, it ends there instead.
+///
+/// Its width (X2): the part decides it on every draw, not egui's saved size. A menu of
+/// choices is as wide as its widest choice's words this frame, at most the room (the room is
+/// measured again on every draw, so a pane made narrower while the menu was closed still holds
+/// it). When the choices change while it is open, it measures again in the same frame. Other
+/// content is cut at the room. Close and reopen measure afresh.
+///
+/// How a caller moves a raw `egui::Popup::menu` of choices here: replace
+/// `egui::Popup::menu(&button).show(|ui| …)` with `design::menu_popup(ui, &button).show(|ui| …)`,
+/// keep the same `choice`/`choice_wrapped` rows inside, and remove the row's `Ban::Layout` count.
+pub fn menu_popup<'a>(ui: &Ui, response: &'a Response) -> MenuPopup<'a> {
     let pane = ui.clip_rect();
     let clear = lane_width().max(S);
     let rightward = pane.right() - clear - response.rect.left();
@@ -2247,9 +2252,102 @@ pub fn menu_popup<'a>(ui: &Ui, response: &'a Response) -> egui::Popup<'a> {
     } else {
         (egui::RectAlign::BOTTOM_END, leftward)
     };
+    let room = room.max(Density::Read.control());
+    MenuPopup {
+        id: egui::Popup::default_response_id(response),
+        popup: menu_popup_raw(response).align(align).width(room),
+        room,
+    }
+}
+
+#[allow(
+    clippy::disallowed_methods,
+    reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
+fn menu_popup_raw(response: &Response) -> egui::Popup<'_> {
     egui::Popup::menu(response)
-        .align(align)
-        .width(room.max(Density::Read.control()))
+}
+
+/// A menu from [`menu_popup`]: `show` draws its content at the width the part decides.
+#[must_use = "call `show` to draw the menu"]
+pub struct MenuPopup<'a> {
+    popup: egui::Popup<'a>,
+    id: Id,
+    /// The menu's largest outer width: its room in the pane.
+    room: f32,
+}
+
+impl MenuPopup<'_> {
+    /// Draw the menu while it is open.
+    pub fn show<R>(self, content: impl FnOnce(&mut Ui) -> R) -> Option<egui::InnerResponse<R>> {
+        let Self { popup, id, room } = self;
+        let ctx = popup.ctx().clone();
+        let key = id.with("splat_menu_width");
+        let shown = popup.show(|ui| {
+            let frame = ui.style().spacing.menu_margin.sum().x
+                + 2.0 * ui.style().visuals.window_stroke.width;
+            let inner_room = (room - frame).max(0.0);
+            let decided = ui.data(|data| data.get_temp::<f32>(key));
+            let width = decided.unwrap_or(inner_room).min(inner_room);
+            let top = ui.cursor().min;
+            let area = Rect::from_min_size(top, vec2(width, ui.ctx().content_rect().height()));
+            let mut child = ui.new_child(UiBuilder::new().max_rect(area).layout(*ui.layout()));
+            child.set_clip_rect(child.clip_rect().intersect(area));
+            let outer = ui.data_mut(|data| data.remove_temp::<MenuMeasure>(menu_measure_id()));
+            ui.data_mut(|data| data.insert_temp(menu_measure_id(), MenuMeasure::default()));
+            let inner = content(&mut child);
+            let measured = ui
+                .data_mut(|data| data.remove_temp::<MenuMeasure>(menu_measure_id()))
+                .unwrap_or_default();
+            if let Some(outer) = outer {
+                ui.data_mut(|data| data.insert_temp(menu_measure_id(), outer));
+            }
+            let used = child.min_rect();
+            let wanted = if measured.any {
+                measured.widest
+            } else {
+                used.width()
+            };
+            let next = wanted.min(inner_room);
+            ui.allocate_rect(
+                Rect::from_min_size(top, vec2(width, used.height())),
+                Sense::hover(),
+            );
+            // A new width (an opening, changed choices, a narrower pane) draws the pass again,
+            // so egui places the menu at its new size in the same frame.
+            if (next - width).abs() > 0.5 || decided.is_none() {
+                ui.data_mut(|data| data.insert_temp(key, next));
+                ui.ctx().request_discard("a menu measured its width");
+            }
+            inner
+        });
+        if shown.is_none() {
+            ctx.data_mut(|data| data.remove_temp::<f32>(key));
+        }
+        shown
+    }
+}
+
+/// The widest choice drawn in the menu being drawn, so the menu can size itself to its choices.
+#[derive(Clone, Copy, Default)]
+struct MenuMeasure {
+    widest: f32,
+    any: bool,
+}
+
+fn menu_measure_id() -> Id {
+    Id::new("splat_menu_measure")
+}
+
+/// A choice notes its words' width (`natural`) for the menu it is drawn in, if any.
+pub(super) fn note_choice_width(ui: &Ui, natural: f32) {
+    ui.data_mut(|data| {
+        if let Some(mut measure) = data.get_temp::<MenuMeasure>(menu_measure_id()) {
+            measure.widest = measure.widest.max(natural);
+            measure.any = true;
+            data.insert_temp(menu_measure_id(), measure);
+        }
+    });
 }
 
 // The popup and status parts, public here so their doc tests can name them

@@ -170,12 +170,11 @@ pub fn heading(ui: &mut Ui, heading: Heading<'_>) -> Response {
 ///
 /// **Width (X2).** A choice never takes more width than its column gives. In a column it takes
 /// the column's width, and its words are cut with an ellipsis when they do not fit. On a line it
-/// takes its words' width, at most the rest of the line. In an auto-sized menu, egui first
-/// measures the menu (a sizing pass, inside the room egui gives it: a `ComboBox`'s or a
-/// `Popup::width`'s width, else egui's default menu room, at most the screen; `menu_popup` gives
-/// the room to its pane's edge): there the choice asks for its words' width, at most that room,
-/// so the menu is as wide as its widest choice and never wider than its room. Then each choice
-/// takes the menu's width.
+/// takes its words' width, at most the rest of the line. In a menu from `menu_popup`, the
+/// menu decides its width on every draw from its choices' words, at most its room in the pane,
+/// and each choice takes that width. In a raw egui popup (staged), egui measures the menu only
+/// on its first frame (there the choice asks for its words' width, at most egui's room) and then
+/// keeps that size; a choice then fills it.
 ///
 /// **Words (X2).** The words are the app's own fixed words (`&'static str`). Words from the
 /// user's data (a name, a path, a title) can be any length, so they go through
@@ -225,6 +224,7 @@ pub fn choice(ui: &mut Ui, selected: bool, label: &'static str) -> Response {
 /// The width a choice row takes: never more than its column or line gives (X2). `natural` is
 /// the row's width with its words on one line.
 fn choice_width(ui: &Ui, natural: f32) -> f32 {
+    super::layout::note_choice_width(ui, natural);
     let room = ui.available_width().max(0.0);
     if ui.layout().is_vertical() && !ui.is_sizing_pass() {
         // A column: its width, whatever the words need.

@@ -1098,4 +1098,93 @@ fn a_menu_of_long_choices_stays_beside_its_splitter() {
             );
         }
     }
+    // X2 review 1: the part decides the menu's width on every draw, not egui's saved size.
+    // One popup id, its choices change while it is open: narrow, then a long folder path, then
+    // narrow again. The menu follows each (the path does not wrap into a column as narrow as
+    // the old menu), always inside the column.
+    // X2 review 2: close it, make the pane narrower, open the same popup again: the menu keeps
+    // inside the narrower pane.
+    {
+        const PATH: &str = "Campaigns/Ashen Marches/Encounters/Below the old mill/Second floor";
+        let ctx = context();
+        let size = vec2(960.0, 640.0);
+        let label = Cell::new("All");
+        let column = Cell::new(COLUMN);
+        let opener = Cell::new(None::<Response>);
+        let row = Cell::new(Rect::NOTHING);
+        let draw = |events| {
+            frame(&ctx, size, events, |ui| {
+                let pane = Rect::from_min_size(Pos2::ZERO, vec2(column.get(), 640.0));
+                ui.scope_builder(egui::UiBuilder::new().max_rect(pane), |ui| {
+                    ui.set_clip_rect(pane);
+                    ScrollColumn::new("test_menu_pane").show(ui, |ui| {
+                        let button = ui.button("Roll");
+                        crate::design::menu_popup(ui, &button).show(|ui| {
+                            row.set(
+                                crate::design::choice_wrapped(ui, true, label.get(), None).rect,
+                            );
+                        });
+                        opener.set(Some(button));
+                    });
+                });
+            })
+        };
+        let menu = |button: &Response| {
+            let id = egui::Popup::default_response_id(button);
+            assert!(egui::Popup::is_id_open(&ctx, id), "the menu is open");
+            ctx.memory(|memory| memory.area_rect(id))
+                .expect("the menu's rect")
+        };
+        let settle = |n| {
+            for _ in 0..n {
+                draw(Vec::new());
+            }
+        };
+        let inside = |menu: Rect, column: f32| {
+            menu.left() >= -0.5 && menu.right() <= column - lane_width() + 0.5
+        };
+        draw(Vec::new());
+        let button = opener.take().expect("the button");
+        draw(click(button.rect.center()));
+        settle(3);
+        let narrow = menu(&button);
+        assert!(
+            narrow.width() < COLUMN / 2.0,
+            "x2-measure: a short choice, a narrow menu {narrow:?}"
+        );
+        label.set(PATH);
+        settle(3);
+        let wide = menu(&button);
+        assert!(
+            wide.width() > COLUMN - lane_width() - 2.0 * S && inside(wide, COLUMN),
+            "x2-measure: a long path widens the menu to its room {wide:?}"
+        );
+        assert!(
+            row.get().height() < 4.0 * Type::Body.line(),
+            "x2-measure: the path wraps in the wide menu, not in a narrow column: {:?}",
+            row.get()
+        );
+        label.set("All");
+        settle(3);
+        let back = menu(&button);
+        assert!(
+            back.width() < COLUMN / 2.0,
+            "x2-measure: a short choice again, a narrow menu again {back:?}"
+        );
+        // Wide, close, a narrower pane, reopen.
+        label.set(PATH);
+        settle(3);
+        draw(key(Key::Escape));
+        settle(2);
+        column.set(200.0);
+        settle(2);
+        let button = opener.take().expect("the button");
+        draw(click(button.rect.center()));
+        settle(3);
+        let reopened = menu(&button);
+        assert!(
+            inside(reopened, 200.0),
+            "x2-room: reopened in a narrower pane, the menu {reopened:?} keeps inside it"
+        );
+    }
 }
