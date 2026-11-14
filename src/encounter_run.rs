@@ -5000,7 +5000,6 @@ pub struct DeletedRun {
 }
 
 impl DeletedRun {
-    pub const UNDO_LABEL: &str = "Undo delete run";
     /// One deletion warning on every page, including the way to keep unsent changes.
     pub fn message(&self) -> String {
         let name = &self.encounter;
