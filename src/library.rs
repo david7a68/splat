@@ -2013,20 +2013,26 @@ impl Registration {
 }
 
 /// A campaign file's words without the package list's lines for `package`: its task line (by
-/// its id, or by one of `links`, the names that named it) and the `Only:` line under it.
+/// its id, or by one of `links`, the names that named it) and the `Only:` line under it. Only
+/// the `## Packages` section is the list; a task line under any other heading stays.
 fn without_package_lines(text: &str, package: Uuid, links: &[&str]) -> String {
     let mark = format!(" ^{package}");
     let mut out = String::with_capacity(text.len());
     let mut under = false;
+    let mut in_packages = false;
     for line in text.split_inclusive('\n') {
         let words = line.trim_end_matches(['\n', '\r']);
+        if words.starts_with("## ") {
+            // The reader's own section rule (`list_formats`): a `## ` heading starts a section.
+            in_packages = words.trim().eq_ignore_ascii_case("## Packages");
+        }
         let task = ["- [", "* [", "+ ["]
             .iter()
             .any(|start| words.starts_with(start));
         let named = words
             .get(6..)
             .is_some_and(|name| links.contains(&name.trim()));
-        if task && (words.ends_with(&mark) || named) {
+        if in_packages && task && (words.ends_with(&mark) || named) {
             under = true;
             continue;
         }
@@ -12232,12 +12238,12 @@ mod tests {
                 .unwrap()
                 .id
         };
-        // Point 3 (second pass): the Lookup route, while an unrelated Library draft is unsaved,
-        // so no reload can run. Point 2 (second pass): an outside edit that names the copy by
+        // Point 3 (second pass): the encounter search's event, while an unrelated Library draft
+        // is unsaved, so no reload can run: the clause ends in the same pass as the write. Point 2 (second pass): an outside edit that names the copy by
         // its key.
         let original_path = &paths[0];
         for path in [
-            "lookup with a draft",
+            "encounter search with a draft",
             "campaign page",
             "outside edit",
             "outside name link",
@@ -12268,7 +12274,7 @@ mod tests {
                 fs::write(&campaign_file, text).unwrap();
             };
             match path {
-                "lookup with a draft" => {
+                "encounter search with a draft" => {
                     let loaded = load_all(app.campaigns.modules(), Some(&campaign)).unwrap();
                     let unrelated = loaded
                         .notes
@@ -12282,8 +12288,26 @@ mod tests {
                     library.selected = Some(unrelated);
                     assert!(library.dirty(), "fixture: an unrelated draft is unsaved");
                     app.library = std::mem::take(&mut library);
-                    app.library.use_entry = Some((module.id, entry_of(&module)));
-                    app.route(&egui::Context::default());
+                    // The encounter search's `Use it` (src/encounters.rs, `use_package_entry`):
+                    // the one producer of this event that no Library draft locks (Lookup's
+                    // `Open in Library` and Library's `Choose for this campaign` wait for the
+                    // draft). Its act is this insert; `route` is the app's own consumer.
+                    let ctx = egui::Context::default();
+                    ctx.data_mut(|data| {
+                        data.insert_temp(
+                            egui::Id::new("use_package_entry"),
+                            (module.id, entry_of(&module)),
+                        )
+                    });
+                    app.route(&ctx);
+                    assert!(
+                        crate::content_workspace::CampaignDocument::load(&campaign)
+                            .unwrap()
+                            .selections
+                            .iter()
+                            .any(|selection| selection.package.id == Some(module.id)),
+                        "fixture: the event wrote the choice"
+                    );
                     library = std::mem::take(&mut app.library);
                     assert!(
                         library.dirty() && library.pending.is_none(),
@@ -12332,6 +12356,9 @@ mod tests {
                         &format!("## Packages\n- [x] {}\n", module.name),
                         1,
                     );
+                    // An unrelated checklist item with the same name, under another heading.
+                    let text =
+                        format!("{text}\n## Errands\n\n- [ ] {}\n  Buy rope.\n", module.name);
                     fs::write(&campaign_file, text).unwrap();
                     assert!(
                         CampaignDocument::load(&campaign)
@@ -12346,7 +12373,7 @@ mod tests {
                     );
                 }
             }
-            if path != "lookup with a draft" {
+            if path != "encounter search with a draft" {
                 reload(&mut library, &app.campaigns);
             }
             assert_eq!(
@@ -12370,6 +12397,16 @@ mod tests {
                 choices_before,
                 "point-3-{path}"
             );
+            if path == "outside name link" {
+                let text = fs::read_to_string(&campaign_file).unwrap();
+                let errands = format!("## Errands\n\n- [ ] {}\n  Buy rope.\n", module.name);
+                assert!(
+                    text.contains(&errands),
+                    "point-2-unrelated-item-stays\n{text}"
+                );
+                let rest = text.split("\n## Errands").next().unwrap().to_owned() + "\n";
+                fs::write(&campaign_file, rest).unwrap();
+            }
             let text = fs::read_to_string(&campaign_file).unwrap();
             assert!(
                 !text.contains(&d.package.to_string())
