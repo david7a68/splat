@@ -4450,6 +4450,8 @@ pub(super) fn lookup_prose_gap(d: &Driver<'_>, title: &str, kind: &str) -> Optio
                 && node.rect.top() <= kind.bottom() + design::XL
                 && (node.name.starts_with("Edit ")
                     || node.name == "Add to Log"
+                    || node.name == "Open this session"
+                    || node.name == "Open on the timeline"
                     || node.name.starts_with("Start a fight with "))
         })
         .map(|node| node.rect.bottom())

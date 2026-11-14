@@ -2582,21 +2582,41 @@ impl Lookup {
             WrittenIn::Event(_) => "Open on the timeline",
         };
         let mut open = false;
-        ui.horizontal(|ui| {
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                open = Action::quiet(place)
-                    .icon(icons::OPEN_OUT)
-                    .density(Density::Read)
-                    .show(ui)
-                    .clicked();
-            });
-        });
         egui::ScrollArea::vertical()
             .id_salt(("lookup_written", at))
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                style::title(ui, &written.title);
-                style::subtitle(ui, &written.detail);
+                // The card's one action is a title-line action, as every reader's is (FN2, FM5):
+                // after the title when it fits, else in one row under it, from the text edge.
+                let width = ui.available_width();
+                let cell = ui
+                    .allocate_ui_with_layout(
+                        egui::vec2(width, 0.0),
+                        egui::Layout::top_down(egui::Align::Min),
+                        |ui| {
+                            style::title(ui, &written.title);
+                            style::subtitle(ui, &written.detail);
+                        },
+                    )
+                    .response
+                    .rect;
+                let title = ui
+                    .painter()
+                    .layout(
+                        written.title.clone(),
+                        Type::Display.font(ui),
+                        colors().text,
+                        width.max(design::XXL),
+                    )
+                    .size()
+                    .x;
+                let action = Action::quiet(place)
+                    .icon(icons::OPEN_OUT)
+                    .density(Density::Read);
+                open = world::title_line_actions(ui, cell, title, width, vec![action])
+                    .first()
+                    .copied()
+                    .unwrap_or(false);
                 // The `L` gap after the kind line, as every other Lookup entry has. Their reader
                 // also keeps one row gap for its line warnings above the prose, so the card's
                 // words start where a spell's do.

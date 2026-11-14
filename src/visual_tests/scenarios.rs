@@ -13954,6 +13954,27 @@ pub mod session_notes {
                 && !d.has_containing("“Toll At The Old Mill”"),
             "Lookup offers New NPC “Toll at the old mill” for the typed toll at the old mill",
         );
+        // Round 28 FN2: the card's action is a title-line action: on the title's line when it
+        // fits, else under the title from its text edge; never above the title.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let places = d.at_size(size, |d| {
+                let action = d.place_of("Open this session")?;
+                let title = d.painted_word_rect("Session 4: Ferry Watch", egui::Rect::EVERYTHING)?;
+                Some((action, title))
+            });
+            d.observe(
+                "iter-28-D-FN2",
+                places.is_some_and(|(action, title)| {
+                    let beside = action.center().y >= title.top()
+                        && action.center().y <= title.bottom()
+                        && action.left() >= title.right();
+                    let under = action.top() >= title.bottom() - 0.5
+                        && (action.left() - title.left()).abs() <= crate::design::S + 0.5;
+                    beside || under
+                }),
+                format!("At {size:?}, the action and the title: {places:?}"),
+            );
+        }
         d.state("lookup-written-card-link", Sizes::Default);
         look_up_again(d, "bless");
         d.wait_for_text("Spell · Level 1 · Campaign");
