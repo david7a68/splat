@@ -949,10 +949,6 @@ struct PagePresses {
 }
 
 /// Keep each storage message and its actions together at the list measure.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn storage_notice(
     ui: &mut egui::Ui,
     tone: Tone,
@@ -996,20 +992,28 @@ fn storage_notice(
                     egui::vec2(text_width, 0.0),
                     egui::Layout::top_down(egui::Align::Min),
                     |ui| {
-                        ui.add_space((Density::Read.control() - Type::Body.line()) / 2.0);
+                        // The text's first line centres on the actions' line:
+                        // (`Read` control 28 − `Body` line 20) / 2 = `XS`.
+                        design::gap(ui, design::Gap::XS);
                         design::message(ui, tone, words);
                     },
                 );
                 add(ui);
             });
         } else {
-            let left = ui.cursor().left();
             let text = design::message(ui, tone, words);
-            ui.horizontal_wrapped(|ui| {
-                ui.spacing_mut().item_spacing.x = design::L;
-                ui.add_space((text.rect.left() - left).max(0.0));
-                add(ui);
-            });
+            // The actions start under the text, after the message's bar and icon.
+            let mut room = ui.available_rect_before_wrap();
+            room.min.x = text.rect.left().max(room.min.x);
+            ui.scope_builder(
+                egui::UiBuilder::new()
+                    .max_rect(room)
+                    .layout(egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true)),
+                |ui| {
+                    ui.spacing_mut().item_spacing.x = design::L;
+                    add(ui);
+                },
+            );
         }
     });
 }
@@ -2888,10 +2892,6 @@ mod sheet_now_tests {
     }
 
     #[test]
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn wrapped_sheet_cells_keep_the_next_pair_on_one_row() {
         let ctx = eframe::egui::Context::default();
         let mut cells = [eframe::egui::Rect::NOTHING; 4];
@@ -2901,11 +2901,14 @@ mod sheet_now_tests {
                     ui.set_width(280.0);
                     super::sheet_columns(ui, 4, |ui, at| {
                         cells[at] = ui
-                            .allocate_space(eframe::egui::vec2(
-                                super::TILE_WIDTH,
-                                crate::design::L * if at == 0 { 3.0 } else { 1.0 },
-                            ))
-                            .1;
+                            .allocate_exact_size(
+                                eframe::egui::vec2(
+                                    super::TILE_WIDTH,
+                                    crate::design::L * if at == 0 { 3.0 } else { 1.0 },
+                                ),
+                                eframe::egui::Sense::hover(),
+                            )
+                            .0;
                     });
                 });
             });

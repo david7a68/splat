@@ -578,6 +578,10 @@ const ADD_INITIATIVE: ReaderField = ReaderField {
     page: crate::field_id!("world_add_initiative"),
     compact: crate::field_id!("lookup_add_initiative"),
 };
+const ADD_SIDE: ReaderField = ReaderField {
+    page: crate::field_id!("world_add_side"),
+    compact: crate::field_id!("lookup_add_side"),
+};
 
 /// The width a missing link takes as `missing_link` draws it: one line, or with `stacked` its
 /// name line above `Not found`.
@@ -637,15 +641,6 @@ fn missing_link(ui: &mut egui::Ui, name: &str, stacked: bool) {
             );
         });
     }
-}
-
-/// A compact reader's missing link: its muted `Small` label, then `⚠ <name> · Not found` in the
-/// warning tone, as the place that waits for a choice reads.
-fn compact_missing(ui: &mut egui::Ui, label: &str, name: &str) {
-    ui.horizontal(|ui| {
-        ui.label(Type::Small.rich(ui, label).color(colors().muted));
-        missing_link(ui, name, false);
-    });
 }
 
 /// `line_start` for a quiet action that starts a line: the first in its row, or a later one that
@@ -1351,11 +1346,14 @@ pub fn npc_group(npc: &Entry, stat_block: &Entry, side: &str) -> Arc<RunGroup> {
     })
 }
 
-/// Always offer both routes: Obsidian for editing and the system file handler.
+/// Always offer both routes: Obsidian for editing and the system file handler. The repair
+/// editor's title is the file's name, so its line shows the folder (`folder_file_line`).
 pub(crate) fn file_actions(ui: &mut egui::Ui, campaign: &Campaign, relative: &str) {
-    entry_file_actions(ui, &campaign.path, relative, true);
+    folder_file_line(ui, &campaign.path, relative, true);
 }
 
+/// A file line under a title that is the entry's name: the file's path, then the links. Under a
+/// title that is the file's name, use `folder_file_line`.
 pub(crate) fn entry_file_actions(ui: &mut egui::Ui, root: &Path, relative: &str, obsidian: bool) {
     // When even `…/<file name>` does not fit beside the links, the path takes its own row and
     // the links the row below, as in Library: the file name is never cut (FA4).
@@ -1410,6 +1408,57 @@ pub(crate) fn entry_file_parts(ui: &mut egui::Ui, root: &Path, relative: &str, o
     design::named(ui, &response, &path.display().to_string());
     response.on_hover_text(path.display().to_string());
     entry_file_links(ui, &path, obsidian);
+}
+
+/// A file line under a title that is the file's name (the repair editor, an unreadable note):
+/// the folder, then the links, so the line never repeats the title (FH9). A folder too
+/// long for its room gives way at its start, so its last part, the one nearest the file, stays.
+/// Its hover and accessible name keep the whole path.
+pub(crate) fn folder_file_line(ui: &mut egui::Ui, root: &Path, relative: &str, obsidian: bool) {
+    let path = root.join(relative);
+    let folder = relative
+        .rsplit_once('/')
+        .map(|(folder, _)| format!("{folder}/"));
+    let font = Type::Small.font(ui);
+    let links = entry_file_links_width(ui, obsidian);
+    let beside = ui.available_width() - links - design::L;
+    // The folder takes its own row only when not even a short end of it fits beside the links.
+    let own_row = folder.as_ref().is_some_and(|folder| {
+        beside < design::number_width(ui, folder, &font).min(design::XXL * 3.0)
+    });
+    let shown = folder.map(|folder| {
+        let room = if own_row {
+            ui.available_width()
+        } else {
+            beside
+        };
+        let mut shown = folder.clone();
+        let chars: Vec<char> = folder.chars().collect();
+        let mut from = 0;
+        while design::number_width(ui, &shown, &font) > room && from < chars.len() {
+            from += 1;
+            shown = format!("…{}", chars[from..].iter().collect::<String>());
+        }
+        shown
+    });
+    let label = |ui: &mut egui::Ui, shown: String| {
+        let response = ui.label(Type::Small.rich(ui, shown).color(colors().muted));
+        design::named(ui, &response, &path.display().to_string());
+        response.on_hover_text(path.display().to_string());
+    };
+    if own_row {
+        if let Some(shown) = shown {
+            label(ui, shown);
+        }
+        ui.horizontal(|ui| entry_file_links(ui, &path, obsidian));
+    } else {
+        ui.horizontal(|ui| {
+            if let Some(shown) = shown {
+                label(ui, shown);
+            }
+            entry_file_links(ui, &path, obsidian);
+        });
+    }
 }
 
 /// The width of a file line's links, with the gap between them.
@@ -1878,6 +1927,47 @@ struct GroupFault {
 /// The kind of the Part of flag, which World shows with its Change action.
 const PART_OF: FlagKind = FlagKind::Unread(Field::PartOf);
 
+/// Where a reader shows an entry's status: once (ruling R9, N9). A campaign entry whose reader
+/// draws the editable Status row shows its status there, and its kind line has none
+/// (`NPC · Campaign`); every other entry keeps its status on the kind line. The kind line's words
+/// and the Status row both come from this one value, so the two can never both show it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ReaderStatus {
+    /// The Status row shows it, with its Change.
+    Row,
+    /// The kind line shows it (`NPC · alive`), or the entry has none.
+    KindLine,
+}
+
+impl ReaderStatus {
+    /// The place for this entry's status. `campaign` is the campaign whose entries the reader
+    /// may change; `editing` is true while the Status field is open.
+    pub(crate) fn of(item: &Item, index: &ContentIndex, campaign: bool, editing: bool) -> Self {
+        let entry = &item.entry;
+        let set = !status(entry).trim().is_empty();
+        let row = if entry.kind != "world" || !campaign || !item.is_private() {
+            false
+        } else if index.duplicate_world.contains_key(&entry.path) {
+            // A duplicate note's read-only values have their own Status line.
+            set
+        } else {
+            set || status_unread(entry) || editing
+        };
+        if row { Self::Row } else { Self::KindLine }
+    }
+
+    /// The kind line's first words: the entry's kind, with its status only when no Status row
+    /// shows it. A duplicate note's line names its file, not the fault its row names, so it
+    /// takes the plain kind and status (`subtitle`), not its row's words.
+    pub(crate) fn kind_words(self, item: &Item, duplicate: bool) -> String {
+        match self {
+            Self::Row => type_label(world_type(&item.entry)),
+            Self::KindLine if duplicate => crate::library::presentation::subtitle(&item.entry),
+            Self::KindLine => item.subtitle.clone(),
+        }
+    }
+}
+
 /// True when the note's Status value was not read.
 fn status_unread(entry: &Entry) -> bool {
     entry
@@ -2095,7 +2185,7 @@ struct LogField {
 }
 
 /// Why an open `Add to Log` field waits: an edit form of its entry is open.
-pub(crate) const LOG_WAITS: &str = "Save or discard your edit first.";
+pub(crate) const LOG_WAITS: &str = "Save or discard your edit to add a Log line.";
 
 /// The least room that `Add to Log`'s field keeps for a sentence when its stamp shares its line.
 /// It also keeps the words it holds whole, with the field's margins.
@@ -2647,26 +2737,13 @@ impl Reader {
             campaign.filter(|campaign| edit::editable(item, index) && !self.editing(id, campaign));
         // Lookup has no file line. While the repair message names the fault, the kind line
         // names the open file in place of the fault.
-        let kind_line = if self.compact
-            && campaign.is_some()
-            && index.duplicate_world.contains_key(&item.entry.path)
-        {
-            format!(
-                "{} · {} · {}",
-                crate::library::presentation::subtitle(&item.entry),
-                item.owner,
-                item.entry.path
-            )
+        let duplicate = index.duplicate_world.contains_key(&item.entry.path);
+        let kind = ReaderStatus::of(item, index, campaign.is_some(), self.status_editing)
+            .kind_words(item, duplicate);
+        let kind_line = if self.compact && campaign.is_some() && duplicate {
+            format!("{kind} · {} · {}", item.owner, item.entry.path)
         } else {
-            format!(
-                "{} · {}",
-                if !self.compact && world_type(&item.entry) == "npc" {
-                    "NPC"
-                } else {
-                    &item.subtitle
-                },
-                item.owner
-            )
+            format!("{kind} · {}", item.owner)
         };
         // While a run is open, an NPC has Add to fight below, and Arrivals adds a creature.
         let start = (self.sides.is_none()
@@ -3062,6 +3139,9 @@ impl Reader {
             !crate::library::presentation::reading_sections(&item.entry.body, &item.entry.name)
                 .is_empty();
         if (item.entry.kind == "world" || item.is_world_note()) && !has_prose {
+            // These words stand where the note's first paragraph would: the reader's gap before
+            // prose (`L`) sets them apart from the values or the action above (FF4).
+            design::gap(ui, design::Gap::L);
             ui.label(
                 Type::Small
                     .rich(ui, "Nothing written yet.")
@@ -3434,11 +3514,11 @@ impl Reader {
         let response = match &stamp {
             None => draw(ui, field),
             Some(stamp) => {
-                let width = ui
+                let size = ui
                     .painter()
                     .layout_no_wrap(stamp.clone(), Type::Small.font(ui), colors().muted)
-                    .size()
-                    .x;
+                    .size();
+                let width = size.x;
                 let words = Type::Small.rich(ui, stamp).color(colors().muted);
                 // The stamp shares the field's line while the field keeps room for a sentence.
                 // One layout for both, so the field keeps its ID, and the keyboard, when the
@@ -3455,11 +3535,25 @@ impl Reader {
                     .x;
                 let beside = room >= LOG_FIELD_BESIDE.max(typed + 3.0 * design::S);
                 ui.horizontal_wrapped(|ui| {
-                    ui.label(words);
                     if !beside {
+                        ui.label(words);
                         ui.end_row();
+                        return draw(ui, field);
                     }
-                    draw(ui, field)
+                    // Beside the field, the stamp keeps its room before it and is put centred on
+                    // the field's line, so it reads as the start of the line it dates (AC3, FA6,
+                    // AA4), not 12 px above it.
+                    let (slot, _) =
+                        ui.allocate_exact_size(egui::vec2(width, 0.0), egui::Sense::hover());
+                    let response = draw(ui, field);
+                    ui.put(
+                        egui::Rect::from_center_size(
+                            egui::pos2(slot.center().x, response.rect.center().y),
+                            size,
+                        ),
+                        egui::Label::new(words).extend(),
+                    );
+                    response
                 })
                 .inner
             }
@@ -4473,43 +4567,73 @@ impl Reader {
                     .iter()
                     .map(|(_, group)| ("Part of", *group)),
             );
-            let targets: Vec<_> = targets
+            // One value per row, in the label column that the Status row below uses (FF3): every
+            // value of the block starts at one edge. A label with several groups (Part of) is
+            // one row whose links wrap. With no target, no row, so no gap.
+            let mut rows: Vec<(&str, Vec<usize>)> = Vec::new();
+            for (label, at) in targets
                 .into_iter()
                 .filter_map(|(label, target)| target.map(|at| (label, at)))
-                .collect();
-            // With no target, the line draws no row, so it adds no gap.
-            if !targets.is_empty() {
-                ui.horizontal_wrapped(|ui| {
-                    for (n, (label, at)) in targets.into_iter().enumerate() {
-                        if n > 0 {
-                            ui.label(Type::Small.rich(ui, "·").color(colors().muted));
-                        }
-                        ui.label(Type::Small.rich(ui, label).color(colors().muted));
-                        if design::link(ui, &index.items[at].entry.name).clicked() {
-                            go = Some(Go::Item(at, None));
-                        }
-                    }
-                });
+            {
+                match rows.last_mut() {
+                    Some((last, ats)) if *last == label => ats.push(at),
+                    _ => rows.push((label, vec![at])),
+                }
             }
-            // A link fault reads as every compact value does (FD6): the muted label, then the
-            // value in the warning tone, `⚠ <name> · Not found`.
+            let width = self.relationship_value_width(ui, item, index);
+            for (label, ats) in rows {
+                Self::value_row(
+                    ui,
+                    label,
+                    width,
+                    |ui| {
+                        for (n, at) in ats.into_iter().enumerate() {
+                            if n > 0 {
+                                ui.label(Type::Small.rich(ui, "·").color(colors().muted));
+                            }
+                            if design::link(ui, &index.items[at].entry.name).clicked() {
+                                go = Some(Go::Item(at, None));
+                            }
+                        }
+                    },
+                    None,
+                );
+            }
+            // A link fault reads as every value does (FD6): the muted label in its column, then
+            // the value in the warning tone, `⚠ <name> · Not found`.
             if broken_links(item, index).contains(&LinkProblem::StatBlockNotFound) {
                 let name = reader_field(&item.entry, "creature")
                     .map(|v| link_name(v, "Stat block"))
                     .unwrap_or_else(|| "Stat block".into());
-                compact_missing(ui, "Stat block", &name);
+                // Its name and `Not found` share a line when they fit, as before (FD6).
+                let room = width.max(missing_width(ui, &name, false));
+                Self::value_row(
+                    ui,
+                    "Stat block",
+                    room,
+                    |ui| missing_link(ui, &name, false),
+                    None,
+                );
             }
             let choices = index.place_choices(item.entry.id);
             if !choices.is_empty() {
-                ui.horizontal(|ui| {
-                    ui.label(Type::Small.rich(ui, "In").color(colors().muted));
-                    let name = world_field(&item.entry, "in")
-                        .map(|value| link_name(value, "Place"))
-                        .unwrap_or_default();
-                    if warning_link(ui, &place_choices_words(&name, choices.len())).clicked() {
-                        self.place_choices_open = !self.place_choices_open;
-                    }
-                });
+                let name = world_field(&item.entry, "in")
+                    .map(|value| link_name(value, "Place"))
+                    .unwrap_or_default();
+                let mut open = false;
+                Self::value_row(
+                    ui,
+                    "In",
+                    width,
+                    |ui| {
+                        open =
+                            warning_link(ui, &place_choices_words(&name, choices.len())).clicked();
+                    },
+                    None,
+                );
+                if open {
+                    self.place_choices_open = !self.place_choices_open;
+                }
                 if self.place_choices_open {
                     let (followed, chosen) = self.place_chooser(ui, item, index, None);
                     go = go.or(followed);
@@ -4529,7 +4653,9 @@ impl Reader {
                 && index.place_choices(item.entry.id).is_empty()
                 && let Some(place) = reader_field(&item.entry, "in").and_then(Value::as_str)
             {
-                compact_missing(ui, "In", place.trim_matches(['[', ']']));
+                let name = place.trim_matches(['[', ']']);
+                let room = width.max(missing_width(ui, name, false));
+                Self::value_row(ui, "In", room, |ui| missing_link(ui, name, false), None);
             }
             if go.is_some() {
                 return go;
@@ -4543,9 +4669,7 @@ impl Reader {
         // Status and its Change show in both readers, World's and Lookup's: one act, one write
         // and one Undo wherever the DM reads the entry.
         let value_width = self.relationship_value_width(ui, item, index);
-        if !self.status_editing
-            && (!status(&item.entry).trim().is_empty() || status_unread(&item.entry))
-        {
+        if !self.status_editing && ReaderStatus::of(item, index, true, false) == ReaderStatus::Row {
             let value = status(&item.entry);
             let unread = status_unread(&item.entry);
             let changed = Self::relationship_row(
@@ -4713,10 +4837,6 @@ impl Reader {
 }
 
 /// Choose the stat block, side and initiative. Returns how the form ended, if it did.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn add_form(
     ui: &mut egui::Ui,
     item: &Item,
@@ -4760,27 +4880,18 @@ fn add_form(
     if creature(&item.entry).is_none() {
         ui.checkbox(&mut adding.save, "Save this as their stat block");
     }
-    if sides.len() > 1 {
+    if let Some((first, rest)) = sides.split_first()
+        && !rest.is_empty()
+    {
         design::small_field(ui, "Side", None, None, |ui| {
-            let combo = egui::ComboBox::from_id_salt("world_add_side")
-                .selected_text(design::reader::human_label(&adding.side))
-                .icon(design::combo_icon)
-                .show_ui(ui, |ui| {
-                    for side in sides {
-                        // A side's name is the DM's own words, so it can be long: it wraps.
-                        if design::extras::choice_wrapped(
-                            ui,
-                            adding.side == *side,
-                            &design::reader::human_label(side),
-                            None,
-                        )
-                        .clicked()
-                        {
-                            adding.side.clone_from(side);
-                        }
-                    }
-                });
-            design::named(ui, &combo.response, "Side");
+            // A side's name is the DM's own words, so it can be long: the list's rows wrap.
+            let _ = design::Dropdown::new(ADD_SIDE.id(compact, item.entry.id), "Side")
+                .choice(first.clone(), design::reader::human_label(first))
+                .choices(
+                    rest.iter()
+                        .map(|side| (side.clone(), design::reader::human_label(side))),
+                )
+                .show(ui, &mut adding.side);
         });
     }
     design::small_field(
@@ -5285,6 +5396,36 @@ mod tests {
             // Neighbour: Part of adds no In or Stat block warning.
             assert_eq!(problems.len(), expected, "FD1-only-groups-{groups}");
         }
+    }
+
+    #[test]
+    fn r9_status_shows_in_the_status_row_or_on_the_kind_line_never_both() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = sample_campaign(dir.path());
+        let id = create_entry(&campaign, "Rook", "npc").unwrap();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let item = &index.items[index.position(id).unwrap()];
+        assert_eq!(
+            status(&item.entry),
+            "alive",
+            "R9-fixture: a new NPC is alive"
+        );
+        // A campaign NPC in a reader that may change it: the Status row shows the status.
+        let place = ReaderStatus::of(item, &index, true, false);
+        assert_eq!(place, ReaderStatus::Row, "R9-row");
+        assert_eq!(
+            place.kind_words(item, false),
+            "NPC",
+            "R9-row: no status on the kind line"
+        );
+        // The same entry where no Status row is drawn: the kind line keeps its status.
+        let place = ReaderStatus::of(item, &index, false, false);
+        assert_eq!(place, ReaderStatus::KindLine, "R9-kind-line");
+        assert_eq!(
+            place.kind_words(item, false),
+            "NPC · alive",
+            "R9-kind-line: the status stays"
+        );
     }
 
     #[test]

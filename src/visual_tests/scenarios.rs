@@ -10630,6 +10630,56 @@ pub mod signed_in {
             "Choosing a remote campaign opens its import, with the name filled in",
         );
         d.click("Cancel");
+        // Wave 2 d (C): the D&D Beyond link is a `Dropdown`. Its list opens under the control,
+        // as wide as it, with the account's campaigns; one that another campaign links is a
+        // blocked choice with its reason, and Escape closes the list.
+        const LINK_CHOICES: [&str; 4] = [
+            "Not linked",
+            "The Emberfall Marches",
+            "Quiet Harbor",
+            "Salt Road",
+        ];
+        let (control, rows, blocked) = d.aside(|d| {
+            go_campaign(d);
+            d.click(LINK_TAB);
+            d.click_starting("D&D Beyond campaign link: ");
+            d.wait_for_text("Salt Road");
+            let nodes = d.nodes();
+            let control = nodes
+                .iter()
+                .find(|node| node.name.starts_with("D&D Beyond campaign link: "))
+                .map(|node| node.rect);
+            let rows: Vec<egui::Rect> = nodes
+                .iter()
+                .filter(|node| {
+                    LINK_CHOICES.contains(&node.name.as_str())
+                        && node.in_view()
+                        && control.is_some_and(|control| node.rect.top() >= control.bottom())
+                })
+                .map(|node| node.rect)
+                .collect();
+            (
+                control,
+                rows,
+                d.visible_text("Already linked to another campaign."),
+            )
+        });
+        d.observe(
+            "iter-28-C-link-dropdown",
+            blocked
+                && rows.len() == LINK_CHOICES.len()
+                && control.is_some_and(|control| {
+                    rows.iter().all(|row| {
+                        row.left() >= control.left() - 0.5 && row.right() <= control.right() + 0.5
+                    })
+                }),
+            format!(
+                "Link control {control:?}; its open choices {rows:?}; blocked reason {blocked}"
+            ),
+        );
+        // No capture of the open list: the part's list has an egui scroll node over its rows
+        // (`no-overlap/egui-chrome`), a gap sent to the part's owner.
+        d.press(Key::Escape);
         d.begin_task();
 
         go_party(d);
@@ -11150,12 +11200,19 @@ pub mod signed_in {
         );
         // Round 26 FN6: the locked picker keeps the form's width, so it ends with the session
         // folder field, as it does unlocked.
-        let edges = d.place_of("D&D Beyond campaign link").zip(
-            d.nodes()
-                .iter()
-                .find(|node| node.name == "Folder" && node.role == egui::accesskit::Role::TextInput)
-                .map(|node| node.rect),
-        );
+        let edges = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name.starts_with("D&D Beyond campaign link: "))
+            .map(|node| node.rect)
+            .zip(
+                d.nodes()
+                    .iter()
+                    .find(|node| {
+                        node.name == "Folder" && node.role == egui::accesskit::Role::TextInput
+                    })
+                    .map(|node| node.rect),
+            );
         d.observe(
             "iter-26-C-FN6",
             edges.is_some_and(|(picker, folder)| (picker.right() - folder.right()).abs() <= 1.0),
@@ -11769,8 +11826,37 @@ pub mod world {
         d.click(&format!("New NPC “{NPC}”"));
         d.settle();
         d.expect("Add to fight");
-        d.expect("NPC · alive · Campaign");
         d.expect("Change Status");
+        // Ruling R9 (AF2, FF2): the status shows once. The Status row shows `alive` with its
+        // Change, so the kind line has no status.
+        d.observe(
+            "iter-28-D-R9",
+            d.has("NPC · Campaign") && !d.has("NPC · alive · Campaign") && d.visible_text("alive"),
+            "Lookup's reader shows the NPC's status in its Status row only, not on the kind line",
+        );
+        // Round 28 FF4: `Nothing written yet.` stands where prose starts, `L` below the control
+        // above it (here the NPC's `Add to fight`), so it does not read as that control's reason.
+        let gap = d
+            .painted_rect_in("Nothing written yet.", egui::Rect::EVERYTHING)
+            .and_then(|words| {
+                let above = d
+                    .nodes()
+                    .into_iter()
+                    .filter(|node| {
+                        node.role == Role::Button
+                            && node.rect.bottom() <= words.top()
+                            && node.rect.left() < words.right()
+                            && node.rect.right() > words.left()
+                    })
+                    .max_by(|a, b| a.rect.bottom().total_cmp(&b.rect.bottom()))?;
+                Some((above.name, words.top() - above.rect.bottom()))
+            });
+        d.observe(
+            "iter-28-D-FF4",
+            gap.as_ref()
+                .is_some_and(|(_, gap)| *gap >= crate::design::L - 1.0),
+            format!("The control above the words, and the gap: {gap:?}"),
+        );
         d.state("world-new-npc", Sizes::Default);
         d.click("Add to fight");
         d.type_into("Stat block", "Guard");
@@ -11819,6 +11905,26 @@ pub mod world {
             }
         }
         d.state("npc-add-to-run-form", Sizes::All);
+        // Round 28: the Side list is a `Dropdown`. It opens under its control, inside Lookup;
+        // Escape closes it and keeps the side. (Its capture is left out: the part's list holds an
+        // unnamed egui handle over its rows, a gap sent to the part's owner.)
+        d.click("Side: Enemies");
+        d.settle();
+        let control = d.place_of("Side: Enemies");
+        d.observe(
+            "iter-28-D-side-list",
+            control.is_some_and(|control| {
+                d.nodes().into_iter().any(|node| {
+                    node.name == "Party"
+                        && node.rect.top() >= control.bottom() - 0.5
+                        && node.rect.left() >= control.left() - 0.5
+                })
+            }),
+            format!("The Side list opens under its control {control:?}"),
+        );
+        d.press(Key::Escape);
+        d.settle();
+        d.expect("Side: Enemies");
         d.expect("Add to fight");
         let add_buttons = |d: &Driver<'_>| {
             d.nodes()
@@ -11838,6 +11944,24 @@ pub mod world {
         d.expect("Undo stat block change");
         let (success, detail) = world_build::finished_change_tone(d, "Stat block set to Guard.");
         d.observe("iter-20-D-FD5-stat-block", success, detail);
+        // Round 28 FF3: Lookup's values share one value column. The Stat block's value starts
+        // where the Status row's value starts, each in its own row.
+        let edges = d.place_of("Change Status").map(|change| {
+            let block = egui::Rect::from_min_max(
+                egui::pos2(0.0, change.top() - crate::design::XXL * 3.0),
+                egui::pos2(change.left(), change.bottom()),
+            );
+            (
+                d.painted_word_rect("Guard", block),
+                d.painted_word_rect("alive", block),
+            )
+        });
+        d.observe(
+            "iter-28-D-FF3",
+            matches!(edges, Some((Some(link), Some(value)))
+                if (link.left() - value.left()).abs() <= 0.5 && link.bottom() <= value.top()),
+            format!("Stat block's value and Status's value (left edge, rows): {edges:?}"),
+        );
         d.state("world-npc-in-run", Sizes::All);
         d.observe(
             "NPC arrival",
@@ -13920,6 +14044,33 @@ pub mod session_notes {
                 && !d.has_containing("“Toll At The Old Mill”"),
             "Lookup offers New NPC “Toll at the old mill” for the typed toll at the old mill",
         );
+        // Round 28 FN2: the card's action is a title-line action: on the title's line when it
+        // fits, else under the title from its text edge; never above the title.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let places = d.at_size(size, |d| {
+                let action = d.place_of("Open this session")?;
+                // The card's title in Lookup, not the Session page's title of the same words.
+                let lookup = d.place_of(SEARCH_LOOKUP)?;
+                let pane = egui::Rect::from_min_max(
+                    egui::pos2(lookup.left() - 1.0, lookup.bottom()),
+                    egui::pos2(f32::MAX, f32::MAX),
+                );
+                let title = d.painted_word_rect("Session 4: Ferry Watch", pane)?;
+                Some((action, title))
+            });
+            d.observe(
+                "iter-28-D-FN2",
+                places.is_some_and(|(action, title)| {
+                    let beside = action.center().y >= title.top()
+                        && action.center().y <= title.bottom()
+                        && action.left() >= title.right();
+                    let under = action.top() >= title.bottom() - 0.5
+                        && (action.left() - title.left()).abs() <= crate::design::S + 0.5;
+                    beside || under
+                }),
+                format!("At {size:?}, the action and the title: {places:?}"),
+            );
+        }
         d.state("lookup-written-card-link", Sizes::Default);
         look_up_again(d, "bless");
         d.wait_for_text("Spell · Level 1 · Campaign");
