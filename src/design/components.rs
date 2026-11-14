@@ -802,17 +802,31 @@ impl<'a> Action<'a> {
         let width = (galley.size().x + 2.0 * padding + icon_width + key_width)
             .max(self.height)
             .max(self.min_width.unwrap_or_default());
+        // The padding before the icon and the words: less only for a `line_start` hang that
+        // the clip leaves short (below).
+        let mut left_padding = padding;
         let (rect, response) = if self.kind == Kind::Quiet && self.line_start {
             // The words start at the text edge; the padding and any icon hang in the gutter. The
             // row allocates all but the icon, so the next item keeps the same gap after the
             // target as it has after a `line_start` action without an icon.
-            let size = vec2(width - icon_width, self.height);
+            // P3a: the hang never passes this `Ui`'s clip (its pane's hang room, or whatever
+            // clip encloses it), so the action is always whole. Where that room is shorter than
+            // the hang, the action first gives up its left padding (blank but for the hover
+            // fill), so its words stay at the text edge (a menu's choices under its heading);
+            // only an icon that still does not fit moves the words, by what is missing.
+            let hang = padding + icon_width;
+            let clip = ui.clip_rect();
+            let short = (clip.left() - (ui.cursor().min.x - hang)).clamp(0.0, hang);
+            let given = short.min(padding);
+            let shift = short - given;
+            let size = vec2(width - icon_width + shift, self.height);
             let (id, allocated) = ui.allocate_space(size);
-            let rect = ui
-                .layout()
-                .align_size_within_rect(size, allocated)
-                .translate(vec2(-padding, 0.0));
-            let rect = rect.with_min_x(rect.min.x - icon_width);
+            let aligned = ui.layout().align_size_within_rect(size, allocated);
+            left_padding = padding - given;
+            let rect = Rect::from_min_size(
+                pos2(aligned.left() - hang + short, aligned.top()),
+                vec2(width - given, self.height),
+            );
             // An Undo under its message keeps its target in the message's column, so it never
             // hangs past a pane whose text edge is the message's (Lookup's reader). The icon
             // and the words keep their places.
@@ -821,7 +835,15 @@ impl<'a> Action<'a> {
             } else {
                 rect
             };
-            (rect, ui.interact(target, id, Sense::click()))
+            // egui also gives a press to a target up to `interact_radius` away: the target
+            // starts that far inside the clip, so a press outside the clip never reaches it
+            // (a press on the action's own left pixels still does, as the nearest target).
+            let radius = ui.style().interaction.interact_radius;
+            let target = target.with_min_x(target.min.x.max(clip.left() + radius));
+            let mut response = ui.interact(target, id, Sense::click());
+            // The response (and its accessible bounds) is the whole painted action.
+            response.rect = rect;
+            (rect, response)
         } else {
             ui.allocate_exact_size(vec2(width, height), Sense::click())
         };
@@ -865,7 +887,7 @@ impl<'a> Action<'a> {
             stroke,
             StrokeKind::Inside,
         );
-        let mut x = rect.left() + padding;
+        let mut x = rect.left() + left_padding;
         if let Some(icon) = self.icon {
             ui.painter().text(
                 pos2(x, rect.center().y),
@@ -4807,12 +4829,21 @@ mod tests {
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(400.0, 200.0))
             .build_ui(|ui| {
-                for (label, icon, line_start) in [
-                    ("Undo heading change", true, true),
-                    ("Clear value", false, true),
-                    ("Undo replacement", true, false),
+                // P3a: the last two rows' clip leaves the hang short: none at all (a menu's
+                // content edge), and 10 px for an icon's 28.
+                for (label, icon, line_start, room) in [
+                    ("Undo heading change", true, true, None),
+                    ("Clear value", false, true, None),
+                    ("Undo replacement", true, false, None),
+                    ("Menu choice", false, true, Some(0.0)),
+                    ("Undo tight", true, true, Some(10.0)),
                 ] {
                     ui.horizontal(|ui| {
+                        if let Some(room) = room {
+                            let mut clip = ui.clip_rect();
+                            clip.min.x = EDGE - room;
+                            ui.set_clip_rect(clip);
+                        }
                         space(ui, EDGE - ui.cursor().left());
                         let action = Action::quiet(label);
                         let action = if icon {
@@ -4862,6 +4893,23 @@ mod tests {
                 && (words("Undo replacement") - (EDGE + S + ICON_SLOT)).abs() <= 0.5,
             "no-hang: words {}, target {normal:?}",
             words("Undo replacement")
+        );
+        // P3a: the action is whole in its clip. With no room, it gives up its left padding and
+        // its words stay at the text edge (a menu's choices under its heading); with 10 px for
+        // an icon (20 px slot), the words move by the 10 px that are missing.
+        let menu = node("Menu choice");
+        assert!(
+            (words("Menu choice") - EDGE).abs() <= 0.5 && (menu.left() - EDGE).abs() <= 0.5,
+            "hang-none: words {} at the edge {EDGE}, target {menu:?} from the clip",
+            words("Menu choice")
+        );
+        let tight = node("Undo tight");
+        assert!(
+            (words("Undo tight") - (EDGE + ICON_SLOT - 10.0)).abs() <= 0.5
+                && (tight.left() - (EDGE - 10.0)).abs() <= 0.5,
+            "hang-short: words {} after the icon, target {tight:?} from the clip at {}",
+            words("Undo tight"),
+            EDGE - 10.0
         );
     }
 

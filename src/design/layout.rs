@@ -1094,15 +1094,39 @@ impl ScrollColumn {
             return self.inline(ui, add);
         }
         let (sideways, full, id) = (self.sideways, self.full_width, self.id);
-        Self::styled(ui, |ui, width| {
-            self.area().show(ui, |ui| {
-                if !sideways {
-                    ui.set_max_width(width);
-                }
-                if full {
-                    ui.set_min_width(width);
-                }
-                super::pane::whole_rows(ui, id, add)
+        // In a pane's body, the area starts where a `line_start` hang may reach and its content
+        // at the text edge (P3a): the surface covers the hang, and nothing moves.
+        let Some(reach) = super::pane::column_reach(ui, lane_width()) else {
+            return Self::styled(ui, |ui, width| {
+                self.area().show(ui, |ui| {
+                    if !sideways {
+                        ui.set_max_width(width);
+                    }
+                    if full {
+                        ui.set_min_width(width);
+                    }
+                    super::pane::whole_rows(ui, id, add)
+                })
+            });
+        };
+        super::pane::reaching(ui, reach, |ui| {
+            Self::styled(ui, |ui, width| {
+                self.area().show(ui, |ui| {
+                    if !sideways {
+                        ui.set_max_width(width);
+                    }
+                    if full {
+                        ui.set_min_width(width);
+                    }
+                    super::pane::whole_rows(ui, id, |ui| {
+                        super::pane::inset(ui, reach, |ui| {
+                            if full {
+                                ui.set_min_width(ui.max_rect().width());
+                            }
+                            add(ui)
+                        })
+                    })
+                })
             })
         })
     }
