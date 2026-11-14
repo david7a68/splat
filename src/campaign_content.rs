@@ -469,6 +469,11 @@ pub struct CampaignContent {
     /// Where each open repair's editor sits this frame. Focus scrolling leaves them to the
     /// editor, which scrolls the page to its own viewport.
     editor_rects: Vec<egui::Rect>,
+    /// This frame, a repair's editor gained focus from a pointer press: the page keeps its
+    /// offset (`show`).
+    pointer_focus: bool,
+    /// The page's scroll offset at the end of the last frame: the offset this frame is drawn at.
+    page_offset: Option<f32>,
     /// The page's kept results, each with the order its action took (newest first) and what
     /// its action left (`Payload`): the one owner of each result's words and Undo.
     results: design::Results<PageOwner, PageKept>,
@@ -1205,7 +1210,8 @@ impl CampaignContent {
         let paned = footer.pane(ui, body, |ui| {
             if fills {
                 let page_height = ui.available_height();
-                design::ScrollColumn::new("campaign_packages_page").show(ui, |ui| {
+                self.pointer_focus = false;
+                let column = design::ScrollColumn::new("campaign_packages_page").show(ui, |ui| {
                     // egui gives the content only the visible height, so a scroll area inside
                     // it (a repair editor, a list) would shrink below the fold. The page's
                     // content has all the height it needs; the page scrolls instead.
@@ -1215,6 +1221,18 @@ impl CampaignContent {
                         self.scroll_to_focus(ui);
                     });
                 });
+                // A click into a repair's editor does not scroll the page: the DM clicked what
+                // was in view. The editor's reveal (`world::repair::editor_events`) scrolls the
+                // page when it gains focus; after a pointer press the page keeps the offset this
+                // frame was drawn at. Keyboard and screen-reader focus still bring it into view.
+                let mut state = column.state;
+                if self.pointer_focus
+                    && let Some(offset) = self.page_offset
+                {
+                    state.offset.y = offset;
+                    state.store(ui.ctx(), column.id);
+                }
+                self.page_offset = Some(state.offset.y);
             } else {
                 self.editor_rects.clear();
                 self.page(ui, campaigns, &active, 0.0);
@@ -1742,6 +1760,8 @@ impl CampaignContent {
                     });
                     self.editor_rects.push(editor.response.rect);
                     let (edited, focused) = editor.inner;
+                    self.pointer_focus |= focused
+                        && ui.input(|input| input.pointer.any_pressed() || input.pointer.any_released());
                     if edited || focused {
                         self.active_repair = Some(path.clone());
                     }
