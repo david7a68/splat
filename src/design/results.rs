@@ -714,13 +714,13 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         (
             "src/encounters/groups.rs",
-            "group_editor_view",
-            &[Ban::Results, Ban::Extras(1), Ban::Pane(1)],
+            "discard_group_draft",
+            &[Ban::Results],
         ),
         (
             "src/encounters/groups.rs",
-            "member_result_into",
-            &[Ban::Results],
+            "group_editor_view",
+            &[Ban::Results, Ban::Extras(1), Ban::Pane(1)],
         ),
         (
             "src/encounters/groups.rs",
@@ -732,26 +732,22 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "creature_pane",
             &[Ban::Results, Ban::Layout(2), Ban::Pane(1), Ban::RowKey(1)],
         ),
+        // The encounter editor's old footer (its pane keeps main's form until part P2) has no
+        // ticket: the separation's and the member result's Undo go by owner.
+        ("src/encounters.rs", "undo_editor_of", &[Ban::ByOwner(1)]),
+        ("src/encounters.rs", "undo_kept_of", &[Ban::ByOwner(1)]),
+        ("src/encounters.rs", "undo_member_of", &[Ban::ByOwner(1)]),
         (
             "src/encounters.rs",
-            "i20_w1_search_finds_a_hidden_duplicate_and_repairs_it_with_undo",
-            &[Ban::Results, Ban::Pane(1)],
+            "undo_separation_of",
+            &[Ban::ByOwner(1)],
         ),
-        ("src/encounters.rs", "kept_into_footer", &[Ban::Results]),
-        (
-            "src/encounters.rs",
-            "ledger_view",
-            &[Ban::Results, Ban::Layout(1), Ban::Pane(1)],
-        ),
-        ("src/encounters.rs", "results_into", &[Ban::Results]),
-        ("src/encounters.rs", "result_stamp", &[Ban::Results]),
         (
             "src/encounters.rs",
             "run_settings",
-            &[Ban::Results, Ban::Layout(2), Ban::Pane(1)],
+            &[Ban::Results, Ban::Pane(1)],
         ),
         ("src/encounters.rs", "save_draft", &[Ban::Results]),
-        ("src/encounters.rs", "stamp_kept", &[Ban::Results]),
         ("src/library.rs", "add_reader_result", &[Ban::Results]),
         // A by-owner Undo and `use_press` of Library's page lines (Wave 2 moves them to tickets).
         (
@@ -918,11 +914,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "creature_search_with_summary",
             &[Ban::Layout(1)],
         ),
-        (
-            "src/encounters.rs",
-            "editor_view",
-            &[Ban::Pane(1), Ban::Extras(1)],
-        ),
+        ("src/encounters.rs", "editor_view", &[Ban::Pane(1)]),
         ("src/encounters.rs", "notes_field", &[Ban::Layout(1)]),
         (
             "src/encounters.rs",
@@ -930,7 +922,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Layout(1), Ban::RowKey(1)],
         ),
         ("src/encounters.rs", "roster_pane", &[Ban::Layout(1)]),
-        ("src/encounters/groups.rs", "belongs_to", &[Ban::Layout(1)]),
         (
             "src/encounters/groups.rs",
             "change_row",
@@ -1044,6 +1035,9 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "one_fault_has_one_tone_in_every_place",
             &[Ban::Body],
         ),
+        ("src/encounters.rs", "cause", &[Ban::Words]),
+        ("src/encounters.rs", "kept_outcome", &[Ban::Words]),
+        ("src/encounters.rs", "outcome_words", &[Ban::Words]),
         (
             "src/design/outcome.rs",
             "a_body_fault_gives_its_repairs_back_by_id",
@@ -1157,11 +1151,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/world/page.rs", "list", &[Ban::Extras(1)]),
         ("src/world/page.rs", "unread_pane", &[Ban::Extras(1)]),
         ("src/world/related.rs", "history_rows", &[Ban::Extras(1)]),
-        (
-            "src/encounters/groups.rs",
-            "editor_members",
-            &[Ban::Pane(1)],
-        ),
         (
             "src/encounters/groups.rs",
             "a_group_changed_on_disk_blocks_the_whole_save_and_keeps_the_draft",
@@ -1375,8 +1364,8 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/design/components.rs", 16),
             ("src/dndbeyond.rs", 1),
             ("src/encounter_run.rs", 2),
-            ("src/encounters.rs", 4),
-            ("src/encounters/groups.rs", 2),
+            ("src/encounters.rs", 1),
+            ("src/encounters/groups.rs", 1),
             ("src/library.rs", 16),
             ("src/sessions/carry.rs", 1),
             ("src/sessions/page.rs", 3),

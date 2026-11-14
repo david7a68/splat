@@ -7,7 +7,7 @@ use super::{
 use crate::{
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, Catalogue, EntryRef},
-    design::{self, Action, Density, Status, Tone, Type, colors, icons},
+    design::{self, Action, Density, Tone, Type, colors, icons},
     difficulty::creature_xp,
     encounter_run::{FaultKind, GroupMember, MemberFault, RunGroup, change_rows},
     library::{note_path, write_note},
@@ -40,6 +40,7 @@ const OVERRIDE_NAME: design::FieldName = crate::field_id!("override_name");
 const OVERRIDE_NOTE: design::FieldName = crate::field_id!("override_note");
 const GROUP_NAME: design::FieldName = crate::field_id!("group_name");
 const ENCOUNTER_GROUP_NAME: design::FieldName = crate::field_id!("encounter_group_name");
+const BELONGS: design::FieldName = crate::field_id!("group_encounter");
 /// The name of a roster slot's button, for the form it opens.
 pub(super) const SLOT_OPTIONS: &str =
     "Options: starting HP, temporary HP, initiative group and changes";
@@ -133,8 +134,9 @@ pub(super) struct GroupDraft {
     /// The last `Use` on a member this campaign could not find. It owns the result line until
     /// its Undo, a newer member result, or a move or removal that changes the members' places.
     replaced: Option<Replaced>,
-    /// When the newest member result was made (`result_stamp`); `None` before the first.
-    member_stamp: Option<design::ResultOrder>,
+    /// A member result was just made: the page records it in its store, which issues its order
+    /// (`Encounters::record_member_results`), in the frame of the act.
+    member_new: bool,
     /// Changes at each edit of the draft (`touch`), and only then; a new draft has its own. Save's
     /// cached check is keyed by it (FN5, review of PR 299).
     revision: u64,
@@ -194,7 +196,7 @@ impl GroupDraft {
             removed_unread: None,
             removed_member: None,
             replaced: None,
-            member_stamp: None,
+            member_new: false,
             revision: next_revision(),
             members_saved: None,
             edited_last_frame: false,
@@ -233,7 +235,7 @@ impl GroupDraft {
             removed_unread: None,
             removed_member: None,
             replaced: None,
-            member_stamp: None,
+            member_new: false,
             revision: next_revision(),
             members_saved: None,
             edited_last_frame: false,
@@ -248,6 +250,14 @@ impl GroupDraft {
     }
     pub(super) fn name(&self) -> String {
         self.name.clone()
+    }
+    /// The draft's own identity, the owner of its member result in the page's store.
+    pub(super) fn id(&self) -> Uuid {
+        self.id
+    }
+    /// Whether a member result was made since the page last looked, and the look.
+    pub(super) fn take_member_new(&mut self) -> bool {
+        std::mem::take(&mut self.member_new)
     }
     /// Give this group the owner `earlier` had, and change nothing else: Undo of a move.
     pub(super) fn take_owner_from(&mut self, earlier: &GroupDraft) {
@@ -265,7 +275,8 @@ impl GroupDraft {
     /// The member result that shows now, with its Undo: the newest of a replacement, a removed
     /// member and a removed unread row owns it. A replacement's ends when its member no longer
     /// holds the chosen creature.
-    pub(super) fn member_result(&mut self) -> Option<(String, &'static str, design::ResultOrder)> {
+    /// The member result that shows: its words and its Undo. Its order is the page's store's.
+    pub(super) fn member_result(&mut self) -> Option<(String, design::outcome::UndoStep)> {
         if let Some(result) = &self.replaced {
             if self
                 .setup
@@ -273,10 +284,10 @@ impl GroupDraft {
                 .get(result.index)
                 .is_some_and(|member| member.creature == result.after)
             {
-                // Each member result is made with its stamp, so a shown one has it.
-                return self
-                    .member_stamp
-                    .map(|stamp| (result.words.clone(), "Undo replacement", stamp));
+                return Some((
+                    result.words.clone(),
+                    design::outcome::UndoStep::of(design::outcome::Verb::Replace, "member"),
+                ));
             }
             self.replaced = None;
         }
@@ -284,8 +295,12 @@ impl GroupDraft {
             .as_ref()
             .map(|(_, _, name)| name)
             .or(self.removed_unread.as_ref().map(|(_, _, name)| name))
-            .zip(self.member_stamp)
-            .map(|(name, stamp)| (format!("Removed {name}."), "Undo remove member", stamp))
+            .map(|name| {
+                (
+                    format!("Removed {name}."),
+                    design::outcome::UndoStep::of(design::outcome::Verb::Remove, "member"),
+                )
+            })
     }
     /// Undo the member result that shows: the creature, the member or the unread row comes
     /// back at its place, and other draft edits stay.
@@ -453,7 +468,7 @@ impl GroupDraft {
                 .map_or(source.len(), |at| row[0].range.start + at + 1);
             self.removed_member = None;
             self.replaced = None;
-            self.member_stamp = Some(super::result_stamp());
+            self.member_new = true;
             self.removed_unread = Some((
                 line,
                 source[start..end].to_owned(),
@@ -1407,7 +1422,7 @@ pub(super) fn of_encounter(
         } else {
             groups[index].setup.encounter = None;
         }
-        *removed_group = Some((index, gone, delete, super::result_stamp()));
+        *removed_group = Some((index, gone, delete, true));
     }
     if Action::secondary("New group for this encounter")
         .icon(icons::ADD)
@@ -1425,10 +1440,6 @@ pub(super) fn of_encounter(
 
 /// Who a group is for, in its editor. An encounter being built is a choice before it is saved,
 /// and under the name it has now.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn belongs_to(
     ui: &mut egui::Ui,
     draft: &mut GroupDraft,
@@ -1454,69 +1465,28 @@ fn belongs_to(
     });
     ui.horizontal(|ui| {
         choice_label(ui, BELONGS_TO);
-        // The choice ends where the name field ends, inside the column.
+        // The choice ends where the name field ends, inside the column. The part's list is as
+        // wide as its control at every size (FB8), and a long name wraps in it.
         let right = name_right.min(ui.max_rect().right());
         let width = (right - ui.cursor().left()).max(Density::Scan.control());
-        // FB8: egui keeps a popup's first size, so a menu opened at one width would stay that
-        // wide after a resize. When the control's width changes while its menu is open, the
-        // remembered sizes go, and the menu takes the control's width again. Only one popup is
-        // open at a time, and Splat has no window that keeps a place.
-        let key = width.round() as i32;
-        let last_id = ui.make_persistent_id("group_encounter_width");
-        // The combo's own popup id: its button is `make_persistent_id(Id::new(salt))`.
-        let popup = ui
-            .make_persistent_id(egui::Id::new("group_encounter"))
-            .with("popup");
-        if ui
-            .data(|data| data.get_temp::<i32>(last_id))
-            .is_some_and(|last| last != key)
-            && egui::Popup::is_id_open(ui.ctx(), popup)
-        {
-            ui.ctx().memory_mut(egui::Memory::reset_areas);
-        }
-        ui.data_mut(|data| data.insert_temp(last_id, key));
-        let was_open = egui::Popup::is_id_open(ui.ctx(), popup);
-        let combo = egui::ComboBox::from_id_salt("group_encounter")
-            .icon(design::combo_icon)
+        let mut chosen = current;
+        let mut dropdown = design::Dropdown::new(BELONGS.of(draft.id), BELONGS_TO)
             .width(width)
-            .truncate()
-            .selected_text(shown)
-            .show_ui(ui, |ui| {
-                // FB8: the menu is as wide as its control, as Library's scope menu is. Its
-                // content is the control's width less the menu's frame; a long name wraps.
-                let frame = ui.style().spacing.menu_margin.sum().x
-                    + 2.0 * ui.style().visuals.window_stroke.width;
-                let inner = (width - frame).max(0.0);
-                ui.set_min_width(inner);
-                ui.set_max_width(inner);
-                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
-                let any =
-                    design::extras::choice_wrapped(ui, current.is_none(), ANY_ENCOUNTER, None);
-                crate::rolls::menu_choice_focus(ui, &any);
-                if any.clicked() {
-                    draft.setup.encounter = None;
-                    draft.touch();
-                }
-                for (id, name) in &choices {
-                    // The same choice again keeps a link that the note gives.
-                    let choice =
-                        design::extras::choice_wrapped(ui, current == Some(*id), name, None);
-                    crate::rolls::menu_choice_focus(ui, &choice);
-                    if choice.clicked() && current != Some(*id) {
-                        draft.setup.encounter = Some(EntryRef::id(*id));
-                        draft.touch();
-                    }
-                }
-            });
-        // The menu's focus model (the run's menus use it too): the control owns its menu while it
-        // is open, and when the menu closes by the keys or a choice the focus comes back to it;
-        // a click on another control keeps the focus there.
-        crate::rolls::keep_menu_owner(&combo.response);
-        if !was_open && egui::Popup::is_id_open(ui.ctx(), popup) {
-            let by_mouse = ui.ctx().input(|input| input.pointer.any_click());
-            crate::rolls::own_menu(&combo.response, !by_mouse);
+            .choice(None, ANY_ENCOUNTER)
+            .choices(choices.iter().map(|(id, name)| (Some(*id), *name)));
+        // An encounter that is gone stays the value, as words the list cannot choose again.
+        if current.is_some_and(|id| !choices.iter().any(|(known, _)| *known == id)) {
+            dropdown = dropdown.blocked_choice(
+                current,
+                MISSING_ENCOUNTER,
+                "Its encounter was deleted. Choose another.",
+            );
         }
-        design::named(ui, &combo.response, &format!("{BELONGS_TO}: {shown}"));
+        if dropdown.show(ui, &mut chosen).changed {
+            // The same choice again keeps a link that the note gives: only a change writes.
+            draft.setup.encounter = chosen.map(EntryRef::id);
+            draft.touch();
+        }
     });
     // In an encounter's editor, belonging to it goes without saying.
     if current.is_some() && current == open.map(|(id, _)| id) {
@@ -2280,7 +2250,7 @@ impl Encounters {
                 self.saved = true;
                 self.error = None;
                 self.message = Some("Group saved.".into());
-                self.message_order = Some(design::ResultOrder::issue());
+                self.stamp_kept(super::KeptResult::Saved);
 
                 // The list and an open run read groups from the snapshot.
                 self.refreshing = true;
@@ -2356,9 +2326,41 @@ impl Encounters {
         // Save, and Save is blocked and not primary.
         let refusal = self.group_refusal();
         // The Session page has no save of its own to give this key to.
+        // One `DraftState` decides the save row's word, Save's weight and reason, Discard and the
+        // campaign lock; keyboard Save runs exactly when Save can (migrate:O, rows 139, FB9).
+        let empty = self
+            .group_draft
+            .as_ref()
+            .is_some_and(|draft| draft.setup.members.is_empty());
+        let state = {
+            let changed = if dirty {
+                design::memo::Changed::Yes
+            } else {
+                design::memo::Changed::No
+            };
+            // An open run's `Next turn` owns the one primary action.
+            let primary = if has_run {
+                design::save_row::Primary::Elsewhere
+            } else {
+                design::save_row::Primary::Draft
+            };
+            let mut state = design::DraftState::new(changed, primary).locks_campaign();
+            if empty {
+                state = state.refused(EMPTY_REASON);
+            } else if let Some(refusal) = &refusal {
+                state = state.refused(refusal.text.clone());
+            } else if self.shows_validation_error() {
+                // AH1: the last refusal still shows: Invalid, as the encounter editor says.
+                state = state.invalid();
+            }
+            if self.message.is_some() {
+                // FC1: the shared `Saved`; the list keeps the full sentence for after Back.
+                state = state.just_saved();
+            }
+            state
+        };
         let save_key = in_plan
-            && refusal.is_none()
-            && dirty
+            && state.can_save()
             && ui
                 .ctx()
                 .input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
@@ -2369,9 +2371,6 @@ impl Encounters {
         };
         let compact = ui.available_width() < 760.0;
 
-        let saved_note = self.message.clone();
-        // AH1: a draft that Save's check refused says Invalid, as the encounter editor does.
-        let refused = self.shows_validation_error() || refusal.is_some();
         let focus_name = std::mem::take(&mut self.focus_name);
         let draft = self.group_draft.as_mut().expect("the editor has a draft");
         let column_right = ui.data(|data| data.get_temp::<f32>(column_right_id(&draft.path)));
@@ -2385,7 +2384,6 @@ impl Encounters {
         let block_right = column_right.map_or(ui.max_rect().right(), |right| {
             right.min(ui.max_rect().right())
         });
-        let empty = draft.setup.members.is_empty();
         // FB7: Save group is on the title line at the editor's right edge, above the Add
         // creatures column, where Save encounter is in the encounter editor (round 28: one place
         // in both editors). The name and Belongs to keep the block's edge. The save row below
@@ -2397,19 +2395,12 @@ impl Encounters {
             .natural_width(ui)
             .max(Action::secondary("Save group").natural_width(ui))
             .ceil();
-        let button = if dirty && !has_run && !empty && !refused {
-            Action::primary("Save group")
-        } else {
-            Action::secondary("Save group")
+        let button = match state.save_weight() {
+            design::save_row::SaveWeight::Primary => Action::primary("Save group"),
+            design::save_row::SaveWeight::Secondary => Action::secondary("Save group"),
         }
         .min_width(save_width)
-        .blocked(if empty {
-            Some(EMPTY_REASON)
-        } else if !dirty {
-            Some("No changes to save.")
-        } else {
-            refusal.as_ref().map(|refusal| refusal.text.as_str())
-        });
+        .blocked(state.save_blocked());
         ui.horizontal(|ui| {
             back = Action::quiet(icons::BACK)
                 .name(back_name)
@@ -2453,18 +2444,8 @@ impl Encounters {
         let mut below: Vec<(&'static str, Option<&'static str>)> = Vec::new();
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Scan.control());
-            let (icon, word, color) = if empty || refused {
-                (icons::ERROR, "Invalid", colors().document.invalid)
-            } else if dirty {
-                (icons::DRAFT, "Unsaved", colors().document.unsaved)
-            } else if saved_note.is_some() {
-                // FC1: the save row says the shared `Saved`, as the encounter editor does. The
-                // list keeps the full sentence for after Back.
-                (icons::OK, "Saved", colors().document.saved)
-            } else {
-                (icons::OK, "No changes", colors().muted)
-            };
-            discard = super::editor_save_state(ui, Status { icon, word, color }, dirty, None);
+            discard =
+                super::editor_save_state(ui, state.word().status(), state.discard_shown(), None);
             let gap = ui.spacing().item_spacing.x;
             let font = Type::Small.font(ui);
             let mut room = block_right - ui.cursor().left();
@@ -2482,16 +2463,11 @@ impl Encounters {
                 }
             };
             let empty_reason = beside(EMPTY_REASON, empty.then_some(EMPTY_REASON));
-            // FB6: while Save is blocked, Discard is the one way out, so the lock says only that.
+            // FB6: while Save is blocked, Discard is the one way out, so the lock says only that
+            // (`DraftState::lock_reason`). Its place is measured by the longer form.
             let switch = beside(
-                super::draft_switch_reason(),
-                dirty.then(|| {
-                    if empty {
-                        super::blocked_draft_switch_reason()
-                    } else {
-                        super::draft_switch_reason()
-                    }
-                }),
+                design::save_row::SAVE_OR_DISCARD_TO_SWITCH,
+                state.lock_reason(),
             );
             super::blocked_reason(ui, switch);
             ui.allocate_ui_with_layout(
@@ -2537,18 +2513,7 @@ impl Encounters {
             return;
         }
         if discard {
-            self.clear_notice();
-            let draft = self.group_draft.take().expect("the editor has a draft");
-            if draft.baseline.is_some() {
-                match GroupDraft::open(&active.path, &draft.path) {
-                    Ok(reopened) => self.group_draft = Some(reopened),
-                    Err(e) => self.error = Some(e),
-                }
-            }
-            self.discarded_group = Some(draft);
-            self.discarded_group_order = Some(design::ResultOrder::issue());
-            self.stamp_kept(super::KeptResult::GroupDiscarded);
-            self.discarded = None;
+            self.discard_group_draft(active);
             return;
         }
         if save || save_key {
@@ -2558,22 +2523,37 @@ impl Encounters {
         // FI1's family: the editor's results with a live Undo (the discard, the newest member
         // result), then Save's reason, then the file's warnings sit in one footer pinned below
         // the members and the search, so none of them moves a member or a field.
+        // The footer's messages are made before the body: the member result, the discard, the
+        // copies' separations, newest first by their stores, then the reasons and warnings.
+        self.record_member_results();
         let kinds = self.kept_results(false);
-        let pressed = std::cell::Cell::new(None);
-        let member_undo = std::cell::Cell::new(false);
-        let (pressed_ref, member_ref) = (&pressed, &member_undo);
-        let footer_id = self.group_draft.as_ref().map(|draft| draft.path.clone());
-        let mut footer =
-            design::Footer::new(("group_editor_footer", footer_id), ui.available_width());
-        // The member result is newer than the discard: it was made on the draft that the
-        // discard left open.
-        let identity = std::cell::Cell::new(false);
-        let separated = super::identity_line(ui.ctx());
-        if let Some(draft) = self.group_draft.as_mut() {
-            member_result_into(draft, &mut footer, member_ref, separated, &identity);
+        let frame = design::outcome::PaneFrame::new(ui);
+        let footer_id = self.group_draft.as_ref().map(|draft| draft.id());
+        let mut messages = design::outcome::Messages::new(
+            &frame,
+            ("group_editor_footer", footer_id),
+            ui.available_width(),
+        );
+        if let Some(root) = self.active.as_ref().map(|active| active.path.clone())
+            && let Some(draft) = self.group_draft.as_mut()
+            && let Some((words, undo)) = draft.member_result()
+            && let Some(shown) = self.member_results.get(&super::MemberOwner {
+                root,
+                draft: draft.id(),
+            })
+        {
+            messages.kept(shown.outcome(&frame, |_| {
+                design::outcome::Said::new(super::outcome_words(&words))
+                    .undo(undo.pressed_as(super::FooterPress::UndoMember))
+                    .into()
+            }));
         }
-        self.kept_into_footer(&mut footer, &kinds, pressed_ref);
-        super::identity_failure_into(ui.ctx(), &mut footer);
+        for line in self.kept_lines(&frame, &kinds) {
+            messages.kept(line);
+        }
+        for line in self.separation_lines(&frame, &active.path) {
+            messages.kept(line);
+        }
         // Save's reason: the last refusal, or the check's fault when the editor shows it at no
         // other place (a member row or the reason beside Save already says theirs).
         let reason = self.error.clone().or_else(|| {
@@ -2582,31 +2562,77 @@ impl Encounters {
                 .filter(|refusal| !refusal.in_place)
                 .map(|refusal| refusal.text.clone())
         });
-        if let Some(e) = reason {
-            footer.reason(e.clone(), move |ui| {
-                design::message(ui, Tone::Error, &e);
-            });
+        if let Some(error) = reason {
+            messages.outcome(design::outcome::FaultMessage::new(
+                &super::EncounterFault::Failed(error),
+            ));
+        }
+        if let Some(error) = self.separation_failure() {
+            messages.outcome(design::outcome::FaultMessage::new(
+                &super::EncounterFault::SeparationFailed(error),
+            ));
         }
         for warning in file_warnings {
-            footer.notice(warning.clone(), move |ui| {
-                design::message(ui, Tone::Warning, &warning);
-            });
+            messages.outcome(design::outcome::FaultMessage::new(
+                &super::EncounterFault::FileWarning(warning),
+            ));
         }
-        let bottom = footer.show_by_hand(ui);
-        if let Some(kind) = pressed.get() {
-            self.undo_kept(kind, Some((active, campaigns.modules())));
+        // FF8: a press of a copied note's repair in the search, for the page's store.
+        let separated = std::cell::Cell::new(None);
+        // The members and Add creatures are columns, each with its own scroll (in the narrow
+        // layout, one of them under its tab): the body fills its room above the footer.
+        let paned = messages.pane(
+            ui,
+            design::pane::Body::Fills(design::pane::Fills::because(
+                design::pane::FillsReason::Columns,
+            )),
+            |ui| self.group_editor_body(ui, compact, name_right, &separated),
+        );
+        self.record_separation(separated.into_inner());
+        if let Some(press) = paned.pressed {
+            match (press.id, press.ticket) {
+                (super::FooterPress::Undo, Some(ticket)) => {
+                    self.undo_by_ticket(ticket, Some((active, campaigns.modules())));
+                }
+                (super::FooterPress::UndoSeparation, Some(ticket)) => {
+                    self.undo_separation(ui.ctx(), ticket, active);
+                }
+                (super::FooterPress::UndoMember, Some(ticket)) => self.undo_member(ticket),
+                _ => {}
+            }
         }
-        if identity.get() {
-            super::undo_identity(ui.ctx());
+    }
+
+    /// `Discard` in the group editor: the saved group opens clean, and the discarded draft
+    /// waits for `Undo discard` with its results.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
+    pub(super) fn discard_group_draft(&mut self, active: &Campaign) {
+        self.clear_notice();
+        let draft = self.group_draft.take().expect("the editor has a draft");
+        if draft.baseline.is_some() {
+            match GroupDraft::open(&active.path, &draft.path) {
+                Ok(reopened) => self.group_draft = Some(reopened),
+                Err(e) => self.error = Some(e),
+            }
         }
-        if member_undo.get()
-            && let Some(draft) = self.group_draft.as_mut()
-        {
-            draft.undo_member_result();
-            self.expanded = None;
-        }
-        let mut body = super::body_above(ui, bottom);
-        let ui = &mut body;
+        self.discarded_group = Some(draft);
+        // The Session plan's footer reads this order (package S's caller).
+        self.discarded_group_order = Some(design::ResultOrder::issue());
+        self.stamp_kept(super::KeptResult::GroupDiscarded);
+        self.discarded = None;
+    }
+
+    /// The group editor's body, in the pane: the members and Add creatures, as columns or tabs.
+    fn group_editor_body(
+        &mut self,
+        ui: &mut egui::Ui,
+        compact: bool,
+        name_right: f32,
+        separated: &std::cell::Cell<Option<super::Separated>>,
+    ) {
         let Some(snapshot) = &self.snapshot else {
             design::spinner(ui);
             return;
@@ -2649,7 +2675,15 @@ impl Encounters {
                     if ui.data_mut(|data| data.remove_temp::<f32>(id)).is_some() {
                         ui.ctx().request_discard("The members column is not shown");
                     }
-                    add_pane(ui, draft, snapshot, search, focus_search, peek, true)
+                    add_pane(
+                        ui,
+                        draft,
+                        snapshot,
+                        search,
+                        focus_search,
+                        (peek, separated),
+                        true,
+                    )
                 }
             }
             return;
@@ -2667,7 +2701,15 @@ impl Encounters {
                 bottom: 0,
             }))
             .show_inside(ui, |ui| {
-                add_pane(ui, draft, snapshot, search, focus_search, peek, false);
+                add_pane(
+                    ui,
+                    draft,
+                    snapshot,
+                    search,
+                    focus_search,
+                    (peek, separated),
+                    false,
+                );
             });
         egui::CentralPanel::default()
             .frame(egui::Frame::new().inner_margin(egui::Margin {
@@ -2712,7 +2754,11 @@ fn add_pane(
     snapshot: &Snapshot,
     search: &mut String,
     focus_search: &mut bool,
-    peek: &mut Option<Uuid>,
+    // Lookup's creature, and where a press of a copied note's repair says what it did (FF8).
+    (peek, separated): (
+        &mut Option<Uuid>,
+        &std::cell::Cell<Option<super::Separated>>,
+    ),
     compact: bool,
 ) {
     if !compact {
@@ -2741,6 +2787,7 @@ fn add_pane(
         peek,
         super::SearchRoster {
             already: &|_| false,
+            separated,
         },
         &summary,
     );
@@ -2773,38 +2820,6 @@ fn member_key(path: &str, member: &MemberDraft) -> String {
 /// Where a group editor's members column ended in the last pass, for the name field above it.
 fn column_right_id(path: &str) -> egui::Id {
     egui::Id::new(("group_column_right", path))
-}
-
-/// The newest member result, with its Undo, in the editor's footer. A pressed Undo is recorded
-/// in `pressed` and applied with `undo_member_result` after the footer is drawn.
-/// FF8: the creature search's separation result takes its place beside it, newest first;
-/// its pressed Undo is recorded in `identity`.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-)]
-fn member_result_into<'a>(
-    draft: &mut GroupDraft,
-    footer: &mut design::Footer<'a>,
-    pressed: &'a std::cell::Cell<bool>,
-    separated: Option<(design::ResultOrder, String, &'static str)>,
-    identity: &'a std::cell::Cell<bool>,
-) {
-    if let Some((words, undo, stamp)) = draft.member_result() {
-        footer.result(stamp, words.clone(), true, move |ui| {
-            if design::undo_message(ui, Tone::Success, &words, undo) {
-                pressed.set(true);
-            }
-        });
-    }
-    // The separation result: the footer puts it in its place by its own order.
-    if let Some((stamp, words, undo)) = separated {
-        footer.result(stamp, words.clone(), true, move |ui| {
-            if design::undo_message(ui, Tone::Success, &words, undo) {
-                identity.set(true);
-            }
-        });
-    }
 }
 
 #[allow(
@@ -3322,7 +3337,7 @@ fn members(
         draft.removed_member = None;
         draft.removed_unread = None;
         draft.replaced = Some(result);
-        draft.member_stamp = Some(super::result_stamp());
+        draft.member_new = true;
     }
     if let Some(index) = remove {
         let member = draft.setup.members.remove(index);
@@ -3336,7 +3351,7 @@ fn members(
         let name = shown_name(&member.overrides, base);
         draft.removed_unread = None;
         draft.removed_member = Some((index, member, name));
-        draft.member_stamp = Some(super::result_stamp());
+        draft.member_new = true;
     } else if let Some(index) = raise {
         draft.setup.members.swap(index, index - 1);
     } else if let Some(index) = lower {
@@ -3746,24 +3761,100 @@ mod tests {
         id
     }
 
-    /// The members with the editor's footer, as the group editor draws them.
-    #[allow(clippy::disallowed_methods)]
-    fn editor_members(
-        ui: &mut egui::Ui,
-        state: &mut (GroupDraft, Option<String>),
-        snapshot: &Snapshot,
-    ) {
-        let pressed = std::cell::Cell::new(false);
-        let mut footer = design::Footer::new("members_test_footer", ui.available_width());
-        let identity = std::cell::Cell::new(false);
-        member_result_into(&mut state.0, &mut footer, &pressed, None, &identity);
-        let bottom = footer.show_by_hand(ui);
-        if pressed.get() {
-            state.0.undo_member_result();
-            state.1 = None;
+    /// The draft, its open form, and the member result store, as the page holds them.
+    type MembersState = (
+        GroupDraft,
+        Option<String>,
+        design::Results<super::super::MemberOwner, super::super::MemberMark>,
+    );
+
+    /// The members with the editor's typed footer, as the group editor draws them: the member
+    /// result is recorded in its store in the frame of the act, and its Undo is pressed through
+    /// the footer and used by the press's ticket.
+    fn editor_members(ui: &mut egui::Ui, state: &mut MembersState, snapshot: &Snapshot) {
+        let owner = super::super::MemberOwner {
+            root: std::path::PathBuf::from("campaign"),
+            draft: state.0.id(),
+        };
+        if state.0.take_member_new() {
+            state.2.record(super::super::MemberMark(owner.clone()));
         }
-        let mut body = super::super::body_above(ui, bottom);
-        members(&mut body, &mut state.0, snapshot, &mut state.1);
+        if state.0.member_result().is_none() {
+            state.2.owner_changed(&owner);
+        }
+        let frame = design::outcome::PaneFrame::new(ui);
+        let mut messages =
+            design::outcome::Messages::new(&frame, "members_test_footer", ui.available_width());
+        if let Some((words, undo)) = state.0.member_result()
+            && let Some(shown) = state.2.get(&owner)
+        {
+            messages.kept(shown.outcome(&frame, |_| {
+                design::outcome::Said::new(super::super::outcome_words(&words))
+                    .undo(undo.pressed_as(super::super::FooterPress::UndoMember))
+                    .into()
+            }));
+        }
+        let (draft, expanded, results) = state;
+        let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
+            members(ui, draft, snapshot, expanded);
+        });
+        if let Some(ticket) = paned.pressed.and_then(|press| press.ticket) {
+            let _ = results.undo_by(ticket, |_| {
+                draft.undo_member_result();
+                Ok::<(), ()>(())
+            });
+            *expanded = None;
+        }
+    }
+
+    /// Review of PR 339 (1): a member result belongs to its draft's content. Remove a member,
+    /// Discard (the saved group opens clean, with the same identity), then Undo discard: the
+    /// member is still removed and its result comes back with its Undo.
+    #[test]
+    fn undo_discard_brings_back_the_group_member_result() {
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let (goblin, wolf) = (creature(dir.path(), "Goblin"), creature(dir.path(), "Wolf"));
+        let mut saved = GroupDraft::new();
+        saved.name = "Pack".into();
+        saved.add(goblin);
+        saved.add(wolf);
+        saved.save(&active, &[]).unwrap();
+        let mut page = Encounters {
+            active: Some(active.clone()),
+            group_draft: Some(GroupDraft::open(dir.path(), &saved.path).unwrap()),
+            ..Default::default()
+        };
+        // Remove as the member list does: the member's data, then the mark.
+        let draft = page.group_draft.as_mut().unwrap();
+        let member = draft.setup.members.remove(0);
+        draft.removed_member = Some((0, member, "Goblin".into()));
+        draft.member_new = true;
+        draft.touch();
+        let owner = super::super::MemberOwner {
+            root: active.path.clone(),
+            draft: draft.id(),
+        };
+        page.record_member_results();
+        assert!(
+            page.member_results.get(&owner).is_some(),
+            "recorded at the act"
+        );
+        page.discard_group_draft(&active);
+        page.record_member_results();
+        assert!(
+            page.member_results.get(&owner).is_some(),
+            "the discarded draft keeps its result while it waits for Undo discard"
+        );
+        assert!(page.undo_kept(super::super::KeptResult::GroupDiscarded, None));
+        page.record_member_results();
+        let draft = page.group_draft.as_mut().unwrap();
+        assert_eq!(draft.setup.members.len(), 1, "the member is still removed");
+        assert!(draft.member_result().is_some());
+        assert!(
+            page.member_results.get(&owner).is_some(),
+            "Undo discard shows the member result again, with its Undo"
+        );
     }
 
     /// Round 28 (K3 review): a member's key is its identity in the draft. A move keeps each key
@@ -3877,11 +3968,11 @@ mod tests {
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(880.0, 1000.0))
             .build_state(
-                move |ctx, state: &mut (GroupDraft, Option<String>)| {
+                move |ctx, state: &mut MembersState| {
                     egui::CentralPanel::default()
                         .show(ctx, |ui| editor_members(ui, state, &snapshot));
                 },
-                (draft, None),
+                (draft, None, design::Results::default()),
             );
         design::theme::install(&harness.ctx);
         harness.run_steps(2);
@@ -3948,11 +4039,11 @@ mod tests {
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(880.0, 1000.0))
             .build_state(
-                move |ctx, state: &mut (GroupDraft, Option<String>)| {
+                move |ctx, state: &mut MembersState| {
                     egui::CentralPanel::default()
                         .show(ctx, |ui| editor_members(ui, state, &snapshot));
                 },
-                (draft, None),
+                (draft, None, design::Results::default()),
             );
         design::theme::install(&harness.ctx);
         harness.run_steps(2);
@@ -4995,6 +5086,8 @@ mod tests {
         assert!(draft.groups[0].file_gone());
         draft.groups_read = true;
         let editor = Encounters {
+            // The draft's results are the campaign's (`EditorOwner`).
+            active: Some(campaign.clone()),
             draft: Some(draft),
             snapshot: Some(Snapshot::load(&campaign, &[]).unwrap()),
             ..Default::default()
@@ -5003,17 +5096,27 @@ mod tests {
             |ctx, editor: &mut Encounters| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     if !editor.encounter_disk_view(ui, &campaign, &[]) {
+                        // The draft's results in a footer, from the page's store, as the editor
+                        // draws them; the Undo goes to the store.
+                        editor.record_editor_results();
+                        let lines = editor.editor_result_lines();
+                        let pressed = std::cell::Cell::new(None);
+                        let mut footer =
+                            design::Footer::new("group_test_footer", ui.available_width());
+                        Encounters::editor_results_into(
+                            &mut footer,
+                            &editor.editor_results,
+                            &lines,
+                            &pressed,
+                        );
+                        let bottom = footer.show_by_hand(ui);
+                        if let Some(owner) = pressed.take() {
+                            editor.undo_editor_of(&owner);
+                        }
                         let Encounters {
                             draft, snapshot, ..
                         } = editor;
                         if let (Some(draft), Some(snapshot)) = (draft.as_mut(), snapshot.as_ref()) {
-                            // The draft's results in a footer, as the editor draws them.
-                            let pressed = super::super::DraftUndo::default();
-                            let mut footer =
-                                design::Footer::new("group_test_footer", ui.available_width());
-                            draft.results_into(&mut footer, &pressed, None);
-                            let bottom = footer.show_by_hand(ui);
-                            draft.apply_undo(&pressed);
                             let mut body = super::super::body_above(ui, bottom);
                             of_encounter(&mut body, draft, snapshot, &mut false, &mut None);
                         }
