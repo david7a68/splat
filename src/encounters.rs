@@ -5719,7 +5719,7 @@ impl Encounters {
 
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: the editor's two columns fill the page, each with its own scroll (`Fills::because`), and the unread rows' footer keeps main's form (`show_by_hand`) (design::results::STAGED_ALLOWS)"
+        reason = "staged: the editor’s two columns fill the page, each with its own scroll (`Fills::because`), and the unread rows’ footer keeps main’s form (`show_by_hand`) (design::results::STAGED_ALLOWS)"
     )]
     fn editor_view(
         &mut self,
@@ -9050,7 +9050,7 @@ mod tests {
                             None,
                         );
                         let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
-                            ui.label("The editor's body");
+                            ui.label("The editor’s body");
                             // Review of PR 347: the body makes a newer replacement before the
                             // older one's Undo press is applied, as `Use` in the roster does.
                             let replace = egui::Id::new("test_body_replaces");
@@ -9116,7 +9116,7 @@ mod tests {
         assert_eq!(
             draft.setup.roster, before,
             "Undo gives back the roster from before its own replacement, not from before the \
-             body's newer one in the same frame"
+             body’s newer one in the same frame"
         );
         assert!(
             draft.body.contains("Ash falls on the ford."),
@@ -9128,7 +9128,7 @@ mod tests {
                 && harness
                     .query_by_label("1 Wolf row replaced again.")
                     .is_none(),
-            "the result's words leave with its data; the newer replacement's rows were given \
+            "the result’s words leave with its data; the newer replacement’s rows were given \
              back too, so it ends"
         );
     }
@@ -10439,7 +10439,7 @@ mod tests {
         let link = harness.get_by_label("Show file").rect();
         assert!(
             whole(&harness, link),
-            "the file line's Show file is reached by the footer's scroll: {link:?}"
+            "the file line’s Show file is reached by the footer’s scroll: {link:?}"
         );
         // A warning that comes and goes, at 960 and in the narrow layout (880).
         // Each pane heading or tab by what it names (its count may change), and its top.

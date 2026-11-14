@@ -1189,7 +1189,7 @@ mod iter_2_c_tests {
             });
             assert!(
                 inside,
-                "{case}: the menu's rows {rows:?} lie below or above the button {shown:?}, inside the pane {pane:?} less a lane of {lane}"
+                "{case}: the menu’s rows {rows:?} lie below or above the button {shown:?}, inside the pane {pane:?} less a lane of {lane}"
             );
         }
     }
