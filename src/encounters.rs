@@ -6614,6 +6614,10 @@ impl Encounters {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn roster_pane(
         ui: &mut egui::Ui,
         draft: &mut Draft,
@@ -6626,64 +6630,115 @@ impl Encounters {
         // holds the heading's place.
         heading: Option<Option<&crate::difficulty::Difficulty>>,
     ) -> bool {
-        // The roster column is a pane of its own, keyed by the draft (its scroll and its notes
-        // are this encounter's), whose messages are the editor's footer below both columns. All
-        // of it scrolls, so that the settings give up their room to a group being built. The
-        // notes are the pane's one editor (round 28, P2): when the column is full they scroll
-        // in a region of their own, so the groups after them stay in reach. A line-start quiet
-        // action paints its hang into the margin left of the pane.
-        // The pane is scoped to its parent `Ui`; the scope's id is the draft's alone, so the
-        // column keeps its scroll and its region when the window crosses to the narrow layout,
-        // whose parent differs (iter 7), and another encounter opens at its own top.
-        let width = ui.available_width();
-        let scope = egui::UiBuilder::new().id(("encounter_roster", draft.id));
+        // All of it scrolls, so that the settings give up their room to a group being built.
+        // A line-start quiet action reaches `S` into the page's gutter. The scroll area starts
+        // there too, so it shows the whole target, and its margin keeps the text where it was.
+        // Its id is the draft's alone: the column keeps its scroll when the window crosses to
+        // the narrow layout (iter 7), and another encounter opens at its own top.
+        //
+        // Kept on its own scroll, not the pane's editor region (round 28, P2): a screen
+        // reader's ScrollIntoView on the notes would reach only the region's scroll column,
+        // never the column around it, so notes below the view could not be brought into it.
+        let area = ui.available_rect_before_wrap();
+        let scope = egui::UiBuilder::new()
+            .id(("encounter_roster", draft.id))
+            .max_rect(area.with_min_x(area.min.x - design::S));
         ui.scope_builder(scope, |ui| {
-        design::Footer::new("encounter_roster", width).pane_editor(ui, |ui, region| {
-            ui.set_width(ui.available_width().min(design::LIST_MEASURE));
-            if let Some(difficulty) = heading {
-                roster_heading(ui, draft.setup.roster.len(), difficulty);
-            }
-            // Without a link there is no sheet to sync with, whatever the note says.
-            let live = linked_party.filter(|_| draft.setup.combat_sync);
-            if draft.setup.roster.is_empty() {
-                design::gap(ui, design::Gap::S);
-                blocked_reason(
-                    ui,
-                    Some("No participants yet. Add the party and creatures from Add participants."),
-                );
-            }
-            Self::roster(ui, draft, snapshot, focus_search, expanded, live, make_yours);
-            // The header's name field ends where the roster's rows and rules end (FA9, FI9).
-            let right = ui.available_rect_before_wrap().right();
-            ui.ctx()
-                .data_mut(|data| data.insert_temp(pane_right_id(draft.id, ROSTER_PANE), right));
-            design::gap(ui, design::Gap::M);
-            if let Some(party) = linked_party {
-                Self::sync_option(ui, draft, snapshot, party);
-            }
-            ui.checkbox(&mut draft.setup.repeatable, REPEATABLE_OPTION);
-            // FI7: what the option changes, in the form the sync option's help uses.
-            design::help(ui, REPEATABLE_HELP);
-            design::gap(ui, design::Gap::M);
-            Self::loot_field(ui, draft);
-            design::gap(ui, design::Gap::M);
-            design::field(ui, NOTES_LABEL, None, None, |ui| {
-                let hint = design::placeholder(
-                    ui,
-                    "What you read to the table, then your tactics. The run shows this before the first turn.",
-                );
-                let output = region.editor(ui, NOTES_FIELD.of(draft.id), &mut draft.body, |edit| {
-                    notes_style(edit, 5).hint_text(hint)
-                });
-                if let Some(note) = crate::markdown_source::pressed_note_link(ui, &output, None) {
-                    crate::markdown_view::send_note_link(ui.ctx(), note, None);
-                }
-                design::named(ui, &output.response, NOTES_LABEL);
-            });
-            groups::of_encounter(ui, draft, snapshot, focus_search, expanded)
-        })
+            // The roster keeps the scroll bar's lane whether or not the bar shows (FB2's family).
+            let lane = scroll_lane(ui) - design::S;
+            egui::ScrollArea::vertical()
+                .id_salt("encounter_editor")
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    egui::Frame::new()
+                        .inner_margin(egui::Margin {
+                            left: design::S as i8,
+                            ..egui::Margin::ZERO
+                        })
+                        .show(ui, |ui| {
+                            ui.set_width(ui.available_width().min(design::LIST_MEASURE).min(lane));
+                            Self::roster_column(
+                                ui,
+                                draft,
+                                snapshot,
+                                focus_search,
+                                expanded,
+                                linked_party,
+                                make_yours,
+                                heading,
+                            )
+                        })
+                        .inner
+                })
+                .inner
         })
         .inner
+    }
+
+    /// The roster column's content: the roster, its options, the loot, the notes and the
+    /// encounter's groups.
+    #[allow(clippy::too_many_arguments)]
+    fn roster_column(
+        ui: &mut egui::Ui,
+        draft: &mut Draft,
+        snapshot: &Snapshot,
+        focus_search: &mut bool,
+        expanded: &mut Option<String>,
+        linked_party: Option<&Party>,
+        make_yours: &mut Option<usize>,
+        heading: Option<Option<&crate::difficulty::Difficulty>>,
+    ) -> bool {
+        if let Some(difficulty) = heading {
+            roster_heading(ui, draft.setup.roster.len(), difficulty);
+        }
+        // Without a link there is no sheet to sync with, whatever the note says.
+        let live = linked_party.filter(|_| draft.setup.combat_sync);
+        if draft.setup.roster.is_empty() {
+            design::gap(ui, design::Gap::S);
+            blocked_reason(
+                ui,
+                Some("No participants yet. Add the party and creatures from Add participants."),
+            );
+        }
+        Self::roster(
+            ui,
+            draft,
+            snapshot,
+            focus_search,
+            expanded,
+            live,
+            make_yours,
+        );
+        // The header's name field ends where the roster's rows and rules end (FA9, FI9).
+        let right = ui.available_rect_before_wrap().right();
+        ui.ctx()
+            .data_mut(|data| data.insert_temp(pane_right_id(draft.id, ROSTER_PANE), right));
+        design::gap(ui, design::Gap::M);
+        if let Some(party) = linked_party {
+            Self::sync_option(ui, draft, snapshot, party);
+        }
+        ui.checkbox(&mut draft.setup.repeatable, REPEATABLE_OPTION);
+        // FI7: what the option changes, in the form the sync option's help uses.
+        design::help(ui, REPEATABLE_HELP);
+        design::gap(ui, design::Gap::M);
+        Self::loot_field(ui, draft);
+        design::gap(ui, design::Gap::M);
+        design::field(ui, NOTES_LABEL, None, None, |ui| {
+            let hint = design::placeholder(
+                ui,
+                "What you read to the table, then your tactics. The run shows this before the first turn.",
+            );
+            let output = NOTES_FIELD
+                .of(draft.id)
+                .editor(ui, &mut draft.body, |edit| {
+                    notes_style(edit, 5).hint_text(hint)
+                });
+            if let Some(note) = crate::markdown_source::pressed_note_link(ui, &output, None) {
+                crate::markdown_view::send_note_link(ui.ctx(), note, None);
+            }
+            design::named(ui, &output.response, NOTES_LABEL);
+        });
+        groups::of_encounter(ui, draft, snapshot, focus_search, expanded)
     }
 
     /// What the party finds when this fight is over, one line each. The note keeps it as its
@@ -8315,39 +8370,18 @@ mod tests {
             .unwrap()
             .click();
         harness.event(egui::Event::Text("Unsent tactics.\n".repeat(60)));
-        harness.run_steps(30);
+        harness.run_steps(2);
         let focus = harness.ctx.memory(|memory| memory.focused()).unwrap();
         let text = draft.borrow().body.clone();
         assert!(text.contains("Unsent tactics."));
-        // The notes are the roster pane's editor region (round 28, P2): the region scrolls to the
-        // caret. Where the notes' text is painted, and the view it is clipped to.
-        let painted = |harness: &egui_kittest::Harness<'_>, words: &str| {
-            harness
-                .output()
-                .shapes
-                .iter()
-                .find_map(|shape| match &shape.shape {
-                    // A group heading paints its words in capitals.
-                    egui::Shape::Text(text)
-                        if text
-                            .galley
-                            .text()
-                            .to_lowercase()
-                            .starts_with(&words.to_lowercase()) =>
-                    {
-                        Some((
-                            egui::Rect::from_min_size(text.pos, text.galley.size()),
-                            shape.clip_rect,
-                        ))
-                    }
-                    _ => None,
-                })
-        };
-        let (notes, view) = painted(&harness, "Unsent tactics.").unwrap();
-        assert!(
-            notes.top() < view.top() && notes.bottom() <= view.bottom() + 1.0,
-            "Exercise a scrolled editor: the text {notes:?} in its view {view:?}"
-        );
+        // Outer scroll moves down to the caret; keep that same scroll state when the parent changes.
+        let scroll_id = egui::Id::new(("encounter_roster", draft.borrow().id))
+            .with(egui::Id::new("encounter_editor"));
+        let offset = egui::scroll_area::State::load(&harness.ctx, scroll_id)
+            .unwrap()
+            .offset
+            .y;
+        assert!(offset > 0.0, "Exercise a scrolled editor");
         for width in [600.0, 960.0] {
             harness.set_size(egui::vec2(width, 640.0));
             harness.run_steps(2);
@@ -8357,67 +8391,31 @@ mod tests {
                 Some(focus),
                 "The same notes control keeps focus"
             );
-            // The caret (at the text's end) stays in view; the text is not back at its top.
-            let (notes, view) = painted(&harness, "Unsent tactics.").unwrap();
+            let current = egui::scroll_area::State::load(&harness.ctx, scroll_id)
+                .unwrap()
+                .offset
+                .y;
             assert!(
-                notes.top() < view.top()
-                    && notes.bottom() <= view.bottom() + 1.0
-                    && notes.bottom() > view.top() + design::S,
-                "Scroll survives parent changes at {width}: the text {notes:?} in {view:?}"
+                (current - offset).abs() < 1.0,
+                "Scroll survives parent changes: {offset} -> {current}"
             );
         }
-        // Round 28 P2: another encounter opens at its own top, with its own text. Its notes are
-        // the pane's editor region: on the FIRST frame, at 960, 1280 and 1920 wide, a 600-line
-        // text keeps at least 64 px and the groups after it stay whole in view; at a short
-        // height the region still keeps 64 px.
-        let long: String = (1..=600).map(|n| format!("Second line {n}.\n")).collect();
-        for (width, height) in [
-            (960.0, 640.0),
-            (1280.0, 800.0),
-            (1920.0, 1080.0),
-            (960.0, 400.0),
-        ] {
-            let mut second = Draft::new();
-            second.body = long.clone();
-            second.groups_read = true;
-            *draft.borrow_mut() = second;
-            harness.set_size(egui::vec2(width, height));
-            harness.step();
-            let shown = painted(&harness, "Second line 1.");
-            let groups = painted(&harness, "Groups for this encounter");
-            // The region is the view the notes' frame is clipped to, less egui's clip margin.
-            let margin = harness.ctx.style().visuals.clip_rect_margin;
-            let region = shown.and_then(|(notes, _)| {
-                harness
-                    .output()
-                    .shapes
-                    .iter()
-                    .find_map(|shape| match &shape.shape {
-                        egui::Shape::Rect(frame)
-                            if frame.stroke.width > 0.0
-                                && (frame.rect.top() + design::S - notes.top()).abs() <= 1.0 =>
-                        {
-                            Some(shape.clip_rect.shrink(margin))
-                        }
-                        _ => None,
-                    })
-            });
-            let top = shown.zip(region).is_some_and(|((notes, view), region)| {
-                region.height() >= 64.0 - 0.5 && (notes.top() - view.top()).abs() <= design::S + 1.0
-            });
-            let after = height < 640.0
-                || groups
-                    .zip(shown)
-                    .is_some_and(|((groups, clip), (_, view))| {
-                        groups.top() >= view.bottom()
-                            && groups.bottom() <= clip.bottom()
-                            && groups.bottom() <= height
-                    });
-            assert!(
-                top && after,
-                "At {width}x{height}, first frame: the notes {shown:?}, their region {region:?}, the groups heading {groups:?}"
-            );
-        }
+        // Another encounter opens at its own top, with its own text: the column's scroll is
+        // keyed by the draft, not shared with the encounter before it.
+        let mut second = Draft::new();
+        second.body = (1..=600).map(|n| format!("Second line {n}.\n")).collect();
+        let second_scroll =
+            egui::Id::new(("encounter_roster", second.id)).with(egui::Id::new("encounter_editor"));
+        *draft.borrow_mut() = second;
+        harness.run_steps(2);
+        let top =
+            egui::scroll_area::State::load(&harness.ctx, second_scroll).map(|state| state.offset.y);
+        assert!(
+            top.is_some_and(|top| top.abs() < 0.5)
+                && harness.query_all_by_label("Read-aloud and notes").count() > 0
+                && draft.borrow().body.starts_with("Second line 1."),
+            "the second encounter starts at its top: offset {top:?}"
+        );
     }
 
     #[test]
@@ -8566,16 +8564,9 @@ mod tests {
                 .map(|node| node.rect().right())
                 .reduce(f32::max)
                 .unwrap();
-            // Round 28 P2: the notes are the pane's editor region, a scroll column that keeps
-            // its own bar's lane: the frame and that lane end at the roster's edge.
-            let lane = if name == "Read-aloud and notes" {
-                design::lane_width()
-            } else {
-                0.0
-            };
             assert!(
-                (right + lane - rule).abs() <= 0.5,
-                "iter18-B-FD4: {name} ends at {right} (and a lane of {lane}), the roster rule at {rule}"
+                (right - rule).abs() <= 0.5,
+                "iter18-B-FD4: {name} ends at {right}, the roster rule at {rule}"
             );
         }
         // Must stay true: the loot field keeps its gap before the menu.
