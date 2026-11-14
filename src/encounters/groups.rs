@@ -133,8 +133,9 @@ pub(super) struct GroupDraft {
     /// The last `Use` on a member this campaign could not find. It owns the result line until
     /// its Undo, a newer member result, or a move or removal that changes the members' places.
     replaced: Option<Replaced>,
-    /// When the newest member result was made (`result_stamp`); `None` before the first.
-    member_stamp: Option<design::ResultOrder>,
+    /// A member result was just made: the page records it in its store, which issues its order
+    /// (`Encounters::record_member_results`), in the frame of the act.
+    member_new: bool,
     /// Changes at each edit of the draft (`touch`), and only then; a new draft has its own. Save's
     /// cached check is keyed by it (FN5, review of PR 299).
     revision: u64,
@@ -194,7 +195,7 @@ impl GroupDraft {
             removed_unread: None,
             removed_member: None,
             replaced: None,
-            member_stamp: None,
+            member_new: false,
             revision: next_revision(),
             members_saved: None,
             edited_last_frame: false,
@@ -233,7 +234,7 @@ impl GroupDraft {
             removed_unread: None,
             removed_member: None,
             replaced: None,
-            member_stamp: None,
+            member_new: false,
             revision: next_revision(),
             members_saved: None,
             edited_last_frame: false,
@@ -248,6 +249,14 @@ impl GroupDraft {
     }
     pub(super) fn name(&self) -> String {
         self.name.clone()
+    }
+    /// The draft's own identity, the owner of its member result in the page's store.
+    pub(super) fn id(&self) -> Uuid {
+        self.id
+    }
+    /// Whether a member result was made since the page last looked, and the look.
+    pub(super) fn take_member_new(&mut self) -> bool {
+        std::mem::take(&mut self.member_new)
     }
     /// Give this group the owner `earlier` had, and change nothing else: Undo of a move.
     pub(super) fn take_owner_from(&mut self, earlier: &GroupDraft) {
@@ -265,7 +274,8 @@ impl GroupDraft {
     /// The member result that shows now, with its Undo: the newest of a replacement, a removed
     /// member and a removed unread row owns it. A replacement's ends when its member no longer
     /// holds the chosen creature.
-    pub(super) fn member_result(&mut self) -> Option<(String, &'static str, design::ResultOrder)> {
+    /// The member result that shows: its words and its Undo. Its order is the page's store's.
+    pub(super) fn member_result(&mut self) -> Option<(String, design::outcome::UndoStep)> {
         if let Some(result) = &self.replaced {
             if self
                 .setup
@@ -273,10 +283,10 @@ impl GroupDraft {
                 .get(result.index)
                 .is_some_and(|member| member.creature == result.after)
             {
-                // Each member result is made with its stamp, so a shown one has it.
-                return self
-                    .member_stamp
-                    .map(|stamp| (result.words.clone(), "Undo replacement", stamp));
+                return Some((
+                    result.words.clone(),
+                    design::outcome::UndoStep::verb(design::outcome::Verb::Replace),
+                ));
             }
             self.replaced = None;
         }
@@ -284,8 +294,12 @@ impl GroupDraft {
             .as_ref()
             .map(|(_, _, name)| name)
             .or(self.removed_unread.as_ref().map(|(_, _, name)| name))
-            .zip(self.member_stamp)
-            .map(|(name, stamp)| (format!("Removed {name}."), "Undo remove member", stamp))
+            .map(|name| {
+                (
+                    format!("Removed {name}."),
+                    design::outcome::UndoStep::of(design::outcome::Verb::Remove, "member"),
+                )
+            })
     }
     /// Undo the member result that shows: the creature, the member or the unread row comes
     /// back at its place, and other draft edits stay.
@@ -453,7 +467,7 @@ impl GroupDraft {
                 .map_or(source.len(), |at| row[0].range.start + at + 1);
             self.removed_member = None;
             self.replaced = None;
-            self.member_stamp = Some(super::result_stamp());
+            self.member_new = true;
             self.removed_unread = Some((
                 line,
                 source[start..end].to_owned(),
@@ -2558,23 +2572,38 @@ impl Encounters {
         // FI1's family: the editor's results with a live Undo (the discard, the newest member
         // result), then Save's reason, then the file's warnings sit in one footer pinned below
         // the members and the search, so none of them moves a member or a field.
+        // The footer's messages are made before the body: the member result, the discard, the
+        // copies' separations, newest first by their stores, then the reasons and warnings.
+        self.record_member_results();
+        self.refresh_separations();
         let kinds = self.kept_results(false);
-        let kept_lines = self.kept_footer_lines(&kinds);
-        let pressed = std::cell::Cell::new(None);
-        let member_undo = std::cell::Cell::new(false);
-        let (pressed_ref, member_ref) = (&pressed, &member_undo);
-        let footer_id = self.group_draft.as_ref().map(|draft| draft.path.clone());
-        let mut footer =
-            design::Footer::new(("group_editor_footer", footer_id), ui.available_width());
-        // The member result is newer than the discard: it was made on the draft that the
-        // discard left open.
-        let identity = std::cell::Cell::new(false);
-        let separated = super::identity_line(ui.ctx());
-        if let Some(draft) = self.group_draft.as_mut() {
-            member_result_into(draft, &mut footer, member_ref, separated, &identity);
+        let frame = design::outcome::PaneFrame::new(ui);
+        let footer_id = self.group_draft.as_ref().map(|draft| draft.id());
+        let mut messages = design::outcome::Messages::new(
+            &frame,
+            ("group_editor_footer", footer_id),
+            ui.available_width(),
+        );
+        if let Some(root) = self.active.as_ref().map(|active| active.path.clone())
+            && let Some(draft) = self.group_draft.as_mut()
+            && let Some((words, undo)) = draft.member_result()
+            && let Some(shown) = self.member_results.get(&super::MemberOwner {
+                root,
+                draft: draft.id(),
+            })
+        {
+            messages.kept(shown.outcome(&frame, |_| {
+                design::outcome::Said::new(super::outcome_words(&words))
+                    .undo(undo.pressed_as(super::FooterPress::UndoMember))
+                    .into()
+            }));
         }
-        Self::kept_into_footer(&mut footer, &kept_lines, pressed_ref);
-        super::identity_failure_into(ui.ctx(), &mut footer);
+        for line in self.kept_lines(&frame, &kinds) {
+            messages.kept(line);
+        }
+        for line in self.separation_lines(&frame, &active.path) {
+            messages.kept(line);
+        }
         // Save's reason: the last refusal, or the check's fault when the editor shows it at no
         // other place (a member row or the reason beside Save already says theirs).
         let reason = self.error.clone().or_else(|| {
@@ -2583,31 +2612,59 @@ impl Encounters {
                 .filter(|refusal| !refusal.in_place)
                 .map(|refusal| refusal.text.clone())
         });
-        if let Some(e) = reason {
-            footer.reason(e.clone(), move |ui| {
-                design::message(ui, Tone::Error, &e);
-            });
+        if let Some(error) = reason {
+            messages.outcome(design::outcome::FaultMessage::new(
+                &super::EncounterFault::Failed(error),
+            ));
+        }
+        if let Some(error) = self.separation_error.clone() {
+            messages.outcome(design::outcome::FaultMessage::new(
+                &super::EncounterFault::SeparationFailed(error),
+            ));
         }
         for warning in file_warnings {
-            footer.notice(warning.clone(), move |ui| {
-                design::message(ui, Tone::Warning, &warning);
-            });
+            messages.outcome(design::outcome::FaultMessage::new(
+                &super::EncounterFault::FileWarning(warning),
+            ));
         }
-        let bottom = footer.show_by_hand(ui);
-        if let Some(kind) = pressed.get() {
-            self.undo_kept(kind, Some((active, campaigns.modules())));
+        // FF8: a press of a copied note's repair in the search, for the page's store.
+        let separated = std::cell::Cell::new(None);
+        // The members and Add creatures are columns, each with its own scroll (in the narrow
+        // layout, one of them under its tab): the body fills its room above the footer.
+        let paned = messages.pane(
+            ui,
+            design::pane::Body::Fills(design::pane::Fills::because(
+                design::pane::FillsReason::Columns,
+            )),
+            |ui| self.group_editor_body(ui, compact, name_right, &separated),
+        );
+        self.record_separation(separated.into_inner());
+        if let Some(press) = paned.pressed {
+            match (press.id, press.ticket) {
+                (super::FooterPress::Undo, Some(ticket)) => {
+                    self.undo_by_ticket(ticket, Some((active, campaigns.modules())));
+                }
+                (super::FooterPress::UndoSeparation, Some(ticket)) => {
+                    self.undo_separation(ui.ctx(), ticket, active);
+                }
+                (super::FooterPress::UndoMember, Some(ticket)) => self.undo_member(ticket),
+                _ => {}
+            }
         }
-        if identity.get() {
-            super::undo_identity(ui.ctx());
-        }
-        if member_undo.get()
-            && let Some(draft) = self.group_draft.as_mut()
-        {
-            draft.undo_member_result();
-            self.expanded = None;
-        }
-        let mut body = super::body_above(ui, bottom);
-        let ui = &mut body;
+    }
+
+    /// The group editor's body, in the pane: the members and Add creatures, as columns or tabs.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
+    fn group_editor_body(
+        &mut self,
+        ui: &mut egui::Ui,
+        compact: bool,
+        name_right: f32,
+        separated: &std::cell::Cell<Option<super::Separated>>,
+    ) {
         let Some(snapshot) = &self.snapshot else {
             design::spinner(ui);
             return;
@@ -2650,7 +2707,7 @@ impl Encounters {
                     if ui.data_mut(|data| data.remove_temp::<f32>(id)).is_some() {
                         ui.ctx().request_discard("The members column is not shown");
                     }
-                    add_pane(ui, draft, snapshot, search, focus_search, peek, &separated, true)
+                    add_pane(ui, draft, snapshot, search, focus_search, peek, separated, true)
                 }
             }
             return;
@@ -2668,7 +2725,7 @@ impl Encounters {
                 bottom: 0,
             }))
             .show_inside(ui, |ui| {
-                add_pane(ui, draft, snapshot, search, focus_search, peek, &separated, false);
+                add_pane(ui, draft, snapshot, search, focus_search, peek, separated, false);
             });
         egui::CentralPanel::default()
             .frame(egui::Frame::new().inner_margin(egui::Margin {
@@ -2786,29 +2843,6 @@ fn column_right_id(path: &str) -> egui::Id {
     clippy::disallowed_methods,
     reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
 )]
-fn member_result_into<'a>(
-    draft: &mut GroupDraft,
-    footer: &mut design::Footer<'a>,
-    pressed: &'a std::cell::Cell<bool>,
-    separated: Option<(design::ResultOrder, String, &'static str)>,
-    identity: &'a std::cell::Cell<bool>,
-) {
-    if let Some((words, undo, stamp)) = draft.member_result() {
-        footer.result(stamp, words.clone(), true, move |ui| {
-            if design::undo_message(ui, Tone::Success, &words, undo) {
-                pressed.set(true);
-            }
-        });
-    }
-    // The separation result: the footer puts it in its place by its own order.
-    if let Some((stamp, words, undo)) = separated {
-        footer.result(stamp, words.clone(), true, move |ui| {
-            if design::undo_message(ui, Tone::Success, &words, undo) {
-                identity.set(true);
-            }
-        });
-    }
-}
 
 #[allow(
     clippy::disallowed_methods,
@@ -3325,7 +3359,7 @@ fn members(
         draft.removed_member = None;
         draft.removed_unread = None;
         draft.replaced = Some(result);
-        draft.member_stamp = Some(super::result_stamp());
+        draft.member_new = true;
     }
     if let Some(index) = remove {
         let member = draft.setup.members.remove(index);
@@ -3339,7 +3373,7 @@ fn members(
         let name = shown_name(&member.overrides, base);
         draft.removed_unread = None;
         draft.removed_member = Some((index, member, name));
-        draft.member_stamp = Some(super::result_stamp());
+        draft.member_new = true;
     } else if let Some(index) = raise {
         draft.setup.members.swap(index, index - 1);
     } else if let Some(index) = lower {
