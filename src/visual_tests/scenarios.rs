@@ -7031,6 +7031,24 @@ pub mod run_absent_player {
             shown && d.has("Undo: initiative for Brannoch Vale"),
             "At 960 Undo says it takes back an initiative, and its accessible name keeps the row",
         );
+        // iter-28-R AJ1: a one-line notice is centred with its Log link and its close, at
+        // 960 and 1200.
+        for size in [SMALL, DEFAULT] {
+            let centres = d.at_size(size, |d| {
+                (
+                    d.painted_rect_in("joined at", egui::Rect::EVERYTHING)
+                        .map(|rect| rect.center().y),
+                    d.place_of("Log").map(|rect| rect.center().y),
+                    d.place_of("Dismiss this message").map(|rect| rect.center().y),
+                )
+            });
+            d.observe(
+                "iter-28-R-AJ1",
+                matches!(centres, (Some(text), Some(log), Some(close))
+                    if (text - log).abs() <= 1.0 && (text - close).abs() <= 1.0),
+                format!("At {size:?}, the notice's, Log's and close's centres: {centres:?}"),
+            );
+        }
         d.state("initiative-set-in-combat", Sizes::Default);
         let joined = "Brannoch Vale joined at\u{a0}20 ·\u{a0}acts next round.";
         d.expect(joined);

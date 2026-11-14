@@ -1182,11 +1182,27 @@ impl Run {
                                             );
                                             self.group_drop_zone(ui, roster.response.rect);
                                             if let Some(notice) = notice {
+                                                // AJ1: a notice on one line is centred with its
+                                                // Log and close, as a compact one is.
+                                                let one_line = ui
+                                                    .fonts_mut(|fonts| {
+                                                        fonts.layout(
+                                                            notice.clone(),
+                                                            Type::Small.font(ui),
+                                                            egui::Color32::PLACEHOLDER,
+                                                            ui.available_width() - design::L * 7.0,
+                                                        )
+                                                    })
+                                                    .rows
+                                                    .len()
+                                                    <= 1;
                                                 // All the height the list gave up, so the dock stays where it was.
                                                 ui.allocate_ui_with_layout(
                                                     vec2(ui.available_width(), notice_height),
                                                     Layout::left_to_right(
-                                                        if compact || self.notice_summary.is_some()
+                                                        if compact
+                                                            || one_line
+                                                            || self.notice_summary.is_some()
                                                         {
                                                             Align::Center
                                                         } else {
@@ -1269,6 +1285,7 @@ impl Run {
                                                                 vec2(
                                                                     message_width,
                                                                     if compact
+                                                                        || one_line
                                                                         || self
                                                                             .notice_summary
                                                                             .is_some()
