@@ -410,6 +410,9 @@ fn roster_fault_reason(path: &str, faults: &[RosterFault]) -> Option<String> {
 }
 
 struct Draft {
+    /// The words typed in a field that stores a cleaned value, while it has focus
+    /// (`groups::TypedWords`): they end with the draft.
+    typed: groups::TypedWords,
     recovery: disk::Recovery,
     id: Uuid,
     path: String,
@@ -460,6 +463,7 @@ impl Draft {
             "---\nsplat_schema: 2\nsplat_id: {id}\nsplat_kind: encounter\nsplat_name: New encounter\n---\n\n## Roster\n\n| Side | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n"
         );
         Self {
+            typed: groups::TypedWords::default(),
             recovery: Default::default(),
             id,
             path: format!("Encounters/{id}.md"),
@@ -511,6 +515,7 @@ impl Draft {
             (prose, Vec::new())
         };
         Ok(Self {
+            typed: groups::TypedWords::default(),
             recovery: Default::default(),
             id: entry.id,
             path: path.into(),
@@ -6516,16 +6521,14 @@ impl Encounters {
                         // While the field has focus it keeps the exact words typed (a lone
                         // space too): the field part drops its text Undo when the bound text is
                         // rewritten under it.
-                        let typed = field.named_id(GROUP_LABEL).with("typed");
-                        let mut group = ui
-                            .data(|data| data.get_temp::<String>(typed))
-                            .unwrap_or_else(|| {
-                                slot.extra
-                                    .get("initiative_group")
-                                    .and_then(Value::as_str)
-                                    .unwrap_or("")
-                                    .to_owned()
-                            });
+                        let group_id = field.named_id(GROUP_LABEL);
+                        let mut group = draft.typed.bound(group_id, || {
+                            slot.extra
+                                .get("initiative_group")
+                                .and_then(Value::as_str)
+                                .unwrap_or("")
+                                .to_owned()
+                        });
                         let response = design::line_field(
                             ui,
                             field,
@@ -6534,14 +6537,9 @@ impl Encounters {
                             "Initiative group",
                             120.0,
                         );
-                        let focused = response.has_focus();
-                        ui.data_mut(|data| {
-                            if focused {
-                                data.insert_temp(typed, group.clone());
-                            } else {
-                                data.remove::<String>(typed);
-                            }
-                        });
+                        draft
+                            .typed
+                            .keep(group_id, response.has_focus(), group.clone());
                         if response.changed() {
                             if group.trim().is_empty() {
                                 slot.extra.remove("initiative_group");
@@ -6594,6 +6592,7 @@ impl Encounters {
                             entry,
                             &slot.side,
                             Some(&sides),
+                            &mut draft.typed,
                         )
                         .done;
                         if done {

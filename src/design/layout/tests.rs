@@ -508,6 +508,16 @@ fn inline_create_moves_nothing_while_the_dm_types() {
     );
 }
 
+/// Whether `after` is `before` with `letter` inserted at one place: every letter of `before`
+/// stays, in its order, whatever the cursor's place was.
+fn one_letter_inserted(after: &str, before: &str, letter: char) -> bool {
+    before
+        .char_indices()
+        .map(|(at, _)| at)
+        .chain([before.len()])
+        .any(|at| after == format!("{}{letter}{}", &before[..at], &before[at..]))
+}
+
 /// PR 297: a field keeps its focus when a layout branch changes around it, and two live fields
 /// with one name and two row keys keep their own text and focus. A field whose id comes from its
 /// place does not keep it, which is the fault this part rules out.
@@ -630,7 +640,10 @@ fn a_field_id_keeps_focus_across_a_layout_branch() {
     // The cursor stays where egui had it (a caller may set it for the new text), so the
     // letter lands inside the words; only the history was dropped.
     edit(&mut other, vec![egui::Event::Text("s".into())]);
-    assert!(other.len() == 6 && other.contains('s'), "{other}");
+    assert!(
+        one_letter_inserted(&other, "Brine", 's'),
+        "k3-own: every letter of the bound text stays, with the typed one: {other}"
+    );
     edit(&mut other, vec![ctrl_z()]);
     assert_eq!(other, "Brine", "k3-own: Ctrl+Z undoes the DM's own typing");
 
@@ -779,8 +792,8 @@ fn a_field_id_keeps_focus_across_a_layout_branch() {
         draw(&mut members, vec![egui::Event::Text("x".into())]);
         let typed = members[0].clone();
         assert!(
-            typed.len() == 6 && typed.contains('x'),
-            "the DM typed in A: {typed}"
+            one_letter_inserted(&typed, "Alpha", 'x'),
+            "the DM typed in A, and A's letters stay: {typed}"
         );
         if refocus {
             // The press of "Move down" takes the focus; the DM clicks back into the first row.
@@ -796,7 +809,7 @@ fn a_field_id_keeps_focus_across_a_layout_branch() {
         draw(&mut members, vec![ctrl_z()]);
         assert_eq!(
             members,
-            [String::from("Beta"), typed],
+            [String::from("Beta"), typed.clone()],
             "k3-swap (refocus {refocus}): B keeps its words, and A keeps the DM's typing"
         );
         ctx.memory_mut(|memory| memory.surrender_focus(first));
