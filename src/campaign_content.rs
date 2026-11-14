@@ -282,8 +282,8 @@ macro_rules! new_result {
             campaign,
             payload: $payload,
         });
-        // A newer act's answer: the refused pick is no longer the answer to the last act.
-        $page.refusal = None;
+        // A newer act's answer: a failed one is no longer the answer to the last act.
+        $page.answer = None;
     };
 }
 
@@ -503,9 +503,10 @@ pub struct CampaignContent {
     pub found_package: Option<Module>,
     pub forget_package: Option<Uuid>,
     error: Option<String>,
-    /// The refusal of the DM's last folder pick for a missing package (ruling Q-x): the
-    /// answer to their last act, first in the footer. See [`Refusal`] for its owner and ends.
-    refusal: Option<Refusal>,
+    /// The newest failed answer to an act of the DM (ruling Q-x): a refused folder pick, a
+    /// failed Undo or write, a repair's failed Save. First in the footer. See [`Answer`] for its
+    /// owner and ends.
+    answer: Option<Answer>,
     disabled_selections: std::collections::BTreeMap<Uuid, Selection>,
     refresh_pending: bool,
     repairs: Vec<Repair>,
@@ -518,16 +519,38 @@ pub struct CampaignContent {
     /// changed; other changed repairs keep their drafts with a secondary Save.
     active_repair: Option<String>,
 }
-/// A folder pick that Splat refused (`Find the folder…`, `Register it again`): the folder holds
-/// another package, or no package. It belongs to one package in one campaign and is the answer
-/// to the DM's last act. It ends when a newer act answers (`new_result!`, the next press of a
-/// package choice), when its package is found again (`package_restored`), when the page loads
-/// again, and it shows only while its package is still missing in its campaign.
-struct Refusal {
+/// The newest failed answer to an act of the DM, in one campaign: the footer's one ordering
+/// rule is that it comes first, before the kept results, which are older answers. A newer act
+/// ends or replaces it: a new result (`new_result!`), the next press of a package choice, another
+/// failure (`Self::fail`), the package found again (`package_restored`). A load of the page and a
+/// change of campaign (`forget_discards_of_other_campaigns`, also while the page is hidden) end
+/// it too. It shows only while its cause stands: a refused pick while its package is missing, a
+/// repair's failure while that repair still has it.
+struct Answer {
     campaign: Uuid,
-    /// The package, by its reference's label (as `details` keeps it).
-    package: String,
+    cause: Cause,
     words: String,
+}
+
+/// The newest failed answer of an act in the `active` campaign.
+fn answer_in(active: &Option<Campaign>, cause: Cause, words: String) -> Option<Answer> {
+    Some(Answer {
+        campaign: active.as_ref().map_or(Uuid::nil(), |active| active.id),
+        cause,
+        words,
+    })
+}
+
+enum Cause {
+    /// A folder pick that Splat refused (`Find the folder…`, `Register it again`): the folder
+    /// holds another package, or none. The package, by its reference's label (as `details`
+    /// keeps it).
+    Refused { package: String },
+    /// An Undo, a write or a removal that failed.
+    Failed,
+    /// A repair's Save that failed, by the repair's path; the repair keeps the failure as its
+    /// state, and the footer says it here while this is the newest answer.
+    NotSaved { path: String },
 }
 
 struct RemovedPackage {
@@ -883,10 +906,16 @@ impl CampaignContent {
             Ok(()) => {
                 self.refresh_pending = true;
                 self.error = None;
-                self.refusal = None;
+                self.answer = None;
             }
-            Err(error) => self.error = Some(error),
+            Err(error) => self.fail(Cause::Failed, error),
         }
+    }
+
+    /// An act failed: its words are the newest answer, first in the footer, in place of any
+    /// older one.
+    fn fail(&mut self, cause: Cause, words: String) {
+        self.answer = answer_in(&self.active, cause, words);
     }
     /// A repair's draft, by its path, for checks of who owns a result.
     #[cfg(test)]
@@ -1052,6 +1081,14 @@ impl CampaignContent {
     /// Discarded work belongs to its campaign. Undo must not save it into another: a change of
     /// campaign ends the open campaign's discards, removal and Campaign.md write.
     fn forget_discards_of_other_campaigns(&mut self, campaign: Option<&Campaign>) {
+        // A failed answer is the answer to an act in its campaign: a change of campaign ends it.
+        if self
+            .answer
+            .as_ref()
+            .is_some_and(|answer| campaign.is_none_or(|campaign| campaign.id != answer.campaign))
+        {
+            self.answer = None;
+        }
         if let Some(old) = &self.active
             && campaign.is_none_or(|campaign| campaign.id != old.id)
         {
@@ -1115,7 +1152,7 @@ impl CampaignContent {
         self.snapshot = None;
         self.entry_matches = None;
         self.error = None;
-        self.refusal = None;
+        self.answer = None;
         self.end_plain(PageResult::Saved);
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
@@ -1359,7 +1396,7 @@ impl CampaignContent {
     }
 
     /// The page's one message footer (round 26), made before the body. Ruling Q-x: the answer to
-    /// the DM's last act comes first. So a refused folder pick (`Refusal`) leads, then the kept
+    /// the DM's last act comes first. So the newest failed answer (`Answer`) leads, then the kept
     /// results (one with a live Undo first, newest first, as the store's orders say), the
     /// warning about encounters a removal left without creatures, each repair's failed Save or
     /// refusal, the page's errors, and last the package faults, which come from the files and
@@ -1379,14 +1416,37 @@ impl CampaignContent {
             design::outcome::Messages::new(frame, ("campaign_page_footer", active.id), width);
         let locked = self.dirty();
         let warnings = self.package_warnings_of(campaigns);
-        if let Some(refusal) = self.refusal.as_ref().filter(|refusal| {
-            refusal.campaign == active.id
-                && warnings
-                    .unavailable
-                    .iter()
-                    .any(|missing| missing.selection.package.label() == refusal.package)
-        }) {
-            messages.outcome(FaultMessage::new(&ContentFault::Error(&refusal.words)));
+        // Ruling Q-x: the newest failed answer first, while its cause stands. A repair's failure
+        // shown here is not said again below.
+        let answer = self.answer.as_ref().filter(|answer| {
+            answer.campaign == active.id
+                && match &answer.cause {
+                    Cause::Refused { package } => warnings
+                        .unavailable
+                        .iter()
+                        .any(|missing| missing.selection.package.label() == *package),
+                    Cause::Failed => true,
+                    Cause::NotSaved { path } => self.repairs.iter().any(|repair| {
+                        &repair.path == path && repair.failure.as_ref() == Some(&answer.words)
+                    }),
+                }
+        });
+        let first_failure = answer.and_then(|answer| match &answer.cause {
+            Cause::NotSaved { path } => Some(path.as_str()),
+            _ => None,
+        });
+        if let Some(answer) = answer {
+            match &answer.cause {
+                Cause::NotSaved { path } => {
+                    messages.answer(FaultMessage::new(&ContentFault::RepairNotSaved {
+                        path,
+                        cause: &answer.words,
+                    }));
+                }
+                Cause::Refused { .. } | Cause::Failed => {
+                    messages.answer(FaultMessage::new(&ContentFault::Error(&answer.words)));
+                }
+            }
         }
         for shown in self.results.newest_first(&active.id) {
             let line = shown.outcome(frame, |kept| outcome_of(&kept.payload, locked));
@@ -1416,7 +1476,11 @@ impl CampaignContent {
                 data.get_temp::<bool>(egui::Id::new(("repair_open", repair.path.as_str())))
                     .unwrap_or(false)
             });
-            if let Some(failure) = &repair.failure {
+            if let Some(failure) = repair
+                .failure
+                .as_ref()
+                .filter(|_| first_failure != Some(repair.path.as_str()))
+            {
                 messages.outcome(FaultMessage::new(&ContentFault::RepairNotSaved {
                     path: &repair.path,
                     cause: failure,
@@ -1525,7 +1589,7 @@ impl CampaignContent {
             Payload::CampaignWrite(write) => match write.undo() {
                 Ok(_) => self.refresh_pending = true,
                 Err(error) => {
-                    self.error = Some(undo_failed(&error));
+                    self.fail(Cause::Failed, undo_failed(&error));
                     return Err(());
                 }
             },
@@ -1553,7 +1617,7 @@ impl CampaignContent {
             Payload::ManifestWrite { write, .. } => match write.undo() {
                 Ok(_) => self.refresh_pending = true,
                 Err(error) => {
-                    self.error = Some(undo_failed(&error));
+                    self.fail(Cause::Failed, undo_failed(&error));
                     return Err(());
                 }
             },
@@ -1561,7 +1625,8 @@ impl CampaignContent {
                 if let Some(snapshot) = self.snapshot.as_mut() {
                     let document = &mut snapshot.document;
                     if document.selections != removed.after {
-                        self.error = Some(
+                        self.fail(
+                            Cause::Failed,
                             "Campaign choices changed. Keep them and edit the package choices here."
                                 .into(),
                         );
@@ -1576,7 +1641,7 @@ impl CampaignContent {
                         }
                         Err(error) => {
                             document.selections = after;
-                            self.error = Some(undo_failed(&error));
+                            self.fail(Cause::Failed, undo_failed(&error));
                             return Err(());
                         }
                     }
@@ -1709,6 +1774,7 @@ impl CampaignContent {
         active: &Campaign,
     ) {
         let mut repaired = false;
+        let mut not_saved = None;
         // One primary Save on the screen: the active repair's, else the last open changed one.
         let changed: Vec<&str> = self
             .repairs
@@ -1837,7 +1903,11 @@ impl CampaignContent {
                                 i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)
                             }))
                     {
-                        repaired |= repair.save(active);
+                        if repair.save(active) {
+                            repaired = true;
+                        } else if let Some(failure) = &repair.failure {
+                            not_saved = Some((repair.path.clone(), failure.clone()));
+                        }
                     }
                     // One discard result per repair: its next Discard or edit ends its own
                     // result only.
@@ -1873,6 +1943,9 @@ impl CampaignContent {
         }) {
             // The package list below draws the one rule; a second rule here would separate nothing.
             design::gap(ui, design::Gap::L);
+        }
+        if let Some((path, words)) = not_saved {
+            self.fail(Cause::NotSaved { path }, words);
         }
         if repaired && !self.dirty() {
             self.reload(ui.ctx(), campaigns, active.clone());
@@ -2299,7 +2372,7 @@ impl CampaignContent {
                         );
                         self.refresh_pending = true;
                     }
-                    Err(error) => self.error = Some(error),
+                    Err(error) => self.answer = answer_in(&self.active, Cause::Failed, error),
                 }
                 return;
             }
@@ -2323,8 +2396,8 @@ impl CampaignContent {
             | ContentPress::Remove(at) => at,
             _ => return,
         };
-        // A new act on a package: the earlier refusal no longer answers the last act.
-        self.refusal = None;
+        // A new act on a package: an earlier failure no longer answers the last act.
+        self.answer = None;
         let Some(Unavailable {
             index: i,
             selection,
@@ -2375,11 +2448,13 @@ impl CampaignContent {
                 self.found_package = Some(module);
             }
             Some(Err(words)) => {
-                self.refusal = Some(Refusal {
-                    campaign: self.active.as_ref().map_or(Uuid::nil(), |active| active.id),
-                    package: selection.package.label(),
+                self.answer = answer_in(
+                    &self.active,
+                    Cause::Refused {
+                        package: selection.package.label(),
+                    },
                     words,
-                });
+                )
             }
             None => {}
         }
@@ -2409,7 +2484,7 @@ impl CampaignContent {
                 }
                 Err(error) => {
                     document.selections = before;
-                    self.error = Some(error);
+                    self.answer = answer_in(&self.active, Cause::Failed, error);
                 }
             }
         }
@@ -3645,6 +3720,8 @@ mod tests {
         struct Page {
             content: CampaignContent,
             campaigns: Campaigns,
+            /// The Campaign page is not drawn (another page is open); its `tick` still runs.
+            hidden: bool,
         }
         crate::hermetic::closed::clear_next_folder();
         let temp = tempfile::tempdir().unwrap();
@@ -3686,7 +3763,9 @@ mod tests {
             .build_ui_state(
                 |ui, page: &mut Page| {
                     page.content.tick(ui.ctx(), &page.campaigns);
-                    page.content.show(ui, &page.campaigns);
+                    if !page.hidden {
+                        page.content.show(ui, &page.campaigns);
+                    }
                     // The app's own steps after the page (`lib.rs`).
                     if let Some(module) = page.content.found_package.take() {
                         let result = page.campaigns.restore_module(module);
@@ -3700,6 +3779,7 @@ mod tests {
                 Page {
                     content: CampaignContent::default(),
                     campaigns,
+                    hidden: false,
                 },
             );
         let settle = |harness: &mut egui_kittest::Harness<'_, Page>| {
@@ -3833,8 +3913,59 @@ mod tests {
         moved(&mut harness, "watch-moved", "watch");
         assert!(harness.query_by_label(refusal).is_none());
         assert!(toll_fault(&harness).is_some());
-        // A newer act answers: the refusal of a second wrong pick ends when Watch is found.
         moved(&mut harness, "watch", "watch-a");
+        // The newest failed answer first, whatever its kind: a kept result whose Undo will fail
+        // (the package choices it would restore are not the file's), then a refusal (first,
+        // above that older result), then the failed Undo: its error is first and the refusal
+        // is gone.
+        {
+            let content = &mut harness.state_mut().content;
+            new_result!(
+                content,
+                Payload::Removed(RemovedPackage {
+                    name: "Gone".into(),
+                    words: removal_words("Gone", &[]).0,
+                    warning: None,
+                    before: Vec::new(),
+                    after: Vec::new(),
+                    users: Vec::new(),
+                })
+            );
+        }
+        harness.run_steps(2);
+        pick(&mut harness, "toll-a");
+        let kept = harness.get_by_label("Undo remove Gone").rect();
+        let shown = harness.get_by_label(refusal).rect();
+        assert!(
+            shown.bottom() <= kept.top(),
+            "the refusal {shown:?} is not above the older kept result {kept:?}"
+        );
+        harness.get_by_label("Undo remove Gone").click();
+        settle(&mut harness);
+        let failed = "Campaign choices changed. Keep them and edit the package choices here.";
+        let error = message(&harness, failed).expect("the failed Undo says why");
+        let kept = harness.get_by_label("Undo remove Gone").rect();
+        assert!(
+            error.bottom() <= kept.top() && harness.query_by_label(refusal).is_none(),
+            "the failed Undo's error {error:?} is not first above {kept:?}, or the refusal stays"
+        );
+        // A refusal, and a round trip to another campaign while the page is hidden: the change
+        // of campaign ends the stored answer, not only its words on screen.
+        pick(&mut harness, "toll-a");
+        assert!(harness.query_by_label(refusal).is_some());
+        harness.state_mut().hidden = true;
+        harness.state_mut().campaigns.open_for_test(&second);
+        harness.run_steps(4);
+        harness.state_mut().campaigns.open_for_test(&first);
+        harness.run_steps(4);
+        assert!(
+            harness.state().content.answer.is_none(),
+            "a refused pick of the first campaign outlived a change of campaign"
+        );
+        harness.state_mut().hidden = false;
+        settle(&mut harness);
+        assert!(harness.query_by_label(refusal).is_none());
+        // A newer act answers: the refusal of a second wrong pick ends when Watch is found.
         pick(&mut harness, "toll-a");
         assert!(harness.query_by_label(refusal).is_some());
         pick(&mut harness, "watch-a");

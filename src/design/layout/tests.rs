@@ -507,7 +507,7 @@ fn inline_create_moves_nothing_while_the_dm_types() {
     let draw_with = |width: f32,
                      reason: Option<TestReason>,
                      cancel: bool,
-                     preview: bool,
+                     preview: Option<&'static str>,
                      lock: Option<bool>| {
         let (mut name, mut folder) = (String::from("Copper Coast"), String::from("/vault"));
         let side = match lock {
@@ -537,18 +537,16 @@ fn inline_create_moves_nothing_while_the_dm_types() {
                     .help("Splat keeps the notes here."),
                 )
                 .create(Create::primary(CREATE).blocked(reason))
-                .kept_line(
-                    KeptLine::new()
-                        .cancel(CANCEL, cancel)
-                        .preview(preview.then_some(PREVIEW)),
-                )
+                .kept_line(KeptLine::new().cancel(CANCEL, cancel).preview(preview))
                 .show(ui);
             let _ = Action::quiet("Below").show(ui);
         });
         let rects = ["Folder", "Browse…", "Add campaign", "Below"].map(|name| bounds(&nodes, name));
         (rects, nodes, painted)
     };
-    let draw_at = |width, reason, cancel, preview| draw_with(width, reason, cancel, preview, None);
+    let draw_at = |width, reason, cancel, preview: bool| {
+        draw_with(width, reason, cancel, preview.then_some(PREVIEW), None)
+    };
     let draw = |reason, cancel, preview| draw_at(800.0, reason, cancel, preview);
     let (still, _, _) = draw(None, false, false);
     for reason in [None, Some(TestReason::NoFolder), Some(TestReason::Long)] {
@@ -581,16 +579,48 @@ fn inline_create_moves_nothing_while_the_dm_types() {
                 );
             }
             if reason.is_none() {
-                // The preview keeps one line, cut at its start; its accessible name is whole.
+                // The preview keeps one line; its leading words stay and its path gives way at
+                // its front; its accessible name is whole.
                 let preview = painted
                     .iter()
                     .find(|text| text.text.ends_with("Campaign.md"))
                     .expect("the preview is painted");
                 assert!(preview.rect.height() < 1.5 * Type::Small.line());
-                assert!(preview.text.starts_with('…'), "{}", preview.text);
+                assert!(
+                    preview.text.starts_with("Will create …/"),
+                    "{}",
+                    preview.text
+                );
                 let _ = bounds(&nodes, PREVIEW);
             }
         }
+    }
+    // A long Campaign preview (the caller's short form, a long final name) and a long Library
+    // preview (a whole path): the painted words keep `Will add` and `Will create`, give way in
+    // the path only, from its front; the accessible name keeps the whole words.
+    const CAMPAIGN: &str =
+        "Will add …/The Copper Coast campaign folder that a DM named with a very long name indeed";
+    const LIBRARY: &str = "Will create /home/dm/Obsidian/Vault/Packages/Copper Coast Bestiary/Creatures/Ash Wolves of the Long Road";
+    for (preview, lead, end) in [
+        (CAMPAIGN, "Will add …", "very long name indeed"),
+        (LIBRARY, "Will create …", "/Ash Wolves of the Long Road"),
+    ] {
+        let (_, nodes, painted) = draw_with(500.0, None, true, Some(preview), None);
+        let shown = painted
+            .iter()
+            .find(|text| text.text.ends_with(end))
+            .unwrap_or_else(|| {
+                let texts: Vec<_> = painted.iter().map(|text| text.text.as_str()).collect();
+                panic!("the preview ending `{end}` is painted: {texts:?}")
+            });
+        assert!(
+            shown.text.starts_with(lead)
+                && shown.text != preview
+                && shown.rect.height() < 1.5 * Type::Small.line(),
+            "a long preview keeps `{lead}` and gives way in its path: {}",
+            shown.text
+        );
+        let _ = bounds(&nodes, preview);
     }
     let [field, browse, create, _] = still;
     assert!(
@@ -629,7 +659,7 @@ fn inline_create_moves_nothing_while_the_dm_types() {
     // reason as its description and on the kept line; nothing moves when the lock comes and
     // goes (the kept line keeps the reason's room), with any reason of Create's beside it.
     for reason in [None, Some(TestReason::NoFolder), Some(TestReason::Long)] {
-        let (open, nodes, painted) = draw_with(800.0, reason, true, false, Some(false));
+        let (open, nodes, painted) = draw_with(800.0, reason, true, None, Some(false));
         let browse = |nodes: &Nodes| {
             nodes
                 .iter()
@@ -639,7 +669,7 @@ fn inline_create_moves_nothing_while_the_dm_types() {
         };
         assert_eq!(browse(&nodes), (false, None), "open: {reason:?}");
         assert!(!painted.iter().any(|text| text.text == LOCKED));
-        let (locked, nodes, painted) = draw_with(800.0, reason, true, false, Some(true));
+        let (locked, nodes, painted) = draw_with(800.0, reason, true, None, Some(true));
         assert_eq!(
             open, locked,
             "a lock that comes and goes moves nothing: {reason:?}"

@@ -2271,6 +2271,17 @@ impl<'f, A: 'static> Messages<'f, A> {
         self
     }
 
+    /// The answer to the DM's last act when it failed (ruling Q-x): a fault that the caller
+    /// holds as its newest answer and ends at the next act. It comes first in the footer, before
+    /// every kept result, which are answers to older acts.
+    pub fn answer(&mut self, fault: FaultMessage<A>) -> &mut Self {
+        let (_, typed) = Outcome::from(fault).parts();
+        let words = Cow::Owned(typed.body.words.as_str().to_owned());
+        let draw = self.draw(typed, None);
+        self.footer.push(FooterRank::Answer, None, words, draw);
+        self
+    }
+
     /// A kept result of this frame, newest first by the order its store issued.
     pub fn kept(&mut self, line: KeptLine<'f, A>) -> &mut Self {
         self.kept_at(line.ticket, line.typed)

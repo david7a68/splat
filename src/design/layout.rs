@@ -3120,8 +3120,11 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
     }
 }
 
-/// A preview keeps one line: one that does not fit gives way at its start
-/// (`…/modules/copper_coast`); its hover and accessible name keep it whole.
+/// A preview keeps one line. One that does not fit keeps its leading words (`Will create`) and
+/// gives way in its path, from the path's front (`Will create …/modules/copper_coast`), so the
+/// final name stays as long as it can; only a final name that alone does not fit is cut at its
+/// start too. Words with no path give way at their start. Its hover and accessible name keep it
+/// whole.
 fn preview_line(ui: &mut Ui, preview: &str) {
     let font = Type::Small.font(ui);
     let room = ui.available_width();
@@ -3133,15 +3136,39 @@ fn preview_line(ui: &mut Ui, preview: &str) {
         .collect();
     let mut shown = one_row.clone();
     if number_width(ui, &shown, &font) > room {
-        let chars: Vec<char> = one_row.chars().collect();
-        let mut from = 0;
-        while from < chars.len() {
-            shown = format!("…{}", chars[from..].iter().collect::<String>());
-            if number_width(ui, &shown, &font) <= room {
-                break;
+        // The leading words end where the first word that holds a path separator starts.
+        let path_at = one_row
+            .split_inclusive(' ')
+            .scan(0, |at, word| {
+                let start = *at;
+                *at += word.len();
+                Some((start, word))
+            })
+            .find(|(_, word)| word.contains(['/', '\\']))
+            .map_or(0, |(start, _)| start);
+        let (lead, path) = one_row.split_at(path_at);
+        // Whole folders go from the path's front first (`…/Copper Coast/Campaign.md`).
+        let folders = path
+            .char_indices()
+            .filter(|(_, c)| matches!(c, '/' | '\\'))
+            .map(|(at, _)| &path[at..])
+            .find(|rest| number_width(ui, &format!("{lead}…{rest}"), &font) <= room);
+        shown = match folders {
+            Some(rest) => format!("{lead}…{rest}"),
+            None => {
+                // The final name alone does not fit: it gives way at its start.
+                let last = path.rfind(['/', '\\']).map_or(path, |at| &path[at + 1..]);
+                let chars: Vec<char> = last.chars().collect();
+                let mut cut = format!("{lead}…{last}");
+                for from in 0..chars.len() {
+                    cut = format!("{lead}…{}", chars[from..].iter().collect::<String>());
+                    if number_width(ui, &cut, &font) <= room {
+                        break;
+                    }
+                }
+                cut
             }
-            from += 1;
-        }
+        };
     }
     let response = ui
         .add(egui::Label::new(Type::Small.rich(ui, shown).color(colors().muted)).extend())
