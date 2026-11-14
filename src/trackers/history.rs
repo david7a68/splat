@@ -12,8 +12,9 @@ use super::{
     result_words, with_dependents,
 };
 use crate::design::outcome::PagePlaceholder;
-use crate::design::{self, Action, Density, Gap, Tone, Type, colors};
-use crate::world::{FooterAct, FooterKind, FooterLine, FooterRank};
+use crate::design::outcome::{FaultMessage, Messages, Outcome, Said, UndoStep, Verb};
+use crate::design::{self, Action, Density, Gap, Type, colors};
+use crate::world::FooterAct;
 use eframe::egui;
 use ledger::{Entry, Ledger, Op};
 use std::collections::HashMap;
@@ -333,9 +334,62 @@ impl Trackers {
     }
 }
 
-/// The reader's footer lines of the history of `note`: why the last `Remove` or its Undo wrote
-/// nothing, and the last `Remove` with `Undo remove`. A note turned off shows nothing.
-pub(crate) fn footer_lines(trackers: &Trackers, note: Uuid) -> Vec<FooterLine> {
+/// The reader's footer messages of the history of `note`: why the last `Remove` or its Undo
+/// wrote nothing, and the last `Remove` with `Undo remove`. A note turned off shows nothing.
+/// (A named lead exception in package D's slice: only this footer path moves to the typed
+/// footer. `remove` still issues its own order, so the result goes in by the staged path.)
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: the last Remove keeps the order `remove` issued (design::results::STAGED_ALLOWS)"
+)]
+pub(crate) fn footer(trackers: &Trackers, note: Uuid, messages: &mut Messages<'_, FooterAct>) {
+    if !in_play(&trackers.rules, note) {
+        return;
+    }
+    if let Some((_, reason)) = trackers
+        .history_reason
+        .as_ref()
+        .filter(|(owner, _)| *owner == note)
+    {
+        match reason {
+            Unrecorded::Refused(why) => {
+                messages.outcome(Outcome::Refused(crate::world::said(why)));
+            }
+            Unrecorded::NotSaved(error) => {
+                messages.outcome(FaultMessage::new(&NotSaved(super::view::not_saved(error))));
+            }
+        }
+    }
+    if let Some(removed) = trackers.removed.as_ref().filter(|r| r.note == note) {
+        messages.outcome_at(
+            removed.order,
+            Said::new(crate::world::said(&removed.words))
+                .undo(UndoStep::verb(Verb::Remove).pressed_as(FooterAct::Trackers)),
+        );
+    }
+}
+
+/// A failed save of the history, in the words `view::not_saved` gives it.
+struct NotSaved(crate::design::outcome::Sentence);
+
+impl crate::design::outcome::Fault for NotSaved {
+    fn severity(&self) -> crate::design::outcome::Severity {
+        crate::design::outcome::Severity::NotSaved
+    }
+    fn cause(&self) -> crate::design::outcome::Sentence {
+        self.0.clone()
+    }
+}
+
+/// The words of the footer's messages of the history of `note`, in the footer's order, for the
+/// checks.
+#[cfg(test)]
+pub(crate) struct FooterWords {
+    pub words: String,
+}
+
+#[cfg(test)]
+pub(crate) fn footer_lines(trackers: &Trackers, note: Uuid) -> Vec<FooterWords> {
     let mut lines = Vec::new();
     if !in_play(&trackers.rules, note) {
         return lines;
@@ -345,30 +399,16 @@ pub(crate) fn footer_lines(trackers: &Trackers, note: Uuid) -> Vec<FooterLine> {
         .as_ref()
         .filter(|(owner, _)| *owner == note)
     {
-        let (tone, words) = match reason {
-            Unrecorded::Refused(why) => (Tone::Warning, why.clone()),
-            Unrecorded::NotSaved(error) => (Tone::Error, super::view::not_saved(error).to_string()),
+        let words = match reason {
+            Unrecorded::Refused(why) => why.clone(),
+            Unrecorded::NotSaved(error) => super::view::not_saved(error).to_string(),
         };
-        lines.push(FooterLine::new(
-            FooterRank::Reason,
-            tone,
-            &words,
-            FooterKind::Plain,
-        ));
+        lines.push(FooterWords { words });
     }
     if let Some(removed) = trackers.removed.as_ref().filter(|r| r.note == note) {
-        lines.push(
-            FooterLine::new(
-                FooterRank::Undo,
-                crate::world::CHANGED,
-                &removed.words,
-                FooterKind::Undo {
-                    label: "Undo remove",
-                    act: FooterAct::Trackers,
-                },
-            )
-            .at(removed.order),
-        );
+        lines.push(FooterWords {
+            words: removed.words.clone(),
+        });
     }
     lines
 }

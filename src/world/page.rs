@@ -2,7 +2,11 @@
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{Nav, Reader, file_fault::FileFault};
 use crate::{
-    design::{self, Type, colors, icons},
+    design::{
+        self, Type, colors, icons,
+        outcome::{FaultMessage, Messages, PaneFrame, Said, UndoStep},
+        pane::Body,
+    },
     lookup::{ContentIndex, WorldGroups},
     persistence::Campaign,
 };
@@ -142,6 +146,66 @@ type Held = (
     Vec<String>,
 );
 
+/// The page's one kept result (`Note repaired.`, a generated NPC's discard). A later one
+/// replaces it; it shows only while its own state holds (`page_messages`).
+struct PageKept(super::PageResult);
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct PageSlot;
+
+impl design::results::Owner for PageSlot {
+    type Scope = ();
+    fn scope(&self) -> &() {
+        &()
+    }
+}
+
+impl design::results::Kept for PageKept {
+    type Owner = PageSlot;
+    const ENDS: design::results::Ends = design::results::Ends {
+        owner_changed: design::results::OwnerChanged::Ends,
+        disk_changed: design::results::DiskChanged::Stays,
+        press: design::results::Press::Undo,
+    };
+    fn owner(&self) -> PageSlot {
+        PageSlot
+    }
+}
+
+/// One ticked question: its note and the line that holds its box, in its campaign.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct TickOwner {
+    campaign: Uuid,
+    note: Uuid,
+    at: usize,
+}
+
+impl design::results::Owner for TickOwner {
+    type Scope = Uuid;
+    fn scope(&self) -> &Uuid {
+        &self.campaign
+    }
+}
+
+/// A tick's result lives while its note holds the ticked line where the tick wrote it (the
+/// check of the notes after each load, `disk_changed`), until its Undo, or a new tick of that
+/// line.
+impl design::results::Kept for Tick {
+    type Owner = TickOwner;
+    const ENDS: design::results::Ends = design::results::Ends {
+        owner_changed: design::results::OwnerChanged::Ends,
+        disk_changed: design::results::DiskChanged::Checked,
+        press: design::results::Press::Undo,
+    };
+    fn owner(&self) -> TickOwner {
+        TickOwner {
+            campaign: self.campaign,
+            note: self.note,
+            at: self.at,
+        }
+    }
+}
+
 /// A question that the DM ticked in Open questions, kept for its `Undo tick` by the note's ID
 /// and the line that holds its box.
 struct Tick {
@@ -191,8 +255,8 @@ pub struct WorldPage {
     generated_shown: bool,
     /// The NPC that Discard let go, with its table facts, for one `Undo discard`.
     discarded_npc: Option<Held>,
-    /// When the page's result (`Note repaired.` or the NPC's discard) was made.
-    result_order: crate::design::ResultOrder,
+    /// The page's result (`Note repaired.` or the NPC's discard), with its order.
+    results: design::Results<PageSlot, PageKept>,
     generator_problems: Vec<crate::npc_generator::TableProblem>,
     generator_sources: Vec<String>,
     error: Option<PageError>,
@@ -210,8 +274,8 @@ pub struct WorldPage {
     kept_empty: Vec<View>,
     /// Repair causes are read and parsed only when the index generation changes.
     broken_details: std::collections::BTreeMap<String, BrokenDetail>,
-    /// Ticked questions with a live `Undo tick`, oldest first.
-    ticks: Vec<Tick>,
+    /// Ticked questions with a live `Undo tick`.
+    ticks: design::Results<TickOwner, Tick>,
     /// Why the last tick, or its Undo, wrote nothing.
     tick_error: Option<String>,
     /// The held NPC whose card's `Copy the marker` was pressed, by name, with the order the
@@ -262,7 +326,7 @@ impl WorldPage {
         self.checks = Some((index.generation(), super::checks::run(index)));
         self.kept_empty.clear();
         // A tick's Undo lives while its note holds the ticked line where the tick wrote it.
-        self.ticks.retain(|tick| {
+        self.ticks.disk_changed(|tick| {
             index
                 .position(tick.note)
                 .and_then(|at| read(&index.items[at].entry.path))
@@ -319,7 +383,7 @@ impl WorldPage {
             self.generated_shown = false;
             self.discarded_npc = None;
             self.marker_copied = None;
-            self.ticks.clear();
+            self.ticks = design::Results::new();
             self.tick_error = None;
         }
     }
@@ -701,19 +765,12 @@ impl WorldPage {
                         self.view = View::Reader;
                         self.selected = repair.entry_id();
                         self.repaired = self.selected;
-                        self.result_order = crate::design::ResultOrder::issue();
+                        self.results.record(PageKept(super::PageResult::Repaired));
                         // The repair is the newer result. A change result kept from before the
                         // note broke has nothing left to undo, and would hide `Note repaired.`.
                         // Another note's rename keeps its Undo.
                         self.reader.clear_notice();
-                        if self
-                            .reader
-                            .name_undo
-                            .as_ref()
-                            .is_some_and(|change| change.shows_on(campaign, &repair.path))
-                        {
-                            self.reader.name_undo = None;
-                        }
+                        self.reader.end_name_change_on(campaign, &repair.path);
                         self.repair = None;
                         self.reload = true;
                     }
@@ -728,20 +785,25 @@ impl WorldPage {
                     return;
                 }
                 if self.view != View::Reader {
-                    let bottom = if self.view == View::Questions {
-                        self.questions_footer(ui, index, campaign)
-                    } else {
-                        ui.max_rect().bottom()
-                    };
-                    let act = egui::ScrollArea::vertical()
-                        .id_salt(("world_checks", self.view == View::Questions))
-                        .max_height((bottom - ui.cursor().top()).max(0.0))
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| {
-                            design::reader::measure(ui, |ui| self.checks_view(ui, index))
-                        })
-                        .inner;
-                    match act {
+                    // The checks view is its pane's scroll column; Open questions' ticks and
+                    // their reason sit in its footer.
+                    let frame = PaneFrame::new(ui);
+                    let questions = self.view == View::Questions;
+                    let mut messages =
+                        Messages::new(&frame, ("world_checks", questions), ui.available_width());
+                    if questions {
+                        self.questions_messages(&frame, &mut messages, campaign);
+                    }
+                    let paned = messages.pane(ui, Body::Content, |ui| {
+                        design::reader::measure(ui, |ui| self.checks_view(ui, index))
+                    });
+                    if let Some(press) = paned.pressed
+                        && press.id == super::FooterAct::Untick
+                        && let Some(ticket) = press.ticket
+                    {
+                        self.untick(index, campaign, ticket);
+                    }
+                    match paned.body {
                         Some(CheckAct::Open(page, heading)) => {
                             self.open_note(index.items[page].entry.id);
                             self.reader.show_heading(heading);
@@ -759,22 +821,24 @@ impl WorldPage {
                 else {
                     // The result sits in the pane's footer, as it does below a note (round 26
                     // FF1), so the empty state's advice keeps its place.
-                    let mut lines: Vec<_> =
-                        self.result(None).iter().map(|(r, _)| r.line()).collect();
+                    let frame = PaneFrame::new(ui);
+                    let mut messages = Messages::new(&frame, "world_footer", ui.available_width());
+                    self.page_messages(&frame, &mut messages, None);
                     // A Log line whose entry is gone says its words here too.
-                    lines.extend(self.reader.gone_log_notices(Some(campaign.id)));
-                    match super::draw_footer(ui, "world_footer", &lines).0 {
-                        Some(super::FooterAct::GoneLog(id)) => self.reader.end_gone_log(id),
-                        Some(_) => self.undo_discard(),
-                        None => {}
+                    self.reader
+                        .gone_log_messages(&frame, &mut messages, Some(campaign.id));
+                    let paned = messages.pane(ui, Body::Content, |ui| {
+                        design::empty_state(
+                            ui,
+                            icons::WORLD,
+                            "No note open",
+                            "Choose one from the list, or make a new one.",
+                            |_| {},
+                        );
+                    });
+                    if let Some(press) = paned.pressed {
+                        let _ = self.footer_press(ui.ctx(), press, None, campaign, trackers);
                     }
-                    design::empty_state(
-                        ui,
-                        icons::WORLD,
-                        "No note open",
-                        "Choose one from the list, or make a new one.",
-                        |_| {},
-                    );
                     return;
                 };
                 // A later result on the repaired note replaces `Note repaired.`.
@@ -784,42 +848,31 @@ impl WorldPage {
                     self.repaired = None;
                 }
                 // Every result, reason and Undo of the open note sits in the pane's footer,
-                // pinned below the reader, so none of them moves the note (round 26).
-                let page = self.result(Some(item.entry.id));
-                let lines = super::with_lines(
-                    self.reader.footer_lines(
-                        item,
-                        index,
-                        Some(campaign),
-                        page.as_ref().map(|(page, order)| (page, *order)),
-                    ),
-                    crate::trackers::history::footer_lines(trackers, item.entry.id),
+                // below the reader, so none of them moves the note (round 26). The reader is the
+                // pane's scroll column, one for each note.
+                let frame = PaneFrame::new(ui);
+                let mut messages = Messages::new(
+                    &frame,
+                    ("world_reader", item.entry.id),
+                    ui.available_width(),
                 );
-                let (pressed, bottom) = super::draw_footer(ui, "world_footer", &lines);
-                match pressed {
-                    Some(super::FooterAct::Page) => self.undo_discard(),
-                    Some(super::FooterAct::Trackers) => trackers.undo_remove(),
-                    Some(act) => nav = self.reader.footer_act(ui.ctx(), act, item, campaign),
-                    None => {}
-                }
+                self.reader
+                    .footer(&frame, &mut messages, item, index, Some(campaign));
+                self.page_messages(&frame, &mut messages, Some(item.entry.id));
+                crate::trackers::history::footer(trackers, item.entry.id, &mut messages);
                 // As in Library, a wide table may use the pane; prose keeps its measure.
-                crate::markdown_view::with_wide_tables(ui, |ui| {
-                    egui::ScrollArea::vertical()
-                        .id_salt(("world_reader", item.entry.id))
-                        // The reader ends `S` above the footer, so the footer never covers it.
-                        .max_height((bottom - ui.cursor().top()).max(0.0))
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| {
-                            let read = self.reader.read_with(
-                                ui,
-                                item,
-                                index,
-                                Some(campaign),
-                                Some(&mut *trackers),
-                            );
-                            nav = nav.take().or(read);
-                        });
+                let reader = &mut self.reader;
+                let paned = crate::markdown_view::with_wide_tables(ui, |ui| {
+                    messages.pane(ui, Body::Content, |ui| {
+                        reader.read_with(ui, item, index, Some(campaign), Some(&mut *trackers))
+                    })
                 });
+                nav = nav.take().or(paned.body);
+                if let Some(press) = paned.pressed {
+                    let pressed =
+                        self.footer_press(ui.ctx(), press, Some(item), campaign, trackers);
+                    nav = nav.take().or(pressed);
+                }
             });
         if let Some(kind) = create.take() {
             self.begin_new(kind, Some(index));
@@ -889,21 +942,61 @@ impl WorldPage {
 
     /// The result this page shows in the footer: the NPC Discard let go, or the repair that made
     /// the open note readable, with when it was made.
-    fn result(
+    /// The page's result, while its own state holds: the discarded NPC while no NPC is held,
+    /// `Note repaired.` while the repaired note is open.
+    fn page_messages<'f>(
         &self,
+        frame: &'f PaneFrame,
+        messages: &mut Messages<'f, super::FooterAct>,
         open: Option<Uuid>,
-    ) -> Option<(super::PageResult, crate::design::ResultOrder)> {
-        if let Some((npc, _, _)) = self.discarded_npc.as_ref()
-            && self.generated.is_none()
-        {
-            Some((
-                super::PageResult::Discarded(npc.name.clone()),
-                self.result_order,
-            ))
-        } else if open.is_some() && self.repaired == open {
-            Some((super::PageResult::Repaired, self.result_order))
-        } else {
-            None
+    ) {
+        let Some(shown) = self.results.get(&PageSlot) else {
+            return;
+        };
+        let shows = match &shown.value().0 {
+            super::PageResult::Discarded(_) => {
+                self.discarded_npc.is_some() && self.generated.is_none()
+            }
+            super::PageResult::Repaired => open.is_some() && self.repaired == open,
+        };
+        if shows {
+            messages.kept(shown.outcome(frame, |kept| kept.0.outcome()));
+        }
+    }
+
+    /// A press in a pane that shows the reader's footer: the page's own result and the
+    /// trackers' are taken here, the reader's by the reader.
+    fn footer_press(
+        &mut self,
+        ctx: &egui::Context,
+        press: crate::design::outcome::Press<super::FooterAct>,
+        item: Option<&crate::lookup::Item>,
+        campaign: &Campaign,
+        trackers: &mut crate::trackers::Trackers,
+    ) -> Option<Nav> {
+        match press.id {
+            super::FooterAct::Page => {
+                let ticket = press.ticket?;
+                // Only the discard has an Undo; a replaced result (`Gone`) does nothing.
+                if self
+                    .results
+                    .undo_by(ticket, |kept| match kept.0 {
+                        super::PageResult::Discarded(_) => Ok(()),
+                        super::PageResult::Repaired => Err(()),
+                    })
+                    .is_ok()
+                {
+                    self.undo_discard();
+                }
+                None
+            }
+            super::FooterAct::Trackers => {
+                trackers.undo_remove();
+                None
+            }
+            _ => self
+                .reader
+                .footer_act(ctx, press, item.map(|item| item.entry.id), campaign),
         }
     }
 
@@ -1199,7 +1292,8 @@ impl WorldPage {
             {
                 // The copy's result belonged to this card; `Undo discard` does not bring it back.
                 self.marker_copied = None;
-                self.result_order = crate::design::ResultOrder::issue();
+                self.results
+                    .record(PageKept(super::PageResult::Discarded(npc.name.clone())));
                 self.discarded_npc = Some((
                     npc,
                     std::mem::take(&mut self.generator_problems),
@@ -1458,12 +1552,11 @@ impl WorldPage {
         let item = &index.items[found.page];
         let (note, name) = (item.entry.id, item.entry.name.clone());
         let words = format!("\u{201c}{}\u{201d} ticked in {name}.", found.words);
-        let result = self.write_tick(campaign, item, at, &line, true);
+        let result = Self::write_tick(&self.reader, campaign, item, at, &line, true);
         self.tick_error = result.err();
         if self.tick_error.is_none() {
-            self.ticks
-                .retain(|tick| !(tick.note == note && tick.at == at));
-            self.ticks.push(Tick {
+            // A new tick of this line replaces its earlier result (`record`).
+            self.ticks.record(Tick {
                 campaign: campaign.id,
                 note,
                 at,
@@ -1475,37 +1568,47 @@ impl WorldPage {
     }
 
     /// `Undo tick`: the box of that question, in that note at that line, is open again while
-    /// the line holds the tick.
-    fn untick(&mut self, index: &ContentIndex, campaign: &Campaign, note: Uuid, at: usize) {
-        let Some(place) = self
-            .ticks
-            .iter()
-            .position(|tick| tick.note == note && tick.at == at)
-        else {
-            return;
-        };
-        let tick = &self.ticks[place];
-        let result = if tick.campaign != campaign.id {
-            Err("This tick belongs to another campaign. Nothing was changed.".to_owned())
-        } else {
-            match index.position(note) {
-                Some(position) => {
-                    self.write_tick(campaign, &index.items[position], at, &tick.line, false)
-                }
+    /// the line holds the tick. The press's ticket names the tick; a replaced or ended one does
+    /// nothing; a failed write keeps the result and says why.
+    fn untick(
+        &mut self,
+        index: &ContentIndex,
+        campaign: &Campaign,
+        ticket: crate::design::results::Ticket,
+    ) {
+        let reader = &self.reader;
+        let result = self.ticks.undo_by(ticket, |tick| {
+            if tick.campaign != campaign.id {
+                return Err(
+                    "This tick belongs to another campaign. Nothing was changed.".to_owned(),
+                );
+            }
+            match index.position(tick.note) {
+                Some(position) => Self::write_tick(
+                    reader,
+                    campaign,
+                    &index.items[position],
+                    tick.at,
+                    &tick.line,
+                    false,
+                ),
                 None => Err("The note of this question is gone. Nothing was changed.".to_owned()),
             }
-        };
-        self.tick_error = result.err();
-        if self.tick_error.is_none() {
-            self.ticks.remove(place);
-            self.reload = true;
+        });
+        match result {
+            Ok(_) => {
+                self.tick_error = None;
+                self.reload = true;
+            }
+            Err(crate::design::results::ByTicket::Failed(error)) => self.tick_error = Some(error),
+            Err(crate::design::results::ByTicket::Gone) => {}
         }
     }
 
     /// Set one question's box in its note through the World's one write path, which writes
     /// only when the file still holds what this act read.
     fn write_tick(
-        &self,
+        reader: &Reader,
         campaign: &Campaign,
         item: &crate::lookup::Item,
         at: usize,
@@ -1513,8 +1616,8 @@ impl WorldPage {
         done: bool,
     ) -> Result<(), String> {
         let name = &item.entry.name;
-        if self.reader.editing(item.entry.id, campaign)
-            || self.reader.edited_elsewhere.contains(&item.entry.id)
+        if reader.editing(item.entry.id, campaign)
+            || reader.edited_elsewhere.contains(&item.entry.id)
         {
             return Err(format!("Save or discard your edit of {name} first."));
         }
@@ -1529,43 +1632,27 @@ impl WorldPage {
             .map(|_| ())
     }
 
-    /// Open questions' footer: each tick's result with its `Undo tick`, newest first, then why
-    /// the last tick wrote nothing. Returns where the questions end.
-    fn questions_footer(
-        &mut self,
-        ui: &mut egui::Ui,
-        index: &ContentIndex,
+    /// Open questions' footer: each tick's result with its Undo, newest first, then why the
+    /// last tick wrote nothing. A tick has no verb of its own (`Undo: tick`): the counted
+    /// `Said` escape, until the shared part has one.
+    fn questions_messages<'f>(
+        &self,
+        frame: &'f PaneFrame,
+        messages: &mut Messages<'f, super::FooterAct>,
         campaign: &Campaign,
-    ) -> f32 {
-        let mut lines: Vec<_> = self
-            .ticks
-            .iter()
-            .rev()
-            .map(|tick| {
-                super::FooterLine::new(
-                    super::FooterRank::Undo,
-                    super::CHANGED,
-                    &tick.words,
-                    super::FooterKind::Undo {
-                        label: "Undo tick",
-                        act: super::FooterAct::Untick(tick.note, tick.at),
-                    },
-                )
-            })
-            .collect();
-        lines.extend(self.tick_error.as_ref().map(|error| {
-            super::FooterLine::new(
-                super::FooterRank::Reason,
-                design::Tone::Error,
-                error,
-                super::FooterKind::Error { editor: None },
-            )
-        }));
-        let (pressed, bottom) = super::draw_footer(ui, "world_footer", &lines);
-        if let Some(super::FooterAct::Untick(note, at)) = pressed {
-            self.untick(index, campaign, note, at);
+    ) {
+        for shown in self.ticks.newest_first(&campaign.id) {
+            messages.kept(shown.outcome(frame, |tick| {
+                Said::new(super::said(&tick.words))
+                    .undo(UndoStep::act("tick").pressed_as(super::FooterAct::Untick))
+                    .into()
+            }));
         }
-        bottom
+        if let Some(error) = &self.tick_error {
+            messages.outcome(FaultMessage::new(&super::ReaderFault::Action(
+                error.clone(),
+            )));
+        }
     }
 
     #[allow(

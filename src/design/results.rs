@@ -807,16 +807,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/timeline.rs", "remove", &[Ban::Results]),
         ("src/timeline.rs", "touch", &[Ban::Results]),
         ("src/trackers/history.rs", "remove", &[Ban::Results]),
-        ("src/world/edit.rs", "discard_lost", &[Ban::Results]),
+        ("src/trackers/history.rs", "footer", &[Ban::Order]),
         (
             "src/world/edit.rs",
             "edit_form",
             &[Ban::Results, Ban::Layout(1), Ban::Extras(2)],
-        ),
-        (
-            "src/world/edit.rs",
-            "lead_review_a_discarded_draft_belongs_to_its_campaign",
-            &[Ban::Results],
         ),
         (
             "src/world/page.rs",
@@ -828,10 +823,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "creation_form",
             &[Ban::Results, Ban::Layout(1), Ban::Pane(1)],
         ),
-        ("src/world/page.rs", "show", &[Ban::Results, Ban::Layout(3)]),
-        ("src/world.rs", "draw_footer", &[Ban::Results, Ban::Pane(1)]),
-        ("src/world.rs", "entry_controls", &[Ban::Results]),
-        ("src/world.rs", "stamp", &[Ban::Results]),
+        ("src/world/page.rs", "show", &[Ban::Layout(1)]),
         // Package K: raw egui calls that a layout part replaces.
         (
             "src/campaigns.rs",
@@ -1074,6 +1066,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/trackers.rs", "act_words", &[Ban::Words]),
         ("src/world/repair.rs", "cause", &[Ban::Words]),
+        ("src/world.rs", "said", &[Ban::Words]),
         ("src/trackers.rs", "cause", &[Ban::Words]),
         ("src/trackers/history.rs", "show", &[Ban::Body]),
         ("src/trackers/view.rs", "body", &[Ban::Body]),
@@ -1185,7 +1178,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/world.rs", "missing_link", &[Ban::Extras(1)]),
         ("src/world.rs", "unread_groups_message", &[Ban::Extras(1)]),
         ("src/world.rs", "value_row", &[Ban::Extras(1)]),
-        ("src/world/edit.rs", "copy_or_let_go", &[Ban::Extras(1)]),
         ("src/world/page.rs", "list", &[Ban::Extras(1)]),
         ("src/world/page.rs", "unread_pane", &[Ban::Extras(1)]),
         ("src/world/related.rs", "history_rows", &[Ban::Extras(1)]),
@@ -1421,9 +1413,7 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/timeline.rs", 3),
             ("src/timeline/page.rs", 2),
             ("src/trackers/history.rs", 1),
-            ("src/world.rs", 2),
-            ("src/world/edit.rs", 4),
-            ("src/world/page.rs", 3),
+            ("src/world/page.rs", 1),
         ],
     ),
     (
