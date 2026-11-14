@@ -886,26 +886,21 @@ impl WorldPage {
                 self.page_messages(&frame, &mut messages, Some(item.entry.id));
                 crate::trackers::history::footer(trackers, item.entry.id, &mut messages);
                 // As in Library, a wide table may use the pane; prose keeps its measure.
-                // An open edit form takes the editor form of the pane (P2): its text gives way,
-                // so Save stays in view under a long note.
+                // The reader pane is always the editor form (P2): an edit form's text draws in its
+                // region and gives way, so Save stays in view under a long note from the first
+                // frame the form shows; with no form, the unused region is a content pane.
                 let reader = &mut self.reader;
                 let paned = crate::markdown_view::with_wide_tables(ui, |ui| {
-                    if reader.edits_in_pane(item.entry.id, Some(campaign)) {
-                        messages.pane_editor(ui, |ui, region| {
-                            reader.read_in_pane(
-                                ui,
-                                item,
-                                index,
-                                Some(campaign),
-                                Some(&mut *trackers),
-                                Some(region),
-                            )
-                        })
-                    } else {
-                        messages.pane(ui, Body::Content, |ui| {
-                            reader.read_with(ui, item, index, Some(campaign), Some(&mut *trackers))
-                        })
-                    }
+                    messages.pane_editor(ui, |ui, region| {
+                        reader.read_in_pane(
+                            ui,
+                            item,
+                            index,
+                            Some(campaign),
+                            Some(&mut *trackers),
+                            Some(region),
+                        )
+                    })
                 });
                 nav = nav.take().or(paned.body);
                 if let Some(press) = paned.pressed {

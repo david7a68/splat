@@ -1284,6 +1284,29 @@ impl<'a> Driver<'a> {
         self.click_rect(rect, &format!("Click: {name}"));
     }
 
+    /// Press a control and run only the frame that takes the press, with no settling, so a
+    /// check sees the first frame the press shows (a layout that is right only a frame later
+    /// fails it). Call `settle` after the check.
+    pub fn click_first_frame(&mut self, name: &str) {
+        let rect = self.aim(&format!("control {name:?}"), |node| {
+            node.name == name && Self::is_control(node)
+        });
+        let pos = rect.center();
+        self.harness.hover_at(pos);
+        self.harness.step();
+        for pressed in [true, false] {
+            self.harness.event(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
+        self.harness.step();
+        self.harness.remove_cursor();
+        self.interactions += 1;
+    }
+
     /// The words of the last pass, and run `act` with every pass's words collected.
     pub(super) fn traced<T>(&mut self, act: impl FnOnce(&mut Self) -> T) -> (T, BTreeSet<String>) {
         self.frames.lock().expect("frames").during = Some(BTreeSet::new());

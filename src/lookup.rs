@@ -2556,26 +2556,20 @@ impl Lookup {
         reader.footer(&frame, &mut messages, current, &index, campaign);
         crate::trackers::history::footer(trackers, current.entry.id, &mut messages);
         // The results list above sets its own row spacing. The reader keeps the app's, so an
-        // entry reads the same whether a search or a link opened it. An open edit form takes the
-        // pane's editor form (P2), so Save stays in view under a long note.
-        let paned = if reader.edits_in_pane(current.entry.id, campaign) {
-            messages.pane_editor(ui, |ui, region| {
-                ui.spacing_mut().item_spacing.y = ui.ctx().style().spacing.item_spacing.y;
-                reader.read_in_pane(
-                    ui,
-                    current,
-                    &index,
-                    campaign,
-                    Some(&mut *trackers),
-                    Some(region),
-                )
-            })
-        } else {
-            messages.pane(ui, Body::Content, |ui| {
-                ui.spacing_mut().item_spacing.y = ui.ctx().style().spacing.item_spacing.y;
-                reader.read_with(ui, current, &index, campaign, Some(&mut *trackers))
-            })
-        };
+        // entry reads the same whether a search or a link opened it. The pane is always the
+        // editor form (P2), so an edit form's text gives way and Save stays in view from the
+        // first frame the form shows.
+        let paned = messages.pane_editor(ui, |ui, region| {
+            ui.spacing_mut().item_spacing.y = ui.ctx().style().spacing.item_spacing.y;
+            reader.read_in_pane(
+                ui,
+                current,
+                &index,
+                campaign,
+                Some(&mut *trackers),
+                Some(region),
+            )
+        });
         nav = nav.take().or(paned.body);
         match paned.pressed {
             Some(press) if press.id == world::FooterAct::Trackers => trackers.undo_remove(),

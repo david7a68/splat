@@ -2668,14 +2668,8 @@ impl Reader {
         self.read_in_pane(ui, item, index, campaign, trackers, None)
     }
 
-    /// Whether the open note `id` has its edit form open in this campaign: its pane then takes
-    /// the editor form (`pane_editor`), so Save stays in view under a long text.
-    pub(crate) fn edits_in_pane(&self, id: Uuid, campaign: Option<&Campaign>) -> bool {
-        campaign.is_some_and(|campaign| self.editing(id, campaign))
-    }
-
-    /// `read_with` in its pane's body: `region` is the pane's editor region when the pane took
-    /// the editor form (`edits_in_pane`); the edit form's text draws in it.
+    /// `read_with` in its pane's body: `region` is the pane's editor region (World's and
+    /// Lookup's reader panes are always the editor form); the edit form's text draws in it.
     pub(crate) fn read_in_pane(
         &mut self,
         ui: &mut egui::Ui,

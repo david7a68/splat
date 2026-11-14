@@ -22,6 +22,27 @@ fn entry(d: &Driver<'_>, path: &str, name: &str, kind: &str, fields: &str) -> Uu
     id
 }
 
+/// Review of PR 333 (lead P3): with a 600-line text in an edit form, Save is present and whole
+/// in view at 960, 1280 and 1920, and at `short`, a short window where the form's other controls
+/// and the region's 64 px fit.
+fn long_draft_keeps_save(d: &mut Driver<'_>, id: &str, short: (f32, f32)) {
+    for size in [SMALL, (1280.0, 800.0), LARGE, short] {
+        let (present, whole) = d.at_size(size, |d| {
+            let nodes = d.nodes();
+            let save = nodes.iter().filter(|node| node.name == "Save changes");
+            (
+                save.clone().count() == 1,
+                save.clone().all(|node| node.fully_in_view()),
+            )
+        });
+        d.observe(
+            id,
+            present && whole,
+            format!("At {size:?} under a 600-line text: one Save changes {present}, whole in view {whole}"),
+        );
+    }
+}
+
 fn reload(d: &mut Driver<'_>) {
     d.app_mut().lookup.refresh();
     d.settle();
@@ -1924,6 +1945,34 @@ pub fn facts(d: &mut Driver<'_>) {
             ),
         );
     }
+    // Review of PR 333 (Astra P2): the reader pane is the editor form before Edit is pressed,
+    // so the FIRST frame of a clean 600-line note's form keeps Save in view (on 1205b05d that
+    // frame drew the form with no region). Then the long note at every size.
+    let ledger = root(d).join("Notes/Long ledger.md");
+    entry(d, "Notes/Long ledger.md", "Long ledger", "npc", "");
+    let mut text = fs::read_to_string(&ledger).unwrap();
+    for n in 1..=600 {
+        text.push_str(&format!("Line {n} of the long ledger.\n"));
+    }
+    fs::write(&ledger, &text).unwrap();
+    reload(d);
+    d.click_starting("Long ledger · ");
+    d.expect("Edit Long ledger");
+    d.click_first_frame("Edit Long ledger");
+    let first = d
+        .nodes()
+        .iter()
+        .any(|node| node.name == "Save changes" && node.fully_in_view());
+    d.observe(
+        "iter-28-D-P2-first-frame",
+        first,
+        "The first frame after Edit on a 600-line note has Save changes whole in view",
+    );
+    d.settle();
+    long_draft_keeps_save(d, "iter-28-D-P2-long-note", (960.0, 520.0));
+    d.click("Cancel");
+    fs::remove_file(&ledger).unwrap();
+    reload(d);
     d.click_containing("Horn Rings · ");
     d.expect("Edit Horn Rings");
     d.state("lines-from-other-pages", Sizes::All);
@@ -4817,6 +4866,15 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     let add = tops_at_sizes(d, "Add to fight");
     d.click("Edit Rook Ambry");
     d.wait_for_text("Save changes");
+    // Review of PR 333 (lead P3): Lookup's form with a 600-line draft keeps Save in view.
+    let kept = d.editor_text().unwrap();
+    let mut long = kept.clone();
+    for n in 1..=600 {
+        long.push_str(&format!("\nLine {n} of Rook's long record."));
+    }
+    d.replace_text_in("Text", &long);
+    long_draft_keeps_save(d, "iter-28-D-P2-long-draft-lookup", (960.0, 600.0));
+    d.replace_text_in("Text", &kept);
     d.click("Change In");
     d.type_into("Find a location", "North");
     d.click("North Gate");
