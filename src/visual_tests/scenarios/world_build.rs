@@ -3070,7 +3070,7 @@ pub fn round_trip(d: &mut Driver<'_>) {
         fs::read_to_string(&faction_path).unwrap().contains("ready"),
         "iter-6-D-ST1-shortcut: Ctrl+S must save the focused form",
     );
-    d.click("Undo change Rook");
+    d.click("Undo change Ashfall Faction");
     assert_eq!(fs::read_to_string(&faction_path).unwrap(), faction_before);
     go_campaign(d);
     d.click(TAB_ENTRIES);

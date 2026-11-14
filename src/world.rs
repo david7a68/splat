@@ -1819,11 +1819,11 @@ impl IdentityNoun {
         }
     }
 
-    /// What a separate note's Undo names: `Undo separate note`.
+    /// What a separate note's Undo names after its verb: `Undo separate note`.
     fn act(self) -> &'static str {
         match self {
-            Self::Note => "separate note",
-            Self::Entry => "separate entry",
+            Self::Note => "note",
+            Self::Entry => "entry",
         }
     }
 }
