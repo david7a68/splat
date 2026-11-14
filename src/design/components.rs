@@ -582,6 +582,51 @@ pub const LINE_START_HANG: f32 = S;
 /// the pane, inside the parent's clip (`pane::body_clip`).
 pub const LINE_START_REACH: f32 = LINE_START_HANG + super::tokens::ICON_SLOT;
 
+/// A `line_start` action's pointer clicks come only from presses that started inside its room.
+/// The press's origin is kept while the button is down on the action (by its id, until the
+/// release); a press and release in one frame read the press from that frame's input. A refused
+/// click comes back as a quiet response under the same id (no click flag), and the action's
+/// registration, focus and non-pointer activations (Enter, Space, AccessKit) are untouched.
+fn line_start_press(ui: &Ui, response: Response, room: Rect) -> Response {
+    let key = response.id.with("line_start_press_origin");
+    if response.is_pointer_button_down_on()
+        && let Some(origin) = ui.input(|input| input.pointer.press_origin())
+    {
+        ui.data_mut(|data| data.insert_temp(key, origin));
+    }
+    if !response.clicked_by(egui::PointerButton::Primary) {
+        if !response.is_pointer_button_down_on() {
+            ui.data_mut(|data| data.remove::<egui::Pos2>(key));
+        }
+        return response;
+    }
+    let kept = ui.data_mut(|data| data.remove_temp::<egui::Pos2>(key));
+    let origin = kept.or_else(|| {
+        ui.input(|input| {
+            input.raw.events.iter().rev().find_map(|event| match event {
+                egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    ..
+                } => Some(*pos),
+                _ => None,
+            })
+        })
+    });
+    let keyboard = ui
+        .input(|input| input.key_pressed(egui::Key::Enter) || input.key_pressed(egui::Key::Space));
+    if keyboard || origin.is_none_or(|origin| room.contains(origin)) {
+        return response;
+    }
+    let mut quiet = ui.interact(Rect::NOTHING, response.id.with("refused"), Sense::hover());
+    quiet.id = response.id;
+    quiet.rect = response.rect;
+    quiet.interact_rect = response.interact_rect;
+    quiet.sense = response.sense;
+    quiet
+}
+
 impl<'a> Action<'a> {
     fn new(kind: Kind, label: &'a str) -> Self {
         Self {
@@ -848,21 +893,15 @@ impl<'a> Action<'a> {
             } else {
                 rect
             };
-            // It takes a press only inside its room: every painted pixel there is its target
-            // (egui's direct hit), and a pointer outside the room cannot reach it as egui's
-            // nearest target either (`interact_radius`), as this frame's sense says.
+            // Its target is every painted pixel inside its room, and it is always registered to
+            // take clicks, so focus, the keyboard and AccessKit work whatever the pointer does.
+            // Only a POINTER click is refused, when its press started outside the room (egui
+            // also gives a press to a target up to `interact_radius` away), decided where the
+            // click is handled (`line_start_press`).
             let room = ui.clip_rect().with_min_x(ui.clip_rect().left().max(limit));
-            let outside = ui
-                .input(|input| input.pointer.interact_pos())
-                .is_some_and(|at| !room.contains(at));
-            let sense = if outside {
-                Sense::hover()
-            } else {
-                Sense::click()
-            };
             let clip = ui.clip_rect();
             ui.set_clip_rect(room);
-            let response = ui.interact(target, id, sense);
+            let response = line_start_press(ui, ui.interact(target, id, Sense::click()), room);
             ui.set_clip_rect(clip);
             (rect, response)
         } else {
