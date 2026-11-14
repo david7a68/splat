@@ -1198,7 +1198,7 @@ impl<'a> Driver<'a> {
 
     /// Text typed into the focused field and a screen reader's Click on the control named
     /// `name`, in ONE pass. `Harness::step` runs one pass per queued event, so both events go
-    /// straight into the next frame's input (the queue drained first) and one frame runs. egui
+    /// straight into the next frame's input and one checked frame runs; queued actions fail. egui
     /// applies an AccessKit Click when the control is drawn, without moving the focus: a field
     /// drawn before the control takes the text in the pass where the control is clicked
     /// (proved by `driver_tests::text_and_reader_click_meet_in_one_pass`).
@@ -1215,18 +1215,17 @@ impl<'a> Driver<'a> {
                     self.describe()
                 )
             });
-        // Drain the queue: the next step must run exactly one pass.
-        self.harness.step();
-        let input = self.harness.input_mut();
-        input.events.push(egui::Event::Text(text.to_owned()));
-        input.events.push(egui::Event::AccessKitActionRequest(
-            accesskit::ActionRequest {
-                target,
-                action: accesskit::Action::Click,
-                data: None,
-            },
-        ));
-        self.harness.step();
+        super::input_frame::one_pass(
+            &mut self.harness,
+            [
+                egui::Event::Text(text.to_owned()),
+                egui::Event::AccessKitActionRequest(accesskit::ActionRequest {
+                    target,
+                    action: accesskit::Action::Click,
+                    data: None,
+                }),
+            ],
+        );
         self.interactions += 2;
         self.settle();
     }
@@ -3698,16 +3697,17 @@ mod driver_tests {
         harness.run_steps(2);
         let target = accesskit::NodeId(harness.state().button.expect("the button draws").value());
         let before = harness.state().passes;
-        let input = harness.input_mut();
-        input.events.push(egui::Event::Text("typed".into()));
-        input.events.push(egui::Event::AccessKitActionRequest(
-            accesskit::ActionRequest {
-                target,
-                action: accesskit::Action::Click,
-                data: None,
-            },
-        ));
-        harness.step();
+        super::super::input_frame::one_pass(
+            &mut harness,
+            [
+                egui::Event::Text("typed".into()),
+                egui::Event::AccessKitActionRequest(accesskit::ActionRequest {
+                    target,
+                    action: accesskit::Action::Click,
+                    data: None,
+                }),
+            ],
+        );
         let state = harness.state();
         assert_eq!(state.passes, before + 1, "one-pass: one step runs one pass");
         assert_eq!(

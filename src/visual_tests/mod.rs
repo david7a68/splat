@@ -32,6 +32,7 @@ mod dm_audit;
 mod driver;
 pub(crate) mod ergonomics;
 pub(crate) mod fixture;
+pub(crate) mod input_frame;
 #[cfg(target_os = "linux")]
 mod isolation;
 mod plain_evening;
