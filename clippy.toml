@@ -38,7 +38,6 @@ disallowed-methods = [
     { path = "egui::Slider::new", reason = "a Slider's value field takes its id from its place", allow-invalid = true },
     { path = "egui::Slider::from_get_set", reason = "a Slider's value field takes its id from its place", allow-invalid = true },
     { path = "splat::design::components::text_field", reason = "use design::labelled_field with a FieldId", allow-invalid = true },
-    { path = "splat::design::components::small_text_field", reason = "use design::labelled_field with a FieldId", allow-invalid = true },
     { path = "splat::design::components::text_input", reason = "use design::line_field with a FieldId", allow-invalid = true },
     # Words and field ids are checked when the program compiles: build them with `word!` and
     # `field_id!`, which take a literal and check it in a `const` block.

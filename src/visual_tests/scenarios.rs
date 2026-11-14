@@ -12461,7 +12461,7 @@ pub mod session_notes {
         d.type_text("Harvest Eve");
         // A day opens what follows it, so move it to the top.
         d.scroll_until(pos2(850.0, 550.0), "Place this event after", 12);
-        d.click("Place this event after");
+        d.click_starting("Place this event after: ");
         d.click("Start of the timeline");
         d.state("timeline-day-added", Sizes::All);
         // Round 27 FL1: the detail form keeps the scroll bar's lane, so a Day's form (no bar)
@@ -12543,8 +12543,14 @@ pub mod session_notes {
             "Timeline offers the link update in the Library's words",
         );
         // iter-25-S FL3: the offer sits in the list column, so the form keeps its place.
-        let kind_top = |d: &Driver<'_>| d.place_of("Kind of event").map(|rect| rect.top());
-        let detail_left = |d: &Driver<'_>| d.place_of("Kind of event").map(|rect| rect.left());
+        let kind_top = |d: &Driver<'_>| {
+            d.place_of(&d.name_starting("Kind of event: "))
+                .map(|rect| rect.top())
+        };
+        let detail_left = |d: &Driver<'_>| {
+            d.place_of(&d.name_starting("Kind of event: "))
+                .map(|rect| rect.left())
+        };
         let with_offer = [SMALL, DEFAULT, LARGE].map(|size| {
             d.at_size(size, |d| {
                 let offer = d.place_of(LINK_OFFER);
@@ -12610,7 +12616,9 @@ pub mod session_notes {
         d.state("timeline-filtered", Sizes::Default);
         d.observe(
             "S16",
-            !d.has("Move earlier") && !d.has("Move later") && d.has("Place this event after"),
+            !d.has("Move earlier")
+                && !d.has("Move later")
+                && d.has_containing("Place this event after: "),
             "Place after is the one way to change an event's position",
         );
         d.click("All");
@@ -15199,10 +15207,10 @@ pub mod session_recording {
             "The defaults are Sol through the Codex CLI, after OpenAI's gpt-transcribe",
         );
         d.scroll_until(pos2(600.0, 400.0), "Transcript and summary service", 12);
-        d.click("Transcript and summary service");
+        d.click_starting("Transcript and summary service: ");
         d.state_prepared("processing-llm-choices", Sizes::Default, |d| {
             if !d.has("Anthropic") {
-                d.click("Transcript and summary service");
+                d.click_starting("Transcript and summary service: ");
             }
             d.wait_for_text("Anthropic");
         });
@@ -15237,8 +15245,26 @@ pub mod session_recording {
                 format!("Save key {saves:?} ends at {edge:?}; reasons {reasons:?} sit below"),
             );
         });
-        d.click("Transcript and summary service");
+        // At 960 px the Service control is cut by the tab's footer after the choice
+        // (`processing-settings-anthropic` at 960), so the DM scrolls once to reach it. The
+        // state's window resizes can leave the page at another place (the drop-down keeps focus
+        // on its control), so the step scrolls whatever that place is: the task's cost does not
+        // depend on the capture's resizes. Then the page goes back to where it was, so the later
+        // states start where they did before (a return to the same place, not the DM's act).
+        let service = |d: &Driver<'_>| {
+            d.place_of(&d.name_starting("Transcript and summary service: "))
+                .map(|rect| rect.top())
+        };
+        let before = service(d);
+        d.scroll_at(pos2(600.0, 400.0), 1);
+        let scrolled = service(d);
+        d.click_starting("Transcript and summary service: ");
         d.click("Codex CLI, GPT-6.1 Sol");
+        d.aside(|d| {
+            if let (Some(before), Some(scrolled)) = (before, scrolled) {
+                d.scroll_points_at(pos2(600.0, 400.0), scrolled - before);
+            }
+        });
         d.click("Account and campaigns");
 
         d.app_mut().processing.config.provider = crate::processing::Provider::OpenAiCompatible;
@@ -15248,7 +15274,7 @@ pub mod session_recording {
         // A key saved for one service is not sent to another.
         d.click("Recording and processing");
         d.scroll_until(pos2(600.0, 400.0), "Transcript and summary service", 12);
-        d.click("Transcript and summary service");
+        d.click_starting("Transcript and summary service: ");
         d.click("Anthropic");
         d.observe(
             "T11.6",
@@ -15256,6 +15282,14 @@ pub mod session_recording {
                 "The saved key is for OpenAI, so Splat will not send it to Anthropic.",
             ),
             "A saved key does not follow the DM to a different service",
+        );
+        // Round 28 FM9: the warning says why the key is not sent; only the key's own reason
+        // (`Paste a key first.`) and the tab's footer say what to do.
+        d.observe(
+            "iter-28-S2-FM9",
+            d.has_containing("so Splat will not send it to Anthropic.")
+                && !d.has_containing("Save a key for it"),
+            "The key warning does not repeat the footer's instruction",
         );
         d.expect("Remove speech key (OpenAI)");
         d.state_prepared("key-for-another-service", Sizes::All, |d| {
@@ -15277,7 +15311,7 @@ pub mod session_recording {
                 "A saved key says it is saved on this computer",
             );
         });
-        d.click("Transcript and summary service");
+        d.click_starting("Transcript and summary service: ");
         d.click("Codex CLI, GPT-6.1 Sol");
         d.click("Account and campaigns");
         d.click(NAV_SESSIONS);
@@ -15984,7 +16018,7 @@ pub mod session_recording {
         d.observe_both(
             "iter-13-R4",
             "Recording heading and input stay in view",
-            |d| d.visible_text("RECORDING") && d.in_view("Recording input"),
+            |d| d.visible_text("RECORDING") && d.in_view_containing("Recording input: "),
         );
         d.state("input-during-recording", Sizes::Default);
         d.click_containing("Recording 0:");
@@ -16147,7 +16181,64 @@ pub mod session_recording {
         d.click("Start recording");
         d.click("Stop recording");
         d.click_starting("Recordings");
+        // Review of PR 322: a day the plan titled `Day` goes to the model as the file stores it,
+        // `- Day N: Day`, not as the screen shows it. The day is put in the session's events
+        // without a save and taken out again before the next state.
+        let plan_day = "s2-plan-titled-day".to_owned();
+        // The session whose recording is processed: the open note's.
+        let recorded = {
+            let open = d
+                .app_mut()
+                .sessions
+                .selected_path()
+                .map(std::path::Path::to_owned);
+            let campaign = d.app_mut().campaigns.active_campaign().unwrap();
+            let folder = crate::sessions::folder(&campaign).unwrap();
+            crate::sessions::list_notes(&folder)
+                .into_iter()
+                .find(|note| Some(&note.path) == open.as_ref())
+                .map(|note| note.id)
+        };
+        assert!(recorded.is_some(), "an open session note to process");
+        d.app_mut().timeline.events.push(crate::timeline::Event {
+            id: plan_day.clone(),
+            kind: crate::timeline::Kind::Day,
+            title: "Day".into(),
+            duration: String::new(),
+            place: String::new(),
+            notes: String::new(),
+            result: String::new(),
+            session: recorded,
+            run: None,
+            marker: String::new(),
+            restores: false,
+            continued_in: None,
+            played_order: 0,
+            checks_table: None,
+            checks: Vec::new(),
+            within: None,
+            extra: Default::default(),
+        });
         d.click_containing("Process:");
+        let day = {
+            let events = &d.app_mut().timeline.events;
+            events
+                .iter()
+                .position(|event| event.id == plan_day)
+                .map(|at| crate::timeline::day_numbers(events)[at])
+        };
+        d.app_mut()
+            .timeline
+            .events
+            .retain(|event| event.id != plan_day);
+        let sent = crate::processing::last_context().unwrap_or_default();
+        let line = day.map(|day| format!("- Day {day}: Day"));
+        d.observe(
+            "iter-28-S2-day-context",
+            line.as_ref()
+                .is_some_and(|line| sent.lines().any(|sent| sent == line)),
+            format!("The model's context names the day as stored ({line:?}): {sent:?}"),
+        );
         d.expect("Summary");
         d.click("Summary");
         d.press_ctrl(Key::K);
@@ -16196,7 +16287,7 @@ pub mod session_recording {
         d.click(NAV_SETTINGS);
         d.click("Recording and processing");
         d.scroll_until(pos2(600.0, 400.0), "Speech service", 12);
-        d.click("Speech service");
+        d.click_starting("Speech service: ");
         d.click("Another service");
         d.expect("The custom service must support the OpenAI audio/transcriptions API.");
         // Round 24 FH4, AH1, SH1: after the choice, the notice shows whole, and the field that
@@ -16234,20 +16325,53 @@ pub mod session_recording {
             "Enter the model’s name.",
             "Paste a key first.",
         ];
-        let forms: Vec<_> = reasons
-            .iter()
-            .map(|words| {
+        // At 960 px the key row's reason is below the visible body (the field part keeps `L`
+        // after each help): scroll each reason into view in turn, read its form there, and come
+        // back to the same scroll place for the checks below. Proof steps, not the DM's task.
+        let (forms, model, model_reason, model_help) = d.aside(|d| {
+            let at = pos2(600.0, 400.0);
+            let anchor = |d: &Driver<'_>| d.place_of("Speech address").map(|rect| rect.top());
+            let start = anchor(d);
+            let mut forms = Vec::new();
+            let mut order = (None, None, None);
+            for words in reasons {
+                for _ in 0..12 {
+                    if d.painted_color(words).is_some() {
+                        break;
+                    }
+                    d.scroll_at(at, 1);
+                }
                 let place = d.place_of(words);
-                (
-                    *words,
+                forms.push((
+                    words,
                     place.is_some(),
                     d.painted_color(words),
                     place.and_then(|place| d.painted_size(place, words)),
-                )
-            })
-            .collect();
-        let model_reason = d.place_of("Enter the model’s name.");
-        let model_help = d.place_of("The name your service gives it. For OpenAI, gpt-transcribe.");
+                ));
+                if words == "Enter the model’s name." {
+                    order = (
+                        d.place_of("Speech model"),
+                        place,
+                        d.place_of("The name your service gives it. For OpenAI, gpt-transcribe."),
+                    );
+                }
+            }
+            // A wheel step can end a few points short; step again until the form is back.
+            for _ in 0..4 {
+                match (start, anchor(d)) {
+                    (Some(start), Some(now)) if (now - start).abs() > 0.5 => {
+                        d.scroll_points_at(at, now - start);
+                    }
+                    _ => break,
+                }
+            }
+            assert_eq!(
+                anchor(d).map(f32::round),
+                start.map(f32::round),
+                "the FM6 proof leaves the form where it found it"
+            );
+            (forms, order.0, order.1, order.2)
+        });
         d.observe(
             "iter-26-S-FM6",
             forms.iter().all(|(_, shown, colour, size)| {
@@ -16264,12 +16388,25 @@ pub mod session_recording {
                 "Missing values share one reason form below their field: {forms:?}; Model {model:?}, reason {model_reason:?}, help {model_help:?}"
             ),
         );
-        d.expect("The saved key is for OpenAI, so Splat will not send it to this service. Save a key for it.");
-        // Round 27 FI7: a reason is `XS` below its field and `M` above the next label, and the
-        // notice is in the tab's footer, below the form, so it never moves the form.
+        d.expect("The saved key is for OpenAI, so Splat will not send it to this service.");
+        // Round 27 FI7: a reason is `XS` below its field and, as any field's help, `L` above the
+        // next label (N3: the field part owns that space), and the notice is in the tab's footer,
+        // below the form, so it never moves the form. Round 28 FI7: the custom service's help is
+        // the Service field's own: `XS` below the control and `L` above `Address`.
         for size in [SMALL, DEFAULT, LARGE] {
             let (spaced, detail) = d.at_size(size, |d| {
+                let service = d.place_of(&d.name_starting("Speech service: "));
+                let custom = d.place_of(
+                    "The custom service must support the OpenAI audio/transcriptions API.",
+                );
                 let address = d.place_of("Speech address");
+                let address_label = address.and_then(|address| {
+                    let above = egui::Rect::from_x_y_ranges(
+                        address.left() - 1.0..=address.right(),
+                        address.top() - crate::design::XL..=address.top(),
+                    );
+                    d.painted_word_rect("Address", above)
+                });
                 let reason = d.place_of("Enter the address.");
                 let model = d.place_of("Speech model");
                 let label = model.and_then(|model| {
@@ -16286,20 +16423,24 @@ pub mod session_recording {
                     .map(|node| node.rect);
                 let near = |a: f32, b: f32| (a - b).abs() <= 1.0;
                 (
-                    address.zip(reason).is_some_and(|(address, reason)| {
+                    service.zip(custom).is_some_and(|(service, custom)| {
+                        near(custom.top() - service.bottom(), crate::design::XS)
+                    }) && custom.zip(address_label).is_some_and(|(custom, label)| {
+                        near(label.top() - custom.bottom(), crate::design::L)
+                    }) && address.zip(reason).is_some_and(|(address, reason)| {
                         near(reason.top() - address.bottom(), crate::design::XS)
                     }) && reason.zip(label).is_some_and(|(reason, label)| {
-                        near(label.top() - reason.bottom(), crate::design::M)
+                        near(label.top() - reason.bottom(), crate::design::L)
                     }) && notice
                         .zip(address)
                         .is_some_and(|(notice, address)| notice.top() > address.bottom()),
                     format!(
-                        "Address {address:?}, reason {reason:?}, Model label {label:?}, notice {notice:?}"
+                        "Service {service:?}, its help {custom:?}, Address label {address_label:?}, Address {address:?}, reason {reason:?}, Model label {label:?}, notice {notice:?}"
                     ),
                 )
             });
             d.observe(
-                "iter-27-S-FI7",
+                "iter-28-S2-FI7",
                 spaced,
                 format!("At {size:?}, the reason belongs to its field and the notice is in the footer: {detail}"),
             );
@@ -19318,7 +19459,7 @@ pub mod run_loot {
         new_session(d, "The Vault");
         d.click(NAV_TIMELINE);
         d.click_starting(&format!("{RUN_VAULT} ·"));
-        d.click("Session of this event");
+        d.click_starting("Session of this event: ");
         d.click("Session 1: The Vault");
         d.click("Open this session");
         show_plan(d);
