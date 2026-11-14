@@ -963,6 +963,40 @@ fn play(d: &mut Driver<'_>) -> (Evening, Bytes, Bytes) {
         "G7: the fight that was played last offers no Continue fight"
     );
     ev.page(d, "run-ended: played last");
+    // iter-28-B FH4: the open run ends with a gap: the next row starts at least `L` below the
+    // log's last line, so it does not read as a line of the log.
+    // The nodes hold the whole rects, also below the view (R2 brings only Final state in).
+    let texts: Vec<(String, egui::Rect)> = d
+        .nodes()
+        .into_iter()
+        .filter(|node| node.role == egui::accesskit::Role::Label)
+        .map(|node| (node.name, node.rect))
+        .collect();
+    let gap = texts
+        .iter()
+        .find(|(words, _)| words.eq_ignore_ascii_case("Combat log"))
+        .and_then(|(_, label)| {
+            let next = texts
+                .iter()
+                .filter(|(_, rect)| rect.top() > label.bottom() && rect.left() < label.left() - 1.0)
+                .map(|(_, rect)| rect.top())
+                .fold(f32::MAX, f32::min);
+            let log = texts
+                .iter()
+                .filter(|(_, rect)| {
+                    rect.top() > label.bottom()
+                        && rect.top() < next
+                        && rect.left() >= label.left() - 0.5
+                })
+                .map(|(_, rect)| rect.bottom())
+                .fold(f32::MIN, f32::max);
+            (next < f32::MAX && log > f32::MIN).then_some(next - log)
+        });
+    d.observe(
+        "iter-28-B-FH4",
+        gap.is_some_and(|gap| gap >= crate::design::L),
+        format!("The next row starts {gap:?} below the open run's last log line"),
+    );
     ev.hovers(d, "run-ended: played last");
     ev.act(d, "close the ended run", |d| {
         d.click_starting(&format!("Close the run of {PLAIN_PLAYED}"));
@@ -1012,18 +1046,19 @@ fn play(d: &mut Driver<'_>) -> (Evening, Bytes, Bytes) {
     ev.hovers(d, "run-twelve");
     ev.act(d, "open Keys", |d| d.click("Keyboard commands"));
     ev.page(d, "run-keys");
-    // iter-27-R FE14: the panel's title names the keys, not the selected row, and the list
-    // has no second label saying the same.
+    // FE14: the panel's title names the keys in the form of the other fight panels
+    // (`This fight · Log`, `· Prep`, `· Arrivals`), not the selected row, and the list has no
+    // second label saying the same.
     d.observe(
-        "iter-27-R-FE14",
-        d.visible_text("Keyboard commands")
-            && !d.visible_text("KEYBOARD COMMANDS")
+        "iter-28-R-FE14",
+        d.visible_text("This fight · Keys")
+            && !d.visible_text("THIS FIGHT · KEYS")
             && !d.nodes().iter().any(|node| {
                 node.role == egui::accesskit::Role::Label
                     && node.name.contains("Ashfang")
                     && node.rect.left() > 700.0
             }),
-        "With Keys on, the panel's title is Keyboard commands",
+        "With Keys on, the panel's title is This fight · Keys",
     );
     ev.act(d, "close Keys", |d| d.click("Keyboard commands"));
     ev.act(d, "select Brannoch", |d| d.click_row("Brannoch Vale"));

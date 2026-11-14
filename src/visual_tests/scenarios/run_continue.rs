@@ -13,11 +13,13 @@ const SPELL: &str = "Fireball";
 const SESSION: &str = "The Vault";
 const UNREAD: &str = "Splat could not read this run’s saved Undo steps";
 const DISMISS: &str = "Dismiss the Undo message";
-const LATER: &str = "A later fight or rest was played. Start a new run to play this one again.";
+const LATER: &str = "A later fight or rest was played, so this fight cannot go on. Start a new run to play it again.";
 /// The same reason for a fight whose encounter is deleted: only its cause.
-const LATER_GONE: &str = "A later fight or rest was played.";
-const NO_TIMELINE: &str = "Splat cannot read Timeline.md. Fix that on the Timeline page first.";
-const DISK_CHANGED: &str = "Timeline.md changed on disk. Settle that on the Timeline page first.";
+const LATER_GONE: &str = "A later fight or rest was played, so this fight cannot go on.";
+const NO_TIMELINE: &str =
+    "Splat cannot read Timeline.md. Fix it on the Timeline page to continue this fight.";
+const DISK_CHANGED: &str =
+    "Timeline.md changed on disk. Settle it on the Timeline page to continue this fight.";
 
 /// The Undo control's whole action, which its accessible name keeps when its words are cut.
 fn undo_step(d: &Driver<'_>) -> String {
@@ -172,9 +174,10 @@ fn history_line_gaps(d: &mut Driver<'_>, line: &str) {
         d.observe(
             "V11-history-gaps",
             gaps.is_some_and(|(after, before)| {
-                (after - crate::design::S).abs() <= 0.5 && (before - crate::design::M).abs() <= 0.5
+                // iter-28-B: the heading part owns the space above FINAL STATE: `L` (was `M`).
+                (after - crate::design::S).abs() <= 0.5 && (before - crate::design::L).abs() <= 0.5
             }),
-            format!("At {size:?}, {line:?} is S below Read-only and M above FINAL STATE: {gaps:?}"),
+            format!("At {size:?}, {line:?} is S below Read-only and L above FINAL STATE: {gaps:?}"),
         );
     }
     history_edges(d);
@@ -220,18 +223,37 @@ pub(crate) fn history_edges(d: &mut Driver<'_>) {
             });
             Some((cut, log.map(|log| (log.top() - above_log.0, above_log.1))))
         });
+        // R2: the row goes to the list's top only when the run does not fit below it; then the
+        // top is a clean edge. A least scroll that keeps the row lower may cut a line above it.
+        let at_top = d.at_size(size, |d| {
+            let row = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("Close the run of "))?;
+            let mut list = None;
+            d.each_painted_text(|text, clip| {
+                if text.galley.job.text == "FINAL STATE" {
+                    list = Some(clip);
+                }
+            });
+            Some(row.rect.top() - list?.top() <= crate::design::L)
+        });
         d.observe(
             "X37-history-clean-edge",
-            edges.as_ref().is_some_and(|(cut, _)| cut.is_empty()),
-            format!("At {size:?}, the texts cut at the list's top: {edges:?}"),
+            at_top.is_some()
+                && (at_top == Some(false) || edges.as_ref().is_some_and(|(cut, _)| cut.is_empty())),
+            format!(
+                "At {size:?}, row at the list's top {at_top:?}; the texts cut there: {edges:?}"
+            ),
         );
         let gap = edges.and_then(|(_, gap)| gap);
         d.observe(
             "X66-combat-log-gap",
             gap.as_ref().map_or(size == SMALL, |(gap, _)| {
-                (gap - crate::design::M).abs() <= 0.5
+                // iter-28-B: the heading part's `L`, as above FINAL STATE (was `M` for both).
+                (gap - crate::design::L).abs() <= 0.5
             }),
-            format!("At {size:?}, COMBAT LOG is M below the last Final state row: {gap:?}"),
+            format!("At {size:?}, COMBAT LOG is L below the last Final state row: {gap:?}"),
         );
     }
 }
@@ -306,7 +328,7 @@ pub fn run(d: &mut Driver<'_>) {
     // closed last has Resume: one press brings the fight back, with its Undo.
     close_run(d);
     d.begin_task();
-    d.click_beside(&format!("{RUN_VAULT} · Played last"), RESUME);
+    d.click_beside(&format!("{RUN_VAULT} · Closed last"), RESUME);
     d.expect(&format!("{RUN_HEADING}{RUN_VAULT}"));
     d.goal_within("T17.1", "come back from Close run", 1);
     d.observe(
@@ -836,6 +858,59 @@ pub fn run(d: &mut Driver<'_>) {
             format!("At {size:?}, the Vault Guard's Final state row says {mark:?}: {marked:?}"),
         );
     }
+    // iter-28-B FK5: a Final state row at 0 HP says so in the run's form: its icon and word in
+    // the zero-HP colour, on its HP's line.
+    // Review of PR 327: the Bloodied rows too. Each row's word comes from the run's own
+    // `hp_word`; at least one row at 0 HP and one Bloodied must show it.
+    let stated = d.at_size(DEFAULT, |d| {
+        let (mut rows, mut words) = (Vec::new(), Vec::new());
+        d.each_painted_text(|text, clip| {
+            let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+            if !clip.intersects(rect) {
+                return;
+            }
+            let job = &text.galley.job;
+            if let Some((hp, max)) = job
+                .text
+                .strip_prefix("HP ")
+                .and_then(|rest| rest.split_once('/'))
+                .and_then(|(hp, max)| Some((hp.parse::<i64>().ok()?, max.parse::<i64>().ok()?)))
+            {
+                rows.push((rect, crate::design::hp_word(Some(hp), Some(max))));
+            }
+            for section in &job.sections {
+                words.push((
+                    rect,
+                    job.text[section.byte_range.clone()].to_owned(),
+                    section.format.color,
+                ));
+            }
+        });
+        let shown = |rect: egui::Rect, (icon, word, color): (&str, &str, egui::Color32)| {
+            let wanted = format!("{icon}\u{a0}{word}");
+            words.iter().any(|(at, words, painted)| {
+                *words == wanted
+                    && *painted == color
+                    && at.left() > rect.right()
+                    && (at.top() - rect.top()).abs() < rect.height() / 2.0
+            })
+        };
+        let stated: Vec<&str> = rows
+            .iter()
+            .filter_map(|(rect, word)| word.filter(|word| shown(*rect, *word)).map(|word| word.1))
+            .collect();
+        let all = rows
+            .iter()
+            .all(|(rect, word)| word.is_none_or(|word| shown(*rect, word)));
+        (all && stated.contains(&"0 HP") && stated.contains(&"Bloodied"))
+            .then_some(stated.clone())
+            .ok_or(stated)
+    });
+    d.observe(
+        "iter-28-B-FK5",
+        stated.is_ok(),
+        format!("Each Final state row at 0 HP or Bloodied says so in its colour: {stated:?}"),
+    );
     // AI1: Final state keeps one HP column: every row's HP starts at one x, at every size.
     // iter-26-B AI1, FI6, SI1: temporary HP has a column of its own, the conditions start after
     // it also on a row with no temporary HP, and each row's values sit on its name's baseline.
@@ -1078,7 +1153,17 @@ pub fn run(d: &mut Driver<'_>) {
         "While the warning shows, Undo's reason says only Nothing to undo",
     );
     d.state("undo-steps-unread", Sizes::All);
+    let add_at = |d: &mut Driver<'_>| d.at_size(DEFAULT, |d| d.place_of("Add to fight"));
+    let before = add_at(d);
     open_lookup(d);
+    // iter-28-R FK8: Next turn's key letter hides beside Lookup, but its room stays, so `Add to
+    // fight` keeps its x.
+    let after = add_at(d);
+    d.observe(
+        "iter-28-R-FK8",
+        matches!((before, after), (Some(a), Some(b)) if (a.left() - b.left()).abs() < 0.5),
+        format!("Add to fight before and beside Lookup: {before:?} {after:?}"),
+    );
     whole_at_every_size(
         d,
         "T17.6",

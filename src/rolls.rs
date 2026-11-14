@@ -366,10 +366,6 @@ pub(crate) fn menu_heading(link: &RollLink) -> Option<String> {
 /// stays in view, headed in muted Small with what it rolls, and its choices start at the
 /// heading's words. It stays inside its pane, whose right edge is `right`. Returns how to
 /// roll it, when one was chosen.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn mode_menu(response: &egui::Response, link: &RollLink, right: f32) -> Option<(Mode, bool)> {
     let heading = menu_heading(link)?;
     let inspired = response
@@ -387,7 +383,7 @@ fn mode_menu(response: &egui::Response, link: &RollLink, right: f32) -> Option<(
         .min(right - response.rect.left() - margin)
         .max(1.0);
     let mut chosen = None;
-    egui::Popup::menu(response)
+    crate::design::menu_popup(response)
         .open_memory(open)
         .width(width)
         .show(|ui| {
@@ -1509,26 +1505,6 @@ fn key_hint(
         .then_some(hint)
 }
 
-/// The hover and focus text of a tile: its rules, its printed numbers when a run changes
-/// them, and its keys.
-fn tile_rules(ui: &mut egui::Ui, chip: &Chip, shown: &RollLink, keys: &str) {
-    let c = colors();
-    ui.set_max_width(360.0);
-    ui.add(egui::Label::new(Type::Body.rich(ui, &chip.text).color(c.text)).wrap());
-    if *shown != chip.link {
-        ui.label(
-            Type::Small
-                .rich(ui, format!("Printed {}", tile_detail(&chip.link)))
-                .color(c.muted),
-        );
-    }
-    ui.label(
-        Type::Small
-            .rich(ui, format!("{}{keys}", hint(shown)))
-            .color(c.muted),
-    );
-}
-
 /// One action as a tile: its icon, name and hotkey number, then its numbers and where it
 /// lands. The rules text shows on hover and on keyboard focus, and is the tile's accessible
 /// description. It is painted, so the tile is one control with one name.
@@ -1589,31 +1565,33 @@ fn tile(
     if response.has_focus() {
         design::focus_ring(ui, rect);
     }
-    rules_on_hover_and_focus(ui, response, chip, shown, &keys)
+    rules_on_hover_and_focus(response, chip, shown, &keys)
 }
 
-/// A tile's rules text, and its printed numbers and keys, on hover and on keyboard focus (a
-/// click gives no focus), and as the control's accessible description.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
+/// A tile's rules text, and its printed numbers (when a run changes them) and keys, on hover
+/// and on keyboard focus (a click gives no focus), and as the control's accessible
+/// description: one `rich_tip`.
 fn rules_on_hover_and_focus(
-    ui: &egui::Ui,
     response: egui::Response,
     chip: &Chip,
     shown: &RollLink,
     keys: &str,
 ) -> egui::Response {
-    ui.ctx().accesskit_node_builder(response.id, |node| {
+    let mut lines = vec![design::TipLine::body(chip.text.as_str())];
+    if *shown != chip.link {
+        lines.push(design::TipLine::detail(format!(
+            "Printed {}",
+            tile_detail(&chip.link)
+        )));
+    }
+    lines.push(design::TipLine::detail(format!("{}{keys}", hint(shown))));
+    let response = design::rich_tip(response, &lines);
+    // The description stays the rules text alone, as it was (iter-19-R ST3): the tip's other
+    // lines repeat the tile's own name and keys.
+    response.ctx.accesskit_node_builder(response.id, |node| {
         node.set_description(chip.text.clone());
     });
-    if response.has_focus() {
-        response.show_tooltip_ui(|ui| tile_rules(ui, chip, shown, keys));
-        response
-    } else {
-        response.on_hover_ui(|ui| tile_rules(ui, chip, shown, keys))
-    }
+    response
 }
 
 /// How `count` tiles share lines `line` wide: each line's number of tiles and their width.
@@ -1813,10 +1791,6 @@ pub(crate) fn tiles(ui: &mut egui::Ui, entry: &str, chips: &[(Option<usize>, Chi
 /// The totals of an outcome in Strong, with their dice in hover. A muted `·` comes between
 /// the parts, as in a run's `11 vs AC 13 · 10 damage`; it never ends a line, so it wraps with
 /// the part after it.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub(crate) fn outcome_line(ui: &mut egui::Ui, outcome: &Outcome) {
     let c = colors();
     let mut first = true;
@@ -1838,12 +1812,14 @@ pub(crate) fn outcome_line(ui: &mut egui::Ui, outcome: &Outcome) {
     for rolled in [&outcome.first, &outcome.damage].into_iter().flatten() {
         let response = part(ui, &rolled.headline(), Type::Strong);
         design::named(ui, &response, &rolled.line());
-        response.on_hover_ui(|ui| {
-            ui.add(egui::Label::new(rolled.parts_job(ui, c.muted)));
-            if let Some(words) = rolled.changed_words() {
-                ui.label(Type::Small.rich(ui, words).color(c.participant.changed));
-            }
-        });
+        let mut lines = vec![design::TipLine::Job(rolled.parts_job(ui, c.muted))];
+        if let Some(words) = rolled.changed_words() {
+            lines.push(design::TipLine::Job(LayoutJob::single_section(
+                words,
+                egui::TextFormat::simple(Type::Small.font(ui), c.participant.changed),
+            )));
+        }
+        design::rich_tip(response, &lines);
         if let Some(words) = rolled.natural_words() {
             part(ui, words, Type::Body);
         }
@@ -1885,7 +1861,7 @@ pub(crate) fn compact_tiles(ui: &mut egui::Ui, chips: &[Chip]) {
                 break;
             }
             let response = action.show(ui);
-            let response = rules_on_hover_and_focus(ui, response, chip, &shown, "");
+            let response = rules_on_hover_and_focus(response, chip, &shown, "");
             press(ui, &response, &chip.link);
         }
     });
@@ -1893,10 +1869,6 @@ pub(crate) fn compact_tiles(ui: &mut egui::Ui, chips: &[Chip]) {
 
 /// The strip's actions from `from` on, which have no room on its line: a menu that lists each
 /// by name and its Ctrl number, and arms the one the DM chooses.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn more_actions(ui: &mut egui::Ui, word: &str, chips: &[Chip], from: usize, changes: (i64, i64)) {
     let response = design::menu_button(ui, word, false).on_hover_text(format!(
         "{}. Choose one to arm it.",
@@ -1912,7 +1884,7 @@ fn more_actions(ui: &mut egui::Ui, word: &str, chips: &[Chip], from: usize, chan
             !response.clicked_by(egui::PointerButton::Primary),
         );
     }
-    let popup = egui::Popup::menu(&response);
+    let popup = crate::design::menu_popup(&response);
     // As a row's menu: it ends at the button's right edge when it would cross the pane's
     // splitter (egui sizes a popup on the frame it opens, before it shows it).
     let width = popup.get_expected_size().map_or(0.0, |size| size.x);

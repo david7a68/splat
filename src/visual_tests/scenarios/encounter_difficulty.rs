@@ -251,6 +251,32 @@ pub fn run(d: &mut Driver<'_>) {
             "Beside Lookup at 960x640 the difficulty stays {kept} (the line: {line:?}), and the hover keeps the detail {hover}"
         ),
     );
+    // iter-28-B FG1 (N7): on every Ready row that gave way, the word's limit went first, and
+    // the summary gave way by whole facts and members: no fact is cut inside its words (`2…`).
+    let rows = d.at_size(SMALL, |d| {
+        let mut rows = Vec::new();
+        d.each_painted_text(|text, clip| {
+            let words = text.galley.job.text.replace('\u{a0}', " ");
+            if clip.intersects(text.visual_bounding_rect()) && words.contains(" · XP ") {
+                rows.push(words);
+            }
+        });
+        rows
+    });
+    let cut: Vec<&String> = rows.iter().filter(|row| row.contains('…')).collect();
+    d.observe(
+        "iter-28-B-FG1",
+        !cut.is_empty()
+            && cut.iter().all(|row| {
+                !row.contains("(up to")
+                    && row.split(" · ").chain(row.split(", ")).all(|part| {
+                        !part.ends_with('…') || part.trim_end_matches('…').trim().is_empty()
+                    })
+            }),
+        format!(
+            "Beside Lookup at 960x640, the Ready rows that gave way: {cut:?} (all rows {rows:?})"
+        ),
+    );
     d.state("ready-to-run-beside-lookup", Sizes::Small);
     d.press_ctrl(Key::K);
 
