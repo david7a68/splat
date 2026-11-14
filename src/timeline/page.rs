@@ -226,6 +226,9 @@ pub struct TimelinePage {
     /// in view. The next act on checks or the next Undo ends it.
     plan_fault: Option<checks::UndoFault>,
     focus_length: bool,
+    /// Round 29 G142: a roll was made; the next draw scrolls least so that its result and the
+    /// lines under it (with their plan offers) are in view, once.
+    reveal_checks: bool,
     /// What the DM typed in a journey's checks, and each journey's last result with its Undo.
     checks: checks::State,
     checks_done: checks::Results,
@@ -1569,8 +1572,16 @@ impl TimelinePage {
                 // The act's result keeps its line under the table, so it moves no field.
                 let done = self.checks_done.get(&id);
                 let result = done.map(|done| (done.words.as_str(), done.undo));
+                let top = ui.cursor().top();
                 undo_checks |= design::undo_line(ui, Tone::Success, result);
                 checks_act = checks::lines(ui, &view, &mut self.checks).or(checks_act.take());
+                if std::mem::take(&mut self.reveal_checks) {
+                    let block = egui::Rect::from_x_y_ranges(
+                        ui.max_rect().x_range(),
+                        top..=ui.cursor().top(),
+                    );
+                    ui.scroll_to_rect(block, None);
+                }
             }
             design::gap(ui, design::Gap::M);
             let place = EVENT_PLACE.of(design::TextKey::of(&*event));
@@ -1690,7 +1701,11 @@ impl TimelinePage {
                 }
             } else {
                 match checks::apply(book, &id, &act, tables) {
-                    Ok(Some(done)) => self.checks_done.keep(done),
+                    Ok(Some(done)) => {
+                        self.checks_done.keep(done);
+                        self.reveal_checks =
+                            matches!(act, checks::Act::Roll(_) | checks::Act::Enter(..));
+                    }
                     Ok(None) => {}
                     Err(error) => self.checks.failed(&act, error),
                 }

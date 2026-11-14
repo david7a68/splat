@@ -530,6 +530,17 @@ pub fn run(d: &mut Driver<'_>) {
         faults.is_empty() && seen && before.is_some() && before == after,
         format!("Timeline: the result is in view on its kept line ({seen}), and moves no line ({before:?}, {after:?}): {faults:?}"),
     );
+    // Round 29 G142, final review 4a: after the roll, the result and the plan line under it
+    // are in view at 960 px (the detail scrolls least to show them).
+    let line_in_view = d
+        .nodes()
+        .iter()
+        .any(|node| node.name.contains("In the plan") && node.fully_in_view());
+    d.observe(
+        "iter-29-S1-G142-reveal",
+        line_in_view,
+        "Timeline at 960: the rolled result's plan line is in view after the roll",
+    );
     // Row 123 (iter-29 G142): a rolled result on Timeline offers its fight to the plan of the
     // journey's session, as on the plan. Bridge Ambush is in that plan already.
     d.observe(
