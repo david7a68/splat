@@ -24049,27 +24049,50 @@ pub mod remove_package_in_use {
                 format!("Result {done:?}, its Undo {undo:?}, the warning's first link {first:?}"),
             );
             // The missing-creatures warning (now its words, then one `Open` choice per encounter)
-            // keeps the shared warning bar and icon.
-            let warning = d.painted_rect_in(
-                "Bridge Ambush and Shrine of Cinders now have creatures Splat cannot find.",
-                egui::Rect::EVERYTHING,
-            );
-            // The footer part draws its bar as high as its words, so the check reads the part's
-            // own registry: the words lie in a footer message of the warning tone.
+            // keeps the shared warning bar and icon: the part's registry places it in the footer
+            // with the warning tone, and the painted bar runs beside its words.
+            const WARNING: &str =
+                "Bridge Ambush and Shrine of Cinders now have creatures Splat cannot find.";
+            let warning = d.painted_rect_in(WARNING, egui::Rect::EVERYTHING);
+            let tone = crate::design::colors().result.warning;
             d.observe(
                 "iter-6-C-FD3",
                 warning.is_some_and(|warning| {
-                    d.typed_messages().iter().any(|(rect, place, tone)| {
-                        *place == crate::design::outcome::MessagePlace::Footer
-                            && *tone == crate::design::Tone::Warning
-                            && rect.expand(0.5).contains_rect(warning)
-                    })
+                    d.has_tone_bar(warning, tone)
+                        && d.typed_messages().iter().any(|(rect, place, kind)| {
+                            *place == crate::design::outcome::MessagePlace::Footer
+                                && *kind == crate::design::Tone::Warning
+                                && rect.expand(0.5).contains_rect(warning)
+                        })
                 }),
                 format!("The missing-creatures warning keeps the shared warning bar and icon: {warning:?}"),
             );
-            // Round 23 FF4 (the icon centred on a first line of links) is gone with the links:
-            // the warning's first line is words now, and the gate's N2 invariant holds every
-            // message icon on its first line's centre.
+            // Round 23 FF4: the warning icon centres on the message's first line.
+            let mut first_line = None;
+            d.each_painted_text(|text, _| {
+                if text.galley.job.text.contains(WARNING) {
+                    first_line = text
+                        .galley
+                        .rows
+                        .first()
+                        .map(|row| row.rect().translate(text.pos.to_vec2()));
+                }
+            });
+            let icon = warning.and_then(|warning| {
+                let band = egui::Rect::from_min_max(
+                    egui::pos2(warning.left() - crate::design::XXL, warning.top() - crate::design::S),
+                    egui::pos2(warning.left(), warning.bottom() + crate::design::S),
+                );
+                d.painted_word_rect(crate::design::icons::WARN, band)
+            });
+            d.observe(
+                "iter-23-L-FF4",
+                icon.zip(first_line)
+                    .is_some_and(|(icon, line)| (icon.center().y - line.center().y).abs() <= 1.0),
+                format!(
+                    "The warning icon {icon:?} centres on the first line of the message {first_line:?}"
+                ),
+            );
         });
         // Round 25 review: the removal's words are prepared once, at the removal. Unchanged
         // frames at two sizes prepare nothing.
