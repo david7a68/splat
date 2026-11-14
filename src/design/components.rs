@@ -1,8 +1,8 @@
 //! Shared UI parts. Screens compose these instead of styling widgets themselves.
 use super::{comparison::Comparison, extras::space, icons, status::Tinted, tokens::*};
 use eframe::egui::{
-    self, Align, Align2, Color32, CornerRadius, FontId, Id, Layout, Rect, Response, Sense, Stroke,
-    StrokeKind, Ui, Vec2, WidgetInfo, WidgetType, pos2, text::LayoutJob, vec2,
+    self, Align, Align2, Color32, CornerRadius, FontId, Id, Layout, Pos2, Rect, Response, Sense,
+    Stroke, StrokeKind, Ui, Vec2, WidgetInfo, WidgetType, pos2, text::LayoutJob, vec2,
 };
 use std::sync::Arc;
 
@@ -1755,14 +1755,18 @@ impl From<super::StatusKind> for InTextLook {
 
 /// A painted row keeps its status word in the shared status colour. With a kind, the part of
 /// the status up to its kind's icon takes the icon's colour, and the rest the word's.
+///
+/// A disabled parent dims the words around the status and a one-colour status, but never a
+/// kind's colours (R5: a live recording stays in its own colours under any lock).
 pub fn status_in_text<L: Into<InTextLook>>(
     ui: &Ui,
     text: &str,
     status: Option<(&str, L)>,
     width: f32,
-) -> Arc<egui::Galley> {
+) -> StatusText {
     let mut job = LayoutJob::default();
     job.wrap.max_width = width;
+    let dim = |color: Color32| color.gamma_multiply(ui.opacity());
     let muted = colors().muted;
     let (before, word, after, look) = status
         .and_then(|(word, look)| {
@@ -1771,7 +1775,7 @@ pub fn status_in_text<L: Into<InTextLook>>(
         })
         .unwrap_or((text, "", "", InTextLook::One(muted)));
     let (icon, word, icon_color, word_color) = match look {
-        InTextLook::One(color) => ("", word, color, color),
+        InTextLook::One(color) => ("", word, dim(color), dim(color)),
         InTextLook::Kind(kind) => {
             let at = word
                 .find(kind.icon())
@@ -1785,10 +1789,10 @@ pub fn status_in_text<L: Into<InTextLook>>(
         }
     };
     for (text, color) in [
-        (before, muted),
+        (before, dim(muted)),
         (icon, icon_color),
         (word, word_color),
-        (after, muted),
+        (after, dim(muted)),
     ] {
         job.append(
             text,
@@ -1800,7 +1804,40 @@ pub fn status_in_text<L: Into<InTextLook>>(
             },
         );
     }
-    ui.fonts_mut(|fonts| fonts.layout_job(job))
+    StatusText(ui.fonts_mut(|fonts| fonts.layout_job(job)))
+}
+
+/// A row's text with its status, from [`status_in_text`]. It holds the parent's dimming in its
+/// own colours, so its one way to paint is [`StatusText::paint`], at full opacity: a parent's
+/// painter would dim it again, and dim a kind's colours (R5).
+pub struct StatusText(Arc<egui::Galley>);
+
+impl StatusText {
+    pub fn size(&self) -> Vec2 {
+        self.0.size()
+    }
+
+    /// Each laid-out line: its characters and the left edge of its first one.
+    #[cfg(test)]
+    pub(crate) fn lines(&self) -> Vec<(String, f32)> {
+        self.0
+            .rows
+            .iter()
+            .map(|row| {
+                (
+                    row.glyphs.iter().map(|g| g.chr).collect(),
+                    row.pos.x + row.glyphs.first().map_or(0.0, |g| g.pos.x),
+                )
+            })
+            .collect()
+    }
+
+    /// Paints the text with its top left at `pos`, in the parent's clip, at full opacity.
+    pub fn paint(self, ui: &Ui, pos: Pos2) {
+        let mut painter = ui.painter().clone();
+        painter.set_opacity(1.0);
+        painter.galley(pos, self.0, colors().muted);
+    }
 }
 
 /// Rail notices wrap so their cause stays visible in a narrow column. A second line starts at
@@ -3400,20 +3437,6 @@ pub fn undo_line(ui: &mut Ui, tone: Tone, result: Option<(&str, &str)>) -> bool 
 
 /// `undo_message`, with an accessible name for the action when its words are not enough. Capped
 /// at `LIST_MEASURE` like every notice.
-#[deprecated(
-    note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."
-)]
-pub fn undo_message_named(
-    ui: &mut Ui,
-    tone: Tone,
-    text: &str,
-    action: &str,
-    name: Option<&str>,
-) -> bool {
-    undo_message_capped(ui, tone, text, action, name)
-}
-
-/// `undo_message_named`'s drawing.
 pub(super) fn undo_message_capped(
     ui: &mut Ui,
     tone: Tone,
@@ -5667,7 +5690,7 @@ mod tests {
                         for (at, words) in words.iter().enumerate().filter(|(at, _)| shown[*at]) {
                             let live = &live;
                             footer.result(orders[at], words.as_str(), true, move |ui| {
-                                if undo_message_named(
+                                if undo_message_capped(
                                     ui,
                                     Tone::Success,
                                     words,
