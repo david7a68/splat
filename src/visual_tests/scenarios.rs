@@ -11840,7 +11840,18 @@ pub mod world {
         // unnamed egui handle over its rows, a gap sent to the part's owner.)
         d.click("Side: Enemies");
         d.settle();
-        d.expect("Party");
+        let control = d.place_of("Side: Enemies");
+        d.observe(
+            "iter-28-D-side-list",
+            control.is_some_and(|control| {
+                d.nodes().into_iter().any(|node| {
+                    node.name == "Party"
+                        && node.rect.top() >= control.bottom() - 0.5
+                        && node.rect.left() >= control.left() - 0.5
+                })
+            }),
+            format!("The Side list opens under its control {control:?}"),
+        );
         d.press(Key::Escape);
         d.settle();
         d.expect("Side: Enemies");
