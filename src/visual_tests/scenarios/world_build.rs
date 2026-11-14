@@ -4746,20 +4746,27 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         "npc",
         &format!("  creature: {{id: {guard}}}\n"),
     );
-    // Review of PR 355: an NPC of the package that holds Guard, with no stat block.
+    // Review of PR 355: an NPC of the campaign's package (the fixture's own), with no stat
+    // block, which the campaign selects.
     const PACKAGE_NPC: &str = "Varn the Ferryman";
-    let guard_owner = catalogue
-        .entries
-        .values()
-        .find(|i| i.entry.id == guard)
-        .unwrap()
-        .owner;
-    let package_npc = modules
+    let package_id = splat::character::stable_id("package-npc-varn");
+    let module = modules
         .iter()
-        .find(|module| module.id == guard_owner)
-        .expect("Guard's package")
-        .path
-        .join(format!("NPCs/{PACKAGE_NPC}.md"));
+        .find(|module| module.id == splat::character::stable_id("visual:module"))
+        .expect("the fixture's package");
+    let package_npc = module.path.join(format!("NPCs/{PACKAGE_NPC}.md"));
+    {
+        use crate::content_workspace::{CampaignDocument, EntryRef, Selection};
+        let mut document = CampaignDocument::load(campaign.as_ref().unwrap()).unwrap();
+        for selection in &mut document.selections {
+            if let Selection::Selected { entries } = &mut selection.selection
+                && selection.package == EntryRef::id(module.id)
+            {
+                entries.push(EntryRef::id(package_id));
+            }
+        }
+        document.save().unwrap();
+    }
     fs::create_dir_all(package_npc.parent().unwrap()).unwrap();
     fs::write(
         &package_npc,
@@ -4767,7 +4774,7 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
             "World.md",
             &format!(
                 "splat_id: {}\nsplat_kind: world\nsplat_name: {PACKAGE_NPC}\nsplat_world:\n  type: npc\n",
-                splat::character::stable_id("package-npc-varn")
+                package_id
             ),
             &format!("\n# {PACKAGE_NPC}\n\nPoles the ferry at the ford.\n"),
         )
