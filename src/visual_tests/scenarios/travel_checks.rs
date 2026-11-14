@@ -582,9 +582,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.state_prepared("travel-checks-timeline", Sizes::All, |d| {
         // The capture's resize puts the form back at its top; the scenario scrolls to the line
         // (the reveal at the roll is proved above).
-        if let Some(block) = d.place_of("Encounter checks") {
-            d.scroll_until(block.center(), "In the plan", 6);
-        }
+        show_plan_line(d);
         let seen = d
             .nodes()
             .iter()
@@ -602,9 +600,7 @@ pub fn run(d: &mut Driver<'_>) {
         d.expect("Encounter checks");
         // Final review 2, 4d: beside Lookup the form is narrower; the scenario scrolls to the
         // plan line so the capture shows it whole.
-        if let Some(block) = d.place_of("Encounter checks") {
-            d.scroll_until(block.center(), "In the plan", 6);
-        }
+        show_plan_line(d);
         let seen = d
             .nodes()
             .iter()
@@ -1104,9 +1100,7 @@ pub fn plan_act(d: &mut Driver<'_>) {
     );
     d.state_prepared("plan-on-timeline", Sizes::All, |d| {
         // The capture's resize puts the form back at its top; the scenario scrolls to the line.
-        if let Some(block) = d.place_of("Encounter checks") {
-            d.scroll_until(block.center(), "In the plan", 6);
-        }
+        show_plan_line(d);
         let nodes = d.nodes();
         let whole = |name: &str| {
             nodes
@@ -1232,4 +1226,26 @@ pub fn plan_act(d: &mut Driver<'_>) {
         !d.has_containing("Plan line not removed."),
         "The fault ends with its journey",
     );
+}
+
+/// Before a capture: the open journey's `In the plan` line whole in view. A capture's resize puts
+/// the form back at its top, and beside Lookup the form is narrower; the scenario scrolls the
+/// form, a few points at a time, until the line is whole. The reveal at the roll is proved by
+/// its own checks.
+fn show_plan_line(d: &mut Driver<'_>) {
+    let whole = |d: &Driver<'_>| {
+        d.nodes()
+            .iter()
+            .any(|node| node.name.contains("In the plan") && node.fully_in_view())
+    };
+    let Some(block) = d.place_of("Encounter checks") else {
+        return;
+    };
+    d.scroll_until(block.center(), "In the plan", 6);
+    for _ in 0..8 {
+        if whole(d) {
+            return;
+        }
+        d.scroll_points_at(block.center(), 24.0);
+    }
 }
