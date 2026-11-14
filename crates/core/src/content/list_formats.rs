@@ -422,20 +422,12 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
             }
         }
         let mut packages = Vec::new();
-        let mut in_packages = false;
         let mut last_enabled = false;
         let mut last_task = false;
         let mut seen = std::collections::BTreeSet::new();
-        for source_line in super::layout::content_lines(text) {
+        for source_line in package_section_lines(text) {
             let line = source_line.line - 1;
             let raw = source_line.value.as_str();
-            if raw.starts_with("## ") {
-                in_packages = raw.trim().eq_ignore_ascii_case("## Packages");
-                continue;
-            }
-            if !in_packages {
-                continue;
-            }
             let trimmed = raw.trim_start();
             if raw.len() != trimmed.len()
                 && let Some(only) = trimmed
@@ -1266,15 +1258,13 @@ pub fn patch(text: &str, changes: &[(&str, Option<Value>)]) -> Result<String, St
             let mut seen = std::collections::BTreeSet::new();
             let mut offset = 0;
             let mut patches = Vec::new();
-            let mut in_packages = false;
-            for line in after.split_inclusive('\n') {
-                if line.starts_with("## ") {
-                    in_packages = line.trim().eq_ignore_ascii_case("## Packages");
-                }
-                if in_packages
-                    && ["- ", "* ", "+ "]
-                        .iter()
-                        .any(|prefix| line.trim_start().starts_with(prefix))
+            // The reader's own lines of the section (code blocks left out), so a write never
+            // changes a line the reader does not read as a package choice.
+            for cell in package_section_lines(&after) {
+                let (offset, line) = (cell.range.start, &after[cell.range.clone()]);
+                if ["- ", "* ", "+ "]
+                    .iter()
+                    .any(|prefix| line.trim_start().starts_with(prefix))
                     && matches!(line.trim_start().get(2..5), Some("[x]" | "[X]" | "[ ]"))
                 {
                     let indent = line.len() - line.trim_start().len();
@@ -1301,7 +1291,6 @@ pub fn patch(text: &str, changes: &[(&str, Option<Value>)]) -> Result<String, St
                         if enabled { "x" } else { " " }.to_owned(),
                     ));
                 }
-                offset += line.len();
             }
             for (range, value) in patches.into_iter().rev() {
                 after.replace_range(range, &value);
@@ -1317,15 +1306,14 @@ pub fn patch(text: &str, changes: &[(&str, Option<Value>)]) -> Result<String, St
                         .and_then(|a| a.iter().find(|p| words(&p["package"], "id") == id))
                     && old.get("name").and_then(Value::as_str) != Some(name)
                 {
-                    let mut offset = 0;
-                    for line in after.split_inclusive('\n') {
+                    for cell in package_section_lines(&after) {
+                        let (offset, line) = (cell.range.start, &after[cell.range.clone()]);
                         if line.trim_end().ends_with(&format!(" ^{id}")) {
                             let range = offset + (line.len() - line.trim_start().len()) + 6
                                 ..offset + line.trim_end().len() - id.len() - 2;
                             after.replace_range(range, name);
                             break;
                         }
-                        offset += line.len();
                     }
                 }
                 let old = original
@@ -1336,10 +1324,10 @@ pub fn patch(text: &str, changes: &[(&str, Option<Value>)]) -> Result<String, St
                 if old.and_then(|p| p.get("selection")) == package.get("selection") {
                     continue;
                 }
-                let mut offset = 0;
                 let mut child_range = None;
                 let mut insertion = None;
-                for line in after.split_inclusive('\n') {
+                for cell in package_section_lines(&after) {
+                    let (offset, line) = (cell.range.start, &after[cell.range.clone()]);
                     if insertion.is_some() && !line.starts_with([' ', '\t']) {
                         break;
                     }
@@ -1353,7 +1341,6 @@ pub fn patch(text: &str, changes: &[(&str, Option<Value>)]) -> Result<String, St
                     {
                         child_range = Some(offset..offset + line.len());
                     }
-                    offset += line.len();
                 }
                 let replacement = if words(&package["selection"], "mode") == "selected" {
                     format!(
@@ -2069,6 +2056,24 @@ pub fn with_prose(text: &str, notes: &str) -> Result<String, String> {
     } else {
         after
     })
+}
+
+/// The lines of a campaign file's `## Packages` section, outside code blocks: the one reading
+/// of the section, for reading the package choices and for every change to them. Each cell's
+/// range is its whole line in `text`, newline included. The heading line is not in it; a
+/// `## ` heading ends the section, and a second `## Packages` heading starts it again.
+pub fn package_section_lines(text: &str) -> Vec<super::layout::Cell> {
+    let mut in_packages = false;
+    super::layout::content_lines(text)
+        .into_iter()
+        .filter(|cell| {
+            if cell.value.starts_with("## ") {
+                in_packages = cell.value.trim().eq_ignore_ascii_case("## Packages");
+                return false;
+            }
+            in_packages
+        })
+        .collect()
 }
 
 #[cfg(test)]

@@ -2013,35 +2013,38 @@ impl Registration {
 }
 
 /// A campaign file's words without the package list's lines for `package`: its task line (by
-/// its id, or by one of `links`, the names that named it) and the `Only:` line under it. Only
-/// the `## Packages` section is the list; a task line under any other heading stays.
+/// its id, or by one of `links`, the names that named it) and the `Only:` line under it. The
+/// lines are the ones the file's reader reads as its package list
+/// (`list_formats::package_section_lines`: the `## Packages` section, code blocks left out), so
+/// Undo changes no line that the reader does not read as a choice.
 fn without_package_lines(text: &str, package: Uuid, links: &[&str]) -> String {
     let mark = format!(" ^{package}");
-    let mut out = String::with_capacity(text.len());
+    let mut drop = Vec::new();
     let mut under = false;
-    let mut in_packages = false;
-    for line in text.split_inclusive('\n') {
-        let words = line.trim_end_matches(['\n', '\r']);
-        if words.starts_with("## ") {
-            // The reader's own section rule (`list_formats`): a `## ` heading starts a section.
-            in_packages = words.trim().eq_ignore_ascii_case("## Packages");
-        }
+    for cell in content::list_formats::package_section_lines(text) {
+        let words = cell.value.as_str();
         let task = ["- [", "* [", "+ ["]
             .iter()
             .any(|start| words.starts_with(start));
         let named = words
             .get(6..)
             .is_some_and(|name| links.contains(&name.trim()));
-        if in_packages && task && (words.ends_with(&mark) || named) {
+        if task && (words.ends_with(&mark) || named) {
             under = true;
-            continue;
+            drop.push(cell.range);
+        } else if under && words.starts_with([' ', '\t']) && !words.trim().is_empty() {
+            drop.push(cell.range);
+        } else {
+            under = false;
         }
-        if under && words.starts_with([' ', '\t']) && !words.trim().is_empty() {
-            continue;
-        }
-        under = false;
-        out.push_str(line);
     }
+    let mut out = String::with_capacity(text.len());
+    let mut at = 0;
+    for range in drop {
+        out.push_str(&text[at..range.start]);
+        at = range.end;
+    }
+    out.push_str(&text[at..]);
     out
 }
 
@@ -12242,6 +12245,11 @@ mod tests {
         // is unsaved, so no reload can run: the clause ends in the same pass as the write. Point 2 (second pass): an outside edit that names the copy by
         // its key.
         let original_path = &paths[0];
+        let errands = |name: &str| {
+            format!(
+                "\n## Errands\n\n- [ ] {name}\n  Buy rope.\n\n```markdown\n## Packages\n- [ ] {name}\n  Buy rope.\n```\n"
+            )
+        };
         for path in [
             "encounter search with a draft",
             "campaign page",
@@ -12356,9 +12364,9 @@ mod tests {
                         &format!("## Packages\n- [x] {}\n", module.name),
                         1,
                     );
-                    // An unrelated checklist item with the same name, under another heading.
-                    let text =
-                        format!("{text}\n## Errands\n\n- [ ] {}\n  Buy rope.\n", module.name);
+                    // An unrelated checklist item with the same name, under another heading, and
+                    // a fenced example that holds a `## Packages` list of its own.
+                    let text = format!("{text}{}", errands(&module.name));
                     fs::write(&campaign_file, text).unwrap();
                     assert!(
                         CampaignDocument::load(&campaign)
@@ -12399,9 +12407,9 @@ mod tests {
             );
             if path == "outside name link" {
                 let text = fs::read_to_string(&campaign_file).unwrap();
-                let errands = format!("## Errands\n\n- [ ] {}\n  Buy rope.\n", module.name);
+                // The other heading's item and the fenced example stay, byte for byte.
                 assert!(
-                    text.contains(&errands),
+                    text.ends_with(&errands(&module.name)),
                     "point-2-unrelated-item-stays\n{text}"
                 );
                 let rest = text.split("\n## Errands").next().unwrap().to_owned() + "\n";
@@ -12544,7 +12552,7 @@ mod tests {
         );
         let ctx = egui::Context::default();
         crate::design::theme::install(&ctx);
-        let mut frame = |library: &mut Library, campaigns: &mut Campaigns| {
+        let frame = |library: &mut Library, campaigns: &mut Campaigns| {
             let _ = ctx.run(egui::RawInput::default(), |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| library.show(ui, campaigns));
             });

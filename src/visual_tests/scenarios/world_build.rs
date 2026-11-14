@@ -7039,7 +7039,17 @@ pub fn package_about(d: &mut Driver<'_>) {
         })
         .map(|node| node.name)
         .unwrap_or_default();
-    let failed = (kept(d), editor_below_read(d));
+    let failed_reach = space_reaches(
+        d,
+        "Module.md was written again.",
+        Some("Undo write Module.md"),
+    );
+    let failed = (
+        failed_reach
+            .iter()
+            .all(|(keyboard, pointer)| *keyboard && *pointer),
+        editor_below_read(d),
+    );
     // Astra re-check 2: the long reason scrolls by keyboard and by wheel, and its words keep
     // clear of every scroll bar and splitter at 960, 1200 and 1920.
     let message = reason.clone().unwrap_or_default();
@@ -7089,7 +7099,7 @@ pub fn package_about(d: &mut Driver<'_>) {
                 .iter()
                 .all(|(kept, tops)| *kept && *tops == no_result),
         format!(
-            "Save's reason {reason:?} keeps the editor {no_result:?} below Read: unsaved {unsaved:?}, failed {failed:?}, discarded {after:?}"
+            "Save's reason {reason:?} keeps the editor {no_result:?} below Read: unsaved {unsaved:?}, failed {failed:?} (reached by keyboard, pointer at 960, 1200, 1920: {failed_reach:?}), discarded {after:?}"
         ),
     );
     assert!(!folder.join("Package.md").exists());
