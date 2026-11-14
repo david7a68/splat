@@ -7067,8 +7067,31 @@ pub mod run_absent_player {
             shown && d.has("Undo: initiative for Brannoch Vale"),
             "At 960 Undo says it takes back an initiative, and its accessible name keeps the row",
         );
+        // iter-28-R AJ1: a one-line notice is centred with its Log link and its close, at
+        // 960 and 1200.
+        for size in [SMALL, DEFAULT] {
+            let centres = d.at_size(size, |d| {
+                (
+                    d.painted_rect_in("joined at", egui::Rect::EVERYTHING)
+                        .map(|rect| rect.center().y),
+                    // The notice's own Log link (the panel's `Log` tab has the same name).
+                    d.nodes()
+                        .iter()
+                        .find(|node| node.name == "Log" && node.is_link())
+                        .map(|node| node.rect.center().y),
+                    d.place_of("Dismiss this message")
+                        .map(|rect| rect.center().y),
+                )
+            });
+            d.observe(
+                "iter-28-R-AJ1",
+                matches!(centres, (Some(text), Some(log), Some(close))
+                    if (text - log).abs() <= 1.0 && (text - close).abs() <= 1.0),
+                format!("At {size:?}, the notice's, Log's and close's centres: {centres:?}"),
+            );
+        }
         d.state("initiative-set-in-combat", Sizes::Default);
-        let joined = "Brannoch Vale joined at\u{a0}20 ·\u{a0}acts next round.";
+        let joined = "Brannoch Vale joined at\u{a0}20. It acts next round.";
         d.expect(joined);
         let words = d.place_of(joined);
         d.observe(
@@ -7255,7 +7278,7 @@ pub mod prep_to_table {
             "iter-23-R-FI4",
             add_before.iter().all(Option::is_some)
                 && add_before == add_after
-                && d.has_containing(&format!("Undo: {player} absent")),
+                && d.has_containing(&format!("Undo: mark {player} absent")),
             format!(
                 "A longer Undo label does not move Add to fight: {add_before:?} then {add_after:?}"
             ),
@@ -7411,7 +7434,15 @@ pub mod prep_to_table {
         if let Some(tie) = tie {
             d.click(&tie);
         }
-        d.expect("Undo: tie order");
+        // iter-28-R FJ5: the Undo names the moved row and its direction.
+        d.observe(
+            "iter-28-R-FJ5-tie",
+            d.nodes().iter().any(|node| {
+                node.name.starts_with("Undo: move ")
+                    && (node.name.ends_with(" up") || node.name.ends_with(" down"))
+            }) && !d.has_containing("tie order"),
+            "The tie's Undo names the row and its direction",
+        );
         let after = places(d);
         let first = after
             .iter()
@@ -8436,6 +8467,13 @@ pub mod party_from_run {
             "iter7-B-FT1",
             "A player at zero HP keeps visible editable death saves",
             |d| d.in_view("Add a death save success") && d.in_view("Add a death save failure"),
+        );
+        // iter-28-R FJ5: the step's Undo says which save it added.
+        d.observe(
+            "iter-28-R-FJ5-save",
+            d.has_containing("Undo: add death save success on ")
+                && !d.has_containing("death saves on"),
+            "The death save's Undo says success",
         );
         d.state("live-death-saves-once", Sizes::All);
 
@@ -10201,10 +10239,10 @@ pub mod run_roster_conflict {
                     .any(|node| node.name == fault && node.is_link())
                 // iter-26-R FI11, SI2: the repair is a bordered button, as in Arrivals.
                 && d.nodes().iter().any(|node| {
-                    node.name == "Repair in Campaign → Packages"
+                    node.name == "Campaign → Packages"
                         && node.role == egui::accesskit::Role::Button
                 })
-                && d.control_frame("Repair in Campaign → Packages")
+                && d.control_frame("Campaign → Packages")
                     .is_some_and(|frame| frame.stroke.width > 0.0)
                 && d.visible_text("Campaign → Packages"),
             "A stat-block error is an error message, and its repair place is a bordered button",
@@ -10216,8 +10254,8 @@ pub mod run_roster_conflict {
             let places = d.at_size(size, |d| {
                 (
                     fault_words(d),
-                    d.place_of("Repair in Campaign → Packages"),
-                    d.place_of("Dismiss this error"),
+                    d.place_of("Campaign → Packages"),
+                    d.place_of(crate::design::outcome::DISMISS_NAME),
                     d.place_of(NEXT_TURN),
                 )
             });
@@ -10238,11 +10276,19 @@ pub mod run_roster_conflict {
         }
         // Astra 3: at 960 the whole fault is read in view, reached by the keyboard alone.
         let full_fault = "Ember Cultist's stat block could not be read. Its row still works.";
-        let reached = d.tab_to("Repair in Campaign → Packages");
+        // The footer is last in the reading order, so the keyboard's fast way to it is Shift+Tab
+        // (review of PR 338: within 10 reverse stops of the top).
+        // The dock's and the footer line's controls come after the pane in the reading order
+        // (measured: 10 of them, then the message's close, then its repair).
+        let stops = d.shift_tab_to("Campaign → Packages");
         d.observe(
             "iter-26-R-AI1-whole",
-            d.window_size() == SMALL && reached && d.visible_text(full_fault),
-            format!("At 960, Tab reaches the repair and the whole fault shows: reached {reached}"),
+            d.window_size() == SMALL
+                && stops.is_some_and(|stops| stops <= 12)
+                && d.visible_text(full_fault),
+            format!(
+                "At 960, Shift+Tab reaches the repair and the whole fault shows: stops {stops:?}"
+            ),
         );
         // Astra 3 changes this check on purpose: the error's whole fault wraps in the run's message
         // footer (the lead's footer ruling: the list keeps its top and only its visible height
@@ -17357,7 +17403,7 @@ pub mod encounter_groups {
         const REPLACED: &str = "Replaced Unknown creature with Ember Cultist.";
         d.observe(
             "iter-23-B-FI1",
-            d.visible_text(REPLACED) && d.has("Undo replacement"),
+            d.visible_text(REPLACED) && d.has("Undo replace member"),
             "Use names the replacement and offers Undo replacement",
         );
         // FH5, SH1: a finished change is a success message, with the success bar.
@@ -17386,7 +17432,7 @@ pub mod encounter_groups {
         // go with it.
         d.type_into(&format!("Group notes for {GROUP_LOST}"), " Arrive at dusk.");
         let typed = d.visible_text("Arrive at dusk.");
-        d.click("Undo replacement");
+        d.click("Undo replace member");
         d.expect("Replace Unknown creature");
         d.observe(
             "iter-23-B-FI1-undo",
@@ -17394,7 +17440,7 @@ pub mod encounter_groups {
                 && d.visible_text("Arrive at dusk.")
                 && !d.has("Changes for Ember Cultist")
                 && !d.visible_text(REPLACED)
-                && !d.has("Undo replacement"),
+                && !d.has("Undo replace member"),
             "Undo replacement keeps the notes typed after it and clears its own result",
         );
         d.click("Discard");
@@ -17557,37 +17603,93 @@ pub mod encounter_groups {
             );
         });
         d.check_tab_order("run, group panel");
+        // R1: the heading's line is the fight after; the group's own totals (`3 members ·
+        // XP 150`) are its hover (review of PR 338), and the member count is on the line where
+        // it fits.
+        let members = d.at_size(DEFAULT, |d| {
+            d.painted_in(egui::Rect::EVERYTHING).contains("3 members")
+        });
+        let hover = d.tip_words("Drag Goblin Wave to the initiative list");
         d.observe(
             "T13.1",
             d.has_containing("3\u{a0}×\u{a0}Goblin\u{a0}Warrior")
-                && d.visible_text("3 members · XP 150"),
-            "The panel lists each group's members and total XP",
+                && members
+                && hover.contains("3 members · XP 150"),
+            "The panel lists each group's members, and the line says the fight after",
         );
         // T5.7 in Arrivals: after a group's XP, what the fight becomes when it joins. Bridge
         // Ambush's three creatures and the goblins are far below the party's Low 2,800.
         // iter-27-B FI10: in the one form, named as the fight after: ` · Fight after: XP 450 ·
         // Low`.
+        // iter-28-R R1: `Fight after` never gives way: each group heading that has a word says
+        // it at every size; the member count, the side and then the XP number give way first.
         let fight_after = |d: &Driver<'_>| {
-            let mut words = Vec::new();
-            d.each_painted_text(|text, _| {
-                if text.galley.job.text.starts_with(" · Fight after: ") {
-                    words.push(text.galley.job.text.clone());
-                }
-            });
-            words
+            d.nodes()
+                .into_iter()
+                .filter(|node| {
+                    node.name.starts_with("Drag ")
+                        && node.name.contains(" to the initiative list")
+                        && node.fully_in_view()
+                })
+                .filter_map(|node| {
+                    let words = d.painted_in(node.shown).replace('\u{a0}', " ");
+                    let at = words.find("Fight after: ")?;
+                    // The line ends at the next icon (the status's or the name's).
+                    let word = words[at..]
+                        .split(|c: char| ('\u{E000}'..='\u{F8FF}').contains(&c))
+                        .next()
+                        .unwrap_or_default()
+                        .trim()
+                        .to_owned();
+                    Some((node.name.clone(), word))
+                })
+                .collect::<Vec<_>>()
         };
         let joins = d.at_size(DEFAULT, |d| fight_after(d));
+        let narrow = d.at_size(SMALL, |d| fight_after(d));
+        let names =
+            |list: &[(String, String)]| list.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>();
         d.observe(
             "T5.7-arrivals",
             !joins.is_empty()
-                && joins.iter().all(|word| {
-                    word.strip_prefix(" · Fight after: XP ")
-                        .and_then(|rest| rest.strip_suffix(" · Low"))
-                        .is_some_and(|xp| {
-                            !xp.is_empty() && xp.chars().all(|c| c.is_ascii_digit() || c == ',')
-                        })
+                && joins.iter().all(|(_, word)| {
+                    let word = word.trim_end();
+                    word.ends_with("Low")
+                        && word
+                            .strip_prefix("Fight after: XP ")
+                            .and_then(|rest| rest.strip_suffix(" · Low"))
+                            .is_none_or(|xp| xp.chars().all(|c| c.is_ascii_digit() || c == ','))
                 }),
-            format!("Each group heading with room says what the fight becomes: {joins:?}"),
+            format!("Each group heading says what the fight becomes: {joins:?}"),
+        );
+        // Review of PR 338: EVERY Arrivals heading (every drag handle in view) holds it, but a
+        // group whose fight has no word (`XP not known`: the line has nothing to say).
+        let headings = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .filter(|node| {
+                    node.name.starts_with("Drag ")
+                        && node.name.contains(" to the initiative list")
+                        && node.fully_in_view()
+                })
+                .filter(|node| {
+                    !d.painted_in(node.shown)
+                        .replace('\u{a0}', " ")
+                        .contains("not known")
+                })
+                .map(|node| node.name)
+                .collect::<Vec<_>>()
+        };
+        let all = (
+            d.at_size(SMALL, |d| headings(d)),
+            d.at_size(DEFAULT, |d| headings(d)),
+        );
+        d.observe(
+            "iter-28-R-R1",
+            joins.len() >= 2 && names(&narrow) == all.0 && names(&joins) == all.1,
+            format!(
+                "At 960 and 1200 every heading with a word says Fight after: {narrow:?} / {joins:?}; headings {all:?}"
+            ),
         );
         // The words are worked out after a step, not on each frame of the panel.
         let words = crate::test_support::CachedWork::start("Arrivals words", d, |d| {
@@ -17602,8 +17704,8 @@ pub mod encounter_groups {
             d.settle();
             d.at_size(LARGE, |_| ());
             d.settle();
-            // At 960 the heading has no room for it; the default size does.
-            !d.at_size(DEFAULT, |d| fight_after(d)).is_empty()
+            // R1: at 960 too.
+            !d.at_size(SMALL, |d| fight_after(d)).is_empty()
         });
         d.observe(
             "F1-arrivals-cache",
@@ -17612,8 +17714,9 @@ pub mod encounter_groups {
         );
         d.observe(
             "T13.1",
-            d.visible_text("XP 50")
-                && d.has_containing(
+            // R1: the group's own XP (`XP 50`) is its heading's hover and description now; the
+            // line says the fight after.
+            d.has_containing(
                     "Unknown creature · line\u{a0}13: not in this campaign’s packages.",
                 )
                 // iter-26-R FI8: `Will add:` keeps its first member on its line.
@@ -17625,9 +17728,14 @@ pub mod encounter_groups {
             !d.is_disabled(&add_group(GROUP_LOST)),
             "A group with one valid member has a working Add button",
         );
+        // R1: the member count is the first to give way, so it is read at 1200.
+        let can_join = d.at_size(DEFAULT, |d| {
+            d.painted_in(egui::Rect::EVERYTHING)
+                .contains("1 of 3 can join")
+        });
         d.observe(
             "T13.1",
-            d.visible_text("1 of 3 can join")
+            can_join
                 && d.has_containing("not in this campaign’s packages")
                 && d.has_containing("Cinder Wolf · line\u{a0}14: Maximum HP would become −28."),
             "A group counts a creature it cannot find, and gives every reason it cannot be added",
@@ -17903,7 +18011,7 @@ pub mod encounter_groups {
         d.expect_moves("Move before puts the tied arrival above its twin.");
         d.click("Move Rival Team (Rival Captain 2) before Rival Team");
         d.at_size(DEFAULT, |d| {
-            d.expect("Rival Team (Rival Captain 2) moved before Rival Team at\u{a0}14")
+            d.expect("Rival Team (Rival Captain 2) moved before Rival Captain at\u{a0}14.")
         });
         d.observe(
             "F4",
@@ -22012,14 +22120,14 @@ pub mod session_plan {
         d.observe(
             "iter-24-S-FL3",
             undos == ["Undo delete run"]
-                && d.visible_text(&format!("Deleted the saved run of {FIRST}."))
+                && d.visible_text(&format!("Deleted the saved run of “{FIRST}”."))
                 && !d.visible_text(&notice),
             format!("The plan shows one result and one Undo after two steps: {undos:?}"),
         );
         // iter-25-S family: deleting a saved run is a finished change, in the success tone.
         d.observe(
             "iter-25-S-success-run-deleted",
-            d.place_of(&format!("Deleted the saved run of {FIRST}."))
+            d.place_of(&format!("Deleted the saved run of “{FIRST}”."))
                 .is_some_and(|words| d.has_tone_bar(words, crate::design::colors().result.success)),
             "The deleted run's result has the success tone",
         );
@@ -22797,10 +22905,12 @@ pub mod session_plan {
         );
         d.state("resumed-setup-after-long-rest", Sizes::All);
         const SAVED_HP_SET: &str = crate::encounter_run::SAVED_HP_USED;
-        const SAVED_HP_UNDO: &str = "Undo use saved HP";
-        let notice_top = d
+        const SAVED_HP_UNDO: &str = "Undo: use saved HP";
+        // The typed footer (M2) is pinned under the setup roster: a message keeps its left edge
+        // and the footer its bottom; its top follows its height.
+        let notice_at = d
             .place_of("Party HP is full after the long rest.")
-            .map(|rect| rect.top());
+            .map(|rect| rect.left());
         // iter-26-R FI2: the offer, its result and the offer back after Undo are in the setup's
         // message footer below the rows: no row moves through the three.
         // Setup rows, by their initiative fields.
@@ -22819,25 +22929,36 @@ pub mod session_plan {
             "Use the saved HP puts back the saved HP",
         );
         // FT2: the press is its own step, so the full HP stays one Undo away.
-        let result_top = d.place_of(SAVED_HP_SET).map(|rect| rect.top());
+        let result_at = d.place_of(SAVED_HP_SET).map(|rect| rect.left());
         d.observe(
             "iter-16-B-FT2-message",
-            notice_top
-                .zip(result_top)
+            notice_at
+                .zip(result_at)
                 .is_some_and(|(notice, result)| (notice - result).abs() < 1.0),
             format!(
-                "The result replaces the notice in its place: {notice_top:?} then {result_top:?}"
+                "The result replaces the notice in its place: {notice_at:?} then {result_at:?}"
             ),
         );
+        // The message part places its Undo: beside the words when it fits, else under them,
+        // from their first letter (proofs-M2). Here: it is offered, in view, at the words. The
+        // header's Undo names the same step with the same words (FH4), so the message's is the
+        // lower of the two.
+        let message_undo = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .filter(|node| node.name == SAVED_HP_UNDO && node.in_view())
+                .map(|node| node.rect)
+                .max_by(|a, b| a.top().total_cmp(&b.top()))
+        };
         d.observe(
             "iter-16-B-FT2-message-undo",
-            d.in_view(SAVED_HP_UNDO)
-                && d.place_of(SAVED_HP_UNDO)
-                    .zip(d.place_of(SAVED_HP_SET))
-                    .is_some_and(|(undo, words)| {
-                        (undo.center().y - words.center().y).abs() < crate::design::S
-                    }),
-            "The result offers Undo on its own line",
+            message_undo(d)
+                .zip(d.place_of(SAVED_HP_SET))
+                .is_some_and(|(undo, words)| {
+                    (undo.center().y - words.center().y).abs() < crate::design::S
+                        || undo.top() >= words.bottom() - 0.5
+                }),
+            "The result offers its Undo, at its words",
         );
         d.observe(
             "iter-16-B-FT2-header",
@@ -22849,7 +22970,7 @@ pub mod session_plan {
         d.observe(
             "iter-24-R-FJ4",
             d.has(SAVED_HP_UNDO) && !d.has("Undo"),
-            "The saved-HP result's Undo says Undo use saved HP, not a bare Undo",
+            "The saved-HP result's Undo says Undo: use saved HP, not a bare Undo",
         );
         let rows_result = row_tops(d);
         d.state("saved-hp-restored", Sizes::All);
@@ -22878,19 +22999,34 @@ pub mod session_plan {
             "iter-26-R-FI2-setup-undo-b",
             d.field_text(&field).as_deref() != Some("12")
                 && d.visible_text(SAVED_HP_SET)
-                && d.in_view(SAVED_HP_UNDO)
+                && d.nodes()
+                    .iter()
+                    .filter(|node| node.name == SAVED_HP_UNDO && node.in_view())
+                    .count()
+                    == 2
                 && kestrel(d).contains("HP 11/41")
                 && row_tops(d) == rows_result,
             "Undo of B gives back A's result and its Undo, with A's HP",
         );
-        // AT1: this Undo has the shape of every Undo after a message: quiet, with its icon.
-        let saved_hp_undo = undo_shape(d, SAVED_HP_UNDO);
+        // AT1: this Undo has the shape of every Undo after a message: quiet, with its icon (the
+        // message's own Undo, the lower of the two with these words).
+        let saved_hp_undo = message_undo(d).and_then(|target| {
+            let frame = d.control_frame_at(target)?;
+            Some((
+                frame.stroke,
+                frame.fill,
+                target.height().round() as i32,
+                d.painted_in(target).contains(crate::design::icons::UNDO),
+            ))
+        });
         d.observe(
             "iter-17-B-AT1",
             saved_hp_undo.is_some_and(|(stroke, _, _, icon)| stroke == egui::Stroke::NONE && icon),
             format!("The saved-HP result's Undo is quiet with the Undo icon: {saved_hp_undo:?}"),
         );
-        d.click(SAVED_HP_UNDO);
+        // The message's own Undo (its press goes to the step's store by its ticket).
+        let target = message_undo(d).expect("the message's Undo");
+        d.click_rect(target, "Click: the message's Undo: use saved HP");
         d.observe(
             "iter-16-B-FT2-undo",
             kestrel(d).contains("HP 41/41"),

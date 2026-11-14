@@ -12,7 +12,7 @@ const ROLL_LOOT: &str = "Roll 2 × gems for Sunken Vault";
 const SPELL: &str = "Fireball";
 const SESSION: &str = "The Vault";
 const UNREAD: &str = "Splat could not read this run’s saved Undo steps";
-const DISMISS: &str = "Dismiss the Undo message";
+const DISMISS: &str = crate::design::outcome::DISMISS_NAME;
 const LATER: &str = "A later fight or rest was played, so this fight cannot go on. Start a new run to play it again.";
 /// The same reason for a fight whose encounter is deleted: only its cause.
 const LATER_GONE: &str = "A later fight or rest was played, so this fight cannot go on.";
@@ -188,65 +188,43 @@ fn history_line_gaps(d: &mut Driver<'_>, line: &str) {
 /// below the line above it.
 pub(crate) fn history_edges(d: &mut Driver<'_>) {
     for size in [SMALL, DEFAULT, LARGE] {
-        let edges = d.at_size(size, |d| {
-            let (mut list, mut state, mut log) = (None, None, None);
-            d.each_painted_text(|text, clip| {
-                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
-                let words = text.galley.job.text.as_str();
-                if words == "FINAL STATE" && clip.intersects(rect) {
-                    (list, state) = (Some(clip), Some(rect));
-                }
-                if words == "COMBAT LOG" && clip.intersects(rect) {
-                    log = Some(rect);
-                }
-            });
-            let (list, state) = (list?, state?);
-            let (mut cut, mut above_log) = (Vec::new(), (f32::MIN, String::new()));
-            d.each_painted_text(|text, clip| {
-                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
-                if (clip.top() - list.top()).abs() < 0.5
-                    && rect.top() < list.top() - 0.5
-                    && rect.bottom() > list.top() + 0.5
-                {
-                    cut.push(text.galley.job.text.clone());
-                }
-                // The list's own texts in Final state's column, between its label and the log's.
-                if log.is_some_and(|log| {
-                    (clip.top() - list.top()).abs() < 0.5
-                        && rect.left() >= state.left() - 0.5
-                        && rect.top() > state.bottom()
-                        && rect.bottom() <= log.top() + 0.5
-                }) && rect.bottom() > above_log.0
-                {
-                    above_log = (rect.bottom(), text.galley.job.text.clone());
-                }
-            });
-            Some((cut, log.map(|log| (log.top() - above_log.0, above_log.1))))
-        });
-        // R2: the row goes to the list's top only when the run does not fit below it; then the
-        // top is a clean edge. A least scroll that keeps the row lower may cut a line above it.
-        let at_top = d.at_size(size, |d| {
-            let row = d
-                .nodes()
-                .into_iter()
-                .find(|node| node.name.starts_with("Close the run of "))?;
-            let mut list = None;
-            d.each_painted_text(|text, clip| {
-                if text.galley.job.text == "FINAL STATE" {
-                    list = Some(clip);
-                }
-            });
-            Some(row.rect.top() - list?.top() <= crate::design::L)
+        // R2 scrolls the list once, at Open: so at each size the run is closed and opened
+        // again there, and measured in that pass. A missing `Close the run of …` fails.
+        let measured = d.aside(|d| {
+            d.act_at_size(size, |d| {
+                let close = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with("Close the run of "))?
+                    .name;
+                d.click(&close);
+                d.click(&close.replacen("Close", "Open", 1));
+                d.expect("Read-only");
+                let edges = history_edge_texts(d);
+                // R2: the row goes to the list's top only when the run does not fit below it;
+                // then the top is a clean edge. A least scroll that keeps the row lower may cut
+                // a line above it.
+                let row = d.nodes().into_iter().find(|node| node.name == close)?;
+                let mut list = None;
+                d.each_painted_text(|text, clip| {
+                    if text.galley.job.text == "FINAL STATE" {
+                        list = Some(clip);
+                    }
+                });
+                let at_top = row.rect.top() - list?.top() <= crate::design::L;
+                Some((at_top, edges))
+            })
         });
         d.observe(
             "X37-history-clean-edge",
-            at_top.is_some()
-                && (at_top == Some(false) || edges.as_ref().is_some_and(|(cut, _)| cut.is_empty())),
-            format!(
-                "At {size:?}, row at the list's top {at_top:?}; the texts cut there: {edges:?}"
-            ),
+            measured.as_ref().is_some_and(|(at_top, edges)| {
+                !at_top || edges.as_ref().is_some_and(|(cut, _)| cut.is_empty())
+            }),
+            format!("At {size:?}, (row at the list's top, the texts cut there): {measured:?}"),
         );
-        let gap = edges.and_then(|(_, gap)| gap);
+        let gap = measured
+            .and_then(|(_, edges)| edges)
+            .and_then(|(_, gap)| gap);
         d.observe(
             "X66-combat-log-gap",
             gap.as_ref().map_or(size == SMALL, |(gap, _)| {
@@ -256,6 +234,58 @@ pub(crate) fn history_edges(d: &mut Driver<'_>) {
             format!("At {size:?}, COMBAT LOG is L below the last Final state row: {gap:?}"),
         );
     }
+    // The steps after this see the run as opened at the scenario's own size.
+    d.aside(|d| {
+        if let Some(close) = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name.starts_with("Close the run of "))
+            .map(|node| node.name)
+        {
+            d.click(&close);
+            d.click(&close.replacen("Close", "Open", 1));
+            d.expect("Read-only");
+        }
+    });
+}
+
+/// The texts cut at the list's top, and COMBAT LOG's gap below the last Final state row.
+type EdgeTexts = Option<(Vec<String>, Option<(f32, String)>)>;
+
+fn history_edge_texts(d: &Driver<'_>) -> EdgeTexts {
+    let (mut list, mut state, mut log) = (None, None, None);
+    d.each_painted_text(|text, clip| {
+        let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+        let words = text.galley.job.text.as_str();
+        if words == "FINAL STATE" && clip.intersects(rect) {
+            (list, state) = (Some(clip), Some(rect));
+        }
+        if words == "COMBAT LOG" && clip.intersects(rect) {
+            log = Some(rect);
+        }
+    });
+    let (list, state) = (list?, state?);
+    let (mut cut, mut above_log) = (Vec::new(), (f32::MIN, String::new()));
+    d.each_painted_text(|text, clip| {
+        let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+        if (clip.top() - list.top()).abs() < 0.5
+            && rect.top() < list.top() - 0.5
+            && rect.bottom() > list.top() + 0.5
+        {
+            cut.push(text.galley.job.text.clone());
+        }
+        // The list's own texts in Final state's column, between its label and the log's.
+        if log.is_some_and(|log| {
+            (clip.top() - list.top()).abs() < 0.5
+                && rect.left() >= state.left() - 0.5
+                && rect.top() > state.bottom()
+                && rect.bottom() <= log.top() + 0.5
+        }) && rect.bottom() > above_log.0
+        {
+            above_log = (rect.bottom(), text.galley.job.text.clone());
+        }
+    });
+    Some((cut, log.map(|log| (log.top() - above_log.0, above_log.1))))
 }
 
 /// The selected name as the dock paints it.
@@ -1151,6 +1181,26 @@ pub fn run(d: &mut Driver<'_>) {
         "iter-25-R-AI3-short",
         short,
         "While the warning shows, Undo's reason says only Nothing to undo",
+    );
+    // iter-28-R R6 (FK1): the roster keeps the footer's room while every row keeps its scale
+    // height: with the unread-steps message, all 8 rows show at 1200, none is counted below.
+    let rows = d.at_size(DEFAULT, |d| {
+        (
+            d.nodes()
+                .iter()
+                .filter(|node| {
+                    node.name.contains(", HP ")
+                        && node.name.contains(", AC ")
+                        && node.fully_in_view()
+                })
+                .count(),
+            d.nodes().iter().any(|node| node.name.ends_with(" below")),
+        )
+    });
+    d.observe(
+        "iter-28-R-R6",
+        rows == (8, false),
+        format!("At 1200 with the message, rows in view and a below count: {rows:?}"),
     );
     d.state("undo-steps-unread", Sizes::All);
     let add_at = |d: &mut Driver<'_>| d.at_size(DEFAULT, |d| d.place_of("Add to fight"));
