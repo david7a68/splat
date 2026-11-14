@@ -2071,6 +2071,21 @@ impl Splat {
                     self.timeline_page.dated = self.sessions.current_dated();
                     self.timeline_page.tables =
                         self.lookup.index().map(|index| index.loot_sources());
+                    // Row 123: what a check result can offer to its session's plan.
+                    self.timeline_page.plan_names = timeline::page::PlanNames {
+                        fights: self
+                            .encounters
+                            .plan_fights()
+                            .into_iter()
+                            .map(|fight| fight.name)
+                            .collect(),
+                        groups: self
+                            .encounters
+                            .plan_groups()
+                            .iter()
+                            .map(|group| group.name.clone())
+                            .collect(),
+                    };
                     self.timeline_page.places = self
                         .lookup
                         .index()

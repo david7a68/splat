@@ -530,6 +530,13 @@ pub fn run(d: &mut Driver<'_>) {
         faults.is_empty() && seen && before.is_some() && before == after,
         format!("Timeline: the result is in view on its kept line ({seen}), and moves no line ({before:?}, {after:?}): {faults:?}"),
     );
+    // Row 123 (iter-29 G142): a rolled result on Timeline offers its fight to the plan of the
+    // journey's session, as on the plan. Bridge Ambush is in that plan already.
+    d.observe(
+        "iter-29-S1-G142",
+        d.has_containing("In the plan") && !d.has(PLAN_AMBUSH),
+        "Timeline: the rolled Bridge Ambush says In the plan, as the plan of its session does",
+    );
     d.state("travel-checks-timeline", Sizes::Default);
     d.state_prepared("travel-checks-timeline-lookup", Sizes::Small, |d| {
         if !d.has("Close Lookup") {
@@ -560,6 +567,7 @@ pub fn run(d: &mut Driver<'_>) {
             && journey(d, "Journey B").checks_table.as_deref() == Some("road"),
         "Timeline: Undo roll takes back only this journey's roll",
     );
+    timeline_plans_a_result(d);
     field_history_belongs_to_its_event(d);
     // The same on the plan.
     d.click(NAV_SESSIONS);
@@ -645,6 +653,50 @@ pub fn run(d: &mut Driver<'_>) {
 /// Review of PR 313: egui keeps a field's cursor and text Undo under its id, so each event's
 /// **How long** and **Notes** have an id of their own. Edit journey A, open journey B, focus its
 /// field, press Ctrl+Z: B never gets A's words, and A keeps what it had.
+/// Row 123 (iter-29 G142): on Timeline, `Plan “<name>”` under a result writes the plan line into
+/// the note of the journey's session; its result and Undo are in the list's footer, and the
+/// offer becomes `In the plan`. Undo there takes the line back. The journey ends with no check.
+fn timeline_plans_a_result(d: &mut Driver<'_>) {
+    const PLAN_SHRINE: &str = "Plan “Shrine of Cinders”";
+    const PLANNED: &str = "“Shrine of Cinders” is in tonight’s plan.";
+    let dir = folder(d);
+    d.click_starting("Travel ·");
+    d.type_into("Enter a roll for Day 1", "19");
+    d.press(Key::Enter);
+    d.expect("1 travel check rolled.");
+    d.observe(
+        "iter-29-S1-G142",
+        d.has(PLAN_SHRINE) && !note_file(&dir).contains("[[Shrine of Cinders]]"),
+        "Timeline: a result that links a fight not in the plan offers it",
+    );
+    d.click(PLAN_SHRINE);
+    let note = note_file(&dir);
+    d.observe(
+        "iter-29-S1-G142",
+        note.contains("- [[Shrine of Cinders]]")
+            && d.has(PLANNED)
+            && d.has("Undo add plan line")
+            && d.has_containing("In the plan")
+            && !d.has(PLAN_SHRINE),
+        format!("Timeline: the press writes the plan line, and the footer says so: {note}"),
+    );
+    d.click("Undo add plan line");
+    d.observe(
+        "iter-29-S1-G142",
+        !note_file(&dir).contains("[[Shrine of Cinders]]")
+            && d.has(PLAN_SHRINE)
+            && !d.has(PLANNED)
+            && journey(d, "Travel").checks.len() == 1,
+        "Timeline: Undo add plan line takes back only the line; the result stays",
+    );
+    d.click("Clear the check for Day 1");
+    d.observe(
+        "iter-29-S1-G142",
+        journey(d, "Travel").checks.is_empty(),
+        "The journey has no check again",
+    );
+}
+
 fn field_history_belongs_to_its_event(d: &mut Driver<'_>) {
     const A_LENGTH: &str = "5 days";
     const A_NOTES: &str = "Wolves on the road.";

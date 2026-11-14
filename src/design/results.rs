@@ -827,7 +827,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "scenes_are_note_acts_with_their_own_undo statement",
             &[Ban::Results],
         ),
-        ("src/sessions/plan.rs", "travel_act", &[Ban::Results]),
+        ("src/sessions/plan.rs", "plan_line_act", &[Ban::Results]),
         ("src/timeline.rs", "next_result_order", &[Ban::Results]),
         ("src/sessions/plan.rs", "kept_at", &[Ban::Order]),
         ("src/trackers/history.rs", "remove", &[Ban::Results]),

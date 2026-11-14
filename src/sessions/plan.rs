@@ -20,8 +20,8 @@ use crate::{
     timeline::{
         self, Book, Kind, checks,
         page::{
-            added_message, file_act, file_messages, long_rest_status, problems, quick_add_with,
-            rest_ruling,
+            PlanNames, added_message, file_act, file_messages, long_rest_status, problems,
+            quick_add_with, rest_ruling,
         },
         removed_event_words,
     },
@@ -153,10 +153,10 @@ fn pressed(act: FooterAct) -> super::SessionAct {
     clippy::disallowed_methods,
     reason = "staged: plan results keep their own orders (`outcome_at`, design::results::STAGED_ALLOWS)"
 )]
-fn kept_at(
-    messages: &mut Messages<'_, super::SessionAct>,
+fn kept_at<A: 'static>(
+    messages: &mut Messages<'_, A>,
     order: design::ResultOrder,
-    outcome: impl Into<KeptOutcome<super::SessionAct>>,
+    outcome: impl Into<KeptOutcome<A>>,
 ) {
     messages.outcome_at(order, outcome);
 }
@@ -2044,6 +2044,83 @@ fn road_plan_line(book: &Book, journey: &str, chosen: &checks::Planned) -> Strin
     }
 }
 
+/// Row 123: the one rule of a check result's offer, on the plan and on Timeline. For a name the
+/// result links: nothing when it is no fight and no group of the campaign (`known`), else whether
+/// a row for it is still to come in the plan (`coming`).
+fn offer_state<'a>(
+    name: &str,
+    mut known: impl Iterator<Item = &'a str>,
+    mut coming: impl Iterator<Item = &'a str>,
+) -> Option<bool> {
+    known
+        .any(|known| known.eq_ignore_ascii_case(name))
+        .then(|| coming.any(|coming| coming.eq_ignore_ascii_case(name)))
+}
+
+/// Row 123: a session plan as Timeline's check results see it: the names the campaign can plan,
+/// and those with a row still to come in that session's plan.
+#[derive(Debug, Default, PartialEq)]
+pub struct JourneyPlan {
+    known: Vec<String>,
+    coming: Vec<String>,
+}
+
+impl JourneyPlan {
+    /// What `checks::View::planned` asks, by the plan's own rule (`offer_state`).
+    pub fn get(&self, name: &str) -> Option<bool> {
+        offer_state(
+            name,
+            self.known.iter().map(String::as_str),
+            self.coming.iter().map(String::as_str),
+        )
+    }
+
+    /// Read from the plan's words: the fights still to come take one link each, as the plan's
+    /// rows do (`plan_links`), and a linked group is to come.
+    fn read(
+        body: &str,
+        events: &[timeline::Event],
+        session: Option<Uuid>,
+        names: &PlanNames,
+    ) -> Self {
+        let fights = plan_fight_stubs(&names.fights);
+        let mut coming: Vec<String> = plan_links(body, events, session, &fights)
+            .into_iter()
+            .filter(|(_, _, waiting)| *waiting)
+            .map(|(_, fight, _)| fight.name.clone())
+            .collect();
+        coming.extend(linked_names(body).into_iter().filter(|name| {
+            !names
+                .fights
+                .iter()
+                .any(|fight| fight.eq_ignore_ascii_case(name))
+                && names
+                    .groups
+                    .iter()
+                    .any(|group| group.eq_ignore_ascii_case(name))
+        }));
+        Self {
+            known: names.fights.iter().chain(&names.groups).cloned().collect(),
+            coming,
+        }
+    }
+}
+
+/// Fights known only by their names: what `plan_links` and `plan_first` read of a fight.
+fn plan_fight_stubs(names: &[String]) -> Vec<PlanFight> {
+    names
+        .iter()
+        .map(|name| PlanFight {
+            saved: None,
+            id: Uuid::nil(),
+            name: name.clone(),
+            path: String::new(),
+            summary: String::new(),
+            difficulty: Default::default(),
+        })
+        .collect()
+}
+
 /// Each fight still to come in the plan, in order, by its name, with the day it is played on
 /// when its line came from a journey's check.
 fn road_days(
@@ -2134,7 +2211,20 @@ pub(super) struct Travel {
     /// The fights still to come with their days on the road, while the note, the Timeline and
     /// the campaign's fights are as they were.
     days: Option<(RoadKey, Arc<RoadDays>)>,
+    /// Row 123: the plan that Timeline's open journey offers to, while its session, its note,
+    /// the Timeline and the campaign's names are as they were.
+    journey_plan: Option<(JourneyKey, Arc<JourneyPlan>)>,
 }
+
+/// What Timeline's view of a session plan is read from: the session, the note's words (the open
+/// draft's revision, or the file's time when no draft holds it), the Timeline's count of
+/// changes, and the campaign's names.
+type JourneyKey = (
+    Uuid,
+    (Option<u64>, Option<std::time::SystemTime>),
+    u64,
+    PlanNames,
+);
 
 /// What the plan's days on the road are read from: the session, the note's revision, the
 /// Timeline's count of changes, and the count of the campaign's fights.
@@ -2630,14 +2720,7 @@ impl Sessions {
     ) -> Option<checks::RoadMark> {
         let note = self.notes.iter().find(|note| Some(note.id) == session)?;
         let text = std::fs::read_to_string(&note.path).ok()?;
-        let fight = [PlanFight {
-            saved: None,
-            id: Uuid::nil(),
-            name: name.to_owned(),
-            path: String::new(),
-            summary: String::new(),
-            difficulty: Default::default(),
-        }];
+        let fight = plan_fight_stubs(&[name.to_owned()]);
         let (at, _, _) = plan_links(&text, events, session, &fight)
             .into_iter()
             .find(|(_, _, waiting)| *waiting)?;
@@ -2714,26 +2797,159 @@ impl Sessions {
         days
     }
 
-    /// Take back the plan line of `Plan “…”`, while the note is as that act left it.
-    fn undo_plan_line(&mut self) {
+    /// Take back the plan line of `Plan “…”`, while the note is as that act left it. A note that
+    /// changed since gives the act and its fault, for the block where the DM pressed Undo (the
+    /// plan's or Timeline's).
+    pub fn undo_plan_line(&mut self) -> Option<(checks::Act, String)> {
         let (Some((_, line, undo)), Some(draft)) = (self.travel.planned.take(), &mut self.draft)
         else {
-            return;
+            return None;
         };
-        // A note that changed since says so where the DM acted.
-        if let Err(fault) = undo.undo(draft) {
-            self.travel
-                .block
-                .failed(&checks::Act::Plan(line), fault.words().to_owned());
+        undo.undo(draft)
+            .err()
+            .map(|fault| (checks::Act::Plan(line), fault.words().to_owned()))
+    }
+
+    /// Row 123: Timeline's view of the plan of `journey`'s session, for its check results'
+    /// offers. Read again only when its session, the note, the Timeline or the names changed.
+    /// A journey with no session, or whose note is gone, offers nothing.
+    pub fn journey_plan(
+        &mut self,
+        book: &Book,
+        journey: &str,
+        names: &PlanNames,
+    ) -> Arc<JourneyPlan> {
+        let session = book
+            .events
+            .iter()
+            .find(|event| event.id == journey)
+            .and_then(|event| event.session);
+        let Some(note) = session.and_then(|id| self.notes.iter().find(|note| note.id == id)) else {
+            return Arc::default();
+        };
+        let draft = self.draft.as_ref().filter(|draft| draft.path == note.path);
+        let stamp = match draft {
+            Some(draft) => (Some(draft.revision()), None),
+            None => (
+                None,
+                std::fs::metadata(&note.path)
+                    .and_then(|meta| meta.modified())
+                    .ok(),
+            ),
+        };
+        let key = (note.id, stamp, book.changes(), names.clone());
+        if let Some((known, plan)) = &self.travel.journey_plan
+            && *known == key
+        {
+            return Arc::clone(plan);
+        }
+        let body = match draft {
+            Some(draft) => Some(draft.body.clone()),
+            None => std::fs::read_to_string(&note.path)
+                .ok()
+                .map(|text| crate::sessions::body_of(&text).to_owned()),
+        };
+        let plan = Arc::new(body.map_or_else(JourneyPlan::default, |body| {
+            JourneyPlan::read(&body, &book.events, Some(note.id), names)
+        }));
+        self.travel.journey_plan = Some((key, Arc::clone(&plan)));
+        plan
+    }
+
+    /// Row 123: `Plan “<name>”` pressed on Timeline. It writes the plan line into the note of the
+    /// journey's session by the plan's own act (`plan_line_act`), so its result and Undo are the
+    /// one the plan shows. That note becomes the selected session's, as a press on its row in
+    /// Sessions makes it. The fault, when there is one, is for Timeline's block.
+    pub fn plan_from_timeline(
+        &mut self,
+        book: &Book,
+        journey: &str,
+        chosen: &checks::Planned,
+        names: &PlanNames,
+    ) -> Result<(), String> {
+        let session = book
+            .events
+            .iter()
+            .find(|event| event.id == journey)
+            .and_then(|event| event.session)
+            .filter(|id| self.notes.iter().any(|note| note.id == *id));
+        let Some(session) = session else {
+            return Err("This journey’s session note is gone.".to_owned());
+        };
+        if self.selected != Some(session) || self.draft.is_none() {
+            self.select(Some(session));
+        }
+        if self.selected != Some(session) || self.draft.is_none() {
+            return Err(
+                "The open session note needs a choice first; resolve it and try again.".to_owned(),
+            );
+        }
+        let fights = plan_fight_stubs(&names.fights);
+        self.plan_line_act(book, Some(session), journey, chosen, &fights)
+    }
+
+    /// Row 123: `Plan “<name>”`'s result and `Undo add plan line`, in the footer of Timeline's
+    /// list, from the one store the plan's footer reads (`Travel::planned`), while the note is as
+    /// the act left it.
+    pub fn plan_line_result<A: 'static>(&self, messages: &mut Messages<'_, A>, undo: A) {
+        if let Some((_, line, plan_undo)) = &self.travel.planned
+            && self
+                .draft
+                .as_ref()
+                .is_some_and(|draft| plan_undo.live(draft))
+        {
+            kept_at(
+                messages,
+                self.travel.planned_order,
+                Said::new(as_sentence(&line.words()))
+                    .undo(UndoStep::of(Verb::Add, "plan line").pressed_as(undo)),
+            );
         }
     }
 
-    /// Carry out an act on a journey's checks. `Plan` writes the session note; the others write
-    /// `Timeline.md`.
+    /// `Plan “<name>”`: write its line into the selected session's note, before the first fight
+    /// still to come. The result and its Undo go to `Travel::planned`; the fault comes back.
     #[allow(
         clippy::disallowed_methods,
         reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
     )]
+    fn plan_line_act(
+        &mut self,
+        book: &Book,
+        session: Option<Uuid>,
+        journey: &str,
+        chosen: &checks::Planned,
+        fights: &[PlanFight],
+    ) -> Result<(), String> {
+        let (Some(draft), Some(note)) = (&mut self.draft, session) else {
+            return Ok(());
+        };
+        let line = road_plan_line(book, journey, chosen);
+        let written = draft.apply(note, Apply::Now, |words| {
+            Some(plan_first(words, &line, &book.events, session, fights))
+        });
+        let result = match written {
+            Ok(undo) => {
+                self.travel.planned_order = design::ResultOrder::issue();
+                self.travel.planned = Some((journey.to_owned(), chosen.clone(), undo));
+                Ok(())
+            }
+            Err(fault) => {
+                let words = fault.words().to_owned();
+                if let crate::sessions::ActFault::NotSaved(_, undo) = fault {
+                    self.travel.planned_order = design::ResultOrder::issue();
+                    self.travel.planned = Some((journey.to_owned(), chosen.clone(), undo));
+                }
+                Err(words)
+            }
+        };
+        self.mentions
+            .insert(note, timeline::referenced_ids(&draft.body));
+        result
+    }
+
+    /// Carry out an act on a journey's checks. `Plan` writes the session note; the others write
+    /// `Timeline.md`.
     fn travel_act(
         &mut self,
         book: &mut Book,
@@ -2753,29 +2969,9 @@ impl Sessions {
                 .any(|event| event.id == id && event.duration.trim().is_empty());
         }
         if let checks::Act::Plan(chosen) = &act {
-            let (Some(draft), Some(note)) = (&mut self.draft, session) else {
-                return;
-            };
-            let line = road_plan_line(book, id, chosen);
-            let written = draft.apply(note, Apply::Now, |words| {
-                Some(plan_first(words, &line, &book.events, session, plan.fights))
-            });
-            match written {
-                Ok(undo) => {
-                    self.travel.planned_order = design::ResultOrder::issue();
-                    self.travel.planned = Some((id.to_owned(), chosen.clone(), undo));
-                }
-                Err(fault) => {
-                    let words = fault.words().to_owned();
-                    if let crate::sessions::ActFault::NotSaved(_, undo) = fault {
-                        self.travel.planned_order = design::ResultOrder::issue();
-                        self.travel.planned = Some((id.to_owned(), chosen.clone(), undo));
-                    }
-                    self.travel.block.failed(&act, words);
-                }
+            if let Err(words) = self.plan_line_act(book, session, id, chosen, plan.fights) {
+                self.travel.block.failed(&act, words);
             }
-            self.mentions
-                .insert(note, timeline::referenced_ids(&draft.body));
             return;
         }
         match checks::apply(book, id, &act, plan.tables) {
@@ -3185,22 +3381,17 @@ impl Sessions {
         let mut travel_undo = (TravelUndo::None, String::new());
         // A name a result links: an encounter or a group, and whether a row for it is to come.
         let in_plan = |name: &str| {
-            let fight = plan
-                .fights
-                .iter()
-                .any(|fight| fight.name.eq_ignore_ascii_case(name));
-            let group = plan
-                .groups
-                .iter()
-                .any(|group| group.name.eq_ignore_ascii_case(name));
-            (fight || group).then(|| {
+            offer_state(
+                name,
+                plan.fights
+                    .iter()
+                    .map(|fight| fight.name.as_str())
+                    .chain(plan.groups.iter().map(|group| group.name.as_str())),
                 planned
                     .iter()
-                    .any(|fight| fight.name.eq_ignore_ascii_case(name))
-                    || planned_groups
-                        .iter()
-                        .any(|group| group.name.eq_ignore_ascii_case(name))
-            })
+                    .map(|fight| fight.name.as_str())
+                    .chain(planned_groups.iter().map(|group| group.name.as_str())),
+            )
         };
         // Review of PR 274: the DM's own scroll or navigation, or a draw the plan missed (the
         // DM left the view), ends a pending reveal, so it never pulls the plan back.
@@ -3579,7 +3770,11 @@ impl Sessions {
                     }
                     FooterAct::Scene(act) => scene_act = Some(act),
                     FooterAct::Rewards(act) => rewards_act = Some(act),
-                    FooterAct::UndoPlanLine => self.undo_plan_line(),
+                    FooterAct::UndoPlanLine => {
+                        if let Some((act, words)) = self.undo_plan_line() {
+                            self.travel.block.failed(&act, words);
+                        }
+                    }
                     FooterAct::File(act) => file_act(book, act, press.ticket),
                 },
                 _ => self.session_press(press, book, plan),
