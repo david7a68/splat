@@ -3803,14 +3803,22 @@ mod tests {
         id
     }
 
-    /// The draft, its open form, the member result store, as the page holds them; a member the
-    /// body removes in the next frame; and a footer press held one frame (`Some(None)` holds the
+    /// A member act the body does in the next frame, before a held press is applied.
+    #[derive(Clone, Copy)]
+    enum BodyAct {
+        Remove(usize),
+        /// The member at this place moves up, as `Move up` does.
+        Raise(usize),
+    }
+
+    /// The draft, its open form, the member result store, as the page holds them; a member act
+    /// the body does in the next frame; and a footer press held one frame (`Some(None)` holds the
     /// next press), so that it is applied after a later body, with the ticket it was made with.
     type MembersState = (
         GroupDraft,
         Option<String>,
         design::Results<super::super::MemberOwner, super::super::MemberMark>,
-        Option<usize>,
+        Option<BodyAct>,
         Option<Option<design::outcome::Press<super::super::FooterPress>>>,
     );
 
@@ -3838,13 +3846,20 @@ mod tests {
             messages.kept(shown.outcome(&frame, super::super::MemberMark::outcome));
         }
         let expanded = &mut state.1;
-        let body_removes = &mut state.3;
+        let body_acts = &mut state.3;
         let draft = page.group_draft.as_mut().expect("the draft");
         let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
             members(ui, draft, snapshot, expanded);
             // Review of PR 347: the body removes another member before a press is applied.
-            if let Some(index) = body_removes.take() {
-                remove_member(draft, index, snapshot);
+            match body_acts.take() {
+                Some(BodyAct::Remove(index)) => remove_member(draft, index, snapshot),
+                // As `members` does for `Move up`, the change flag included.
+                Some(BodyAct::Raise(index)) => {
+                    draft.members_saved = None;
+                    draft.touch();
+                    draft.setup.members.swap(index, index - 1);
+                }
+                None => {}
             }
         });
         // A press held from the frame before is applied after this frame's body.
@@ -3919,6 +3934,41 @@ mod tests {
             page.member_results.get(&owner).is_some(),
             "Undo discard shows the member result again, with its Undo"
         );
+        // Review 2 of PR 347: the result lives while its draft can come back, and ends when it
+        // cannot. Discard again: the sweep keeps it. Edit the clean draft: Undo discard expires,
+        // and the sweep ends the result. Repeated, no entry builds up.
+        for _ in 0..2 {
+            let draft = page.group_draft.as_mut().unwrap();
+            let owner = super::super::MemberOwner {
+                root: active.path.clone(),
+                draft: draft.results_key(),
+            };
+            let member = draft.setup.members.remove(0);
+            draft.member_new = Some(MemberUndo::Removed {
+                index: 0,
+                member,
+                name: "Wolf".into(),
+            });
+            draft.touch();
+            page.record_member_results();
+            page.discard_group_draft(&active);
+            page.end_unreachable_results();
+            assert!(
+                page.member_results.get(&owner).is_some(),
+                "kept while Undo discard can bring its draft back"
+            );
+            page.group_draft.as_mut().unwrap().name = "Edited".into();
+            let _ = page.kept_results(false);
+            assert!(page.discarded_group.is_none(), "Undo discard expired");
+            page.end_unreachable_results();
+            assert!(
+                page.member_results.get(&owner).is_none(),
+                "its draft cannot come back: the result ends"
+            );
+            assert!(page.member_results.is_empty(), "no entry is left behind");
+            let reopened = GroupDraft::open(dir.path(), &saved.path).unwrap();
+            page.group_draft = Some(reopened);
+        }
     }
 
     /// Round 28 (K3 review): a member's key is its identity in the draft. A move keeps each key
@@ -4057,7 +4107,7 @@ mod tests {
             matches!(harness.state().4, Some(Some(_))),
             "the press is held for the next frame"
         );
-        harness.state_mut().3 = Some(0);
+        harness.state_mut().3 = Some(BodyAct::Remove(0));
         harness.run_steps(2);
         let names: Vec<_> = harness
             .state()
@@ -4123,6 +4173,79 @@ mod tests {
                 .unwrap_or(""),
             "",
             "Ctrl+Z in B's Other effect gave B the history of A"
+        );
+
+        // Review 2 of PR 347: a replacement's Undo names its member, not its place. Scout (A)
+        // is replaced so that both members hold Wolf, and A's Undo arrives in the pass of a
+        // body act, after it: (1) A moves up: A gets its Goblin back at its new place, Wolf (B)
+        // and the new order stay; (2) A is removed: the Undo is refused and B stays.
+        harness.get_by_label("Done with changes").click();
+        harness.run_steps(2);
+        let replace_scout = |draft: &mut GroupDraft| {
+            let at = draft
+                .setup
+                .members
+                .iter()
+                .position(|member| member.count == 3)
+                .expect("Scout");
+            let before =
+                std::mem::replace(&mut draft.setup.members[at].creature, EntryRef::id(wolf));
+            draft.member_new = Some(MemberUndo::Replaced(Replaced {
+                member: draft.setup.members[at].id,
+                before,
+                after: EntryRef::id(wolf),
+                words: "Replaced Scout with Wolf.".into(),
+            }));
+            draft.touch();
+            at
+        };
+        let wolf_b = |draft: &GroupDraft| {
+            draft
+                .setup
+                .members
+                .iter()
+                .find(|member| member.count == 7)
+                .cloned()
+                .expect("Wolf (B)")
+        };
+        assert_eq!(replace_scout(&mut harness.state_mut().0), 1, "A is second");
+        let b = wolf_b(&harness.state().0);
+        harness.run_steps(2);
+        let held_with = |harness: &mut egui_kittest::Harness<'_, MembersState>, act: BodyAct| {
+            // The press is held, and applied after the next pass's body, which does `act`.
+            harness.state_mut().4 = Some(None);
+            harness.get_by_label("Undo replace member").click();
+            harness.run_steps(1);
+            assert!(
+                matches!(harness.state().4, Some(Some(_))),
+                "the press is held for the next pass"
+            );
+            harness.state_mut().3 = Some(act);
+            harness.run_steps(1);
+            assert!(harness.state().4.is_none(), "the held press was applied");
+        };
+        held_with(&mut harness, BodyAct::Raise(1));
+        let members = harness.state().0.setup.members.clone();
+        assert!(
+            members.len() == 2
+                && members[0].count == 3
+                && members[0].creature == EntryRef::id(goblin)
+                && members[1] == b
+                && members[1].creature == EntryRef::id(wolf),
+            "after a move, Undo replace gives A its Goblin and leaves B: {:?}",
+            members
+                .iter()
+                .map(|member| (member.count, member.creature.label()))
+                .collect::<Vec<_>>()
+        );
+        harness.run_steps(2);
+        assert_eq!(replace_scout(&mut harness.state_mut().0), 0, "A is first");
+        harness.run_steps(2);
+        held_with(&mut harness, BodyAct::Remove(0));
+        assert_eq!(
+            harness.state().0.setup.members,
+            vec![b.clone()],
+            "an Undo whose member left in its pass is refused; B stays"
         );
     }
 

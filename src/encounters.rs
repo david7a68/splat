@@ -9137,6 +9137,57 @@ mod tests {
             "the result’s words leave with its data; the newer replacement’s rows were given \
              back too, so it ends"
         );
+
+        // Review 2 of PR 347: a draft's results live while the draft can come back, in both
+        // stores (its own result, and its group's member result), and end when it cannot.
+        // Discard: the sweep keeps them. Edit the clean draft: Undo discard expires, and the
+        // sweep ends them. Repeated, no entry builds up.
+        let page = harness.state_mut();
+        for round in 0..2 {
+            let draft = page.draft.as_mut().unwrap();
+            let group = GroupDraft::new();
+            let member_owner = MemberOwner {
+                root: active.path.clone(),
+                draft: group.results_key(),
+            };
+            draft.groups.push(group);
+            let roster = draft.setup.roster.clone();
+            draft.new_results.push(DraftUndo::Replacement {
+                before: roster.clone(),
+                after: roster,
+                words: format!("Round {round}."),
+            });
+            let owner = EditorOwner {
+                root: active.path.clone(),
+                draft: draft.results_key,
+                kind: DraftResult::Replacement,
+            };
+            page.record_editor_results();
+            page.member_results.record(MemberMark {
+                owner: member_owner.clone(),
+                undo: groups::MemberUndo::Unread {
+                    line: 1,
+                    row: "| 1 | Wolf |\n".into(),
+                    name: "Wolf".into(),
+                },
+            });
+            page.discard_draft(&active);
+            page.end_unreachable_results();
+            assert!(
+                page.editor_results.get(&owner).is_some()
+                    && page.member_results.get(&member_owner).is_some(),
+                "kept while Undo discard can bring the draft back"
+            );
+            page.draft.as_mut().unwrap().body.push_str("Edited.");
+            let _ = page.kept_results(false);
+            assert!(page.discarded.is_none(), "Undo discard expired");
+            page.end_unreachable_results();
+            assert!(
+                page.editor_results.is_empty() && page.member_results.is_empty(),
+                "its draft cannot come back: both stores end its results"
+            );
+            page.draft = Some(Draft::open(dir.path(), &saved.path).unwrap());
+        }
     }
     /// Older notes do not change, and a note says so only when the DM turned this on.
     #[test]
