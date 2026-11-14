@@ -3304,7 +3304,7 @@ impl<'a> Driver<'a> {
     /// Capture the current state with the pointer resting on a control.
     /// The words on screen while the pointer rests on `target` until its tooltip shows; the
     /// pointer then leaves. Not an act of the DM's task.
-    pub fn hover_words(&mut self, target: &str) -> String {
+    pub fn tip_words(&mut self, target: &str) -> String {
         let Some(rect) = self
             .nodes()
             .into_iter()

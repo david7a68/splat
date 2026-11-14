@@ -17607,7 +17607,7 @@ pub mod encounter_groups {
         let members = d.at_size(DEFAULT, |d| {
             d.painted_in(egui::Rect::EVERYTHING).contains("3 members")
         });
-        let hover = d.hover_words("Drag Goblin Wave to the initiative list");
+        let hover = d.tip_words("Drag Goblin Wave to the initiative list");
         d.observe(
             "T13.1",
             d.has_containing("3\u{a0}×\u{a0}Goblin\u{a0}Warrior")
