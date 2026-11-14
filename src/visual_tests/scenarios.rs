@@ -17469,27 +17469,40 @@ pub mod encounter_groups {
         // Ambush's three creatures and the goblins are far below the party's Low 2,800.
         // iter-27-B FI10: in the one form, named as the fight after: ` · Fight after: XP 450 ·
         // Low`.
+        // iter-28-R R1: `Fight after` never gives way: each group heading that has a word says
+        // it at every size; the member count, the side and then the XP number give way first.
         let fight_after = |d: &Driver<'_>| {
-            let mut words = Vec::new();
-            d.each_painted_text(|text, _| {
-                if text.galley.job.text.starts_with(" · Fight after: ") {
-                    words.push(text.galley.job.text.clone());
-                }
-            });
-            words
+            d.nodes()
+                .into_iter()
+                .filter(|node| node.name.starts_with("Drag ") && node.in_view())
+                .filter_map(|node| {
+                    let words = d.painted_in(node.shown).replace('\u{a0}', " ");
+                    let at = words.find("Fight after: ")?;
+                    Some((node.name.clone(), words[at..].to_owned()))
+                })
+                .collect::<Vec<_>>()
         };
         let joins = d.at_size(DEFAULT, |d| fight_after(d));
+        let narrow = d.at_size(SMALL, |d| fight_after(d));
+        let names =
+            |list: &[(String, String)]| list.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>();
         d.observe(
             "T5.7-arrivals",
             !joins.is_empty()
-                && joins.iter().all(|word| {
-                    word.strip_prefix(" · Fight after: XP ")
-                        .and_then(|rest| rest.strip_suffix(" · Low"))
-                        .is_some_and(|xp| {
-                            !xp.is_empty() && xp.chars().all(|c| c.is_ascii_digit() || c == ',')
-                        })
+                && joins.iter().all(|(_, word)| {
+                    let word = word.trim_end();
+                    word.ends_with("Low")
+                        && word
+                            .strip_prefix("Fight after: XP ")
+                            .and_then(|rest| rest.strip_suffix(" · Low"))
+                            .is_none_or(|xp| xp.chars().all(|c| c.is_ascii_digit() || c == ','))
                 }),
-            format!("Each group heading with room says what the fight becomes: {joins:?}"),
+            format!("Each group heading says what the fight becomes: {joins:?}"),
+        );
+        d.observe(
+            "iter-28-R-R1",
+            joins.len() >= 2 && names(&narrow) == names(&joins),
+            format!("At 960 and 1200 the same headings say Fight after: {narrow:?} / {joins:?}"),
         );
         // The words are worked out after a step, not on each frame of the panel.
         let words = crate::test_support::CachedWork::start("Arrivals words", d, |d| {
@@ -17504,8 +17517,8 @@ pub mod encounter_groups {
             d.settle();
             d.at_size(LARGE, |_| ());
             d.settle();
-            // At 960 the heading has no room for it; the default size does.
-            !d.at_size(DEFAULT, |d| fight_after(d)).is_empty()
+            // R1: at 960 too.
+            !d.at_size(SMALL, |d| fight_after(d)).is_empty()
         });
         d.observe(
             "F1-arrivals-cache",

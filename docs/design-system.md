@@ -1236,7 +1236,9 @@ summary before it, from its end, by whole facts and members (`5 party · 1 × Ci
 the row's hover and its accessible name keep the whole line. A fight with no word because an input is not known says
 `XP not known` in the word's place (`Difficulty::form`). With no table or no party, or nothing against the party,
 the line is as before. A row with an unfinished run shows no word. Arrivals names what the XP is for: a group's
-heading ends `· Fight after: XP 450 · Low`, the fight once the group joins, without the limit. The answer is worked out when the encounter, the saved sheets or the rules
+heading says `Fight after: XP 450 · Low`, the fight once the group joins, without the limit. R1: `Fight after` and
+its word never give way: the member count goes first, then the side, then the XP number, through the one difficulty
+line (`difficulty::Line::fight_after`); the heading never adds a line. The answer is worked out when the encounter, the saved sheets or the rules
 change, and when the editor's draft changes; never on a frame with no change.
 
 A Ready row's menu has `Remove` after Edit encounter, only for an encounter with no saved run (unfinished,
@@ -1739,10 +1741,11 @@ eight rows tall, so the words, the chosen match and the roster stay in view. New
 picker says Side and uses roster words. List encounter groups, tonight's plan groups, then any-encounter
 groups. Empty sections use group headings and one muted line. New group opens Encounters. Each group's first
 line has its draggable name, side, count and XP; then members, Initiative and Add. A blank Initiative field rolls initiative.
-After a group's XP, ` → Moderate` (in `text`) says what the fight becomes when the group joins: the characters who
-are present against every present creature and the group. It shows only where the totals and the status words are
-in the heading and stay there with it; it never widens the group block or adds a line. The drag handle's
-accessible description says `Adds 400 XP; the fight becomes Moderate`, and its hover adds the budget line.
+Then `Fight after: XP 450 · Low` (the word in `text`) says what the fight becomes when the group joins: the characters
+who are present against every present creature and the group. R1: it never gives way; the member count, then the side,
+then its XP number do (`difficulty::Line::fight_after`), and it never widens the group block or adds a line. The drag
+handle's accessible description says the group's totals, `Adds 400 XP. Fight after: Moderate.`, and its hover adds the
+budget line.
 Dragging outlines the roster in accent. Added groups retain Add and name their joining round. Setup additions
 say Added in setup. A status that cannot fit the member slot whole takes a full-width line above the members
 and controls, and wraps there at its spaces, never inside a word. Every row keeps the shape of the widest join status
