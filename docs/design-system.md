@@ -1556,8 +1556,11 @@ the block's edge, and a total of three digits gives up `=` there. Each place hol
 ends in `…`, and hover keeps the roll's whole line. No control of the dock moves when a total comes, changes or goes.
 Fit whole words, retain a distinguishing last word or copy number or
 letter, end shortened names with an ellipsis and drop trailing joining words: `Seraphina… Bell`, `Cinder… 2`.
-The dock's name wraps to its two lines before it ends in `…`; a first word longer than both lines is cut by letters,
-within the slot, so no control moves. Hover and accessibility keep full names. A row at 0 HP with the panel hidden has `Death saves` first on the
+The dock's name wraps to its two lines before it ends in `…`. R15: the name wraps at whole words onto at most two
+lines; a word that stands alone on its line and still does not fit that line is cut by letters with `…`, on the first
+line or the second (`Seraphina` / `Thornwood-Ash…`), with as many letters as fit; no other cut falls inside a word.
+A second line that would hold no word of the name takes the next word that way. All within the slot, so no control
+moves. Hover and accessibility keep full names. A row at 0 HP with the panel hidden has `Death saves` first on the
 action tiles' line above the dock, so no control of the dock moves and the name keeps its slot.
 
 ### Effects and turn reminders
@@ -1681,7 +1684,8 @@ result against it, a plain comparison with no hit or miss verdict (`17 vs AC 13 
 form that fits whole, dropping words before the result first; the result's last two parts (the comparison or save
 outcome, and the damage with its `(half)`) never drop. A roll result is never cut, and it does not change a row's height while it fits: when the
 result does not fit whole after the effects and the save DC, the row without them shows it whole if it can; else
-condition words give way into the row's `N more` until it fits. Only when its two parts fit in none of these does it
+condition words give way into the row's `N more` until it fits. State marks (Bloodied, Conc) never give way: a DM who
+does not see Conc misses a concentration save. Only when its two parts fit in none of these does it
 take a line of its own under the conditions, at the name's edge, and that row grows by the line. The row's accessible name holds them whole. Roll words
 never move a row's columns. A save's creature targets show their roll in the AC
 cell. After `Roll damage`, each target says its own result, from the amount Enter gives it (`Saved · 1 damage
@@ -1775,9 +1779,9 @@ member of a shared-roll block. Keep tie details in Arrivals and Log, outside the
 
 ### Saving and closing
 
-Recovery copies keep the encounter name and preserve the other file. Start their second line with `Copy 2`, before `Opened last`, round and state. Only file names keep the UTC save-time suffix.
+Recovery copies keep the encounter name and preserve the other file. Start their second line with `Copy 2`, before `Closed last`, round and state. Only file names keep the UTC save-time suffix.
 The last closed run owns primary Resume, unless the encounter's editor holds unsaved changes (then `Save
-encounter` is primary). `Opened last` (the run closed last, also in Setup) follows a copy number; Changed on disk marks a preserved disk version, after the copy number when present. Keep last-change wording from the close dialog. Saved rows use relative time today and yesterday,
+encounter` is primary). `Closed last` (the run closed last, also in Setup; it says what the value is) follows a copy number; Changed on disk marks a preserved disk version, after the copy number when present. Keep last-change wording from the close dialog. Saved rows use relative time today and yesterday,
 then a short UTC date. Edit stays for recovery copies whose encounter exists; reserve an empty slot otherwise.
 Measure actions before assigning paused-row text width. Saved time follows turn without a full stop. State
 words come from one function: Setup, Setup · Paused, Round 2, Round 2 · Paused, Ended · Round 2. An open run

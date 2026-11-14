@@ -4754,7 +4754,7 @@ impl Run {
                 .and_then(|id| identities.get(&id))
                 .is_some_and(|paths| paths.len() > 1);
             let at = if duplicate { 0 } else { after_copy(run) };
-            run.label.insert_str(at, "Opened last · ");
+            run.label.insert_str(at, "Closed last · ");
         }
         let all_recent = runs
             .iter()
@@ -6853,7 +6853,7 @@ mod tests {
         let copies = Run::list(dir.path(), campaign).unwrap();
         assert_eq!(copies[0].id, Some(latest));
         assert_eq!(copies[0].encounter, "Ambush");
-        assert!(copies[0].label.starts_with("Copy 1 · Opened last · "));
+        assert!(copies[0].label.starts_with("Copy 1 · Closed last · "));
         assert!(copies[0].label.contains(" · Last: "));
         let old = copies
             .iter()
@@ -6864,6 +6864,24 @@ mod tests {
             fs::read(&original).unwrap(),
             [bytes.as_slice(), b"\n"].concat()
         );
+        // FM8 (review of PR 326): the label says what the value is, the run closed last. A
+        // run opened and not closed (B) does not take it from A, which was closed last.
+        {
+            let _opened = Run::open(&original, campaign).unwrap();
+            let rows = Run::list(dir.path(), campaign).unwrap();
+            let a = rows.iter().find(|row| row.id == Some(latest)).unwrap();
+            let b = rows.iter().find(|row| row.id == Some(original_id)).unwrap();
+            assert!(
+                a.label.contains("Closed last · "),
+                "iter-28-R-FM8: {}",
+                a.label
+            );
+            assert!(
+                !b.label.contains("Closed last"),
+                "iter-28-R-FM8: {}",
+                b.label
+            );
+        }
         let mut old = Run::open(&original, campaign).unwrap();
         assert!(old.close_run());
         assert_eq!(

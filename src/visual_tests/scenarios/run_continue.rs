@@ -308,7 +308,7 @@ pub fn run(d: &mut Driver<'_>) {
     // closed last has Resume: one press brings the fight back, with its Undo.
     close_run(d);
     d.begin_task();
-    d.click_beside(&format!("{RUN_VAULT} · Opened last"), RESUME);
+    d.click_beside(&format!("{RUN_VAULT} · Closed last"), RESUME);
     d.expect(&format!("{RUN_HEADING}{RUN_VAULT}"));
     d.goal_within("T17.1", "come back from Close run", 1);
     d.observe(

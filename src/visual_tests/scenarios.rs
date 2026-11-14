@@ -10225,6 +10225,42 @@ pub mod run_roster_conflict {
         for _ in 0..20 {
             d.click(NEXT_TURN);
         }
+        // iter-28-R FL9: a condition link's painted underline keeps 2 px from its row's edge,
+        // where the next row's turn stroke is (it was 1 px: `Prone` at y 146, stroke at 147).
+        for size in [SMALL, DEFAULT] {
+            let gaps = d.at_size(size, |d| {
+                let nodes = d.nodes();
+                let rows: Vec<egui::Rect> = nodes
+                    .iter()
+                    .filter(|node| {
+                        node.role == egui::accesskit::Role::Button && node.name.contains(", HP ")
+                    })
+                    .map(|node| node.rect)
+                    .collect();
+                nodes
+                    .iter()
+                    .filter(|node| node.name.starts_with("Rule: ") && node.in_view())
+                    .filter_map(|link| {
+                        let row = rows.iter().find(|row| row.contains(link.rect.center()))?;
+                        let underline = d
+                            .line_segments_in(link.rect)
+                            .into_iter()
+                            // The underline spans its word; the rules between rows span the row.
+                            .filter(|line| line.width() <= link.rect.width() + 1.0)
+                            .map(|line| line.center().y)
+                            .fold(f32::NAN, f32::max);
+                        (!underline.is_nan()).then(|| (link.name.clone(), row.bottom() - underline))
+                    })
+                    .collect::<Vec<_>>()
+            });
+            d.observe(
+                "iter-28-R-FL9",
+                !gaps.is_empty() && gaps.iter().all(|(_, gap)| *gap >= 2.0),
+                format!(
+                    "At {size:?}, each condition underline's distance to its row's edge: {gaps:?}"
+                ),
+            );
+        }
         d.state("after-full-round", Sizes::Standard);
     }
 }
@@ -17235,10 +17271,13 @@ pub mod encounter_groups {
                     .is_some_and(|c| c.is_ascii_digit())
             })
         });
+        // At 1200 no change of Rival Captain's shows, so the count is `✎ 3 changes`.
+        let mark_count = format!("{} 3 changes", crate::design::icons::CHANGED);
         d.observe(
             "iter-26-R-FI10",
-            (words.contains(" changes") && !words.contains("Changed") && !words.contains(" more")
-                || words.contains("Changed") && words.contains(" more"))
+            words.contains(&mark_count)
+                && !words.contains("Changed")
+                && !words.contains(" more")
                 && counted,
             format!("{RIVAL_NAME}'s row at 1200: {words}"),
         );
@@ -18819,8 +18858,10 @@ pub mod run_overrides {
                 && ((row.contains("Changed")
                     && ((row.contains("Attack +1") && row.contains("Damage +1"))
                         || row.contains("more")))
-                    // iter-28-R FJ3: with no change shown, `✎ 2 changes`.
-                    || row.contains(" changes")),
+                    // iter-28-R FJ3: with no change shown, the mark and the count of changes.
+                    || (2..10).any(|count| {
+                        row.contains(&format!("{} {count} changes", crate::design::icons::CHANGED))
+                    })),
             format!("The row marks a change and carries its bonuses: {row}"),
         );
         d.observe(
@@ -22516,16 +22557,15 @@ pub mod session_plan {
                 && !d.has_containing("Last: Party"),
             "Last: after a long rest says full HP, in lower case",
         );
-        // iter-25-S FK8, iter-28-R FM8: the run closed last says it in the DM's words, and the
-        // words are true for a run still in Setup (no turn was played in it).
+        // iter-25-S FK8, iter-28-R FM8 (review of PR 326): the run closed last says what the
+        // value is, `Closed last`, true also for a run still in Setup (no turn was played).
         d.observe(
             "iter-28-R-FM8",
             d.nodes()
                 .iter()
-                .any(|node| node.name.contains("Opened last"))
-                && !d.has_containing("Closed last")
+                .any(|node| node.name.contains("Closed last"))
                 && !d.has_containing("Played last"),
-            "The saved run's second line says Opened last",
+            "The saved run's second line says Closed last (the value is the order of closing)",
         );
         d.state("saved-runs-history", Sizes::All);
         d.observe(
@@ -23390,16 +23430,13 @@ pub mod run_rolls {
         let after = match condition {
             // iter-25-R SJ1: words whose result cannot fit whole after the conditions take a
             // line of their own under them, at the name's edge.
-            Some(condition) => match d.painted_rect_in(condition, node.shown) {
-                Some(line) => {
+            Some(condition) => d
+                .painted_rect_in(condition, node.shown)
+                .is_some_and(|line| {
                     (words.left() >= line.right() && (words.top() - line.top()).abs() < 2.0)
                         || ((words.left() - name.left()).abs() < 1.0
                             && words.top() >= line.bottom() - 1.0)
-                }
-                // iter-28-R R8: the row's words gave way so the result is whole on the
-                // second line; the condition stays in the row's name and hover.
-                None => (words.left() - name.left()).abs() < 1.0 && node.name.contains(condition),
-            },
+                }),
             None => (words.left() - name.left()).abs() < 1.0,
         };
         let wrong = [
@@ -23964,13 +24001,31 @@ pub mod run_rolls {
                 format!("At {size:?} the saved result shows whole, `(half)` included: {whole:?}"),
             );
         }
-        let pitch = d.at_size(SMALL, |d| {
-            [ATTACKER, TARGET].map(|row| d.row_node(row).map(|node| node.rect.height().round()))
+        // iter-28-R R8 (review of PR 326) changes FI2 on purpose: a result is never cut, and
+        // the state marks never give way. At 960 the target's Bloodied and Conc marks and its
+        // whole result are painted; where they do not share the line the result takes its own
+        // line and the row grows by exactly that line.
+        let (pitch, painted) = d.at_size(SMALL, |d| {
+            (
+                [ATTACKER, TARGET]
+                    .map(|row| d.row_node(row).map(|node| node.rect.height().round())),
+                d.row_node(TARGET)
+                    .map(|node| d.painted_in(node.shown).replace('\u{a0}', " "))
+                    .unwrap_or_default(),
+            )
         });
+        let line = crate::design::Type::Small.line().round();
         d.observe(
             "iter-27-R-FI2",
-            pitch.iter().all(Option::is_some) && pitch[0] == pitch[1],
-            format!("At 960 the row with the save result keeps the pitch of a row without one: {pitch:?}"),
+            matches!(pitch, [Some(a), Some(b)] if b == a || b == a + line),
+            format!("At 960 the row with the save result grows by at most its own line: {pitch:?}"),
+        );
+        d.observe(
+            "iter-28-R-R8-marks",
+            painted.contains("Bloodied")
+                && painted.contains("Conc")
+                && painted.contains("Saved · 1 damage (half)"),
+            format!("At 960 the target keeps both marks and its whole result: {painted:?}"),
         );
         d.state("save-applied", Sizes::Default);
         // Undo gives each target back its own HP.
