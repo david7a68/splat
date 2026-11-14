@@ -912,12 +912,14 @@ pub fn log_from_play(d: &mut Driver<'_>) {
                 )
             });
             let words = pane.map(|pane| d.painted_in(pane)).unwrap_or_default();
+            // `From other notes` links the session by its name; at 960 it is below the fold.
+            let link = d
+                .nodes()
+                .into_iter()
+                .any(|node| node.role == egui::accesskit::Role::Link && node.name == label);
             (
-                pane.is_some()
-                    && !words.contains(&session)
-                    && words.matches(&label).count() >= 2
-                    && d.has(&label),
-                format!("{words:?}"),
+                pane.is_some() && !words.contains(&session) && words.contains(&label) && link,
+                format!("link {link}, painted {words:?}"),
             )
         });
         d.observe(
@@ -953,7 +955,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     // would not fit beside it, so no word of the scene is cut; an empty field shares its line
     // (the first check of this scenario's field).
     let (label, place) = d.at_size(DEFAULT, |d| {
-        (d.place_of(&format!("{stamp}:")), d.place_of(&field))
+        (d.place_of(&format!("{shown_stamp}:")), d.place_of(&field))
     });
     d.observe(
         "T18.2",
