@@ -1722,6 +1722,19 @@ impl<'a> Driver<'a> {
         found
     }
 
+    /// Whether `words` are painted whole inside `area` and inside the clip that cuts them (a
+    /// pane's whole-row cut hides a control that its accessible node still shows in view).
+    pub fn painted_whole_in(&self, words: &str, area: egui::Rect) -> bool {
+        let mut whole = false;
+        self.each_painted_text(|text, clip| {
+            let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+            whole |= text.galley.job.text == words
+                && area.contains(rect.center())
+                && clip.expand(1.0).contains_rect(rect);
+        });
+        whole
+    }
+
     /// Actual row bounds exclude a wrapping label's indentation before its first word.
     pub fn painted_word_rect(&self, words: &str, area: egui::Rect) -> Option<egui::Rect> {
         let mut found = None;
