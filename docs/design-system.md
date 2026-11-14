@@ -1641,7 +1641,9 @@ Undo. The row's
 hover and accessible name hold every whole word. After damage to a row marked Conc, `Conc save DC 12` ends
 its second line until the next step, only in the room that the effects leave; else only in the hover and the
 accessible name. Right after the row's own `Conc` mark it says `save DC 12` (`✧ Conc · save DC 12`); the hover and
-the accessible name keep `Conc save DC 12`. In Conditions an official condition's count is on its tick, `✓ Frightened 10`, while the
+the accessible name keep `Conc save DC 12`. R27: where the DC gives way and the mark ends the line, the mark reads `✧ Conc save`,
+never a bare `Conc` that a roll's result word follows (`Conc Saved` reads as a save that passed). The roll's result is its own
+block after the row's laid-out line, so the mark keeps its place in the line and keeps `save`. In Conditions an official condition's count is on its tick, `✓ Frightened 10`, while the
 grid fits its room; else it is listed under Other effects, which lists other words with their whole words. The
 tab's help says `No HP, AC or roll changes by itself. A time you type counts down at the end of that creature’s turn: Bless 10 rounds goes from 10 to 9.` An
 ended run shows them as words, and a click does nothing.
@@ -1728,7 +1730,7 @@ form that fits whole, dropping words before the result first; the result's last 
 outcome, and the damage with its `(half)`) never drop. A roll result is never cut, and it does not change a row's height while it fits: when the
 result does not fit whole after the effects and the save DC, the row without them shows it whole if it can; else
 condition words give way into the row's `N more` until it fits. State marks (Bloodied, Conc) never give way: a DM who
-does not see Conc misses a concentration save. Only when its two parts fit in none of these does it
+does not see Conc misses a concentration save; with its DC gone, the mark keeps `save` (R27). Only when its two parts fit in none of these does it
 take a line of its own under the conditions, at the name's edge, and that row grows by the line. The row's accessible name holds them whole. Roll words
 never move a row's columns. A save's creature targets show their roll in the AC
 cell. After `Roll damage`, each target says its own result, from the amount Enter gives it (`Saved · 1 damage

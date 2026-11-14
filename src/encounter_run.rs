@@ -247,22 +247,28 @@ impl RunGroup {
         let base = Base::of(&member.entry, &self.side);
         member.overrides.resolve(&base).ok()
     }
+    /// The group's own facts in the one order of `difficulty::FightAfter` (side, count, then
+    /// its XP when `worth`): `Enemies · 3 members · XP 150`. The Encounters list, the plan
+    /// (through `summary`) and Arrivals all start a group's line with these words.
+    pub(crate) fn facts(&self, worth: bool) -> String {
+        crate::difficulty::FightAfter {
+            side: &crate::design::reader::human_label(&self.side),
+            members: &self.count_label(),
+            worth: &if worth {
+                self.xp_label()
+            } else {
+                String::new()
+            },
+        }
+        .facts()
+    }
     /// How many, on which side, and what they are worth, in one line.
     pub(crate) fn summary(&self) -> String {
         // When nobody can join, the count says it all: no XP, no `Will add: none`.
         if self.joinable_count() == 0 && self.unavailable > 0 {
-            return format!(
-                "{} · {}",
-                crate::design::reader::human_label(&self.side),
-                self.count_label()
-            );
+            return self.facts(false);
         }
-        let mut summary = format!(
-            "{} · {} · {}",
-            crate::design::reader::human_label(&self.side),
-            self.count_label(),
-            self.xp_label()
-        );
+        let mut summary = self.facts(true);
         if self
             .members
             .iter()
@@ -10977,6 +10983,27 @@ mod tests {
             p.present = true;
         }
         assert!(weigh(&mut run).is_some());
+        // Point 4 (round 29 review): one owner of a group's facts. The Encounters list and the
+        // plan (`summary`) and Arrivals' heading with no form start with the same words.
+        let facts = group.facts(true);
+        assert!(group.summary().starts_with(&facts), "{}", group.summary());
+        let none = crate::difficulty::Difficulty::default();
+        let (side, members, worth) = (
+            crate::design::reader::human_label(&group.side),
+            group.count_label(),
+            group.xp_label(),
+        );
+        let heading = crate::difficulty::Line::fight_after(
+            &none,
+            crate::difficulty::FightAfter {
+                side: &side,
+                members: &members,
+                worth: &worth,
+            },
+        )
+        .fit(|_| true)
+        .map(|fitted| fitted.text());
+        assert_eq!(heading.as_deref(), Some(facts.as_str()));
         // R1, FJ3 (iter-29 G121): a group of allies only still says the fight after it joins:
         // the fight as it is, since an ally that is not a character adds no XP.
         let allies = group_of(

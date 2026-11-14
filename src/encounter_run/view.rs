@@ -331,16 +331,6 @@ fn arrival_total(text: &str) -> Result<Option<i64>, &'static str> {
     }
 }
 
-/// A group's own facts in the difficulty line's one order: `Enemies · 3 members · XP 150`.
-fn arrival_facts(group: &super::RunGroup) -> String {
-    crate::difficulty::FightAfter {
-        side: &style::human_label(&group.side),
-        members: &group.count_label(),
-        worth: &group.xp_label(),
-    }
-    .facts()
-}
-
 fn arrival_add_word(group: &super::RunGroup) -> String {
     if group.warnings.is_empty() {
         "Add".to_owned()
@@ -3608,7 +3598,7 @@ impl Run {
             .iter()
             .map(|group| {
                 let status = self.group_status(group, self.group_joined(group));
-                let totals = arrival_facts(group);
+                let totals = group.facts(true);
                 let heading = design::number_width(
                     ui,
                     &format!("{} {}", icons::DRAG, group.name),
@@ -3854,34 +3844,48 @@ impl Run {
         // place). The one difficulty line (`difficulty::Line`) decides the order of the words
         // (side, then count; FJ2, FC7) and what gives way: the member count, then the side,
         // then the XP number; it never adds a line. The name is the heading's.
-        let side = style::human_label(&group.side);
-        let members = group.count_label();
-        let worth = group.xp_label();
-        let parts = || crate::difficulty::FightAfter {
-            side: &side,
-            members: &members,
-            worth: &worth,
-        };
-        let totals_text = parts().facts();
+        let totals_text = group.facts(true);
         let no_form = crate::difficulty::Difficulty::default();
-        let fight =
-            crate::difficulty::Line::fight_after(rating.as_ref().unwrap_or(&no_form), parts());
-        // R1: the line's own facts (members, side, XP number) give way so that the status words
-        // keep their place in the heading (they are not the line's); only where even the
-        // shortest line and the status do not fit together do the status words leave the
-        // heading, as before. `Fight after` and its word never give way.
-        let room = grip.rect.width() - heading_width - design::L;
-        let width = |text: &str| design::number_width(ui, text, &Type::Small.font(ui));
-        let fit_in = |room: f32| {
-            fight
-                .fit(|text| width(text) <= room)
-                .filter(|fitted| width(&fitted.text()) <= room)
+        let (side, members, worth) = (
+            style::human_label(&group.side),
+            group.count_label(),
+            group.xp_label(),
+        );
+        let line = || {
+            crate::difficulty::Line::fight_after(
+                rating.as_ref().unwrap_or(&no_form),
+                crate::difficulty::FightAfter {
+                    side: &side,
+                    members: &members,
+                    worth: &worth,
+                },
+            )
         };
-        let (fitted, status_in_heading) = match fit_in(room - status_room) {
-            Some(fitted) if !status.is_empty() => (Some(fitted), true),
-            _ => (fit_in(room), false),
-        };
+        // Point 3 (round 29 review): the line's parts change only with the run, the groups or
+        // the scale, so its fit is kept by those revisions, its room and its font: an unchanged
+        // frame builds no line and measures nothing.
+        let content = (
+            self.revision,
+            self.groups_revision(),
+            self.scale_revision(),
+            group.id,
+        );
+        let font = Type::Small.font(ui);
+        let id = grip.id.with("fight_after");
+        // Point 2 (round 29 review, R1): the heading reserves the smallest COMPLETE
+        // `Fight after: <word or reason>` first, and the title shortens in what is left. The
+        // status words stay in the heading only where the whole title, they and that smallest
+        // line fit together.
+        let shortest = crate::difficulty::shortest_kept(ui, id, content, &font, line);
+        let whole = grip.rect.width();
+        let status_in_heading =
+            !status.is_empty() && heading_width + status_room + design::L + shortest <= whole;
         let status_room = if status_in_heading { status_room } else { 0.0 };
+        let title_width = heading_width
+            .min(whole - design::L - shortest - status_room)
+            .max(0.0);
+        let room = whole - title_width - status_room - design::L;
+        let fitted = crate::difficulty::fit_kept(ui, id, content, room, &font, line);
         let shown = rating.as_ref().and_then(|fight| fight.rating.as_ref());
         // A pointer's way to do what the Add button does, so the keyboard does not stop here.
         grip.widget_info(|| {
@@ -3950,9 +3954,8 @@ impl Run {
         .into_galley(
             ui,
             Some(egui::TextWrapMode::Truncate),
-            // The line was fitted to the room the whole name leaves, so the name keeps it.
-            (word_rect.left() - status_room - grip.rect.left() - design::S)
-                .max(heading_width.min(grip.rect.width())),
+            // Point 2: the line kept its smallest complete form; the title has what is left.
+            title_width.min(word_rect.left() - status_room - grip.rect.left() - design::S),
             Type::Strong.font(ui),
         );
         ui.painter().galley(
@@ -7721,6 +7724,9 @@ struct Extra {
     /// Each effect shows as its plain words: the row with each time taken away (X5, the
     /// ruling on PR 276), whose lines and height the row keeps.
     as_plain: bool,
+    /// R27 (G176): this step owes a concentration save whose DC gave way. Where the mark ends
+    /// the line (a roll's result follows it there), it reads `Conc save`, never a bare `Conc`.
+    save_owed: bool,
 }
 
 /// The effects a row shows: the first ones with their words, each with its count, then the
@@ -7906,8 +7912,10 @@ impl RowLayout {
                         .cloned()
                 })
                 .unwrap_or_else(|| {
+                    // R27: with no DC on the line, a save still owed keeps `save` on the mark.
                     let extra = Extra {
                         as_plain: true,
+                        save_owed: input.conc_dc.is_some(),
                         ..Extra::default()
                     };
                     let mut layout = Self::measured(ui, input, (count, BonusFit::All, &extra));
@@ -8039,6 +8047,7 @@ impl RowLayout {
         // height and the effects it shows by their words stay.
         let base = measure(&Extra {
             as_plain: true,
+            save_owed: conc_dc.is_some(),
             ..Extra::default()
         });
         let mut effects: Vec<(usize, &str)> = conditions
@@ -8535,6 +8544,19 @@ impl RowLayout {
                     },
                     ..Default::default()
                 },
+            );
+        }
+        // R27 (G176): a save is owed but its DC gave way, and the mark ends the line, where a
+        // roll's result follows it: the mark keeps `save` (`Conc save`, never `Conc Saved`).
+        if extra.save_owed
+            && extra.conc_dc.is_none()
+            && conc_end.is_some()
+            && conc_end == Some(job.text.chars().count())
+        {
+            job.append(
+                "\u{a0}save",
+                0.0,
+                egui::TextFormat::simple(font.clone(), c.participant.concentrating),
             );
         }
         // Damage to a row marked Conc: its save, until the next step, in the room left.
@@ -11419,6 +11441,13 @@ mod tests {
                     line.contains("Bloodied") && line.contains("Conc"),
                     "iter-28-R-R8: both marks stay: {line}"
                 );
+                // R27 (iter-29 G176): where the DC gave way, the mark says `Conc save`, so the
+                // result never follows a bare `Conc` (`Conc Saved` read as a save that passed).
+                assert!(
+                    line.contains("save DC 10") || line.contains("Conc\u{a0}save"),
+                    "iter-29-R1-G176: {line}"
+                );
+                assert!(!line.trim_end().ends_with("Conc"), "iter-29-R1-G176: {line}");
                 assert_eq!(
                     saved.height(scale),
                     row(None).height(scale)

@@ -1124,7 +1124,7 @@ mod iter_2_c_tests {
                     });
                 });
                 let line = output.shapes.iter().find_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text) if text.galley.job.text.contains("XP 6,300") => {
+                    egui::Shape::Text(text) if text.galley.job.text.ends_with("Above High") => {
                         Some(text.galley.job.text.clone())
                     }
                     _ => None,
@@ -1135,15 +1135,16 @@ mod iter_2_c_tests {
         };
         let rated = lines(Some(&rating));
         const FORM: &str = " · XP 6,300 · Above High";
+        // Q-s (iter-29 G120): the word never gives way; `5 party` goes first, then the XP number,
+        // then the creatures from the end. So a line that lost a creature lost those two too.
         for line in &rated {
-            let shown = line.strip_suffix(FORM);
-            assert!(
-                shown.is_some_and(|shown| shown == detail
-                    || shown.strip_suffix('…').is_some_and(|cut| {
-                        detail.starts_with(cut.trim_end_matches([' ', '·', ',']))
-                    })),
-                "{line:?}"
-            );
+            assert!(line.ends_with("Above High"), "{line:?}");
+            if !line.contains("Cinder Tyrant") || !line.contains("Ember Cultist") {
+                assert!(
+                    !line.contains("XP 6,300") && !line.contains("5 party"),
+                    "{line:?}"
+                );
+            }
         }
         // The detail is whole where it fits, and gives way where it does not.
         let whole = format!("{detail}{FORM}");
