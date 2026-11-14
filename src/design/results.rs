@@ -205,6 +205,14 @@ pub trait Kept {
     fn owner(&self) -> Self::Owner;
 }
 
+/// A kind of kept result that checks, at [`Results::reconcile`], the state its words and its
+/// Undo rest on, and revises its own value (a clause that no longer holds ends; an Undo whose
+/// files changed waits). `With` is what the check reads besides the value itself.
+pub trait Reconcile {
+    type With: ?Sized;
+    fn reconcile(&mut self, with: &Self::With);
+}
+
 /// What each end event does to one kind of kept result. A new action of the same owner always
 /// ends its earlier result ([`Results::record`]); a campaign switch always hides it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -601,6 +609,26 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
         revised
     }
 
+    /// The one event for a kind whose words or Undo rest on state that a later write or a
+    /// reload can change (R11: a copy's registration says what the campaign chose, until the
+    /// copy's use changes). Each entry checks that state itself ([`Reconcile`]) and is revised
+    /// in place through [`Results::revise_by`]: the same entry, ticket, order and Undo. The
+    /// caller picks no entry, so no predicate reaches a newer result. Call it when the state's
+    /// generation changes (a reload), never each frame: a check may read files.
+    pub fn reconcile(&mut self, with: &T::With)
+    where
+        T: Reconcile,
+    {
+        let tickets: Vec<Ticket> = self
+            .entries
+            .iter()
+            .map(|entry| Ticket { order: entry.order })
+            .collect();
+        for ticket in &tickets {
+            let _ = self.revise_by(ticket, |value| value.reconcile(with));
+        }
+    }
+
     /// The owner changed by its own later action (a saved edit, a rename, a removal).
     pub fn owner_changed(&mut self, owner: &O) {
         match T::ENDS.owner_changed {
@@ -739,10 +767,17 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/encounters.rs", "save_draft", &[Ban::Results]),
         ("src/library.rs", "add_reader_result", &[Ban::Results]),
         // A by-owner Undo and `use_press` of Library's page lines (Wave 2 moves them to tickets).
+        // Round 29 L: the source change's Undo, and the registration's (`undo_package_registration`),
+        // moved into stores; by owner until the reader footer moves to `Messages`.
         (
             "src/library.rs",
             "apply_page_press",
-            &[Ban::Results, Ban::ByOwner(2)],
+            &[Ban::Results, Ban::ByOwner(3)],
+        ),
+        (
+            "src/library.rs",
+            "undo_package_registration",
+            &[Ban::ByOwner(1)],
         ),
         (
             "src/design/results.rs",
@@ -1324,7 +1359,7 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/dndbeyond.rs", 1),
             ("src/encounters.rs", 1),
             ("src/encounters/groups.rs", 1),
-            ("src/library.rs", 16),
+            ("src/library.rs", 14),
             ("src/sessions/carry.rs", 1),
             ("src/sessions/page.rs", 1),
             ("src/sessions/plan.rs", 8),
@@ -1404,6 +1439,16 @@ mod tests {
         };
         fn owner(&self) -> Note {
             self.note.clone()
+        }
+    }
+
+    /// The test kind's state check: the note `with` names had its use changed.
+    impl Reconcile for Done {
+        type With = Note;
+        fn reconcile(&mut self, with: &Note) {
+            if self.note == *with {
+                self.words = "A, its use changed.";
+            }
         }
     }
 
@@ -1757,6 +1802,32 @@ mod tests {
         // `disk_changed: Ends` never asks.
         offers.disk_changed(|_| unreachable!("an `Ends` kind is not checked"));
         assert!(offers.is_empty());
+    }
+
+    /// R11: `reconcile` revises each entry in place by itself: A's value changes, B's does not;
+    /// both keep their order, and A's ticket from before still reaches A (its Undo stays).
+    #[test]
+    fn reconcile_revises_each_entry_in_place() {
+        let mut results = Results::<Note, Done>::new();
+        results.record(done(A, "A."));
+        results.record(done(B, "B."));
+        results.record(done(OTHER, "Other."));
+        let frame = super::super::outcome::PaneFrame::for_test();
+        let a_ticket = results.get(&A).unwrap().ticket_for_test(&frame);
+        let orders = |results: &Results<Note, Done>| {
+            [A, B, OTHER].map(|note| results.get(&note).map(|shown| shown.order()))
+        };
+        let before = orders(&results);
+        results.reconcile(&A);
+        assert_eq!(words(&results, "Tidewater"), ["B.", "A, its use changed."]);
+        assert_eq!(words(&results, "Ashfall"), ["Other."]);
+        assert_eq!(orders(&results), before, "no order is issued or lost");
+        let undone = results.undo_by(a_ticket, |value| Ok::<_, ()>(value.words));
+        assert_eq!(
+            undone.ok().map(|(_, words)| words),
+            Some("A, its use changed.")
+        );
+        assert_eq!(words(&results, "Tidewater"), ["B."]);
     }
 
     /// The staged counts of `STAGED`: a new call fails, and a lower count asks to lower it.
