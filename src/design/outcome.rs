@@ -583,13 +583,23 @@ impl UndoStep {
         let words: Vec<&str> = object
             .as_deref()
             .map_or(Vec::new(), |o| o.split(' ').collect());
-        for keep in (1..words.len()).rev() {
-            let shown = format!("{head} {}…{tail}", words[..keep].join(" "));
-            if number_width(ui, &shown, &font) <= width {
-                return shown;
+        // The most whole words that fit, by bisection: at most `log2` of the word count
+        // measurements per draw (the width grows with the words kept).
+        let cut = |keep: usize| format!("{head} {}…{tail}", words[..keep].join(" "));
+        let fits = |keep: usize| number_width(ui, &cut(keep), &font) <= width;
+        if words.len() < 2 || !fits(1) {
+            return format!("{head} …{tail}");
+        }
+        let (mut low, mut high) = (1, words.len() - 1);
+        while low < high {
+            let mid = (low + high).div_ceil(2);
+            if fits(mid) {
+                low = mid;
+            } else {
+                high = mid - 1;
             }
         }
-        format!("{head} …{tail}")
+        cut(low)
     }
 }
 
@@ -603,7 +613,8 @@ pub struct CheckedChoice(());
 
 /// The rules of a choice template, checked at compile time by `choice!`: it starts with the
 /// app's fixed words (a capital letter first), it holds exactly `values` places `{}` for the
-/// objects, and no other brace.
+/// objects, no other brace, and at least one fixed word of three letters or more (so an object
+/// cannot be the whole label behind a letter: `choice!("A{}", label)` does not compile).
 #[doc(hidden)]
 pub const fn check_choice(template: &str, values: usize) -> CheckedChoice {
     let b = template.as_bytes();
@@ -611,7 +622,7 @@ pub const fn check_choice(template: &str, values: usize) -> CheckedChoice {
         !b.is_empty() && b[0].is_ascii_uppercase(),
         "A choice starts with the app's own words, a capital first: choice!(\"Repair {{}}\", name)."
     );
-    let (mut i, mut places) = (0, 0);
+    let (mut i, mut places, mut run, mut word) = (0, 0, 0, false);
     while i < b.len() {
         if b[i] == b'{' {
             assert!(
@@ -619,12 +630,25 @@ pub const fn check_choice(template: &str, values: usize) -> CheckedChoice {
                 "A choice template has only `{{}}` places."
             );
             places += 1;
+            run = 0;
             i += 2;
             continue;
         }
         assert!(b[i] != b'}', "A choice template has only `{{}}` places.");
+        if b[i].is_ascii_alphabetic() {
+            run += 1;
+            if run >= 3 {
+                word = true;
+            }
+        } else {
+            run = 0;
+        }
         i += 1;
     }
+    assert!(
+        word,
+        "A choice has a fixed word of three letters or more: choice!(\"Repair {{}}\", name)."
+    );
     assert!(
         places == values,
         "A choice template has one `{{}}` place for each object."
@@ -659,6 +683,17 @@ pub const fn check_choice(template: &str, values: usize) -> CheckedChoice {
 /// ```compile_fail
 /// let a = String::from("Ghost of the Mill");
 /// let _ = splat::choice!("Move {} before {}", a);
+/// ```
+///
+/// A fixed word is a word: an object behind one letter is not choice words (twin: `Add {}`).
+///
+/// ```
+/// let label = String::from("Repair Bridge Ambush");
+/// let _ = splat::choice!("Add {}", label);
+/// ```
+/// ```compile_fail
+/// let label = String::from("Repair Bridge Ambush");
+/// let _ = splat::choice!("A{}", label);
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ChoiceWords {
@@ -719,24 +754,26 @@ impl ChoiceWords {
     }
 
     /// The visible words: the whole words when `fits` them, else the longest cut that does
-    /// (every object cut to the same number of letters, at least `OBJECT_KEEPS`). The fixed
-    /// words are never cut.
-    fn fit(&self, fits: impl Fn(&str) -> bool) -> String {
+    /// (every object cut to the same number of letters, at least `OBJECT_KEEPS`). When even the
+    /// shortest cut does not fit, the whole words wrap: a fixed word is never cut. The search is
+    /// a bisection over the letters kept: at most `log2` of the longest object's length
+    /// measurements per draw.
+    fn fit(&self, fits: impl Fn(&str) -> bool) -> Fitted {
         let whole = self.label();
+        if fits(&whole) {
+            return Fitted::Whole(whole);
+        }
         let longest = self
             .objects
             .iter()
             .map(|object| object.chars().count())
             .max()
             .unwrap_or(0);
-        if longest <= OBJECT_KEEPS || fits(&whole) {
-            return whole;
+        if longest <= OBJECT_KEEPS || !fits(&self.shown(OBJECT_KEEPS)) {
+            return Fitted::Wraps(whole);
         }
         // The widest cut that fits: the width grows with the letters kept.
         let (mut low, mut high) = (OBJECT_KEEPS, longest - 1);
-        if !fits(&self.shown(low)) {
-            return self.shown(low);
-        }
         while low < high {
             let mid = (low + high).div_ceil(2);
             if fits(&self.shown(mid)) {
@@ -745,17 +782,72 @@ impl ChoiceWords {
                 high = mid - 1;
             }
         }
-        self.shown(low)
+        Fitted::Cut(self.shown(low), whole)
     }
 
-    /// `fit` for a bordered choice in `room`.
-    fn fit_choice(&self, ui: &Ui, room: f32) -> String {
-        self.fit(|words| {
-            Action::secondary(words)
-                .density(Density::Read)
-                .natural_width(ui)
-                <= room
-        })
+    /// `fit` for a choice of `kind` in `room`.
+    fn fit_choice(&self, ui: &Ui, kind: ChoiceKind, room: f32) -> Fitted {
+        self.fit(|words| kind.action(words).natural_width(ui) <= room)
+    }
+}
+
+/// What a choice's words look like in their room.
+enum Fitted {
+    /// All the words, on one line.
+    Whole(String),
+    /// The objects cut (the visible words), and the whole words for the name and the tip.
+    Cut(String, String),
+    /// All the words, wrapped onto more lines: even the shortest cut did not fit.
+    Wraps(String),
+}
+
+/// The kind of a choice whose words hold data, as `MessageChoice` is for fixed words: a safe
+/// choice is bordered; a `Lose` is red with exactly `L` before it, after the safe ones. (A
+/// dismissal has no words: it is the close icon, `MessageChoice::Dismiss`.)
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChoiceKind {
+    Safe,
+    Lose,
+}
+
+impl ChoiceKind {
+    fn action(self, words: &str) -> Action<'_> {
+        match self {
+            Self::Safe => Action::secondary(words),
+            Self::Lose => Action::destructive(words),
+        }
+        .density(Density::Read)
+    }
+}
+
+/// Draw a data choice of `kind` in `room`: whole, cut with the whole words as its name and its
+/// tip (on hover and on keyboard focus), or wrapped. `lock` is its reason while it holds.
+fn data_choice(
+    ui: &mut Ui,
+    words: &ChoiceWords,
+    kind: ChoiceKind,
+    room: f32,
+    lock: Option<&str>,
+) -> Response {
+    match words.fit_choice(ui, kind, room) {
+        Fitted::Whole(words) => kind.action(&words).blocked(lock).show(ui),
+        Fitted::Wraps(words) => kind.action(&words).wraps().blocked(lock).show(ui),
+        Fitted::Cut(shown, whole) => {
+            let response = kind.action(&shown).name(&whole).blocked(lock).show(ui);
+            cut_tip(response, &whole, lock)
+        }
+    }
+}
+
+/// The whole words of a control whose visible words are cut, on hover and on keyboard focus
+/// (`rich_tip`), with its lock's reason under them while it holds.
+fn cut_tip(response: Response, whole: &str, lock: Option<&str>) -> Response {
+    match lock {
+        Some(reason) => super::rich_tip(
+            response,
+            &[super::TipLine::body(whole), super::TipLine::detail(reason)],
+        ),
+        None => super::rich_tip(response, &[super::TipLine::body(whole)]),
     }
 }
 
@@ -870,7 +962,13 @@ pub enum NoPress {}
 /// reason that is always there (the choice is locked for as long as it is drawn), and a lock
 /// that comes and goes at run time is written only as `locked_when(condition, reason)`, which
 /// keeps the reason's line while it is open so nothing below moves. An optional reason does
-/// not fit `blocked`:
+/// not fit `blocked`.
+///
+/// Two duties stay with the caller, as the types cannot see them: **one stable reason per
+/// lock**, and **never build the choice two ways** (`if cond { c.blocked(r) } else { c }`
+/// compiles and moves the line when `cond` changes). `locked_when` keeps the room of the
+/// reason it is given in each frame: a reason that changes to one of another height moves the
+/// line once.
 ///
 /// ```
 /// use splat::outcome::{Choice, MessageChoice};
@@ -889,8 +987,8 @@ pub enum NoPress {}
 #[must_use = "give it to a message's `choice`"]
 pub struct Choice<A> {
     what: MessageChoice<'static>,
-    /// A bordered choice whose words hold objects from data (`Choice::named`).
-    named: Option<ChoiceWords>,
+    /// A choice whose words hold objects from data (`Choice::named`, `Choice::named_as`).
+    named: Option<(ChoiceKind, ChoiceWords)>,
     id: A,
     lock: Lock,
     hover: Option<String>,
@@ -923,9 +1021,18 @@ impl<A> Choice<A> {
     /// (`choice!("Move {} before {}", a, b)`). The part cuts the objects when the line is short,
     /// never the fixed words, and names the action with the whole words.
     pub fn named(words: ChoiceWords, id: A) -> Self {
+        Self::named_as(ChoiceKind::Safe, words, id)
+    }
+
+    /// `named`, of `kind`: `ChoiceKind::Lose` is red, with exactly `L` before it, after the
+    /// safe choices (`choice!("Delete {}", name)`).
+    pub fn named_as(kind: ChoiceKind, words: ChoiceWords, id: A) -> Self {
         Self {
-            what: MessageChoice::Choice(""),
-            named: Some(words),
+            what: match kind {
+                ChoiceKind::Safe => MessageChoice::Choice(""),
+                ChoiceKind::Lose => MessageChoice::Lose(""),
+            },
+            named: Some((kind, words)),
             id,
             lock: None,
             hover: None,
@@ -1036,6 +1143,12 @@ impl<A> Undo<A> {
 /// Its Undo's lock has the two forms of [`Choice`]'s: an optional reason does not fit
 /// `undo_blocked`.
 ///
+/// ```
+/// use splat::outcome::{Done, Verb};
+/// let live = true;
+/// let _ = Done::new(Verb::Remove, "Bell").undo(1).undo_locked_when(live, splat::sentence!("End the run first."));
+/// let _ = Done::new(Verb::Remove, "Bell").undo(1).undo_blocked(splat::sentence!("End the run first."));
+/// ```
 /// ```compile_fail
 /// use splat::outcome::{Done, Verb};
 /// let live = true;
@@ -1328,7 +1441,7 @@ struct Body {
     undo: Option<UndoStep>,
     undo_lock: Lock,
     choices: Vec<MessageChoice<'static>>,
-    named: Vec<Option<ChoiceWords>>,
+    named: Vec<Option<(ChoiceKind, ChoiceWords)>>,
     locks: Vec<Lock>,
     hovers: Vec<Option<String>>,
 }
@@ -1349,6 +1462,9 @@ impl<A> Typed<A> {
         let mut ids = Vec::with_capacity(choices.len());
         let (mut whats, mut locks, mut hovers) = (Vec::new(), Vec::new(), Vec::new());
         let mut named = Vec::new();
+        // Safe first: a choice that loses something follows every other (a stable order).
+        let mut choices = choices;
+        choices.sort_by_key(|choice| matches!(choice.what, MessageChoice::Lose(_)));
         for choice in choices {
             whats.push(choice.what);
             named.push(choice.named);
@@ -1846,7 +1962,7 @@ impl Body {
                             let name = (shown != label).then_some(label.as_str());
                             let lock = holding(&self.undo_lock);
                             let (undo, centre) =
-                                undo_message_line(ui, self.tone, words, &shown, name, lock);
+                                undo_message_line(ui, self.tone, words, &shown, name, lock, true);
                             activated(ui, pressed, undo, words, Pressed::Undo);
                             line = centre;
                         }
@@ -1889,7 +2005,11 @@ impl Body {
                             if shown != label {
                                 action = action.name(label);
                             }
-                            let clicked = action.show(ui).clicked();
+                            let mut response = action.show(ui);
+                            if shown != label {
+                                response = cut_tip(response, label, holding(&self.undo_lock));
+                            }
+                            let clicked = response.clicked();
                             activated(ui, pressed, clicked, words, Pressed::Undo);
                             space(ui, (L - gap).max(0.0));
                         }
@@ -1945,10 +2065,9 @@ impl Body {
 
     /// A choice's whole width, with the `L` before a red one.
     fn choice_width(&self, ui: &Ui, at: usize, choice: MessageChoice<'_>) -> f32 {
-        if let Some(Some(words)) = self.named.get(at) {
-            return Action::secondary(&words.label())
-                .density(Density::Read)
-                .natural_width(ui);
+        if let Some(Some((kind, words))) = self.named.get(at) {
+            let lose = if *kind == ChoiceKind::Lose { L } else { 0.0 };
+            return kind.action(&words.label()).natural_width(ui) + lose;
         }
         match choice {
             MessageChoice::Choice(word) => Action::secondary(word)
@@ -1974,17 +2093,14 @@ impl Body {
         for (at, choice) in self.row_choices() {
             let lock = self.locks.get(at).and_then(holding);
             let clicked = match (choice, self.named.get(at).and_then(Option::as_ref)) {
+                // Words with objects: whole, cut (named and tipped with the whole words) or
+                // wrapped to the row's width.
                 // Words with objects: cut to the row's width, named with the whole words.
-                (_, Some(words)) => {
-                    let label = words.label();
-                    let shown = words.fit_choice(ui, ui.max_rect().width());
-                    let mut action = Action::secondary(&shown)
-                        .density(Density::Read)
-                        .blocked(lock);
-                    if shown != label {
-                        action = action.name(&label);
+                (_, Some((kind, words))) => {
+                    if *kind == ChoiceKind::Lose && at > 0 {
+                        space(ui, (L - gap).max(0.0));
                     }
-                    action.show(ui).clicked()
+                    data_choice(ui, words, *kind, ui.max_rect().width(), lock).clicked()
                 }
                 (MessageChoice::Choice(word), None) => Action::secondary(word)
                     .density(Density::Read)
@@ -2202,6 +2318,14 @@ impl<A> PagePlaceholder<A> {
 ///
 /// Its lock has the two forms of [`Choice`]'s:
 ///
+/// ```
+/// use splat::outcome::Repair;
+/// let unsaved = true;
+/// let _ = Repair::new("Replace with a basic manifest", 1)
+///     .locked_when(unsaved, splat::sentence!("Save or discard campaign changes first."));
+/// let _ = Repair::new("Replace with a basic manifest", 1)
+///     .blocked(splat::sentence!("Save or discard campaign changes first."));
+/// ```
 /// ```compile_fail
 /// use splat::outcome::Repair;
 /// let unsaved = true;
@@ -2252,7 +2376,9 @@ impl<A> Repair<A> {
 /// and dependency faults): the fault's words and tone, then each [`Repair`] on its own line from
 /// the words, with its lock's reason and its help line under it. Its tone and words come from the
 /// fault when it is made; the press comes back as the caller's id, at most one per draw (the
-/// first in drawing order). A body place: `show` is a reviewed suppression (`Ban::Body`).
+/// first in drawing order): the first-press slot is per `show` call, not per pane or frame. It
+/// registers the fault's rect for the gate (`MessagePlace::Page`), not a whole row: a row that
+/// holds it registers itself. A body place: `show` is a reviewed suppression (`Ban::Body`).
 #[must_use = "call show"]
 pub struct BodyFault<A> {
     tone: Tone,
@@ -2288,21 +2414,10 @@ impl<A> BodyFault<A> {
                 let text = words.as_str();
                 tone_message(ui, tone, text);
                 for (at, repair) in repairs.iter().enumerate() {
-                    let label = repair.words.label();
                     let clicked = message_choice_row(ui, tone, |ui| {
-                        let shown = repair.words.fit_choice(ui, ui.available_width());
-                        let mut action = Action::secondary(&shown)
-                            .density(Density::Read)
-                            .blocked(holding(&repair.lock));
-                        if shown != label {
-                            action = action.name(&label);
-                        }
-                        let response = action.show(ui);
-                        if shown != label {
-                            response.on_hover_text(&label).clicked()
-                        } else {
-                            response.clicked()
-                        }
+                        let room = ui.available_width();
+                        let lock = holding(&repair.lock);
+                        data_choice(ui, &repair.words, ChoiceKind::Safe, room, lock).clicked()
                     });
                     activated(ui, &mut pressed, clicked, text, Pressed::Choice(at));
                     if let Some((reason, locked)) = &repair.lock {
@@ -2738,7 +2853,7 @@ mod tests {
             app.dndbeyond
                 .results
                 .record(Saved(Campaign("older"), "Campaign link saved"));
-            app.moves = true;
+            app.moves = Some(["Ghost of the Mill", "Ember Cultist"]);
             app
         };
         let mut narrow = one();
@@ -2761,6 +2876,62 @@ mod tests {
         );
         let h = harness_sized(one(), 960.0);
         assert_eq!(visible(&h, MOVE).1, [MOVE], "wide: the whole words");
+
+        // Review of PR 332, 3: two objects with one prefix are told apart by the tip, on hover
+        // and on keyboard focus, whenever the visible words are cut.
+        let painted = |h: &Harness<'_, App>, words: &str| {
+            h.output().shapes.iter().any(|clipped| {
+                matches!(&clipped.shape, egui::Shape::Text(text) if text.galley.job.text == words)
+            })
+        };
+        const ALIKE: &str = "Move Ghost north before Ghost south";
+        let mut narrow = one();
+        narrow.moves = Some(["Ghost north", "Ghost south"]);
+        narrow.narrow = Some(260.0);
+        let mut h = harness_sized(narrow, 960.0);
+        h.ctx
+            .all_styles_mut(|style| style.interaction.tooltip_delay = 0.0);
+        let shown = visible(&h, ALIKE).1;
+        assert!(
+            shown.len() == 1 && shown[0].matches("Gho…").count() == 2,
+            "both objects cut alike: {shown:?}"
+        );
+        assert!(!painted(&h, ALIKE), "no tip before hover or focus");
+        let at = h.get_by_label(ALIKE).rect().center();
+        h.event(egui::Event::PointerMoved(at));
+        h.run_steps(4);
+        assert!(painted(&h, ALIKE), "hover shows the whole words");
+        h.event(egui::Event::PointerMoved(egui::pos2(1.0, 1.0)));
+        h.run_steps(4);
+        assert!(!painted(&h, ALIKE), "the tip goes with the pointer");
+        h.get_by_label(ALIKE).focus();
+        h.run_steps(4);
+        assert!(painted(&h, ALIKE), "keyboard focus shows the whole words");
+
+        // Review of PR 332, 2: a red choice with data is drawn red, exactly `L` after the safe
+        // choice before it, after the safe ones though it was given first; its press comes back.
+        let mut app = one();
+        app.moves = Some(["Ash", "Elm"]);
+        app.deletes = true;
+        let mut h = harness_sized(app, 960.0);
+        let (delete, moving) = (
+            h.get_by_label("Delete Ash").rect(),
+            h.get_by_label("Move Ash before Elm").rect(),
+        );
+        assert!(
+            (delete.top() - moving.top()).abs() < 0.5
+                && (delete.left() - moving.right() - L).abs() < 0.5,
+            "exactly L after the safe choice: {moving:?} {delete:?}"
+        );
+        let red = h.output().shapes.iter().any(|clipped| {
+            matches!(&clipped.shape, egui::Shape::Text(text)
+                if text.galley.job.text == "Delete Ash"
+                    && text.galley.job.sections.iter().all(|section| section.format.color == colors().destructive))
+        });
+        assert!(red, "the destructive colour");
+        h.get_by_label("Delete Ash").click();
+        h.run_steps(2);
+        assert_eq!(h.state().deleted, 1);
     }
 
     /// M3 gap 3, in the pilot: a press made on the line before its entry changed in place (in
@@ -2928,6 +3099,40 @@ mod tests {
         h.get_by_label(&name).click();
         h.run_steps(2);
         assert!(h.state().pressed.is_empty());
+
+        // Review of PR 332, 4: narrower than the shortest cut, the words wrap inside the row;
+        // every fixed word is painted, none is cut.
+        const WHOLE: &str = "Repair Ravenholm in Library";
+        let mut h = Harness::builder()
+            .with_size(egui::vec2(400.0, 300.0))
+            .build_ui_state(
+                |ui, right: &mut f32| {
+                    let fault = Hp(Severity::NeedsFixing, None);
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(150.0, 300.0),
+                        egui::Layout::top_down(egui::Align::Min),
+                        |ui| {
+                            *right = ui.max_rect().right();
+                            let _ = BodyFault::<u8>::new(&fault)
+                                .repair(Repair::new(
+                                    crate::choice!("Repair {} in Library", "Ravenholm"),
+                                    1,
+                                ))
+                                .show(ui);
+                        },
+                    );
+                },
+                0.0,
+            );
+        crate::design::theme::install(&h.ctx);
+        h.run_steps(4);
+        let node = h.get_by_label(WHOLE).rect();
+        let wrapped = h.output().shapes.iter().any(|clipped| {
+            matches!(&clipped.shape, egui::Shape::Text(text)
+                if text.galley.job.text == WHOLE && text.galley.rows.len() > 1 && !text.galley.elided)
+        });
+        assert!(wrapped, "the whole words, wrapped, nothing cut");
+        assert!(node.right() <= *h.state() + 0.5, "inside the row: {node:?}");
     }
 
     /// The pane's one press: the first in the footer's drawing order wins, and a second press
@@ -3064,6 +3269,7 @@ mod tests {
             Register,
             Rename,
             Dismiss,
+            Delete,
         }
         /// What a change inside the body does in the next frame drawn.
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -3105,7 +3311,10 @@ mod tests {
             /// What the older line says.
             pub older_line: OlderLine,
             /// The older line has a choice whose words hold two objects from data (M3).
-            pub moves: bool,
+            pub moves: Option<[&'static str; 2]>,
+            /// It also has a red choice with data, given before `Move` (the part puts it after).
+            pub deletes: bool,
+            pub deleted: usize,
             /// What each Undo press did to the store: the words it took back, or `Gone`.
             pub acted: Vec<Result<&'static str, &'static str>>,
             /// Each press: the pane, the kind, and its ticket's order.
@@ -3115,6 +3324,10 @@ mod tests {
         }
 
         /// The pilot's `show_active`: it needs the owner by `&mut`.
+        #[allow(
+            clippy::disallowed_methods,
+            reason = "the pilot's by-owner revision, in the frame of its read"
+        )]
         fn show_active(ui: &mut Ui, dndbeyond: &mut DndBeyond, change: InBody) {
             dndbeyond.edits += 1;
             match change {
@@ -3146,6 +3359,7 @@ mod tests {
                 if let Some(shown) = app.dndbeyond.results.get(&Campaign(owner)) {
                     let two_choices = app.two_choices;
                     let moves = app.moves;
+                    let deletes = app.deletes;
                     let line = shown.outcome(&frame, |saved| {
                         match (owner, older_line) {
                             (_, OlderLine::Said) | ("newer" | "third", _) => {}
@@ -3175,13 +3389,16 @@ mod tests {
                                 )
                                 .locked_when(live, LOCK),
                             );
-                            if moves {
+                            if let Some([a, b]) = moves {
+                                if deletes {
+                                    said = said.choice(Choice::named_as(
+                                        ChoiceKind::Lose,
+                                        crate::choice!("Delete {}", a),
+                                        Act::Delete,
+                                    ));
+                                }
                                 said = said.choice(Choice::named(
-                                    crate::choice!(
-                                        "Move {} before {}",
-                                        "Ghost of the Mill",
-                                        "Ember Cultist"
-                                    ),
+                                    crate::choice!("Move {} before {}", a, b),
                                     Act::Rename,
                                 ));
                             }
@@ -3233,6 +3450,7 @@ mod tests {
                     Act::Register => app.registered += 1,
                     Act::Rename => app.renamed += 1,
                     Act::Dismiss => {}
+                    Act::Delete => app.deleted += 1,
                 }
             }
         }

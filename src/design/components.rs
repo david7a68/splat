@@ -546,6 +546,9 @@ pub struct Action<'a> {
     /// A `line_start` Undo whose target stays in its message's column: the row's left edge.
     column: bool,
     min_width: Option<f32>,
+    /// Its words wrap onto more lines in the room it has, and it grows taller, in place of an
+    /// ellipsis (a choice whose fixed words must all show).
+    wraps: bool,
 }
 
 impl<'a> Action<'a> {
@@ -564,8 +567,16 @@ impl<'a> Action<'a> {
             line_start: false,
             column: false,
             min_width: None,
+            wraps: false,
         }
     }
+
+    /// Its words wrap in the room it has, and it grows taller, instead of being cut.
+    pub(in crate::design) fn wraps(mut self) -> Self {
+        self.wraps = true;
+        self
+    }
+
     pub fn primary(label: &'a str) -> Self {
         Self::new(Kind::Primary, label)
     }
@@ -725,7 +736,24 @@ impl<'a> Action<'a> {
             Kind::Secondary | Kind::Quiet => c.text,
             Kind::Destructive => c.destructive,
         };
-        let galley = one_line(ui, self.label, font, foreground, room);
+        let galley = if self.wraps {
+            let mut job = LayoutJob::simple(
+                self.label.replace(['\n', '\r'], " "),
+                font,
+                foreground,
+                room.max(1.0),
+            );
+            job.wrap.break_anywhere = false;
+            ui.fonts_mut(|fonts| fonts.layout_job(job))
+        } else {
+            one_line(ui, self.label, font, foreground, room)
+        };
+        // A wrapped label grows the control by its extra lines; one line keeps its height.
+        let height = if self.wraps {
+            self.height.max(galley.size().y + 2.0 * XS)
+        } else {
+            self.height
+        };
         let key = self.key.map(|key| {
             one_line(
                 ui,
@@ -760,7 +788,7 @@ impl<'a> Action<'a> {
             };
             (rect, ui.interact(target, id, Sense::click()))
         } else {
-            ui.allocate_exact_size(vec2(width, self.height), Sense::click())
+            ui.allocate_exact_size(vec2(width, height), Sense::click())
         };
         let name = self.name.unwrap_or(self.label);
         response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), name));
@@ -3289,7 +3317,7 @@ pub(super) fn undo_message_capped(
     action: &str,
     name: Option<&str>,
 ) -> bool {
-    undo_message_line(ui, tone, text, action, name, None).0
+    undo_message_line(ui, tone, text, action, name, None, false).0
 }
 
 /// `undo_message_capped`, with Undo blocked for `blocked`'s reason (only Undo greys, and the line
@@ -3302,10 +3330,11 @@ pub(super) fn undo_message_line(
     action: &str,
     name: Option<&str>,
     blocked: Option<&str>,
+    tipped: bool,
 ) -> (bool, f32) {
     ui.scope(|ui| {
         ui.set_max_width(ui.available_width().min(LIST_MEASURE));
-        undo_message_inside(ui, tone, text, action, name, blocked)
+        undo_message_inside(ui, tone, text, action, name, blocked, tipped)
     })
     .inner
 }
@@ -3317,7 +3346,17 @@ fn undo_message_inside(
     action: &str,
     name: Option<&str>,
     blocked: Option<&str>,
+    tipped: bool,
 ) -> (bool, f32) {
+    // With `tipped`, a cut label (`name` differs) shows its whole words on hover and on focus.
+    let tip = |response: Response| match (tipped, name) {
+        (true, Some(name)) => {
+            let mut lines = vec![super::popups::TipLine::body(name)];
+            lines.extend(blocked.map(super::popups::TipLine::detail));
+            super::popups::rich_tip(response, &lines)
+        }
+        _ => response,
+    };
     let button = Action::quiet(action)
         .icon(icons::UNDO)
         .density(Density::Read)
@@ -3339,7 +3378,7 @@ fn undo_message_inside(
         let words = tone_message(ui, tone, text);
         ui.horizontal(|ui| {
             space(ui, inset);
-            pressed = button.line_start_in_column().show(ui).clicked();
+            pressed = tip(button.line_start_in_column().show(ui)).clicked();
         });
         words
     } else {
@@ -3351,7 +3390,7 @@ fn undo_message_inside(
                     tone_message(ui, tone, text)
                 })
                 .inner;
-            pressed = button.show(ui).clicked();
+            pressed = tip(button.show(ui)).clicked();
             words
         })
         .inner

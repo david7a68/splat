@@ -11,6 +11,8 @@ disallowed-methods = [
     { path = "splat::design::components::ResultOrder::issue", reason = "record the result in a `design::Results` store: it issues the order at the action" },
     { path = "splat::design::components::Footer::result", reason = "give the footer a kept result as a `KeptLine` (`Shown::outcome`, `Messages::kept`)" },
     { path = "splat::design::results::Results::undo", reason = "a footer press names its entry by its ticket: use `Results::undo_by(press.ticket, …)`; by owner, a press could undo a newer result of that owner: `Ban::Results`" },
+    { path = "splat::design::results::Results::revise", reason = "a revision names its entry by its ticket: use `Results::revise_by(&ticket, …)`; by owner, late work could change a newer result of that owner: `Ban::ByOwner`" },
+    { path = "splat::design::results::Results::revise_where", reason = "a revision names its entry by its ticket: use `Results::revise_by(&ticket, …)`; a predicate can reach a newer result: `Ban::ByOwner`" },
     { path = "splat::design::results::Results::use_press", reason = "a footer press names its entry by its ticket: use `Results::use_press_by(press.ticket)`: `Ban::Results`" },
     { path = "splat::design::components::save_row_state", reason = "use `design::save_row` with a `DraftState`" },
     # Package K: layout parts.

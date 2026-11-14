@@ -569,8 +569,11 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
         Ok(change(&mut entry.value))
     }
 
-    /// `revise_by` for the owner's entry (Sessions' carry-over: the session's result follows its
-    /// note's draft). [`Gone`] when the owner has none.
+    /// `revise_by` for the owner's entry, whichever it is now. [`Gone`] when the owner has none.
+    /// Banned outside `src/design/` and counted (`Ban::ByOwner(n)`), as `undo` is: late work
+    /// that revises by owner changes a newer result of that owner. Use it only for a check made
+    /// in the same frame as the read it follows (Sessions' `end_what_changed` holds only the
+    /// session, not a ticket).
     pub fn revise<R>(&mut self, owner: &O, change: impl FnOnce(&mut T) -> R) -> Result<R, Gone> {
         let entry = self
             .entries
@@ -581,7 +584,8 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
     }
 
     /// `revise_by` for every entry whose value `holds` (a note file moved, and each Undo that
-    /// names it follows it), in every scope; how many were revised.
+    /// names it follows it), in every scope; how many were revised. Banned and counted as
+    /// `revise` is (Sessions' `Carries::moved` holds paths, not tickets).
     pub fn revise_where(
         &mut self,
         mut holds: impl FnMut(&T) -> bool,
@@ -770,6 +774,13 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "end_events_do_what_the_kind_says",
             &[Ban::ByOwner(1)],
         ),
+        // The part's own tests of the by-owner revisions (M3), and the pilot fixture's.
+        (
+            "src/design/results.rs",
+            "a_ticket_reaches_only_its_own_entry",
+            &[Ban::ByOwner(4)],
+        ),
+        ("src/design/outcome.rs", "show_active", &[Ban::ByOwner(1)]),
         (
             "src/design/results.rs",
             "a_result_shows_only_in_its_own_scope statement",
@@ -1746,6 +1757,10 @@ mod tests {
     /// A ticket names one entry: after its owner's later action replaced it, or an end event
     /// ended it, the ticket's Undo is `Gone` and changes nothing; the other entries stay.
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the test of the by-owner revisions against the ticket's"
+    )]
     fn a_ticket_reaches_only_its_own_entry() {
         let mut results = Results::<Note, Done>::new();
         let (a, b) = (A, B);
@@ -1817,6 +1832,17 @@ mod tests {
         assert!(
             results.is_empty(),
             "the revised B ended at its owner's change"
+        );
+        // Review of PR 332, 1: A's late work ends after B replaced A for the same owner. Its
+        // revision by A's ticket is `Gone`, and B is unchanged.
+        let mut results = Results::<Note, Done>::new();
+        results.record(done(A, "A"));
+        let stale = ticket(&results, &a);
+        results.record(done(A, "B for the same note"));
+        assert_eq!(results.revise_by(&stale, |v| v.words = "late"), Err(Gone));
+        assert_eq!(
+            results.get(&a).map(|shown| shown.value().words),
+            Some("B for the same note")
         );
     }
 
