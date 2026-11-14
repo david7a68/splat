@@ -2671,14 +2671,84 @@ impl Severity {
             Self::NeedsFixing => Tone::Warning,
         }
     }
+}
 
-    /// A status line that states this fault (an owner line `Ashen Marches · Cannot be read`):
-    /// the tone's icon and colour for the icon and the words, so a fault's status has the tone
-    /// its message and its row have. The caller gives the fault's kind, never a colour.
-    pub fn status(self, word: &str) -> super::Status<'_> {
-        let (icon, color) = self.tone().parts();
-        super::Status { icon, word, color }
+/// A fault that a status line states after its owner's name (an owner line
+/// `Ashen Marches · Cannot be read`). The kind gives the words AND the severity, so a status
+/// word never meets another kind's tone. It is a [`Fault`]: its row, its message and its status
+/// line take one tone from one `severity`.
+///
+/// ```
+/// use splat::outcome::{FaultStatus, fault_status};
+/// fn f(ui: &mut eframe::egui::Ui) { fault_status(ui, "Ashen Marches", FaultStatus::ManifestDeleted); }
+/// ```
+///
+/// The caller gives no severity and no phrase:
+///
+/// ```compile_fail
+/// use splat::outcome::{Severity, fault_status};
+/// fn f(ui: &mut eframe::egui::Ui) {
+///     fault_status(ui, "Ashen Marches", Severity::NeedsFixing, "Cannot be read");
+/// }
+/// ```
+///
+/// ```compile_fail
+/// use splat::outcome::{FaultStatus, Severity, fault_status};
+/// fn f(ui: &mut eframe::egui::Ui) {
+///     fault_status(ui, "Ashen Marches", (FaultStatus::CannotRead, Severity::NeedsFixing));
+/// }
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FaultStatus {
+    /// The file cannot be read now (not text, no permission, or its text does not parse).
+    CannotRead,
+    /// A package's manifest was deleted; its entries still read. The DM writes it again.
+    ManifestDeleted,
+}
+
+impl FaultStatus {
+    /// The status words after the owner's name.
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::CannotRead => "Cannot be read",
+            Self::ManifestDeleted => "Manifest deleted",
+        }
     }
+
+    /// The whole status words: `<owner> · <word>`. For measuring a line before it is drawn.
+    pub fn words(self, owner: &str) -> String {
+        format!("{owner} · {}", self.word())
+    }
+}
+
+impl Fault for FaultStatus {
+    fn severity(&self) -> Severity {
+        match self {
+            Self::CannotRead => Severity::CannotRead,
+            Self::ManifestDeleted => Severity::NeedsFixing,
+        }
+    }
+
+    fn cause(&self) -> Sentence {
+        match self {
+            Self::CannotRead => crate::sentence!("The file cannot be read."),
+            Self::ManifestDeleted => crate::sentence!("The package manifest was deleted."),
+        }
+    }
+}
+
+/// A fault's status line after its owner's name, in the fault's tone with its icon.
+pub fn fault_status(ui: &mut Ui, owner: &str, fault: FaultStatus) -> Response {
+    let (icon, color) = fault.severity().tone().parts();
+    let words = fault.words(owner);
+    super::status(
+        ui,
+        super::Status {
+            icon,
+            word: &words,
+            color,
+        },
+    )
 }
 
 /// Where a fault is: a name, and the line of its file when it has one.

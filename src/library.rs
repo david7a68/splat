@@ -10,7 +10,7 @@ use crate::{
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, Catalogue},
     design::{
-        self, Action, Density, Status, Tone, Type, colors, icons, outcome::Severity,
+        self, Action, Density, Status, Tone, Type, colors, icons, outcome::FaultStatus,
         reader as reader_style,
     },
     history::{self, Step, Trail},
@@ -943,6 +943,9 @@ pub(crate) struct Note {
     /// Why the file could not be read at all, from the system error's kind. Such a note has no
     /// text, so it offers no source editing or repair until a read succeeds.
     fault: Option<FileFault>,
+    /// The package's manifest was deleted: this note stands in for it. Its entries still
+    /// read, so it is a fault to fix (a warning), not a file that cannot be read.
+    manifest_gone: bool,
     owner: Owner,
 }
 impl Note {
@@ -3170,6 +3173,7 @@ fn problem_note(
         text,
         entry: None,
         fault,
+        manifest_gone: false,
         owner,
     })
 }
@@ -3215,6 +3219,7 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
                 entry: (!mismatched).then_some(entry),
                 error: mismatched.then(|| "Package details have another identity. Replace with the registered details, or restore the original id.".into()),
                 fault: None,
+                manifest_gone: false,
                 owner: Owner::Package(module.clone()),
             });
         }
@@ -3225,6 +3230,7 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
                 entry: None,
                 error: Some(crate::content_workspace::DELETED_MANIFEST.into()),
                 fault: None,
+                manifest_gone: true,
                 owner: Owner::Package(module.clone()),
             });
         }
@@ -3247,6 +3253,7 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
                 entry: Some(entry),
                 error: None,
                 fault: None,
+                manifest_gone: false,
                 owner: Owner::Builtin,
             });
         }
@@ -3310,6 +3317,7 @@ pub(crate) fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Resul
                         entry: Some(entry),
                         error: None,
                         fault: None,
+                        manifest_gone: false,
                         owner: owner.clone(),
                     });
                 }
@@ -3379,6 +3387,7 @@ pub(crate) fn catalogue_subtitles(
                 entry: Some(e.entry.clone()),
                 error: None,
                 fault: None,
+                manifest_gone: false,
                 owner: Owner::Builtin,
             })
             .collect(),
@@ -4138,6 +4147,7 @@ impl Library {
                         entry: note.entry.clone(),
                         error: note.error.clone(),
                         fault: note.fault.clone(),
+                        manifest_gone: note.manifest_gone,
                         owner: note.owner.clone(),
                     },
                     used,
@@ -6585,6 +6595,7 @@ impl Library {
                                     entry: Some(entry),
                                     error: None,
                                     fault: None,
+                                    manifest_gone: false,
                                     owner,
                                 });
                                 l.notes.sort_by_cached_key(|n| natural_key(n.name()));
@@ -7123,14 +7134,26 @@ impl Library {
         let about = note.entry.as_ref().is_some_and(|e| e.kind == "package");
         let mut use_every = None;
         let mut every_chosen = false;
-        // Row 125: a fault on the owner line has its kind, and the kind gives the line its icon
-        // and tone (`Severity::status`), as the catalogue row and the message have them.
-        let mut owner_fault = None;
-        let package_word = match &note.owner {
-            Owner::Package(module) if stopped_reading => {
-                owner_fault = Some(Severity::CannotRead);
-                format!("{} · Cannot be read", module.name)
+        // Row 125: a fault on the owner line is typed, from the note's typed state (its file
+        // fault, its parse, a deleted manifest), never from its error words. The kind gives the
+        // status words and the tone (`outcome::fault_status`), as the row and the message have.
+        let owner_fault = match &note.owner {
+            Owner::Package(_) if stopped_reading => Some(FaultStatus::CannotRead),
+            Owner::Package(_) if about => None,
+            Owner::Package(_) if note.manifest_gone => Some(FaultStatus::ManifestDeleted),
+            Owner::Package(_) | Owner::Campaign(_)
+                if note.error.is_some() || note.fault.is_some() || stopped_reading =>
+            {
+                Some(FaultStatus::CannotRead)
             }
+            _ => None,
+        };
+        let owner_name = match &note.owner {
+            Owner::Package(module) => module.name.as_str(),
+            _ => "Campaign",
+        };
+        let package_word = match &note.owner {
+            Owner::Package(module) if let Some(fault) = owner_fault => fault.words(&module.name),
             Owner::Package(_) if about && campaigns.active_campaign().is_none() => {
                 "No campaign open".into()
             }
@@ -7155,17 +7178,6 @@ impl Library {
                     .count();
                 every_chosen = chosen == entries.len();
                 chosen_count(chosen, needed, entries.len())
-            }
-            Owner::Package(module)
-                if note.error.as_deref() == Some(crate::content_workspace::DELETED_MANIFEST) =>
-            {
-                // The entries still read: the DM writes the manifest again (a warning).
-                owner_fault = Some(Severity::NeedsFixing);
-                format!("{} · Manifest deleted", module.name)
-            }
-            Owner::Package(module) if note.error.is_some() => {
-                owner_fault = Some(Severity::CannotRead);
-                format!("{} · Cannot be read", module.name)
             }
             Owner::Package(module) => format!(
                 "{} · {}",
@@ -7510,15 +7522,16 @@ impl Library {
                 && note.error.is_none()
                 && !stopped_reading;
             let read_only_word;
+            let campaign_fault_word;
             let owner_word = match &note.owner {
                 Owner::Package(module) if read_only => {
                     read_only_word = format!("{} · Read only", module.name);
                     read_only_word.as_str()
                 }
                 Owner::Package(_) => package_word.as_str(),
-                Owner::Campaign(_) if note.error.is_some() || stopped_reading => {
-                    owner_fault = Some(Severity::CannotRead);
-                    "Campaign · Cannot be read"
+                Owner::Campaign(_) if let Some(fault) = owner_fault => {
+                    campaign_fault_word = fault.words(owner_name);
+                    campaign_fault_word.as_str()
                 }
                 _ if read_only => "Campaign · Read only",
                 _ => "Campaign · Editable",
@@ -7574,24 +7587,26 @@ impl Library {
                     }
                     _ => owner_word,
                 };
-                design::status(
-                    ui,
-                    if let Some(fault) = owner_fault {
-                        fault.status(owner_word)
-                    } else if read_only {
-                        Status {
-                            icon: icons::READ_ONLY,
-                            word: owner_word,
-                            color: d.read_only,
-                        }
-                    } else {
-                        Status {
-                            icon: icons::EDIT,
-                            word: owner_word,
-                            color: d.clean,
-                        }
-                    },
-                );
+                if let Some(fault) = owner_fault {
+                    design::outcome::fault_status(ui, owner_name, fault);
+                } else {
+                    design::status(
+                        ui,
+                        if read_only {
+                            Status {
+                                icon: icons::READ_ONLY,
+                                word: owner_word,
+                                color: d.read_only,
+                            }
+                        } else {
+                            Status {
+                                icon: icons::EDIT,
+                                word: owner_word,
+                                color: d.clean,
+                            }
+                        },
+                    );
+                }
                 if !file_below {
                     if ui.available_width() >= path_room {
                         file_line(ui);
@@ -8813,6 +8828,7 @@ mod tests {
                 entry: Some(entry),
                 error: None,
                 fault: None,
+                manifest_gone: false,
                 owner: Owner::Builtin,
             });
         }
@@ -8822,6 +8838,7 @@ mod tests {
             entry: None,
             error: Some("Invalid YAML".into()),
             fault: None,
+            manifest_gone: false,
             owner: Owner::Builtin,
         });
         let check = |loaded: &Loaded| {
@@ -9331,6 +9348,7 @@ mod tests {
                     text,
                     error: None,
                     fault: None,
+                    manifest_gone: false,
                     owner: Owner::Package(Module {
                         id: Uuid::new_v4(),
                         name: name.into(),
@@ -9437,6 +9455,7 @@ mod tests {
             text,
             error: None,
             fault: None,
+            manifest_gone: false,
             owner,
         };
         library.loaded.as_mut().unwrap().notes[1].owner =
@@ -10206,6 +10225,7 @@ mod tests {
                 entry: None,
                 error: None,
                 fault: None,
+                manifest_gone: false,
                 owner: Owner::Builtin,
             }],
             ..Default::default()
@@ -10218,6 +10238,7 @@ mod tests {
             entry: None,
             error: None,
             fault: None,
+            manifest_gone: false,
             owner: Owner::Builtin,
         });
         loaded.invalidate();
@@ -10438,6 +10459,7 @@ mod tests {
                         entry: Some(entry),
                         error: None,
                         fault: None,
+                        manifest_gone: false,
                         owner: Owner::Builtin,
                     }],
                     diagnostics: vec![],
@@ -10499,6 +10521,7 @@ mod tests {
                 text: source.into(),
                 error: None,
                 fault: None,
+                manifest_gone: false,
                 owner: Owner::Builtin,
             }
         })
@@ -10615,6 +10638,7 @@ mod tests {
             entry: duplicate.entry.clone(),
             error: None,
             fault: None,
+            manifest_gone: false,
             owner: Owner::Builtin,
         });
         assert_eq!(loaded.resolve_spell(&by_id), None);
@@ -10632,6 +10656,7 @@ mod tests {
                     entry: Some(Entry::parse(path, source).unwrap()),
                     error: None,
                     fault: None,
+                    manifest_gone: false,
                     owner: Owner::Builtin,
                 }],
                 ..Default::default()
@@ -10853,6 +10878,7 @@ mod tests {
                         entry: Some(Entry::parse("Long rule.md", &source).unwrap()),
                         error: None,
                         fault: None,
+                        manifest_gone: false,
                         owner: Owner::Builtin,
                     }],
                     ..Default::default()
@@ -11122,6 +11148,7 @@ mod tests {
                         entry: Some(entry.clone()),
                         error: None,
                         fault: None,
+                        manifest_gone: false,
                         owner: Owner::Builtin,
                     }],
                     diagnostics: vec![],
@@ -11872,6 +11899,7 @@ mod tests {
             entry: None,
             error: None,
             fault: None,
+            manifest_gone: false,
             owner: Owner::Package(module.clone()),
         };
         let discarded = (Some(first.id), "a.md".to_string(), "words".to_string());
