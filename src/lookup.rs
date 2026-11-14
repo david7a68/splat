@@ -1434,10 +1434,12 @@ impl ContentIndex {
             }
             let entry = &item.entry;
             let group = if entry.kind != "world" {
+                // A note in the campaign folder itself has the empty path: the root group
+                // (`design::FolderGroup::of_path` names it; no folder is called `Notes`).
                 let folder = entry
                     .path
                     .rsplit_once('/')
-                    .map_or("Notes", |(folder, _)| folder);
+                    .map_or("", |(folder, _)| folder);
                 (3, folder.to_owned())
             } else {
                 match world::world_type(entry) {
@@ -3770,10 +3772,22 @@ mod tests {
                 "Sessions/Session 1.md",
                 "---\nsession_id: x\n---\nThe champion waved.\n",
             ),
+            ("Rumours.md", "Talk in the tavern.\n"),
+            ("Notes/Old.md", "Old talk.\n"),
         ]);
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
         assert!(index.errors.is_empty(), "{:?}", index.errors);
         let groups = index.world_groups("");
+        // Row 35: a note in the campaign folder itself is in the root group (the empty path),
+        // never in a folder called `Notes`; a real `Notes` folder is a group of its own.
+        let names = |key: &str| -> Vec<&str> {
+            groups[&(3, key.to_owned())]
+                .iter()
+                .map(|&(at, _)| index.items[at].entry.name.as_str())
+                .collect()
+        };
+        assert_eq!(names(""), ["Rumours"]);
+        assert_eq!(names("Notes"), ["Old"]);
         let locations = &groups[&(1, "Locations".to_owned())];
         let rows: Vec<_> = locations
             .iter()

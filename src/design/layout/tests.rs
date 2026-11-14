@@ -186,7 +186,18 @@ fn slot_and_status_slot_keep_the_next_control_still() {
     const SAVES: Slot = Slot::new(&["0 of 3", "3 of 3 saves"], SlotType::Small);
     let ctx = context();
     let after = |value: &str, state: usize| {
-        let nodes = frame(&ctx, vec2(600.0, 300.0), |ui| {
+        let letter = [KeyLetter::Hidden, KeyLetter::Shown][state];
+        let (nodes, painted) = frame_with(&ctx, vec2(600.0, 300.0), Vec::new(), |ui| {
+            // Row 62: a control's key letter comes and goes; the control after it stays, in a
+            // right-to-left row as in Run's header, and in a left-to-right row.
+            ui.horizontal(|ui| {
+                let _ = KeySlot::new(Action::primary("Next turn"), "N").show(ui, letter);
+                Action::secondary("Add to fight").show(ui);
+            });
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                let _ = KeySlot::new(Action::primary("Next turn"), "N").show(ui, letter);
+                Action::secondary("Add").show(ui);
+            });
             ui.horizontal(|ui| {
                 SAVES.show(ui, value, colors().text);
                 Action::quiet("Success").show(ui);
@@ -200,7 +211,15 @@ fn slot_and_status_slot_keep_the_next_control_still() {
                 Action::quiet("Account").show(ui);
             });
         });
-        (bounds(&nodes, "Success"), bounds(&nodes, "Account"))
+        // The letter itself comes and goes, so the case is not still because nothing changed.
+        let letters = painted.iter().filter(|text| text.text == "N").count();
+        assert_eq!(letters, 2 * state, "key letters painted for {letter:?}");
+        (
+            bounds(&nodes, "Success"),
+            bounds(&nodes, "Account"),
+            bounds(&nodes, "Add to fight"),
+            bounds(&nodes, "Add"),
+        )
     };
     let narrow = after("0 of 3", 0);
     let wide = after("3 of 3 saves", 1);
@@ -258,6 +277,8 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
     const START: Word = crate::word!("Start fight");
     const OPEN: Word = crate::word!("Open in Lookup");
     const WORDS: [&str; 4] = ["Edit", "Add to Log", "Start fight", "Open in Lookup"];
+    const ALL_EVENTS: Word = crate::word!("All events");
+    const RECORDINGS: Word = crate::word!("Back to recordings");
     let (title, kind) = ("Cinder Wolf", "Beast · CR 3");
     let ctx = context();
     let line = || {
@@ -296,11 +317,52 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
             let rect = Rect::from_min_size(ui.cursor().min, vec2(width, 300.0));
             left = rect.left();
             ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                let _ = TitleLine::back(ALL_EVENTS, BackEdge::Text).show(ui);
                 rows = line().show(ui).rows;
+                let _ = TitleLine::back(RECORDINGS, BackEdge::Segments)
+                    .context("2026-01-01 19:00")
+                    .show(ui);
             });
         });
         for words in WORDS.into_iter().chain([title, kind]) {
             assert!(painted_whole(&painted, words), "{words:?} whole at {width}");
+        }
+        // FL7: a back link's word is whole and starts at the text edge: the title's edge, or a
+        // segmented row's words `S` inside it. Its icon follows the word inside its own target,
+        // whole, centred on the word's line; the target is a 28 px control that hangs at most
+        // `S` into the gutter, and the word is its accessible name.
+        for (word, edge) in [(ALL_EVENTS, left), (RECORDINGS, left + S)] {
+            let word = word.as_str();
+            assert!(painted_whole(&painted, word), "{word:?} whole at {width}");
+            let target = bounds(&nodes, word);
+            let ink = painted
+                .iter()
+                .find(|text| text.text == word)
+                .map(|text| text.rect)
+                .unwrap();
+            assert!(
+                (ink.left() - edge).abs() <= 1.5,
+                "{word:?} starts at the text edge {edge}: {ink:?} at {width}"
+            );
+            let icon = painted
+                .iter()
+                .find(|text| text.text == BACK_LINK_ICON && target.contains_rect(text.rect))
+                .unwrap_or_else(|| panic!("{word:?}'s icon inside its target {target:?}"));
+            assert!(
+                icon.clip.expand(0.5).contains_rect(icon.rect),
+                "{word:?}'s icon whole in its clip"
+            );
+            assert!(
+                icon.rect.left() > ink.right(),
+                "{word:?}'s icon after the word"
+            );
+            assert!(
+                (icon.rect.center().y - target.center().y).abs() <= 2.0,
+                "{word:?}'s icon centred on its line: {:?} in {target:?}",
+                icon.rect
+            );
+            assert!(target.height() >= 24.0 && target.width() >= 24.0);
+            assert!(target.left() >= left - S - 0.5, "{word:?} hangs at most S");
         }
         let rects = WORDS.map(|word| bounds(&nodes, word));
         // The draw keeps to the measure: every action ends inside the width it was given.

@@ -4162,12 +4162,67 @@ pub fn grouped_draft_comparison(
     draft_comparison_styled(ui, draft, disk, id, face, line_height);
 }
 
-pub fn folder_group_heading(ui: &mut Ui, path: &str, count: usize) {
+/// The folder a group of notes is in: the campaign folder itself, or a folder inside it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FolderGroup<'a> {
+    /// Notes directly in the campaign folder. No folder of that name exists, so the heading
+    /// names the place, [`FolderGroup::ROOT_NAME`], with no `/`.
+    Root,
+    /// A folder inside the campaign folder, by its path from there (`Places`, `Lore/Old`). The
+    /// heading shows the path with a `/` after it.
+    Folder(&'a str),
+}
+
+impl<'a> FolderGroup<'a> {
+    /// The root group's name: the campaign's folder (CONTEXT.md: a campaign has a folder for its
+    /// files).
+    pub const ROOT_NAME: &'static str = "Campaign folder";
+
+    /// The group of a note's folder path, relative to the campaign folder; the root's path is
+    /// empty.
+    pub fn of_path(path: &'a str) -> Self {
+        if path.is_empty() {
+            Self::Root
+        } else {
+            Self::Folder(path)
+        }
+    }
+
+    /// The words of its heading, without the count.
+    pub fn words(self) -> String {
+        match self {
+            Self::Root => Self::ROOT_NAME.to_owned(),
+            Self::Folder(path) => format!("{path}/"),
+        }
+    }
+}
+
+/// A folder's heading in a list of notes: the folder icon, the folder's words, the count. The
+/// root has its own name in one place ([`FolderGroup::ROOT_NAME`]); only a folder ends in `/`.
+///
+/// ```
+/// use splat::layout::doc_parts::FolderGroup;
+/// assert_eq!(FolderGroup::of_path("").words(), "Campaign folder");
+/// assert_eq!(FolderGroup::of_path("Lore/Old").words(), "Lore/Old/");
+/// ```
+///
+/// The heading takes a `FolderGroup`, never a path string that it would edit:
+///
+/// ```compile_fail,E0308
+/// # fn draw(ui: &mut eframe::egui::Ui) {
+/// splat::layout::doc_parts::folder_group_heading(ui, "Places", 3);
+/// # }
+/// ```
+pub fn folder_group_heading(ui: &mut Ui, folder: FolderGroup<'_>, count: usize) {
     ui.label(
         Type::Small
             .rich(
                 ui,
-                format!("{} {path}/  {count}", egui_phosphor::regular::FOLDER),
+                format!(
+                    "{} {}  {count}",
+                    egui_phosphor::regular::FOLDER,
+                    folder.words()
+                ),
             )
             .color(colors().muted),
     );
