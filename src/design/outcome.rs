@@ -989,6 +989,21 @@ pub enum MessageChoice<'a> {
     Dismiss(Lost),
 }
 
+/// The room before a red choice of `width` (`docs/design-system.md`, the destructive choice
+/// rule): exactly `L` after the choice before it when it fits on that line; else a line of its own,
+/// `M` below the others. `gap` is the item spacing that already follows the choice before it.
+fn before_lose(ui: &mut Ui, width: f32, gap: f32) {
+    let after = (L - gap).max(0.0);
+    if ui.available_size_before_wrap().x >= after + width {
+        space(ui, after);
+    } else {
+        let row_gap = ui.spacing().item_spacing.y;
+        ui.spacing_mut().item_spacing.y = M;
+        ui.end_row();
+        ui.spacing_mut().item_spacing.y = row_gap;
+    }
+}
+
 /// The close icon's accessible name and hover words.
 pub const DISMISS_NAME: &str = "Dismiss this message";
 
@@ -2575,8 +2590,8 @@ impl Body {
         }
     }
 
-    /// The choices, in order: a red one keeps exactly `L` from the one before it. The pressed
-    /// choice's index.
+    /// The choices, in order: a red one keeps exactly `L` from the one before it on its line, or
+    /// starts a line of its own `M` below the others (`before_lose`). The pressed choice's index.
     fn draw_choices(&self, ui: &mut Ui, pressed: &mut Option<Pressed>) {
         let gap = ui.spacing().item_spacing.x;
         for (at, choice) in self.row_choices() {
@@ -2587,7 +2602,7 @@ impl Body {
                 // Words with objects: cut to the row's width, named with the whole words.
                 (_, Some((kind, words))) => {
                     if *kind == ChoiceKind::Lose && at > 0 {
-                        space(ui, (L - gap).max(0.0));
+                        before_lose(ui, kind.action(&words.label()).natural_width(ui), gap);
                     }
                     data_choice(ui, words, *kind, ui.max_rect().width(), lock).clicked()
                 }
@@ -2598,7 +2613,10 @@ impl Body {
                     .clicked(),
                 (MessageChoice::Lose(word), None) => {
                     if at > 0 {
-                        space(ui, (L - gap).max(0.0));
+                        let width = Action::destructive(word)
+                            .density(Density::Read)
+                            .natural_width(ui);
+                        before_lose(ui, width, gap);
                     }
                     Action::destructive(word)
                         .density(Density::Read)
