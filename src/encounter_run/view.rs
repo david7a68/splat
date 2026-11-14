@@ -4094,7 +4094,13 @@ impl Run {
             ui,
             Some(egui::TextWrapMode::Truncate),
             // Point 2: the line kept its smallest complete form; the title has what is left.
-            title_width.min(word_rect.left() - status_room - grip.rect.left() - design::S),
+            // With the answer on its own line, `heading_split` alone owns the title's width
+            // (fifth review: no later cap may take it below its first word).
+            if split.below {
+                title_width
+            } else {
+                title_width.min(word_rect.left() - status_room - grip.rect.left() - design::S)
+            },
             Type::Strong.font(ui),
         );
         ui.painter().galley(
@@ -10150,7 +10156,9 @@ mod tests {
         }
     }
 
-    /// Fourth review of PR 371, through `group_list` (as the app draws Arrivals):
+    /// Fourth review of PR 371, through `group_list` (as the app draws Arrivals). The group's
+    /// long first word puts the title's floor where, at some widths of the sweep, the heading
+    /// holds the floor and `Fight after: Low` but not `Fight after: Moderate`:
     /// point 3: pressing Add across a difficulty boundary (Low to Moderate) moves no Add, at
     /// any width, because the heading reserves the widest answer, not the current one;
     /// point 1: when the last offered group goes to another encounter, the list is empty and
@@ -10170,7 +10178,7 @@ mod tests {
                 .insert(field.into(), serde_yaml_ng::from_str(value).unwrap());
             entry
         };
-        let name = "Watchers of the Long Southern Road";
+        let name = "Stonewatchers-of-the-Southern-Road Company";
         let label = format!("Add {name} to the initiative list");
         let mut moved = Vec::new();
         for width in (300..=640).step_by(8) {
@@ -10282,6 +10290,105 @@ mod tests {
             );
         }
         assert!(moved.is_empty(), "iter-29-R1 point 3: Add moved: {moved:?}");
+        // Fifth review: at the narrowest headings, with the answer on its own line, the title
+        // keeps at least its first word (`heading_split`'s floor) as drawn by the production
+        // row. A long first word puts that floor within a few pixels of the heading's width at
+        // some width of this sweep; the title then ends `…` right after the whole first word.
+        let first = "Stonewatchers-of-the-Southern-Road-and-the-Ember-Hills";
+        let long = format!("{first} Company of Wardens");
+        let mut at_floor = 0;
+        for width in 340..=520 {
+            let run = super::super::tests::run();
+            let mut group = (*run.groups.clone().map_or_else(
+                || {
+                    Arc::new(super::super::RunGroup {
+                        id: Uuid::new_v4(),
+                        path: "Long.md".into(),
+                        name: String::new(),
+                        side: "enemies".into(),
+                        encounter: None,
+                        encounter_name: None,
+                        members: vec![super::super::GroupMember {
+                            entry: run.state.participants[0].definition.clone(),
+                            count: 1,
+                            overrides: Default::default(),
+                        }],
+                        notes: String::new(),
+                        xp: 0,
+                        xp_unknown: vec![],
+                        unavailable: 0,
+                        unavailable_members: vec![],
+                        problem: None,
+                        warnings: vec![],
+                    })
+                },
+                |groups| groups[0].clone(),
+            ))
+            .clone();
+            group.name = long.clone();
+            let mut run = run;
+            run.groups = Some(Arc::new(vec![Arc::new(group)]));
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(width as f32, 600.0))
+                .build(move |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let arrival = run.arrival_block(ui);
+                        run.group_list(ui, arrival);
+                    });
+                });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            let title = harness
+                .output()
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text.ends_with(&long) => Some(
+                        text.galley
+                            .rows
+                            .iter()
+                            .map(|row| row.text())
+                            .collect::<String>(),
+                    ),
+                    _ => None,
+                });
+            let Some(title) = title else { continue };
+            // The real heading: the drag handle's own rect. The floor: the first word with the
+            // drag mark and `…`, in the title's type.
+            let heading = harness
+                .query_by_label_contains("Drag Stonewatchers")
+                .map(|node| node.rect().width());
+            let floor = design::number_width(
+                &egui::Ui::new(
+                    harness.ctx.clone(),
+                    egui::Id::new("measure"),
+                    egui::UiBuilder::new(),
+                ),
+                &format!("{} {first}…", icons::DRAG),
+                &Type::Strong.font(&egui::Ui::new(
+                    harness.ctx.clone(),
+                    egui::Id::new("measure_font"),
+                    egui::UiBuilder::new(),
+                )),
+            );
+            let Some(heading) = heading else { continue };
+            if heading < floor {
+                continue;
+            }
+            let shown = title.trim_start_matches(|c: char| c != ' ').trim_start();
+            assert!(
+                shown.starts_with(first),
+                "iter-29-R1 fifth review at {width} (heading {heading}, floor {floor}): the \
+                 title {title:?} lost its first word"
+            );
+            if heading - floor < design::S {
+                at_floor += 1;
+            }
+        }
+        assert!(
+            at_floor > 0,
+            "the sweep reached a heading less than S wider than the floor"
+        );
     }
 
     #[test]
