@@ -101,30 +101,18 @@ pub(crate) struct AddedFrom {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group_id: Option<Uuid>,
 }
-/// A second step that the DM opened: the close dialog. Each opening owes the dialog's default
-/// focus (FO2) until the default control holds it; the next opening is a new value that owes
-/// it again. No flag outlives the opening it was for.
+/// A second step that the DM opened: the close dialog. Its keyboard focus belongs to the dialog
+/// part while it shows (`design::dialog_default`, G44), so no flag outlives an opening.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum Opening {
     #[default]
     Shut,
-    Open {
-        focus_owed: bool,
-        /// The egui pass that last drew the dialog. A dialog that comes back after passes
-        /// without it (the DM was on another page) is a new appearance and owes focus again.
-        drawn: Option<u64>,
-    },
+    Open,
 }
 
 impl Opening {
-    /// Open the step. A step that is already open stays the same opening.
     pub(crate) fn open(&mut self) {
-        if !self.is_open() {
-            *self = Self::Open {
-                focus_owed: true,
-                drawn: None,
-            };
-        }
+        *self = Self::Open;
     }
 
     pub(crate) fn shut(&mut self) {
@@ -132,39 +120,7 @@ impl Opening {
     }
 
     pub(crate) fn is_open(self) -> bool {
-        matches!(self, Self::Open { .. })
-    }
-
-    /// Whether this opening still owes the default control its focus. It owes it until the
-    /// control holds the focus (`focus_given`), so a change of the dialog's content in its
-    /// first frames (a conflict that arrives) cannot lose it.
-    pub(crate) fn owes_focus(self) -> bool {
-        matches!(
-            self,
-            Self::Open {
-                focus_owed: true,
-                ..
-            }
-        )
-    }
-
-    /// The dialog is drawn in this egui pass. Where the pass before did not draw it, it
-    /// appears again (FO2, `signed-in` 16: back from another page) and owes its focus again.
-    pub(crate) fn drawn(&mut self, pass: u64) {
-        if let Self::Open { focus_owed, drawn } = self {
-            let seen = drawn.is_some_and(|last| last + 1 >= pass);
-            if !seen {
-                *focus_owed = true;
-            }
-            *drawn = Some(pass);
-        }
-    }
-
-    /// The default control holds the focus: this opening owes it no more.
-    pub(crate) fn focus_given(&mut self) {
-        if let Self::Open { focus_owed, .. } = self {
-            *focus_owed = false;
-        }
+        self == Self::Open
     }
 }
 

@@ -11590,8 +11590,9 @@ pub mod signed_in {
             "iter-29-R1-G44",
             d.focused_name().as_deref() == Some("Keep running"),
             format!(
-                "The second opening focuses Keep running: {:?}",
-                d.focused_name()
+                "The second opening focuses Keep running: {:?} (focus id {:?})",
+                d.focused_name(),
+                d.focus_id()
             ),
         );
         for size in [SMALL, DEFAULT, LARGE] {
@@ -11661,7 +11662,10 @@ pub mod signed_in {
             d.observe(
                 "iter-29-R1-G44-witness",
                 focused.as_deref() == Some("Keep running"),
-                format!("The second opening, after the resize: focus on {focused:?}"),
+                format!(
+                    "The second opening, after the resize: focus on {focused:?} (id {:?})",
+                    d.focus_id()
+                ),
             );
         });
         d.app_mut().settings.simulate(Account::Connected);

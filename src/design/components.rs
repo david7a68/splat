@@ -3515,14 +3515,96 @@ fn dialog_width<R>(
             ui.set_max_height(viewport.height() - XXL * 2.0);
             ui.label(Type::Section.rich(ui, title).color(c.text));
             space(ui, XS);
-            egui::ScrollArea::vertical()
+            let inner = egui::ScrollArea::vertical()
                 .id_salt(("dialog_body", id))
                 .auto_shrink([false, true])
                 .show(ui, add)
-                .inner
+                .inner;
+            keep_focus_inside(ui, id);
+            inner
         })
         .inner
 }
+
+fn default_key(layer: egui::LayerId) -> Id {
+    Id::new("dialog_default").with(layer.id)
+}
+
+fn before_key(id: &str) -> Id {
+    Id::new(("dialog_focus_before", id))
+}
+
+/// The dialog's default control (G44, `docs/design-system.md:218`): while the dialog shows,
+/// the keyboard focus stays inside it. Where the focus is outside it (nothing has it, or a
+/// control under the dialog asked for it), this control takes it, on every frame: on each
+/// opening, and back from any request from under the dialog. Call it on the control.
+pub fn dialog_default(ui: &Ui, response: &Response) {
+    let key = default_key(ui.layer_id());
+    ui.ctx().data_mut(|data| data.insert_temp(key, response.id));
+}
+
+/// The dialog part's rule: after the body, a focus outside the dialog's layer goes to its
+/// default control, and the control that had it is kept for `dialog_return_focus`.
+fn keep_focus_inside(ui: &Ui, id: &str) {
+    let ctx = ui.ctx();
+    let layer = ui.layer_id();
+    let Some(default) = ctx.data(|data| data.get_temp::<Id>(default_key(layer))) else {
+        return;
+    };
+    let focused = ctx.memory(|memory| memory.focused());
+    let inside = focused
+        .and_then(|focused| ctx.read_response(focused))
+        .is_some_and(|response| response.layer_id == layer);
+    if inside {
+        return;
+    }
+    if let Some(focused) = focused {
+        ctx.data_mut(|data| data.insert_temp(before_key(id), focused));
+    }
+    ctx.memory_mut(|memory| memory.request_focus(default));
+}
+
+/// When the dialog `id` closes, the focus goes back to the control that had it before the
+/// dialog took it (the run's Amount field, say), if one did.
+pub fn dialog_return_focus(ctx: &egui::Context, id: &str) {
+    let key = before_key(id);
+    if let Some(before) = ctx.data(|data| data.get_temp::<Id>(key)) {
+        ctx.data_mut(|data| data.remove::<Id>(key));
+        // The key that closed the dialog (Enter on its control, or Escape) is spent: the
+        // control that gets the focus back must not read it (a text field ends its input
+        // on Enter and would drop the focus again).
+        ctx.input_mut(|input| {
+            input.consume_key(egui::Modifiers::NONE, egui::Key::Enter);
+            input.consume_key(egui::Modifiers::NONE, egui::Key::Escape);
+        });
+        // egui still counts the closing dialog as the top modal layer on the next pass, and a
+        // control under it gives up a focus it cannot use. So the focus returns at the start
+        // of the first pass with no modal layer on top.
+        ctx.data_mut(|data| data.insert_temp(Id::new(RETURN_PENDING), before));
+        if ctx
+            .data(|data| data.get_temp::<bool>(Id::new(RETURN_HOOK)))
+            .is_none()
+        {
+            ctx.data_mut(|data| data.insert_temp(Id::new(RETURN_HOOK), true));
+            ctx.on_begin_pass(
+                "dialog_return_focus",
+                std::sync::Arc::new(|ctx: &egui::Context| {
+                    let pending = Id::new(RETURN_PENDING);
+                    let Some(before) = ctx.data(|data| data.get_temp::<Id>(pending)) else {
+                        return;
+                    };
+                    if ctx.memory(|memory| memory.top_modal_layer()).is_none() {
+                        ctx.data_mut(|data| data.remove::<Id>(pending));
+                        ctx.memory_mut(|memory| memory.request_focus(before));
+                    }
+                }),
+            );
+        }
+    }
+}
+
+const RETURN_PENDING: &str = "dialog_focus_return_pending";
+const RETURN_HOOK: &str = "dialog_focus_return_hook";
 
 /// The width of a panel beside a page: Lookup, or the run's side panel.
 pub fn side_panel_width(available: f32) -> f32 {

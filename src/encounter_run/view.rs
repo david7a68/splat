@@ -2691,9 +2691,6 @@ impl Run {
         let lost = self.unsent_only_here_names();
         let block = self.close_reason();
         let mut keep = ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape));
-        self.closing.drawn(ui.ctx().cumulative_pass_nr());
-        let focus = self.closing.owes_focus();
-        let mut focused = false;
         let mut close = false;
         let mut save_new = false;
         let conflict = self.first_sync_in(SyncState::Conflict);
@@ -2801,33 +2798,21 @@ impl Run {
                         design::blocked_reason(ui, block.as_deref());
                         design::gap(ui, design::Gap::S);
                     }
-                    // FO2: each opening gives Keep running the default focus once
-                    // (`docs/design-system.md:218`); the opening owns it, so a second opening
-                    // in the same view gives it again.
-                    // A stable id: words or actions that come into the dialog while it is
-                    // open (a conflict) do not move the focus to an id that is gone.
+                    // FO2 (G44): Keep running is the dialog's default control. While the dialog
+                    // shows, the part keeps the focus inside it (`docs/design-system.md:218`):
+                    // on each opening, and back from a request from under it (the dock's
+                    // Amount). A stable id, so words that come in (a conflict) keep it.
                     let response = ui
                         .push_id("close_keep_running", |ui| {
                             Action::secondary("Keep running").show(ui)
                         })
                         .inner;
-                    // Given once Keep running already holds the focus when it is drawn; until
-                    // then it is asked for again, also under a new id after the content changed.
-                    if focus {
-                        if response.has_focus() {
-                            focused = true;
-                        } else {
-                            response.request_focus();
-                        }
-                    }
+                    design::dialog_default(ui, &response);
                     keep |= response.clicked();
                 },
             );
             close |= lose;
         });
-        if focused {
-            self.closing.focus_given();
-        }
         if review {
             self.review_conflict();
             self.panel = Panel::Reference;
@@ -2835,6 +2820,8 @@ impl Run {
         }
         if keep {
             self.closing.shut();
+            // The focus goes back where it was before the dialog took it.
+            design::dialog_return_focus(ui.ctx(), "close_run");
             return false;
         }
         if save_new {
@@ -14063,6 +14050,79 @@ mod tests {
         );
         let same = CombatSync::simulated_state(SyncState::Error, 7, 62, 8);
         assert_eq!(pending_words(&same), PENDING_WORDS);
+    }
+
+    /// iter-29 G44, through the WHOLE run view (as the app draws it, dock included): after the
+    /// close dialog's second opening, Keep running holds the focus and keeps it on the next
+    /// frames (no control under the dialog takes it), Enter keeps the run, and when the
+    /// dialog closes the focus is back where it was.
+    #[test]
+    fn iter_29_r1_the_open_close_dialog_keeps_the_focus_in_the_whole_view() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+        use std::{cell::RefCell, rc::Rc};
+        let mut run = super::super::tests::run();
+        for (index, total) in [20, 15, 10].into_iter().enumerate() {
+            run.apply(Command::Initiative(index, Some(total))).unwrap();
+        }
+        run.apply(Command::Begin).unwrap();
+        run.disk_conflict = true;
+        let run = Rc::new(RefCell::new(run));
+        let shown = run.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(1200.0, 800.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    shown.borrow_mut().show(ui);
+                });
+            });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(4);
+        let focused_name = |harness: &egui_kittest::Harness<'_>| {
+            harness
+                .root()
+                .children_recursive()
+                .find(|node| node.accesskit_node().is_focused())
+                .map(|node| node.accesskit_node().label().unwrap_or_default())
+        };
+        // Before the dialog: the Amount field has the focus, as after a step.
+        run.borrow_mut().focus_amount = true;
+        harness.run_steps(2);
+        let before = focused_name(&harness);
+        assert!(before.is_some(), "the Amount field has the focus first");
+        for (opening, key) in [("first", egui::Key::Enter), ("second", egui::Key::Escape)] {
+            // The DM's own way: the dock's Close run.
+            harness
+                .get_all_by_label("Close run")
+                .next()
+                .expect("Close run in the dock")
+                .click();
+            harness.run_steps(2);
+            // A request from under the dialog: the dock asks for the Amount field's focus
+            // (`focus_amount`). It may win its own frame; the dialog takes the focus back.
+            run.borrow_mut().focus_amount = true;
+            harness.run_steps(2);
+            let mut seen = Vec::new();
+            for _ in 0..3 {
+                harness.run_steps(1);
+                seen.push(focused_name(&harness));
+            }
+            assert!(
+                seen.iter()
+                    .all(|name| name.as_deref() == Some("Keep running")),
+                "iter-29-R1-G44 whole view, {opening} opening: focus on each frame {seen:?}"
+            );
+            harness.key_press(key);
+            harness.run_steps(3);
+            assert!(
+                !run.borrow().closing.is_open() && !run.borrow().confirm_close,
+                "{key:?} keeps the run"
+            );
+            assert_eq!(
+                focused_name(&harness),
+                before,
+                "after the dialog closes the focus is back where it was"
+            );
+        }
     }
 
     #[test]
