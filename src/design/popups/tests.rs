@@ -251,14 +251,18 @@ fn in_a_pane_the_list_stays_above_the_footer() {
                         .layout(Layout::top_down(Align::Min)),
                 );
                 let ui = &mut child;
-                let mut pressed = None;
-                let mut footer = crate::design::Footer::new("test_pane_footer", COLUMN);
-                footer.outcome(
-                    crate::outcome::Notice::new(crate::sentence!("The link is off."))
-                        .choice(crate::outcome::MessageChoice::Choice("Link again")),
-                    &mut pressed,
+                let pane_frame = crate::outcome::PaneFrame::new(ui);
+                let mut messages =
+                    crate::outcome::Messages::new(&pane_frame, "test_pane_footer", COLUMN);
+                messages.outcome(
+                    crate::outcome::Notice::new(crate::sentence!("The link is off.")).choice(
+                        crate::outcome::Choice::new(
+                            crate::outcome::MessageChoice::Choice("Link again"),
+                            (),
+                        ),
+                    ),
                 );
-                footer.pane(ui, pane::Body::Content, |ui| {
+                let paned = messages.pane(ui, pane::Body::Content, |ui| {
                     for line in 0..30 {
                         ui.label(format!("Body line {line}"));
                     }
@@ -273,7 +277,7 @@ fn in_a_pane_the_list_stays_above_the_footer() {
                     control.set(shown.response.rect);
                     ui.label("After the drop-down");
                 });
-                if pressed.is_some() {
+                if paned.pressed.is_some() {
                     link.set(true);
                 }
             })

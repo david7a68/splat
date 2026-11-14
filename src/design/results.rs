@@ -246,6 +246,18 @@ impl<'a, T> Shown<'a, T> {
     pub fn value(&self) -> &'a T {
         self.value
     }
+    /// This result as a typed footer line for this frame's pane (package M), made from its own
+    /// value and carrying this entry's [`Ticket`]. The call takes the view, so the store's
+    /// borrow ends here: the pane's body may change the store or its owner. The line borrows the
+    /// pane's local `frame`, so it cannot be kept past this frame. Give it to `Messages::kept`.
+    pub fn outcome<'f, A>(
+        self,
+        frame: &'f super::outcome::PaneFrame,
+        make: impl FnOnce(&T) -> super::outcome::KeptOutcome<A>,
+    ) -> super::outcome::KeptLine<'f, A> {
+        super::outcome::KeptLine::new(frame, Ticket { order: self.order }, make(self.value))
+    }
+
     /// This result's footer line: its words, made from its own value, with its own order.
     pub fn footer(&self, words: impl FnOnce(&T) -> String) -> FooterResult {
         FooterResult {
@@ -253,6 +265,44 @@ impl<'a, T> Shown<'a, T> {
             words: words(self.value),
         }
     }
+}
+
+/// Names one kept entry of a store: the order its action issued, which no other entry of any
+/// store has. Only a store's view makes one (`Shown::outcome`); it is not `Clone`, and its order
+/// cannot be read. A press on a kept line comes back with it, and the store acts by it
+/// ([`Results::undo_by`], [`Results::use_press_by`]): a replaced or ended entry is [`ByTicket::Gone`]
+/// and nothing changes.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Ticket {
+    order: ResultOrder,
+}
+
+impl Ticket {
+    /// For the staged path (`Messages::outcome_at`) and the footer's control ids.
+    pub(in crate::design) fn of(order: ResultOrder) -> Self {
+        Self { order }
+    }
+
+    pub(in crate::design) fn order(&self) -> ResultOrder {
+        self.order
+    }
+}
+
+impl<T> Shown<'_, T> {
+    /// This entry's ticket, for the store's own tests.
+    #[cfg(test)]
+    pub(in crate::design) fn ticket_for_test(&self, _frame: &super::outcome::PaneFrame) -> Ticket {
+        Ticket { order: self.order }
+    }
+}
+
+/// What a store did with a ticket.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ByTicket<E> {
+    /// The entry it named was replaced or ended: nothing changed.
+    Gone,
+    /// The entry is there, and its action failed: it stays.
+    Failed(E),
 }
 
 /// One kept result's words and its order, bound together. It is not `Clone`, and its order is
@@ -282,6 +332,9 @@ impl<'a> Footer<'a> {
     /// A kept result from a [`Results`] store, with the order its action issued. `words` gives
     /// its words (the footer's order and accessible name), and `draw` draws it; both get the
     /// stored value. `has_undo` is true while its Undo is live.
+    #[deprecated(
+        note = "A footer holds only owned, typed data: make a `KeptLine` with `Shown::outcome` and give it to `Messages::kept` (src/design/outcome.rs)."
+    )]
     pub fn kept<T>(
         &mut self,
         shown: Shown<'a, T>,
@@ -297,6 +350,9 @@ impl<'a> Footer<'a> {
 
     /// A kept result's owned footer line ([`Shown::footer`]): its words, with the order its
     /// action issued. `draw` gets the line's own words.
+    #[deprecated(
+        note = "A footer holds only owned, typed data: make a `KeptLine` with `Shown::outcome` and give it to `Messages::kept` (src/design/outcome.rs)."
+    )]
     pub fn kept_line(
         &mut self,
         line: &'a FooterResult,
@@ -422,6 +478,46 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
         };
         let at = self.position(owner)?;
         Some(run(&self.entries[at].value).map(|done| (self.entries.remove(at).value, done)))
+    }
+
+    /// The Undo of the entry `ticket` names, as `undo` does by owner: it leaves only when `run`
+    /// works. An entry replaced or ended since the ticket was made is `Gone`, and `run` does not
+    /// run.
+    pub fn undo_by<R, E>(
+        &mut self,
+        ticket: Ticket,
+        run: impl FnOnce(&T) -> Result<R, E>,
+    ) -> Result<(T, R), ByTicket<E>> {
+        const {
+            assert!(
+                matches!(T::ENDS.press, Press::Undo),
+                "this kind has no Undo: its press is not `Press::Undo`"
+            )
+        };
+        let at = self
+            .entries
+            .iter()
+            .position(|entry| entry.order == ticket.order)
+            .ok_or(ByTicket::Gone)?;
+        match run(&self.entries[at].value) {
+            Ok(done) => Ok((self.entries.remove(at).value, done)),
+            Err(error) => Err(ByTicket::Failed(error)),
+        }
+    }
+
+    /// The offer `ticket` names, used up by its press; `None` when it was replaced or ended.
+    pub fn use_press_by(&mut self, ticket: Ticket) -> Option<T> {
+        const {
+            assert!(
+                matches!(T::ENDS.press, Press::Use),
+                "this kind is not used up by its press: its press is not `Press::Use`"
+            )
+        };
+        let at = self
+            .entries
+            .iter()
+            .position(|entry| entry.order == ticket.order)?;
+        Some(self.entries.remove(at).value)
     }
 
     /// The owner's offer, used up by its press whatever the action's outcome.
@@ -595,7 +691,32 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/encounters.rs", "save_draft", &[Ban::Results]),
         ("src/encounters.rs", "stamp_kept", &[Ban::Results]),
         ("src/library.rs", "add_reader_result", &[Ban::Results]),
-        ("src/library.rs", "apply_page_press", &[Ban::Results]),
+        // A by-owner Undo and `use_press` of Library's page lines (Wave 2 moves them to tickets).
+        (
+            "src/library.rs",
+            "apply_page_press",
+            &[Ban::Results, Ban::ByOwner(2)],
+        ),
+        (
+            "src/design/results.rs",
+            "a_failed_undo_keeps_its_entry_and_its_order",
+            &[Ban::ByOwner(3)],
+        ),
+        (
+            "src/design/results.rs",
+            "end_events_do_what_the_kind_says",
+            &[Ban::ByOwner(1)],
+        ),
+        (
+            "src/design/results.rs",
+            "a_result_shows_only_in_its_own_scope statement",
+            &[Ban::ByOwner(1)],
+        ),
+        (
+            "src/design/results.rs",
+            "a_result_shows_only_in_its_own_scope statement",
+            &[Ban::ByOwner(1)],
+        ),
         (
             "src/library.rs",
             "editor_pane",
@@ -660,7 +781,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/sessions/plan.rs",
             "plan_pane",
-            &[Ban::Results, Ban::Layout(1), Ban::Pane(1)],
+            // `ByOwner`: `checks::Results::undo(id, book)`, not the footer store's; counted by name.
+            &[Ban::Results, Ban::Layout(1), Ban::Pane(1), Ban::ByOwner(1)],
         ),
         (
             "src/sessions/plan.rs",
@@ -910,7 +1032,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/slash.rs", "note", &[Ban::Layout(1)]),
         ("src/sessions/slash.rs", "popup_at", &[Ban::Layout(1)]),
         ("src/timeline/checks.rs", "table_line", &[Ban::Layout(1)]),
-        ("src/timeline/page.rs", "detail", &[Ban::Layout(7)]),
+        (
+            "src/timeline/page.rs",
+            "detail",
+            // `ByOwner`: `checks::Results::undo(id, book)`, not the footer store's; counted by name.
+            &[Ban::Layout(7), Ban::ByOwner(1)],
+        ),
         ("src/timeline/page.rs", "filters", &[Ban::Layout(1)]),
         ("src/timeline/page.rs", "list", &[Ban::Layout(1)]),
         ("src/timeline/page.rs", "new_events_line", &[Ban::Layout(1)]),
@@ -920,11 +1047,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Layout(1)],
         ),
         ("src/trackers/view.rs", "amount_field", &[Ban::RowKey(3)]),
-        (
-            "src/trackers/view.rs",
-            "show",
-            &[Ban::Layout(1), Ban::Extras(1)],
-        ),
         ("src/world.rs", "add_form", &[Ban::Layout(1)]),
         ("src/world/page.rs", "new_menu", &[Ban::Layout(1)]),
         ("src/world/repair.rs", "editor_events", &[Ban::Layout(2)]),
@@ -966,11 +1088,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/trackers.rs", "cause", &[Ban::Words]),
         ("src/trackers/history.rs", "show", &[Ban::Body]),
         ("src/trackers/view.rs", "body", &[Ban::Body]),
-        (
-            "src/trackers/view.rs",
-            "footer",
-            &[Ban::Words, Ban::Pane(1)],
-        ),
+        ("src/trackers/view.rs", "messages", &[Ban::Words]),
         ("src/combat_sync.rs", "labelled_stepper", &[Ban::Extras(1)]),
         ("src/dndbeyond.rs", "show_import", &[Ban::Extras(1)]),
         (
@@ -1462,6 +1580,10 @@ mod tests {
     /// Review of PR 299: a failed Undo dropped its change. Here A's Undo fails after an
     /// unrelated B; A stays with its order, and B is untouched. Then A's Undo works.
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the test of the by-owner Undo, staged until its callers use `undo_by`"
+    )]
     fn a_failed_undo_keeps_its_entry_and_its_order() {
         let mut results = Results::new();
         results.record(done(A, "A."));
@@ -1543,7 +1665,12 @@ mod tests {
         links.record(Linked(a.clone(), "A."));
         let a_order = links.get(&a).unwrap().order();
         assert!(links.get(&b).is_none(), "B reads A");
-        assert!(links.undo(&b, |_| Ok::<(), ()>(())).is_none(), "B undoes A");
+        #[allow(
+            clippy::disallowed_methods,
+            reason = "the test of the by-owner Undo, staged until its callers use `undo_by`"
+        )]
+        let b_undoes_a = links.undo(&b, |_| Ok::<(), ()>(()));
+        assert!(b_undoes_a.is_none(), "B undoes A");
         links.owner_changed(&b);
         assert!(links.get(&a).is_some(), "B's saved edit ends A");
         links.record(Linked(b.clone(), "B."));
@@ -1554,13 +1681,22 @@ mod tests {
             "B's result replaces A's"
         );
         assert_eq!(links.get(&b).unwrap().value().1, "B.");
-        assert!(matches!(links.undo(&b, |_| Ok::<(), ()>(())), Some(Ok(_))));
+        #[allow(
+            clippy::disallowed_methods,
+            reason = "the test of the by-owner Undo, staged until its callers use `undo_by`"
+        )]
+        let undone = links.undo(&b, |_| Ok::<(), ()>(()));
+        assert!(matches!(undone, Some(Ok(_))));
         assert_eq!(links.get(&a).unwrap().value().1, "A.", "B's Undo takes A");
     }
 
     /// The footer takes each kept result with the order its own action issued: added oldest
     /// first, the newer one still leads; then the older one again, and it leads. `words` and
     /// `draw` get the stored value.
+    #[allow(
+        deprecated,
+        reason = "the test of `Footer::kept`, deprecated until Wave 3 removes it"
+    )]
     #[test]
     fn the_footer_takes_each_kept_result_with_its_own_order() {
         use egui_kittest::kittest::Queryable;
@@ -1600,7 +1736,52 @@ mod tests {
         assert!(a < b, "A again is newest: A {a}, B {b}");
     }
 
+    /// A ticket names one entry: after its owner's later action replaced it, or an end event
+    /// ended it, the ticket's Undo is `Gone` and changes nothing; the other entries stay.
     #[test]
+    fn a_ticket_reaches_only_its_own_entry() {
+        let mut results = Results::<Note, Done>::new();
+        let (a, b) = (A, B);
+        results.record(done(A, "A1"));
+        results.record(done(B, "B"));
+        let frame = super::super::outcome::PaneFrame::for_test();
+        let ticket = |results: &Results<Note, Done>, owner: &Note| {
+            results.get(owner).unwrap().ticket_for_test(&frame)
+        };
+        let old = ticket(&results, &a);
+        results.record(done(A, "A2"));
+        assert_eq!(
+            results.undo_by(old, |_| Ok::<_, ()>(())).err(),
+            Some(ByTicket::Gone)
+        );
+        assert_eq!(results.get(&a).map(|shown| shown.value().words), Some("A2"));
+        assert_eq!(results.get(&b).map(|shown| shown.value().words), Some("B"));
+        let old = ticket(&results, &a);
+        results.owner_changed(&a);
+        assert_eq!(
+            results.undo_by(old, |_| Ok::<_, ()>(())).err(),
+            Some(ByTicket::Gone)
+        );
+        let b_ticket = ticket(&results, &b);
+        // A failed Undo keeps its entry.
+        assert_eq!(
+            results.undo_by(b_ticket, |_| Err::<(), _>("no")).err(),
+            Some(ByTicket::Failed("no"))
+        );
+        let b_ticket = ticket(&results, &b);
+        assert_eq!(
+            results
+                .undo_by(b_ticket, |_| Ok::<_, ()>(()))
+                .map(|(done, ())| done.words),
+            Ok("B")
+        );
+    }
+
+    #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the test of the by-owner offer press, staged until its callers use `use_press_by`"
+    )]
     fn end_events_do_what_the_kind_says() {
         let mut results = Results::new();
         results.record(done(A, "A."));
