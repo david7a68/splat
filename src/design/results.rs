@@ -1406,7 +1406,7 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/library.rs", 16),
             ("src/party_sync.rs", 1),
             ("src/sessions/carry.rs", 1),
-            ("src/sessions/page.rs", 4),
+            ("src/sessions/page.rs", 3),
             ("src/sessions/plan.rs", 8),
             ("src/timeline.rs", 3),
             ("src/timeline/page.rs", 2),

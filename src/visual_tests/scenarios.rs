@@ -12006,6 +12006,14 @@ pub mod session_notes {
         d.begin_task();
         d.click("New session");
         d.state("session-form", Sizes::Default);
+        // Review of PR 324: the Session template drop-down, open at 960 and 1200 px; the second
+        // press closes it again.
+        d.aside(|d| {
+            d.click_starting("Session template:");
+            d.expect("Short notes");
+            d.state("session-template-open", Sizes::Standard);
+            d.click_starting("Session template:");
+        });
         d.type_into("Session title", TITLE);
         d.click("Create session");
         d.expect(&format!("Session 1: {TITLE}"));
@@ -15689,6 +15697,12 @@ pub mod session_recording {
         d.expect("Earlier part");
         d.click("Earlier part");
         d.expect("Part 1 of 2");
+        // Review of PR 324: the Go to a time drop-down, open at 960 and 1200 px.
+        d.aside(|d| {
+            d.click_starting("Go to a time:");
+            d.state("recording-part-open", Sizes::Standard);
+            d.click_starting("Go to a time:");
+        });
         choose_view(d, "What the check changed");
         d.expect("Restored");
         d.state("second-pass-review", Sizes::Default);
