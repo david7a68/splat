@@ -5170,14 +5170,20 @@ impl Sessions {
             } else {
                 "Quiet"
             };
-            ui.label(
-                Type::Small
-                    .rich(
-                        ui,
-                        format!("{} recorded · {sound}", clock(live.recorder.seconds())),
-                    )
-                    .color(c.muted),
-            );
+            // R5: the live time is the state's, in its word's colour; the sound is detail.
+            let mut job = egui::text::LayoutJob::default();
+            for (part, color) in [
+                (clock(live.recorder.seconds()), status.word_color()),
+                (format!(" recorded · {sound}"), c.muted),
+            ] {
+                Type::Small.rich(ui, part).color(color).append_to(
+                    &mut job,
+                    ui.style(),
+                    egui::FontSelection::Default,
+                    egui::Align::Center,
+                );
+            }
+            ui.label(job);
         }
         if stalled && let Some(live) = &self.live {
             let words = format!(

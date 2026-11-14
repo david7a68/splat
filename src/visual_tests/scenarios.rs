@@ -12756,7 +12756,17 @@ pub mod session_notes {
         d.click("Copy link");
         d.expect("Copied");
         d.expect("Mentioned in");
+        // `Copied` above proves the acknowledgement. Its two-second real-time expiry must not
+        // choose the words of this state's captures (four sizes taken across it): wait until
+        // it has ended, as before `timeline-with-run`.
+        d.wait_for_text("Copy link");
         d.state_prepared("timeline-event", Sizes::AllAndHiDpi, |d| {
+            // Every size shows the same words: the timer has ended before the first capture.
+            d.observe(
+                "iter-28-S-copied-timer",
+                d.visible_text("Copy link") && !d.visible_text("Copied"),
+                "The Timeline event's captures show Copy link, not a timed Copied",
+            );
             // iter-23-S FK5: the list row draws the rest ruling as the plan row and the detail
             // do: its icon and word in the ruling's colour.
             let mut rulings = Vec::new();
@@ -14525,6 +14535,22 @@ pub mod session_recording {
         let mut found: Vec<(Surface, &'static str, String, egui::Color32)> = Vec::new();
         d.each_painted_text(|text, _| {
             let job = &text.galley.job;
+            let at = text.visual_bounding_rect().center();
+            // The Recordings tab's live row has its time on its own line: `0:00 recorded · …`.
+            if job.text.contains(" recorded · ") && !rows.iter().any(|row| row.contains(at)) {
+                let first = job
+                    .sections
+                    .first()
+                    .map(|s| (job.text[s.byte_range.clone()].to_owned(), s.format.color));
+                let (part, color) = first.unwrap_or_default();
+                // The time alone is its first part; a whole muted line has no time part.
+                if clock_like(&part) {
+                    found.push((Surface::RecordingsTab, "time", part, color));
+                } else {
+                    found.push((Surface::RecordingsTab, "line", part, color));
+                }
+                return;
+            }
             if !job
                 .sections
                 .iter()
@@ -14532,7 +14558,6 @@ pub mod session_recording {
             {
                 return;
             }
-            let at = text.visual_bounding_rect().center();
             let size = job
                 .sections
                 .first()
@@ -14570,17 +14595,17 @@ pub mod session_recording {
         for surface in surfaces {
             let mine: Vec<_> = found.iter().filter(|(at, ..)| at == surface).collect();
             let has = |kind: &str| mine.iter().any(|(_, k, ..)| *k == kind);
-            let timed = matches!(
-                surface,
-                Surface::Rail | Surface::RecordLine | Surface::Banner
-            );
+            // Every surface but the list row shows the live time.
+            let timed = *surface != Surface::ListRow;
             d.observe(
                 "iter-28-S-FO1",
                 has("icon")
                     && has("word")
                     && (!timed || has("time"))
-                    && mine.iter().all(|(_, kind, _, color)| {
-                        *color == if *kind == "icon" { c.recording } else { c.text }
+                    && mine.iter().all(|(_, kind, _, color)| match *kind {
+                        "icon" => *color == c.recording,
+                        "line" => false,
+                        _ => *color == c.text,
                     }),
                 format!(
                     "{surface:?}: a live recording's record icon alone is in the recording token; its word and its time are in the text colour: {mine:?}"
@@ -14745,6 +14770,29 @@ pub mod session_recording {
             assert!(d.in_view("Continue processing") && !d.is_disabled("Continue processing"));
             check_one_primary(d, "Record again", "iter-9-C2-ST1-two-alerts");
             check_processing_action(d, "Process:", false);
+            // Repair 3 of PR 363: the close icon's target reaches into the banner's padding and
+            // does not make the banner taller: its top line is `XS` (its inner margin) above the
+            // first message's words.
+            let words = d.painted_rect_in(
+                "Processing “Session 1: Failed processing” failed",
+                egui::Rect::EVERYTHING,
+            );
+            let scale = d.pixels_per_point();
+            let top = words.and_then(|words| {
+                d.horizontal_rules(
+                    (words.left() + 1.0) * scale,
+                    (words.top() - 40.0) * scale,
+                    words.top() * scale,
+                )
+                .last()
+                .map(|y| y / scale)
+            });
+            let gap = words.zip(top).map(|(words, top)| words.top() - top);
+            d.observe(
+                "iter-28-S-banner-height",
+                gap.is_some_and(|gap| gap <= crate::design::XS + 1.0),
+                format!("The banner's top line is XS above its first words: {gap:?} (top {top:?}, words {words:?})"),
+            );
         });
         let tabs_stopped = recording_tabs(d);
         assert!(d.in_view("Record again"));
@@ -14951,14 +14999,15 @@ pub mod session_recording {
                 && node.name.contains("Stopped")
         });
         let b_after = b_name(d);
-        let b_row = b_before.is_some() && b_after != b_before;
+        // B's row was found before, and says the same after.
+        let b_same = b_before.is_some() && b_after == b_before;
         d.observe(
             "iter-28-S-FO1-stop-elsewhere",
             red(&stalled_rail)
                 && red(&stopped_rail)
                 && red(&stopped_row)
                 && a_row
-                && !b_row
+                && b_same
                 && banner_bar
                 && live.is_empty()
                 && !d.has_containing("The recording of “Session 2")
