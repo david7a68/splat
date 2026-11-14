@@ -2734,9 +2734,9 @@ pub(crate) fn note_text(name: &str, kind: &str, namespace: Option<&str>) -> Stri
         if kind == "campaign" {
             "## Packages\n\n## Rule choices\n\n| Rule | Choice |\n| --- | --- |\n"
         } else if kind == "effect" {
-            "## Effect\n\nDescribe what changes and when it ends.\n"
+            "Describe what changes and when it ends.\n"
         } else if kind == "rule" {
-            "## Rule\n\nDescribe when and how this rule applies.\n"
+            "Describe when and how this rule applies.\n"
         } else if kind == "rule_group" {
             "## Rules\n\nDescribe the rules this group enables.\n"
         } else {
@@ -7686,7 +7686,12 @@ impl Library {
                             let dependency = &index.items[at].entry;
                             (
                                 dependency.id,
-                                format!("{} is in this campaign only.", dependency.name),
+                                // Row 145 (FC6): say what the link is and why it matters.
+                                format!(
+                                    "{} links to {}, which is in this campaign only. Another \
+                                     campaign that uses {} will not find it.",
+                                    entry.name, dependency.name, package.name
+                                ),
                                 format!("Copy {} to {}", dependency.name, package.name),
                             )
                         })
@@ -8699,6 +8704,12 @@ mod tests {
 
     #[test]
     fn duplicate_checks_keep_id_key_matches_and_refresh_after_edits() {
+        // Row 115 (FH10): a new rule or effect has no heading that repeats its kind line.
+        for (kind, word) in [("rule", "Rule"), ("effect", "Effect")] {
+            let text = note_text("Watch Orders", kind, None);
+            assert!(!text.contains(&format!("## {word}\n")), "{text}");
+            assert!(text.contains("\n# Watch Orders\n\nDescribe "), "{text}");
+        }
         let base = Entry::parse("Rule.md", &note_text("Rule", "rule", None)).unwrap();
         let mut loaded = Loaded::default();
         // Same ID, same key, both, no key, and unreadable notes all occur in a
@@ -10840,6 +10851,9 @@ mod tests {
         assert!(text.find("Arcane Recovery").unwrap() < text.find("Signature Spells").unwrap());
         assert!(text.contains("Wizard Spell List"), "{text}");
         assert!(text.contains("Wizard Progression"), "{text}");
+        // Row 107 (AG3): the table's own title is its one heading.
+        assert_eq!(text.matches("Wizard Features").count(), 1, "{text}");
+        assert!(!text.contains("Class table"), "{text}");
         // Tight rows in one case, as a spell's are, and each option on its own row.
         assert!(text.contains("Primary ability\nIntelligence"), "{text}");
         assert!(text.contains("Option A\n"), "{text}");
@@ -10856,6 +10870,14 @@ mod tests {
     #[test]
     fn class_reader_is_readable_and_opens_features() {
         let loaded = load(None).unwrap();
+        // Row 144 (FG6): no built-in name ends in a colon, which reads as a cut title.
+        let colons: Vec<_> = loaded
+            .notes
+            .iter()
+            .map(Note::name)
+            .filter(|name| name.ends_with(':'))
+            .collect();
+        assert!(loaded.notes.len() > 100 && colons.is_empty(), "{colons:?}");
         let index = loaded
             .notes
             .iter()
@@ -10919,8 +10941,10 @@ mod tests {
         assert!(rendered.contains("Starting equipment"));
         assert!(!rendered.contains("dnd2024:class_features/"));
         assert!(rendered.find("Rage").unwrap() < rendered.find("Relentless Rage").unwrap());
-        // The class table names the feature too. The link is in the list below it.
-        assert!(rendered.contains("Class table"));
+        // The class table names the feature too. The link is in the list below it. Its own
+        // title is its heading, once (row 107).
+        assert_eq!(rendered.matches("Barbarian Features").count(), 1, "{rendered}");
+        assert!(!rendered.contains("Class table"), "{rendered}");
         let link = texts
             .iter()
             .rfind(|text| text.galley.job.text == "Relentless Rage")

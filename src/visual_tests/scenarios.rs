@@ -1936,7 +1936,7 @@ pub mod library_navigation {
         d.wait_for_text("Captain Varra copied to Ashen Marches and linked.");
         d.observe(
             "W1",
-            !d.visible_text("Captain Varra is in this campaign only."),
+            !d.visible_text("Ash Exposure links to Captain Varra, which is in this campaign only. Another campaign that uses Ashen Marches will not find it."),
             "Copying the dependency also reconnects the package entry",
         );
         for size in [SMALL, DEFAULT, LARGE] {
@@ -1955,7 +1955,7 @@ pub mod library_navigation {
         }
         d.state("dependency-copy-reconnected", Sizes::All);
         d.click("Undo copy");
-        d.wait_for_text("Captain Varra is in this campaign only.");
+        d.wait_for_text("Ash Exposure links to Captain Varra, which is in this campaign only. Another campaign that uses Ashen Marches will not find it.");
         // A link in a paragraph is named by its words and where it goes (iter-16 AD1).
         d.click("Wiki watch spell (opens Ashfall)");
         d.wait_for_text("Hot ash falls");
@@ -2131,7 +2131,7 @@ pub mod library_navigation {
             && !d.has_containing("copied to Ember Reach");
         if a_alone {
             d.click("Undo copy");
-            d.wait_for_text("Captain Varra is in this campaign only.");
+            d.wait_for_text("Ash Exposure links to Captain Varra, which is in this campaign only. Another campaign that uses Ashen Marches will not find it.");
         }
         let a_back = std::fs::read_to_string(&path).unwrap() == a_text && copies_in(&a_folder) == 0;
         let b_kept = std::fs::read_to_string(&b_path).unwrap() == b_linked

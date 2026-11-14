@@ -358,7 +358,7 @@ impl CopyDialog {
                 if plan.dependencies.is_empty() {
                     ui.label(
                         Type::Small
-                            .rich(ui, "No required dependencies")
+                            .rich(ui, "Copies no other entry.")
                             .color(colors().muted),
                     );
                 } else if plan

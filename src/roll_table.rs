@@ -365,16 +365,20 @@ fn marked_tables_under_headings(body: &str) -> Vec<Headed> {
     found
 }
 
-/// Use the reader's checks when counting tables that cannot roll.
+/// The table warnings the reader shows, by the reader's checks: a table that cannot roll, and
+/// a `per` word Splat cannot read (the table still rolls, but the DM must change the note; round
+/// 28 FE3). A table with both has two.
 pub(crate) fn fault_count(body: &str) -> usize {
     marked_tables(body)
         .into_iter()
-        .filter(|(marker, rows)| {
-            marker
-                .as_ref()
-                .map_or(true, |marker| table_rows(&marker.dice, rows).is_err())
+        .map(|(marker, rows)| match marker {
+            Err(_) => 1,
+            Ok(marker) => {
+                usize::from(table_rows(&marker.dice, &rows).is_err())
+                    + usize::from(marker.per.warning().is_some())
+            }
         })
-        .count()
+        .sum()
 }
 
 #[test]
@@ -384,6 +388,11 @@ fn fault_count_keeps_valid_tables_and_counts_each_invalid_table_once() {
     let broken = valid.replace("1-4", "2-4");
     assert_eq!(fault_count(valid), 0);
     assert_eq!(fault_count(&format!("{valid}\n{broken}\n{broken}")), 2);
+    // An unreadable `per` word is a warning too; a word Splat reads is not.
+    let fortnight = valid.replace("dice=1d4", "dice=1d4 per=fortnight");
+    assert_eq!(fault_count(&valid.replace("dice=1d4", "dice=1d4 per=watch")), 0);
+    assert_eq!(fault_count(&format!("{fortnight}\n{broken}")), 2);
+    assert_eq!(fault_count(&fortnight.replace("1-4", "2-4")), 2);
 }
 
 fn parse_range(cell: &str) -> Option<(i64, i64)> {

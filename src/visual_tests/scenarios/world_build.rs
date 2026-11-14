@@ -3096,7 +3096,7 @@ pub fn tables(d: &mut Driver<'_>) {
     d.observe_both(
         "W6",
         "Table faults appear in the World list and warning count",
-        |d| d.has_containing("3 table faults") && d.visible_text("1 note needs fixing"),
+        |d| d.has_containing("4 table faults") && d.visible_text("1 note needs fixing"),
     );
     // F9: a `per` word that Splat cannot read warns on its table, and the table still rolls.
     // Round 27 FE13: the warning quotes the word the DM wrote and names the words that work.
