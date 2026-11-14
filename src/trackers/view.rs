@@ -669,7 +669,7 @@ fn register_block(ui: &egui::Ui, top: f32) {
 #[allow(clippy::too_many_arguments)]
 #[allow(
     clippy::disallowed_methods,
-    reason = "a repeated amount field's problem: a row fault at the line that leaves the field out"
+    reason = "a repeated amount field’s problem: a row fault at the line that leaves the field out"
 )]
 fn tracker_lines(
     ui: &mut egui::Ui,
