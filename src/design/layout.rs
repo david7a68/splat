@@ -153,7 +153,8 @@ impl RowIndex {
 
 /// A text from the row's data (a file name, an entry's name), as a [`RowKey`]. Named, so that a
 /// key made with `format!` is seen: Clippy bans `from_data` outside `src/design/`, and each use
-/// is a counted row (`Ban::RowKey`).
+/// is a counted row (`Ban::RowKey`). An object whose id is a text is a [`TextOwner`]: key its
+/// fields with [`TextKey::of`], which needs no counted row.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TextKey(String);
 
@@ -161,7 +162,67 @@ impl TextKey {
     pub fn from_data(text: impl Into<String>) -> Self {
         Self(text.into())
     }
+
+    /// The key of `owner`'s fields: its own id text. Not banned: the text comes from a listed
+    /// owner type's id, never from the layout or a `format!`.
+    ///
+    /// The compiling twin is the part test `a_timeline_event_keys_its_fields` (a timeline event,
+    /// a crate-private type, cannot be named in a doc example).
+    ///
+    /// A free text is not an owner, and only the types listed in `src/design/layout.rs` can
+    /// become one (the trait is sealed):
+    ///
+    /// ```compile_fail,E0277
+    /// let _ = splat::layout::TextKey::of("journey");
+    /// ```
+    ///
+    /// ```compile_fail,E0277
+    /// let _ = splat::layout::TextKey::of(&format!("row {}", 1));
+    /// ```
+    ///
+    /// No public owner type holds a free text (review 1: `DocOwner` did):
+    ///
+    /// ```compile_fail,E0422
+    /// let _ = splat::layout::TextKey::of(&splat::layout::DocOwner { id: format!("row_{}", 1) });
+    /// ```
+    ///
+    /// A caller's own type cannot become an owner (it would turn any text into a key with no
+    /// counted row):
+    ///
+    /// ```compile_fail,E0277
+    /// struct Row(String);
+    /// impl splat::layout::TextOwner for Row {
+    ///     fn owner_text(&self) -> &str {
+    ///         &self.0
+    ///     }
+    /// }
+    /// ```
+    pub fn of(owner: &impl TextOwner) -> Self {
+        Self(owner.owner_text().to_owned())
+    }
 }
+
+/// An object whose id is a text (a timeline event's `id`). Its text fields are keyed by that id
+/// with [`TextKey::of`]. Sealed: a type becomes an owner only by a line in
+/// `src/design/layout.rs` (`text_owners!`), so `String` and `str` never do, and the id is
+/// borrowed from the object, so a `format!` cannot be one.
+pub trait TextOwner: sealed::Sealed {
+    /// The object's id, borrowed from its data.
+    fn owner_text(&self) -> &str;
+}
+
+macro_rules! text_owners {
+    ($($owner:ty => |$it:ident| $id:expr),* $(,)?) => {$(
+        impl sealed::Sealed for $owner {}
+        impl TextOwner for $owner {
+            fn owner_text(&self) -> &str {
+                let $it = self;
+                $id
+            }
+        }
+    )*};
+}
+text_owners!(crate::timeline::Event => |event| &event.id);
 
 macro_rules! row_keys {
     ($($key:ty),*) => {$(
@@ -169,22 +230,150 @@ macro_rules! row_keys {
         impl RowKey for $key {}
     )*};
 }
-row_keys!(uuid::Uuid, RowIndex, TextKey, std::path::Path);
+row_keys!(uuid::Uuid, RowIndex, TextKey);
 impl<K: RowKey + ?Sized> sealed::Sealed for &K {}
 impl<K: RowKey + ?Sized> RowKey for &K {}
 impl<K: RowKey> sealed::Sealed for Option<K> {}
 impl<K: RowKey> RowKey for Option<K> {}
 
-/// A text field's id. It comes from a name in the source and an optional [`RowKey`], never from
-/// the field's place in the layout, so a branch that changes the layout around the field keeps
-/// its focus, cursor and selection. Make one with [`field_id!`](crate::field_id), which takes a
-/// string literal; the source lint fails when two `field_id!` names are the same. Two live
-/// fields with one id (the same name and key) are the gate's `widget-id-clash` check.
+/// Why a field exists once in the whole app, so its id needs no owner's key. A closed set: a
+/// reviewer reads a wrong claim in one word. A field that edits one object of many (an event, a
+/// session, a member, a run, a picker of an entry) is never `Once`: key it with
+/// [`FieldName::of`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Once {
+    /// A setting of the app: there is one settings object, and its fields are its own.
+    Settings,
+    /// The query of a page's or a popup's own search. The query is not saved object data.
+    PageSearch,
+    /// The one form that makes a new object. It holds no saved object's text.
+    CreateForm,
+    /// An example in the design gallery, a doc example or a part test.
+    Example,
+}
+
+/// A text field's name, from [`field_id!`](crate::field_id). It cannot draw a field: say whose
+/// field it is first. [`of`](Self::of) gives the field of one object (its key comes from that
+/// object's data); [`once`](Self::once) gives the field that exists once in the app, for one of
+/// the [`Once`] reasons.
 ///
 /// ```
-/// use splat::layout::RowIndex;
-/// const NAME: splat::layout::FieldId = splat::field_id!("doc_name");
-/// assert_ne!(NAME.with(RowIndex::from_data(1)).id(), NAME.with(RowIndex::from_data(2)).id());
+/// use splat::layout::{FieldName, Once, RowIndex};
+/// const NAME: FieldName = splat::field_id!("doc_name");
+/// const COOKIE: splat::layout::FieldId = splat::field_id!("doc_cookie").once(Once::Settings);
+/// fn f(ui: &mut eframe::egui::Ui, text: &mut String) {
+///     let _ = NAME.of(RowIndex::from_data(1)).single_line(ui, text, |edit| edit);
+///     let _ = COOKIE.single_line(ui, text, |edit| edit);
+/// }
+/// ```
+///
+/// A name with no owner choice draws nothing:
+///
+/// ```compile_fail,E0599
+/// fn f(ui: &mut eframe::egui::Ui, text: &mut String) {
+///     let _ = splat::field_id!("doc_name").single_line(ui, text, |edit| edit);
+/// }
+/// ```
+///
+/// ```compile_fail,E0308
+/// fn f(ui: &mut eframe::egui::Ui, text: &mut String) {
+///     let _ = splat::layout::line_field(ui, splat::field_id!("doc_name"), "Name", text, "", 80.0);
+/// }
+/// ```
+///
+/// A `Once` reason is one of the listed words, not a text:
+///
+/// ```compile_fail,E0308
+/// let _ = splat::field_id!("doc_name").once("Settings");
+/// ```
+///
+/// An id or a place from the layout is not an owner's key:
+///
+/// ```compile_fail,E0277
+/// fn f(ui: &mut eframe::egui::Ui) {
+///     let _ = splat::field_id!("doc_name").of(ui.next_auto_id());
+/// }
+/// ```
+///
+/// ```compile_fail,E0277
+/// fn f(ui: &mut eframe::egui::Ui) {
+///     let _ = splat::field_id!("doc_name").of(ui.cursor().min.y as usize);
+/// }
+/// ```
+///
+/// A path or a name is not an identity: a save or a rename changes it while the DM types, and
+/// the field loses its focus, cursor and Undo. Neither is a key (a path can only be the counted
+/// escape `TextKey::from_data`):
+///
+/// ```compile_fail,E0277
+/// let _ = splat::field_id!("doc_name").of(std::path::Path::new("Groups/Wolves.md"));
+/// ```
+///
+/// ```compile_fail,E0277
+/// let _ = splat::field_id!("doc_name").of(std::path::PathBuf::from("Groups/Wolves.md"));
+/// ```
+///
+/// ```compile_fail,E0277
+/// let _ = splat::field_id!("doc_name").of("Wolves");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct FieldName {
+    name: &'static str,
+}
+
+impl FieldName {
+    /// Use [`field_id!`](crate::field_id). Clippy disallows this call outside `src/design/`.
+    #[doc(hidden)]
+    pub const fn checked(name: &'static str) -> Self {
+        let bytes = name.as_bytes();
+        assert!(!bytes.is_empty(), "A field id is not empty.");
+        let mut at = 0;
+        while at < bytes.len() {
+            assert!(
+                bytes[at].is_ascii_lowercase() || bytes[at] == b'_' || bytes[at].is_ascii_digit(),
+                "A field id is snake_case."
+            );
+            at += 1;
+        }
+        Self { name }
+    }
+
+    /// The field of one object: `key` is the identity of the object whose text the field edits
+    /// (a `Uuid`, a [`TextOwner`]'s id), never something the field or a save changes (a path, a
+    /// name) and never a place in the layout or a list.
+    pub fn of(self, key: impl RowKey) -> FieldId {
+        FieldId {
+            name: self.name,
+            key: Some(Id::new(key)),
+        }
+    }
+
+    /// The field that exists once in the app, for `reason`.
+    pub const fn once(self, reason: Once) -> FieldId {
+        let _ = reason;
+        FieldId {
+            name: self.name,
+            key: None,
+        }
+    }
+}
+
+/// A text field's id. It comes from a name in the source and its owner, never from the field's
+/// place in the layout, so a branch that changes the layout around the field keeps its focus,
+/// cursor and selection. Make one from a [`FieldName`] ([`field_id!`](crate::field_id), which
+/// takes a string literal) with [`FieldName::of`] or [`FieldName::once`]; the source lint fails
+/// when two `field_id!` names are the same. Two live fields with one id (the same name and key)
+/// are the gate's `widget-id-clash` check.
+///
+/// The named parts ([`line_field`], [`labelled_field`], [`FieldId::search`], [`CreateField`])
+/// add the field's visible name to its id, so one name given two labels (one helper that draws
+/// three pickers) is three fields. The parts also drop egui's text Undo when the bound text
+/// changed since the field last had focus (see [`FieldId::single_line`]).
+///
+/// ```
+/// use splat::layout::{FieldName, RowIndex};
+/// const NAME: FieldName = splat::field_id!("doc_name");
+/// assert_ne!(NAME.of(RowIndex::from_data(1)).id(), NAME.of(RowIndex::from_data(2)).id());
 /// ```
 ///
 /// A row index is made only by its named constructor:
@@ -196,13 +385,13 @@ impl<K: RowKey> RowKey for Option<K> {}
 /// An `egui::Id` is not a [`RowKey`], and neither is a bare text:
 ///
 /// ```compile_fail,E0277
-/// const NAME: splat::layout::FieldId = splat::field_id!("doc_name");
-/// let _ = NAME.with(eframe::egui::Id::new("place"));
+/// const NAME: splat::layout::FieldName = splat::field_id!("doc_name");
+/// let _ = NAME.of(eframe::egui::Id::new("place"));
 /// ```
 ///
 /// ```compile_fail,E0277
-/// const NAME: splat::layout::FieldId = splat::field_id!("doc_name");
-/// let _ = NAME.with(format!("{:?}", eframe::egui::Id::new("place")));
+/// const NAME: splat::layout::FieldName = splat::field_id!("doc_name");
+/// let _ = NAME.of(format!("{:?}", eframe::egui::Id::new("place")));
 /// ```
 ///
 /// An id from the layout is not a `FieldId`:
@@ -233,23 +422,7 @@ pub struct FieldId {
 }
 
 impl FieldId {
-    /// Use [`field_id!`](crate::field_id). Clippy disallows this call outside `src/design/`.
-    #[doc(hidden)]
-    pub const fn checked(name: &'static str) -> Self {
-        let bytes = name.as_bytes();
-        assert!(!bytes.is_empty(), "A field id is not empty.");
-        let mut at = 0;
-        while at < bytes.len() {
-            assert!(
-                bytes[at].is_ascii_lowercase() || bytes[at] == b'_' || bytes[at].is_ascii_digit(),
-                "A field id is snake_case."
-            );
-            at += 1;
-        }
-        Self { name, key: None }
-    }
-
-    /// The same field for one row, entry or draft of many.
+    /// The same field for one part of its owner (a line of a tracker, an action of a line).
     pub fn with(self, key: impl RowKey) -> Self {
         let key = match self.key {
             Some(outer) => outer.with(key),
@@ -261,27 +434,99 @@ impl FieldId {
         }
     }
 
-    /// egui's id for this field, to give or test its focus.
+    /// egui's id for this field as [`single_line`](Self::single_line),
+    /// [`multi_line`](Self::multi_line) and [`editor`](Self::editor) draw it, to give or test its
+    /// focus. A named part adds its name: use [`named_id`](Self::named_id) for those.
     pub fn id(self) -> Id {
         Id::new(("splat_field", self.name, self.key))
+    }
+
+    /// egui's id for this field as a named part draws it ([`line_field`], [`labelled_field`],
+    /// [`FieldId::search`], [`CreateField`]), with `name`, the visible label or accessible name
+    /// the part is given.
+    pub fn named_id(self, name: &str) -> Id {
+        self.named(name).id()
+    }
+
+    /// This field with its visible name in its id. One name with two labels is two fields.
+    fn named(self, name: &str) -> Self {
+        let key = match self.key {
+            Some(outer) => outer.with(("named", name)),
+            None => Id::new(("named", name)),
+        };
+        Self {
+            key: Some(key),
+            ..self
+        }
     }
 
     /// A one-line field with this id that no shared part draws (a password, a code font).
     /// `style` sets the rest of the `TextEdit`; Clippy refuses another id on it outside
     /// `src/design/`. The field is drawn here, so the gate's `widget-id-clash` check sees it.
+    ///
+    /// The field parts (`single_line`, `multi_line`, `editor`, `search`, the parts drawn
+    /// through them, and `number_field`; not the staged raw fields) guard their text history
+    /// (`TextGuard`): when the bound text is not the
+    /// text the field held when it last had focus (the program or another object replaced it),
+    /// egui's text Undo for this id is dropped before Ctrl+Z can reach it (the cursor stays). So another object's
+    /// words cannot come back through Undo, even when the owner's key is missing. One case stays
+    /// with the owner's key: both texts are equal (A's text was emptied, B's is empty too).
+    ///
+    /// Caller duty: do not rewrite the bound text while the field has focus (a trim, a format, a
+    /// clear in the frame of `changed()`); keep the typed words and store the cleaned value.
     #[allow(
         clippy::disallowed_methods,
         reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
     )]
-    pub fn single_line<'t>(
+    pub fn single_line(
         self,
         ui: &mut Ui,
-        text: &'t mut dyn TextBuffer,
-        style: impl FnOnce(TextEdit<'t>) -> TextEdit<'t>,
+        text: &mut dyn TextBuffer,
+        style: impl for<'t> FnOnce(TextEdit<'t>) -> TextEdit<'t>,
     ) -> Response {
-        let response = ui.add(style(TextEdit::singleline(text).id(self.id())));
+        let id = self.id();
+        let guard = TextGuard::before(ui, id, text.as_str());
+        let response = ui.add(style(TextEdit::singleline(text).id(id)));
+        guard.after(ui, text.as_str(), &response);
         record_field(ui, &response);
         response
+    }
+
+    /// A multi-line editor with this id, for a caller that reads where the text was laid out
+    /// (the galley, its place, the cursor, the clip rect): a Markdown source, a repair editor.
+    /// It guards the text history as [`single_line`](Self::single_line) does.
+    ///
+    /// ```
+    /// fn f(ui: &mut eframe::egui::Ui, note: &mut String) {
+    ///     const NOTE: splat::layout::FieldName = splat::field_id!("doc_note");
+    ///     let id = NOTE.once(splat::layout::Once::Example);
+    ///     let editor = id.editor(ui, note, |edit| edit.desired_rows(4));
+    ///     let _ = (editor.response, editor.galley, editor.galley_pos, editor.text_clip_rect);
+    ///     let _ = editor.cursor_range;
+    /// }
+    /// ```
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+    )]
+    pub fn editor(
+        self,
+        ui: &mut Ui,
+        text: &mut dyn TextBuffer,
+        style: impl for<'t> FnOnce(TextEdit<'t>) -> TextEdit<'t>,
+    ) -> Editor {
+        let id = self.id();
+        let guard = TextGuard::before(ui, id, text.as_str());
+        let output = style(TextEdit::multiline(text).id(id)).show(ui);
+        guard.after(ui, text.as_str(), &output.response);
+        record_field(ui, &output.response);
+        Editor {
+            response: output.response,
+            galley: output.galley,
+            galley_pos: output.galley_pos,
+            text_clip_rect: output.text_clip_rect,
+            cursor_range: output.cursor_range,
+        }
     }
 
     /// A search field with this id: the search icon, the hint (what can be searched) and, while
@@ -291,7 +536,8 @@ impl FieldId {
     ///
     /// ```
     /// fn f(ui: &mut eframe::egui::Ui, query: &mut String) {
-    ///     const SEARCH: splat::layout::FieldId = splat::field_id!("doc_search");
+    ///     use splat::layout::{FieldId, Once};
+    ///     const SEARCH: FieldId = splat::field_id!("doc_search").once(Once::PageSearch);
     ///     let search = SEARCH.search(ui, "Search", query, "Search by name…", 240.0);
     ///     let _ = (search.field, search.cleared);
     /// }
@@ -301,7 +547,8 @@ impl FieldId {
     ///
     /// ```compile_fail,E0599
     /// fn f(ui: &mut eframe::egui::Ui, query: &mut String) {
-    ///     const SEARCH: splat::layout::FieldId = splat::field_id!("doc_search");
+    ///     use splat::layout::{FieldId, Once};
+    ///     const SEARCH: FieldId = splat::field_id!("doc_search").once(Once::PageSearch);
     ///     let _ = SEARCH.search(ui, "Search", query, "Search by name…", 240.0).without_clear();
     /// }
     /// ```
@@ -315,6 +562,7 @@ impl FieldId {
     ) -> Search {
         let clear = || Action::quiet("Clear").density(Density::Scan);
         let mut cleared = false;
+        let id = self.named(name).id();
         let field = ui
             .horizontal(|ui| {
                 let room = if text.is_empty() {
@@ -322,14 +570,16 @@ impl FieldId {
                 } else {
                     clear().natural_width(ui) + ui.spacing().item_spacing.x
                 };
+                let guard = TextGuard::before(ui, id, text);
                 let field = super::components::search_box(
                     ui,
-                    self.id(),
+                    id,
                     name,
                     text,
                     hint,
                     (width - room).max(Density::Scan.control()),
                 );
+                guard.after(ui, text, &field);
                 record_field(ui, &field);
                 if !text.is_empty() && clear().show(ui).clicked() {
                     text.clear();
@@ -347,16 +597,195 @@ impl FieldId {
         clippy::disallowed_methods,
         reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
     )]
-    pub fn multi_line<'t>(
+    pub fn multi_line(
         self,
         ui: &mut Ui,
-        text: &'t mut dyn TextBuffer,
-        style: impl FnOnce(TextEdit<'t>) -> TextEdit<'t>,
+        text: &mut dyn TextBuffer,
+        style: impl for<'t> FnOnce(TextEdit<'t>) -> TextEdit<'t>,
     ) -> Response {
-        let response = ui.add(style(TextEdit::multiline(text).id(self.id())));
+        let id = self.id();
+        let guard = TextGuard::before(ui, id, text.as_str());
+        let response = ui.add(style(TextEdit::multiline(text).id(id)));
+        guard.after(ui, text.as_str(), &response);
         record_field(ui, &response);
         response
     }
+}
+
+/// What [`FieldId::editor`] drew: the field and where its text was laid out. The fields are
+/// egui's `TextEditOutput` fields of the same names.
+#[must_use = "read `response` for changes and focus"]
+pub struct Editor {
+    pub response: Response,
+    /// The laid-out text.
+    pub galley: std::sync::Arc<egui::Galley>,
+    /// Where the galley's top left corner was painted.
+    pub galley_pos: egui::Pos2,
+    /// The rect the text is clipped to (the visible part of the text).
+    pub text_clip_rect: Rect,
+    /// The cursor or selection, while the field has one.
+    pub cursor_range: Option<egui::text::CCursorRange>,
+}
+
+/// What the bound text was when the field last drew with focus: its length and a hash.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct BoundText {
+    len: usize,
+    hash: u64,
+}
+
+impl BoundText {
+    /// One hash of the text (egui itself copies a focused field's whole text into its Undo
+    /// history every frame it has focus, so this adds less than egui does).
+    fn of(text: &str) -> Self {
+        #[cfg(test)]
+        BOUND_TEXT_HASHES.with(|count| count.set(count.get() + 1));
+        Self {
+            len: text.len(),
+            hash: egui::util::hash(text),
+        }
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many times a field part hashed its text, for the cost proof.
+    pub(crate) static BOUND_TEXT_HASHES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many fields keep a record. The oldest record goes first, and egui's Undo history for
+/// its field goes with it, so a field with no record never has old history.
+pub(crate) const BOUND_TEXTS: usize = 32;
+
+/// The records, newest last. At most [`BOUND_TEXTS`].
+#[derive(Clone, Default)]
+struct BoundTexts(Vec<(Id, BoundText)>);
+
+fn bound_texts_id() -> Id {
+    Id::new("splat_bound_texts")
+}
+
+/// How many records the guard holds, for the part test.
+#[cfg(test)]
+pub(crate) fn bound_text_count(ctx: &egui::Context) -> usize {
+    ctx.data(|data| data.get_temp::<BoundTexts>(bound_texts_id()))
+        .map_or(0, |records| records.0.len())
+}
+
+/// The field parts' guard of egui's text Undo. egui keeps a field's cursor and Undo history
+/// under its id. If the field's text is not the text it held when it last had focus, someone
+/// else's history is under this id (another object's, when the caller left out the owner's
+/// key; or the program replaced the text): drop it before Ctrl+Z can bring it back.
+///
+/// When it checks, before the draw:
+/// - the field has focus: every frame (egui adds Undo history only then);
+/// - the field has a record and no focus: on a frame with a pointer press or a key press, the
+///   only frames in which focus can come and Ctrl+Z run inside egui's draw. An idle frame, or
+///   one with only pointer moves, hashes nothing.
+///
+/// A field that is not drawn for a while (its pane closed) keeps its record, so the same check
+/// runs when it comes back. A dropped history removes the record. At most [`BOUND_TEXTS`] fields
+/// keep a record; the oldest goes first, with its egui history.
+///
+/// One case passes: the old and new texts are equal (A's text was emptied, B's is empty). The
+/// owner's key ([`FieldName::of`]) covers that one. A caller does not rewrite the bound text
+/// while the field has focus (a trim, a format, a clear in the frame of `changed()`): the guard
+/// takes that for another text and drops the DM's own Undo.
+#[must_use]
+struct TextGuard {
+    id: Id,
+    focused_before: bool,
+}
+
+impl TextGuard {
+    fn before(ui: &Ui, id: Id, text: &str) -> Self {
+        let focused_before = ui.memory(|memory| memory.has_focus(id));
+        let check = focused_before
+            || ui.input(|input| {
+                input.pointer.any_pressed()
+                    || input
+                        .events
+                        .iter()
+                        .any(|event| matches!(event, egui::Event::Key { pressed: true, .. }))
+            });
+        if check && Self::stale(ui, id, text) {
+            // The cursor stays: a caller may have set it for this text (select all on open), and
+            // egui keeps a cursor inside the text it draws.
+            Self::drop_history(ui.ctx(), id);
+            Self::forget(ui.ctx(), id);
+        }
+        Self { id, focused_before }
+    }
+
+    fn after(self, ui: &Ui, text: &str, response: &Response) {
+        if !response.has_focus() {
+            return;
+        }
+        // Focus came this frame by a way the check before the draw did not see: egui may have
+        // fed the old history with this text.
+        if !self.focused_before && Self::stale(ui, self.id, text) {
+            Self::drop_history(ui.ctx(), self.id);
+        }
+        let bound = BoundText::of(text);
+        let ctx = ui.ctx();
+        let oldest = ctx.data_mut(|data| {
+            let records = &mut data
+                .get_temp_mut_or_default::<BoundTexts>(bound_texts_id())
+                .0;
+            records.retain(|(id, _)| *id != self.id);
+            records.push((self.id, bound));
+            (records.len() > BOUND_TEXTS).then(|| records.remove(0).0)
+        });
+        if let Some(oldest) = oldest {
+            Self::drop_history(ctx, oldest);
+        }
+    }
+
+    /// Whether the field last had focus with another text.
+    fn stale(ui: &Ui, id: Id, text: &str) -> bool {
+        let Some(bound) = ui.ctx().data(|data| {
+            data.get_temp::<BoundTexts>(bound_texts_id())
+                .and_then(|records| {
+                    records
+                        .0
+                        .iter()
+                        .find(|(record, _)| *record == id)
+                        .map(|(_, bound)| *bound)
+                })
+        }) else {
+            return false;
+        };
+        bound.len != text.len() || bound != BoundText::of(text)
+    }
+
+    fn forget(ctx: &egui::Context, id: Id) {
+        ctx.data_mut(|data| {
+            data.get_temp_mut_or_default::<BoundTexts>(bound_texts_id())
+                .0
+                .retain(|(record, _)| *record != id);
+        });
+    }
+
+    fn drop_history(ctx: &egui::Context, id: Id) {
+        if let Some(mut state) = egui::text_edit::TextEditState::load(ctx, id) {
+            state.clear_undoer();
+            state.store(ctx, id);
+        }
+    }
+}
+
+/// The guarded draw of a field that a part outside this file draws (a number field): `draw`
+/// draws the `TextEdit` with `id` and the text.
+pub(super) fn guarded_field(
+    ui: &mut Ui,
+    id: Id,
+    text: &mut String,
+    draw: impl FnOnce(&mut Ui, &mut String) -> Response,
+) -> Response {
+    let guard = TextGuard::before(ui, id, text);
+    let response = draw(ui, text);
+    guard.after(ui, text, &response);
+    response
 }
 
 /// What [`FieldId::search`] drew: the field, and whether `Clear` emptied it this frame.
@@ -465,13 +894,14 @@ pub fn widget_id_clashes(
     found
 }
 
-/// A [`FieldId`] from a string literal, checked when the program compiles.
+/// A [`FieldName`] from a string literal, checked when the program compiles. Give it its owner
+/// with [`FieldName::of`] or [`FieldName::once`] before it can draw.
 #[macro_export]
 macro_rules! field_id {
     ($name:literal) => {
         const {
             #[allow(clippy::disallowed_methods, reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)")]
-            let id = $crate::layout::FieldId::checked($name);
+            let id = $crate::layout::FieldName::checked($name);
             id
         }
     };
@@ -488,7 +918,7 @@ pub fn line_field(
 ) -> Response {
     let hint = placeholder(ui, hint);
     // The desired width excludes the margins.
-    let response = id.single_line(ui, text, |edit| {
+    let response = id.named(name).single_line(ui, text, |edit| {
         edit.desired_width(width - 2.0 * S)
             .min_size(vec2(width, 26.0))
             .margin(vec2(S, 4.0))
@@ -515,7 +945,7 @@ pub fn labelled_field(
 
 /// The form field of `labelled_field` and `InlineCreate`, `width` wide without its margins.
 fn form_field(ui: &mut Ui, id: FieldId, label: &str, text: &mut String, width: f32) -> Response {
-    let response = id.single_line(ui, text, |edit| {
+    let response = id.named(label).single_line(ui, text, |edit| {
         edit.desired_width(width)
             .min_size(vec2(0.0, Density::Read.control()))
             .margin(vec2(S, 5.0))
@@ -1508,7 +1938,7 @@ pub struct Complete;
 /// fn form(ui: &mut eframe::egui::Ui, name: &mut String) {
 ///     let reason = name.is_empty().then_some(Reason::NoName);
 ///     let _ = InlineCreate::new()
-///         .field(CreateField::new(splat::field_id!("doc_form_name"), "Name", name))
+///         .field(CreateField::new(splat::field_id!("doc_form_name").once(splat::layout::Once::Example), "Name", name))
 ///         .create(Create::primary(splat::word!("Create")).blocked(reason))
 ///         .kept_line(KeptLine::new())
 ///         .show(ui);
@@ -1538,9 +1968,9 @@ pub struct Complete;
 /// use splat::layout::{Create, CreateField, InlineCreate, NoReason};
 /// let (mut a, mut b) = (String::new(), String::new());
 /// let _ = InlineCreate::new()
-///     .field(CreateField::new(splat::field_id!("doc_a"), "A", &mut a))
+///     .field(CreateField::new(splat::field_id!("doc_a").once(splat::layout::Once::Example), "A", &mut a))
 ///     .create(Create::<NoReason>::primary(splat::word!("Create")))
-///     .field(CreateField::new(splat::field_id!("doc_b"), "B", &mut b));
+///     .field(CreateField::new(splat::field_id!("doc_b").once(splat::layout::Once::Example), "B", &mut b));
 /// ```
 ///
 /// A form with no kept line has no `show`:
@@ -1549,7 +1979,7 @@ pub struct Complete;
 /// use splat::layout::{Create, CreateField, InlineCreate, NoReason};
 /// fn form(ui: &mut eframe::egui::Ui, name: &mut String) {
 ///     let _ = InlineCreate::new()
-///         .field(CreateField::new(splat::field_id!("doc_name"), "Name", name))
+///         .field(CreateField::new(splat::field_id!("doc_name").once(splat::layout::Once::Example), "Name", name))
 ///         .create(Create::<NoReason>::primary(splat::word!("Create")))
 ///         .show(ui);
 /// }

@@ -526,13 +526,13 @@ const NOT_FOUND: &str = " · Not found";
 /// each has its own name; the entry's id tells the entries apart.
 #[derive(Clone, Copy)]
 struct ReaderField {
-    page: design::FieldId,
-    compact: design::FieldId,
+    page: design::FieldName,
+    compact: design::FieldName,
 }
 
 impl ReaderField {
     fn id(self, compact: bool, entry: Uuid) -> design::FieldId {
-        (if compact { self.compact } else { self.page }).with(entry)
+        (if compact { self.compact } else { self.page }).of(entry)
     }
 }
 

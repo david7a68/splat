@@ -38,7 +38,8 @@ pub(crate) const RESULTS_LISTED: usize = 8;
 const PANEL_MARGIN: f32 = design::M;
 
 pub const SEARCH_NAME: &str = "Search everything";
-const LOOKUP_SEARCH: design::FieldId = crate::field_id!("lookup_search");
+const LOOKUP_SEARCH: design::FieldId =
+    crate::field_id!("lookup_search").once(design::Once::PageSearch);
 
 /// The search field's placeholder for this width of the panel.
 fn search_hint(width: f32) -> &'static str {

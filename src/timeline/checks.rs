@@ -16,16 +16,12 @@ const MOST_OFFERS: usize = 3;
 
 /// The "How long" field of an open event. Both of its forms (with checks to follow and without)
 /// use this id, so the focus and the cursor stay when the event gains or loses its checks.
-const LENGTH: design::FieldId = crate::field_id!("event_length");
+const LENGTH: design::FieldName = crate::field_id!("event_length");
 
 /// The "How long" field of this event. egui keeps a field's cursor and text Undo under its id, so
 /// each event has its own id: another event's length never gets this one's history.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub(super) fn length_field(event: &Event) -> design::FieldId {
-    LENGTH.with(design::TextKey::from_data(event.id.as_str()))
+    LENGTH.of(design::TextKey::of(event))
 }
 
 /// What the DM asked for in a journey's checks. One press in a frame.

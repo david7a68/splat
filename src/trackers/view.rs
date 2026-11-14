@@ -886,7 +886,7 @@ fn name_cell(ui: &mut egui::Ui, view: &mut ViewState, name: &str, size: egui::Ve
     }
 }
 
-const AMOUNT: design::FieldId = crate::field_id!("trackers_amount");
+const AMOUNT: design::FieldName = crate::field_id!("trackers_amount");
 
 /// `add: ask` puts a number field in the action's place. It holds focus until Enter or Escape.
 #[allow(
@@ -907,7 +907,7 @@ fn amount_field(
     // panel's two layouts nest it in different `Ui`s, and an automatic id would lose focus and
     // the typed amount when the width crosses between them.
     let id = AMOUNT
-        .with(TextKey::from_data(key.as_str()))
+        .of(TextKey::from_data(key.as_str()))
         .with(instance.as_deref().map(TextKey::from_data))
         .with(TextKey::from_data(label));
     let response = ui.add_sized(

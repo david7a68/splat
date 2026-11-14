@@ -18,7 +18,8 @@ const RESULTS: usize = 8;
 /// More letters than any command has: the `/` was not a command.
 const LONGEST_TYPED: usize = 16;
 pub const SEARCH_NAME: &str = "Search to link";
-const SEARCH_FIELD: design::FieldId = crate::field_id!("search_to_link");
+const SEARCH_FIELD: design::FieldId =
+    crate::field_id!("search_to_link").once(design::Once::PageSearch);
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Command {
@@ -577,7 +578,7 @@ fn search(
     highlight: &mut usize,
     focus: &mut bool,
 ) -> Outcome {
-    let field_id = SEARCH_FIELD.id();
+    let field_id = SEARCH_FIELD.named_id(SEARCH_NAME);
     let in_field = ui.memory(|memory| memory.has_focus(field_id));
     let (up, down, enter) = if in_field {
         ui.input_mut(|i| {
