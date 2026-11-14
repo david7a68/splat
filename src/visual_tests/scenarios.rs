@@ -1893,13 +1893,22 @@ pub mod library_navigation {
                 .pane_records()
                 .into_iter()
                 .find(|record| record.footer().is_some())?;
-            let (footer, viewport, height) =
-                (record.footer()?, record.viewport()?, record.content_height()?);
+            let (footer, viewport, height) = (
+                record.footer()?,
+                record.viewport()?,
+                record.content_height()?,
+            );
             let gap = footer.top() - (viewport.top() + height);
             Some(if record.fits() && record.offset() <= 0.5 {
-                ((gap - crate::design::S).abs() <= 1.0, format!("follows by {gap}"))
+                (
+                    (gap - crate::design::S).abs() <= 1.0,
+                    format!("follows by {gap}"),
+                )
             } else {
-                (height > viewport.height(), format!("pinned, content {height} in {}", viewport.height()))
+                (
+                    height > viewport.height(),
+                    format!("pinned, content {height} in {}", viewport.height()),
+                )
             })
         };
         for size in [SMALL, DEFAULT] {

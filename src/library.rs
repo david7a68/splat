@@ -5413,9 +5413,13 @@ impl Library {
                     }
                 }
                 ui.spacing_mut().item_spacing.y = 0.0;
-                let mut list = egui::ScrollArea::vertical()
-                    .id_salt(("entry_list", self.section.label(), &query, scope))
-                    .auto_shrink([false, false]);
+                // The list's own scroll column, which keeps its lane; only the rows in view draw.
+                let mut list = design::ScrollColumn::new((
+                    "entry_list",
+                    self.section.label(),
+                    &query,
+                    scope,
+                ));
                 if std::mem::take(&mut self.reveal_row)
                     && let Some(row) =
                         selected.and_then(|selected| matches.iter().position(|i| *i == selected))
