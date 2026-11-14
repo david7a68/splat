@@ -61,7 +61,8 @@ fn resolve(campaign: &Campaign, name: &str) -> Result<PathBuf, String> {
     })
 }
 
-/// One wording for a folder that is gone, whatever it holds (`Session`, `Run`).
+/// The wording of a run folder that is gone. The session folder says it as a typed fault
+/// (`page::FolderFault::Missing`); the run's callers still read these words (routing row 136).
 pub(crate) fn missing_folder(what: &str, folder: &Path) -> String {
     format!(
         "{what} folder not found: {}. It may have been moved or renamed.",
@@ -70,22 +71,34 @@ pub(crate) fn missing_folder(what: &str, folder: &Path) -> String {
 }
 
 pub fn folder(campaign: &Campaign) -> Result<PathBuf, String> {
+    folder_typed(campaign).map_err(String::from)
+}
+
+/// The campaign's session folder, or why it cannot be used, as a typed fault.
+pub(crate) fn folder_typed(campaign: &Campaign) -> Result<PathBuf, page::FolderFault> {
     let path = resolve(campaign, &folder_setting(campaign)?)?;
     let document = CampaignDocument::load(campaign)?;
     let entry = Entry::parse(&document.path, &document.text)?;
     if entry.fields.contains_key(FOLDER_FIELD) && !path.is_dir() {
-        return Err(missing_folder("Session", &path));
+        return Err(page::FolderFault::Missing(path));
     }
     Ok(path)
 }
 
+/// `open_folder_typed` with the fault's words, for the fixtures. The page keeps the fault typed.
+#[cfg(test)]
 pub(crate) fn open_folder(campaign: &Campaign) -> Result<PathBuf, String> {
+    open_folder_typed(campaign).map_err(String::from)
+}
+
+/// `open_folder` with its fault typed: the page shows it in its footer and on its page.
+pub(crate) fn open_folder_typed(campaign: &Campaign) -> Result<PathBuf, page::FolderFault> {
     let document = CampaignDocument::load(campaign)?;
     let entry = Entry::parse(&document.path, &document.text)?;
     if !entry.fields.contains_key(FOLDER_FIELD) {
-        write_folder(campaign, &folder_setting(campaign)?)
+        write_folder(campaign, &folder_setting(campaign)?).map_err(page::FolderFault::NotSaved)
     } else {
-        folder(campaign)
+        folder_typed(campaign)
     }
 }
 
@@ -497,13 +510,50 @@ pub(crate) fn storage_files(folder: &Path) -> Result<Vec<PathBuf>, String> {
 }
 
 /// Copy before changing the manifest; retain the old files if any step fails.
-pub(crate) fn move_storage(campaign: &Campaign, name: &str) -> Result<PathBuf, String> {
+/// The files of a session folder's storage by kind: what a Move files and save would move, or
+/// moved. Counted from one listing (`storage_files`), never from the page's own lists.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct StorageCounts {
+    pub files: usize,
+    pub notes: usize,
+    pub templates: usize,
+    pub recordings: usize,
+}
+
+impl StorageCounts {
+    pub(crate) fn of(folder: &Path, files: &[PathBuf]) -> Self {
+        let templates = folder.join(TEMPLATES);
+        let recordings = folder.join(RECORDINGS);
+        let kept = [folder.join("Timeline.md"), folder.join(NOTE_PATHS)];
+        let count = |holds: &dyn Fn(&PathBuf) -> bool| files.iter().filter(|p| holds(p)).count();
+        Self {
+            files: files.len(),
+            notes: count(&|path| {
+                path.parent() == Some(folder)
+                    && path.extension().is_some_and(|ext| ext == "md")
+                    && !kept.contains(path)
+            }),
+            templates: count(&|path| path.starts_with(&templates)),
+            recordings: count(&|path| {
+                path.starts_with(&recordings) && path.extension().is_some_and(|ext| ext == "wav")
+            }),
+        }
+    }
+}
+
+/// Moves the session storage to the folder `name`, and says what it moved: the counts of the
+/// files it listed and moved at this act.
+pub(crate) fn move_storage(
+    campaign: &Campaign,
+    name: &str,
+) -> Result<(PathBuf, StorageCounts), String> {
     let old = folder(campaign)?;
     let new = resolve(campaign, name)?;
     if old == new {
-        return save_folder(campaign, name);
+        return save_folder(campaign, name).map(|folder| (folder, StorageCounts::default()));
     }
     let files = storage_files(&old)?;
+    let moved = StorageCounts::of(&old, &files);
     let pairs: Vec<_> = files
         .iter()
         .map(|path| {
@@ -540,7 +590,7 @@ pub(crate) fn move_storage(campaign: &Campaign, name: &str) -> Result<PathBuf, S
         }
         return Err(errors.join(" "));
     }
-    Ok(new)
+    Ok((new, moved))
 }
 
 /// Moves `source` to `target` in one step, and never replaces a file at `target`: Linux's
@@ -2613,8 +2663,16 @@ mod tests {
         let path = save_folder(&campaign, "Meetings").unwrap();
         fs::create_dir_all(&path).unwrap();
         fs::rename(&path, dir.path().join("Moved meetings")).unwrap();
+        // Routing row 136: the fault is typed, and its words are a sentence that names the path.
+        let fault = folder_typed(&campaign).unwrap_err();
+        assert_eq!(fault, page::FolderFault::Missing(path.clone()));
         let error = folder(&campaign).unwrap_err();
-        assert!(error.contains("Session folder not found"));
+        assert!(
+            error.starts_with("Splat cannot find the session folder ")
+                && error.contains(&path.display().to_string())
+                && error.ends_with("It may have been moved or renamed."),
+            "{error}"
+        );
         assert!(!path.exists());
     }
 
@@ -3625,7 +3683,7 @@ mod tests {
             "Existing template"
         );
         fs::remove_file(new.join("Templates/Own.md")).unwrap();
-        assert_eq!(move_storage(&campaign, "Evenings").unwrap(), new);
+        assert_eq!(move_storage(&campaign, "Evenings").unwrap().0, new);
         assert_eq!(folder(&campaign).unwrap(), new);
         for (path, bytes) in relative.iter().zip(originals) {
             assert_eq!(fs::read(new.join(path)).unwrap(), bytes);

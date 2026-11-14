@@ -34,6 +34,47 @@ impl Owner for OfSession {
     }
 }
 
+/// One campaign's session folder setting: the Session folder form (Campaign's Link and folder
+/// page). It is the campaign's folder, not the session folder, because a move changes the
+/// session folder. Another campaign hides its results, and coming back shows them again.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct FolderLink {
+    pub campaign: PathBuf,
+}
+
+impl Owner for FolderLink {
+    type Scope = Path;
+    fn scope(&self) -> &Path {
+        &self.campaign
+    }
+}
+
+/// `Moved <counts> to <folder>.`: Move files and save moved the session files of one campaign.
+pub(super) struct FolderMoved {
+    pub link: FolderLink,
+    /// What moved, in words: `1 note, 4 events and 2 templates`.
+    pub counts: String,
+    /// The folder as the DM typed it.
+    pub typed: String,
+    /// The folder the files are in now.
+    pub to: PathBuf,
+}
+
+impl Kept for FolderMoved {
+    type Owner = FolderLink;
+    const ENDS: Ends = Ends {
+        // The DM's next edit of the folder field, and the next save or failed save of the
+        // folder (`folder_view`, `folder_save_row`).
+        owner_changed: OwnerChanged::Ends,
+        // A disk scan (`refresh`) ends it when the folder it moved to is gone.
+        disk_changed: DiskChanged::Checked,
+        press: Press::Nothing,
+    };
+    fn owner(&self) -> FolderLink {
+        self.link.clone()
+    }
+}
+
 /// `<file> is now a separate session.` and its Undo. The copy's file holds the new identity
 /// until the Undo writes the old one back.
 pub(super) struct Separate {
