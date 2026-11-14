@@ -2227,6 +2227,132 @@ pub(crate) fn next_order() -> u64 {
     ORDER.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1
 }
 
+/// The Log line an act wrote (a value change with its Log line, `Add to Log`), to show whole once
+/// its entry draws again in the reader that made it. It waits through the reload that reads the
+/// new file, and ends: when it is shown, when another entry draws, when the reader is not drawn
+/// for a pass (its page closed), in another campaign, at the next act and at an Undo.
+#[derive(Clone, Debug, PartialEq)]
+struct LogReveal {
+    campaign: Uuid,
+    id: Uuid,
+    /// The line as written, without the list mark.
+    line: String,
+    /// The line as the entry's body holds it, its links written for the Markdown reader.
+    read: String,
+    /// The pass in which the reader last drew while this waited; `None` before the first.
+    drawn: Option<u64>,
+}
+
+/// What a pending reveal does in one draw of its reader.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RevealStep {
+    /// Its entry is not read again yet: wait.
+    Wait,
+    /// Its entry draws with the line: show it, once.
+    Show,
+    /// Another entry, another campaign, or a pass with no draw: it ends.
+    Drop,
+}
+
+impl LogReveal {
+    fn new(campaign: Uuid, id: Uuid, line: &str) -> Self {
+        Self {
+            campaign,
+            id,
+            line: line.to_owned(),
+            read: with_links(line, &HashMap::new()),
+            drawn: None,
+        }
+    }
+
+    fn step(&mut self, campaign: Option<Uuid>, id: Uuid, body: &str, pass: u64) -> RevealStep {
+        let missed = self.drawn.is_some_and(|drawn| drawn + 1 < pass);
+        self.drawn = Some(pass);
+        if missed || campaign != Some(self.campaign) || id != self.id {
+            RevealStep::Drop
+        } else if body.contains(&self.read) {
+            RevealStep::Show
+        } else {
+            RevealStep::Wait
+        }
+    }
+
+    /// The end of the line as the reader paints it: after its last link, or from the last link
+    /// on when what follows it is too short to tell lines apart (`→ [[The Arena]].`). A link
+    /// paints as its name (`[[a|b]]` as `b`, `[[Notes/a]]` as `a`).
+    fn painted_tail(&self) -> String {
+        let line = self.line.trim();
+        let after = line.rsplit_once("]]").map_or(line, |(_, after)| after);
+        if after.trim().chars().count() >= 4 || !line.contains("[[") {
+            return after.trim_end().to_owned();
+        }
+        let (_, link) = line.rsplit_once("[[").unwrap_or(("", line));
+        let (target, rest) = link.split_once("]]").unwrap_or((link, ""));
+        let name = target.rsplit_once('|').map_or_else(
+            || target.rsplit('/').next().unwrap_or(target),
+            |(_, name)| name,
+        );
+        format!("{name}{rest}").trim_end().to_owned()
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Scans of the painted shapes for a reveal or a reservation, on this thread.
+    pub(crate) static REVEAL_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The texts painted on `layer` after its first `from` shapes, with their rects: what one
+/// draw of a reader painted. Only a pending reveal or reservation asks.
+fn painted_since(
+    ctx: &egui::Context,
+    layer: egui::LayerId,
+    from: usize,
+) -> Vec<(String, egui::Rect)> {
+    #[cfg(test)]
+    REVEAL_SCANS.with(|count| count.set(count.get() + 1));
+    fn walk(shape: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
+        match shape {
+            egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, out)),
+            egui::Shape::Text(text) => {
+                out.push((text.galley.job.text.clone(), text.visual_bounding_rect()));
+            }
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    ctx.graphics(|layers| {
+        if let Some(list) = layers.get(layer) {
+            for clipped in list.all_entries().skip(from) {
+                walk(&clipped.shape, &mut out);
+            }
+        }
+    });
+    out
+}
+
+fn painted_count(ctx: &egui::Context, layer: egui::LayerId) -> usize {
+    ctx.graphics(|layers| layers.get(layer).map_or(0, |list| list.all_entries().len()))
+}
+
+/// The last line of a body's Log, as written, without its list mark.
+fn last_log_line(body: &str) -> Option<&str> {
+    let mut in_log = false;
+    let mut last = None;
+    for line in body.lines() {
+        let text = line.trim();
+        if let Some(heading) = text.strip_prefix('#') {
+            in_log = heading
+                .trim_start_matches('#')
+                .trim()
+                .eq_ignore_ascii_case("Log");
+        } else if in_log && let Some(item) = text.strip_prefix("- ") {
+            last = Some(item);
+        }
+    }
+    last
+}
+
 /// A reader's open `Add to Log` fields, by campaign and note. A change of its keys (a field
 /// opens or closes) takes a new stamp, so the other reader rebuilds its copy of the keys only
 /// then (`Reader::share_with`), not on each pass. Typing in a field keeps the stamp.
@@ -2381,6 +2507,16 @@ pub struct Reader {
     pub form_shown_elsewhere: Option<Uuid>,
     /// The note whose edit form this reader drew, and the pass it drew it in.
     form_drawn: Option<(Uuid, u64)>,
+    /// The Log line the last act wrote, shown whole once when its entry draws again (D-2).
+    reveal: Option<LogReveal>,
+    /// The note whose Status field just opened: the body keeps room for one new Log entry in
+    /// view, so the act that writes it moves nothing (rulings R29, R30).
+    reserve_log: Option<Uuid>,
+    /// Where this reader drew the open Status field, for that room.
+    status_field: Option<egui::Rect>,
+    /// After `Add to Log` wrote its line, the keyboard goes to the title line's `Add to Log`,
+    /// the control that survives the field: one more Enter opens the next line.
+    focus_log_opener: Option<Uuid>,
 }
 
 /// A reader's `Add to fight`: what joins the open run, by the run's own add
@@ -2504,6 +2640,21 @@ pub(crate) fn title_line_actions(
     room: f32,
     actions: Vec<Action<'_>>,
 ) -> Vec<bool> {
+    title_line_responses(ui, cell, title, room, actions)
+        .iter()
+        .map(egui::Response::clicked)
+        .collect()
+}
+
+/// `title_line_actions`, with each action's response: a caller that gives one of them the
+/// keyboard (after `Add to Log`, its own opener).
+pub(crate) fn title_line_responses(
+    ui: &mut egui::Ui,
+    cell: egui::Rect,
+    title: f32,
+    room: f32,
+    actions: Vec<Action<'_>>,
+) -> Vec<egui::Response> {
     let widths: Vec<f32> = actions
         .iter()
         .map(|action| action.natural_width(ui))
@@ -2578,7 +2729,7 @@ pub(crate) fn title_line_actions(
             in_rect(
                 ui,
                 egui::Rect::from_min_size(at, egui::vec2(width, height)),
-                |ui| action.show(ui).clicked(),
+                |ui| action.show(ui),
             )
         })
         .collect()
@@ -2587,11 +2738,11 @@ pub(crate) fn title_line_actions(
 /// Draw one action in its target, which the caller has already allocated or which lies on a
 /// line already allocated: a child that takes no room from `ui`, so a top-down layout never
 /// moves its cursor back up to the target.
-pub(crate) fn in_rect(
+pub(crate) fn in_rect<R>(
     ui: &mut egui::Ui,
     rect: egui::Rect,
-    add: impl FnOnce(&mut egui::Ui) -> bool,
-) -> bool {
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> R {
     let mut child = ui.new_child(
         egui::UiBuilder::new()
             .max_rect(rect)
@@ -2968,10 +3119,77 @@ impl Reader {
             None
         };
         crate::markdown_view::want_heading(ui.ctx(), heading);
+        let pass = ui.ctx().cumulative_pass_nr();
+        let step = self.reveal.as_mut().map(|reveal| {
+            reveal.step(
+                campaign.map(|campaign| campaign.id),
+                item.entry.id,
+                &item.entry.body,
+                pass,
+            )
+        });
+        if step == Some(RevealStep::Drop) {
+            self.reveal = None;
+        }
+        let reserve = self.reserve_log == Some(item.entry.id);
+        let scan = (step == Some(RevealStep::Show) || reserve)
+            .then(|| painted_count(ui.ctx(), ui.layer_id()));
         let go = self.draw(ui, item, index, campaign, trackers, region);
+        if let Some(from) = scan {
+            self.reveal_after_draw(ui, item, from, step == Some(RevealStep::Show), reserve);
+        }
         // A request lasts one draw, so it cannot reach a heading on another page.
         crate::markdown_view::want_heading(ui.ctx(), None);
         go.and_then(|go| self.settle(go))
+    }
+
+    /// After one draw: show the act's new Log line whole by the least scroll, once; or, as the
+    /// Status field opens, keep the field and the room for one new Log entry in view, so the
+    /// act moves nothing (rulings R29, R30). Each target is one entry, never the whole Log, and
+    /// a target taller than the view is not scrolled to.
+    fn reveal_after_draw(
+        &mut self,
+        ui: &mut egui::Ui,
+        item: &Item,
+        from: usize,
+        show: bool,
+        reserve: bool,
+    ) {
+        let painted = painted_since(ui.ctx(), ui.layer_id(), from);
+        let view = ui.clip_rect().height();
+        let last = |tail: &str| {
+            painted
+                .iter()
+                .rev()
+                .find(|(text, _)| !tail.is_empty() && text.trim_end().ends_with(tail))
+                .map(|(_, rect)| *rect)
+        };
+        if show {
+            let tail = self.reveal.as_ref().map(LogReveal::painted_tail);
+            if let Some(rect) = tail.as_deref().and_then(last)
+                && rect.height() <= view
+            {
+                ui.scroll_to_rect(rect, None);
+            }
+            self.reveal = None;
+        }
+        if reserve {
+            self.reserve_log = None;
+            // The room: the Log's last entry again, below itself, as tall as it.
+            let entry = last_log_line(&item.entry.body)
+                .map(|line| LogReveal::new(Uuid::nil(), item.entry.id, line).painted_tail())
+                .as_deref()
+                .and_then(last);
+            if let (Some(field), Some(entry)) = (self.status_field, entry) {
+                let room = egui::Rect::from_min_max(
+                    field.min,
+                    egui::pos2(field.right(), entry.bottom() + entry.height()),
+                );
+                if room.height() <= view {
+                    ui.scroll_to_rect(room, None);
+                }
+            }
+        }
     }
 
     #[allow(
@@ -3118,8 +3336,19 @@ impl Reader {
             } else {
                 width
             };
-            let pressed = title_line_actions(ui, cell, title_width, room, actions);
-            let mut pressed = pressed.into_iter();
+            let responses = title_line_responses(ui, cell, title_width, room, actions);
+            // After `Add to Log` wrote its line, the keyboard goes to `Add to Log`, the last
+            // action when there is one: the field and its `Add` are gone (D-2).
+            if edit.is_some()
+                && self
+                    .focus_log_opener
+                    .take_if(|focus| *focus == id)
+                    .is_some()
+                && let Some(opener) = responses.last()
+            {
+                opener.request_focus();
+            }
+            let mut pressed = responses.iter().map(egui::Response::clicked);
             if let Some(campaign) = edit
                 && pressed.next() == Some(true)
             {
@@ -3736,6 +3965,10 @@ impl Reader {
         if go.is_some() {
             self.picker = None;
             self.place_choices_open = false;
+            // The act's new Log line shows whole when the entry draws again (D-2).
+            self.reveal = log
+                .as_deref()
+                .map(|line| LogReveal::new(campaign.id, item.entry.id, line));
         }
         go
     }
@@ -3902,6 +4135,10 @@ impl Reader {
         let go = self.written(result, item.entry.id);
         if go.is_some() {
             self.held.log_fields.remove(&(campaign.id, item.entry.id));
+            // The line shows whole when the entry draws again; the field and its `Add` are
+            // gone, so the keyboard goes to the title line's `Add to Log` (D-2).
+            self.reveal = Some(LogReveal::new(campaign.id, item.entry.id, &line));
+            self.focus_log_opener = Some(item.entry.id);
         }
         go
     }
@@ -4507,6 +4744,8 @@ impl Reader {
     ) -> Option<Nav> {
         let go = match press.id {
             FooterAct::Undo => {
+                // An Undo takes the line back, so no reveal waits for it.
+                self.reveal = None;
                 let ticket = press.ticket?;
                 match self.held.results.undo_by(ticket, |result| match result {
                     ReaderResult::Change(change) | ReaderResult::Name(change) => {
@@ -5010,6 +5249,7 @@ impl Reader {
                 status(&item.entry).clone_into(&mut self.status);
                 self.status_editing = true;
                 self.status_select = true;
+                self.reserve_log = Some(item.entry.id);
             }
         }
         if self.status_editing {
@@ -5021,6 +5261,7 @@ impl Reader {
                 None,
                 None,
             );
+            self.status_field = Some(response.rect);
             // Change puts the keyboard in the field with its words selected, so the DM types
             // the new value at once. A pass that still holds Change's click takes the keyboard
             // from a field that was not clicked, so the request waits for a pass with no click.
@@ -6488,6 +6729,93 @@ mod tests {
             "Enter closes the field"
         );
 
+        // D-2: the act records ONE reveal of its line, bound to this reader and this entry, and
+        // the keyboard goes to `Add to Log`.
+        let line = "[[Session 1]]: Told who burned the ropes.";
+        assert_eq!(lookup.reveal, Some(LogReveal::new(campaign.id, hob, line)));
+        assert_eq!(lookup.focus_log_opener, Some(hob));
+        assert_eq!(
+            lookup.reveal.as_ref().unwrap().painted_tail(),
+            ": Told who burned the ropes."
+        );
+        {
+            // The body as the reader gets it after the reload, its links rewritten.
+            let reloaded = {
+                let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+                index.items[index.position(hob).unwrap()].entry.body.clone()
+            };
+            let reveal = lookup.reveal.clone().unwrap();
+            let at = |pass: u64, campaign: Uuid, id: Uuid, body: &str| {
+                let mut reveal = reveal.clone();
+                reveal.drawn = Some(10);
+                reveal.step(Some(campaign), id, body, pass)
+            };
+            // The old body, before the reload reads the new file: it waits.
+            assert_eq!(at(11, campaign.id, hob, &item.entry.body), RevealStep::Wait);
+            // Through the reload, the same entry with the line: shown.
+            assert_eq!(at(11, campaign.id, hob, &reloaded), RevealStep::Show);
+            // Entry B never uses A's reveal; another campaign neither.
+            assert_eq!(at(11, campaign.id, oren, &reloaded), RevealStep::Drop);
+            assert_eq!(at(11, Uuid::nil(), hob, &reloaded), RevealStep::Drop);
+            // A pass with no draw of this reader (its page closed) ends it.
+            assert_eq!(at(12, campaign.id, hob, &reloaded), RevealStep::Drop);
+        }
+        // The painted end of a line whose words end in a link: from the link on, by its name.
+        for (written, tail) in [
+            (
+                "[[Session 1]], Day 2: Place not set → [[The Arena]].",
+                "The Arena.",
+            ),
+            ("[[Session 1]]: Met [[People/Hob|old Hob]].", "old Hob."),
+            ("Rode north.", "Rode north."),
+        ] {
+            assert_eq!(
+                LogReveal::new(campaign.id, hob, written).painted_tail(),
+                tail
+            );
+        }
+        // Drawn: shown once by the least scroll, then gone; the next passes do no reveal work.
+        {
+            let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+            let at = index.position(hob).unwrap();
+            // The harness draws its first pass as it is made.
+            let scans = REVEAL_SCANS.with(std::cell::Cell::get);
+            let mut harness = egui_kittest::Harness::new_ui_state(
+                |ui, reader: &mut Reader| {
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        reader.read_with(ui, &index.items[at], &index, Some(&campaign), None)
+                    });
+                },
+                // A reader of its own, so this draw ends none of the test's kept results.
+                Reader {
+                    reveal: lookup.reveal.clone(),
+                    ..reader()
+                },
+            );
+            crate::design::theme::install(&harness.ctx);
+            harness.run_steps(1);
+            assert_eq!(REVEAL_SCANS.with(std::cell::Cell::get), scans + 1);
+            assert!(harness.state().reveal.is_none(), "shown once, then gone");
+            harness.run_steps(3);
+            assert_eq!(
+                REVEAL_SCANS.with(std::cell::Cell::get),
+                scans + 1,
+                "no reveal work on an unchanged pass"
+            );
+        }
+        // An Undo ends a waiting reveal; a new act replaces it with its own line.
+        lookup.reveal = Some(LogReveal::new(campaign.id, hob, line));
+        lookup.footer_act(
+            &egui::Context::default(),
+            design::outcome::Press {
+                id: FooterAct::Undo,
+                ticket: None,
+            },
+            None,
+            &campaign,
+        );
+        assert_eq!(lookup.reveal, None, "an Undo ends the reveal");
+
         // Act A in Lookup, an unrelated act B in the World page's reader, then Undo of A: A's
         // line goes, B's stays.
         let mut world = reader();
@@ -6495,9 +6823,21 @@ mod tests {
         let other = &index.items[index.position(oren).unwrap()];
         let oren_path = dir.path().join("NPCs/Oren.md");
         let oren_before = fs::read_to_string(&oren_path).unwrap();
+        // D-2: a waiting reveal is replaced by the next act's own line; B's act is B's
+        // reader's reveal and never reaches A's reader.
+        world.reveal = Some(LogReveal::new(campaign.id, oren, "old"));
         world
             .add_log_line(&campaign, other, "Paid the toll.")
             .unwrap();
+        assert_eq!(
+            world
+                .reveal
+                .as_ref()
+                .map(|reveal| (reveal.id, reveal.line.as_str())),
+            Some((oren, "[[Session 1]]: Paid the toll.")),
+            "a new act replaces the reveal with its own line"
+        );
+        assert_eq!(lookup.reveal, None);
         let oren_after = fs::read_to_string(&oren_path).unwrap();
         assert_ne!(oren_before, oren_after);
         assert!(lookup.last_change().unwrap().undo(&campaign).is_ok());

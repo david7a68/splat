@@ -882,6 +882,9 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     fs::write(&path, &away).unwrap();
     d.app_mut().lookup.refresh();
     d.settle();
+    // D-2: the DM changes the status at 960, where the reader is short: the field opens with
+    // room for the new Log entry in view, so the act moves nothing and the entry is whole.
+    d.set_base(SMALL);
     d.click("Change Status");
     d.observe(
         "T15.4",
@@ -890,6 +893,16 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         "Change on Status in Lookup puts the keyboard in the field, with the status on disk",
     );
     d.type_text("missing");
+    let lookup_pane = |d: &Driver<'_>| {
+        d.place_of(SEARCH_LOOKUP).map(|search| {
+            egui::Rect::from_min_max(
+                egui::pos2(search.left(), 0.0),
+                egui::pos2(f32::INFINITY, f32::INFINITY),
+            )
+        })
+    };
+    // The reader's title is the witness of a scroll: nothing above the Status row changes.
+    let title_before = lookup_pane(d).and_then(|pane| d.painted_word_rect(VARRA_BLACK, pane));
     d.press(Key::Enter);
     d.expect("Undo change to Status");
     let changed = fs::read_to_string(&path).unwrap();
@@ -903,7 +916,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     );
     // Round 28 FC8: Lookup names the session as the Session page beside it does, in the Log
     // line, in `From other notes` and in its row's link, never by its file.
-    let named = |d: &Driver<'_>, size: (f32, f32)| {
+    let named = |d: &Driver<'_>| {
         let pane = d.place_of(SEARCH_LOOKUP).map(|search| {
             egui::Rect::from_min_max(
                 egui::pos2(search.left(), 0.0),
@@ -916,17 +929,13 @@ pub fn log_from_play(d: &mut Driver<'_>) {
             .nodes()
             .into_iter()
             .any(|node| node.role == egui::accesskit::Role::Link && node.name == label);
-        let line = pane.is_some_and(|pane| d.painted_line_with(&label, pane));
         (
-            pane.is_some()
-                && !words.contains(&session)
-                && fc8_label_painted(size, words.contains(&label), line)
-                && link,
+            pane.is_some() && !words.contains(&session) && words.contains(&label) && link,
             format!("link {link}, painted {words:?}"),
         )
     };
     for size in [DEFAULT, LARGE] {
-        let (named, detail) = d.at_size(size, |d| named(d, size));
+        let (named, detail) = d.at_size(size, named);
         d.observe(
             "iter-28-D-FC8",
             named,
@@ -940,22 +949,28 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     let mut at_capture = Vec::new();
     d.state_prepared("status-changed-in-lookup", Sizes::Default, |d| {
         d.settle();
-        let size = if at_capture.is_empty() {
-            SMALL
-        } else {
-            DEFAULT
-        };
-        at_capture.push(named(d, size));
+        let title = lookup_pane(d).and_then(|pane| d.painted_word_rect(VARRA_BLACK, pane));
+        at_capture.push((named(d), title));
     });
-    let (fits, detail) = at_capture
+    let ((fits, detail), title_after) = at_capture
         .into_iter()
         .next()
-        .unwrap_or((false, "no capture".into()));
+        .unwrap_or(((false, "no capture".into()), None));
     d.observe(
         "iter-28-D-FC8",
         fits,
         format!("At {SMALL:?}, Lookup names the session `{label}`, not `{session}`: {detail}"),
     );
+    // D-2 (a): at 960 the new Log entry is painted whole (FC8's whole-block check above) and
+    // the act scrolled nothing: the title, above the Status row, is where it was before Enter.
+    d.observe(
+        "iter-29-D2-status-log",
+        fits && title_before
+            .zip(title_after)
+            .is_some_and(|(before, after)| (before.top() - after.top()).abs() <= 0.5),
+        format!("At {SMALL:?}, the title before Enter {title_before:?} and at the capture {title_after:?}; the entry: {detail}"),
+    );
+    d.set_base(DEFAULT);
     d.click("Undo change to Status");
     d.observe(
         "T15.4",
@@ -1378,45 +1393,36 @@ pub fn log_from_play(d: &mut Driver<'_>) {
             "A name that two entries share is not Not found: row {row:?}, Not found at {found:?}"
         ),
     );
-}
 
-/// FC8's one property, the session's name painted whole, per size. At 960 the new Stat block
-/// row (G43) leaves the Log entry's second line cut at the bottom of Lookup's scroll area, so
-/// there the label's own line is read (`Driver::painted_line_with`, the lead's option 1). At
-/// 1200 and 1920 the whole text block must be painted (`Driver::painted_in`), as before.
-fn fc8_label_painted(size: (f32, f32), whole_block: bool, label_line: bool) -> bool {
-    if size == SMALL {
-        label_line
-    } else {
-        whole_block
-    }
-}
-
-#[cfg(test)]
-mod fc8_tests {
-    use super::fc8_label_painted;
-    use crate::visual_tests::driver::{DEFAULT, LARGE, SMALL};
-
-    /// Review of 55a1f89e: a clipped block whose label line is whole passes only at 960.
-    #[test]
-    fn only_960_reads_the_label_line() {
-        for size in [DEFAULT, LARGE] {
-            assert!(
-                !fc8_label_painted(size, false, true),
-                "a clipped block at {size:?}"
-            );
-            assert!(
-                fc8_label_painted(size, true, true),
-                "a whole block at {size:?}"
-            );
-        }
-        assert!(
-            fc8_label_painted(SMALL, false, true),
-            "the label line at 960"
-        );
-        assert!(
-            !fc8_label_painted(SMALL, true, false),
-            "a cut label line at 960"
-        );
-    }
+    // D-2 (b): `Add to Log` in a long entry at 960. The new line is at the note's end, far
+    // below the title line; after Enter it is painted whole in Lookup's reader, and the
+    // keyboard is on `Add to Log`, the control that survives the field.
+    const RODE: &str = "Rode north past the burned ferry.";
+    let long: String = (1..=24)
+        .map(|n| format!("\nA long paragraph {n} about the watch on the river road.\n"))
+        .collect();
+    fs::write(&path, format!("{before}{long}")).unwrap();
+    d.set_base(SMALL);
+    d.app_mut().lookup.open_id(varra);
+    d.app_mut().lookup.refresh();
+    d.settle();
+    d.expect(&format!("Edit {VARRA_BLACK}"));
+    d.click("Add to Log");
+    d.expect(&field);
+    d.type_text(RODE);
+    d.press(Key::Enter);
+    d.expect(&added);
+    let shown = lookup_pane(d).is_some_and(|pane| d.painted_in(pane).contains(RODE));
+    let focus = d.focused_name();
+    d.observe(
+        "iter-29-D2-add-log",
+        shown && focus.as_deref() == Some("Add to Log"),
+        format!(
+            "At {SMALL:?}, the new Log line is painted whole: {shown}; the keyboard is on {focus:?}"
+        ),
+    );
+    fs::write(&path, &before).unwrap();
+    d.app_mut().lookup.refresh();
+    d.settle();
+    d.set_base(DEFAULT);
 }
