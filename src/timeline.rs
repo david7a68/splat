@@ -941,7 +941,8 @@ pub struct Book {
     baseline: Option<Vec<u8>>,
     /// The generated body last written, even while frontmatter is edited elsewhere.
     pending_run: Option<(RunFact, Option<Uuid>, bool, Option<Within>)>,
-    pub duplicate: Option<String>,
+    /// Another timeline file in the Timeline's folder: the page warns, with its file line.
+    pub duplicate: Option<PathBuf>,
     saved_events: Vec<Event>,
     pub renamed_links: BTreeMap<String, Vec<String>>,
     link_titles: BTreeMap<String, (String, String)>,
@@ -1022,11 +1023,20 @@ impl Book {
             self.duplicate = None;
             return;
         };
-        self.duplicate = path.parent().and_then(|folder| fs::read_dir(folder).ok()).into_iter().flatten()
-            .filter_map(Result::ok).map(|file| file.path())
+        self.duplicate = path
+            .parent()
+            .and_then(|folder| fs::read_dir(folder).ok())
+            .into_iter()
+            .flatten()
+            .filter_map(Result::ok)
+            .map(|file| file.path())
             .filter(|other| other != path && other.extension().is_some_and(|ext| ext == "md"))
-            .find(|other| fs::read_to_string(other).is_ok_and(|text| text.lines().any(|line| line.starts_with("timeline_version:"))))
-            .map(|other| format!("Another timeline file exists: {}. Compare its events with Timeline.md before removing either file.", other.display()));
+            .find(|other| {
+                fs::read_to_string(other).is_ok_and(|text| {
+                    text.lines()
+                        .any(|line| line.starts_with("timeline_version:"))
+                })
+            });
     }
 
     /// Read the file, and drop any edit not yet saved.
@@ -2433,12 +2443,7 @@ mod tests {
         let copy = dir.path().join("Timeline (conflict).md");
         fs::copy(dir.path().join(FILE), &copy).unwrap();
         book.poll(&eframe::egui::Context::default());
-        assert!(
-            book.duplicate
-                .as_deref()
-                .unwrap()
-                .contains("Timeline (conflict).md")
-        );
+        assert!(book.duplicate.as_deref() == Some(copy.as_path()));
         assert!(copy.exists());
     }
 

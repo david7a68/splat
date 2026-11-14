@@ -4,8 +4,8 @@ use super::{Book, Event, Kind, checks, clock, clock_now, clock_words, day_number
 use crate::design::{
     self, Action, Density, Status, Tone, Type, colors, icons,
     outcome::{
-        Choice, Fault, FaultMessage, KeptOutcome, MessageChoice, Messages, Notice, PaneFrame, Said,
-        Sentence, Severity, UndoStep, Verb,
+        Choice, Fault, FaultMessage, FileLine, KeptOutcome, MessageChoice, Messages, Notice,
+        PaneFrame, Said, Sentence, Severity, UndoStep, Verb,
     },
 };
 use eframe::egui;
@@ -292,24 +292,31 @@ impl design::results::Kept for JustAdded {
     }
 }
 
-/// A footer fault of the Timeline: a save that failed, or a removal that notes still link to.
-/// The kind gives the tone.
+/// A footer fault of the Timeline: a save that failed, a removal that notes still link to, a
+/// flag of the file, or a second timeline file. The kind gives the tone.
 enum FileFault {
     /// Notes still link to the removed event: the DM checks them.
     Linked(Sentence),
     NotSaved(Sentence),
+    /// A line of the file that Splat read its own way (`Line 9: “Day 5” is day 1 in order. …`).
+    Flag(Sentence),
+    /// Another timeline file in the Timeline's folder.
+    Copy,
 }
 
 impl Fault for FileFault {
     fn severity(&self) -> Severity {
         match self {
-            Self::Linked(_) => Severity::NeedsFixing,
+            Self::Linked(_) | Self::Flag(_) | Self::Copy => Severity::NeedsFixing,
             Self::NotSaved(_) => Severity::NotSaved,
         }
     }
     fn cause(&self) -> Sentence {
         match self {
-            Self::Linked(words) | Self::NotSaved(words) => words.clone(),
+            Self::Linked(words) | Self::NotSaved(words) | Self::Flag(words) => words.clone(),
+            Self::Copy => crate::sentence!(
+                "Another timeline file exists. Compare its events with Timeline.md before removing either file."
+            ),
         }
     }
 }
@@ -486,60 +493,31 @@ pub fn file_messages<'f, A: 'static>(
             )),
         );
     }
-}
-
-/// The file's flags and a second timeline file, each with the file's line (its path, `Edit in
-/// Obsidian` and `Show file`) under the last, at the bottom of the room a pane would take, outside
-/// its scroll: on the footer's side, so they stay in view over long content and move no row. A
-/// typed footer message has no file line yet (a gap of the message part, sent to its owner), so
-/// they are not footer messages. Returns the room left above them for the pane (all of it with
-/// no flag).
-pub fn file_flags_below(ui: &mut egui::Ui, book: &Book) -> egui::Rect {
-    let room = ui.available_rect_before_wrap();
-    if book.flags.is_empty() && book.duplicate.is_none() {
-        return room;
-    }
-    // At the room's bottom, by the height they took in the last pass; a pass whose height
-    // differs is drawn again (`request_discard`), so no shown frame has them misplaced.
-    let key = ui.id().with("file_flags_height");
-    let height = ui
-        .ctx()
-        .data(|data| data.get_temp::<f32>(key))
-        .unwrap_or(0.0)
-        .min(room.height());
-    let at = egui::Rect::from_min_max(egui::pos2(room.left(), room.bottom() - height), room.max);
-    let mut below = ui.new_child(
-        egui::UiBuilder::new()
-            .id_salt("file_flags")
-            .max_rect(at.with_max_y(f32::INFINITY))
-            .layout(egui::Layout::top_down(egui::Align::Min)),
-    );
-    file_flags(&mut below, book);
-    let used = below.min_rect().height();
-    if (used - height).abs() > 0.5 {
-        ui.ctx().data_mut(|data| data.insert_temp(key, used));
-        ui.ctx().request_discard("the file flags changed height");
-    }
-    room.with_max_y((at.top() - design::S).max(room.top()))
-}
-
-fn file_flags(ui: &mut egui::Ui, book: &Book) {
+    // The flags, one warning each, with the file's line (its path, `Edit in Obsidian` and `Show
+    // file`) under the last; then a second timeline file with its own line. They are footer
+    // messages, so they stay in view over long content and move no row (PR 340's rule), in the
+    // footer's height-limited region, which scrolls when they fill it.
     let folder = book.path.as_deref().and_then(std::path::Path::parent);
     for (at, flag) in book.flags.iter().enumerate() {
-        let text = flag_words(flag);
-        match folder {
+        let fault = FaultMessage::new(&FileFault::Flag(as_sentence(&flag_words(flag))));
+        messages.outcome(match folder {
             Some(folder) if at + 1 == book.flags.len() => {
-                design::message_with_actions(ui, Tone::Warning, &text, |ui| {
-                    crate::encounters::file_line(ui, folder, super::FILE);
-                });
+                fault.file(FileLine::new(folder, super::FILE).edit().show())
             }
-            _ => {
-                design::message(ui, Tone::Warning, &text);
-            }
-        }
+            _ => fault,
+        });
     }
-    if let Some(warning) = &book.duplicate {
-        design::message(ui, Tone::Warning, warning);
+    if let Some(copy) = &book.duplicate {
+        let fault = FaultMessage::new(&FileFault::Copy);
+        let named = copy.parent().zip(copy.file_name());
+        messages.outcome(match named {
+            Some((folder, name)) => fault.file(
+                FileLine::new(folder, name.to_string_lossy().into_owned())
+                    .edit()
+                    .show(),
+            ),
+            None => fault,
+        });
     }
 }
 
@@ -1003,13 +981,7 @@ impl TimelinePage {
         let offer = open.and_then(|id| notes.event_link_offer(book, id));
         let frame = PaneFrame::new(ui);
         let messages = self.list_messages(&frame, ui, book, notes, open, offer.as_ref());
-        let full = ui.available_rect_before_wrap();
-        let room = file_flags_below(ui, book);
-        let mut pane_ui = ui.new_child(egui::UiBuilder::new().max_rect(room).layout(*ui.layout()));
-        let paned = messages.pane(&mut pane_ui, design::Body::Content, |ui| {
-            body(self, ui, book, notes)
-        });
-        ui.advance_cursor_after_rect(full);
+        let paned = messages.pane(ui, design::Body::Content, |ui| body(self, ui, book, notes));
         if let Some(press) = paned.pressed {
             match press.id {
                 ListAct::UndoLinks => {

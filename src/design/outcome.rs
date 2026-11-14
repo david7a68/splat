@@ -220,14 +220,17 @@ impl Sentence {
     }
 
     /// Words that come from outside the app: an error of the system, a parser's message, a row
-    /// of the DM's own table. They start with a capital and end with an end mark, whatever came.
-    /// Blank words are no sentence: `None`, and the caller says what it knows in its own
-    /// checked words. The source lint counts the uses of this escape per file.
+    /// of the DM's own table. They end with an end mark, whatever came, and start with a capital,
+    /// unless their first word is data (`is_data`: a path or a file name, such as
+    /// `wrong-package/ holds …` or `package.md changed on disk`), which keeps its letters as they
+    /// are on disk. Blank words are no sentence: `None`, and the caller says what it knows in its
+    /// own checked words. The source lint counts the uses of this escape per file.
     pub fn outside(words: impl Into<String>) -> Option<Self> {
         let words: String = words.into();
         let mut words = words.trim().to_owned();
         let first = words.chars().next()?;
-        if first.is_lowercase() {
+        let first_word = words.split_whitespace().next().unwrap_or_default();
+        if first.is_lowercase() && !is_data(first_word) {
             words = first.to_uppercase().chain(words.chars().skip(1)).collect();
         }
         if !ends_with_mark(&words) {
@@ -268,6 +271,18 @@ impl std::fmt::Display for Sentence {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.0)
     }
+}
+
+/// Is this word data that keeps its letters (M4 gap 3)? A word with a path separator (`/`, `\`)
+/// or a file extension: a `.` with a letter or digit on both sides (`package.md`, `v2.json`).
+/// Not a word that only ends with a mark (`removed.`, `wolf:`).
+fn is_data(word: &str) -> bool {
+    let word = word.trim_end_matches([',', ':', ';', '.', '?', '!', '”', '’', ')']);
+    let bytes = word.as_bytes();
+    word.contains(['/', '\\'])
+        || bytes
+            .windows(3)
+            .any(|w| w[0].is_ascii_alphanumeric() && w[1] == b'.' && w[2].is_ascii_alphanumeric())
 }
 
 fn ends_with_mark(words: &str) -> bool {
@@ -1301,24 +1316,82 @@ impl<A> Said<A> {
     }
 }
 
-/// A notice in the info tone: guidance, or why other actions wait. A notice with an Undo (a
-/// result that wrote nothing, `Draft discarded.`) is a kept result: `KeptOutcome::Notice`.
+/// A notice's tone (M4 gap 2). It has no error: an error is a fault, so it is a
+/// [`FaultMessage`] and its tone comes from its `Severity`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NoticeTone {
+    /// Guidance, or why other actions wait.
+    Info,
+    /// What an act the DM can take next will cost (`The current folder keeps … Splat no longer
+    /// shows these files.`): nothing is wrong yet, so it is no fault.
+    Warning,
+}
+
+impl NoticeTone {
+    fn tone(self) -> Tone {
+        match self {
+            Self::Info => Tone::Info,
+            Self::Warning => Tone::Warning,
+        }
+    }
+}
+
+/// A notice: guidance or why other actions wait (`new`, the info tone), or a warning before an
+/// act (`warning`: what the act will cost, in the warning tone with its bar and icon). A notice
+/// with an Undo (a result that wrote nothing, `Draft discarded.`) is a kept result:
+/// `KeptOutcome::Notice`.
+///
+/// Its tone is one of the two its constructors name; no notice takes a `Tone`, and none is an
+/// error, which is a fault ([`FaultMessage`]):
+///
+/// ```
+/// use splat::outcome::{Notice, NoPress};
+/// let _ = Notice::<NoPress>::new(splat::sentence!("Sync is off."));
+/// let _ = Notice::<NoPress>::warning(splat::sentence!("Splat no longer shows these files."));
+/// ```
+/// ```compile_fail,E0599
+/// use splat::outcome::{Notice, NoPress};
+/// let _ = Notice::<NoPress>::error(splat::sentence!("Splat no longer shows these files."));
+/// ```
+/// ```compile_fail,E0599
+/// use splat::outcome::{Notice, NoPress, Tone};
+/// let _ = Notice::<NoPress>::new(splat::sentence!("Sync is off.")).tone(Tone::Error);
+/// ```
 #[must_use = "give it to `Messages::outcome`"]
 pub struct Notice<A> {
+    tone: NoticeTone,
     words: Sentence,
     choices: Vec<Choice<A>>,
+    file: Option<FileLine>,
 }
 
 impl<A> Notice<A> {
+    /// Guidance, or why other actions wait: the info tone.
     pub fn new(words: Sentence) -> Self {
         Self {
+            tone: NoticeTone::Info,
             words,
             choices: Vec::new(),
+            file: None,
+        }
+    }
+
+    /// A warning before an act: what the act the DM can take next will cost. The warning tone.
+    pub fn warning(words: Sentence) -> Self {
+        Self {
+            tone: NoticeTone::Warning,
+            ..Self::new(words)
         }
     }
 
     pub fn choice(mut self, choice: Choice<A>) -> Self {
         self.choices.push(choice);
+        self
+    }
+
+    /// The file it is about, on a line under its words ([`FileLine`]).
+    pub fn file(mut self, file: FileLine) -> Self {
+        self.file = Some(file);
         self
     }
 }
@@ -1331,6 +1404,7 @@ pub struct FaultMessage<A> {
     tone: Tone,
     words: Sentence,
     choices: Vec<Choice<A>>,
+    file: Option<FileLine>,
 }
 
 impl<A> FaultMessage<A> {
@@ -1339,6 +1413,7 @@ impl<A> FaultMessage<A> {
             tone: fault.severity().tone(),
             words: fault_words(fault),
             choices: Vec::new(),
+            file: None,
         }
     }
 
@@ -1346,6 +1421,210 @@ impl<A> FaultMessage<A> {
         self.choices.push(choice);
         self
     }
+
+    /// The file the fault is in, on a line under its words, with the links that open it
+    /// ([`FileLine`]). Several faults of one file: give it to the last.
+    pub fn file(mut self, file: FileLine) -> Self {
+        self.file = Some(file);
+        self
+    }
+}
+
+/// The links of a [`FileLine`], by their visible words.
+pub const EDIT_IN_OBSIDIAN: &str = "Edit in Obsidian";
+pub const SHOW_FILE: &str = "Show file";
+
+/// A file a footer message is about (M4 gap 1): its path, as data, and the links that open it
+/// (`edit`: `Edit in Obsidian`; `show`: `Show file`). Only a footer message holds one
+/// ([`FaultMessage::file`], [`Notice::file`]), so it stays in the footer's fixed region, which
+/// scrolls when its messages fill a third of the pane; it is never drawn in a pane's content.
+///
+/// The part draws it on a line under the message's words, from their first letter: the path,
+/// then the links, on one line when they fit; else the path on its own line and the links on
+/// the line under it, wrapped between whole links. The path is never changed: not by
+/// `Sentence::outside`, never given a capital, never wrapped inside; a path wider than its line
+/// is cut in the middle (`Campaign/Ses…/Timeline.md`), with the whole path in its hover and as
+/// its accessible name. Each link is a target at least `XL` (24 px) square, and its accessible
+/// name names the file (`Show file: Timeline.md`). A press opens the file: no id comes back,
+/// and the pane's one press is not used.
+///
+/// The path is data: it is no sentence, so no sentence form reaches it.
+///
+/// ```
+/// use splat::outcome::{FileLine, Notice, NoPress};
+/// let _ = Notice::<NoPress>::new(splat::sentence!("Sync is off."))
+///     .file(FileLine::new("/vault/Campaign", "Sessions/Timeline.md").edit().show());
+/// ```
+/// ```compile_fail,E0451
+/// use splat::outcome::FileLine;
+/// let _ = FileLine { root: "/vault".into(), relative: "Timeline.md".into(), edit: true, show: true };
+/// ```
+/// ```compile_fail,E0624
+/// use splat::outcome::FileLine;
+/// fn f(ui: &mut eframe::egui::Ui) {
+///     FileLine::new("/vault/Campaign", "Timeline.md").show().draw(ui);
+/// }
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[must_use = "give it to a footer message's `file`"]
+pub struct FileLine {
+    root: std::path::PathBuf,
+    relative: String,
+    edit: bool,
+    show: bool,
+}
+
+impl FileLine {
+    /// The file at `relative` (as the DM knows it, shown as it is) inside the folder `root`.
+    pub fn new(root: impl Into<std::path::PathBuf>, relative: impl Into<String>) -> Self {
+        Self {
+            root: root.into(),
+            relative: relative.into(),
+            edit: false,
+            show: false,
+        }
+    }
+
+    /// With `Edit in Obsidian`.
+    pub fn edit(mut self) -> Self {
+        self.edit = true;
+        self
+    }
+
+    /// With `Show file`.
+    pub fn show(mut self) -> Self {
+        self.show = true;
+        self
+    }
+
+    fn path(&self) -> std::path::PathBuf {
+        self.root.join(&self.relative)
+    }
+
+    /// The file's own name, the last part of its path.
+    fn name(&self) -> &str {
+        self.relative
+            .rsplit(['/', '\\'])
+            .find(|part| !part.is_empty())
+            .unwrap_or(&self.relative)
+    }
+
+    fn links(&self) -> impl Iterator<Item = &'static str> {
+        [(self.edit, EDIT_IN_OBSIDIAN), (self.show, SHOW_FILE)]
+            .into_iter()
+            .filter_map(|(on, word)| on.then_some(word))
+    }
+
+    /// The accessible name of one of its links: the link's words, then the file.
+    fn link_name(&self, word: &str) -> String {
+        format!("{word}: {}", self.name())
+    }
+
+    /// The line, at the cursor, as wide as `ui` allows.
+    fn draw(&self, ui: &mut Ui) {
+        let path = self.path();
+        let whole = path.display().to_string();
+        let font = Type::Small.font(ui);
+        let gap = ui.spacing().item_spacing.x;
+        let links: f32 = self
+            .links()
+            .map(|word| number_width(ui, word, &Type::Body.font(ui)).max(XL) + gap)
+            .sum();
+        let room = ui.available_width();
+        let beside = room - links - L;
+        let one_line = links == 0.0 || number_width(ui, &self.relative, &font) <= beside;
+        let shown = cut_middle(
+            ui,
+            &self.relative,
+            &font,
+            if one_line && links > 0.0 {
+                beside
+            } else {
+                room
+            },
+        );
+        let path_label = |ui: &mut Ui| {
+            let response = ui.label(Type::Small.rich(ui, shown).color(colors().muted));
+            super::components::named(ui, &response, &whole);
+            response.on_hover_text(&whole);
+        };
+        let draw_links = |ui: &mut Ui| {
+            for word in self.links() {
+                let response = link(ui, word);
+                super::components::named(ui, &response, &self.link_name(word));
+                if response.clicked() {
+                    let url = if word == EDIT_IN_OBSIDIAN {
+                        obsidian_url(&path)
+                    } else {
+                        file_url(&path)
+                    };
+                    ui.ctx().open_url(egui::OpenUrl::new_tab(url));
+                }
+            }
+        };
+        let row = egui::Layout::left_to_right(egui::Align::Center);
+        if one_line {
+            ui.with_layout(row, |ui| {
+                path_label(ui);
+                draw_links(ui);
+            });
+        } else {
+            ui.with_layout(row, path_label);
+            ui.with_layout(row.with_main_wrap(true), draw_links);
+        }
+    }
+}
+
+/// `text` whole when it fits in `room`, else cut in the middle (`Campaign/Ses…/Timeline.md`):
+/// the most letters that fit, a third of them from its start and the rest from its end, so the
+/// file name stays as long as it can.
+fn cut_middle(ui: &Ui, text: &str, font: &egui::FontId, room: f32) -> String {
+    if number_width(ui, text, font) <= room {
+        return text.to_owned();
+    }
+    let chars: Vec<char> = text.chars().collect();
+    let shown = |keep: usize| {
+        let head = keep / 3;
+        let tail = keep - head;
+        let mut words: String = chars[..head].iter().collect();
+        words.push('…');
+        words.extend(&chars[chars.len() - tail..]);
+        words
+    };
+    // The widest that fits, by bisection: `log2(n)` measurements.
+    let (mut fits, mut wide) = (0, chars.len());
+    while wide - fits > 1 {
+        let keep = (fits + wide) / 2;
+        if number_width(ui, &shown(keep), font) <= room {
+            fits = keep;
+        } else {
+            wide = keep;
+        }
+    }
+    shown(fits)
+}
+
+/// The link that opens a file in Obsidian.
+pub fn obsidian_url(path: &std::path::Path) -> String {
+    format!("obsidian://open?path={}", encode_path(path))
+}
+
+/// The link that shows a file with the system's file handler.
+pub fn file_url(path: &std::path::Path) -> String {
+    format!("file://{}", encode_path(path))
+}
+
+fn encode_path(path: &std::path::Path) -> String {
+    path.to_string_lossy()
+        .bytes()
+        .map(|byte| {
+            if byte.is_ascii_alphanumeric() || b"-._~/".contains(&byte) {
+                (byte as char).to_string()
+            } else {
+                format!("%{byte:02X}")
+            }
+        })
+        .collect()
 }
 
 /// A footer message that is not a result: it has no order, and keeps the caller's order among
@@ -1445,6 +1724,8 @@ struct Body {
     named: Vec<Option<(ChoiceKind, ChoiceWords)>>,
     locks: Vec<Lock>,
     hovers: Vec<Option<String>>,
+    /// The file it is about, on a line under the words (`FileLine`).
+    file: Option<FileLine>,
 }
 
 /// A body and the caller's ids of its Undo and of each choice, by index.
@@ -1483,10 +1764,17 @@ impl<A> Typed<A> {
                 named,
                 locks,
                 hovers,
+                file: None,
             },
             undo: undo_id,
             choices: ids,
         }
+    }
+
+    /// With the file it is about.
+    fn with_file(mut self, file: Option<FileLine>) -> Self {
+        self.body.file = file;
+        self
     }
 
     /// The caller's id of what the part pressed.
@@ -1504,7 +1792,8 @@ impl<A> Outcome<A> {
         match self {
             Self::Notice(notice) => (
                 FooterRank::Notice,
-                Typed::new(Tone::Info, notice.words, None, notice.choices),
+                Typed::new(notice.tone.tone(), notice.words, None, notice.choices)
+                    .with_file(notice.file),
             ),
             Self::Refused(words) => (
                 FooterRank::Reason,
@@ -1512,7 +1801,7 @@ impl<A> Outcome<A> {
             ),
             Self::Fault(fault) => (
                 FooterRank::Reason,
-                Typed::new(fault.tone, fault.words, None, fault.choices),
+                Typed::new(fault.tone, fault.words, None, fault.choices).with_file(fault.file),
             ),
         }
     }
@@ -1544,10 +1833,11 @@ impl<A> KeptOutcome<A> {
             }
             Self::Said(said) => Typed::new(Tone::Success, said.words, said.undo, said.choices),
             Self::Notice(notice, undo) => {
-                Typed::new(Tone::Info, notice.words, Some(undo), notice.choices)
+                Typed::new(notice.tone.tone(), notice.words, Some(undo), notice.choices)
+                    .with_file(notice.file)
             }
             Self::Fault(fault, undo) => {
-                Typed::new(fault.tone, fault.words, Some(undo), fault.choices)
+                Typed::new(fault.tone, fault.words, Some(undo), fault.choices).with_file(fault.file)
             }
         }
     }
@@ -1983,11 +2273,13 @@ impl Body {
                             line = centre;
                         }
                     }
+                    self.file_line(ui);
                     self.reasons(ui);
                     return;
                 }
                 let message = tone_message(ui, self.tone, words);
                 line = first_line_centre(&message);
+                self.file_line(ui);
                 let inset = message.rect.left() - ui.cursor().left();
                 let gap = ui.spacing().item_spacing.x;
                 let undo = self.undo.as_ref().map(|step| {
@@ -2047,6 +2339,15 @@ impl Body {
             .response;
         register(ui, response.rect, place, self.tone);
         line
+    }
+
+    /// The file line under the words, from their first letter (`FileLine::draw`).
+    fn file_line(&self, ui: &mut Ui) {
+        if let Some(file) = &self.file {
+            message_choice_row(ui, self.tone, |ui| {
+                ui.vertical(|ui| file.draw(ui));
+            });
+        }
     }
 
     /// Why its Undo or a choice is locked, each reason once, in `Small` muted words on a line of
@@ -2579,6 +2880,26 @@ mod tests {
         );
         assert_eq!(outside(" Done. ").as_deref(), Some("Done."));
         assert_eq!(outside("Go “now”").as_deref(), Some("Go “now”."));
+        // M4 gap 3: a first word that is a path or a file name keeps its letters (Campaign
+        // content's `wrong-package/ holds …`, `package.md changed on disk`); words that only
+        // end with a mark still get their capital.
+        for data in [
+            "wrong-package/ holds a different package.",
+            "package.md changed on disk.",
+            "notes\\npc.md: no such file.",
+            "v2.json, line 3: a list opens here.",
+        ] {
+            assert_eq!(outside(data).as_deref(), Some(data));
+        }
+        assert_eq!(
+            outside("package.md changed on disk").as_deref(),
+            Some("package.md changed on disk.")
+        );
+        assert_eq!(
+            outside("removed: the wolf").as_deref(),
+            Some("Removed: the wolf.")
+        );
+        assert_eq!(outside("ends. here").as_deref(), Some("Ends. here."));
         // Blank words are no sentence.
         assert_eq!(outside(""), None);
         assert_eq!(outside(" \n\t "), None);
@@ -2686,6 +3007,12 @@ mod tests {
                 let mut messages =
                     Messages::<NoPress>::new(&frame, "one_fault", ui.available_width());
                 messages.outcome(FaultMessage::new(&fault));
+                // M4 gap 2: a warning before an act is a notice in the warning tone, and a
+                // plain notice keeps the info tone.
+                messages.outcome(Notice::warning(crate::sentence!(
+                    "Splat no longer shows these files."
+                )));
+                messages.outcome(Notice::new(crate::sentence!("Sync is off.")));
                 let _ = messages.pane(ui, crate::design::Body::Content, |_| ());
             });
         crate::design::theme::install(&h.ctx);
@@ -2699,12 +3026,42 @@ mod tests {
                 MessagePlace::Row,
                 MessagePlace::Page,
                 MessagePlace::Page,
+                MessagePlace::Footer,
+                MessagePlace::Footer,
                 MessagePlace::Footer
             ]
         );
-        assert!(
-            rects.iter().all(|(_, _, tone)| *tone == Tone::Warning),
+        let tones: Vec<_> = rects.iter().map(|(_, _, tone)| *tone).collect();
+        assert_eq!(
+            tones,
+            [[Tone::Warning; 6].as_slice(), &[Tone::Info]].concat(),
             "{rects:?}"
+        );
+        // The warning notice paints the warning's bar and icon before its words, as the gate's
+        // tone checks (`has_tone_bar`, the icon check) see them.
+        let words = h
+            .get_by_role_and_label(
+                egui::accesskit::Role::Label,
+                "Splat no longer shows these files.",
+            )
+            .rect();
+        let (icon, bar) = (super::icons::WARN, colors().result.warning);
+        let shapes = &h.output().shapes;
+        let painted_icon = shapes.iter().any(|clipped| {
+            matches!(&clipped.shape, egui::Shape::Text(text)
+                if text.galley.job.text == icon
+                    && text.pos.x < words.left()
+                    && (text.pos.y - words.top()).abs() <= Type::Body.line())
+        });
+        let painted_bar = shapes.iter().any(|clipped| {
+            matches!(&clipped.shape, egui::Shape::Rect(rect)
+                if rect.fill == bar
+                    && rect.rect.right() < words.left()
+                    && (rect.rect.top() - words.top()).abs() <= 1.0)
+        });
+        assert!(
+            painted_icon && painted_bar,
+            "the warning notice's icon {painted_icon} and bar {painted_bar}"
         );
         assert_eq!(
             h.query_all_by_role_and_label(
@@ -2713,6 +3070,193 @@ mod tests {
             )
             .count(),
             5
+        );
+    }
+
+    /// M4 gap 1: a footer message's file line. The path is data, drawn as it is, from the words'
+    /// first letter; its links are targets of at least `XL` whose names name the file, and a
+    /// press opens the file without a press of the pane. A path wider than its line is cut in
+    /// the middle and keeps its file name, with the whole path as its name and in its hover. 30
+    /// such messages at 960 × 640 keep the footer within a third of the pane, and the body in
+    /// view above it (the footer's region scrolls: `Footer`'s own proof).
+    #[test]
+    fn a_footer_file_line_keeps_its_path_and_opens_its_file() {
+        use egui::accesskit::Role;
+        const BODY: &str = "The body starts here.";
+        const ROOT: &str = "/vault/Ashen Marches";
+        const SHORT: &str = "wrong-package/package.md";
+        const LONG: &str = "Sessions/Session 12 at the Northern Bridge Crossing of Ravenholm/Notes of the wardens/Timeline.md";
+        struct Fixture {
+            width: f32,
+            count: usize,
+            relative: &'static str,
+            pressed: usize,
+        }
+        let fault = Hp(Severity::NeedsFixing, Some(9));
+        let harness = |size: egui::Vec2, width: f32, count: usize, relative: &'static str| {
+            let mut h = Harness::builder().with_size(size).build_ui_state(
+                move |ui, fixture: &mut Fixture| {
+                    let fault = Hp(Severity::NeedsFixing, Some(9));
+                    ui.set_max_width(fixture.width);
+                    let frame = PaneFrame::new(ui);
+                    let mut messages =
+                        Messages::<u8>::new(&frame, "file_line_footer", ui.available_width());
+                    for at in 0..fixture.count {
+                        let message = FaultMessage::new(&fault)
+                            .choice(Choice::new(MessageChoice::Choice("Try again"), at as u8));
+                        messages.outcome(
+                            message.file(FileLine::new(ROOT, fixture.relative).edit().show()),
+                        );
+                    }
+                    let paned = messages.pane(ui, crate::design::Body::Content, |ui| {
+                        ui.label(BODY);
+                    });
+                    if paned.pressed.is_some() {
+                        fixture.pressed += 1;
+                    }
+                },
+                Fixture {
+                    width,
+                    count,
+                    relative,
+                    pressed: 0,
+                },
+            );
+            crate::design::theme::install(&h.ctx);
+            h.run_steps(4);
+            h
+        };
+        let painted = |h: &Harness<'_, Fixture>, rect: Rect| -> Vec<String> {
+            h.output()
+                .shapes
+                .iter()
+                .filter_map(|clipped| match &clipped.shape {
+                    egui::Shape::Text(text)
+                        if rect.contains(text.pos + text.galley.size() / 2.0) =>
+                    {
+                        Some(text.galley.job.text.clone())
+                    }
+                    _ => None,
+                })
+                .collect()
+        };
+        let whole = |relative: &str| format!("{ROOT}/{relative}");
+        // A node by the name the part gave it (`named`), not the words of its text run.
+        let named = |name: String| {
+            egui_kittest::kittest::By::new()
+                .predicate(move |node| node.data().label() == Some(name.as_str()))
+        };
+        let words = fault_words(&fault);
+
+        // Wide: the path whole, as it is on disk (no capital), at the words' first letter,
+        // then its two links on the same line.
+        let mut h = harness(egui::vec2(960.0, 640.0), 960.0, 1, SHORT);
+        let said = h.get_by_role_and_label(Role::Label, words.as_str()).rect();
+        let path = h
+            .query_all(named(whole(SHORT)))
+            .next()
+            .expect("the path")
+            .rect();
+        assert_eq!(painted(&h, path), [SHORT], "the path, whole and as it is");
+        assert!(
+            (path.left() - said.left()).abs() <= 1.0 && path.top() >= said.bottom() - 1.0,
+            "the path {path:?} starts under the words {said:?}, at their first letter"
+        );
+        for word in [EDIT_IN_OBSIDIAN, SHOW_FILE] {
+            let name = format!("{word}: package.md");
+            let target = h.get_by_label(&name).rect();
+            assert!(
+                target.width() >= XL && target.height() >= XL,
+                "{name}: a target of at least XL, {target:?}"
+            );
+            assert!(
+                target.left() > path.right() && (target.center().y - path.center().y).abs() <= 1.0,
+                "{name} {target:?} follows the path {path:?} on its line"
+            );
+        }
+        assert!(
+            h.query_by_label(SHOW_FILE).is_none(),
+            "a link's name names the file, not only its words"
+        );
+        h.get_by_label("Show file: package.md").click();
+        let mut opened: Vec<String> = Vec::new();
+        for _ in 0..3 {
+            h.step();
+            opened.extend(
+                h.output()
+                    .platform_output
+                    .commands
+                    .iter()
+                    .filter_map(|command| match command {
+                        egui::OutputCommand::OpenUrl(open) => Some(open.url.clone()),
+                        _ => None,
+                    }),
+            );
+        }
+        assert_eq!(
+            opened,
+            ["file:///vault/Ashen%20Marches/wrong-package/package.md"],
+            "Show file opens the file"
+        );
+        assert_eq!(
+            h.state().pressed,
+            0,
+            "a link opens its file, not a press of the pane"
+        );
+
+        // Narrow, with a long path: the path takes its own line, cut in the middle, and keeps
+        // its file name; its name and hover keep it whole; the links wrap under it.
+        let mut h = harness(egui::vec2(960.0, 640.0), 320.0, 1, LONG);
+        let said = h.get_by_role_and_label(Role::Label, words.as_str()).rect();
+        let node = h.query_all(named(whole(LONG))).next().expect("the path");
+        let path = node.rect();
+        let shown = painted(&h, path).concat();
+        assert!(
+            shown.contains('…')
+                && shown.starts_with("Sessions/")
+                && shown.ends_with("/Timeline.md"),
+            "cut in the middle, the file name kept: {shown:?}"
+        );
+        assert!(path.right() <= 321.0, "inside its line: {path:?}");
+        assert!(
+            (path.left() - said.left()).abs() <= 1.0,
+            "the path {path:?} at the words {said:?}"
+        );
+        let show = h.get_by_label("Edit in Obsidian: Timeline.md").rect();
+        assert!(
+            show.top() >= path.bottom() - 1.0 && (show.left() - said.left()).abs() <= 1.0,
+            "the links wrap under the path, at the words: {show:?}"
+        );
+        node.hover();
+        h.run_steps(3);
+        assert!(
+            h.output()
+                .shapes
+                .iter()
+                .any(|clipped| matches!(&clipped.shape,
+                    egui::Shape::Text(text) if text.galley.job.text == whole(LONG))),
+            "the hover shows the whole path"
+        );
+
+        // 30 messages with file lines at 960 × 640: the footer takes at most a third of the
+        // pane, and the body stays in view above it.
+        let h = harness(egui::vec2(960.0, 640.0), 960.0, 30, SHORT);
+        let footer = crate::design::pane::footer_rect(&h.ctx, egui::Id::new("file_line_footer"))
+            .expect("the footer is drawn");
+        let body = h.get_by_label(BODY).rect();
+        assert!(
+            footer.height() <= 640.0 / 3.0 + 1.0
+                && body.bottom() <= footer.top()
+                && body.top() >= 0.0,
+            "30 file lines: footer {footer:?}, body {body:?}"
+        );
+        let lowest = h
+            .query_all(named(whole(SHORT)))
+            .map(|node| node.rect().bottom())
+            .fold(f32::MIN, f32::max);
+        assert!(
+            lowest > footer.bottom(),
+            "the footer's region scrolls: the last path {lowest} is below its view {footer:?}"
         );
     }
 
