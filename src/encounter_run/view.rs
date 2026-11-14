@@ -3773,7 +3773,7 @@ impl Run {
         // side, then the XP number; it never adds a line. The name is the heading's.
         let side = style::human_label(&group.side);
         let members = group.count_label();
-        let fight = rating.as_ref().map(|fight| {
+        let fight = rating.as_ref().filter(|_| false).map(|fight| {
             crate::difficulty::Line::fight_after(
                 fight,
                 crate::difficulty::FightAfter {

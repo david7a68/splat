@@ -1891,7 +1891,7 @@ impl Run {
                     .position(|i| *i == index)
                     .is_some_and(|at| at >= after.cursor);
             return format!(
-                "{name} moves to\u{a0}{total} when this turn ends. It acts {}.",
+                "{name} moves to\u{a0}{total} when this turn ends ·\u{a0}acts {}.",
                 if later {
                     "later this round"
                 } else {
@@ -1904,16 +1904,16 @@ impl Run {
         let when = if !state.participants[index].present {
             ""
         } else if passed {
-            " It acts next round."
+            " ·\u{a0}acts next round"
         } else if acted {
-            " It acts again this round."
+            " ·\u{a0}acts again this round"
         } else {
             ""
         };
         // The change is done, so it says so in the past tense, as Arrivals does. FJ8: in
         // sentences, as every result is.
         let verb = if had { "moved to" } else { "joined at" };
-        format!("{name} {verb}\u{a0}{total}.{when}")
+        format!("{name} {verb}\u{a0}{total}{when}.")
     }
     /// Give the turn to the next present participant. A current row whose total changed in
     /// its turn goes to its new place first: if that is still to come in this round, it acts
@@ -2439,7 +2439,11 @@ impl Run {
                     Self::arrival_name(&next, first, &target),
                     next.participants[before].name,
                     display(next.participants[before].initiative),
-                    if waits { " It acts next round." } else { "" }
+                    if waits {
+                        " ·\u{a0}acts next round"
+                    } else {
+                        ""
+                    }
                 )
             }
             Command::Move(from, to) => {
