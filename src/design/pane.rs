@@ -1064,6 +1064,13 @@ impl Footer<'_> {
             ui.ctx().request_discard("the message footer emptied");
         }
         let most = (room.height() / 3.0).floor().max(0.0);
+        #[cfg(test)]
+        if local == Id::new("editor_region_test") {
+            eprintln!(
+                "DIAG pass {} shown {shown} stored {stored} room {room:?}",
+                ui.ctx().cumulative_pass_nr()
+            );
+        }
         // Last pass's height; a change is measured below, and the pass is drawn again.
         let height = if shown { stored.min(most) } else { 0.0 };
         let pinned = room.bottom() - height;
@@ -2034,8 +2041,10 @@ mod editor_region_tests {
                 ..State::default()
             },
         );
+        eprintln!("DIAG long built: {:?}", footer(&long));
         long.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::End);
         long.run_steps(2);
+        eprintln!("DIAG after end: {:?}", footer(&long));
         long.event(egui::Event::Text("!".into()));
         long.run_steps(4);
         let whole = |harness: &egui_kittest::Harness<'_, State>, case: &str| {
