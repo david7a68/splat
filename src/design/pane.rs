@@ -1075,6 +1075,11 @@ impl Footer<'_> {
     /// region gives way: its height is the room less the rest of the content (and less the
     /// footer), the editor scrolls inside it, and what comes after it (a save row) and the
     /// footer stay in view. A body that does not use the region is `Body::Content`.
+    ///
+    /// The contract: the region's height is `max(floor(room − rest), min(64, room))`. Save stays
+    /// in view while the rest of the content fits the room less 64 px; else the region keeps
+    /// 64 px and the pane scrolls as a whole, as `Body::Content` does (below 64 px of room, the
+    /// region is the room).
     pub fn pane_editor<R>(
         self,
         ui: &mut Ui,
@@ -1127,9 +1132,11 @@ impl Footer<'_> {
         // The content starts `LINE_START_REACH` inside the pane: the gutter a quiet `line_start`
         // action (with or without its icon) hangs into stays inside the pane's rect, so its
         // target never reaches past the pane toward a splitter at its left.
-        let content_rect = body_room.with_min_x(
-            (body_room.left() + super::components::LINE_START_REACH).min(body_room.right()),
-        );
+        // Also clear of a splitter's grab band, which reaches this far into a column beside it
+        // (egui's own resize radius).
+        let gutter =
+            super::components::LINE_START_REACH + ui.style().interaction.resize_grab_radius_side;
+        let content_rect = body_room.with_min_x((body_room.left() + gutter).min(body_room.right()));
         let mut body_ui = ui.new_child(
             egui::UiBuilder::new()
                 .id_salt(id.with("body"))
@@ -2149,8 +2156,10 @@ mod editor_region_tests {
         harness
     }
 
+    /// The footer's rect as the pane placed it in the last pass (the first frame after a resize
+    /// included; a response read back can be the frame before's).
     fn footer(harness: &egui_kittest::Harness<'_, State>) -> Option<Rect> {
-        footer_rect(&harness.ctx, Id::new(LOCAL))
+        pane_record(&harness.ctx, Id::new(LOCAL)).and_then(|record| record.footer())
     }
 
     /// The clip of the editor's painted text: the region's view.
