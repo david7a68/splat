@@ -1203,16 +1203,6 @@ pub fn text_field(
     text_field_label(ui, label, Type::Small, text, help, error)
 }
 
-pub fn small_text_field(
-    ui: &mut Ui,
-    label: &str,
-    text: &mut String,
-    help: Option<&str>,
-    error: Option<&str>,
-) -> Response {
-    text_field_label(ui, label, Type::Small, text, help, error)
-}
-
 #[allow(
     clippy::disallowed_methods,
     reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
