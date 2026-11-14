@@ -903,7 +903,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     );
     // Round 28 FC8: Lookup names the session as the Session page beside it does, in the Log
     // line, in `From other notes` and in its row's link, never by its file.
-    let named = |d: &Driver<'_>| {
+    let named = |d: &Driver<'_>, size: (f32, f32)| {
         let pane = d.place_of(SEARCH_LOOKUP).map(|search| {
             egui::Rect::from_min_max(
                 egui::pos2(search.left(), 0.0),
@@ -916,18 +916,17 @@ pub fn log_from_play(d: &mut Driver<'_>) {
             .nodes()
             .into_iter()
             .any(|node| node.role == egui::accesskit::Role::Link && node.name == label);
+        let line = pane.is_some_and(|pane| d.painted_line_with(&label, pane));
         (
-            // The label's own line, whole (review of 7914a560): at 960 the entry's second line
-            // is cut at the bottom of Lookup's scroll area, so the block as a whole is not.
             pane.is_some()
                 && !words.contains(&session)
-                && pane.is_some_and(|pane| d.painted_line_with(&label, pane))
+                && fc8_label_painted(size, words.contains(&label), line)
                 && link,
             format!("link {link}, painted {words:?}"),
         )
     };
     for size in [DEFAULT, LARGE] {
-        let (named, detail) = d.at_size(size, named);
+        let (named, detail) = d.at_size(size, |d| named(d, size));
         d.observe(
             "iter-28-D-FC8",
             named,
@@ -941,7 +940,12 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     let mut at_capture = Vec::new();
     d.state_prepared("status-changed-in-lookup", Sizes::Default, |d| {
         d.settle();
-        at_capture.push(named(d));
+        let size = if at_capture.is_empty() {
+            SMALL
+        } else {
+            DEFAULT
+        };
+        at_capture.push(named(d, size));
     });
     let (fits, detail) = at_capture
         .into_iter()
@@ -1374,4 +1378,45 @@ pub fn log_from_play(d: &mut Driver<'_>) {
             "A name that two entries share is not Not found: row {row:?}, Not found at {found:?}"
         ),
     );
+}
+
+/// FC8's one property, the session's name painted whole, per size. At 960 the new Stat block
+/// row (G43) leaves the Log entry's second line cut at the bottom of Lookup's scroll area, so
+/// there the label's own line is read (`Driver::painted_line_with`, the lead's option 1). At
+/// 1200 and 1920 the whole text block must be painted (`Driver::painted_in`), as before.
+fn fc8_label_painted(size: (f32, f32), whole_block: bool, label_line: bool) -> bool {
+    if size == SMALL {
+        label_line
+    } else {
+        whole_block
+    }
+}
+
+#[cfg(test)]
+mod fc8_tests {
+    use super::fc8_label_painted;
+    use crate::visual_tests::driver::{DEFAULT, LARGE, SMALL};
+
+    /// Review of 55a1f89e: a clipped block whose label line is whole passes only at 960.
+    #[test]
+    fn only_960_reads_the_label_line() {
+        for size in [DEFAULT, LARGE] {
+            assert!(
+                !fc8_label_painted(size, false, true),
+                "a clipped block at {size:?}"
+            );
+            assert!(
+                fc8_label_painted(size, true, true),
+                "a whole block at {size:?}"
+            );
+        }
+        assert!(
+            fc8_label_painted(SMALL, false, true),
+            "the label line at 960"
+        );
+        assert!(
+            !fc8_label_painted(SMALL, true, false),
+            "a cut label line at 960"
+        );
+    }
 }
