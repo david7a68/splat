@@ -727,9 +727,9 @@ impl GroupDraft {
         root: &std::path::Path,
         snapshot: &Snapshot,
     ) -> Result<Option<bool>, String> {
-        let choice = self
-            .recovery
-            .show(ui, &self.comparison_text(snapshot)?, ("group", &self.name));
+        let choice =
+            self.recovery
+                .show(ui, &self.comparison_text(snapshot)?, ("group", &self.name));
         if let Some(keep) = choice {
             if keep {
                 if let Some(change) = self.recovery.accept() {
@@ -3783,13 +3783,25 @@ mod tests {
             .collect();
         assert_ne!(keys[0], keys[1], "two members, two keys");
         draft.setup.members.swap(0, 1);
-        assert_eq!(member_key("g.md", &draft.setup.members[1]), keys[0], "A keeps its key");
-        assert_eq!(member_key("g.md", &draft.setup.members[0]), keys[1], "B keeps its key");
+        assert_eq!(
+            member_key("g.md", &draft.setup.members[1]),
+            keys[0],
+            "A keeps its key"
+        );
+        assert_eq!(
+            member_key("g.md", &draft.setup.members[0]),
+            keys[1],
+            "B keeps its key"
+        );
         // Not a saved part of a member: the same words compare equal.
         let read: GroupSetup =
             serde_yaml_ng::from_value(serde_yaml_ng::to_value(&draft.setup).unwrap()).unwrap();
         assert_eq!(read, draft.setup);
-        assert_ne!(member_key("g.md", &read.members[0]), keys[1], "a member read again is new");
+        assert_ne!(
+            member_key("g.md", &read.members[0]),
+            keys[1],
+            "a member read again is new"
+        );
     }
 
     /// iter-26-B, review 2: a control's change that lands after the comparison, in a frame with
@@ -4957,8 +4969,14 @@ mod tests {
         draft.name = "Renamed".into();
         draft.groups[0].name = "Changed".into();
         let error = draft.save(&campaign, &[]).unwrap_err();
-        assert_eq!(error, super::super::disk::changed_on_disk("group", "Changed"));
-        assert!(error.starts_with("Changed changed on disk."), "R10: {error}");
+        assert_eq!(
+            error,
+            super::super::disk::changed_on_disk("group", "Changed")
+        );
+        assert!(
+            error.starts_with("Changed changed on disk."),
+            "R10: {error}"
+        );
         assert!(draft.groups[0].recovery.change.is_some());
         assert_eq!(fs::read_to_string(&note).unwrap(), external);
         assert!(draft.dirty(), "the group's change is still here to save");

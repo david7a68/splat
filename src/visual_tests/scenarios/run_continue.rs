@@ -240,7 +240,9 @@ pub(crate) fn history_edges(d: &mut Driver<'_>) {
             "X37-history-clean-edge",
             at_top.is_some()
                 && (at_top == Some(false) || edges.as_ref().is_some_and(|(cut, _)| cut.is_empty())),
-            format!("At {size:?}, row at the list's top {at_top:?}; the texts cut there: {edges:?}"),
+            format!(
+                "At {size:?}, row at the list's top {at_top:?}; the texts cut there: {edges:?}"
+            ),
         );
         let gap = edges.and_then(|(_, gap)| gap);
         d.observe(

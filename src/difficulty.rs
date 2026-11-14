@@ -469,7 +469,8 @@ impl<'a> Line<'a> {
     /// `None` when the fight has no form (no party, no table, no foe).
     pub fn fit(&self, fits: impl Fn(&str) -> bool) -> Option<Fitted> {
         let label = self.label.map(|label| (label.to_owned(), false));
-        let with_label = |parts: Vec<Part>| -> Vec<Part> { label.iter().cloned().chain(parts).collect() };
+        let with_label =
+            |parts: Vec<Part>| -> Vec<Part> { label.iter().cloned().chain(parts).collect() };
         // The forms, longest first; the last one is the word with its label only.
         let forms: Vec<Vec<Part>> = match (&self.difficulty.rating, &self.difficulty.missing) {
             (Some(rating), _) => vec![
@@ -646,7 +647,10 @@ mod tests {
         assert_eq!(at(200), whole);
         assert!(!ready.fit(fits(200)).unwrap().cut);
         // FG1: the limit goes first, before any fact is cut.
-        assert_eq!(at(whole.chars().count() - 1), "5 party · 2 × Cinder Wolf, 1 × Ember Cultist · XP 400 · Low");
+        assert_eq!(
+            at(whole.chars().count() - 1),
+            "5 party · 2 × Cinder Wolf, 1 × Ember Cultist · XP 400 · Low"
+        );
         // Then the summary from its end, by whole members and facts, with `…` (never `2…`).
         assert_eq!(at(55), "5 party · 2 × Cinder Wolf, … · XP 400 · Low");
         assert_eq!(at(35), "5 party · … · XP 400 · Low");
@@ -669,7 +673,12 @@ mod tests {
         assert_eq!(at(39), "Lost Patrol · Fight after: XP 400 · Low");
         assert_eq!(at(30), "Lost Patrol · Fight after: Low");
         // A fight with no form has no line; one whose word is missing keeps its reason.
-        assert!(Line::new(&Difficulty::default()).summary(summary).fit(fits(200)).is_none());
+        assert!(
+            Line::new(&Difficulty::default())
+                .summary(summary)
+                .fit(fits(200))
+                .is_none()
+        );
         let unknown = Difficulty {
             missing: Some(Missing {
                 what: Unknown::Xp,
@@ -679,7 +688,11 @@ mod tests {
             ..Difficulty::default()
         };
         assert_eq!(
-            Line::new(&unknown).summary(summary).fit(fits(30)).unwrap().text(),
+            Line::new(&unknown)
+                .summary(summary)
+                .fit(fits(30))
+                .unwrap()
+                .text(),
             "5 party · … · XP not known"
         );
     }

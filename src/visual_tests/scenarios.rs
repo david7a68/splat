@@ -778,11 +778,7 @@ fn submenu_clear_of_chrome(
         Ok(frame)
     };
     let submenu = targets_of(choices)?;
-    let menu = targets_of(&[
-        "Move to",
-        "Make available to any encounter",
-        "Delete group",
-    ])?;
+    let menu = targets_of(&["Move to", "Make available to any encounter", "Delete group"])?;
     let window = d.window_size();
     let lanes = d.chrome_lanes();
     for (what, targets) in [("submenu", submenu), ("menu", menu)] {
@@ -16432,12 +16428,16 @@ pub mod encounter_groups {
                     };
                     let above = nodes
                         .iter()
-                        .filter(|node| node.rect.bottom() <= label.top() + 0.5 && column(&node.rect))
+                        .filter(|node| {
+                            node.rect.bottom() <= label.top() + 0.5 && column(&node.rect)
+                        })
                         .map(|node| node.rect.bottom())
                         .fold(f32::MIN, f32::max);
                     let below = nodes
                         .iter()
-                        .filter(|node| node.rect.top() >= label.bottom() - 0.5 && column(&node.rect))
+                        .filter(|node| {
+                            node.rect.top() >= label.bottom() - 0.5 && column(&node.rect)
+                        })
                         .map(|node| node.rect.top())
                         .fold(f32::MAX, f32::min);
                     Some((label.top() - above, below - label.bottom()))
@@ -16448,9 +16448,10 @@ pub mod encounter_groups {
                 // At 1920 all three are in view; at the smaller sizes, those in view (one at least).
                 (size != LARGE || gaps.iter().all(Option::is_some))
                     && gaps.iter().any(Option::is_some)
-                    && gaps.iter().flatten().all(|(above, below)| {
-                        *above >= crate::design::L - 1.0 && above > below
-                    }),
+                    && gaps
+                        .iter()
+                        .flatten()
+                        .all(|(above, below)| *above >= crate::design::L - 1.0 && above > below),
                 format!("At {size:?}, the changes form's headings (above, below): {gaps:?}"),
             );
         }
@@ -17803,7 +17804,9 @@ pub mod encounter_history {
         d.observe(
             "iter-28-B-R2",
             held.0.iter().all(Option::is_some) && held.0 == held.1 && held.2.is_ok(),
-            format!("At {LARGE:?}, heading tops before Open and after, and the run in view: {held:?}"),
+            format!(
+                "At {LARGE:?}, heading tops before Open and after, and the run in view: {held:?}"
+            ),
         );
         let before = d.app_mut().timeline.events.len();
         d.click_starting(OPEN_OLD);

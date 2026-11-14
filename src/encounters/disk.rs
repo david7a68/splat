@@ -97,12 +97,7 @@ impl Recovery {
         self.change.take()
     }
 
-    pub fn show(
-        &self,
-        ui: &mut egui::Ui,
-        draft: &str,
-        (what, name): (&str, &str),
-    ) -> Option<bool> {
+    pub fn show(&self, ui: &mut egui::Ui, draft: &str, (what, name): (&str, &str)) -> Option<bool> {
         let change = self.change.as_ref()?;
         let mut messages = vec![changed_on_disk(what, name)];
         messages.extend(

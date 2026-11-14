@@ -269,12 +269,13 @@ pub fn run(d: &mut Driver<'_>) {
         !cut.is_empty()
             && cut.iter().all(|row| {
                 !row.contains("(up to")
-                    && row
-                        .split(" · ")
-                        .chain(row.split(", "))
-                        .all(|part| !part.ends_with('…') || part.trim_end_matches('…').trim().is_empty())
+                    && row.split(" · ").chain(row.split(", ")).all(|part| {
+                        !part.ends_with('…') || part.trim_end_matches('…').trim().is_empty()
+                    })
             }),
-        format!("Beside Lookup at 960x640, the Ready rows that gave way: {cut:?} (all rows {rows:?})"),
+        format!(
+            "Beside Lookup at 960x640, the Ready rows that gave way: {cut:?} (all rows {rows:?})"
+        ),
     );
     d.state("ready-to-run-beside-lookup", Sizes::Small);
     d.press_ctrl(Key::K);

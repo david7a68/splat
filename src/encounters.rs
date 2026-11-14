@@ -1173,13 +1173,12 @@ impl CreatureEditor {
         }
     }
     fn save(&mut self, root: &std::path::Path) -> Result<(), String> {
-        self.recovery
-            .check(
-                root,
-                &mut self.path,
-                Some(&self.baseline),
-                ("creature", &self.fields.name),
-            )?;
+        self.recovery.check(
+            root,
+            &mut self.path,
+            Some(&self.baseline),
+            ("creature", &self.fields.name),
+        )?;
         let text = self.text()?;
         Entry::parse(&self.path, &text)?;
         write_note(root, &self.path, Some(&self.baseline), &text)?;
@@ -1732,7 +1731,11 @@ fn roster_difficulty(
     })
 }
 
-fn roster_summary(setup: &Setup, catalogue: &Catalogue, known: &BTreeMap<String, String>) -> String {
+fn roster_summary(
+    setup: &Setup,
+    catalogue: &Catalogue,
+    known: &BTreeMap<String, String>,
+) -> String {
     let mut party = 0;
     let mut creatures = std::collections::BTreeMap::<String, usize>::new();
     for slot in &setup.roster {
@@ -4078,15 +4081,11 @@ impl Encounters {
     )]
     fn creature_pane(ui: &mut egui::Ui, editor: &mut CreatureEditor) -> Option<CreatureStep> {
         if editor.recovery.change.is_some() {
-            if let Some(keep) =
-                editor
-                    .recovery
-                    .show(
-                        ui,
-                        &editor.text().unwrap_or_default(),
-                        ("creature", &editor.fields.name),
-                    )
-            {
+            if let Some(keep) = editor.recovery.show(
+                ui,
+                &editor.text().unwrap_or_default(),
+                ("creature", &editor.fields.name),
+            ) {
                 if keep {
                     if let Some(change) = editor.recovery.accept() {
                         editor.path = change.path;
@@ -9844,17 +9843,15 @@ mod tests {
         d.save(&campaign, &[]).unwrap();
         let summary = |d: &Draft| {
             let snapshot = Snapshot::load(&campaign, &[]).unwrap();
-            roster_summary(&d.setup, &snapshot.catalogue, &snapshot.known_creature_names)
+            roster_summary(
+                &d.setup,
+                &snapshot.catalogue,
+                &snapshot.known_creature_names,
+            )
         };
-        assert_eq!(
-            summary(&d),
-            "1 party · Changed"
-        );
+        assert_eq!(summary(&d), "1 party · Changed");
         slot_override(&mut d, 0, "{side: ' party '}");
-        assert_eq!(
-            summary(&d),
-            "1 party · Changed"
-        );
+        assert_eq!(summary(&d), "1 party · Changed");
         // iter-26-B FL2: the members in a group's form: each with its count, also one, joined
         // by commas, so ` · ` separates facts only; a renamed member names its base.
         let wolf = stat_creature(dir.path(), "Wolf", 11);
