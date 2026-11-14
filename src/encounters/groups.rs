@@ -48,8 +48,30 @@ fn one() -> u64 {
     1
 }
 
+/// A member's identity in the open draft. Its row, its fields and its open changes form key by
+/// it, so a move, a removal or an Undo never gives one member's form, cursor or typed words to
+/// another (K3: a key is an identity, not a place). It is not saved: a member read again gets a
+/// new one, and two members compare by their saved words alone.
+#[derive(Clone, Copy, Debug)]
+struct MemberId(Uuid);
+
+impl Default for MemberId {
+    fn default() -> Self {
+        Self(Uuid::new_v4())
+    }
+}
+
+impl PartialEq for MemberId {
+    /// Not part of what a member is: a draft and its saved form compare by their words.
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct MemberDraft {
+    #[serde(skip)]
+    id: MemberId,
     creature: EntryRef,
     #[serde(default = "one")]
     count: u64,
@@ -484,6 +506,7 @@ impl GroupDraft {
             return;
         }
         self.setup.members.push(MemberDraft {
+            id: MemberId::default(),
             extra: Mapping::new(),
             creature: EntryRef::id(id),
             count: 1,
@@ -510,6 +533,7 @@ impl GroupDraft {
         self.touch();
         self.members_saved = None;
         self.setup.members.push(MemberDraft {
+            id: MemberId::default(),
             extra: Mapping::new(),
             creature: EntryRef::id(id),
             count: 1,
@@ -2740,6 +2764,12 @@ fn name_width(column: f32) -> f32 {
     }
 }
 
+/// The key of a member's open changes form and of its fields: its group and its identity in the
+/// draft, never its place among the members.
+fn member_key(path: &str, member: &MemberDraft) -> String {
+    format!("{path}:member_{}", member.id.0)
+}
+
 /// Where a group editor's members column ended in the last pass, for the name field above it.
 fn column_right_id(path: &str) -> egui::Id {
     egui::Id::new(("group_column_right", path))
@@ -3054,7 +3084,8 @@ fn members(
                 .filter(|member| member.before <= index)
                 .count()
             + 1;
-        ui.push_id(index, |ui| {
+        // The row's widgets key by the member's identity, not its place.
+        ui.push_id(member.id.0, |ui| {
             let entry = snapshot
                 .catalogue
                 .resolve_ref(&member.creature)
@@ -3088,7 +3119,7 @@ fn members(
                     ))
                 })
                 .unwrap_or_default();
-            let key = format!("{path}:member_{index}");
+            let key = member_key(&path, member);
             let is_open = expanded.as_deref() == Some(key.as_str());
             let member_row = ui
                 .label(
@@ -3275,9 +3306,15 @@ fn members(
     if edited || remove.or(raise).or(lower).is_some() || replaced.is_some() {
         draft.touch();
     }
-    // An open form is keyed by place. Left open, it would now edit another member.
-    if remove.or(raise).or(lower).is_some() {
+    // An open form is keyed by its member's identity: a move keeps it on that member. Only the
+    // removed member's own form closes.
+    if let Some(index) = remove
+        && let Some(member) = draft.setup.members.get(index)
+        && expanded.as_deref() == Some(member_key(&path, member).as_str())
+    {
         *expanded = None;
+    }
+    if remove.or(raise).or(lower).is_some() {
         draft.replaced = None;
     }
     // One result line: the newest member result takes it.
@@ -3729,6 +3766,32 @@ mod tests {
         members(&mut body, &mut state.0, snapshot, &mut state.1);
     }
 
+    /// Round 28 (K3 review): a member's key is its identity in the draft. A move keeps each key
+    /// with its member, two members never share one, and the identity is not part of what a
+    /// member is: the draft still equals its saved form, and a member read again equals it.
+    #[test]
+    fn a_member_keys_its_form_by_its_identity_not_its_place() {
+        let mut draft = GroupDraft::new();
+        let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
+        draft.add(a);
+        draft.add(b);
+        let keys: Vec<String> = draft
+            .setup
+            .members
+            .iter()
+            .map(|member| member_key("g.md", member))
+            .collect();
+        assert_ne!(keys[0], keys[1], "two members, two keys");
+        draft.setup.members.swap(0, 1);
+        assert_eq!(member_key("g.md", &draft.setup.members[1]), keys[0], "A keeps its key");
+        assert_eq!(member_key("g.md", &draft.setup.members[0]), keys[1], "B keeps its key");
+        // Not a saved part of a member: the same words compare equal.
+        let read: GroupSetup =
+            serde_yaml_ng::from_value(serde_yaml_ng::to_value(&draft.setup).unwrap()).unwrap();
+        assert_eq!(read, draft.setup);
+        assert_ne!(member_key("g.md", &read.members[0]), keys[1], "a member read again is new");
+    }
+
     /// iter-26-B, review 2: a control's change that lands after the comparison, in a frame with
     /// editing input, is seen in the next frame even when that frame has no input; after it, an
     /// unchanged frame compares nothing.
@@ -3737,6 +3800,7 @@ mod tests {
         let ctx = egui::Context::default();
         let mut draft = GroupDraft::new();
         let member = MemberDraft {
+            id: MemberId::default(),
             creature: EntryRef::id(Uuid::new_v4()),
             count: 1,
             overrides: Mapping::new(),
