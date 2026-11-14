@@ -2893,7 +2893,10 @@ mod tests {
             .all_styles_mut(|style| style.interaction.tooltip_delay = 0.0);
         let shown = visible(&h, ALIKE).1;
         assert!(
-            shown.len() == 1 && shown[0].matches("Gho…").count() == 2,
+            shown.len() == 1
+                && shown[0].matches('…').count() == 2
+                && !shown[0].contains("north")
+                && !shown[0].contains("south"),
             "both objects cut alike: {shown:?}"
         );
         assert!(!painted(&h, ALIKE), "no tip before hover or focus");
