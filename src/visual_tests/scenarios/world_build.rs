@@ -12025,7 +12025,8 @@ fn long_repair_keeps_save(d: &mut Driver<'_>) {
     d.click_line_end("Long line 300.");
     d.type_text(" Edited.");
     // Save, Discard and the reason in the footer: each whole in view, Save above the reason.
-    let in_view = |d: &Driver<'_>| {
+    // Discard shows only while the draft has changes.
+    let in_view = |d: &Driver<'_>, changed: bool| {
         let nodes = d.nodes();
         let find = |name: &str, role: Role| {
             nodes
@@ -12038,9 +12039,10 @@ fn long_repair_keeps_save(d: &mut Driver<'_>) {
             find("Discard", Role::Button),
             find(REASON, Role::Label),
         );
-        let whole = [save, discard, reason]
+        let whole = [save, reason]
             .iter()
             .all(|found| found.is_some_and(|(_, whole)| whole))
+            && (!changed || discard.is_some_and(|(_, whole)| whole))
             && save
                 .zip(reason)
                 .is_some_and(|((save, _), (reason, _))| save.bottom() <= reason.top());
@@ -12049,7 +12051,7 @@ fn long_repair_keeps_save(d: &mut Driver<'_>) {
             format!("Save {save:?}, Discard {discard:?}, reason {reason:?}"),
         )
     };
-    let (whole, detail) = in_view(d);
+    let (whole, detail) = in_view(d, true);
     d.observe(
         "iter-28-P2-long-repair-save",
         whole
@@ -12061,7 +12063,7 @@ fn long_repair_keeps_save(d: &mut Driver<'_>) {
     d.state("long-repair-middle-line-edited", Sizes::Small);
     // Discard works, and the footer gains its Undo line: Save stays whole in view.
     d.click("Discard");
-    let (whole, detail) = in_view(d);
+    let (whole, detail) = in_view(d, false);
     d.observe(
         "iter-28-P2-long-repair-discard",
         whole
@@ -12082,7 +12084,7 @@ fn long_repair_keeps_save(d: &mut Driver<'_>) {
         splat::character::stable_id("long-repair")
     );
     d.replace_text_in(&editor_name, &valid);
-    let (whole, detail) = in_view(d);
+    let (whole, detail) = in_view(d, true);
     let save_whole = d
         .nodes()
         .iter()
