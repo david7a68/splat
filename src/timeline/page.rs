@@ -1966,11 +1966,22 @@ mod tests {
         book.add(Kind::LongRest, None);
         book.events[0].restores = true;
         let event_id = book.events[0].id.clone();
+        // The ruling line in the row, and its result in the pane's footer, as the pages draw them.
         let mut harness = egui_kittest::Harness::builder().build_state(
             move |ctx, book: &mut Book| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    if let Some(action) = rest_ruling(ui, &book.events[0]) {
+                    let frame = PaneFrame::new(ui);
+                    let mut messages = Messages::new(&frame, "ruling_test", ui.available_width());
+                    ruling_line(&frame, &mut messages, book, &event_id, ());
+                    let mut action = None;
+                    let paned = messages.pane(ui, design::Body::Content, |ui| {
+                        action = rest_ruling(ui, &book.events[0]);
+                    });
+                    if let Some(action) = action {
                         action.apply(book, &event_id);
+                    }
+                    if let Some(ticket) = paned.pressed.and_then(|press| press.ticket) {
+                        book.undo_restores(ticket);
                     }
                 });
             },
@@ -1987,7 +1998,7 @@ mod tests {
         harness.run_steps(2);
         assert!(harness.state().events[0].restores);
         harness.get_by_label(REST_RESTORES_WORDS);
-        harness.get_by_label("Undo ruling").click();
+        harness.get_by_label("Undo change ruling").click();
         harness.run_steps(2);
         assert!(!harness.state().events[0].restores);
     }

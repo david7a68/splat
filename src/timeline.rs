@@ -1868,7 +1868,7 @@ impl Book {
     /// is told from. It holds no ticket here (the run's update is no press): by owner, counted.
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: a run's update revises the one kept removal by its owner (design::results::STAGED_ALLOWS)"
+        reason = "staged: the update of a run revises the one kept removal by its owner (design::results::STAGED_ALLOWS)"
     )]
     fn removal_follows_run(&mut self, file: &TimelineFile, session: Option<Uuid>) {
         let owned = self.owned_events(session);

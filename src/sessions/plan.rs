@@ -142,10 +142,6 @@ pub(super) enum FooterAct {
     File(timeline::page::FileAct),
 }
 
-/// The plan's footer messages and the session page's, in the one footer of the pane the plan
-/// is drawn in.
-type PlanMessages<'f> = Messages<'f, super::SessionAct>;
-
 fn pressed(act: FooterAct) -> super::SessionAct {
     super::SessionAct::Plan(act)
 }
@@ -158,7 +154,7 @@ fn pressed(act: FooterAct) -> super::SessionAct {
     reason = "staged: plan results keep their own orders (`outcome_at`, design::results::STAGED_ALLOWS)"
 )]
 fn kept_at(
-    messages: &mut PlanMessages<'_>,
+    messages: &mut Messages<'_, super::SessionAct>,
     order: design::ResultOrder,
     outcome: impl Into<KeptOutcome<super::SessionAct>>,
 ) {
@@ -169,7 +165,7 @@ fn kept_at(
 /// from a file or the system. The one place this file takes them as a sentence.
 #[allow(
     clippy::disallowed_methods,
-    reason = "words built from the plan's data, or from a file or the system, as text (design::results::STAGED_ALLOWS)"
+    reason = "words built from the data of the plan, or from a file or the system, as text (design::results::STAGED_ALLOWS)"
 )]
 fn as_sentence(words: &str) -> Sentence {
     Sentence::outside(words).unwrap_or(crate::sentence!("Something changed."))
@@ -2348,7 +2344,7 @@ impl Rewards {
     /// The note's rewards results and its fault, in the plan's message footer, each naming its
     /// fight by the name the act read. Results with their Undo go newest first among the
     /// footer's results; the fault is a notice until the note changes.
-    fn in_footer(&self, messages: &mut PlanMessages<'_>, note: Uuid, revision: u64) {
+    fn in_footer(&self, messages: &mut Messages<'_, super::SessionAct>, note: Uuid, revision: u64) {
         if let Some((id, _, words, met)) = &self.fault
             && (*id, *met) == (note, revision)
         {
@@ -2812,7 +2808,11 @@ impl Sessions {
         }
     }
 
-    fn removed_group_message(&self, messages: &mut PlanMessages<'_>, session: Option<Uuid>) {
+    fn removed_group_message(
+        &self,
+        messages: &mut Messages<'_, super::SessionAct>,
+        session: Option<Uuid>,
+    ) {
         let Some((id, _, _, _, _, name)) = &self.removed_group else {
             return;
         };
@@ -3838,7 +3838,7 @@ impl Sessions {
     /// The scenes' results whose own place is not drawn, in the plan's message footer
     /// (`shown_at`): the Scene field's once it closes, a row's while the scenes fold, and a
     /// removal whose row's place is gone. The Undo stays the note's, so it stays in reach.
-    fn scene_messages(&self, messages: &mut PlanMessages<'_>, shown: Shown) {
+    fn scene_messages(&self, messages: &mut Messages<'_, super::SessionAct>, shown: Shown) {
         if let Some(fault) = &self.scenes.fault
             && shown.fault == Some(Place::Footer)
         {
@@ -3952,7 +3952,12 @@ impl Sessions {
             && self.draft.as_ref().is_some_and(|draft| undo.live(draft))
         {
             design::gap(ui, design::Gap::XS);
-            if design::undo_message(ui, Tone::Success, "Scene added to tonight.", "Undo scene") {
+            if design::undo_message(
+                ui,
+                Tone::Success,
+                "Scene added to tonight.",
+                "Undo add scene",
+            ) {
                 *act = Some(SceneAct::UndoAdd);
             }
         }
@@ -4132,7 +4137,7 @@ impl Sessions {
         })
     }
 
-    fn deleted_run_message(&self, messages: &mut PlanMessages<'_>) {
+    fn deleted_run_message(&self, messages: &mut Messages<'_, super::SessionAct>) {
         if let Some((tone, words)) = self.deleted_run_words() {
             let undo =
                 UndoStep::of(Verb::Delete, "run").pressed_as(pressed(FooterAct::UndoDeletedRun));
@@ -4164,7 +4169,7 @@ impl Sessions {
         &mut self,
         frame: &'f PaneFrame,
         ui: &egui::Ui,
-        messages: &mut PlanMessages<'f>,
+        messages: &mut Messages<'f, super::SessionAct>,
         book: &Book,
         session: Option<Uuid>,
         plan: &Plan<'_>,
@@ -6079,7 +6084,7 @@ mod tests {
             harness.query_by_label("Plan a scene").is_some(),
             "the field stays open"
         );
-        harness.get_by_label("Undo scene").click();
+        harness.get_by_label("Undo add scene").click();
         harness.run_steps(2);
         assert_eq!(read(), before);
         // Another change of the words ends that Undo for good, also when the words come back.
@@ -6091,14 +6096,14 @@ mod tests {
         harness.run_steps(1);
         harness.key_press(egui::Key::Enter);
         harness.run_steps(3);
-        assert!(harness.query_by_label("Undo scene").is_some());
+        assert!(harness.query_by_label("Undo add scene").is_some());
         for state in ["Done", "Open"] {
             harness
                 .get_by_label(&format!("{state}: Pay the toll"))
                 .click();
             harness.run_steps(2);
         }
-        assert!(harness.query_by_label("Undo scene").is_none());
+        assert!(harness.query_by_label("Undo add scene").is_none());
         // So does another session.
         harness.get_by_label("Plan a scene").focus();
         harness.run_steps(1);
@@ -6108,12 +6113,12 @@ mod tests {
         harness.run_steps(1);
         harness.key_press(egui::Key::Enter);
         harness.run_steps(3);
-        assert!(harness.query_by_label("Undo scene").is_some());
+        assert!(harness.query_by_label("Undo add scene").is_some());
         harness.state_mut().0.select(None);
         harness.run_steps(2);
         harness.state_mut().0.select(Some(note.id));
         harness.run_steps(2);
-        assert!(harness.query_by_label("Undo scene").is_none());
+        assert!(harness.query_by_label("Undo add scene").is_none());
         assert!(read().contains("- [ ] Cross at dawn\n- [ ] Rest at the ford\n"));
         // Review of PR 280: a refused Undo says why where the DM sees it. With the field closed,
         // `Undo scene` is in the footer; Obsidian changes the note just before the DM presses
@@ -6130,7 +6135,7 @@ mod tests {
         harness.run_steps(3);
         let obsidian = format!("{}\nObsidian added this just before Undo.\n", read());
         fs::write(&note.path, &obsidian).unwrap();
-        harness.get_by_label("Undo scene").click();
+        harness.get_by_label("Undo add scene").click();
         harness.run_steps(3);
         assert_eq!(read(), obsidian, "the outside edit stays");
         assert!(
@@ -6578,7 +6583,7 @@ mod tests {
             &harness,
             "XP 0, as in your last rewards. XP tonight: 200 for 2 fights. 1 award is not known."
         ));
-        assert_eq!(harness.query_all_by_label("Undo rewards").count(), 2);
+        assert_eq!(harness.query_all_by_label("Undo add rewards").count(), 2);
         // The footer lists the newest result first: B, then A.
         let top = |words: &str| {
             harness
@@ -6595,7 +6600,7 @@ mod tests {
         );
         // Undo of A (the footer's second) takes back A's block alone; B's stays.
         harness
-            .query_all_by_label("Undo rewards")
+            .query_all_by_label("Undo add rewards")
             .last()
             .unwrap()
             .click();
@@ -6608,7 +6613,7 @@ mod tests {
             )
         );
         assert!(harness.query_by_label("Add rewards: Bridge").is_some());
-        assert_eq!(harness.query_all_by_label("Undo rewards").count(), 1);
+        assert_eq!(harness.query_all_by_label("Undo add rewards").count(), 1);
 
         // Another session and back keeps an Undo: it is the note's. Undo B gives the words
         // back exactly.
@@ -6616,7 +6621,7 @@ mod tests {
         harness.run_steps(2);
         harness.state_mut().0.select(Some(note.id));
         harness.run_steps(2);
-        harness.get_by_label("Undo rewards").click();
+        harness.get_by_label("Undo add rewards").click();
         harness.run_steps(2);
         assert_eq!(read(), outside);
 
@@ -6628,16 +6633,16 @@ mod tests {
         // takes back nothing and says so under the row.
         let typed = read().replace(&block_a, &format!("{block_a}\n  - Varra's signet ring\n"));
         fs::write(&note.path, &typed).unwrap();
-        harness.get_by_label("Undo rewards").click();
+        harness.get_by_label("Undo add rewards").click();
         harness.run_steps(2);
         assert_eq!(read(), typed);
         assert!(shown(&harness, "That line changed on disk."));
-        assert!(harness.query_by_label("Undo rewards").is_none());
+        assert!(harness.query_by_label("Undo add rewards").is_none());
         fs::write(&note.path, &no_xp).unwrap();
         harness.state_mut().0.draft.as_mut().unwrap().follow_disk();
         harness.run_steps(2);
         assert!(
-            harness.query_by_label("Undo rewards").is_none(),
+            harness.query_by_label("Undo add rewards").is_none(),
             "the block is no longer the act's"
         );
         harness.get_by_label("Add rewards: Shrine").click();
@@ -6688,7 +6693,7 @@ mod tests {
                 .body
                 .contains(&block_a)
         );
-        assert!(harness.query_by_label("Undo rewards").is_some());
+        assert!(harness.query_by_label("Undo add rewards").is_some());
         harness.state_mut().0.draft.as_mut().unwrap().save();
         assert!(read().contains(&block_a));
 
@@ -6703,7 +6708,7 @@ mod tests {
         };
         harness.run_steps(2);
         assert!(shown(&harness, "In notes"));
-        assert!(harness.query_by_label("Undo rewards").is_none());
+        assert!(harness.query_by_label("Undo add rewards").is_none());
 
         // The act reads its new words again before it writes. A block that would be code in a
         // code block that is not closed writes nothing, says so, and a second press neither.
@@ -6732,7 +6737,7 @@ mod tests {
         assert!(read().ends_with(&single));
         let quoted = format!("{prefix}# Session\n\n> {single}## Keep this heading\nKeep this.\n");
         fs::write(&note.path, &quoted).unwrap();
-        harness.get_by_label("Undo rewards").click();
+        harness.get_by_label("Undo add rewards").click();
         harness.run_steps(2);
         assert_eq!(read(), quoted);
         assert!(shown(&harness, "That line changed on disk."));
