@@ -383,6 +383,53 @@ pub fn broken(d: &mut Driver<'_>) {
     d.click("Undo discard of Broken.md");
     assert_eq!(d.editor_text().as_deref(), Some(unfinished.as_str()));
     tops.push(("Undo discard, reason", editor_tops(d)));
+    // Lead review of PR 329: each repair's Undo is its own. A: Broken.md's discard; B: an edit
+    // of another broken note, Cracked.md; Undo A brings A's words back and leaves B's draft.
+    let cracked = root(d).join("Notes/Cracked.md");
+    let cracked_text = "---\nsplat_schema: 2\nsplat_id: [\n---\n\nCracked.\n";
+    fs::write(&cracked, cracked_text).unwrap();
+    reload(d);
+    d.click_starting("Notes/Broken.md · ");
+    d.click("Discard");
+    d.expect("Undo discard of Broken.md");
+    d.click_starting("Notes/Cracked.md · ");
+    let b_words = format!("{cracked_text}\nB's own words.\n");
+    d.replace_text_in("Note text", &b_words);
+    let b_changed = d.editor_text().as_deref() == Some(b_words.as_str());
+    d.click_starting("Notes/Broken.md · ");
+    d.click("Undo discard of Broken.md");
+    let a_back = d.editor_text().as_deref() == Some(unfinished.as_str());
+    d.click_starting("Notes/Cracked.md · ");
+    let b_kept = d.editor_text().as_deref() == Some(b_words.as_str())
+        && fs::read_to_string(&cracked).unwrap() == cracked_text;
+    d.observe(
+        "iter-28-D-repair-a-b-undo",
+        b_changed && a_back && b_kept,
+        format!(
+            "B changed {b_changed}; Undo A brings A's words back {a_back}; B's draft stays {b_kept}"
+        ),
+    );
+    // B's draft goes, so the list has one broken note again.
+    d.click("Discard");
+    fs::remove_file(&cracked).unwrap();
+    reload(d);
+    // A newer file on disk ends A's kept Undo: Undo would hide that change.
+    d.click_starting("Notes/Broken.md · ");
+    let disk_now = fs::read_to_string(&path).unwrap();
+    d.click("Discard");
+    d.expect("Undo discard of Broken.md");
+    fs::write(&path, format!("{disk_now}\nA newer outside edit.\n")).unwrap();
+    d.settle();
+    d.observe(
+        "iter-28-D-repair-newer-file",
+        !d.has("Undo discard of Broken.md"),
+        "A newer file on disk ends Broken.md's Undo discard",
+    );
+    // Back to the draft the steps below start from.
+    fs::write(&path, &disk_now).unwrap();
+    d.settle();
+    d.replace_text_in("Note text", &unfinished);
+    assert_eq!(d.editor_text().as_deref(), Some(unfinished.as_str()));
     // The discard result's owner is the discarded draft: an edit ends it, and the reason leads
     // again. The edit types the same words back, so the draft is the one before Discard.
     d.click("Discard");
