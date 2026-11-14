@@ -1079,9 +1079,19 @@ fn claimed_id() -> Id {
 /// whole row; a row that starts at the view's top keeps the plain cut, as in `Body::Content`.
 /// Elsewhere it only runs `add`.
 pub(super) fn whole_rows<R>(ui: &mut Ui, column: Id, add: impl FnOnce(&mut Ui) -> R) -> R {
-    let Some(pane) = innermost(ui).filter(|pane| !pane.content && pane.edge) else {
+    let Some(pane) = innermost(ui).filter(|pane| !pane.content) else {
         return add(ui);
     };
+    // P3a: a column in a `Fills` body has the hang's room of a pane of its own (`hang_left`
+    // from the column's left), so a `line_start` action in it never paints or takes a press
+    // over a control left of the column (the scroll bar of the column beside it).
+    let mut clip = ui.clip_rect();
+    let column_room = Rect::from_min_max(pos2(ui.max_rect().left(), clip.top()), clip.max);
+    clip.min.x = clip.min.x.max(hang_left(ui, column_room));
+    ui.set_clip_rect(clip);
+    if !pane.edge {
+        return add(ui);
+    }
     let view = ui.clip_rect();
     let key = pane.pane.with(("column_cut", column));
     let kept = ui
@@ -2263,6 +2273,61 @@ mod row_cut_tests {
                 && (surface.left() - band.right()).abs() <= 0.5,
             "gutter-band: the clip {:?}, Stop's hit area {hit:?} and the surface {surface:?} stop at the band {band:?}",
             state.clip
+        );
+        // 5: two columns in a `Fills` body, the second 8 px right of the first's scroll lane: the
+        // icon action at the second column's text edge hangs 28 px, over the first's bar unless
+        // the column's own clip stops at it.
+        let mut columns = egui_kittest::Harness::builder()
+            .with_size(vec2(700.0, 300.0))
+            .build_ui_state(
+                move |ui, seen: &mut (Rect, Rect, Rect, Rect)| {
+                    let frame = PaneFrame::new(ui);
+                    let messages = Messages::<NoPress>::new(&frame, "gutter_fills", 680.0);
+                    *seen = messages
+                        .pane(
+                            ui,
+                            Body::Fills(Fills::for_test(FillsReason::MarkdownEditor)),
+                            |ui| {
+                                let room = ui.available_rect_before_wrap();
+                                let left = room.with_max_x(room.left() + 200.0);
+                                ui.scope_builder(egui::UiBuilder::new().max_rect(left), |ui| {
+                                    ScrollColumn::new("gutter_list").show(ui, |ui| {
+                                        for row in 0..60 {
+                                            ui.label(format!("Row {row}"));
+                                        }
+                                    })
+                                });
+                                let right = room.with_min_x(left.right() + S);
+                                let (rect, hit, clip) = ui
+                                    .scope_builder(egui::UiBuilder::new().max_rect(right), |ui| {
+                                        ScrollColumn::new("gutter_reader")
+                                            .show(ui, |ui| {
+                                                let shown = Action::quiet("Add one")
+                                                    .icon(crate::design::icons::ERROR)
+                                                    .line_start()
+                                                    .show(ui);
+                                                (shown.rect, shown.interact_rect, ui.clip_rect())
+                                            })
+                                            .inner
+                                    })
+                                    .inner;
+                                (rect, hit, clip, left)
+                            },
+                        )
+                        .body;
+                },
+                (Rect::NOTHING, Rect::NOTHING, Rect::NOTHING, Rect::NOTHING),
+            );
+        crate::design::theme::install(&columns.ctx);
+        columns.run_steps(4);
+        let (rect, hit, clip, list) = *columns.state();
+        assert!(
+            rect.left() < list.right() - 0.5,
+            "gutter-columns-pressure: the icon action {rect:?} hangs into the list column {list:?}"
+        );
+        assert!(
+            clip.left() >= list.right() - 0.5 && hit.left() >= list.right() - 0.5,
+            "gutter-columns: the column's clip {clip:?} and the action's hit area {hit:?} stop at the list column's right edge {list:?}"
         );
         // 2: flush against a splitter.
         let mut flush = egui_kittest::Harness::builder()
