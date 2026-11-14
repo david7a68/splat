@@ -1640,6 +1640,9 @@ pub(super) struct Scenes {
     fold: Fold,
     /// The Scene field had focus on the last frame.
     typing: bool,
+    /// A scene was just added from the Scene field: its result under the field scrolls whole
+    /// into view, on each frame until it is (another scroll of the same frame may win once).
+    reveal_added: bool,
 }
 
 impl Scenes {
@@ -3954,7 +3957,7 @@ impl Sessions {
         let typed = state.words.trim().to_owned();
         let emptied = state.words.is_empty();
         self.scenes.typing = result.field.has_focus();
-        self.field_result(ui, reveal.then_some(result.field.rect), shown, act);
+        self.field_result(ui, result.field.rect, reveal, shown, act);
         if let Some(link) = result.chosen {
             *act = Some(SceneAct::Add(link));
         } else if result.enter && !typed.is_empty() {
@@ -3969,17 +3972,20 @@ impl Sessions {
     /// field, so the field never moves for its own result. With `reveal`, the field's rectangle,
     /// the field and its words scroll into view together.
     fn field_result(
-        &self,
+        &mut self,
         ui: &mut egui::Ui,
-        reveal: Option<egui::Rect>,
+        field: egui::Rect,
+        reveal: bool,
         shown: Shown,
         act: &mut Option<SceneAct>,
     ) {
         self.row_fault(ui, Place::Field, shown);
+        let mut added = None;
         if shown.added == Some(Place::Field)
             && let Some(undo) = &self.scenes.added
             && self.draft.as_ref().is_some_and(|draft| undo.live(draft))
         {
+            let top = ui.cursor().top();
             design::gap(ui, design::Gap::XS);
             if design::undo_message(
                 ui,
@@ -3989,10 +3995,30 @@ impl Sessions {
             ) {
                 *act = Some(SceneAct::UndoAdd);
             }
+            added = Some(egui::Rect::from_x_y_ranges(
+                field.x_range(),
+                top..=ui.cursor().top(),
+            ));
         }
-        if let Some(field) = reveal {
+        if reveal {
             let bottom = ui.cursor().top().max(field.bottom());
             ui.scroll_to_rect(field.with_max_y(bottom), None);
+        }
+        // Round 29 P-1: after Add, the result and its Undo, the answer to the act, are whole in
+        // view, with the field above them while both fit; else the result wins. The least
+        // scroll that shows them, on each frame until they show.
+        match added {
+            Some(result) if self.scenes.reveal_added => {
+                if ui.clip_rect().contains_rect(result) {
+                    self.scenes.reveal_added = false;
+                } else if field.union(result).height() <= ui.clip_rect().height() {
+                    ui.scroll_to_rect(field.union(result), None);
+                } else {
+                    ui.scroll_to_rect(result, None);
+                }
+            }
+            // Not drawn under the field in this frame: the next Add sets it again.
+            _ => {}
         }
     }
 
@@ -4027,6 +4053,7 @@ impl Sessions {
                     if let Some(field) = &mut scenes.field {
                         field.clear();
                         field.focus = true;
+                        scenes.reveal_added = true;
                     }
                 }
                 (result.map(drop), Place::Field)

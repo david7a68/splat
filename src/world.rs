@@ -3593,10 +3593,15 @@ impl Reader {
         let select = std::mem::take(&mut open.select);
         let field = &mut open.field;
         let name = format!("Log line for {}", item.entry.name);
-        const LOG_LINE: crate::layout::FieldName = crate::field_id!("world_log_line");
-        let entry = item.entry.id;
+        // One draft for each reader (World's page, Lookup), campaign and entry: the same entry
+        // can be open in both readers, each with its own Log field.
+        const LOG_LINE: ReaderField = ReaderField {
+            page: crate::field_id!("world_log_line"),
+            compact: crate::field_id!("lookup_log_line"),
+        };
+        let id = LOG_LINE.id(self.compact, item.entry.id).with(campaign.id);
         let form = || {
-            design::add_field::<()>(LOG_LINE.of(entry), &name, "What happened?")
+            design::add_field::<()>(id, &name, "What happened?")
                 .actions(crate::word!("Add"), crate::word!("Cancel"))
         };
         // The field ends at the reader's measure, also when the stamp shares its line: a row of
