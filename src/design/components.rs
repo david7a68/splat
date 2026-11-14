@@ -807,17 +807,39 @@ impl<'a> Action<'a> {
         let width = (galley.size().x + 2.0 * padding + icon_width + key_width)
             .max(self.height)
             .max(self.min_width.unwrap_or_default());
+        // The padding before the icon and the words: less only for a `line_start` hang that
+        // the clip leaves short (below).
+        let mut left_padding = padding;
         let (rect, response) = if self.kind == Kind::Quiet && self.line_start {
             // The words start at the text edge; the padding and any icon hang in the gutter. The
             // row allocates all but the icon, so the next item keeps the same gap after the
             // target as it has after a `line_start` action without an icon.
-            let size = vec2(width - icon_width, self.height);
+            // P3a: the action is whole in its room (`pane::hang_limit`: this `Ui`'s clip, its
+            // pane column's surface, and every band a layout part reserved across its hang).
+            // Where the room is shorter than the hang, the action first gives up its left
+            // padding (blank but for the hover fill), so its words stay at the text edge (a
+            // menu's choices under its heading); then it moves its icon and words by what is
+            // still missing, also past the text edge when the room starts there.
+            let hang = padding + icon_width;
+            let start = ui.cursor().min;
+            let limit = super::pane::hang_limit(
+                ui,
+                Rect::from_min_max(
+                    pos2(start.x - hang, start.y),
+                    pos2(start.x, start.y + self.height),
+                ),
+            );
+            let short = (limit - (start.x - hang)).max(0.0);
+            let given = short.min(padding);
+            let shift = short - given;
+            let size = vec2(width - icon_width + shift, self.height);
             let (id, allocated) = ui.allocate_space(size);
-            let rect = ui
-                .layout()
-                .align_size_within_rect(size, allocated)
-                .translate(vec2(-padding, 0.0));
-            let rect = rect.with_min_x(rect.min.x - icon_width);
+            let aligned = ui.layout().align_size_within_rect(size, allocated);
+            left_padding = padding - given;
+            let rect = Rect::from_min_size(
+                pos2(aligned.left() - hang + short, aligned.top()),
+                vec2(width - given, self.height),
+            );
             // An Undo under its message keeps its target in the message's column, so it never
             // hangs past a pane whose text edge is the message's (Lookup's reader). The icon
             // and the words keep their places.
@@ -826,7 +848,16 @@ impl<'a> Action<'a> {
             } else {
                 rect
             };
-            (rect, ui.interact(target, id, Sense::click()))
+            // Ruling R19: its press area is its painted area inside its room, registered once
+            // for clicks; egui's nearest-target rule applies to it as to every control. It is
+            // never inside a reserved band (`hang_limit`), so a press directly on a splitter
+            // band or a scroll lane is that control's direct hit.
+            let room = ui.clip_rect().with_min_x(ui.clip_rect().left().max(limit));
+            let clip = ui.clip_rect();
+            ui.set_clip_rect(room);
+            let response = ui.interact(target, id, Sense::click());
+            ui.set_clip_rect(clip);
+            (rect, response)
         } else {
             ui.allocate_exact_size(vec2(width, height), Sense::click())
         };
@@ -870,7 +901,7 @@ impl<'a> Action<'a> {
             stroke,
             StrokeKind::Inside,
         );
-        let mut x = rect.left() + padding;
+        let mut x = rect.left() + left_padding;
         if let Some(icon) = self.icon {
             ui.painter().text(
                 pos2(x, rect.center().y),
@@ -4872,6 +4903,76 @@ mod tests {
                 );
             }
         }
+        // P3a, ruling R19 (proof 3): a hanging Undo keeps keyboard focus, Enter, Space and an
+        // AccessKit click with the pointer anywhere; one input frame per step, counted in it.
+        use crate::visual_tests::input_frame::one_pass;
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(360.0, 200.0))
+            .build_ui_state(
+                |ui, count: &mut usize| {
+                    // Behind a parent clip from x 100, so a pointer at x 40 is outside its room;
+                    // 260 px of room wraps the line, so the Undo hangs (`line_start_in_column`).
+                    let room = ui.available_rect_before_wrap().with_min_x(100.0);
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(room), |ui| {
+                        let mut clip = ui.clip_rect();
+                        clip.min.x = 100.0;
+                        ui.set_clip_rect(clip);
+                        *count += usize::from(undo_message(ui, Tone::Success, TEXT, UNDO));
+                    });
+                },
+                0_usize,
+            );
+        super::super::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let undo = harness.get_by_label(UNDO).accesskit_node().id();
+        harness.get_by_label(UNDO).focus();
+        harness.run_steps(2);
+        let focused = |harness: &egui_kittest::Harness<'_, usize>| {
+            harness
+                .ctx
+                .memory(|memory| memory.focused())
+                .map(|id| id.value())
+                == Some(undo.0)
+        };
+        assert!(focused(&harness), "undo-focus-setup: the Undo has focus");
+        let undo_rect = harness.get_by_label(UNDO).rect();
+        one_pass(
+            &mut harness,
+            [egui::Event::PointerMoved(pos2(40.0, undo_rect.center().y))],
+        );
+        assert!(
+            focused(&harness) && *harness.state() == 0,
+            "undo-pointer-away: the pointer away from the Undo keeps its focus and presses nothing ({})",
+            harness.state()
+        );
+        let key = |key, pressed| egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        };
+        let mut counts = Vec::new();
+        for event in [
+            key(egui::Key::Enter, true),
+            key(egui::Key::Enter, false),
+            key(egui::Key::Space, true),
+            key(egui::Key::Space, false),
+            egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+                action: egui::accesskit::Action::Click,
+                target: undo,
+                data: None,
+            }),
+        ] {
+            one_pass(&mut harness, [event]);
+            counts.push(*harness.state());
+        }
+        assert_eq!(
+            counts,
+            vec![1, 1, 2, 2, 3],
+            "undo-keys: Enter, release, Space, release and an AccessKit click with the pointer away"
+        );
     }
 
     /// Every section form says to a screen reader whether it is open, and the state follows a
@@ -4919,12 +5020,21 @@ mod tests {
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(400.0, 200.0))
             .build_ui(|ui| {
-                for (label, icon, line_start) in [
-                    ("Undo heading change", true, true),
-                    ("Clear value", false, true),
-                    ("Undo replacement", true, false),
+                // P3a: the last two rows' clip leaves the hang short: none at all (a menu's
+                // content edge), and 10 px for an icon's 28.
+                for (label, icon, line_start, room) in [
+                    ("Undo heading change", true, true, None),
+                    ("Clear value", false, true, None),
+                    ("Undo replacement", true, false, None),
+                    ("Menu choice", false, true, Some(0.0)),
+                    ("Undo tight", true, true, Some(10.0)),
                 ] {
                     ui.horizontal(|ui| {
+                        if let Some(room) = room {
+                            let mut clip = ui.clip_rect();
+                            clip.min.x = EDGE - room;
+                            ui.set_clip_rect(clip);
+                        }
                         space(ui, EDGE - ui.cursor().left());
                         let action = Action::quiet(label);
                         let action = if icon {
@@ -4974,6 +5084,23 @@ mod tests {
                 && (words("Undo replacement") - (EDGE + S + ICON_SLOT)).abs() <= 0.5,
             "no-hang: words {}, target {normal:?}",
             words("Undo replacement")
+        );
+        // P3a: the action is whole in its clip. With no room, it gives up its left padding and
+        // its words stay at the text edge (a menu's choices under its heading); with 10 px for
+        // an icon (20 px slot), the words move by the 10 px that are missing.
+        let menu = node("Menu choice");
+        assert!(
+            (words("Menu choice") - EDGE).abs() <= 0.5 && (menu.left() - EDGE).abs() <= 0.5,
+            "hang-none: words {} at the edge {EDGE}, target {menu:?} from the clip",
+            words("Menu choice")
+        );
+        let tight = node("Undo tight");
+        assert!(
+            (words("Undo tight") - (EDGE + ICON_SLOT - 10.0)).abs() <= 0.5
+                && (tight.left() - (EDGE - 10.0)).abs() <= 0.5,
+            "hang-short: words {} after the icon, target {tight:?} from the clip at {}",
+            words("Undo tight"),
+            EDGE - 10.0
         );
     }
 
