@@ -1103,6 +1103,8 @@ pub struct Line {
     pub rows: usize,
     /// Its layout job wraps at a width.
     pub wraps: bool,
+    /// The clip it was painted in: its pane's (or a part's inside the pane).
+    pub clip: egui::Rect,
 }
 
 /// A private-use character: one of the app's icon glyphs.
@@ -1131,13 +1133,16 @@ pub fn lines(painted: &[(egui::epaint::TextShape, egui::Rect)]) -> Vec<Line> {
                 first,
                 rows: galley.rows.len(),
                 wraps: galley.job.wrap.max_width.is_finite(),
+                clip: *clip,
             }
         })
         .collect()
 }
 
 /// N2: an icon control (a control that paints only icons) sits on the line of the text beside
-/// it: a text within `3 × L` to its left or right whose first row holds the control's centre;
+/// it: a text of its own pane (the text's clip holds the control's centre, so a text of a
+/// neighbouring pane is never its line) within `3 × L` to its left or right whose first row
+/// holds the control's centre;
 /// of those, the row whose centre is nearest the control's. A control more than twice as tall as
 /// that row is a tile and is left out. The control's centre is within 1 px
 /// of that row's centre. Text inside a text field counts as the field, whose box is the line;
@@ -1158,6 +1163,8 @@ pub fn icon_centres(items: &[Item], lines: &[Line]) -> Vec<Raw> {
         let beside = lines
             .iter()
             .filter(|line| !inside(line) && !icon_only(&line.words))
+            // Round 29 P-1 review: a text of another pane is not the control's line.
+            .filter(|line| line.clip.contains(centre))
             // The file in a Markdown editor is not a line of the app's layout.
             .filter(|line| {
                 !items.iter().any(|editor| {
@@ -2473,6 +2480,7 @@ mod tests {
             first: rect,
             rows: 1,
             wraps: false,
+            clip: egui::Rect::EVERYTHING,
         }
     }
 
@@ -2541,6 +2549,22 @@ mod tests {
         let box_icon = line("\u{e184}", at(156.0, 140.0, 14.0, 16.0));
         let hp = line("17", at(180.0, 140.0, 18.0, 16.0));
         assert!(icon_centres(&[tile], &[hp, box_icon]).is_empty());
+        // Round 29 P-1 review: a text of a neighbouring pane on the control's centre line is not
+        // its line. The plan's menu is 2 px below its own row's text; Lookup's `In`, right of
+        // the plan, has the menu's centre: the menu is still found.
+        let row = line("Captain Varra Black", at(170.0, 334.0, 390.0, 20.0));
+        let row_menu = item(
+            Role::Button,
+            "More actions",
+            at(576.0, 334.0, 24.0, 24.0),
+            None,
+        );
+        let row_dots = line("\u{e3e0}", at(581.0, 338.0, 14.0, 16.0));
+        let mut beside = line("In", at(627.0, 338.0, 14.0, 16.0));
+        beside.clip = at(615.0, 36.0, 330.0, 604.0);
+        let found = icon_centres(&[row_menu], &[row, row_dots, beside]);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].trigger.starts_with("2 px below"), "{found:?}");
         let far = item(Role::Button, "Close", at(900.0, 222.0, 24.0, 24.0), None);
         assert!(
             icon_centres(
