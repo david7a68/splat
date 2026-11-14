@@ -14731,8 +14731,9 @@ pub mod session_recording {
     }
 
     fn choose_view(d: &mut Driver<'_>, name: &str) {
-        if d.has("Recording view") {
-            d.click("Recording view");
+        // The drop-down's name says its chosen view: `Recording view: Summary`.
+        if !d.name_starting("Recording view:").is_empty() {
+            d.click_starting("Recording view:");
         }
         d.click(name);
     }
@@ -15177,6 +15178,19 @@ pub mod session_recording {
         );
         // Round 27 AN1: Cancel's place, to compare with a later stage's longer words.
         let cancel_speech = d.place_of("Cancel processing");
+        // Round 28 FM10: the progress line takes the status line's place: size, status (the
+        // progress words, Cancel under them), then the result links, as in every other state.
+        let size = d.place_of("1 s · 0 MB");
+        let links = d.place_of("Raw transcript");
+        d.observe(
+            "round-28-S-FM10",
+            size.zip(cancel_speech)
+                .zip(links)
+                .is_some_and(|((size, cancel), links)| {
+                    size.bottom() <= cancel.top() && cancel.bottom() <= links.top()
+                }),
+            format!("The status keeps line 3 while processing: size {size:?}, Cancel {cancel_speech:?}, links {links:?}"),
+        );
         d.state("processing-speech", Sizes::Default);
         d.request_close();
         d.expect("Continue processing goes on from there");

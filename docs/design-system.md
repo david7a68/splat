@@ -1970,7 +1970,7 @@ the members from their end (Encounter difficulty, above). Every `·` on the row,
 same blank on each side: the font's own spacing around `·` is uneven, so the row moves each `·` by whole pixels. The
 opened row's `Read encounter` line does not say the difficulty again. A fight with no word because an input is not
 known ends its row with that, and whose, in the word's place: `XP not known: Nameless Thing`, or `Level not known:
-<name>`; with more names, the first and `and 2 more`. Where the row has no room, the first name shortens from its end
+<name>`; with more names, the first and `and 2 more`. One exception: a plan row whose every creature lacks its XP already says whose in its summary, so it ends with `XP not known` alone (`5 party · 1 × Nameless Thing · XP not known`); a creature with a known XP beside them keeps the names. Where the row has no room, the first name shortens from its end
 (`XP not known: Namel…`) and goes only when no letter of it fits (X1); hover and the accessible name keep the whole. The names come from `Scale::weigh`'s typed answer
 (`Difficulty::missing`). The encounter editor, where the DM can repair the cause, ends its line with the names: `ROSTER 6 · XP not known: Nameless Thing`, or in the tab row below 760 px, where the word
 would be. Without room the names shorten from their end (`XP not known: Nameless Th…`) and go only when no letter
@@ -2071,7 +2071,7 @@ fight with <name>`), blocked as the editor's is; then `Add to Log` when it is no
 tonight last (`icons::REMOVE`). Remove from tonight says `Removed “<words>” from tonight.` with Undo remove, in
 the success tone, at the removed row's place while that place is drawn. The Undo is the note's: when that
 place is folded, or no longer among the rows (the fight before it was played), the result and its Undo show in
-the plan's message footer. A done scene does not count in Tonight. Read leaves scenes out as it
+the plan's message footer. Tonight counts the rows under it, a done scene too, as every group heading counts its rows. Read leaves scenes out as it
 leaves out link-only plan lines, and its count line names them: `1 fight, 1 group and 2 scenes, in the plan`.
 Scenes fold first, so that the next fight's row and its primary action stay in view. Each row counts as it is
 when closed: when the closed rows, with the scenes, do not fit the pane, every scene folds. An opened row
