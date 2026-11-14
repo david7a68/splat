@@ -357,13 +357,21 @@ struct HeadingSplit {
 
 /// `whole` is the heading's width, `title` the whole title's, `floor` its first word with `…`
 /// (or the whole title when shorter), `status` the status words with their gap (0 for none),
-/// and `shortest` the smallest complete `Fight after: …`. R1: that answer is reserved first;
-/// the status words stay only where the whole title, they and it fit; the title shortens in
-/// what is left, never below `floor`. Where even `floor` and the answer do not fit together
+/// `current` the smallest complete `Fight after: …` now and `widest` the widest one the row can
+/// show. R1: beside the title or on its own line is decided by `widest` (fourth review), so a
+/// change of difficulty never moves the answer or Add; the status words stay beside the whole
+/// title where the current answer fits after them; else the title shortens to leave `widest`,
+/// never below `floor`. Where even `floor` and the answer do not fit together
 /// (the rule for the boundary), the answer takes its own line under the heading at the whole
 /// width, and the title keeps the heading.
-fn heading_split(whole: f32, title: f32, floor: f32, status: f32, shortest: f32) -> HeadingSplit {
-    if whole < floor + design::L + shortest {
+fn heading_split(
+    whole: f32,
+    title: f32,
+    floor: f32,
+    status: f32,
+    (current, widest): (f32, f32),
+) -> HeadingSplit {
+    if whole < floor + design::L + widest {
         return HeadingSplit {
             title: title.min(whole),
             status: false,
@@ -371,15 +379,21 @@ fn heading_split(whole: f32, title: f32, floor: f32, status: f32, shortest: f32)
             below: true,
         };
     }
-    let keep = status > 0.0 && title + status + design::L + shortest <= whole;
-    let status_room = if keep { status } else { 0.0 };
-    let title = title
-        .min(whole - design::L - shortest - status_room)
-        .max(floor);
+    // The status words stay beside the whole title while the current answer fits after them
+    // (as before); the answer's place (beside, at the right) does not depend on it.
+    if status > 0.0 && title + status + design::L + current <= whole {
+        return HeadingSplit {
+            title,
+            status: true,
+            room: whole - title - status - design::L,
+            below: false,
+        };
+    }
+    let title = title.min(whole - design::L - widest).max(floor);
     HeadingSplit {
         title,
-        status: keep,
-        room: whole - title - status_room - design::L,
+        status: false,
+        room: whole - title - design::L,
         below: false,
     }
 }
@@ -4004,7 +4018,7 @@ impl Run {
             heading_width,
             floor,
             if status.is_empty() { 0.0 } else { status_room },
-            widest,
+            (shortest, widest),
         );
         let (status_in_heading, title_width, room) = (split.status, split.title, split.room);
         let status_room = if status_in_heading { status_room } else { 0.0 };
@@ -10328,10 +10342,18 @@ mod tests {
             group.name = long.clone();
             let mut run = run;
             run.groups = Some(Arc::new(vec![Arc::new(group)]));
+            let floor = std::rc::Rc::new(std::cell::Cell::new(0.0_f32));
+            let measured = floor.clone();
+            let floor_words = format!("{} {first}…", icons::DRAG);
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(width as f32, 600.0))
                 .build(move |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
+                        measured.set(design::number_width(
+                            ui,
+                            &floor_words,
+                            &Type::Strong.font(ui),
+                        ));
                         let arrival = run.arrival_block(ui);
                         run.group_list(ui, arrival);
                     });
@@ -10358,19 +10380,7 @@ mod tests {
             let heading = harness
                 .query_by_label_contains("Drag Stonewatchers")
                 .map(|node| node.rect().width());
-            let floor = design::number_width(
-                &egui::Ui::new(
-                    harness.ctx.clone(),
-                    egui::Id::new("measure"),
-                    egui::UiBuilder::new(),
-                ),
-                &format!("{} {first}…", icons::DRAG),
-                &Type::Strong.font(&egui::Ui::new(
-                    harness.ctx.clone(),
-                    egui::Id::new("measure_font"),
-                    egui::UiBuilder::new(),
-                )),
-            );
+            let floor = floor.get();
             let Some(heading) = heading else { continue };
             if heading < floor {
                 continue;
@@ -13966,7 +13976,7 @@ mod tests {
         for whole in 1..=600 {
             let whole = whole as f32;
             for status in [0.0, 80.0] {
-                let split = heading_split(whole, title, floor, status, shortest);
+                let split = heading_split(whole, title, floor, status, (shortest, shortest));
                 assert!(
                     split.room >= shortest - 0.01 || (split.below && split.room == whole),
                     "{whole} {status}: {split:?}"
@@ -13984,8 +13994,22 @@ mod tests {
                 }
             }
         }
+        // Fourth review: with no status words, the current answer changes neither the place of
+        // the answer (beside or below) nor the title's width; only the widest answer does.
+        for whole in 1..=600 {
+            let whole = whole as f32;
+            let low = heading_split(whole, title, floor, 0.0, (60.0, shortest));
+            let high = heading_split(whole, title, floor, 0.0, (shortest, shortest));
+            assert_eq!((low.below, low.title), (high.below, high.title), "{whole}");
+        }
         // The boundary: exactly the first word, its gap and the answer.
-        let edge = heading_split(floor + design::L + shortest, title, floor, 0.0, shortest);
+        let edge = heading_split(
+            floor + design::L + shortest,
+            title,
+            floor,
+            0.0,
+            (shortest, shortest),
+        );
         assert_eq!(
             (edge.below, edge.title, edge.room),
             (false, floor, shortest)
@@ -13995,7 +14019,7 @@ mod tests {
             title,
             floor,
             0.0,
-            shortest,
+            (shortest, shortest),
         );
         assert!(under.below);
     }

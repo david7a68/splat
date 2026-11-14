@@ -405,8 +405,8 @@ impl Summary {
     /// row's summary as built words (`encounters::roster_summary`; the typed handoff is routed
     /// to the Encounters package). Only a leading party count (`5 party`) is read; everything
     /// after it is ONE opaque fact: never parsed into members, never narrowed member by member.
-    /// It is shown as it came; after the XP number (Q-s) it shortens from its end at whole
-    /// words with `…`, as the line did before typed parts, and goes last. A name such as
+    /// It is shown as it came; after the XP number (Q-s) it shortens from its end where a
+    /// separator stands (`, `, ` · `) with `…`, as the line did before typed parts, and goes last. A name such as
     /// `Ghost, 02 × Echo` keeps its words: never reformatted, only cut from the end.
     pub fn from_built(text: &str) -> Self {
         let (party, rest) = match text.split_once(" · ") {
@@ -661,8 +661,8 @@ impl<'a> Line<'a> {
     }
 
     /// Every stage of giving way, in rank order. A part goes whole, except an opaque fact
-    /// (built words, `Summary::from_built`): before it goes, it shortens from its end at whole
-    /// words with `…`, as the line did before typed parts (point 2 of the third review).
+    /// (built words, `Summary::from_built`): before it goes, it shortens from its end where a
+    /// separator stands, with `…`, as the line did before typed parts (third review, point 2).
     fn stages(&self) -> Vec<Stage> {
         let rated = self.difficulty.rating.is_some();
         let mut ranked: Vec<(usize, Give)> = self
@@ -687,18 +687,20 @@ impl<'a> Line<'a> {
             if let Some(Give::Unit(at)) = order.get(count)
                 && self.units[*at].opaque
             {
-                let words: Vec<&str> = self.units[*at].words.split(' ').collect();
-                for kept in (1..words.len()).rev() {
-                    let start = words[..kept]
-                        .join(" ")
-                        .trim_end_matches(['·', ',', ' ', '…'])
-                        .to_owned();
-                    if !start.is_empty() {
-                        stages.push(Stage {
-                            gone: gone.clone(),
-                            cut: Some((*at, format!("{start}…"))),
-                        });
-                    }
+                // Cut only where the words have a separator (`, ` or ` · `), the places the line
+                // cut them before typed parts: nothing is read as a member, nothing is cut inside
+                // a name's words, and the separator stays before `…` (`1 × Goblin, …`).
+                let words = &self.units[*at].words;
+                let mut ends: Vec<(usize, &str)> = words
+                    .match_indices(", ")
+                    .chain(words.match_indices(" · "))
+                    .collect();
+                ends.sort_by_key(|(end, _)| std::cmp::Reverse(*end));
+                for (end, separator) in ends {
+                    stages.push(Stage {
+                        gone: gone.clone(),
+                        cut: Some((*at, format!("{}{} …", &words[..end], separator.trim_end()))),
+                    });
                 }
             }
         }
@@ -1282,8 +1284,8 @@ mod tests {
             at(200),
             "5 party · 1 × Ghost, 02 × Echo · XP 400 · Low (up to 2,800)"
         );
-        // Never reformatted: whatever of the built words shows is their own start, cut at a
-        // whole word with `…` (point 2 of the third review), and `02` stays `02`.
+        // Never reformatted: whatever of the built words shows is their own start, cut where a
+        // separator stands, with `…` (point 2 of the third review), and `02` stays `02`.
         let words = "1 × Ghost, 02 × Echo";
         for room in (1..=70).rev() {
             let text = at(room);
@@ -1294,25 +1296,24 @@ mod tests {
             assert!(
                 shown.is_empty()
                     || shown == words
-                    || shown.strip_suffix('…').is_some_and(|cut| {
-                        words.starts_with(cut) && words[cut.len()..].starts_with([' ', ','])
-                    }),
+                    || shown
+                        .strip_suffix('…')
+                        .is_some_and(|cut| words.starts_with(cut.trim_end())),
                 "built words at {room}: {text}"
             );
             assert!(!text.contains(" 2 × Echo"), "{room}: {text}");
         }
         assert_eq!(at(40), "1 × Ghost, 02 × Echo · XP 400 · Low");
         assert_eq!(at(30), "1 × Ghost, 02 × Echo · Low");
-        assert_eq!(at(20), "1 × Ghost, 02… · Low");
+        assert_eq!(at(20), "1 × Ghost, … · Low");
         // Point 2 of the third review: built words shorten FROM THEIR END; a useful start stays
-        // (the leading creature), as before typed parts. They go whole only where no word fits.
+        // (the leading creature), as before typed parts. They go whole only where it does not fit.
         let long = Line::roster(
             &low,
             Summary::from_built("5 party · 1 × Goblin, 1 × Ashen Warden of the Ninth Gate"),
         );
         let at = |room| long.fit(fits(room)).unwrap().text();
-        assert_eq!(at(35), "1 × Goblin, 1 × Ashen Warden… · Low");
-        assert_eq!(at(30), "1 × Goblin, 1 × Ashen… · Low");
+        assert_eq!(at(30), "1 × Goblin, … · Low");
         assert_eq!(at(7), "… · Low");
         // Point 3 of the third review: the protected answer is never cut with `…`. Where even
         // its smallest form is wider than the room, it is given whole, to wrap at words.

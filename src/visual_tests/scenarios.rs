@@ -9620,14 +9620,15 @@ pub mod run_edge_states {
         d.type_into(OTHER_EFFECT, LONG_EFFECT);
         d.click(ADD_EFFECT);
         // iter-27-R FK4: the Undo names its verb, so the DM can tell an add from a removal.
-        d.expect(&format!("Undo: add {LONG_EFFECT} on {TARGET}"));
+        // iter-29 G22 (FK11): an effect's Undo has one form, `add effect <words>`.
+        d.expect(&format!("Undo: add effect {LONG_EFFECT} on {TARGET}"));
         d.observe(
             "iter-27-R-FK4",
             !d.has(&format!("Undo: {LONG_EFFECT} on {TARGET}")),
             "The added words' Undo starts with its verb",
         );
         d.state_prepared("long-effect-text", Sizes::All, |d| {
-            undo_keeps_its_word(d, &format!("Undo: add {LONG_EFFECT} on {TARGET}"));
+            undo_keeps_its_word(d, &format!("Undo: add effect {LONG_EFFECT} on {TARGET}"));
         });
         d.observe(
             "Long effects",
@@ -11479,7 +11480,8 @@ pub mod signed_in {
         // iter11-B2: only a step the sheet made gives up `D&D Beyond`. A DM's own effect with
         // those words keeps them, or Undo shows its word alone.
         const DM_EFFECT: &str = "D&D Beyond boon";
-        let dm_undo = format!("Undo: add {DM_EFFECT} on {MEMBER}");
+        // iter-29 G22 (FK11): an effect's Undo has one form, `add effect <words>`.
+        let dm_undo = format!("Undo: add effect {DM_EFFECT} on {MEMBER}");
         d.click(CONDITIONS);
         d.type_into("Other effect", DM_EFFECT);
         d.click("Add");
