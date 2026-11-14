@@ -1447,7 +1447,8 @@ impl Sessions {
         let selected = self
             .selected
             .and_then(|id| self.notes.iter().find(|note| note.id == id));
-        (notes
+        (notes && self.other_recording_shown())
+            || (notes
             && self.notice_arrived()
             && !self.processed_notice_read_here()
             && (self.notice_session.is_none() || self.notice_session == self.selected))
@@ -1473,6 +1474,9 @@ impl Sessions {
     fn banner_notices(&mut self, ui: &mut egui::Ui) {
         let notes = self.on_page && self.view == View::Notes && self.form.is_none();
         let width = ui.available_width().min(design::LIST_MEASURE);
+        if notes && self.other_recording_shown() {
+            self.other_recording_line(ui);
+        }
         if notes
             && self.notice_arrived()
             && !self.processed_notice_read_here()
@@ -3137,44 +3141,38 @@ impl Sessions {
         }
     }
 
-    /// Another session's recording: its state, time and session, under the title. As on the
-    /// recording row, the state's colour is only on its icon and word (round 24 FC7). The line
-    /// keeps its height while that recording is live, so nothing below moves when it stalls.
-    /// Round 27 FE8: while the bottom banner says it stopped saving audio, the line says
-    /// nothing. It stays out of the typed message footer until that footer's notice can carry a
-    /// state word (a gap of the message part, sent to its owner).
-    fn other_recording_line(&self, ui: &mut egui::Ui) {
-        let Some(live) = self
-            .live
+    /// Whether another session's recording state shows in the bottom banner: its recording
+    /// runs, and the banner does not already say that it stopped saving audio (round 27 FE8).
+    fn other_recording_shown(&self) -> bool {
+        self.live
             .as_ref()
-            .filter(|live| Some(live.session) != self.selected)
-        else {
+            .is_some_and(|live| Some(live.session) != self.selected)
+            && self.recording_status().is_some()
+            && self.stalled_elsewhere().is_none()
+    }
+
+    /// Another session's recording: its state, time and session, in the bottom banner, so it
+    /// never moves the title line, the tabs or the plan (round 26 FD3). As on the recording
+    /// row, the state's colour is only on its icon and word (round 24 FC7). It stays out of the
+    /// typed message footer until that footer's notice can colour a state word (a gap of the
+    /// message part, sent to its owner).
+    fn other_recording_line(&self, ui: &mut egui::Ui) {
+        let (Some(live), Some((icon, word, color))) = (&self.live, self.recording_status()) else {
             return;
         };
-        let top = ui.cursor().top();
-        if let Some((icon, word, color)) = self.recording_status()
-            && self.stalled_elsewhere().is_none()
-        {
-            let detail = format!(" {} in {}", clock(live.recorder.seconds()), live.label);
-            let format = |color| egui::TextFormat {
-                font_id: Type::Small.font(ui),
-                color,
-                ..Default::default()
-            };
-            let mut job = egui::text::LayoutJob::default();
-            job.append(icon, 0.0, format(color));
-            job.append(" ", 0.0, format(color));
-            job.append(word, 0.0, format(color));
-            job.append(&detail, 0.0, format(colors().muted));
-            ui.add(egui::Label::new(job).wrap())
-                .on_hover_text(format!("{word}{detail}"));
-        }
-        let used = ui.cursor().top() - top;
-        // The rest of the line's height, so the words coming or going move nothing.
-        ui.allocate_exact_size(
-            egui::vec2(0.0, (Density::Read.control() - used).max(0.0)),
-            egui::Sense::hover(),
-        );
+        let detail = format!(" {} in {}", clock(live.recorder.seconds()), live.label);
+        let format = |color| egui::TextFormat {
+            font_id: Type::Small.font(ui),
+            color,
+            ..Default::default()
+        };
+        let mut job = egui::text::LayoutJob::default();
+        job.append(icon, 0.0, format(color));
+        job.append(" ", 0.0, format(color));
+        job.append(word, 0.0, format(color));
+        job.append(&detail, 0.0, format(colors().muted));
+        ui.add(egui::Label::new(job).wrap())
+            .on_hover_text(format!("{word}{detail}"));
     }
 
     fn record_line_body(&mut self, ui: &mut egui::Ui, settings: &ProcessingSettings) {
@@ -6217,7 +6215,6 @@ impl Sessions {
             });
         });
         self.record_line(ui, settings);
-        self.other_recording_line(ui);
         // The body (Last time, the tabs and their pane) is the pane's; the part places the
         // footer below it.
         let view = self.session_header(ui, book, plan, &note, title_on_own_line);

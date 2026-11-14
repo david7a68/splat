@@ -2270,10 +2270,10 @@ the tabs, the plan's rows and the recording row never move when one comes: `Reco
 deleted.`, `Added to the notes.`, `<file> is now a separate session.`, where an open run stays or moved, `No entry
 is named …`, `Draft discarded.` or `Reloaded from disk.` with their Undo, the warning that this is not the session
 being played or that its date has passed, and the chosen input that is not connected. The line below the title
-holds this session's recording state, which keeps one height from Record to Stop, and the Record step; while
-another session records, it holds that recording's state instead (`● Recording 12:04 in Session 1: …`), at one
-height while that recording is live, and says nothing while the bottom banner says that recording stopped saving
-audio. (It stays out of the typed footer until a footer notice can colour a state word.) The plan has its own message
+holds this session's recording state, which keeps one height from Record to Stop, and the Record step. Another
+session's recording state (`● Recording 12:04 in Session 1: …`) is in the bottom banner, so it moves nothing on the
+page; while the banner says that recording stopped saving audio, it does not say it again. (It stays out of the
+typed footer until a footer notice can colour a state word.) The plan has its own message
 footer below its rows for its Add, Remove, ruling and deleted-run results with their Undo, the file's notices, the
 group being assembled elsewhere and a rename problem, and each fight's `Add rewards` result and fault, naming the
 fight; no result sits under a row. The row keeps its own state word (`✓ In notes`). The marker `Add` result
