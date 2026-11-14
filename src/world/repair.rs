@@ -28,6 +28,12 @@ pub(crate) fn editor_name(path: &str) -> String {
 /// does not parse), so its path is its owner: two repairs open at once are two fields.
 const REPAIR_TEXT: design::layout::FieldName = crate::field_id!("world_repair_text");
 
+/// The source editor's face: the note's text in monospace, as wide as its room.
+fn source_style(edit: egui::TextEdit<'_>) -> egui::TextEdit<'_> {
+    edit.font(egui::TextStyle::Monospace)
+        .desired_width(f32::INFINITY)
+}
+
 /// The source editor itself: the note's text in the editor's face, named for its file, with the
 /// error line marked. In a pane's editor region (World) or where the caller puts it (Campaign,
 /// in a scroll of its own). Its two events (changed, gained focus) and its id.
@@ -42,14 +48,10 @@ fn source_editor(
     draft: &mut String,
     error_line: Option<usize>,
 ) -> ((bool, bool), egui::Id) {
-    fn style(edit: egui::TextEdit<'_>) -> egui::TextEdit<'_> {
-        edit.font(egui::TextStyle::Monospace)
-            .desired_width(f32::INFINITY)
-    }
     let field = REPAIR_TEXT.of(design::TextKey::from_data(path));
     let output = match region {
-        Some(region) => region.editor(ui, field, draft, style),
-        None => field.editor(ui, draft, style),
+        Some(region) => region.editor(ui, field, draft, source_style),
+        None => field.editor(ui, draft, source_style),
     };
     design::named(ui, &output.response, &editor_name(path));
     let active = (output.response.changed(), output.response.gained_focus());

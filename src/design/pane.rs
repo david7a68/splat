@@ -1611,10 +1611,6 @@ mod row_cut_tests {
     /// the same in a `Body::Fills` pane for the rows of its scroll columns, two side by side with
     /// rows of different heights: each column cuts at its own last whole row.
     #[test]
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
-    )]
     fn a_footer_never_cuts_through_a_registered_row() {
         use crate::design::layout::ScrollColumn;
         let mut hidden_by_the_cut = 0;
@@ -1650,12 +1646,21 @@ mod row_cut_tests {
                             if fills {
                                 let body = Body::Fills(Fills::for_test(FillsReason::Columns));
                                 let _ = messages.pane(ui, body, |ui| {
-                                    ui.columns(2, |columns| {
-                                        ScrollColumn::new("rows_left")
-                                            .show(&mut columns[0], |ui| rows(ui, "Row", 44.0));
-                                        ScrollColumn::new("rows_right")
-                                            .show(&mut columns[1], |ui| rows(ui, "Tall", 60.0));
-                                    });
+                                    // Two columns side by side, each half of the body.
+                                    let all = ui.available_rect_before_wrap();
+                                    let (left, right) = all.split_left_right_at_fraction(0.5);
+                                    let column =
+                                        |ui: &mut Ui, at: Rect, id: &str, name: &str, tall: f32| {
+                                            ui.scope_builder(
+                                                egui::UiBuilder::new().max_rect(at),
+                                                |ui| {
+                                                    ScrollColumn::new(id)
+                                                        .show(ui, |ui| rows(ui, name, tall));
+                                                },
+                                            );
+                                        };
+                                    column(ui, left, "rows_left", "Row", 44.0);
+                                    column(ui, right, "rows_right", "Tall", 60.0);
                                 });
                             } else {
                                 let _ =
