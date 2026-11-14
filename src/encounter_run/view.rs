@@ -1476,7 +1476,14 @@ impl Run {
         let current = self.current();
         let next_up = self.next_up();
         let count = self.state.order.len();
-        let mut scale = RunScale::fit(room + lent, ui.available_width(), count);
+        // The scale comes from the room less the kept footer room while the rows still fit
+        // there at their smallest scale (52 px at 1200); else from the whole room.
+        let kept_fits = count as f32 * design::RUN_COMPACT.row <= room + lent - kept;
+        let mut scale = RunScale::fit(
+            room + lent - if kept_fits { kept } else { 0.0 },
+            ui.available_width(),
+            count,
+        );
         let width = ui.available_width();
         let total = |layouts: &[RowLayout], scale: RunScale| -> f32 {
             layouts.iter().map(|l| l.height(scale)).sum()
