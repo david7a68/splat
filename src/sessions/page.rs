@@ -7269,7 +7269,7 @@ impl Sessions {
     /// `Save folder` was (after a refusal found files) never moves files.
     #[allow(
         clippy::disallowed_methods,
-        reason = "R24: a value block's save row shows its own messages"
+        reason = "R24: a value block’s save row shows its own messages"
     )]
     pub fn folder_block(&mut self, ui: &mut egui::Ui, book: &Book, locked: Option<&str>) {
         let Some(campaign) = self.campaign.clone() else {
@@ -9263,7 +9263,7 @@ mod tests {
             let rect = harness.get_by_label(choice).rect();
             assert!(
                 !rect.intersects(save_at),
-                "{choice} is outside Save folder's place: {rect:?}"
+                "{choice} is outside Save folder’s place: {rect:?}"
             );
         }
         press(&mut harness);
@@ -9323,7 +9323,7 @@ mod tests {
         assert!(
             save.accesskit_node().is_disabled()
                 && save.accesskit_node().description().as_deref() == Some(LOCK),
-            "the locked Save says the lock's reason: {:?}",
+            "the locked Save says the lock’s reason: {:?}",
             save.accesskit_node().description()
         );
         assert!(
@@ -9338,7 +9338,7 @@ mod tests {
         harness.run_steps(8);
         assert!(
             shows(&harness, LOCK) && !shows(&harness, "Choose below"),
-            "the locked Save's hover names the lock, not the choices"
+            "the locked Save’s hover names the lock, not the choices"
         );
         harness.remove_cursor();
         harness.state_mut().3 = None;
