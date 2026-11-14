@@ -3520,7 +3520,7 @@ fn dialog_width<R>(
                 .auto_shrink([false, true])
                 .show(ui, add)
                 .inner;
-            keep_focus_inside(ui, id);
+            keep_focus_inside(ui);
             inner
         })
         .inner
@@ -3530,27 +3530,46 @@ fn default_key(layer: egui::LayerId) -> Id {
     Id::new("dialog_default").with(layer.id)
 }
 
-fn before_key(id: &str) -> Id {
-    Id::new(("dialog_focus_before", id))
+fn before_key(owner: Id) -> Id {
+    Id::new("dialog_focus_before").with(owner)
 }
 
-/// The dialog's default control (G44, `docs/design-system.md:218`): while the dialog shows,
-/// the keyboard focus stays inside it. Where the focus is outside it (nothing has it, or a
-/// control under the dialog asked for it), this control takes it, on every frame: on each
-/// opening, and back from any request from under the dialog. Call it on the control.
-pub fn dialog_default(ui: &Ui, response: &Response) {
+/// A focus return that waits for the closing dialog's modal layer to clear.
+#[derive(Clone, Copy)]
+struct Return {
+    owner: Id,
+    before: Id,
+    default: Id,
+}
+
+/// The dialog's default control (G44, `docs/design-system.md:218`): while the dialog shows and
+/// is the TOP modal layer, the keyboard focus stays inside it. Where the focus is outside it
+/// (nothing has it, or a control under the dialog asked for it), this control takes it, on every
+/// frame. A dialog under another one leaves the focus to the top one. `owner` names this
+/// dialog's instance (the run whose close dialog it is), so its remembered focus is its own.
+pub fn dialog_default(ui: &Ui, response: &Response, owner: Id) {
     let key = default_key(ui.layer_id());
-    ui.ctx().data_mut(|data| data.insert_temp(key, response.id));
+    ui.ctx().data_mut(|data| {
+        data.insert_temp(key, (response.id, owner));
+        data.insert_temp(Id::new("dialog_default_of").with(owner), response.id);
+    });
 }
 
-/// The dialog part's rule: after the body, a focus outside the dialog's layer goes to its
-/// default control, and the control that had it is kept for `dialog_return_focus`.
-fn keep_focus_inside(ui: &Ui, id: &str) {
+/// The dialog part's rule: after the body, while this dialog is the top modal layer, a focus
+/// outside its layer goes to its default control, and the control that had it is kept for
+/// `dialog_return_focus`.
+fn keep_focus_inside(ui: &Ui) {
     let ctx = ui.ctx();
     let layer = ui.layer_id();
-    let Some(default) = ctx.data(|data| data.get_temp::<Id>(default_key(layer))) else {
+    let Some((default, owner)) = ctx.data(|data| data.get_temp::<(Id, Id)>(default_key(layer)))
+    else {
         return;
     };
+    // The top modal layer is the previous pass's: none on this dialog's first pass.
+    let top = ctx.memory(|memory| memory.top_modal_layer());
+    if top.is_some_and(|top| top != layer) {
+        return;
+    }
     let focused = ctx.memory(|memory| memory.focused());
     let inside = focused
         .and_then(|focused| ctx.read_response(focused))
@@ -3559,48 +3578,81 @@ fn keep_focus_inside(ui: &Ui, id: &str) {
         return;
     }
     if let Some(focused) = focused {
-        ctx.data_mut(|data| data.insert_temp(before_key(id), focused));
+        ctx.data_mut(|data| data.insert_temp(before_key(owner), focused));
     }
     ctx.memory_mut(|memory| memory.request_focus(default));
 }
 
-/// When the dialog `id` closes, the focus goes back to the control that had it before the
-/// dialog took it (the run's Amount field, say), if one did.
-pub fn dialog_return_focus(ctx: &egui::Context, id: &str) {
-    let key = before_key(id);
-    if let Some(before) = ctx.data(|data| data.get_temp::<Id>(key)) {
-        ctx.data_mut(|data| data.remove::<Id>(key));
-        // The key that closed the dialog (Enter on its control, or Escape) is spent: the
-        // control that gets the focus back must not read it (a text field ends its input
-        // on Enter and would drop the focus again).
-        ctx.input_mut(|input| {
-            input.consume_key(egui::Modifiers::NONE, egui::Key::Enter);
-            input.consume_key(egui::Modifiers::NONE, egui::Key::Escape);
+/// When `owner`'s dialog closes, the focus goes back to the control that had it before the
+/// dialog took it (the run's Amount field, say), if one did. The return is cancelled when
+/// something newer takes the focus first (a field that the next page focuses), and it never
+/// gives the focus to a control that is not drawn any more.
+pub fn dialog_return_focus(ctx: &egui::Context, owner: Id) {
+    let key = before_key(owner);
+    let Some(before) = ctx.data(|data| data.get_temp::<Id>(key)) else {
+        return;
+    };
+    ctx.data_mut(|data| data.remove::<Id>(key));
+    // The dialog's own default control: while the closing dialog's layer clears, it may
+    // still hold (or take back) the focus; that is not a newer choice.
+    let default = ctx
+        .data(|data| data.get_temp::<Id>(Id::new("dialog_default_of").with(owner)))
+        .unwrap_or(before);
+    // The key that closed the dialog (Enter on its control, or Escape) is spent: the
+    // control that gets the focus back must not read it (a text field ends its input
+    // on Enter and would drop the focus again).
+    ctx.input_mut(|input| {
+        input.consume_key(egui::Modifiers::NONE, egui::Key::Enter);
+        input.consume_key(egui::Modifiers::NONE, egui::Key::Escape);
+    });
+    // egui still counts the closing dialog as the top modal layer on the next pass, and a
+    // control under it gives up a focus it cannot use. So the focus returns at the start
+    // of the first pass with no modal layer on top.
+    ctx.data_mut(|data| {
+        let pending = data.get_temp_mut_or_default::<Vec<Return>>(Id::new(RETURN_PENDING));
+        pending.retain(|waiting| waiting.owner != owner);
+        pending.push(Return {
+            owner,
+            before,
+            default,
         });
-        // egui still counts the closing dialog as the top modal layer on the next pass, and a
-        // control under it gives up a focus it cannot use. So the focus returns at the start
-        // of the first pass with no modal layer on top.
-        ctx.data_mut(|data| data.insert_temp(Id::new(RETURN_PENDING), before));
-        if ctx
-            .data(|data| data.get_temp::<bool>(Id::new(RETURN_HOOK)))
-            .is_none()
-        {
-            ctx.data_mut(|data| data.insert_temp(Id::new(RETURN_HOOK), true));
-            ctx.on_begin_pass(
-                "dialog_return_focus",
-                std::sync::Arc::new(|ctx: &egui::Context| {
-                    let pending = Id::new(RETURN_PENDING);
-                    let Some(before) = ctx.data(|data| data.get_temp::<Id>(pending)) else {
-                        return;
-                    };
-                    if ctx.memory(|memory| memory.top_modal_layer()).is_none() {
-                        ctx.data_mut(|data| data.remove::<Id>(pending));
-                        ctx.memory_mut(|memory| memory.request_focus(before));
-                    }
-                }),
-            );
-        }
+    });
+    if ctx
+        .data(|data| data.get_temp::<bool>(Id::new(RETURN_HOOK)))
+        .is_none()
+    {
+        ctx.data_mut(|data| data.insert_temp(Id::new(RETURN_HOOK), true));
+        ctx.on_begin_pass("dialog_return_focus", std::sync::Arc::new(return_pending));
     }
+}
+
+/// At the start of a pass: each waiting return either gives the focus back (no modal layer on
+/// top, the control was drawn on the last pass, nothing newer has the focus) or is cancelled
+/// (a newer focus, or the control is gone); while a modal layer is on top it waits.
+fn return_pending(ctx: &egui::Context) {
+    let key = Id::new(RETURN_PENDING);
+    let Some(mut pending) = ctx.data(|data| data.get_temp::<Vec<Return>>(key)) else {
+        return;
+    };
+    if pending.is_empty() {
+        return;
+    }
+    let focused = ctx.memory(|memory| memory.focused());
+    let modal = ctx.memory(|memory| memory.top_modal_layer()).is_some();
+    pending.retain(|waiting| {
+        let newer = focused.is_some_and(|focused| focused != waiting.default);
+        if newer {
+            return false;
+        }
+        if modal {
+            return true;
+        }
+        if ctx.read_response(waiting.before).is_some() {
+            ctx.memory_mut(|memory| memory.request_focus(waiting.before));
+        }
+        false
+    });
+    ctx.data_mut(|data| data.insert_temp(key, pending));
 }
 
 const RETURN_PENDING: &str = "dialog_focus_return_pending";

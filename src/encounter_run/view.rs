@@ -2680,6 +2680,11 @@ impl Run {
         })
     }
 
+    /// This run's close dialog, as the owner of the focus it remembers (G44).
+    fn close_owner(&self) -> egui::Id {
+        egui::Id::new(("close_run", self.id))
+    }
+
     fn close_confirmation(&mut self, ui: &mut egui::Ui, note: &str) -> bool {
         self.close_dialog(ui, note)
     }
@@ -2807,7 +2812,7 @@ impl Run {
                             Action::secondary("Keep running").show(ui)
                         })
                         .inner;
-                    design::dialog_default(ui, &response);
+                    design::dialog_default(ui, &response, self.close_owner());
                     keep |= response.clicked();
                 },
             );
@@ -2821,7 +2826,7 @@ impl Run {
         if keep {
             self.closing.shut();
             // The focus goes back where it was before the dialog took it.
-            design::dialog_return_focus(ui.ctx(), "close_run");
+            design::dialog_return_focus(ui.ctx(), self.close_owner());
             return false;
         }
         if save_new {
@@ -14068,12 +14073,27 @@ mod tests {
         run.disk_conflict = true;
         let run = Rc::new(RefCell::new(run));
         let shown = run.clone();
+        // A second modal over it: the app's own close prompt, as `src/lib.rs` draws it on the
+        // dialog part, with its own default control.
+        let app_prompt = Rc::new(std::cell::Cell::new(false));
+        let prompt = app_prompt.clone();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(1200.0, 800.0))
             .build(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     shown.borrow_mut().show(ui);
                 });
+                if prompt.get() {
+                    design::dialog(ctx, "close_app_test", "Close Splat?", |ui| {
+                        let owner = egui::Id::new("close_app_test");
+                        let keep = Action::secondary("Keep working").show(ui);
+                        design::dialog_default(ui, &keep, owner);
+                        if keep.clicked() {
+                            prompt.set(false);
+                            design::dialog_return_focus(ui.ctx(), owner);
+                        }
+                    });
+                }
             });
         design::theme::install(&harness.ctx);
         harness.run_steps(4);
@@ -14115,6 +14135,30 @@ mod tests {
                     .all(|name| name.as_deref() == Some("Keep running")),
                 "iter-29-R1-G44 whole view, {opening} opening: focus on each frame {seen:?}"
             );
+            if opening == "first" {
+                // Fifth review, point 1: the app's close prompt opens over the run's dialog.
+                // The top modal holds the focus; the run's dialog does not take it back.
+                app_prompt.set(true);
+                harness.run_steps(2);
+                let mut top = Vec::new();
+                for _ in 0..3 {
+                    harness.run_steps(1);
+                    top.push(focused_name(&harness));
+                }
+                assert!(
+                    top.iter()
+                        .all(|name| name.as_deref() == Some("Keep working")),
+                    "iter-29-R1-G44 two modals: focus on each frame {top:?}"
+                );
+                harness.key_press(egui::Key::Enter);
+                harness.run_steps(4);
+                assert!(!app_prompt.get());
+                assert_eq!(
+                    focused_name(&harness).as_deref(),
+                    Some("Keep running"),
+                    "the app prompt closed: the run's dialog has the focus again"
+                );
+            }
             harness.key_press(key);
             harness.run_steps(3);
             assert!(
@@ -14125,6 +14169,100 @@ mod tests {
                 focused_name(&harness),
                 before,
                 "after the dialog closes the focus is back where it was"
+            );
+        }
+    }
+
+    /// Fifth review, point 2: a dialog's focus return is cancelled by a newer focus choice.
+    /// `Connect to sync` closes the dialog and the next page focuses its sign-in field: the
+    /// field keeps the focus. Keep running (Enter or Escape) gives the focus back to Amount.
+    #[test]
+    fn iter_29_r1_a_newer_focus_cancels_the_dialog_return() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+        use std::{cell::RefCell, rc::Rc};
+        #[derive(Default)]
+        struct Page {
+            open: bool,
+            settings: bool,
+            focus_amount: bool,
+            focus_cookie: bool,
+        }
+        for (choice, key) in [
+            ("Connect to sync", None),
+            ("Keep running", Some(egui::Key::Enter)),
+            ("Keep running", Some(egui::Key::Escape)),
+        ] {
+            let page = Rc::new(RefCell::new(Page {
+                focus_amount: true,
+                ..Page::default()
+            }));
+            let shown = page.clone();
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(800.0, 600.0))
+                .build(move |ctx| {
+                    let owner = egui::Id::new("close_run_test");
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let mut page = shown.borrow_mut();
+                        if page.settings {
+                            let cookie = Action::secondary("Paste session cookie").show(ui);
+                            if std::mem::take(&mut page.focus_cookie) {
+                                cookie.request_focus();
+                            }
+                        } else {
+                            let amount = Action::secondary("Amount").show(ui);
+                            if std::mem::take(&mut page.focus_amount) {
+                                amount.request_focus();
+                            }
+                        }
+                    });
+                    if shown.borrow().open {
+                        design::dialog(ctx, "close_run_test", "Close this run?", |ui| {
+                            let escape = ui.input_mut(|i| {
+                                i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)
+                            });
+                            let keep = Action::secondary("Keep running").show(ui);
+                            design::dialog_default(ui, &keep, owner);
+                            let connect = Action::secondary("Connect to sync").show(ui);
+                            let mut page = shown.borrow_mut();
+                            if keep.clicked() || escape || connect.clicked() {
+                                page.open = false;
+                                design::dialog_return_focus(ui.ctx(), owner);
+                            }
+                            if connect.clicked() {
+                                // As the app does: Settings opens and asks for its field.
+                                page.settings = true;
+                                page.focus_cookie = true;
+                            }
+                        });
+                    }
+                });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(3);
+            let focused_name = |harness: &egui_kittest::Harness<'_>| {
+                harness
+                    .root()
+                    .children_recursive()
+                    .find(|node| node.accesskit_node().is_focused())
+                    .map(|node| node.accesskit_node().label().unwrap_or_default())
+            };
+            assert_eq!(focused_name(&harness).as_deref(), Some("Amount"));
+            page.borrow_mut().open = true;
+            harness.run_steps(3);
+            assert_eq!(focused_name(&harness).as_deref(), Some("Keep running"));
+            match key {
+                Some(key) => harness.key_press(key),
+                None => harness.get_by_label(choice).click(),
+            }
+            harness.run_steps(5);
+            let expected = if key.is_some() {
+                "Amount"
+            } else {
+                "Paste session cookie"
+            };
+            assert_eq!(
+                focused_name(&harness).as_deref(),
+                Some(expected),
+                "iter-29-R1-G44 return after {choice} {key:?}"
             );
         }
     }
