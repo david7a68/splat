@@ -2065,10 +2065,6 @@ pub fn send_note_link(ctx: &egui::Context, note: String, from: Option<uuid::Uuid
     });
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 /// A layout job cut at byte `cut` (a section boundary) into its head and its rest.
 fn split_job(job: LayoutJob, cut: usize) -> (LayoutJob, LayoutJob) {
     let part = |range: std::ops::Range<usize>| LayoutJob {
@@ -2091,6 +2087,10 @@ fn split_job(job: LayoutJob, cut: usize) -> (LayoutJob, LayoutJob) {
     (part(0..cut), part(cut..job.text.len()))
 }
 
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
 fn flush(ui: &mut egui::Ui, job: &mut LayoutJob, target: &mut Targets) {
     if job.is_empty() {
         return;

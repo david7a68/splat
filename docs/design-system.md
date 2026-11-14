@@ -500,8 +500,8 @@ words, or search Everything.`), and quiet `Search Everything` starts the next li
 the words and filters. In Everything the sentence ends at `Try fewer words.` with no action. At narrow widths, scope and category share an equal-width line directly above search. The package's About row follows search as the first list row.
 Hide All entries without a search. Empty categories and their headings stay hidden. Fixed scope names
 wrap; package names can shorten with full hover text and accessible names. The About row stays one line, with
-or without its mark, so a fault moves no row below it. When the marked name does not fit after `About`, the row drops
-`About` first (`⚠ Ashen Marches`); only a name that still does not fit shortens by whole words. Both the scope menu and
+or without its mark, so a fault moves no row below it. The row always keeps `About`, the word that says what it opens; a
+name that does not fit after it shortens by whole words (`⚠ About Ashen…`). Both the scope menu and
 selected button say `Campaign entries`. An open package About row uses selected fill with no selected
 category; choosing a category restores it. About is followed by the manifest name. A manifest is never
 counted or listed as an entry, even when unreadable. Keep its warning on About and in the file issue

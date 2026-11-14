@@ -6373,18 +6373,17 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
                 .starts_with(&format!("{} ", design::icons::ERROR)),
             format!("The About row still shows its mark at {size:?}"),
         );
-        // Round 25 FF4: a marked row whose name would be cut drops `About` first, so the whole
-        // name shows with its mark: no `…`.
+        // Ruling R13 (row 151; it replaces round 25 FF4's "drop `About` first"): the marked row
+        // keeps `About` and its mark; the name is whole or cut by whole words.
         let painted = d.painted_in(about);
+        let after = painted
+            .trim()
+            .strip_prefix(&format!("{} About ", design::icons::ERROR))
+            .unwrap_or_default();
         d.observe(
-            "iter-25-L-FF4",
-            [
-                format!("{} About Ashen Marches", design::icons::ERROR),
-                format!("{} Ashen Marches", design::icons::ERROR),
-            ]
-            .iter()
-            .any(|whole| painted.trim() == whole.as_str()),
-            format!("The marked About row shows the whole name at {size:?}: {painted:?}"),
+            "iter-28-L-151",
+            after == "Ashen Marches" || after == "Ashen…",
+            format!("The marked About row keeps `About` at {size:?}: {painted:?}"),
         );
         // Round 24 FC2: the mark is the error icon in the error colour.
         let mut marks = Vec::new();

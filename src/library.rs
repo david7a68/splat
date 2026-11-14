@@ -855,14 +855,9 @@ fn about_row(ui: &mut egui::Ui, label: &str, selected: bool) -> egui::Response {
     let (head, name) = label
         .split_once("About ")
         .map_or(("", label), |(icon, name)| (icon, name));
-    // Round 25 FF4: when the whole name does not fit after `About` (a fault's mark takes its
-    // room), the row drops `About` before it cuts the name: the row is the package's own row.
-    let about = format!("{head}About ");
-    let head = if design::number_width(ui, &format!("{about}{name}"), &font.font(ui)) <= room {
-        about
-    } else {
-        head.to_owned()
-    };
+    // Ruling R13 (row 151): the row keeps `About`, the word that says what it opens; the name
+    // gives way, by whole words.
+    let head = format!("{head}About ");
     let name_room = room - design::number_width(ui, &head, &font.font(ui));
     let shown = format!(
         "{head}{}",
@@ -2851,10 +2846,6 @@ fn visit_folders(root: &Path, path: &Path, folders: &mut Vec<String>) {
     }
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub(crate) fn folder_field(
     ui: &mut egui::Ui,
     id: design::FieldId,
@@ -2940,7 +2931,7 @@ pub(crate) fn folder_field(
                                 ),
                             );
                             design::named(ui, &response, &format!("Suggestions for {label}"));
-                            egui::Popup::menu(&response).show(|ui| {
+                            design::menu_popup(&response).show(|ui| {
                                 if design::extras::choice_wrapped(
                                     ui,
                                     value.is_empty(),
@@ -4674,7 +4665,7 @@ impl Library {
                 }
                 design::locked(ui, locked, |ui| {
                     let response = design::menu_button(ui, "Packages", false);
-                    egui::Popup::menu(&response).show(|ui| {
+                    design::menu_popup(&response).show(|ui| {
                         if Action::quiet("Reload from disk")
                             .icon(icons::REFRESH)
                             .show(ui)
@@ -4732,7 +4723,7 @@ impl Library {
                     // Round 26 FB1: the menu is as wide as its content, up to the reader
                     // measure, and ends at the count's right edge, so it stays clear of the
                     // splitter between the list and the reader.
-                    egui::Popup::menu(&response)
+                    design::menu_popup(&response)
                         .align(egui::RectAlign::BOTTOM_END)
                         .show(|ui| {
                             let link_label = |at: usize, count: usize| {

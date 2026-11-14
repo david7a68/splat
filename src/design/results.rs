@@ -818,7 +818,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/encounters/list.rs", "row_menu", &[Ban::Layout(1)]),
         ("src/encounters/list.rs", "side_control", &[Ban::Layout(2)]),
         ("src/library.rs", "above_footer", &[Ban::Layout(1)]),
-        ("src/library.rs", "folder_field", &[Ban::Layout(1)]),
         (
             "src/library.rs",
             "new_entry",
@@ -829,7 +828,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "package_form",
             &[Ban::Layout(5), Ban::Extras(3)],
         ),
-        ("src/library.rs", "show", &[Ban::Layout(5)]),
+        ("src/library.rs", "show", &[Ban::Layout(3)]),
         ("src/lookup.rs", "panel", &[Ban::Layout(2)]),
         (
             "src/lookup.rs",
