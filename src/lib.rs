@@ -30,6 +30,7 @@ pub use design::layout;
 // The pane is public only so that its `compile_fail` doc tests can name it.
 #[doc(hidden)]
 pub use design::pane;
+pub use design::value_block;
 /// The ownership and cost parts of `design` (kept results, the save row, per-change caches),
 /// public only so that their compile-fail doc tests can name them. The app uses them through
 /// `design`.
@@ -2201,15 +2202,14 @@ impl Splat {
                         let rest = ui.available_rect_before_wrap();
                         ui.scope_builder(egui::UiBuilder::new().max_rect(rest), |ui| {
                             // Round 26: the link's and the details form's messages sit in the pane's
-                            // footer, below its scroll area.
-                            // Round 28: the pane places the footer after the content (row
-                            // 130: the folder warning follows its choice). The footer's
-                            // messages and the body share the campaigns through one cell.
+                            // footer, below its scroll area; the pane places the footer after the
+                            // content (round 28, row 130).
+                            // Ruling R24: one block per value, Session folder first. Each block is
+                            // its heading row, its field, its save row, then its own messages `S`
+                            // below the save row (`design::ValueBlock`): the session folder's
+                            // warning and move result are its block's, not the footer's.
                             let width = ui.available_width().min(design::LIST_MEASURE);
                             let campaigns = std::cell::RefCell::new(&mut self.campaigns);
-                            // Round 26 FN2, FN5: the session folder form's fault, warning and
-                            // move result share this one footer (owned lines, made before it).
-                            let folder_lines = self.sessions.folder_footer(&self.timeline);
                             let mut footer = design::Footer::new("campaign_link_footer", width);
                             campaigns::Campaigns::footer_messages(
                                 &campaigns,
@@ -2218,34 +2218,20 @@ impl Splat {
                                 blocked,
                             );
                             self.dndbeyond.footer_messages(&mut footer, true);
-                            folder_lines.add_to(&mut footer);
-                            // Round 28 (lead ruling): the session folder form's title line and
-                            // save row stand above the pane, so Save never scrolls away; its
-                            // fields are the pane's content.
                             let details_open = campaigns.borrow().form_open();
-                            ui.vertical(|ui| {
-                                design::locked(ui, blocked, |ui| {
-                                    self.sessions.folder_save_row(
-                                        ui,
-                                        &self.timeline,
-                                        blocked,
-                                        details_open,
-                                    );
-                                });
-                            });
-                            design::gap(ui, design::Gap::S);
                             let sessions = &mut self.sessions;
+                            let timeline = &self.timeline;
                             let dndbeyond = &mut self.dndbeyond;
                             footer.pane(ui, design::Body::Content, |ui| {
                                 // A child that starts empty, so the form narrows itself
                                 // (`set_max_width`) as it did in its own scroll area.
                                 ui.vertical(|ui| {
+                                    sessions.folder_block(ui, timeline, blocked, details_open);
+                                    design::rule(ui);
                                     let mut campaigns = campaigns.borrow_mut();
                                     campaigns.show_active(ui, session, dndbeyond, blocked);
                                     design::locked(ui, blocked, |ui| {
                                         campaigns.show_form_if_editing(ui);
-                                        design::rule(ui);
-                                        sessions.folder_view(ui, blocked);
                                     });
                                 });
                             });

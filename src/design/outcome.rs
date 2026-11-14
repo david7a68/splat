@@ -2343,6 +2343,79 @@ impl<'f, A: 'static> Messages<'f, A> {
     }
 }
 
+/// A save row's own messages (ruling R24): the fault of its act, the warning before its act and
+/// its kept result, drawn by `value_block::ValueBlock::messages` `S` under that save row, in a
+/// footer's order (results with a live Undo, reasons, notices, then other results; results newest
+/// first). The typed `Row` place: they belong to the row above them, so they may move what
+/// follows them, never the row or anything above it. Entries are owned and typed as a
+/// [`Messages`] footer's are, and a kept line still borrows this frame's [`PaneFrame`].
+#[must_use = "give it to `ValueBlock::messages`"]
+pub struct RowMessages<'f, A: 'static> {
+    items: Vec<(FooterRank, Option<ResultOrder>, Typed<A>, Option<Ticket>)>,
+    frame: std::marker::PhantomData<&'f PaneFrame>,
+}
+
+impl<'f, A: 'static> RowMessages<'f, A> {
+    pub fn new(frame: &'f PaneFrame) -> Self {
+        let _ = frame;
+        Self {
+            items: Vec::new(),
+            frame: std::marker::PhantomData,
+        }
+    }
+
+    /// A reason or a notice, at the place its variant gives it.
+    pub fn outcome(&mut self, outcome: impl Into<Outcome<A>>) -> &mut Self {
+        let (rank, typed) = outcome.into().parts();
+        self.items.push((rank, None, typed, None));
+        self
+    }
+
+    /// A kept result of this frame, newest first by the order its store issued.
+    pub fn kept(&mut self, line: KeptLine<'f, A>) -> &mut Self {
+        let rank = if line.typed.body.undo.is_some() {
+            FooterRank::Undo
+        } else {
+            FooterRank::Notice
+        };
+        let order = line.ticket.order();
+        self.items
+            .push((rank, Some(order), line.typed, Some(line.ticket)));
+        self
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty()
+    }
+
+    /// Draw them at the cursor, top down; the first press, as the caller's id.
+    pub(in crate::design) fn show(mut self, ui: &mut Ui) -> Option<Press<A>> {
+        self.items
+            .sort_by_key(|(rank, order, ..)| (*rank, order.map(std::cmp::Reverse)));
+        let mut first = None;
+        for (_, _, typed, ticket) in self.items {
+            let pressed = match &ticket {
+                // A kept line's ids come from its ticket, as in a footer.
+                Some(ticket) => {
+                    let id = egui::Id::new(("design_row_kept_line", ticket.order()));
+                    ui.scope_builder(egui::UiBuilder::new().id(id), |ui| {
+                        typed.body.draw(ui, MessagePlace::Row)
+                    })
+                    .inner
+                }
+                None => typed.body.draw(ui, MessagePlace::Row),
+            };
+            if first.is_none()
+                && let Some(pressed) = pressed
+                && let Some(id) = typed.id(pressed)
+            {
+                first = Some(Press { id, ticket });
+            }
+        }
+        first
+    }
+}
+
 /// N6, the one placement of a message's close icon: `words` draws the message in the room left of
 /// the icon (capped at `LIST_MEASURE`) and gives back the y of the centre of its first line; the
 /// icon goes at the right end of that line, centred on it. A locked icon is disabled, with its

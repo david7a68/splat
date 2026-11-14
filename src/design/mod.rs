@@ -16,6 +16,7 @@ pub mod save_row;
 pub mod status;
 pub mod theme;
 pub mod tokens;
+pub mod value_block;
 
 #[cfg(test)]
 pub(crate) mod attributes;
@@ -53,3 +54,5 @@ pub use save_row::{DraftState, save_row};
 #[allow(unused_imports)]
 pub use status::{KindStatus, StatusKind, Tinted};
 pub use tokens::*;
+// Ruling R24: one block per value of a settings pane.
+pub use value_block::{HeadingNote, HeadingRow, ValueBlock};

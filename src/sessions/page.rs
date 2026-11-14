@@ -15,7 +15,7 @@ use crate::{
         self, Action, CreateReasons, Density, Status, Tone, Type, colors, icons,
         outcome::{
             Choice, Fault, FaultMessage, KeptOutcome, Lost, MessageChoice, Messages, Notice,
-            PaneFrame, Press, Said, Sentence, Severity, UndoStep, Verb,
+            PaneFrame, Press, RowMessages, Said, Sentence, Severity, UndoStep, Verb,
         },
         results::ByTicket,
     },
@@ -191,39 +191,6 @@ impl Fault for FolderFault {
             Self::FilesCame => crate::sentence!(
                 "Not changed. The current folder now keeps session files. Choose to move them or not, then save again."
             ),
-        }
-    }
-}
-
-/// The Session folder form's messages for a footer that is not typed yet: Campaign's Link and
-/// folder page, until package C moves it to `Messages` and calls `Sessions::folder_messages`.
-/// Owned lines with the same words and the same store entry; `add_to` gives them to the footer.
-pub struct FolderFooter {
-    fault: Option<(Tone, String)>,
-    keeps: Option<String>,
-    moved: Option<design::results::FooterResult>,
-}
-
-impl FolderFooter {
-    /// The lines, in the old footer's places: the fault with the reasons, the warning with the
-    /// notices, the move's result with the results, by the order its store issued.
-    pub fn add_to<'a>(&'a self, footer: &mut design::Footer<'a>) {
-        if let Some((tone, words)) = &self.fault {
-            footer.reason(words.as_str(), move |ui| {
-                design::message(ui, *tone, words);
-            });
-        }
-        // Kept on the old call while the Link and folder page uses this untyped footer; the
-        // typed footer (`folder_messages`) shows it as `Notice::warning`, in the same tone.
-        if let Some(words) = &self.keeps {
-            footer.notice(words.as_str(), move |ui| {
-                design::message(ui, Tone::Warning, words);
-            });
-        }
-        if let Some(moved) = &self.moved {
-            footer.kept_line(moved, false, |words, ui| {
-                design::message(ui, Tone::Success, words);
-            });
         }
     }
 }
@@ -7250,21 +7217,33 @@ impl Sessions {
         }
     }
 
-    /// The Session folder form's fields, in the pane's body. Its title line and save row are
-    /// `folder_save_row`, drawn above the pane so Save never scrolls away (round 28, lead
-    /// ruling; a named lead exception split them from one function).
-    pub fn folder_view(&mut self, ui: &mut egui::Ui, locked: Option<&str>) {
-        // Earlier sections can have a wider minimum rect. Give this form its own column.
-        let rect = egui::Rect::from_min_size(
-            ui.cursor().min,
-            egui::vec2(
-                ui.available_width().min(design::FORM_WIDTH),
-                ui.available_height(),
-            ),
-        );
-        ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
-            self.folder_fields(ui, locked);
+    /// The Session folder's block on Campaign's Link and folder page (ruling R24): its heading
+    /// row, its field with its help, its save row, then its own messages `S` below the save row
+    /// (`folder_messages`). `locked`: why the page's links and folders cannot change now (a run);
+    /// `details_open`: the campaign details form, with its own primary save, is in view.
+    pub fn folder_block(
+        &mut self,
+        ui: &mut egui::Ui,
+        book: &Book,
+        locked: Option<&str>,
+        details_open: bool,
+    ) {
+        if self.campaign.is_none() {
+            return;
+        }
+        let frame = PaneFrame::new(ui);
+        let (block, _) = design::ValueBlock::new(ui, design::HeadingRow::new("Session folder"));
+        let (block, ()) =
+            block.field(|ui| design::locked(ui, locked, |ui| self.folder_fields(ui, locked)));
+        let (block, ()) = block.save_row(|ui| {
+            design::locked(ui, locked, |ui| {
+                self.folder_save_row(ui, book, locked, details_open);
+            });
         });
+        let mut messages = RowMessages::<design::outcome::NoPress>::new(&frame);
+        self.folder_messages(&frame, &mut messages, book);
+        // Nothing in the folder's messages can be pressed.
+        let _ = block.messages(messages);
     }
 
     fn folder_fields(&mut self, ui: &mut egui::Ui, locked: Option<&str>) {
@@ -7309,10 +7288,10 @@ impl Sessions {
         }
     }
 
-    /// The Session folder form's title line and save row: its state word, Discard, the reason
-    /// and Save, at the form's right edge. `details_open`: the campaign details form, with its
-    /// own primary save, is in view.
-    pub fn folder_save_row(
+    /// The Session folder form's save row: its state word, Discard, the reason and Save, at the
+    /// form's right edge. `details_open`: the campaign details form, with its own primary save,
+    /// is in view.
+    fn folder_save_row(
         &mut self,
         ui: &mut egui::Ui,
         book: &Book,
@@ -7323,13 +7302,6 @@ impl Sessions {
             return;
         };
         ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
-        design::heading(
-            ui,
-            design::Heading::Group {
-                title: "Session folder",
-                count: 0,
-            },
-        );
         let changed = super::resolve(&campaign, &self.folder_text).ok() != self.folder.clone();
         // The listing the footer read this frame (`folder_scan`, kept until the next scan).
         let files = self.folder_files();
@@ -7508,25 +7480,16 @@ impl Sessions {
         storage_words(*files.as_ref().ok()?.as_ref()?, book.events.len())
     }
 
-    /// Round 26 FN2, FN5: the Session folder form's messages, for the footer of the pane that
-    /// holds the form (Campaign's Link and folder page), so a typed letter, a refusal or a
-    /// result never moves its save row: why the folder cannot be used or a write failed
-    /// (`FolderFault`), what Save without moving would hide, and the open campaign's move
-    /// result from its store. Nothing here can be pressed, so any pane's `Messages` takes them.
-    /// Call it before the body, with the pane's frame:
-    /// `sessions.folder_messages(&frame, &mut messages, &timeline)`. The folder's listing is
-    /// read once per disk scan (`folder_scan`).
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "the Link and folder page (package C) calls it when its footer moves to `Messages`; until then that page calls `folder_footer`"
-        )
-    )]
-    pub fn folder_messages<'f, A: 'static>(
+    /// Round 26 FN2, FN5, ruling R24: the Session folder form's messages, `S` below its save row
+    /// (`folder_block`), so a typed letter, a refusal or a result never moves the save row: why
+    /// the folder cannot be used or a write failed (`FolderFault`), what Save without moving
+    /// would hide (`Notice::warning`), and the open campaign's move result from its store.
+    /// Nothing here can be pressed. The folder's listing is read once per disk scan
+    /// (`folder_scan`).
+    fn folder_messages<'f, A: 'static>(
         &mut self,
         frame: &'f PaneFrame,
-        messages: &mut Messages<'f, A>,
+        messages: &mut RowMessages<'f, A>,
         book: &Book,
     ) {
         let files = self.folder_files();
@@ -7543,34 +7506,6 @@ impl Sessions {
                 .map(|shown| shown.outcome(frame, |moved| folder_moved(moved).into()))
         }) {
             messages.kept(shown);
-        }
-    }
-
-    /// `folder_messages` for a footer that is not typed yet (`FolderFooter`): the same fault,
-    /// the same words, and the same store entry with its own order.
-    pub fn folder_footer(&mut self, book: &Book) -> FolderFooter {
-        let files = self.folder_files();
-        FolderFooter {
-            fault: self.folder_error.as_ref().map(|fault| {
-                let tone = match fault.severity() {
-                    Severity::NeedsFixing => Tone::Warning,
-                    Severity::CannotRead | Severity::NotSaved => Tone::Error,
-                };
-                (tone, String::from(fault.clone()))
-            }),
-            keeps: self
-                .folder_move_counts(book, &files)
-                .map(|counts| folder_keeps(&counts).as_str().to_owned()),
-            moved: self.folder_link().and_then(|link| {
-                self.folder_moves.get(&link).map(|shown| {
-                    shown.footer(|moved| {
-                        folder_moved::<design::outcome::NoPress>(moved)
-                            .words()
-                            .as_str()
-                            .to_owned()
-                    })
-                })
-            }),
         }
     }
 
@@ -8972,7 +8907,6 @@ mod tests {
     /// ends B's only. The missing folder is a typed fault in a sentence (routing row 136).
     #[test]
     fn a_folder_move_result_is_its_campaigns_over_a_switch_and_a_lost_folder() {
-        use crate::design::outcome::NoPress;
         use egui_kittest::kittest::Queryable;
         let dirs = [
             tempfile::tempdir().unwrap(),
@@ -9028,14 +8962,7 @@ mod tests {
                 |ctx, (sessions, book, campaign): &mut State| {
                     sessions.poll(ctx, Some(campaign), book);
                     egui::CentralPanel::default().show(ctx, |ui| {
-                        sessions.folder_save_row(ui, book, None, false);
-                        let frame = PaneFrame::new(ui);
-                        let mut messages =
-                            Messages::<NoPress>::new(&frame, ("folder_test", campaign.id), 600.0);
-                        sessions.folder_messages(&frame, &mut messages, book);
-                        let _ = messages.pane(ui, design::Body::Content, |ui| {
-                            sessions.folder_view(ui, None);
-                        });
+                        sessions.folder_block(ui, book, None, false);
                     });
                 },
                 (Sessions::default(), Book::default(), a.clone()),
