@@ -7038,7 +7038,11 @@ pub mod run_absent_player {
                 (
                     d.painted_rect_in("joined at", egui::Rect::EVERYTHING)
                         .map(|rect| rect.center().y),
-                    d.place_of("Log").map(|rect| rect.center().y),
+                    // The notice's own Log link (the panel's `Log` tab has the same name).
+                    d.nodes()
+                        .iter()
+                        .find(|node| node.name == "Log" && node.is_link())
+                        .map(|node| node.rect.center().y),
                     d.place_of("Dismiss this message")
                         .map(|rect| rect.center().y),
                 )

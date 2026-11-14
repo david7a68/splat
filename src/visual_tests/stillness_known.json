@@ -648,9 +648,6 @@
     ["G6/footer-far-below-body","07-paused-run-after-package-removal","1200x800","Button \"Source and identifiers\"",1],
     ["G6/footer-far-below-body","07-paused-run-after-package-removal","1920x1080","Button \"Source and identifiers\"",1]
   ],
-  "run-absent-player": [
-    ["N2/icon-off-text-centre","05-initiative-set-in-combat","960x640","Button \"Dismiss this message\"",1]
-  ],
   "run-add-creature": [
     ["N5/icon-starts-wrapping-text","01-arrivals-empty","960x640","Text \"\\u{e3b2}\\u{a0}Changed\\n1\\u{a0}×\\u{a0}Rival\\u{a0}Captain (as\\u{a0}Ember\\u{a0}Cultist), 2\\u{a0}×\\u{a0}Cinder\\u{a0}Wolf\"",1],
     ["N5/icon-starts-wrapping-text","04-arrivals-made-up-added","960x640","Text \"\\u{e3b2}\\u{a0}Changed\\n1\\u{a0}×\\u{a0}Rival\\u{a0}Captain (as\\u{a0}Ember\\u{a0}Cultist), 2\\u{a0}×\\u{a0}Cinder\\u{a0}Wolf\"",1]

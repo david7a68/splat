@@ -907,10 +907,6 @@ pub(crate) struct Run {
     /// taken by `note_sync_changes` for its notice (FJ1).
     removed_steps: usize,
     notice_summary: Option<String>,
-    /// R6: the most room the live footer has taken (its message and `S`), which the roster
-    /// keeps free while every row keeps its scale height, so a footer message comes into kept
-    /// room and moves no row. Never saved.
-    footer_kept: f32,
     live_initiative: Option<usize>,
     /// A value reached the run with no step of its own, so Undo stops there.
     undo_stopped: bool,
@@ -1408,7 +1404,6 @@ impl Run {
             notice_changes: 0,
             removed_steps: 0,
             notice_summary: None,
-            footer_kept: 0.0,
             live_initiative: None,
             recording_notice: None,
             copy_label: None,
@@ -4709,7 +4704,6 @@ impl Run {
             notice_changes: 0,
             removed_steps: 0,
             notice_summary: None,
-            footer_kept: 0.0,
             live_initiative: None,
             recording_notice: None,
             copy_label: None,

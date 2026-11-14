@@ -1084,7 +1084,6 @@ impl Run {
                                             ui.spacing_mut().item_spacing.y = 0.0;
                                             let room = ui.available_height();
                                             let footer_room = (full - room).max(0.0);
-                                            self.footer_kept = self.footer_kept.max(footer_room);
                                             // A message goes in the room under the list, so it moves no row while
                                             // the DM's eye is on them. The next action clears it. A long one wraps.
                                             let notice = self
@@ -1469,10 +1468,11 @@ impl Run {
     )]
     fn roster(&mut self, ui: &mut egui::Ui, visible: f32, lent: f32, hidden: f32) {
         let room = visible + hidden;
-        // R6 (FK1): the room the footer has needed stays free under the rows while every row
-        // keeps its scale height; a message then comes into kept room, and no row moves or
-        // hides. Only below scale height does the old rule hold (a cut row is counted below).
-        let kept = self.footer_kept.max(MESSAGE_ROOM);
+        // R6 (FK1): room for a footer message of up to two lines (and the pane's `S` above it)
+        // stays free under the rows while every row keeps its scale height, so such a message
+        // comes into kept room: no row moves and none hides. A taller footer, or rows at their
+        // scale height, keep the old rule: no row moves, and a row it would cut is counted below.
+        let kept = (2.0 * Type::Body.line() + design::S).max(MESSAGE_ROOM);
         let current = self.current();
         let next_up = self.next_up();
         let count = self.state.order.len();
