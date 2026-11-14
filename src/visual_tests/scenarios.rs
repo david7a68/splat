@@ -12357,7 +12357,9 @@ pub mod session_notes {
                 "Focus, text and last line in view {kept_parts:?}; the note's y {note_before:?} then {note_after:?} (banner below it)"
             ),
         );
-        d.click("Dismiss");
+        // Row 83a (N6): the banner notice's close icon is on its first line, centred on it.
+        check_dismiss_at_message_end(d, "iter-28-S-FO5-notice", "is processed.");
+        d.click(crate::design::outcome::DISMISS_NAME);
         assert!(!d.has_containing("is processed."));
         let (wide_text, wide_state) = d.at_size(LARGE, |d| {
             eprintln!(
@@ -14533,12 +14535,12 @@ pub mod session_recording {
                 .map_or(small, |s| s.format.font_id.size);
             let surface = if job.text.contains(" in ") {
                 Surface::Banner
+            } else if rows.iter().any(|row| row.contains(at)) {
+                Surface::ListRow
             } else if at.x < rail {
                 Surface::Rail
             } else if size > small + 0.5 {
                 Surface::RecordLine
-            } else if rows.iter().any(|row| row.contains(at)) {
-                Surface::ListRow
             } else {
                 Surface::RecordingsTab
             };

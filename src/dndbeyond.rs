@@ -423,7 +423,7 @@ impl DndBeyond {
     ) {
         // Row 93: a heading in a row adds no space; the row gives the space above it, so its
         // heading starts `Heading::above` below the rule over it, as a column's heading does.
-        crate::design::gap(ui, crate::design::Gap::S);
+        crate::design::gap(ui, crate::design::Gap::XS);
         ui.horizontal(|ui| {
             crate::design::heading(
                 ui,
