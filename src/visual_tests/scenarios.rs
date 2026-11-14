@@ -11651,7 +11651,19 @@ pub mod signed_in {
             blocked_words(d),
             "Signed out, a blocked Close now is not offered in the words, and its reason shows",
         );
-        d.state("close-with-conflict-signed-out", Sizes::Default);
+        // iter-29 G44 (FO2), the reviewer's witness. The dialog above is this view's second
+        // opening (the first was `close-with-unsent-changes`); with the conflict, Close run is
+        // locked, so the DM cannot open it a third time here. At EACH size, after the resize and
+        // before the image is saved, Keep running holds the focus, so the still shows its ring.
+        d.state_prepared("close-with-conflict-signed-out", Sizes::All, |d| {
+            d.settle();
+            let focused = d.focused_name();
+            d.observe(
+                "iter-29-R1-G44-witness",
+                focused.as_deref() == Some("Keep running"),
+                format!("The second opening, after the resize: focus on {focused:?}"),
+            );
+        });
         d.app_mut().settings.simulate(Account::Connected);
         d.settle();
         d.observe(

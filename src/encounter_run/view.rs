@@ -2804,7 +2804,13 @@ impl Run {
                     // FO2: each opening gives Keep running the default focus once
                     // (`docs/design-system.md:218`); the opening owns it, so a second opening
                     // in the same view gives it again.
-                    let response = Action::secondary("Keep running").show(ui);
+                    // A stable id: words or actions that come into the dialog while it is
+                    // open (a conflict) do not move the focus to an id that is gone.
+                    let response = ui
+                        .push_id("close_keep_running", |ui| {
+                            Action::secondary("Keep running").show(ui)
+                        })
+                        .inner;
                     // Given once Keep running already holds the focus when it is drawn; until
                     // then it is asked for again, also under a new id after the content changed.
                     if focus {
