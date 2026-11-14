@@ -3,6 +3,7 @@
 //! needs one home only. See `docs/design/world-data.md`.
 #![warn(deprecated)] // Its parent allows old message functions; this file does not.
 use super::each_link;
+use std::collections::HashMap;
 
 /// The heading that holds an entry's history from play.
 pub const LOG: &str = "Log";
@@ -218,6 +219,12 @@ fn link_words(text: &str) -> String {
 
 /// A line's words without Markdown, as the reader shows them.
 fn plain(raw: &str) -> String {
+    plain_named(raw, &HashMap::new())
+}
+
+/// `plain`, where a link shows the words the reader shows for it (`super::link_words`): a
+/// session note's name as the Sessions page gives it, from `names`.
+fn plain_named(raw: &str, names: &HashMap<String, String>) -> String {
     let mut text = without(&without(raw, "%%", "%%"), "<!--", "-->");
     let mut linked = String::with_capacity(text.len());
     let mut copied = 0;
@@ -225,14 +232,7 @@ fn plain(raw: &str) -> String {
         linked.push_str(&text[copied..range.start]);
         copied = range.end;
         if !embed {
-            linked.push_str(&words.unwrap_or_else(|| {
-                target
-                    .rsplit('#')
-                    .next()
-                    .unwrap_or(&target)
-                    .trim_start_matches('^')
-                    .to_owned()
-            }));
+            linked.push_str(&words.unwrap_or_else(|| super::link_words(&target, names)));
         }
     }
     linked.push_str(&text[copied..]);
@@ -310,7 +310,13 @@ fn bare(raw: &str) -> bool {
         })
 }
 
-fn line(kind: Kind, heading: &Option<String>, log: bool, raw: &str) -> Option<Line> {
+fn line(
+    kind: Kind,
+    heading: &Option<String>,
+    log: bool,
+    raw: &str,
+    names: &HashMap<String, String>,
+) -> Option<Line> {
     let mut raw = raw.trim();
     let mut task = None;
     if kind == Kind::Item {
@@ -331,12 +337,12 @@ fn line(kind: Kind, heading: &Option<String>, log: bool, raw: &str) -> Option<Li
         cells
             .trim_matches('|')
             .split('|')
-            .map(|cell| plain(&cell.replace('\u{1}', "|")))
+            .map(|cell| plain_named(&cell.replace('\u{1}', "|"), names))
             .filter(|cell| !cell.is_empty())
             .collect::<Vec<_>>()
             .join(" · ")
     } else {
-        plain(rest)
+        plain_named(rest, names)
     };
     if text.is_empty() && label.is_none() {
         return None;
@@ -372,21 +378,30 @@ fn line(kind: Kind, heading: &Option<String>, log: bool, raw: &str) -> Option<Li
     })
 }
 
-/// Every line of a note's body. `title` is the note's name, whose heading is not a section.
-pub fn lines(body: &str, title: &str) -> Vec<Line> {
+/// Every line of a note's body. `title` is the note's name, whose heading is not a section. A
+/// link to a session note reads as the session's name (`names`, by lower-case file stem:
+/// `ContentIndex::session_names`), as the reader shows the link.
+pub fn lines(body: &str, title: &str, names: &HashMap<String, String>) -> Vec<Line> {
     /// The open block: its kind, its raw words, and for a list item its first line's number and
     /// words as read.
     type Open = Option<(Kind, String, Option<(usize, String)>)>;
     /// The heading above, and the level of the Log heading when the lines are inside it.
     type Section = (Option<String>, Option<usize>);
-    fn close(found: &mut Vec<Line>, open: &mut Open, (heading, log): &Section) {
+    fn close(
+        found: &mut Vec<Line>,
+        open: &mut Open,
+        (heading, log): &Section,
+        names: &HashMap<String, String>,
+    ) {
         if let Some((kind, raw, first)) = open.take() {
-            found.extend(line(kind, heading, log.is_some(), &raw).map(|mut line| {
-                if line.task == Some(false) {
-                    line.open_box = first;
-                }
-                line
-            }));
+            found.extend(
+                line(kind, heading, log.is_some(), &raw, names).map(|mut line| {
+                    if line.task == Some(false) {
+                        line.open_box = first;
+                    }
+                    line
+                }),
+            );
         }
     }
     let mut found = Vec::new();
@@ -402,19 +417,19 @@ pub fn lines(body: &str, title: &str) -> Vec<Line> {
         }
         if text.starts_with("```") || text.starts_with("~~~") {
             fence = !fence;
-            close(&mut found, &mut open, &heading);
+            close(&mut found, &mut open, &heading, names);
             continue;
         }
         if fence {
             continue;
         }
         if text.is_empty() || text.starts_with("[!") {
-            close(&mut found, &mut open, &heading);
+            close(&mut found, &mut open, &heading, names);
             header_row = false;
             continue;
         }
         if let Some((level, words)) = heading_words(text) {
-            close(&mut found, &mut open, &heading);
+            close(&mut found, &mut open, &heading, names);
             let name = plain(words);
             // The first heading is the title, whatever its words, when nothing is above it.
             let is_title = name.eq_ignore_ascii_case(title.trim())
@@ -428,13 +443,19 @@ pub fn lines(body: &str, title: &str) -> Vec<Line> {
             }
             heading.0 = (!is_title).then_some(name);
             if heading.0.is_some() {
-                found.extend(line(Kind::Heading, &heading.0, heading.1.is_some(), words));
+                found.extend(line(
+                    Kind::Heading,
+                    &heading.0,
+                    heading.1.is_some(),
+                    words,
+                    names,
+                ));
             }
             header_row = false;
             continue;
         }
         if text.starts_with('|') {
-            close(&mut found, &mut open, &heading);
+            close(&mut found, &mut open, &heading, names);
             if separator_row(text) {
                 // The row above a separator names the columns.
                 if header_row {
@@ -443,14 +464,20 @@ pub fn lines(body: &str, title: &str) -> Vec<Line> {
                 header_row = false;
             } else {
                 let before = found.len();
-                found.extend(line(Kind::Row, &heading.0, heading.1.is_some(), text));
+                found.extend(line(
+                    Kind::Row,
+                    &heading.0,
+                    heading.1.is_some(),
+                    text,
+                    names,
+                ));
                 header_row = found.len() > before;
             }
             continue;
         }
         header_row = false;
         if let Some(rest) = list_marker(text) {
-            close(&mut found, &mut open, &heading);
+            close(&mut found, &mut open, &heading, names);
             let first = rest
                 .trim_start()
                 .starts_with("[ ] ")
@@ -471,7 +498,7 @@ pub fn lines(body: &str, title: &str) -> Vec<Line> {
             None => open = Some((Kind::Paragraph, text.to_owned(), None)),
         }
     }
-    close(&mut found, &mut open, &heading);
+    close(&mut found, &mut open, &heading, names);
     found
 }
 
@@ -546,6 +573,11 @@ pub fn summary(lines: &[Line]) -> &str {
 mod tests {
     use super::*;
 
+    /// A note's lines with no session notes in the campaign.
+    fn lines(body: &str, title: &str) -> Vec<Line> {
+        super::lines(body, title, &HashMap::new())
+    }
+
     const ZAREL: &str = "\n# Zarel Second\n\nTiefling. The Games-Master, who runs the race for the [[Arena Guild]].\n\n- **Look:** Gilded [[Horn Rings|horn rings]], loud and new. A [[Verrash Gunworks|Verrash]] pistol.\n- **Says:** \"Filed!\"\n\n## Ties\n\n| Team | Sponsor |\n|---|---|\n| [[The Ledger\\|the Ledger]] | Merchant bank |\n\n```yaml\nlook: [[Horn Rings]]\n```\n\nSee [[Tournament]] and [[Undercroft]].\n\n## Log\n\n- [[Session 1]], Day 1: Met the party. ^w-1a2b\n- [ ] Does Zarel know about the _fix_? %% splat id=1 %%\n";
 
     #[test]
@@ -586,6 +618,16 @@ mod tests {
         assert!(line.starts_with("- [ ] Does Zarel know"));
         assert_eq!(found[7].open_box, None);
         assert_eq!(found[5].link_targets(), ["Tournament", "Undercroft"]);
+        // Round 28 FC8: a link to a session note reads as the session's name, as the Sessions
+        // page gives it, and still links the file; a link with its own words keeps them.
+        let names = HashMap::from([("session 1".to_owned(), "Session 1: The Crossing".to_owned())]);
+        let named = super::lines(ZAREL, "Zarel Second", &names);
+        assert_eq!(
+            named[7].words(),
+            "Session 1: The Crossing, Day 1: Met the party."
+        );
+        assert!(named[7].links_to(&["session 1".into()]));
+        assert_eq!(named[1].words(), words[1]);
     }
 
     #[test]

@@ -12066,7 +12066,8 @@ pub mod world {
             "Lookup's reader shows the NPC's status in its Status row only, not on the kind line",
         );
         // Round 28 FF4: `Nothing written yet.` stands where prose starts, `L` below the control
-        // above it (here the NPC's `Add to fight`), so it does not read as that control's reason.
+        // above it (here the Status row's `Change`), so it does not read as that control's
+        // reason.
         let gap = d
             .painted_rect_in("Nothing written yet.", egui::Rect::EVERYTHING)
             .and_then(|words| {
@@ -12088,8 +12089,51 @@ pub mod world {
                 .is_some_and(|(_, gap)| *gap >= crate::design::L - 1.0),
             format!("The control above the words, and the gap: {gap:?}"),
         );
+        // Round 28 FF1: the NPC's `Add to fight` is on its title line, as a creature's is, not
+        // a bordered button under Status. With no stat block, it opens the form that asks for
+        // one; while the form is open, the form is the one way to add them (review of PR 355),
+        // and Cancel gives the title line its action back in its place.
+        let add = format!("Add {NPC} to the fight");
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (placed, detail) = d.at_size(size, |d| world_build::npc_add_on_title_line(d, NPC));
+            d.observe(
+                "iter-28-D-FF1",
+                placed,
+                format!("At {size:?}, the new NPC's Add to fight is on its title line: {detail}"),
+            );
+        }
         d.state("world-new-npc", Sizes::Default);
-        d.click("Add to fight");
+        let title_place = d.place_of(&add);
+        d.click(&add);
+        d.expect("Stat block");
+        // One way to add: no title action, and one painted `Add to fight` in Lookup, the form's.
+        let lookup = d.place_of(SEARCH_LOOKUP).map(|search| {
+            egui::Rect::from_min_max(
+                egui::pos2(search.left(), 0.0),
+                egui::pos2(f32::INFINITY, f32::INFINITY),
+            )
+        });
+        let painted = lookup
+            .map(|lookup| d.painted_in(lookup).matches("Add to fight").count())
+            .unwrap_or(0);
+        // The form's heading has the same words as a label: only a button counts.
+        let title_action = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .any(|node| node.name == add && node.role == Role::Button)
+        };
+        let one_way = !title_action(d) && painted == 1;
+        d.click("Cancel");
+        let back = d.place_of(&add);
+        d.click(&add);
+        d.expect("Stat block");
+        d.observe(
+            "iter-28-D-FF1-form",
+            one_way && title_place.is_some() && back == title_place,
+            format!(
+                "With the form open: one way {one_way}, painted Add to fight in Lookup {painted}; after Cancel it is at {back:?}, before {title_place:?}"
+            ),
+        );
         d.type_into("Stat block", "Guard");
         d.click("Guard");
         d.type_into("Initiative", "11");

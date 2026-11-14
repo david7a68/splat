@@ -276,7 +276,7 @@ mod tests {
         // The question as read is the whole question: a changed continuation line is not it
         // (review round 1 of PR 287).
         let body = "- [ ] Who pays Rook\n  to open the gate?\n";
-        let (at, question) = super::super::lines::lines(body, "Rook")
+        let (at, question) = super::super::lines::lines(body, "Rook", &Default::default())
             .into_iter()
             .find_map(|line| line.open_box)
             .unwrap();
