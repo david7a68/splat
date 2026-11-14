@@ -687,6 +687,9 @@
     ["N4/quiet-action-line-start","02-plan-group-assembled","960x640","Button \"Filter creatures\"",1]
   ],
   "session-plan-scenes": [
+    ["G1b/pressed-control-moved","07-scene-removed","1200x800","Button \"Add\"",1],
+    ["G1b/pressed-control-moved","07-scene-removed","1920x1080","Button \"Add\"",1],
+    ["G1b/pressed-control-moved","07-scene-removed","960x640","Button \"Add\"",1],
     ["G1b/pressed-control-moved","08-scenes-folded","960x640","Button \"Long rest · Session 1 · \\u{e182} Everyone at full\"",2],
     ["G3/far-action","01-scenes-in-the-plan","1920x1080","Button \"More actions for The miller is the informer\"",1],
     ["G3/far-action","01-scenes-in-the-plan","1920x1080","Button \"More actions for Warden Ostrel\"",1],
@@ -702,8 +705,7 @@
     ["G3/far-action","06-scene-added","1920x1080","Button \"More actions for Warden Ostrel\"",1],
     ["G3/far-action","06-scene-added","1920x1080","Button \"Resume: Bridge Ambush\"",1],
     ["G3/far-action","07-scene-removed","1920x1080","Button \"Add to Log: Warden Ostrel\"",1],
-    ["G3/far-action","07-scene-removed","1920x1080","Button \"Resume: Bridge Ambush\"",1],
-    ["N4/quiet-action-line-start","06-scene-added","960x640","Button \"Add a fight\"",1]
+    ["G3/far-action","07-scene-removed","1920x1080","Button \"Resume: Bridge Ambush\"",1]
   ],
   "session-recording": [
     ["G1b/pressed-control-moved","04-recording-listed","960x640","Button \"Recordings, 1 recording\"",1],

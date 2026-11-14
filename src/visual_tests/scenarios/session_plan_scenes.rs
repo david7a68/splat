@@ -476,9 +476,12 @@ pub fn run(d: &mut Driver<'_>) {
         !note(d).contains(KEEP) && !d.has("Plan a scene"),
         "Undo scene takes the line back out, and Escape closed the field",
     );
-    // Ruling R30 (round 29, P-1 review): the open field keeps room for its result, so a press on
-    // the Add button moves nothing, and the result and its Undo are whole in view, at every size.
-    // Words that match no World entry, so no suggestion comes or goes.
+    // Ruling R30, amended (round 29, P-1 review): the open field keeps room for its result. A
+    // press on the Add button adds the scene as a row ABOVE the field, so `Add` moves down by
+    // exactly that row (the list grows, as on main with Enter) and by nothing else: the first row
+    // stays where it was (no scroll moved the plan), the field moves with `Add`, and the result
+    // and its Undo are whole in view, at every size. Words that match no World entry, so no
+    // suggestion comes or goes.
     for size in [SMALL, DEFAULT, LARGE] {
         let (still, detail) = d.act_at_size(size, |d| {
             let before_note = note(d);
@@ -491,19 +494,31 @@ pub fn run(d: &mut Driver<'_>) {
                     .find(|node| node.name == "Add" && node.role == egui::accesskit::Role::Button)
                     .map(|node| node.rect)
             };
-            let before = add_button(d);
+            let places = |d: &Driver<'_>| {
+                (
+                    add_button(d),
+                    d.place_of("Plan a scene"),
+                    d.place_of(&format!("Resume: {RUN}")),
+                )
+            };
+            let (add, field, first) = places(d);
             d.click("Add");
             d.expect("Undo add scene");
-            let after = add_button(d);
+            let (add_now, field_now, first_now) = places(d);
+            // The new row's height: how far the field and its actions went down.
+            let row = field.zip(field_now).map(|(field, now)| now.top() - field.top());
             let nodes = d.nodes();
             let find = |name: &str| nodes.iter().find(|node| node.name == name);
             let (words, undo) = (find("Scene added to tonight."), find("Undo add scene"));
-            let still = before.is_some()
-                && before == after
+            let still = first.is_some()
+                && first == first_now
+                && add.zip(add_now).zip(row).is_some_and(|((add, now), row)| {
+                    row > 0.0 && (now.top() - add.top() - row).abs() <= 0.5
+                })
                 && words.is_some_and(|node| node.fully_in_view())
                 && undo.is_some_and(|node| node.fully_in_view());
             let detail = format!(
-                "Add at {before:?} then {after:?}; the words at {:?} shown {:?}, Undo scene at {:?} shown {:?}",
+                "the first row at {first:?} then {first_now:?}; Add at {add:?} then {add_now:?}, the new row {row:?} px; the words at {:?} shown {:?}, Undo scene at {:?} shown {:?}",
                 words.map(|node| node.rect),
                 words.map(|node| node.shown),
                 undo.map(|node| node.rect),
@@ -516,9 +531,7 @@ pub fn run(d: &mut Driver<'_>) {
         d.observe(
             "T12.14",
             still,
-            format!(
-                "At {size:?}, pressing Add moves it not, and its result is whole in view: {detail}"
-            ),
+            format!("At {size:?}, Add moves by its new row only, and the result is whole in view: {detail}"),
         );
     }
 
