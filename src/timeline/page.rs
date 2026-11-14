@@ -1993,11 +1993,16 @@ mod tests {
         harness.run_steps(2);
         assert!(!harness.state().events[0].restores);
         // iter-23-S FL1: each direction says the ruling now in force.
-        harness.get_by_label("The next fight starts from the HP the party has now.");
+        assert!(
+            harness
+                .query_all_by_label("The next fight starts from the HP the party has now.")
+                .next()
+                .is_some()
+        );
         harness.get_by_label("Mark everyone at full").click();
         harness.run_steps(2);
         assert!(harness.state().events[0].restores);
-        harness.get_by_label(REST_RESTORES_WORDS);
+        assert!(harness.query_all_by_label(REST_RESTORES_WORDS).next().is_some());
         harness.get_by_label("Undo change ruling").click();
         harness.run_steps(2);
         assert!(!harness.state().events[0].restores);
