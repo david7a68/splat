@@ -1356,6 +1356,21 @@ impl<'f, A: 'static> Messages<'f, A> {
             pressed: sink.0.borrow_mut().take(),
         }
     }
+
+    /// `pane` with a `Body::Content` body that holds one editor which grows with its text
+    /// (`Footer::pane_editor`, `pane::EditorRegion`).
+    pub fn pane_editor<R>(
+        self,
+        ui: &mut Ui,
+        add: impl for<'r> FnOnce(&mut Ui, super::pane::EditorRegion<'r>) -> R,
+    ) -> Paned<R, A> {
+        let Self { footer, sink, .. } = self;
+        let body = footer.pane_editor(ui, add);
+        Paned {
+            body,
+            pressed: sink.0.borrow_mut().take(),
+        }
+    }
 }
 
 impl Body {
