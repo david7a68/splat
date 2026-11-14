@@ -23,8 +23,8 @@ use eframe::egui::{
 };
 
 use super::{
-    Action, Density, FORM_WIDTH, L, M, PANEL_MIN_WIDTH, S, Status, Type, XS, colors, extras::space,
-    field, named, number_width, placeholder, theme,
+    Action, Density, FORM_WIDTH, L, LINE_START_HANG, M, PANEL_MIN_WIDTH, S, Status, Type, XS,
+    colors, extras::space, field, named, number_width, outcome::Sentence, placeholder, theme,
 };
 
 /// The longest word an action may have, in characters. With this limit and an icon, the widest
@@ -1840,6 +1840,79 @@ impl<R: CreateReasons> Create<R> {
     }
 }
 
+/// A secondary action beside a [`CreateField`] (`Browse…`). A plain [`Word`] is one that is
+/// never locked. A lock that comes and goes is [`locked_when`](Self::locked_when) with its
+/// reason, the form the footer part's choices use: the action is disabled, with the reason as
+/// its accessible description and hover, and the reason's words on the form's kept line. The
+/// kept line keeps the reason's room for the life of the form, so a lock that comes or goes
+/// moves nothing.
+///
+/// ```
+/// use splat::layout::SideAction;
+/// let loading = true;
+/// let _ = SideAction::new(splat::word!("Browse…"))
+///     .locked_when(loading, splat::sentence!("Wait until the Library has loaded."));
+/// ```
+///
+/// A lock without its reason does not compile:
+///
+/// ```compile_fail,E0308
+/// use splat::layout::SideAction;
+/// let _ = SideAction::new(splat::word!("Browse…")).locked_when(true, None);
+/// ```
+///
+/// Nor does a reason that is not a checked sentence:
+///
+/// ```compile_fail,E0308
+/// use splat::layout::SideAction;
+/// let _ = SideAction::new(splat::word!("Browse…")).locked_when(true, "Wait.");
+/// ```
+///
+/// Nor an optional lock, which could be written with no reason:
+///
+/// ```compile_fail,E0599
+/// use splat::layout::SideAction;
+/// let _ = SideAction::new(splat::word!("Browse…")).blocked(Some("Wait."));
+/// ```
+#[derive(Clone, Debug)]
+#[must_use]
+pub struct SideAction {
+    word: Word,
+    /// The lock's reason, and whether it holds now.
+    lock: Option<(Sentence, bool)>,
+}
+
+impl SideAction {
+    pub fn new(word: Word) -> Self {
+        Self { word, lock: None }
+    }
+
+    /// Locked while `locked`, for `reason`. The reason's room on the kept line is kept while
+    /// the form is open, so a lock that comes or goes moves nothing below it.
+    pub fn locked_when(mut self, locked: bool, reason: Sentence) -> Self {
+        self.lock = Some((reason, locked));
+        self
+    }
+
+    fn reason(&self) -> Option<&str> {
+        self.lock
+            .as_ref()
+            .and_then(|(reason, locked)| locked.then_some(reason.as_str()))
+    }
+
+    fn action(&self) -> Action<'_> {
+        Action::secondary(self.word.as_str())
+            .density(Density::Read)
+            .blocked(self.reason())
+    }
+}
+
+impl From<Word> for SideAction {
+    fn from(word: Word) -> Self {
+        Self::new(word)
+    }
+}
+
 /// One text field of an [`InlineCreate`].
 #[must_use]
 pub struct CreateField<'a> {
@@ -1847,7 +1920,7 @@ pub struct CreateField<'a> {
     label: &'a str,
     text: &'a mut String,
     help: Option<&'a str>,
-    side: Option<Word>,
+    side: Option<SideAction>,
     focus: bool,
 }
 
@@ -1868,9 +1941,10 @@ impl<'a> CreateField<'a> {
         self
     }
 
-    /// A secondary action beside the field, before Create (`Browse…`).
-    pub fn side_action(mut self, word: Word) -> Self {
-        self.side = Some(word);
+    /// A secondary action beside the field, before Create when Create follows this field
+    /// (`Browse…`): a [`Word`], or a [`SideAction`] with its lock.
+    pub fn side_action(mut self, side: impl Into<SideAction>) -> Self {
+        self.side = Some(side.into());
         self
     }
 
@@ -1904,12 +1978,46 @@ impl<'a> CreateChoice<'a> {
     }
 }
 
-/// The line below the last field: quiet Cancel at its start when there is something to cancel,
-/// then Create's blocked reason, or, once nothing blocks Create, the preview. At one width its
-/// height is fixed for the life of the form: as tall as a control, or as the tallest declared
-/// reason wrapped beside Cancel at that width, whichever is taller. So nothing below it moves
-/// while the DM types or a reason comes and goes. A resize may change its height, as it changes
-/// every wrapped text.
+/// A drop-down of an [`InlineCreate`], after a text field: the form's [`Dropdown`] (its choices,
+/// words and reasons are the caller's, as for any drop-down), with its label above it. The part
+/// gives it the form's width. A form whose last part is a drop-down puts Create and Cancel on
+/// an action line of their own under it (see [`InlineCreate`]).
+#[must_use]
+pub struct CreateDropdown<'a> {
+    label: &'a str,
+    help: Option<&'a str>,
+    /// The typed drop-down and its value, erased only here, so a caller gives data, not a
+    /// drawing closure.
+    draw: Box<dyn FnOnce(&mut Ui, f32) -> Response + 'a>,
+}
+
+impl<'a> CreateDropdown<'a> {
+    pub fn new<T: PartialEq + Clone + 'a>(
+        label: &'a str,
+        dropdown: Dropdown<'a, T, HasChoices>,
+        current: &'a mut T,
+    ) -> Self {
+        Self {
+            label,
+            help: None,
+            draw: Box::new(move |ui, width| dropdown.width(width).show(ui, current).response),
+        }
+    }
+
+    pub fn help(mut self, help: &'a str) -> Self {
+        self.help = Some(help);
+        self
+    }
+}
+
+/// The line below the last field (and below the action line of a form that ends with a
+/// drop-down): quiet Cancel at its start when there is something to cancel and Cancel is not on
+/// the action line, then a locked side action's reason and Create's blocked reason, or, once
+/// nothing blocks Create, the preview. At one width its height is fixed for the life of the
+/// form: as tall as a control, or as the declared side reason and the tallest declared reason
+/// wrapped beside Cancel at that width, whichever is taller. So nothing below it moves while
+/// the DM types or a reason or lock comes and goes. A resize may change its height, as it
+/// changes every wrapped text.
 #[derive(Clone, Copy, Debug, Default)]
 #[must_use]
 pub struct KeptLine<'a> {
@@ -1941,6 +2049,7 @@ impl<'a> KeptLine<'a> {
 enum CreatePart<'a> {
     Text(CreateField<'a>),
     Choice(CreateChoice<'a>),
+    Dropdown(CreateDropdown<'a>),
 }
 
 /// Typestate of an [`InlineCreate`]: no part yet.
@@ -1949,19 +2058,41 @@ pub struct Empty;
 pub struct AfterChoice;
 /// Typestate of an [`InlineCreate`]: the last part is a text field; Create may follow.
 pub struct AfterField;
+/// Typestate of an [`InlineCreate`]: the last part is a drop-down after a text field; Create
+/// may follow, on an action line of its own.
+pub struct AfterDropdown;
 /// Typestate of an [`InlineCreate`]: Create is named; the kept line must follow.
 pub struct Named;
 /// Typestate of an [`InlineCreate`]: complete.
 pub struct Complete;
 
-/// The one inline creation layout: the fields (and choices) in order, each with its help; the
-/// named Create after the last field on that field's line (after its side action), then the last
-/// field's help, then one kept line. Help under an earlier field has `L` before the next label.
-/// Nothing moves while the DM types: Create keeps its word, and at one width the kept line keeps
-/// its height for the life of the form (a resize may change it, as it changes wrapped text).
+/// The one inline creation layout: the fields (and choices and drop-downs) in order, each with
+/// its help; the named Create after the last field on that field's line (after its side
+/// action), then the last field's help, then one kept line. Help under an earlier field has `L`
+/// before the next label. Nothing moves while the DM types: Create keeps its word, and at one
+/// width the kept line keeps its height for the life of the form (a resize may change it, as it
+/// changes wrapped text).
 ///
-/// The order is in the type: `create` follows a text field, `kept_line` follows `create`, and
-/// only a complete form has `show`.
+/// A form whose last part is a drop-down (the New session form's Template) has an action line
+/// under the drop-down and its help: Create, then Cancel, at the form's text edge. The kept line
+/// follows it, with the reasons or the preview. Everything above the action line has a fixed
+/// height and the preview keeps one line below it, so neither a chosen value nor a preview's
+/// length moves Create.
+///
+/// Width: the form takes the column it is drawn in (a reader's measure), at most
+/// [`FORM_WIDTH`], and never reaches past the `Ui`'s clip. When a field's side action and
+/// Create do not fit beside a field of at least [`CREATE_FIELD_MIN`], they go on an action line
+/// under the field, so no target is cut; a long text scrolls inside its field. Cancel on the
+/// kept line hangs its padding left of the text edge only when the clip has room for it.
+///
+/// Keyboard: the fields, then the drop-downs, then Create, then Cancel (drawing order). Enter
+/// in a text field presses Create when nothing blocks it; Escape in a text field presses Cancel
+/// when Cancel shows. The keyboard leaves the field in both cases. After Create, the caller
+/// gives the keyboard to what was made, or back to the form's field when the act failed and the
+/// form stays; after Cancel, the caller closes the form.
+///
+/// The order is in the type: `create` follows a text field or a drop-down, a drop-down follows
+/// a text field, `kept_line` follows `create`, and only a complete form has `show`.
 ///
 /// ```
 /// use splat::layout::{Create, CreateField, InlineCreate, KeptLine};
@@ -2015,6 +2146,64 @@ pub struct Complete;
 ///         .show(ui);
 /// }
 /// ```
+///
+/// A form that ends with a drop-down, with Create and Cancel on its action line:
+///
+/// ```
+/// use splat::layout::{Create, CreateDropdown, CreateField, Dropdown, InlineCreate, KeptLine, NoReason, Once};
+/// fn form(ui: &mut eframe::egui::Ui, name: &mut String, template: &mut u8) {
+///     let _ = InlineCreate::new()
+///         .field(CreateField::new(splat::field_id!("doc_dd_name").once(Once::Example), "Title", name))
+///         .dropdown(CreateDropdown::new(
+///             "Template",
+///             Dropdown::new(splat::field_id!("doc_dd_template").once(Once::Example), "Template")
+///                 .choice(0, "Standard session")
+///                 .choice(1, "Short notes"),
+///             template,
+///         ))
+///         .create(Create::<NoReason>::primary(splat::word!("Create session")))
+///         .kept_line(KeptLine::new().cancel(splat::word!("Cancel"), true))
+///         .show(ui);
+/// }
+/// ```
+///
+/// A form that ends with a drop-down and has no Create has no kept line and no `show`:
+///
+/// ```compile_fail,E0599
+/// use splat::layout::{CreateDropdown, CreateField, Dropdown, InlineCreate, KeptLine, NoReason, Once};
+/// fn form(ui: &mut eframe::egui::Ui, name: &mut String, template: &mut u8) {
+///     let _ = InlineCreate::<splat::layout::Empty, NoReason>::new()
+///         .field(CreateField::new(splat::field_id!("doc_dd_name").once(Once::Example), "Title", name))
+///         .dropdown(CreateDropdown::new(
+///             "Template",
+///             Dropdown::new(splat::field_id!("doc_dd_template").once(Once::Example), "Template").choice(0, "Standard"),
+///             template,
+///         ))
+///         .kept_line(KeptLine::new())
+///         .show(ui);
+/// }
+/// ```
+///
+/// A drop-down before any text field does not compile (it follows the name):
+///
+/// ```compile_fail,E0599
+/// use splat::layout::{CreateDropdown, Dropdown, InlineCreate, NoReason, Once};
+/// fn form(template: &mut u8) {
+///     let _ = InlineCreate::<splat::layout::Empty, NoReason>::new().dropdown(CreateDropdown::new(
+///         "Template",
+///         Dropdown::new(splat::field_id!("doc_dd_template").once(Once::Example), "Template").choice(0, "Standard"),
+///         template,
+///     ));
+/// }
+/// ```
+///
+/// A drop-down is a typed [`Dropdown`], never a closure that draws:
+///
+/// ```compile_fail,E0277
+/// use splat::layout::CreateDropdown;
+/// let mut value = 0_u8;
+/// let _ = CreateDropdown::new("Template", |ui: &mut eframe::egui::Ui| ui.label("Mine"), &mut value);
+/// ```
 #[must_use = "call show"]
 pub struct InlineCreate<'a, State, R: CreateReasons> {
     parts: Vec<CreatePart<'a>>,
@@ -2028,10 +2217,12 @@ pub struct InlineCreate<'a, State, R: CreateReasons> {
 pub struct InlineCreateResponse {
     pub create: bool,
     pub cancel: bool,
-    /// The last field's side action (`Browse…`).
+    /// A field's side action (`Browse…`; a form has one). Never true while it is locked.
     pub side: bool,
     /// Each text field's response, in order.
     pub fields: Vec<Response>,
+    /// Each drop-down's control, in order.
+    pub dropdowns: Vec<Response>,
 }
 
 impl<'a, State, R: CreateReasons> InlineCreate<'a, State, R> {
@@ -2077,14 +2268,25 @@ macro_rules! add_parts {
         }
     )*};
 }
-add_parts!(Empty, AfterChoice, AfterField);
+add_parts!(Empty, AfterChoice, AfterField, AfterDropdown);
 
-impl<'a, R: CreateReasons> InlineCreate<'a, AfterField, R> {
-    pub fn create(mut self, create: Create<R>) -> InlineCreate<'a, Named, R> {
-        self.create = Some(create);
-        self.into()
-    }
+macro_rules! add_after_field {
+    ($($state:ty),*) => {$(
+        impl<'a, R: CreateReasons> InlineCreate<'a, $state, R> {
+            /// A drop-down after the name field (a text field comes first).
+            pub fn dropdown(mut self, dropdown: CreateDropdown<'a>) -> InlineCreate<'a, AfterDropdown, R> {
+                self.parts.push(CreatePart::Dropdown(dropdown));
+                self.into()
+            }
+
+            pub fn create(mut self, create: Create<R>) -> InlineCreate<'a, Named, R> {
+                self.create = Some(create);
+                self.into()
+            }
+        }
+    )*};
 }
+add_after_field!(AfterField, AfterDropdown);
 
 impl<'a, R: CreateReasons> InlineCreate<'a, Named, R> {
     pub fn kept_line(mut self, kept: KeptLine<'a>) -> InlineCreate<'a, Complete, R> {
@@ -2093,43 +2295,153 @@ impl<'a, R: CreateReasons> InlineCreate<'a, Named, R> {
     }
 }
 
-/// The kept line's fixed height in `room`: a control's, or the tallest declared reason's
-/// wrapped beside Cancel, whichever is taller. A reason drawn with Cancel hidden has more
-/// room, so it is never taller than this.
-fn kept_line_height<R: CreateReasons>(ui: &Ui, room: f32, cancel: Option<Word>) -> f32 {
+/// The narrowest a create form's text field is beside its actions (the words a field shows
+/// before it scrolls). Narrower, the actions go on a line of their own under the field.
+pub const CREATE_FIELD_MIN: f32 = 120.0;
+
+/// The room of a create form: the column it is drawn in, never past the `Ui`'s clip, at most
+/// [`FORM_WIDTH`].
+fn form_room(ui: &Ui) -> f32 {
+    ui.available_width()
+        .min(ui.clip_rect().right() - ui.cursor().left())
+        .min(FORM_WIDTH)
+        .max(1.0)
+}
+
+/// The height of `words` in `Small` type, wrapped at `width`.
+fn small_height(ui: &Ui, words: &str, width: f32) -> f32 {
+    let font = Type::Small.font(ui);
+    ui.fonts_mut(|fonts| {
+        fonts
+            .layout(words.to_owned(), font, colors().muted, width)
+            .size()
+            .y
+    })
+}
+
+/// The kept line's fixed height in `room`: a control's, or the declared side reasons and the
+/// tallest declared reason, stacked and wrapped beside Cancel, whichever is taller. A reason
+/// drawn with Cancel hidden has more room, and a lock that is open draws nothing, so the line
+/// is never taller than this.
+fn kept_line_height<R: CreateReasons>(
+    ui: &Ui,
+    room: f32,
+    cancel: Option<Word>,
+    sides: &[&str],
+) -> f32 {
     let beside = cancel.map_or(0.0, |word| cancel_action(word).natural_width(ui) + L);
     let width = (room - beside).max(1.0);
-    let font = Type::Small.font(ui);
-    R::ALL
+    let create = R::ALL
         .iter()
-        .map(|reason| {
-            ui.fonts_mut(|fonts| {
-                fonts
-                    .layout(
-                        reason.words().to_owned(),
-                        font.clone(),
-                        colors().muted,
-                        width,
-                    )
-                    .size()
-                    .y
-            })
-        })
-        .fold(Density::Read.control(), f32::max)
+        .map(|reason| small_height(ui, reason.words(), width))
+        .fold(0.0, f32::max);
+    let sides: f32 = sides
+        .iter()
+        .map(|reason| small_height(ui, reason, width))
+        .sum();
+    (create + sides).max(Density::Read.control())
 }
 
 fn cancel_action(word: Word) -> Action<'static> {
     Action::quiet(word.as_str()).density(Density::Read)
 }
 
+/// What one text field's line gave back.
+struct FieldLine {
+    response: Response,
+    side: bool,
+    create: bool,
+}
+
+/// One text field with its side action and, when Create follows it, Create: beside the field
+/// when the field keeps [`CREATE_FIELD_MIN`] beside them, else on an action line under it. The
+/// help goes under the line (and under the action line).
+fn field_line<R: CreateReasons>(
+    ui: &mut Ui,
+    part: CreateField<'_>,
+    help: Option<&str>,
+    room: f32,
+    create: Option<&Create<R>>,
+) -> FieldLine {
+    let side_width = part
+        .side
+        .as_ref()
+        .map_or(0.0, |side| side.action().natural_width(ui) + S);
+    let create_width = create.map_or(0.0, |create| create.action().natural_width(ui) + S);
+    let actions = part.side.is_some() || create.is_some();
+    let beside_width = room - side_width - create_width - 2.0 * S;
+    let beside = !actions || beside_width >= CREATE_FIELD_MIN;
+    let mut line = FieldLine {
+        response: ui.response(),
+        side: false,
+        create: false,
+    };
+    let draw_actions = |ui: &mut Ui, line: &mut FieldLine| {
+        if let Some(side) = &part.side {
+            line.side = side.action().show(ui).clicked() && side.reason().is_none();
+        }
+        if let Some(create) = create {
+            line.create = create.action().show(ui).clicked();
+        }
+    };
+    field(ui, part.label, help, None, |ui| {
+        let row = |ui: &mut Ui, add: &mut dyn FnMut(&mut Ui)| {
+            ui.allocate_ui_with_layout(
+                vec2(room, Density::Read.control()),
+                Layout::left_to_right(Align::Center),
+                |ui| {
+                    ui.spacing_mut().item_spacing.x = S;
+                    add(ui);
+                },
+            );
+        };
+        if beside {
+            let width = if actions { beside_width } else { room - 2.0 * S };
+            row(ui, &mut |ui| {
+                line.response = form_field(ui, part.id, part.label, part.text, width);
+                draw_actions(ui, &mut line);
+            });
+        } else {
+            // The actions do not fit beside the field: they take their own line under it, at
+            // the field's left edge, so neither is cut at the column's edge.
+            line.response = form_field(ui, part.id, part.label, part.text, room - 2.0 * S);
+            row(ui, &mut |ui| draw_actions(ui, &mut line));
+        }
+    });
+    if part.focus {
+        line.response.request_focus();
+    }
+    line
+}
+
 impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
     pub fn show(self, ui: &mut Ui) -> InlineCreateResponse {
+        let room = form_room(ui);
+        ui.scope(|ui| {
+            // Nothing in the form is wider than its room: a labelled field takes the
+            // available width.
+            ui.set_max_width(room);
+            self.show_in(ui, room)
+        })
+        .inner
+    }
+
+    fn show_in(self, ui: &mut Ui, room: f32) -> InlineCreateResponse {
         let mut out = InlineCreateResponse::default();
         let Some(create) = self.create else {
             return out;
         };
-        let room = ui.available_width().min(FORM_WIDTH);
         let count = self.parts.len();
+        let ends_with_dropdown = matches!(self.parts.last(), Some(CreatePart::Dropdown(_)));
+        // Every declared lock reason of a side action keeps its room on the kept line.
+        let sides: Vec<(Sentence, bool)> = self
+            .parts
+            .iter()
+            .filter_map(|part| match part {
+                CreatePart::Text(field) => field.side.as_ref().and_then(|side| side.lock.clone()),
+                _ => None,
+            })
+            .collect();
         let mut last_help = None;
         for (at, part) in self.parts.into_iter().enumerate() {
             let last = at + 1 == count;
@@ -2144,46 +2456,27 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
                 }
                 CreatePart::Text(part) if !last => {
                     // The field adds `L` after its help.
-                    let response =
-                        labelled_field(ui, part.id, part.label, part.text, part.help, None);
-                    if part.focus {
-                        response.request_focus();
-                    }
-                    out.fields.push(response);
+                    let help = part.help;
+                    let line = field_line::<R>(ui, part, help, room, None);
+                    out.side |= line.side;
+                    out.fields.push(line.response);
                 }
                 CreatePart::Text(part) => {
                     last_help = part.help;
-                    let side = part.side;
-                    let side_width = side.map_or(0.0, |word| {
-                        Action::secondary(word.as_str())
-                            .density(Density::Read)
-                            .natural_width(ui)
-                            + S
+                    let line = field_line(ui, part, None, room, Some(&create));
+                    out.side |= line.side;
+                    out.create |= line.create;
+                    out.fields.push(line.response);
+                }
+                CreatePart::Dropdown(dropdown) => {
+                    let help = if last { None } else { dropdown.help };
+                    if last {
+                        last_help = dropdown.help;
+                    }
+                    let response = field(ui, dropdown.label, help, None, |ui| {
+                        (dropdown.draw)(ui, room)
                     });
-                    let create_width = create.action().natural_width(ui) + S;
-                    field(ui, part.label, None, None, |ui| {
-                        ui.allocate_ui_with_layout(
-                            vec2(room, Density::Read.control()),
-                            Layout::left_to_right(Align::Center),
-                            |ui| {
-                                ui.spacing_mut().item_spacing.x = S;
-                                let width = (room - side_width - create_width - 2.0 * S).max(120.0);
-                                let response =
-                                    form_field(ui, part.id, part.label, part.text, width);
-                                if part.focus {
-                                    response.request_focus();
-                                }
-                                out.fields.push(response);
-                                if let Some(word) = side {
-                                    out.side = Action::secondary(word.as_str())
-                                        .density(Density::Read)
-                                        .show(ui)
-                                        .clicked();
-                                }
-                                out.create = create.action().show(ui).clicked();
-                            },
-                        );
-                    });
+                    out.dropdowns.push(response);
                 }
             }
         }
@@ -2192,9 +2485,45 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
         if let Some(help) = last_help.take() {
             super::help(ui, help);
         }
+        let cancel_shown = matches!(self.kept.cancel, Some((_, true)));
+        if ends_with_dropdown {
+            // The action line: Create, then Cancel, at the form's text edge. Above it every
+            // part has a fixed height, so a chosen value never moves it.
+            ui.allocate_ui_with_layout(
+                vec2(room, Density::Read.control()),
+                Layout::left_to_right(Align::Center),
+                |ui| {
+                    ui.spacing_mut().item_spacing.x = S;
+                    out.create |= create.action().show(ui).clicked();
+                    if let Some((word, true)) = self.kept.cancel {
+                        out.cancel |= cancel_action(word).show(ui).clicked();
+                    }
+                },
+            );
+        }
+        // Enter in a text field presses Create when nothing blocks it; Escape presses Cancel
+        // when Cancel shows. egui takes the keyboard from a one-line field on both keys.
+        let (enter, escape) = ui.input(|input| {
+            (
+                input.key_pressed(egui::Key::Enter),
+                input.key_pressed(egui::Key::Escape),
+            )
+        });
+        let left = out.fields.iter().any(Response::lost_focus);
+        if left && enter && create.blocked.is_none() && ui.is_enabled() {
+            out.create = true;
+        }
+        if left && escape && cancel_shown {
+            out.cancel = true;
+        }
         // The kept line: one fixed height for the life of the form, whatever it holds now.
-        let cancel = self.kept.cancel.map(|(word, _)| word);
-        let height = kept_line_height::<R>(ui, room, cancel);
+        let kept_cancel = if ends_with_dropdown {
+            None
+        } else {
+            self.kept.cancel
+        };
+        let declared: Vec<&str> = sides.iter().map(|(reason, _)| reason.as_str()).collect();
+        let height = kept_line_height::<R>(ui, room, kept_cancel.map(|(word, _)| word), &declared);
         let (line, _) = ui.allocate_exact_size(vec2(room, height), Sense::hover());
         // Its content goes in a child that does not allocate in `ui` again.
         let mut kept = ui.new_child(
@@ -2203,15 +2532,36 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
                 .layout(Layout::left_to_right(Align::Min)),
         );
         kept.spacing_mut().item_spacing.x = 0.0;
-        if let Some((word, true)) = self.kept.cancel {
-            out.cancel = cancel_action(word).line_start().show(&mut kept).clicked();
+        if let Some((word, true)) = kept_cancel {
+            // Cancel's padding hangs left of the text edge only where the clip shows it (a
+            // reader nested in a pane clips at its own text edge): its target is never cut.
+            let hang = line.left() - LINE_START_HANG >= kept.clip_rect().left() - 0.5;
+            let action = if hang {
+                cancel_action(word).line_start()
+            } else {
+                cancel_action(word)
+            };
+            out.cancel |= action.show(&mut kept).clicked();
             space(&mut kept, L);
         }
+        let mut reasons: Vec<&str> = sides
+            .iter()
+            .filter(|(_, locked)| *locked)
+            .map(|(reason, _)| reason.as_str())
+            .collect();
         if let Some(reason) = create.blocked {
-            let words = Type::Small
-                .rich(&kept, reason.words())
-                .color(colors().muted);
-            kept.add(egui::Label::new(words).wrap());
+            reasons.push(reason.words());
+        }
+        // Each reason once.
+        reasons.dedup();
+        if !reasons.is_empty() {
+            kept.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = 0.0;
+                for reason in reasons {
+                    let words = Type::Small.rich(ui, reason).color(colors().muted);
+                    ui.add(egui::Label::new(words).wrap());
+                }
+            });
         } else if let Some(preview) = self.kept.preview {
             preview_line(&mut kept, preview);
         }

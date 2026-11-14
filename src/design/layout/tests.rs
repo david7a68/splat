@@ -406,8 +406,18 @@ fn inline_create_moves_nothing_while_the_dm_types() {
     const CANCEL: Word = crate::word!("Cancel");
     const PREVIEW: &str = "Will create /home/dm/Obsidian/Vault/Campaigns/The Copper Coast and the Salt Road/Modules/Sessions/A very long folder name that goes on/Copper Coast/Campaign.md";
     let ctx = context();
-    let draw_at = |width: f32, reason: Option<TestReason>, cancel: bool, preview: bool| {
+    const LOCKED: &str = "Wait until the Library has loaded.";
+    // `lock`: None for a plain side action; Some(locked) for one with `locked_when`.
+    let draw_with = |width: f32,
+                     reason: Option<TestReason>,
+                     cancel: bool,
+                     preview: bool,
+                     lock: Option<bool>| {
         let (mut name, mut folder) = (String::from("Copper Coast"), String::from("/vault"));
+        let side = match lock {
+            None => SideAction::new(BROWSE),
+            Some(locked) => SideAction::new(BROWSE).locked_when(locked, crate::sentence!("Wait until the Library has loaded.")),
+        };
         let (nodes, painted) = frame_with(&ctx, vec2(width, 500.0), Vec::new(), |ui| {
             let _ = InlineCreate::new()
                 .field(
@@ -424,7 +434,7 @@ fn inline_create_moves_nothing_while_the_dm_types() {
                         "Folder",
                         &mut folder,
                     )
-                    .side_action(BROWSE)
+                    .side_action(side.clone())
                     .help("Splat keeps the notes here."),
                 )
                 .create(Create::primary(CREATE).blocked(reason))
@@ -439,6 +449,7 @@ fn inline_create_moves_nothing_while_the_dm_types() {
         let rects = ["Folder", "Browse…", "Add campaign", "Below"].map(|name| bounds(&nodes, name));
         (rects, nodes, painted)
     };
+    let draw_at = |width, reason, cancel, preview| draw_with(width, reason, cancel, preview, None);
     let draw = |reason, cancel, preview| draw_at(800.0, reason, cancel, preview);
     let (still, _, _) = draw(None, false, false);
     for reason in [None, Some(TestReason::NoFolder), Some(TestReason::Long)] {
@@ -515,6 +526,227 @@ fn inline_create_moves_nothing_while_the_dm_types() {
         narrow >= wide,
         "a narrower form wraps its tallest reason on more lines"
     );
+    // K4a gap 3: a side action locked with its reason. Locked, Browse is disabled and says the
+    // reason as its description and on the kept line; nothing moves when the lock comes and
+    // goes (the kept line keeps the reason's room), with any reason of Create's beside it.
+    for reason in [None, Some(TestReason::NoFolder), Some(TestReason::Long)] {
+        let (open, nodes, painted) = draw_with(800.0, reason, true, false, Some(false));
+        let browse = |nodes: &Nodes| {
+            nodes
+                .iter()
+                .find(|(_, node)| node.label() == Some("Browse…"))
+                .map(|(_, node)| (node.is_disabled(), node.description().map(str::to_owned)))
+                .expect("Browse")
+        };
+        assert_eq!(browse(&nodes), (false, None), "open: {reason:?}");
+        assert!(!painted.iter().any(|text| text.text == LOCKED));
+        let (locked, nodes, painted) = draw_with(800.0, reason, true, false, Some(true));
+        assert_eq!(open, locked, "a lock that comes and goes moves nothing: {reason:?}");
+        assert_eq!(browse(&nodes), (true, Some(LOCKED.to_owned())), "locked: {reason:?}");
+        let words = painted
+            .iter()
+            .find(|text| text.text == LOCKED)
+            .expect("the lock's reason is painted");
+        assert!(
+            words.rect.top() >= open[0].bottom() && words.rect.bottom() <= open[3].top() + 0.5,
+            "the lock's reason is on the kept line: {:?}",
+            words.rect
+        );
+        if let Some(reason) = reason {
+            let create = painted
+                .iter()
+                .find(|text| text.text == reason.words())
+                .expect("Create's reason is painted too");
+            assert!(
+                create.rect.top() >= words.rect.bottom() - 0.5
+                    && create.rect.bottom() <= open[3].top() + 0.5,
+                "both reasons fit the kept line"
+            );
+        }
+    }
+    // K4a gap 2: in a column whose clip is its text edge (a reader nested in a pane), the form
+    // takes the column's width: the actions go under the field before they are cut, Cancel
+    // does not hang past the clip, and every target is at least 24 px and inside the clip.
+    let in_column = |clip_left: f32, width: f32| {
+        let mut folder = "/home/dm/Obsidian/a very long folder name that scrolls inside its field".to_owned();
+        let column = Rect::from_min_size(pos2(100.0, 20.0), vec2(width, 400.0));
+        let clip = column.with_min_x(clip_left);
+        let (nodes, _) = frame_with(&ctx, vec2(1000.0, 500.0), Vec::new(), |ui| {
+            ui.scope_builder(egui::UiBuilder::new().max_rect(column), |ui| {
+                ui.set_clip_rect(clip);
+                let _ = InlineCreate::new()
+                    .field(
+                        CreateField::new(
+                            crate::field_id!("test_create_column").once(Once::Example),
+                            "Folder",
+                            &mut folder,
+                        )
+                        .side_action(BROWSE),
+                    )
+                    .create(Create::primary(CREATE).blocked(None::<TestReason>))
+                    .kept_line(KeptLine::new().cancel(CANCEL, true))
+                    .show(ui);
+            });
+        });
+        (
+            clip,
+            ["Folder", "Browse…", "Add campaign", "Cancel"].map(|name| bounds(&nodes, name)),
+        )
+    };
+    for width in [NARROWEST_PANE - 60.0, 300.0, 800.0] {
+        let (clip, [field, browse, create, cancel]) = in_column(100.0, width);
+        for (name, target) in [("Browse…", browse), ("Add campaign", create), ("Cancel", cancel)] {
+            assert!(
+                clip.expand(0.5).contains_rect(target)
+                    && target.height() >= 24.0
+                    && target.width() >= 24.0,
+                "{name} at {width}: {target:?} in {clip:?}"
+            );
+        }
+        assert!(field.right() <= clip.right() + 0.5, "the field ends inside the column");
+        let beside = (create.center().y - field.center().y).abs() < 1.0;
+        let under = create.top() >= field.bottom() && (browse.left() - field.left()).abs() < 1.0;
+        assert!(beside || under, "Create beside the field or on its own line: {width}");
+        assert_eq!(beside, width >= 800.0, "the actions wrap only when they do not fit: {width}");
+    }
+    // Where the clip has room, Cancel hangs its padding left of the text edge (line_start).
+    let (_, [_, _, _, cancel]) = in_column(0.0, 800.0);
+    assert!((cancel.left() - (100.0 - S)).abs() < 0.5, "Cancel hangs: {cancel:?}");
+    // K4a gap 1: a form that ends with a drop-down. Create, then Cancel, on an action line
+    // under the drop-down and its help; the action line keeps its y whatever is chosen,
+    // whatever the preview's length and whatever reason shows; the reasons and the preview
+    // are on the kept line under it.
+    const SHORT: &str = "Short notes";
+    const LONG_LABEL: &str =
+        "A customized standard session template with a very long name that the control cuts";
+    let draw_form = |events: Vec<egui::Event>,
+                     chosen: u8,
+                     reason: Option<TestReason>,
+                     preview: Option<&str>,
+                     focus: bool| {
+        let mut title = String::from("Ash on the Road");
+        let mut template = chosen;
+        let mut out = InlineCreateResponse::default();
+        let (nodes, painted) = frame_with(&ctx, vec2(800.0, 600.0), events, |ui| {
+            out = InlineCreate::new()
+                .field(
+                    CreateField::new(
+                        crate::field_id!("test_create_title").once(Once::Example),
+                        "Session title",
+                        &mut title,
+                    )
+                    .focus(focus),
+                )
+                .dropdown(
+                    CreateDropdown::new(
+                        "Template",
+                        Dropdown::new(
+                            crate::field_id!("test_create_template").once(Once::Example),
+                            "Session template",
+                        )
+                        .choice(0, SHORT)
+                        .choice(1, LONG_LABEL),
+                        &mut template,
+                    )
+                    .help("What the note starts with."),
+                )
+                .create(Create::primary(crate::word!("Create session")).blocked(reason))
+                .kept_line(KeptLine::new().cancel(CANCEL, true).preview(preview))
+                .show(ui);
+            let _ = Action::quiet("Below").show(ui);
+        });
+        (out, nodes, painted)
+    };
+    let starting = |nodes: &Nodes, prefix: &str| {
+        let found: Vec<_> = nodes
+            .iter()
+            .filter(|(_, node)| node.label().is_some_and(|label| label.starts_with(prefix)))
+            .collect();
+        assert_eq!(found.len(), 1, "one node starting {prefix:?}");
+        let b = found[0].1.bounds().expect("bounds");
+        Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32))
+    };
+    let actions = |nodes: &Nodes| {
+        ["Create session", "Cancel", "Below"].map(|name| bounds(nodes, name))
+    };
+    let (_, nodes, painted) = draw_form(Vec::new(), 0, None, None, false);
+    let still = actions(&nodes);
+    let [create, cancel, below] = still;
+    let title = bounds(&nodes, "Session title");
+    let template = starting(&nodes, "Session template");
+    let help = painted
+        .iter()
+        .find(|text| text.text == "What the note starts with.")
+        .expect("the drop-down's help");
+    assert!(
+        title.bottom() <= template.top()
+            && template.bottom() <= help.rect.top()
+            && help.rect.bottom() <= create.top(),
+        "the title, the drop-down, its help, then the action line"
+    );
+    assert!(
+        (create.center().y - cancel.center().y).abs() < 1.0 && create.right() <= cancel.left(),
+        "Cancel follows Create on the action line"
+    );
+    assert!((create.left() - title.left()).abs() <= 1.0, "the action line starts at the text edge");
+    for chosen in [0, 1] {
+        for reason in [None, Some(TestReason::NoFolder), Some(TestReason::Long)] {
+            for preview in [None, Some("Sessions/Session 1.md"), Some(PREVIEW)] {
+                let (_, nodes, painted) = draw_form(Vec::new(), chosen, reason, preview, false);
+                assert_eq!(actions(&nodes), still, "{chosen} {reason:?} {preview:?}");
+                let kept = |words: &str| {
+                    painted.iter().find(|text| text.text == words).is_some_and(|text| {
+                        text.rect.top() >= create.bottom() && text.rect.bottom() <= below.top() + 0.5
+                    })
+                };
+                if let Some(reason) = reason {
+                    assert!(kept(reason.words()), "the reason is on the kept line: {reason:?}");
+                } else if let Some(preview) = preview.filter(|preview| preview.len() < 40) {
+                    assert!(kept(preview), "the preview is on the kept line");
+                }
+            }
+        }
+    }
+    // Keyboard: the title, the drop-down, Create, Cancel.
+    let focused = |nodes: &Nodes| {
+        let id = ctx.memory(|memory| memory.focused())?;
+        nodes
+            .iter()
+            .find(|(node, _)| node.0 == id.value())
+            .and_then(|(_, node)| node.label().map(str::to_owned))
+    };
+    let key = |key: egui::Key| {
+        vec![egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        }]
+    };
+    let _ = draw_form(Vec::new(), 0, None, None, true);
+    let (_, nodes, _) = draw_form(Vec::new(), 0, None, None, false);
+    let mut order = vec![focused(&nodes)];
+    for _ in 0..3 {
+        let (_, nodes, _) = draw_form(key(egui::Key::Tab), 0, None, None, false);
+        order.push(focused(&nodes));
+    }
+    assert_eq!(
+        order,
+        ["Session title", "Session template: Short notes", "Create session", "Cancel"]
+            .map(|name| Some(name.to_owned())),
+        "the keyboard order"
+    );
+    // Enter in the field creates when nothing blocks; Escape cancels. Both leave the field.
+    for reason in [None, Some(TestReason::NoFolder)] {
+        let _ = draw_form(Vec::new(), 0, reason, None, true);
+        let (out, nodes, _) = draw_form(key(egui::Key::Enter), 0, reason, None, false);
+        assert_eq!(out.create, reason.is_none(), "Enter creates only when nothing blocks");
+        assert!(!out.cancel && focused(&nodes).is_none());
+    }
+    let _ = draw_form(Vec::new(), 0, None, None, true);
+    let (out, nodes, _) = draw_form(key(egui::Key::Escape), 0, None, None, false);
+    assert!(out.cancel && !out.create && focused(&nodes).is_none(), "Escape cancels");
 }
 
 /// Whether `after` is `before` with `letter` inserted at one place: every letter of `before`
