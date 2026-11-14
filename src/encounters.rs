@@ -2929,6 +2929,8 @@ pub struct Encounters {
     /// Why the last separation, or its Undo, failed, with its campaign and copy. A new
     /// separation or a working Undo ends it; it shows only in its campaign.
     separation_error: Option<SeparationFailure>,
+    /// The count of dropped results keys at the last end of dead results (`end_dead_results`).
+    dead_keys_seen: u64,
     /// Each group draft's member result (`MemberMark`), for both editors. It lives with the page,
     /// so a Discard and its Undo, which move the draft, keep the order.
     member_results: design::Results<MemberOwner, MemberMark>,
@@ -3930,14 +3932,19 @@ impl Encounters {
                 Err(mpsc::TryRecvError::Empty) => {}
             }
         }
-        self.end_dead_results();
+        // Only a dropped key can leave a dead result. Ending a result can drop the last copy of
+        // another draft (a removed group's Undo holds that group), so it looks again.
+        while self.dead_keys_seen != results_key::dead_keys() {
+            self.dead_keys_seen = results_key::dead_keys();
+            self.end_dead_results();
+        }
     }
     /// The member and editor results whose draft no longer exists end. A result watches its
     /// draft's key (`results_key`), which every copy of the draft shares: the open draft, a
     /// discard that Undo discard restores, a group a removed group's Undo holds. A draft that is
     /// dropped (closed, discarded for good, read again, another campaign's) drops its key with
-    /// it, so nothing marks that end. The cost is the number of stored results, a few. The
-    /// editor results go first: a removed group's Undo holds that group's key.
+    /// it, so nothing marks that end. It runs only after a key was dropped, and costs the
+    /// number of stored results. The editor results go first: a removed group's Undo holds that group's key.
     fn end_dead_results(&mut self) {
         self.editor_results
             .end_unreachable(|mark| mark.draft.alive());
@@ -9117,32 +9124,63 @@ mod tests {
             .body
             .push_str("Ash falls on the ford.");
         harness.run_steps(2);
-        // Review 2 of PR 347 (P2-1): frames that build the real footer and run `poll`, with the
-        // draft dirty, no discard held and nothing ended, check only the stored results' keys:
-        // the work is the number of results, and the groups the page holds add nothing to it.
+        // Review 2 of PR 347 (P2-1): 20 groups join the draft, each with one member result.
+        // After that settles, frames that build the real footer (`editor_messages` ->
+        // `kept_results` -> `expire_discards`) and run `poll`, with the draft dirty and no
+        // discard held, check no result key at all; so does `poll` with no footer (another page
+        // shown). Then the groups leave: their keys drop, and the next `poll` ends their results.
         let checks = || KEY_CHECKS.with(std::cell::Cell::get);
-        let start = checks();
-        harness.run_steps(4);
-        let idle = checks() - start;
-        harness
-            .state_mut()
-            .draft
-            .as_mut()
-            .unwrap()
-            .groups
-            .extend((0..20).map(|_| GroupDraft::new()));
+        let added: Vec<MemberOwner> = {
+            let page = harness.state_mut();
+            let groups: Vec<GroupDraft> = (0..20).map(|_| GroupDraft::new()).collect();
+            let owners: Vec<MemberOwner> = groups
+                .iter()
+                .map(|group| MemberOwner {
+                    root: active.path.clone(),
+                    draft: group.results_key(),
+                })
+                .collect();
+            for (group, owner) in groups.iter().zip(&owners) {
+                page.member_results.record(MemberMark {
+                    owner: owner.clone(),
+                    draft: group.results_watch(),
+                    undo: groups::MemberUndo::Unread {
+                        line: 1,
+                        row: "| 1 | Wolf |\n".into(),
+                        name: "Wolf".into(),
+                    },
+                });
+            }
+            page.draft.as_mut().unwrap().groups.extend(groups);
+            owners
+        };
+        harness.run_steps(2);
         let start = checks();
         harness.run_steps(4);
         assert_eq!(
             checks() - start,
-            idle,
-            "20 more groups add no work to an unchanged frame"
+            0,
+            "an unchanged frame with the footer checks no result key"
         );
-        assert!(
-            idle <= 8,
-            "one key check per stored result and pass: {idle}"
+        let ctx = harness.ctx.clone();
+        let campaigns = crate::campaigns::Campaigns::default();
+        let start = checks();
+        for _ in 0..4 {
+            harness.state_mut().poll(&ctx, &campaigns);
+        }
+        assert_eq!(
+            checks() - start,
+            0,
+            "an unchanged frame on another page checks no result key"
         );
         harness.state_mut().draft.as_mut().unwrap().groups.clear();
+        harness.state_mut().poll(&ctx, &campaigns);
+        assert!(
+            added
+                .iter()
+                .all(|owner| harness.state().member_results.get(owner).is_none()),
+            "the groups left the draft: their results end at the next poll"
+        );
         harness.run_steps(1);
         *hold.borrow_mut() = Some(None);
         harness.get_by_label("Undo replace").click();
