@@ -13,8 +13,7 @@ const SPELL: &str = "Fireball";
 const SESSION: &str = "The Vault";
 const UNREAD: &str = "Splat could not read this run’s saved Undo steps";
 const DISMISS: &str = "Dismiss the Undo message";
-const LATER: &str =
-    "A later fight or rest was played, so this fight cannot go on. Start a new run to play it again.";
+const LATER: &str = "A later fight or rest was played, so this fight cannot go on. Start a new run to play it again.";
 /// The same reason for a fight whose encounter is deleted: only its cause.
 const LATER_GONE: &str = "A later fight or rest was played, so this fight cannot go on.";
 const NO_TIMELINE: &str =
@@ -1081,7 +1080,17 @@ pub fn run(d: &mut Driver<'_>) {
         "While the warning shows, Undo's reason says only Nothing to undo",
     );
     d.state("undo-steps-unread", Sizes::All);
+    let add_at = |d: &mut Driver<'_>| d.at_size(DEFAULT, |d| d.place_of("Add to fight"));
+    let before = add_at(d);
     open_lookup(d);
+    // iter-28-R FK8: Next turn's key letter hides beside Lookup, but its room stays, so `Add to
+    // fight` keeps its x.
+    let after = add_at(d);
+    d.observe(
+        "iter-28-R-FK8",
+        matches!((before, after), (Some(a), Some(b)) if (a.left() - b.left()).abs() < 0.5),
+        format!("Add to fight before and beside Lookup: {before:?} {after:?}"),
+    );
     whole_at_every_size(
         d,
         "T17.6",

@@ -224,6 +224,7 @@ pub fn show(
     for at in 0..lines.len() {
         if let Some(gone) = line_row(
             ui,
+            id,
             name,
             lines,
             at,
@@ -254,6 +255,8 @@ pub fn show(
     *lines != before
 }
 
+const LOOT_LINE: design::FieldName = crate::field_id!("loot_line");
+
 /// One line. Returns its place when the DM removes it.
 #[allow(
     clippy::disallowed_methods,
@@ -261,6 +264,7 @@ pub fn show(
 )]
 fn line_row(
     ui: &mut egui::Ui,
+    owner: egui::Id,
     name: &str,
     lines: &mut [String],
     at: usize,
@@ -360,8 +364,10 @@ fn line_row(
             _ => {
                 let mut words = line.clone();
                 let width = (ui.available_width() - menu).max(120.0);
-                let response = design::text_input(
+                // The field belongs to this list (its caller's id) and, by its label, to its line.
+                let response = design::line_field(
                     ui,
+                    LOOT_LINE.of(design::TextKey::from_data(format!("{owner:?}"))),
                     &format!("{name} loot line {}", at + 1),
                     &mut words,
                     "What the party finds",
@@ -394,6 +400,8 @@ fn line_row(
             });
         });
     });
+    // N12: a list row, so a footer never cuts through it.
+    design::register_row(ui, row.response.rect);
     // Below the row, under the key it is about, so the row stays one line.
     if let Some(reason) = reason {
         ui.horizontal(|ui| {

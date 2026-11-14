@@ -840,7 +840,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/loot_editor.rs",
             "line_row",
-            &[Ban::Layout(1), Ban::Extras(1)],
+            &[Ban::Extras(1), Ban::RowKey(1)],
         ),
         ("src/loot_editor.rs", "table_menu", &[Ban::Layout(1)]),
         (

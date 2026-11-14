@@ -972,8 +972,7 @@ const REST_LOG: &str = "Party HP is full after the long rest.";
 /// The Undo step that puts back the HP a Setup had before the rest.
 const SAVED_HP_STEP: &str = "use saved HP";
 /// Why Continue fight is not offered: a fight or a rest has a later place in the order of play.
-pub(crate) const CONTINUE_LATER: &str =
-    "A later fight or rest was played, so this fight cannot go on. Start a new run to play it again.";
+pub(crate) const CONTINUE_LATER: &str = "A later fight or rest was played, so this fight cannot go on. Start a new run to play it again.";
 /// Why Continue fight is not offered: the Timeline has no event for this fight.
 const CONTINUE_NO_EVENT: &str =
     "This fight is not on the Timeline, so it cannot go on. Start a new run to play it again.";
@@ -9264,8 +9263,14 @@ mod tests {
         // FI1: a deleted encounter cannot start a new run, so its reason keeps only the cause.
         // While the encounter exists, and for a reason that names no new run, the words stay.
         for (reason, gone) in [
-            (CONTINUE_LATER, "A later fight or rest was played, so this fight cannot go on."),
-            (CONTINUE_NO_EVENT, "This fight is not on the Timeline, so it cannot go on."),
+            (
+                CONTINUE_LATER,
+                "A later fight or rest was played, so this fight cannot go on.",
+            ),
+            (
+                CONTINUE_NO_EVENT,
+                "This fight is not on the Timeline, so it cannot go on.",
+            ),
             (CONTINUE_NEEDS_TIMELINE, CONTINUE_NEEDS_TIMELINE),
             (CONTINUE_DISK_CHANGED, CONTINUE_DISK_CHANGED),
         ] {
@@ -9274,7 +9279,10 @@ mod tests {
             assert!(!continue_reason(reason, false).contains("new run"));
             // FJ4, FK4 (iter-28-R): the sentence stands where Continue fight would be, so each
             // form says that result; `first` with no object is not a result.
-            for shown in [continue_reason(reason, true), continue_reason(reason, false)] {
+            for shown in [
+                continue_reason(reason, true),
+                continue_reason(reason, false),
+            ] {
                 assert!(
                     shown.contains("cannot go on") || shown.contains("to continue this fight"),
                     "the reason says the fight cannot go on: {shown}"

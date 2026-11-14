@@ -1759,8 +1759,12 @@ impl Run {
                         ui.scope_builder(egui::UiBuilder::new().max_rect(field), |ui| {
                             let name = format!("Initiative for {}", p.name);
                             let text = self.setup_inputs.entry(index).or_default();
-                            let response = design::number_field(
+                            // The field's id is its owner's identity (this run, this
+                            // participant), not its name: a rename or a row with the same
+                            // name never takes over its text, cursor or selection.
+                            let response = design::number_field_with_id(
                                 ui,
+                                egui::Id::new(("run_initiative", self.id, &p.key)),
                                 &name,
                                 text,
                                 "",
@@ -6937,8 +6941,9 @@ fn name_lines(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> (Ar
 /// FK1 (iter-27-R): the dock's selected name in its slot `room` wide, in the text colour. Whole
 /// on one line in `Heading`; else whole in `Small` on up to two lines that share one control's
 /// height; else two `Small` lines of whole words that end in `…` and keep a copy number or
-/// letter (`Ember Cultist of the… 12`); else the first word's letters and `…`. Hover and the
-/// accessible name hold it whole.
+/// letter (`Ember Cultist of the… 12`); a form on one line takes the next word's first letters
+/// onto the second (SK1: `Seraphina Thorn…`); else the first word's letters and `…`. Hover
+/// and the accessible name hold it whole.
 pub(super) fn dock_name_shown(ui: &egui::Ui, name: &str, room: f32) -> Arc<Galley> {
     let layout = |text: &str, font: egui::FontId, line_height: Option<f32>| {
         let mut job = egui::text::LayoutJob::single_section(
@@ -6986,6 +6991,30 @@ pub(super) fn dock_name_shown(ui: &egui::Ui, name: &str, room: f32) -> Arc<Galle
         }
         let shown = format!("{}{end}", kept.join(" ").trim_end_matches([',', ';', ':']));
         if let Some(galley) = fits(&shown) {
+            // SK1: a form on one line, with only `…` on the second, or with the first word
+            // alone shows no more than that word. While the next word's first
+            // letters fit there, they show (`Seraphina Thorn…`), so the slot keeps more of
+            // the name than its first word.
+            let second_empty = galley.rows.len() < DOCK_NAME_LINES
+                || kept.len() == 1
+                || galley
+                    .rows
+                    .last()
+                    .is_some_and(|row| row.text().trim() == end.trim());
+            if second_empty && let Some(next) = body.get(kept.len()) {
+                let letters: Vec<char> = next.chars().collect();
+                let partial = (2..letters.len()).rev().find_map(|count| {
+                    fits(&format!(
+                        "{} {}{end}",
+                        kept.join(" "),
+                        letters[..count].iter().collect::<String>()
+                    ))
+                    .filter(|galley| galley.rows.len() == DOCK_NAME_LINES)
+                });
+                if let Some(partial) = partial {
+                    return partial;
+                }
+            }
             return galley;
         }
     }
@@ -8502,8 +8531,9 @@ fn condition_links(
         });
         // FL9: 2 px below the words' baseline, as reader links do; at the row's bottom the line
         // touched the next row's turn stroke.
-        let underline = link_underline_y(galley, link_start)
-            .map_or(word.bottom(), |y| ui.painter().round_to_pixel_center(origin.y + y));
+        let underline = link_underline_y(galley, link_start).map_or(word.bottom(), |y| {
+            ui.painter().round_to_pixel_center(origin.y + y)
+        });
         ui.painter().hline(
             word.x_range(),
             underline,
@@ -10773,7 +10803,11 @@ mod tests {
                     };
                     let text = layout.second_line.as_ref().unwrap().text().to_owned();
                     let words: String = text.chars().take(span.end).collect();
-                    let kind = if words.ends_with("more") { "more" } else { "changes" };
+                    let kind = if words.ends_with("more") {
+                        "more"
+                    } else {
+                        "changes"
+                    };
                     let before = words.trim_end_matches(kind).trim_end_matches('\u{a0}');
                     let hidden = before
                         .rsplit([' ', '\u{a0}'])
@@ -10791,7 +10825,10 @@ mod tests {
                     let before = before[..before.len() - hidden.len()]
                         .trim_end_matches([' ', '\u{a0}', '·']);
                     if kind == "more" {
-                        assert!(!before.ends_with("Changed"), "iter-28-R-FJ3 at {width}: {text}");
+                        assert!(
+                            !before.ends_with("Changed"),
+                            "iter-28-R-FJ3 at {width}: {text}"
+                        );
                     } else {
                         assert!(
                             before.ends_with(icons::CHANGED) && !text.contains("Changed"),
@@ -11099,8 +11136,16 @@ mod tests {
                     .to_vec();
                 let result = "11 vs AC 13 · 12 damage";
                 let row = |badge| {
-                    RowLayout::new(ui, 442.0, &three, None, design::RUN_COMPACT, RowFit::Natural, 0.0)
-                        .with_badge(ui, badge)
+                    RowLayout::new(
+                        ui,
+                        442.0,
+                        &three,
+                        None,
+                        design::RUN_COMPACT,
+                        RowFit::Natural,
+                        0.0,
+                    )
+                    .with_badge(ui, badge)
                 };
                 let (without, with) = (row(None), row(Some(result)));
                 assert!(!with.badge_below, "iter-28-R-R8: no line of its own");
@@ -12126,8 +12171,12 @@ mod tests {
             run.borrow().setup_inputs.get(&2).map(String::as_str),
             Some("10")
         );
+        // iter-28-R (number field owner): the open field belongs to its participant, not to
+        // the words of its name. A rename while it is open keeps its focus and its selection.
+        run.borrow_mut().state.participants[2].name = "Guard Captain".into();
+        harness.run_steps(2);
         harness
-            .get_by_label("Initiative for Guard 3")
+            .get_by_label("Initiative for Guard Captain")
             .type_text("18");
         harness.run_steps(1);
         harness.key_press(Key::Enter);
@@ -13080,15 +13129,53 @@ mod tests {
                             words.last().is_none_or(|word| !["of", "the"].contains(word)),
                             "{room}: {text}"
                         );
-                        // Whole words, unless the first word alone is cut by letters.
+                        // Whole words, unless the first word alone is cut by letters, or (SK1)
+                        // the last word's letters fill the second line.
                         let written: Vec<&str> = name.split_whitespace().collect();
+                        let whole = words.len().saturating_sub(usize::from(shown.rows.len() == 2));
                         assert!(
                             words.len() <= 1
-                                || words.iter().zip(&written).all(|(a, b)| {
+                                || words.iter().zip(&written).take(whole).all(|(a, b)| {
                                     a.trim_end_matches(',') == b.trim_end_matches(',')
                                 }),
                             "{room}: {text}"
                         );
+                        assert!(
+                            words.iter().zip(&written).all(|(a, b)| {
+                                b.trim_end_matches(',').starts_with(a.trim_end_matches(','))
+                            }),
+                            "{room}: {text}"
+                        );
+                        // iter-28-R SK1: a cut name with more than one word never leaves the
+                        // second line empty while a word's first letters fit there.
+                        if words.len() == 1 && written.len() > 1 && !kept.is_empty() {
+                            let next: Vec<char> = written[1].chars().take(2).collect();
+                            let longer = format!(
+                                "{} {}…{end}",
+                                written[0],
+                                next.iter().collect::<String>()
+                            );
+                            let two = {
+                                let mut job = egui::text::LayoutJob::single_section(
+                                    longer.clone(),
+                                    egui::TextFormat {
+                                        font_id: font.clone(),
+                                        line_height: Some(
+                                            Density::Read.control() / DOCK_NAME_LINES as f32,
+                                        ),
+                                        ..Default::default()
+                                    },
+                                );
+                                job.wrap.max_width = room;
+                                ui.fonts_mut(|fonts| fonts.layout_job(job))
+                            };
+                            assert!(
+                                kept != written[0]
+                                    || two.rows.len() > DOCK_NAME_LINES
+                                    || two.size().x > room + 0.5,
+                                "iter-28-R-SK1 {room}: {text}, but {longer:?} fits"
+                            );
+                        }
                     }
                     // The rule reaches each of its forms: whole, cut by words.
                     assert!(forms.contains(name), "{name}: {forms:?}");
@@ -13214,7 +13301,9 @@ mod tests {
                     0.0,
                 );
                 let detail = layout.second_line.as_ref().unwrap();
-                assert!(detail.text().contains("Blessed") && detail.text().contains(icons::CHANGED));
+                assert!(
+                    detail.text().contains("Blessed") && detail.text().contains(icons::CHANGED)
+                );
                 assert_eq!(detail.rows.len(), 1, "{}", detail.text());
             });
         });
