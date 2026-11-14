@@ -206,24 +206,21 @@ macro_rules! new_result {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ContentPress {
     Undo,
+    /// An encounter a removal left without creatures, by its place in the removal's list.
     Open(usize),
     WriteCampaign,
-}
-
-/// A broken manifest's repairs.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ManifestFix {
-    Open,
-    Write,
-}
-
-/// An unavailable package's repairs.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum PackageFix {
-    UseFolder,
-    Register,
-    Find,
-    Remove,
+    /// A broken manifest's choices, by its package.
+    OpenManifest(Uuid),
+    WriteManifest(Uuid),
+    /// An unavailable package's choices, by its place among the campaign's selections.
+    UseFolder(usize),
+    Register(usize),
+    Find(usize),
+    Remove(usize),
+    /// An encounter that uses an unavailable package's creatures.
+    OpenEntry(Uuid),
+    /// The package's details link: its words are on hover; the press does nothing.
+    Details,
 }
 
 /// What the Campaign page says is wrong, in its footer or its body. The tone comes from the
@@ -256,6 +253,8 @@ enum ContentFault<'a> {
     Unavailable {
         message: &'a str,
         it_was: Option<&'a str>,
+        /// The encounters that use its creatures (`A and B`), and how many.
+        used_by: Option<(&'a str, usize)>,
     },
     /// A Campaign.md flag or a missing dependency (the content layer's words).
     Flag(&'a str),
@@ -327,12 +326,24 @@ impl design::outcome::Fault for ContentFault<'_> {
                 package, problem, ..
             } => outside(&manifest_message(package, problem))
                 .unwrap_or(crate::sentence!("The package manifest cannot be used.")),
-            Self::Unavailable { message, it_was } => {
-                let first =
+            Self::Unavailable {
+                message,
+                it_was,
+                used_by,
+            } => {
+                let mut words =
                     outside(message).unwrap_or(crate::sentence!("This package is not available."));
-                match it_was {
-                    Some(folder) => first.then(crate::sentence!("It was in {}/.", folder)),
-                    None => first,
+                if let Some(folder) = it_was {
+                    words = words.then(crate::sentence!("It was in {}/.", folder));
+                }
+                match used_by {
+                    Some((names, 1)) => {
+                        words.then(crate::sentence!("{} uses its creatures.", names))
+                    }
+                    Some((names, _)) => {
+                        words.then(crate::sentence!("{} use its creatures.", names))
+                    }
+                    None => words,
                 }
             }
             Self::LeftWithout(words) => (*words).clone(),
@@ -495,7 +506,7 @@ fn find_package_folder(
             |name| name.to_string_lossy().into_owned(),
         );
         return Err(format!(
-            "{picked}/ holds a different package. Choose the folder that holds {}.",
+            "The folder {picked}/ holds a different package. Choose the folder that holds {}.",
             name.unwrap_or("this package")
         ));
     }
@@ -532,11 +543,7 @@ fn removal_words(
     users: &[(Uuid, String)],
 ) -> (design::outcome::Sentence, Option<design::outcome::Sentence>) {
     let warning = (!users.is_empty()).then(|| {
-        let names = users
-            .iter()
-            .map(|(_, name)| name.as_str())
-            .collect::<Vec<_>>()
-            .join(", ");
+        let names = and_list(users.iter().map(|(_, name)| name.as_str()));
         if users.len() == 1 {
             crate::sentence!("{} now has creatures Splat cannot find.", names)
         } else {
@@ -547,6 +554,16 @@ fn removal_words(
         crate::sentence!("{} removed from this campaign.", name),
         warning,
     )
+}
+
+/// Names as one phrase: `A`, `A and B`, `A, B and C`.
+fn and_list<'a>(names: impl Iterator<Item = &'a str>) -> String {
+    let names: Vec<&str> = names.collect();
+    match names.split_last() {
+        None => String::new(),
+        Some((last, [])) => (*last).to_owned(),
+        Some((last, before)) => format!("{} and {last}", before.join(", ")),
+    }
 }
 
 /// An apply's result: how many changes it made, and where the old notes are.
@@ -587,15 +604,7 @@ struct Unavailable {
 /// The page's package warnings, gathered once a frame (round 26 FD1).
 #[derive(Default)]
 struct PackageWarnings {
-    /// Each faulty manifest's words.
-    manifests: Vec<String>,
     unavailable: Vec<Unavailable>,
-}
-
-impl PackageWarnings {
-    fn is_empty(&self) -> bool {
-        self.manifests.is_empty() && self.unavailable.is_empty()
-    }
 }
 
 /// A package row's count, in one form: `All chosen · 2,065 entries`, `None chosen · 6 entries`,
@@ -1048,7 +1057,7 @@ impl CampaignContent {
                 ..
             })
         );
-        self.press_result(paned.pressed);
+        self.press_result(ui.ctx(), campaigns, &active, paned.pressed);
         if write {
             self.write_campaign(campaigns, &active);
         }
@@ -1133,15 +1142,6 @@ impl CampaignContent {
             return;
         }
         self.reconcile_section(ui, campaigns, &active);
-        // The packages' faults (a broken manifest, a chosen package that is not available) stand
-        // above the package list, each with its repairs, help and details (body faults).
-        let warnings = self.package_warnings_of(campaigns);
-        if !warnings.is_empty() {
-            ui.scope(|ui| {
-                ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
-                self.package_warnings(ui, campaigns, &active, warnings.unavailable);
-            });
-        }
         if self.snapshot.is_some() {
             // The package list fills the rest of the window, and keeps room for a few rows when
             // repairs above it are tall; then the page scrolls.
@@ -1242,6 +1242,8 @@ impl CampaignContent {
                 messages.outcome(FaultMessage::new(&ContentFault::Error(error)));
             }
         }
+        let warnings = self.package_warnings_of(campaigns);
+        self.package_messages(&mut messages, campaigns, &warnings.unavailable);
         messages
     }
 
@@ -1389,7 +1391,13 @@ impl CampaignContent {
     /// Act on a press in the page's footer. An Undo acts on the result its line showed, by its
     /// ticket: a result that a newer one replaced is gone, and nothing happens. A failed Undo
     /// keeps its result and its Undo, with the failure in the page's errors.
-    fn press_result(&mut self, pressed: Option<design::outcome::Press<ContentPress>>) {
+    fn press_result(
+        &mut self,
+        ctx: &egui::Context,
+        campaigns: &Campaigns,
+        active: &Campaign,
+        pressed: Option<design::outcome::Press<ContentPress>>,
+    ) {
         let Some(design::outcome::Press { id, ticket }) = pressed else {
             return;
         };
@@ -1408,7 +1416,9 @@ impl CampaignContent {
                 let _ = results.undo_by(ticket, |kept| self.undo_result(kept.0.kind));
                 self.results = results;
             }
-            (ContentPress::Undo, None) | (ContentPress::WriteCampaign, _) => {}
+            (ContentPress::Undo, None)
+            | (ContentPress::WriteCampaign | ContentPress::Details, _) => {}
+            (press, _) => self.package_press(ctx, campaigns, active, press),
         }
     }
 
@@ -1942,16 +1952,6 @@ impl CampaignContent {
             return PackageWarnings::default();
         };
         let catalogue = &snapshot.catalogue;
-        let manifests = campaigns
-            .modules()
-            .iter()
-            .filter_map(|module| {
-                catalogue
-                    .manifest_problems
-                    .get(&module.id)
-                    .map(|problem| manifest_message(&module.name, problem))
-            })
-            .collect();
         let unavailable = snapshot
             .document
             .selections
@@ -2007,204 +2007,252 @@ impl CampaignContent {
                 }
             })
             .collect();
-        PackageWarnings {
-            manifests,
-            unavailable,
+        PackageWarnings { unavailable }
+    }
+
+    /// The package faults in the page's footer (round 26 FD1: so the package list keeps one y):
+    /// each broken manifest and each chosen package that is not available, with its choices. A
+    /// choice that writes waits for the page's unsaved changes (`locked_when`: its reason's room
+    /// stays, so nothing moves).
+    fn package_messages(
+        &self,
+        messages: &mut design::outcome::Messages<'_, ContentPress>,
+        campaigns: &Campaigns,
+        unavailable: &[Unavailable],
+    ) {
+        use design::outcome::{Choice, ChoiceKind, FaultMessage, MessageChoice};
+        let Some(snapshot) = &self.snapshot else {
+            return;
+        };
+        let catalogue = &snapshot.catalogue;
+        let unsaved = self.dirty();
+        let wait = || crate::sentence!("Save or discard campaign changes first.");
+        for module in campaigns.modules() {
+            let Some(problem) = catalogue.manifest_problems.get(&module.id) else {
+                continue;
+            };
+            let path = &catalogue.entries[&module.id].entry.path;
+            let exists = manifest_on_disk(module, path, problem);
+            let fault = FaultMessage::new(&ContentFault::Manifest {
+                package: &module.name,
+                problem,
+                on_disk: exists,
+            });
+            let fault = if exists {
+                fault
+                    .choice(Choice::new(
+                        MessageChoice::Choice("Open in Library"),
+                        ContentPress::OpenManifest(module.id),
+                    ))
+                    .choice(
+                        Choice::named_as(
+                            ChoiceKind::Safe,
+                            crate::choice!("Replace with a basic {}", path),
+                            ContentPress::WriteManifest(module.id),
+                        )
+                        // What Replace keeps and replaces, as the Library says it.
+                        .hover(crate::content_workspace::manifest_replace_consequence(path))
+                        .locked_when(unsaved, wait()),
+                    )
+            } else {
+                fault.choice(
+                    Choice::new(
+                        MessageChoice::Choice("Write the manifest again"),
+                        ContentPress::WriteManifest(module.id),
+                    )
+                    .locked_when(unsaved, wait()),
+                )
+            };
+            messages.outcome(fault);
+        }
+        let unsaved_any = unsaved || self.repairs.iter().any(Repair::dirty);
+        for Unavailable {
+            index: i,
+            selection,
+            known,
+            unregistered,
+            relocated,
+            message,
+            ..
+        } in unavailable
+        {
+            let it_was = known
+                .as_ref()
+                .filter(|_| relocated.is_none())
+                .map(|known| folder_words(&known.path));
+            let users = selection.campaign_users(catalogue);
+            let used_by = (!users.is_empty()).then(|| {
+                (
+                    and_list(users.iter().map(|(_, name)| name.as_str())),
+                    users.len(),
+                )
+            });
+            let mut fault = FaultMessage::new(&ContentFault::Unavailable {
+                message,
+                it_was: it_was.as_deref(),
+                used_by: used_by
+                    .as_ref()
+                    .map(|(names, count)| (names.as_str(), *count)),
+            });
+            if relocated.is_some() {
+                fault = fault.choice(
+                    Choice::new(
+                        MessageChoice::Choice("Use this folder"),
+                        ContentPress::UseFolder(*i),
+                    )
+                    .locked_when(unsaved, wait()),
+                );
+            }
+            if *unregistered && relocated.is_none() && known.is_some() {
+                fault = fault.choice(
+                    Choice::new(
+                        MessageChoice::Choice("Register it again"),
+                        ContentPress::Register(*i),
+                    )
+                    .locked_when(unsaved, wait()),
+                );
+            }
+            // Round 25 family: a message action without an icon has the secondary border.
+            fault = fault
+                .choice(
+                    Choice::new(
+                        MessageChoice::Choice("Find the folder…"),
+                        ContentPress::Find(*i),
+                    )
+                    .locked_when(
+                        unsaved_any,
+                        crate::sentence!("Save or discard changes before finding the folder."),
+                    ),
+                )
+                .choice(Choice::new(
+                    MessageChoice::Choice("Remove from this campaign"),
+                    ContentPress::Remove(*i),
+                ));
+            // The encounters that use its creatures, each a way to open it.
+            for (id, name) in users {
+                fault = fault.choice(Choice::named_as(
+                    ChoiceKind::Safe,
+                    crate::choice!("Open {}", name),
+                    ContentPress::OpenEntry(id),
+                ));
+            }
+            // The package's identifier stays out of the words: on hover of its details link.
+            fault = fault.choice(
+                Choice::new(
+                    MessageChoice::Link {
+                        word: "Technical details",
+                        hover: None,
+                    },
+                    ContentPress::Details,
+                )
+                .hover(format!("Package reference: {}", selection.package.label())),
+            );
+            messages.outcome(fault);
         }
     }
 
-    /// Draw the package faults above the package list: each broken manifest and each chosen
-    /// package that is not available, with its repairs. A repair that writes waits for the
-    /// page's unsaved changes (`locked_when`: its reason's room stays, so nothing moves).
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "the packages’ faults stand above the package list with their repairs, help and details: body faults; the replace consequence is the content workspace’s words"
-    )]
-    fn package_warnings(
+    /// Do a package fault's choice from the footer: on the state this frame reads, by the
+    /// package's id or the selection's place.
+    fn package_press(
         &mut self,
-        ui: &mut egui::Ui,
+        ctx: &egui::Context,
         campaigns: &Campaigns,
         active: &Campaign,
-        unavailable: Vec<Unavailable>,
+        press: ContentPress,
     ) {
-        use design::outcome::BodyFault;
-        let unsaved = self.dirty();
-        let wait = || crate::sentence!("Save or discard campaign changes first.");
+        let unavailable = self.package_warnings_of(campaigns).unavailable;
         let Some(snapshot) = self.snapshot.as_mut() else {
             return;
         };
         let catalogue = &snapshot.catalogue;
         let document = &mut snapshot.document;
-        for module in campaigns.modules() {
-            if let Some(problem) = catalogue.manifest_problems.get(&module.id) {
-                let path = &catalogue.entries[&module.id].entry.path;
-                let exists = manifest_on_disk(module, path, problem);
-                let fault = ContentFault::Manifest {
-                    package: &module.name,
-                    problem,
-                    on_disk: exists,
-                };
-                let fault = if exists {
-                    BodyFault::new(&fault)
-                        .repair(design::outcome::Repair::new(
-                            "Open in Library",
-                            ManifestFix::Open,
-                        ))
-                        .repair(
-                            design::outcome::Repair::new(
-                                crate::choice!("Replace with a basic {}", path),
-                                ManifestFix::Write,
-                            )
-                            // The Library's words for the same repair (one owner of the phrase).
-                            .help(
-                                design::outcome::Sentence::outside(
-                                    crate::content_workspace::manifest_replace_consequence(path),
-                                )
-                                .unwrap_or(crate::sentence!("The entries stay unchanged.")),
-                            )
-                            .locked_when(unsaved, wait()),
-                        )
-                } else {
-                    BodyFault::new(&fault).repair(
-                        design::outcome::Repair::new(
-                            "Write the manifest again",
-                            ManifestFix::Write,
-                        )
-                        .locked_when(unsaved, wait()),
-                    )
-                };
-                match fault.show(ui) {
-                    Some(ManifestFix::Write) => {
-                        match crate::content_workspace::ManifestWrite::write_as(
-                            module, path, exists,
-                        ) {
-                            Ok(write) => {
-                                new_result!(self, PageResult::ManifestWrite(module.id));
-                                self.manifest_writes.retain(|(id, _, _)| *id != module.id);
-                                self.manifest_writes
-                                    .push((module.id, module.name.clone(), write));
-                                self.refresh_pending = true;
-                            }
-                            Err(error) => self.error = Some(error),
-                        }
-                    }
-                    Some(ManifestFix::Open) => {
-                        ui.ctx().data_mut(|data| {
-                            data.insert_temp(
-                                egui::Id::new("open_library_repair"),
-                                module.path.join(path),
-                            )
-                        });
-                    }
-                    None => {}
-                }
-            }
-        }
-        // Unavailable registrations and references remain explicit and editable.
         let mut remove = None;
-        let unsaved_any =
-            document.selections != self.saved_selections || self.repairs.iter().any(Repair::dirty);
-        for Unavailable {
+        match press {
+            ContentPress::OpenManifest(id) | ContentPress::WriteManifest(id) => {
+                let Some(module) = campaigns.modules().iter().find(|module| module.id == id) else {
+                    return;
+                };
+                let (Some(problem), Some(entry)) = (
+                    catalogue.manifest_problems.get(&id),
+                    catalogue.entries.get(&id),
+                ) else {
+                    return;
+                };
+                let path = entry.entry.path.clone();
+                if press == ContentPress::OpenManifest(id) {
+                    ctx.data_mut(|data| {
+                        data.insert_temp(
+                            egui::Id::new("open_library_repair"),
+                            module.path.join(&path),
+                        )
+                    });
+                    return;
+                }
+                let exists = manifest_on_disk(module, &path, problem);
+                match crate::content_workspace::ManifestWrite::write_as(module, &path, exists) {
+                    Ok(write) => {
+                        new_result!(self, PageResult::ManifestWrite(module.id));
+                        self.manifest_writes.retain(|(id, _, _)| *id != module.id);
+                        self.manifest_writes
+                            .push((module.id, module.name.clone(), write));
+                        self.refresh_pending = true;
+                    }
+                    Err(error) => self.error = Some(error),
+                }
+                return;
+            }
+            ContentPress::OpenEntry(id) => {
+                self.open_lookup = Some(id);
+                return;
+            }
+            _ => {}
+        }
+        let at = match press {
+            ContentPress::UseFolder(at)
+            | ContentPress::Register(at)
+            | ContentPress::Find(at)
+            | ContentPress::Remove(at) => at,
+            _ => return,
+        };
+        let Some(Unavailable {
             index: i,
             selection,
             registered,
             known,
-            unregistered,
             relocated,
-            message,
-        } in unavailable
-        {
-            ui.push_id(i, |ui| {
-                let it_was = known
-                    .as_ref()
-                    .filter(|_| relocated.is_none())
-                    .map(|known| folder_words(&known.path));
-                let mut fault = BodyFault::new(&ContentFault::Unavailable {
-                    message: &message,
-                    it_was: it_was.as_deref(),
-                });
-                if relocated.is_some() {
-                    fault = fault.repair(
-                        design::outcome::Repair::new("Use this folder", PackageFix::UseFolder)
-                            .locked_when(unsaved, wait()),
-                    );
-                }
-                if unregistered && relocated.is_none() && known.is_some() {
-                    fault = fault.repair(
-                        design::outcome::Repair::new("Register it again", PackageFix::Register)
-                            .locked_when(unsaved, wait()),
-                    );
-                }
-                // Round 25 family: a message action without an icon has the secondary border.
-                let fix = fault
-                    .repair(
-                        design::outcome::Repair::new("Find the folder…", PackageFix::Find)
-                            .locked_when(
-                                unsaved_any,
-                                crate::sentence!(
-                                    "Save or discard changes before finding the folder."
-                                ),
-                            ),
-                    )
-                    .repair(design::outcome::Repair::new(
-                        "Remove from this campaign",
-                        PackageFix::Remove,
-                    ))
-                    .show(ui);
-                let users = selection.campaign_users(catalogue);
-                if !users.is_empty() {
-                    let names: Vec<_> = users.iter().map(|(_, name)| name.as_str()).collect();
-                    if let Some(at) = design::linked_sentence(
-                        ui,
-                        &names,
-                        if names.len() == 1 {
-                            "uses its creatures."
-                        } else {
-                            "use its creatures."
-                        },
-                    ) {
-                        self.open_lookup = Some(users[at].0);
-                    }
-                }
-                let found = match fix {
-                    Some(PackageFix::UseFolder) => relocated.clone().map(Ok),
-                    Some(PackageFix::Register) => known.as_ref().map(|known| {
-                        find_package_folder(
-                            &selection.package,
-                            selection.name.as_deref(),
-                            &known.path,
-                        )
-                    }),
-                    Some(PackageFix::Find) => crate::hermetic::pick_folder_from(
-                        known.as_ref().and_then(|module| module.path.parent()),
-                    )
-                    .map(|folder| {
-                        find_package_folder(&selection.package, selection.name.as_deref(), &folder)
-                    }),
-                    Some(PackageFix::Remove) => {
-                        remove = Some(i);
-                        None
-                    }
-                    None => None,
-                };
-                match found {
-                    Some(Ok(module)) => {
-                        new_result!(self, PageResult::Recovered(module.id));
-                        self.recovered.retain(|(id, _)| *id != module.id);
-                        self.recovered
-                            .push((module.id, (module.clone(), registered.clone())));
-                        self.found_package = Some(module);
-                    }
-                    Some(Err(error)) => self.error = Some(error),
-                    None => {}
-                }
-                design::quiet_section(ui, "Technical details", |ui| {
-                    ui.label(Type::Mono.rich(
-                        ui,
-                        format!("Package reference: {}", selection.package.label()),
-                    ));
-                });
-            });
+            ..
+        }) = unavailable
+            .into_iter()
+            .find(|unavailable| unavailable.index == at)
+        else {
+            return;
+        };
+        let found = match press {
+            ContentPress::UseFolder(_) => relocated.map(Ok),
+            ContentPress::Register(_) => known.as_ref().map(|known| {
+                find_package_folder(&selection.package, selection.name.as_deref(), &known.path)
+            }),
+            ContentPress::Find(_) => crate::hermetic::pick_folder_from(
+                known.as_ref().and_then(|module| module.path.parent()),
+            )
+            .map(|folder| {
+                find_package_folder(&selection.package, selection.name.as_deref(), &folder)
+            }),
+            _ => {
+                remove = Some(i);
+                None
+            }
+        };
+        match found {
+            Some(Ok(module)) => {
+                new_result!(self, PageResult::Recovered(module.id));
+                self.recovered.retain(|(id, _)| *id != module.id);
+                self.recovered
+                    .push((module.id, (module.clone(), registered.clone())));
+                self.found_package = Some(module);
+            }
+            Some(Err(error)) => self.error = Some(error),
+            None => {}
         }
         if let Some(i) = remove {
             let selection = document.selections[i].clone();
@@ -3050,9 +3098,14 @@ mod tests {
                     |ctx| {
                         egui::CentralPanel::default().show(ctx, |ui| {
                             // Round 26 FD1: the page's footer draws the warnings.
+                            let frame = design::outcome::PaneFrame::new(ui);
+                            let mut messages =
+                                design::outcome::Messages::new(&frame, "warnings", 800.0);
                             let unavailable = content.package_warnings_of(&campaigns).unavailable;
-                            content.package_warnings(ui, &campaigns, &active, unavailable);
-                            content.packages_content(ui, &campaigns, &active);
+                            content.package_messages(&mut messages, &campaigns, &unavailable);
+                            let _ = messages.pane(ui, design::Body::Content, |ui| {
+                                content.packages_content(ui, &campaigns, &active)
+                            });
                         });
                     },
                 );
@@ -3411,7 +3464,7 @@ mod tests {
         assert_eq!(
             find_package_folder(&reference, Some("Ashen Marches"), &other).unwrap_err(),
             format!(
-                "{folder}/ holds a different package. Choose the folder that holds Ashen Marches."
+                "The folder {folder}/ holds a different package. Choose the folder that holds Ashen Marches."
             )
         );
     }

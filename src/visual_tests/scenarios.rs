@@ -1076,28 +1076,17 @@ fn check_start(
 
 /// Each affected encounter remains a separate link with a word space on both sides of `and`.
 fn check_link_spaces(d: &mut Driver<'_>) {
-    let first = d
-        .place_of("Bridge Ambush")
-        .expect("First affected encounter link");
-    let second = d
-        .place_of("Shrine of Cinders")
-        .expect("Second affected encounter link");
-    let area = first.union(second).expand(crate::design::XS);
-    let conjunction = d
-        .painted_word_rect("and", area)
-        .expect("The conjunction is painted");
-    let first = d
-        .painted_word_rect("Bridge Ambush", area)
-        .expect("First link is painted");
-    let second = d
-        .painted_word_rect("Shrine of Cinders", area)
-        .expect("Second link is painted");
-    let before = conjunction.left() - first.right();
-    let after = second.left() - conjunction.right();
+    // Round 6 SD4 was about the space around `and` between two encounter links. Wave 2 d (C):
+    // the encounters are named in the message's words (`A and B …`), each with its own `Open`
+    // choice, so the check holds that the two names read as one phrase with `and`.
+    let named = d.painted_rect_in(
+        "Bridge Ambush and Shrine of Cinders",
+        egui::Rect::EVERYTHING,
+    );
     d.observe(
         "iter-6-C-SD4",
-        before > 1.0 && after > 1.0 && (before - after).abs() <= 1.0,
-        format!("Affected encounter links have word spaces: {before}, {after}"),
+        named.is_some() && d.has("Open Bridge Ambush") && d.has("Open Shrine of Cinders"),
+        format!("The affected encounters are named together: {named:?}"),
     );
 }
 

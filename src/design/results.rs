@@ -650,11 +650,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/campaign_content.rs", "cause", &[Ban::Words]),
         ("src/campaign_content.rs", "draw_reason", &[Ban::Body]),
         ("src/campaign_content.rs", "outcome_of", &[Ban::Words]),
-        (
-            "src/campaign_content.rs",
-            "package_warnings",
-            &[Ban::Body, Ban::Words],
-        ),
         ("src/campaign_content.rs", "packages_content", &[Ban::Body]),
         ("src/campaign_content.rs", "page", &[Ban::Body]),
         (

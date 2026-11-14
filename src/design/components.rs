@@ -2413,35 +2413,6 @@ fn message_with_action_inside(ui: &mut Ui, tone: Tone, text: &str, action: &str)
     pressed
 }
 
-/// A sentence of entry links, with explicit word spaces around its conjunctions.
-pub fn linked_sentence(ui: &mut Ui, names: &[&str], suffix: &str) -> Option<usize> {
-    let mut clicked = None;
-    let word_space = number_width(ui, " ", &Type::Body.font(ui));
-    ui.scope(|ui| {
-        ui.spacing_mut().item_spacing.x = 0.0;
-        ui.horizontal_wrapped(|ui| {
-            for (at, name) in names.iter().enumerate() {
-                if at > 0 {
-                    space(ui, word_space);
-                    ui.add(
-                        egui::Label::new(Type::Body.rich(ui, "and"))
-                            .wrap_mode(egui::TextWrapMode::Extend),
-                    );
-                    space(ui, word_space);
-                }
-                if link(ui, name).clicked() {
-                    clicked = Some(at);
-                }
-            }
-            if !names.is_empty() {
-                space(ui, word_space);
-            }
-            ui.label(Type::Body.rich(ui, suffix));
-        });
-    });
-    clicked
-}
-
 /// A message with several actions below it, aligned with the message text.
 #[deprecated(
     note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."

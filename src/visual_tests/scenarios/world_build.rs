@@ -5970,7 +5970,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.click("Find the folder…");
     // Round 23 FE3: the fault comes first, and it names the picked folder and the package.
     d.expect(
-        "wrong-package/ holds a different package. Choose the folder that holds Ashen Marches.",
+        "The folder wrong-package/ holds a different package. Choose the folder that holds Ashen Marches.",
     );
     d.state("package-wrong-folder-picked", Sizes::All);
     crate::hermetic::closed::next_folder(moved.clone());
