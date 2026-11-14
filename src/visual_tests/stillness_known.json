@@ -313,17 +313,12 @@
     ["N2/icon-off-text-centre","01-done-scene-add-to-log","1200x800","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
     ["N2/icon-off-text-centre","01-done-scene-add-to-log","1920x1080","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
     ["N2/icon-off-text-centre","02-log-line-added-in-lookup","1920x1080","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
-    ["N2/icon-off-text-centre","02-log-line-added-in-lookup","960x640","Button \"More actions for Ashfall Keep\"",1],
     ["N2/icon-off-text-centre","02-log-line-added-in-lookup","960x640","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
-    ["N2/icon-off-text-centre","03-status-changed-in-lookup","960x640","Button \"More actions for Ashfall Keep\"",1],
     ["N2/icon-off-text-centre","03-status-changed-in-lookup","960x640","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
     ["N2/icon-off-text-centre","04-log-field-from-scene","1920x1080","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
-    ["N2/icon-off-text-centre","04-log-field-from-scene","960x640","Button \"More actions for Ashfall Keep\"",1],
     ["N2/icon-off-text-centre","04-log-field-from-scene","960x640","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
     ["N2/icon-off-text-centre","05-log-header-long-title","1920x1080","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
-    ["N2/icon-off-text-centre","05-log-header-long-title","960x640","Button \"More actions for Ashfall Keep\"",1],
     ["N2/icon-off-text-centre","05-log-header-long-title","960x640","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
-    ["N2/icon-off-text-centre","06-log-field-blocked-by-edit","960x640","Button \"More actions for Ashfall Keep\"",1],
     ["N2/icon-off-text-centre","06-log-field-blocked-by-edit","960x640","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
     ["N2/icon-off-text-centre","07-log-words-of-a-deleted-entry","960x640","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1],
     ["N2/icon-off-text-centre","08-log-words-without-an-entry","960x640","Button \"More actions for Captain Varra Black: told the party who burned the ropes at the ford\"",1]
@@ -582,10 +577,6 @@
     ["G1b/pressed-control-moved","07-rewards-for-loot","960x640","Button \"Sunken Vault · Fight · Undecided · Ended · Round 2\"",1],
     ["G3/far-action","05-loot-in-the-editor","1920x1080","Button \"More actions for the encounter loot line 4\"",1],
     ["G3/far-action","07-rewards-for-loot","1920x1080","Button \"Add rewards: Sunken Vault\"",1],
-    ["N2/icon-off-text-centre","05-loot-in-the-editor","1200x800","Button \"More actions for the encounter loot line 3\"",1],
-    ["N2/icon-off-text-centre","05-loot-in-the-editor","1200x800","Button \"More actions for the encounter loot line 4\"",1],
-    ["N2/icon-off-text-centre","05-loot-in-the-editor","1920x1080","Button \"More actions for the encounter loot line 3\"",1],
-    ["N2/icon-off-text-centre","05-loot-in-the-editor","1920x1080","Button \"More actions for the encounter loot line 4\"",1],
     ["N4/quiet-action-line-start","04-loot-table-suggestion","960x640","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","05-loot-in-the-editor","1200x800","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","05-loot-in-the-editor","1920x1080","Button \"Filter creatures\"",1],
@@ -609,6 +600,7 @@
     ["N2/icon-off-text-centre","07-save-targets","1200x800","CheckBox \"Half damage: Cinder Wolf 2\"",1],
     ["N2/icon-off-text-centre","07-save-targets","1920x1080","CheckBox \"Half damage: Cinder Wolf 1\"",1],
     ["N2/icon-off-text-centre","07-save-targets","1920x1080","CheckBox \"Half damage: Cinder Wolf 2\"",1],
+    ["N2/icon-off-text-centre","07-save-targets","960x640","CheckBox \"Half damage: Cinder Wolf 1\"",1],
     ["N2/icon-off-text-centre","07-save-targets","960x640","CheckBox \"Half damage: Cinder Wolf 2\"",1],
     ["N4/quiet-action-line-start","02-attack-armed","1200x800","Button \"Stop\"",1],
     ["N4/quiet-action-line-start","02-attack-armed","1920x1080","Button \"Stop\"",1],
@@ -617,9 +609,6 @@
     ["N4/quiet-action-line-start","03-attack-rolled","1920x1080","Button \"Stop\"",1],
     ["N4/quiet-action-line-start","03-attack-rolled","960x640","Button \"Stop\"",1],
     ["N4/quiet-action-line-start","05-row-menu","960x640","Button \"Stop\"",1]
-  ],
-  "run-roster-conflict": [
-    ["N2/icon-off-text-centre","04-loaded-roster-of-12","1200x800","Button \"Dismiss this message\"",1]
   ],
   "run-sync-conflict": [
     ["N5/icon-starts-wrapping-text","06-conflict-resolved","960x640","Text \"\\u{e1b0} Connected · Sync reads this sheet · HP from this run\"",1],
@@ -699,6 +688,9 @@
     ["N4/quiet-action-line-start","02-plan-group-assembled","960x640","Button \"Filter creatures\"",1]
   ],
   "session-plan-scenes": [
+    ["G1b/pressed-control-moved","07-scene-removed","1200x800","Button \"Add\"",1],
+    ["G1b/pressed-control-moved","07-scene-removed","1920x1080","Button \"Add\"",1],
+    ["G1b/pressed-control-moved","07-scene-removed","960x640","Button \"Add\"",1],
     ["G1b/pressed-control-moved","08-scenes-folded","960x640","Button \"Long rest · Session 1 · \\u{e182} Everyone at full\"",2],
     ["G3/far-action","01-scenes-in-the-plan","1920x1080","Button \"More actions for The miller is the informer\"",1],
     ["G3/far-action","01-scenes-in-the-plan","1920x1080","Button \"More actions for Warden Ostrel\"",1],
@@ -773,8 +765,15 @@
     ["N4/quiet-action-line-start","02-travel-checks-rolled-lookup","960x640","Button \"On the road\"",1],
     ["N4/quiet-action-line-start","04-travel-checks-planned-lookup","960x640","Button \"On the road\"",1],
     ["N4/quiet-action-line-start","05-travel-checks-outside","960x640","Button \"On the road\"",1],
+    ["N4/quiet-action-line-start","06-travel-checks-timeline","1200x800","Button \"On the road\"",1],
+    ["N4/quiet-action-line-start","06-travel-checks-timeline","1920x1080","Button \"On the road\"",1],
     ["N4/quiet-action-line-start","06-travel-checks-timeline","960x640","Button \"On the road\"",1],
     ["N4/quiet-action-line-start","07-travel-checks-timeline-lookup","960x640","Button \"On the road\"",1]
+  ],
+  "travel-checks-plan": [
+    ["N4/quiet-action-line-start","01-plan-on-timeline","1200x800","Button \"On the road\"",1],
+    ["N4/quiet-action-line-start","01-plan-on-timeline","1920x1080","Button \"On the road\"",1],
+    ["N4/quiet-action-line-start","01-plan-on-timeline","960x640","Button \"On the road\"",1]
   ],
   "world": [
     ["G1b/pressed-control-moved","08-world-generated-npc-saved","960x640","Button \"Reroll\"",1]

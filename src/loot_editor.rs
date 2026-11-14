@@ -445,6 +445,10 @@ const NO_TABLES: &str =
     "No roll tables yet. Put <!-- splat:rolls key=gems dice=1d6 --> above a table in a World note.";
 
 /// The field that adds a line, the table menu beside it, and the suggestions under it.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: the loot list’s own field stays open and adds with Enter, as the design system describes it (design::results::STAGED_ALLOWS)"
+)]
 fn add_row(
     ui: &mut egui::Ui,
     name: &str,
@@ -455,7 +459,7 @@ fn add_row(
 ) {
     // The gap is the row's item spacing, so the menu ends at the column's right edge.
     let menu = design::menu_button_width(ui, ROLL_MENU) + ui.spacing().item_spacing.x;
-    let added = design::add_field(
+    let added = design::add_field_keys(
         ui,
         &mut state.add,
         &format!("Add loot to {name}"),
