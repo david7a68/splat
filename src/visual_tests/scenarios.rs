@@ -17664,7 +17664,11 @@ pub mod encounter_groups {
             d.nodes()
                 .into_iter()
                 .filter(|node| node.name.starts_with("Drag ") && node.fully_in_view())
-                .filter(|node| !d.painted_in(node.shown).contains("not known"))
+                .filter(|node| {
+                    !d.painted_in(node.shown)
+                        .replace('\u{a0}', " ")
+                        .contains("not known")
+                })
                 .map(|node| node.name)
                 .collect::<Vec<_>>()
         };
@@ -17675,7 +17679,9 @@ pub mod encounter_groups {
         d.observe(
             "iter-28-R-R1",
             joins.len() >= 2 && names(&narrow) == all.0 && names(&joins) == all.1,
-            format!("At 960 and 1200 the same headings say Fight after: {narrow:?} / {joins:?}"),
+            format!(
+                "At 960 and 1200 every heading with a word says Fight after: {narrow:?} / {joins:?}; headings {all:?}"
+            ),
         );
         // The words are worked out after a step, not on each frame of the panel.
         let words = crate::test_support::CachedWork::start("Arrivals words", d, |d| {
