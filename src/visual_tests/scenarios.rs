@@ -4633,6 +4633,15 @@ pub mod encounter_build {
             format!("At 1920, the Sync party and Keep in Ready help widths: {widths:?}"),
         );
 
+        // iter-28-B FL7: the way back shows its word beside the arrow, at every size.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let words = d.at_size(size, |d| d.place_of(BACK_TO_LIST).map(|rect| d.painted_in(rect)));
+            d.observe(
+                "iter-28-B-FL7",
+                words.as_deref().is_some_and(|words| words.contains("Encounters")),
+                format!("At {size:?}, the encounter editor's way back paints {words:?}"),
+            );
+        }
         // Another program changes the encounter while the DM edits it. The choices start at the
         // message text: the safe one first, then exactly `L` before the red one.
         let file = d
@@ -16331,6 +16340,18 @@ pub mod encounter_groups {
         d.expect("MEMBERS 3");
         d.expect("XP 600");
         d.state("group-editor", Sizes::All);
+        // iter-28-B FL7: the way back shows its word beside the arrow, at every size.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let words = d.at_size(size, |d| {
+                d.place_of("Back to encounters")
+                    .map(|rect| d.painted_in(rect))
+            });
+            d.observe(
+                "iter-28-B-FL7-group",
+                words.as_deref().is_some_and(|words| words.contains("Encounters")),
+                format!("At {size:?}, the group editor's way back paints {words:?}"),
+            );
+        }
         // FD3: where FORM_WIDTH ends first, the name and Belongs to still share one edge, and it
         // is clearly apart from the members column's.
         for size in [SMALL, DEFAULT, LARGE] {
@@ -16671,23 +16692,25 @@ pub mod encounter_groups {
                 format!("At {size:?}, the member menu and the notes field end at {edges:?}"),
             );
         }
-        // iter-24-B AK1, AB2: Save group ends at the members column's right edge (the member
-        // menu's), not across the Add creatures pane. iter-27-B FB7: it is on the title line,
-        // after the name, as Save encounter is; the save row below keeps Unsaved and Discard.
+        // iter-27-B FB7: Save group is on the title line, after the name, as Save encounter is;
+        // the save row below keeps Unsaved and Discard. iter-28-B FB7 (closure): it ends at the
+        // editor's right edge, above the Add creatures column, as Save encounter does: the
+        // search field's right edge. (iter-24-B AK1 put it at the members column's edge; the
+        // round 27 contract, one place in both editors, replaces that.)
         for size in [SMALL, DEFAULT, LARGE] {
-            let (save, column, name, unsaved) = d.at_size(size, |d| {
+            let (save, search, name, unsaved) = d.at_size(size, |d| {
                 (
                     d.place_of(SAVE_GROUP),
-                    d.place_of("More actions for Cinder Wolf"),
+                    d.place_of(FIND),
                     d.place_of(&d.name_starting("Group name: ")),
                     d.painted_rect_in("Unsaved", egui::Rect::EVERYTHING),
                 )
             });
             d.observe(
-                "iter-24-B-AK1",
-                save.zip(column)
-                    .is_some_and(|(save, column)| (save.right() - column.right()).abs() <= 0.5),
-                format!("At {size:?}: Save group {save:?}, column's menu {column:?}"),
+                "iter-28-B-FB7",
+                save.zip(search)
+                    .is_some_and(|(save, search)| (save.right() - search.right()).abs() <= 0.5),
+                format!("At {size:?}: Save group {save:?}, the Add creatures search {search:?}"),
             );
             d.observe(
                 "iter-27-B-FB7",
@@ -17867,14 +17890,13 @@ pub mod encounter_history {
 
 /// iter-19-B FD3, FT9: the right edges of a group editor's name field, `Belongs to` and
 /// `Group notes`, which ends at the members column's right edge.
-/// The title line's end (iter-27-B FB7: Save group, after the name), `Belongs to`'s and the notes
-/// field's right edges.
+/// The name field's end (with Save group after it on its line, iter-27-B FB7), `Belongs to`'s
+/// and the notes field's right edges. iter-28-B FB7: Save group goes on to the editor's edge.
 fn group_field_edges(d: &Driver<'_>, group: &str) -> Option<(f32, f32, f32)> {
     let field = d.place_of(&format!("Group name: {group}"))?;
-    let name = d
-        .place_of("Save group")
-        .filter(|save| save.left() > field.right() && save.top() < field.bottom())?
-        .right();
+    d.place_of("Save group")
+        .filter(|save| save.left() > field.right() && save.top() < field.bottom())?;
+    let name = field.right();
     let belongs = d
         .nodes()
         .into_iter()

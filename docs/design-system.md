@@ -1330,9 +1330,11 @@ says so below Belongs to as a warning `small_message`, not as muted field help.
 
 Member rows and Group notes end at the members column's right edge (at most `LIST_MEASURE`), inside the scroll
 content and anchored left. The column keeps the scroll bar's lane whether or not the bar shows, so no field or
-action moves when a long list starts to scroll. The group editor's header is one block that ends at that column's
-edge: the name on line one with Save group after it at the column's edge, as Save encounter is on the encounter
-editor's title line; then the save row with the state and Discard at its start and the reasons. A reason without
+action moves when a long list starts to scroll. The group editor's header starts with the way back, which shows its
+word (`← Encounters`, `← Plan`; the encounter editor's says `← Encounters` or `← Session`), then the name, which
+ends at that column's edge. Save group follows on that line and ends at the editor's right edge, above the Add
+creatures column, where Save encounter ends on the encounter editor's title line: one place in both editors. Then
+the save row with the state and Discard at its start and the reasons. A reason without
 room on the save row takes its own line below it. A group draft that Save's check refuses (a member's change that
 cannot stand, a missing creature, an empty group) says `Invalid`, changed or not, and Save group is not primary;
 the check runs when the draft, the campaign's read or the open group changes, never on an unchanged frame. The fault

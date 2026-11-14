@@ -2331,8 +2331,11 @@ impl Encounters {
             right.min(ui.max_rect().right())
         });
         let empty = draft.setup.members.is_empty();
-        // FB7: Save group is on the title line at the block's right edge, where Save encounter
-        // is in the encounter editor. The save row below keeps the state, Discard and reasons.
+        // FB7: Save group is on the title line at the editor's right edge, above the Add
+        // creatures column, where Save encounter is in the encounter editor (round 28: one place
+        // in both editors). The name and Belongs to keep the block's edge. The save row below
+        // keeps the state, Discard and reasons.
+        let title_right = ui.max_rect().right();
         let button = if dirty && !has_run && !empty && !refused {
             Action::primary("Save group")
         } else {
@@ -2346,16 +2349,17 @@ impl Encounters {
             refusal.as_ref().map(|refusal| refusal.text.as_str())
         });
         ui.horizontal(|ui| {
-            back = Action::quiet(icons::BACK)
+            // FL7: the way back says where it goes, as Timeline's `← All events` does.
+            back = Action::quiet(back_word)
+                .icon(icons::BACK)
                 .name(back_name)
-                .hint(back_word)
                 .blocked_if(dirty, "Save or discard this group first.")
                 .show(ui)
                 .clicked();
             let gap = ui.spacing().item_spacing.x;
-            let room = (block_right - ui.cursor().left()).min(ui.available_width())
-                - button.natural_width(ui)
-                - gap;
+            let room = (block_right.min(title_right - button.natural_width(ui) - gap)
+                - ui.cursor().left())
+            .min(ui.available_width());
             let width = (room - 2.0 * design::S).max(Density::Scan.control());
             let column = column_right.map_or(f32::INFINITY, |right| {
                 right - ui.cursor().left() - 2.0 * design::S
@@ -2365,22 +2369,18 @@ impl Encounters {
             if response.changed() {
                 draft.touch();
             }
+            // Belongs to ends where the name field ends.
             name_right = response.rect.right();
             if focus_name {
                 design::focus_and_select(ui, response.id, &draft.name);
             }
             ui.allocate_ui_with_layout(
                 egui::vec2(
-                    (block_right - ui.cursor().left()).max(0.0),
+                    (title_right - ui.cursor().left()).max(0.0),
                     Density::Scan.control(),
                 ),
                 egui::Layout::right_to_left(egui::Align::Center),
-                |ui| {
-                    let response = button.show(ui);
-                    save = response.clicked();
-                    // The title line ends at Save; Belongs to ends there too.
-                    name_right = response.rect.right();
-                },
+                |ui| save = button.show(ui).clicked(),
             );
         });
         // The save row: the state and Discard at its start, Save group at the block's edge. A

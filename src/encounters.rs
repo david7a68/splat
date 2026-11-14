@@ -5306,14 +5306,15 @@ impl Encounters {
         };
         let (roster_right, header_right) = (edge(ROSTER_PANE), edge(ADD_PANE));
         ui.horizontal_wrapped(|ui| {
-            let back_name = if from_session.is_some() {
-                "Back to session"
+            let (back_word, back_name) = if from_session.is_some() {
+                ("Session", "Back to session")
             } else {
-                "Back to encounters"
+                ("Encounters", "Back to encounters")
             };
-            back = Action::quiet(icons::BACK)
+            // FL7: the way back says where it goes, as Timeline's `← All events` does.
+            back = Action::quiet(back_word)
+                .icon(icons::BACK)
                 .name(back_name)
-                .hint(back_name)
                 .blocked(
                     dirty
                         .then_some("Save or discard this encounter first.")
