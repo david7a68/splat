@@ -11,6 +11,8 @@ disallowed-methods = [
     { path = "splat::design::components::ResultOrder::issue", reason = "record the result in a `design::Results` store: it issues the order at the action" },
     { path = "splat::design::components::Footer::result", reason = "give the footer a kept result as a `KeptLine` (`Shown::outcome`, `Messages::kept`)" },
     { path = "splat::design::results::Results::undo", reason = "a footer press names its entry by its ticket: use `Results::undo_by(press.ticket, …)`; by owner, a press could undo a newer result of that owner: `Ban::Results`" },
+    { path = "splat::design::results::Results::revise", reason = "a revision names its entry by its ticket: use `Results::revise_by(&ticket, …)`; by owner, late work could change a newer result of that owner: `Ban::ByOwner`" },
+    { path = "splat::design::results::Results::revise_where", reason = "a revision names its entry by its ticket: use `Results::revise_by(&ticket, …)`; a predicate can reach a newer result: `Ban::ByOwner`" },
     { path = "splat::design::results::Results::use_press", reason = "a footer press names its entry by its ticket: use `Results::use_press_by(press.ticket)`: `Ban::Results`" },
     { path = "splat::design::components::save_row_state", reason = "use `design::save_row` with a `DraftState`" },
     # Package K: layout parts.
@@ -147,10 +149,13 @@ disallowed-methods = [
     { path = "splat::design::outcome::Sentence::__literal", reason = "make sentences with `sentence!`" },
     { path = "splat::design::outcome::check_template", reason = "make sentences with `sentence!`" },
     { path = "splat::design::outcome::check_literal", reason = "make sentences with `sentence!`" },
+    { path = "splat::design::outcome::check_choice", reason = "make choice words with `choice!`" },
+    { path = "splat::design::outcome::ChoiceWords::__template", reason = "make choice words with `choice!`" },
     { path = "splat::design::outcome::Messages::outcome_at", reason = "record the result in a `design::Results` store, make a `KeptLine` with `Shown::outcome` and use `Messages::kept`; a hand-issued order is staged: `Ban::Order`" },
     { path = "splat::design::outcome::banner", reason = "put the notice in the pane's `Footer`; a body place is a review decision: `Ban::Body`" },
     { path = "splat::design::outcome::row_fault", reason = "put the fault in the pane's `Footer`; a body place is a review decision: `Ban::Body`" },
     { path = "splat::design::outcome::PagePlaceholder::show", reason = "a page placeholder is a review decision: `Ban::Body`" },
+    { path = "splat::design::outcome::BodyFault::show", reason = "a fault with repairs in a page's body is a review decision: `Ban::Body`" },
     # Package X: design extras. Each part decides its own space, its check mark and its Clear, so
     # a caller cannot add or forget them. A suppression's row in `design::results::STAGED_ALLOWS`
     # is `Ban::Extras(n)`, with the number of these calls its item holds.
