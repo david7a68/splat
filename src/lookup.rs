@@ -240,6 +240,9 @@ pub struct ContentIndex {
     /// Each World note's link problems in its list row's words, found the first time a result
     /// row asks. Any file change makes a new index, so this starts empty again (round 26 AE2).
     link_problems: std::sync::OnceLock<HashMap<usize, String>>,
+    /// Each World note's fault, the one record its list row, the header's count and the count's
+    /// menu read. Found the first time a page asks; a file change makes a new index (FI2).
+    note_faults: std::sync::OnceLock<world::NoteFaults>,
     pub broken_world: Vec<(String, String)>,
     pub duplicate_world: BTreeMap<String, Vec<String>>,
     /// World notes whose name another World note also has, found once when the index loads, so
@@ -256,6 +259,8 @@ pub struct ContentIndex {
 thread_local! {
     /// `shown_name` calls on this (the UI) thread.
     static SHOWN_NAMES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Runs of the note-fault scan (it reads every World note's body) on this thread.
+    pub(crate) static FAULT_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// Runs of the shared-name search, by campaign folder. The index loads on another thread, and
@@ -822,6 +827,15 @@ impl ContentIndex {
             .map(String::as_str)
     }
 
+    /// Every World note's fault, found once per index (`world::NoteFaults`).
+    pub(crate) fn note_faults(&self) -> &world::NoteFaults {
+        self.note_faults.get_or_init(|| {
+            #[cfg(test)]
+            FAULT_SCANS.with(|count| count.set(count.get() + 1));
+            world::NoteFaults::of(self)
+        })
+    }
+
     /// A result row's detail: what the entry is, its link fault when it has one, then its
     /// summary. World's list row and Lookup's result say the same fault (round 26 AE2).
     pub(crate) fn result_detail(&self, at: usize) -> String {
@@ -1122,6 +1136,11 @@ impl ContentIndex {
             Some((folder, _)) => format!("{} ({folder})", entry.name),
             None => format!("{} ({})", entry.name, entry.path),
         }
+    }
+
+    /// Whether another World note has this note's name (found when the index loads).
+    pub(crate) fn shares_name(&self, at: usize) -> bool {
+        self.shared_world_names.contains(&at)
     }
 
     /// Whether this world entry's `In` chain leads back to it.
@@ -1652,12 +1671,22 @@ impl view::Links for ContentIndex {
 /// tag (`Frightened [Condition]` for `frightened`). Such a typed word names that entry, so
 /// Lookup offers no `New NPC` or `New location` of it (FK9).
 fn names_the_query(name: &str, query: &str) -> bool {
-    let bare = match name.trim_end().strip_suffix(']') {
-        Some(rest) => rest.rsplit_once(" [").map_or(name, |(bare, _)| bare),
-        None => name,
-    };
-    name.eq_ignore_ascii_case(query) || bare.trim().eq_ignore_ascii_case(query)
+    let bare = KIND_TAGS
+        .iter()
+        .find_map(|tag| name.trim_end().strip_suffix(tag))
+        .map_or(name, str::trim_end);
+    name.eq_ignore_ascii_case(query) || bare.eq_ignore_ascii_case(query)
 }
+
+/// The kind tags that rule glossaries put after a name. Only these: `Mara [North]` is a name
+/// of the DM's, whose words in brackets are part of it.
+const KIND_TAGS: [&str; 5] = [
+    " [Action]",
+    " [Area of Effect]",
+    " [Attitude]",
+    " [Condition]",
+    " [Hazard]",
+];
 
 /// What Lookup's reader shows, in the order the body decides it: the held NPC's card, a found
 /// note, an entry, or nothing.
@@ -1667,6 +1696,23 @@ enum OnScreen {
     Written(usize),
     Entry(usize),
     Nothing,
+}
+
+/// A place on Back's trail: what the reader showed (`OnScreen`), by a lasting identity.
+#[derive(Clone, Debug, PartialEq)]
+enum Shown {
+    Entry(Uuid),
+    /// A found note: where it lives and its title.
+    Written(WrittenIn, String),
+    /// The held NPC's card, while the NPC is held.
+    Card,
+}
+
+/// Where a step on the trail lands, found in the current index and notes.
+enum Landing {
+    Entry(usize),
+    Written(usize),
+    Card,
 }
 
 #[derive(Default)]
@@ -1687,8 +1733,9 @@ pub struct Lookup {
     written_search: Vec<WrittenSearch>,
     /// The note or event being read, in place of an entry.
     reading_written: Option<usize>,
-    /// Identity, because a rebuilt index can change positions.
-    trail: Trail<Uuid>,
+    /// What was on screen, by identity, because a rebuilt index can change positions and the
+    /// found notes are read again each time the panel opens.
+    trail: Trail<Shown>,
     /// Where the panel was drawn last, for Back and Forward beside the Library.
     panel_rect: Option<egui::Rect>,
     waiting_for: Option<Uuid>,
@@ -1961,14 +2008,14 @@ impl Lookup {
             self.open = true;
         }
         self.leave_trackers();
+        self.show_now(Landing::Card);
         self.reading_written = None;
-        self.generated_shown = true;
     }
 
     /// Take back a generated NPC that the World page did not take.
     pub fn keep_generated(&mut self, card: GeneratedCard) {
         self.generated = Some(card.npc);
-        self.generated_shown = true;
+        self.show_now(Landing::Card);
         self.generator_problems = card.problems;
         self.generator_sources = card.sources;
     }
@@ -1999,7 +2046,6 @@ impl Lookup {
         self.open = true;
         self.leave_trackers();
         self.written_stale = true;
-        self.reading_written = None;
         self.navigate(position);
         self.results_open = false;
         self.query.clear();
@@ -2018,7 +2064,6 @@ impl Lookup {
         self.open = true;
         self.leave_trackers();
         self.written_stale = true;
-        self.reading_written = None;
         self.results_open = false;
         // The field must not name something other than the entry on screen.
         self.query.clear();
@@ -2042,21 +2087,14 @@ impl Lookup {
     }
 
     fn navigate(&mut self, position: usize) {
-        if self.current != Some(position) {
-            self.trail.leave(self.current_id());
-        }
-        self.current = Some(position);
-        self.generated_shown = false;
+        self.show_now(Landing::Entry(position));
     }
 
     /// Go to a result. A heading's result opens its note at that heading.
     fn open_result(&mut self, index: &ContentIndex, position: usize) {
         let (position, heading) = index.target_of(position);
-        if self.current != Some(position) {
-            self.navigate(position);
-        }
         // The entry on screen, chosen again, also takes the NPC card's place.
-        self.generated_shown = false;
+        self.navigate(position);
         self.reader.show_heading(heading);
     }
 
@@ -2088,16 +2126,71 @@ impl Lookup {
         if self.trail.peek(step).is_none() {
             return;
         }
-        self.reading_written = None;
-        let here = self.current_id();
-        if let Some((_, position)) = self
-            .trail
-            .go(step, here, |id| self.index.as_ref()?.position(*id))
-        {
-            self.current = Some(position);
+        // What is on screen takes the step's place, so the other way returns to it.
+        let here = self.shown();
+        let (index, written, held) = (&self.index, &self.written, self.generated.is_some());
+        let landed = self.trail.go(step, here, |place| match place {
+            Shown::Entry(id) => index.as_ref()?.position(*id).map(Landing::Entry),
+            Shown::Written(place, title) => written
+                .iter()
+                .position(|note| note.place == *place && note.title == *title)
+                .map(Landing::Written),
+            Shown::Card => held.then_some(Landing::Card),
+        });
+        if let Some((_, landing)) = landed {
+            self.land(landing);
             self.results_open = false;
-            self.generated_shown = false;
         }
+    }
+
+    /// What is on screen, by a lasting identity, for Back's trail.
+    fn shown(&self) -> Option<Shown> {
+        match self.on_screen() {
+            OnScreen::Generated => Some(Shown::Card),
+            OnScreen::Written(at) => self
+                .written
+                .get(at)
+                .map(|note| Shown::Written(note.place.clone(), note.title.clone())),
+            OnScreen::Entry(_) => self.current_id().map(Shown::Entry),
+            OnScreen::Nothing => None,
+        }
+    }
+
+    /// Show `landing` in the reader, with no step on the trail.
+    fn land(&mut self, landing: Landing) {
+        match landing {
+            Landing::Entry(position) => {
+                self.current = Some(position);
+                self.reading_written = None;
+                self.generated_shown = false;
+            }
+            Landing::Written(at) => {
+                self.reading_written = Some(at);
+                self.generated_shown = false;
+            }
+            Landing::Card => self.generated_shown = true,
+        }
+    }
+
+    /// Show `landing` and leave what was on screen on Back's trail, unless it is the same.
+    fn show_now(&mut self, landing: Landing) {
+        let here = self.shown();
+        let next = match &landing {
+            Landing::Entry(position) => self
+                .index
+                .as_ref()
+                .and_then(|index| index.items.get(*position))
+                .map(|item| Shown::Entry(item.entry.id)),
+            Landing::Written(at) => self
+                .written
+                .get(*at)
+                .map(|note| Shown::Written(note.place.clone(), note.title.clone())),
+            Landing::Card => Some(Shown::Card),
+        };
+        if here != next {
+            self.trail.leave(here);
+        }
+        self.land(landing);
     }
 
     /// Back and Forward. Beside the Library page, a key acts here only with focus here,
@@ -2196,10 +2289,11 @@ impl Lookup {
             ui.horizontal(|ui| {
                 // The count belongs to the `DUE N` heading below; the title says nothing more (FH8).
                 ui.label(Type::Heading.rich(ui, "Trackers"));
-                // After the title, so the word keeps the target's own padding (R17: word first,
-                // its arrow after it). Alt+Left still steps back (`history`).
                 back = self.holds_something()
-                    && design::TitleLine::back(crate::word!("Back"), design::BackEdge::Segments)
+                    && Action::quiet("Back")
+                        .icon(icons::LEGACY_BACK)
+                        .key("Alt+Left")
+                        .density(Density::Read)
                         .show(ui)
                         .clicked();
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -2213,9 +2307,12 @@ impl Lookup {
             ui.horizontal(|ui| {
                 ui.label(Type::Heading.rich(ui, "Lookup"));
                 if self.trail.peek(Step::Back).is_some()
-                // A `Read` target, the icon buttons' density, so the title line keeps one height
-                // with or without Back, and the search field below never moves.
-                && design::TitleLine::back(crate::word!("Back"), design::BackEdge::Segments)
+                // The icon buttons' density, so the title line keeps one height with or without
+                // Back, and the search field below never moves.
+                && Action::quiet("Back")
+                    .icon(icons::LEGACY_BACK)
+                    .key("Alt+Left")
+                    .density(Density::Read)
                     .show(ui)
                     .clicked()
                 {
@@ -2520,14 +2617,8 @@ impl Lookup {
                 self.highlight = row;
             }
             match hit {
-                Hit::Entry(position) => {
-                    self.reading_written = None;
-                    self.open_result(&index, position);
-                }
-                Hit::Written(at) => {
-                    self.reading_written = Some(at);
-                    self.generated_shown = false;
-                }
+                Hit::Entry(position) => self.open_result(&index, position),
+                Hit::Written(at) => self.show_now(Landing::Written(at)),
             }
             // Arrow keys walk the list. A click on a row means read it.
             if !response.has_focus() {
@@ -2611,7 +2702,7 @@ impl Lookup {
                 match crate::npc_generator::roll(&tables) {
                     Ok(npc) => {
                         self.generated = Some(npc);
-                        self.generated_shown = true;
+                        self.show_now(Landing::Card);
                         self.create_error = None;
                     }
                     Err(error) => self.create_error = Some(error),
@@ -2640,7 +2731,7 @@ impl Lookup {
         if let Some(npc) = &self.generated
             && world::page::unsaved_npc_row(ui, &npc.name)
         {
-            self.generated_shown = true;
+            self.show_now(Landing::Card);
         }
         if let OnScreen::Written(at) = shown {
             self.written_reader(ui, at, &query);
@@ -3408,37 +3499,92 @@ mod tests {
             "nothing ahead keeps the note open"
         );
 
-        // Row 17 of the session-cycle design: while an unsaved NPC is held, an entry that opens
-        // takes the card's place, under the NPC's row, and Back is such an entry. The NPC stays.
-        lookup.generated = Some(crate::npc_generator::Generated {
+        // Round 29 (FL4, the lead's packet): Back's trail holds what was ON SCREEN: an entry, a
+        // found note or the held NPC's card, each by a lasting identity. Open A, then B, then a
+        // found note: Back returns to B, and Forward to the note.
+        let notes = || {
+            vec![
+                Written {
+                    title: "Tonight".into(),
+                    detail: "Session".into(),
+                    text: "The missing captain".into(),
+                    place: WrittenIn::Session(Uuid::from_u128(1)),
+                },
+                Written {
+                    title: "Ferry".into(),
+                    detail: "Event".into(),
+                    text: "The ferry burns".into(),
+                    place: WrittenIn::Event("ferry".into()),
+                },
+            ]
+        };
+        lookup.set_written(notes());
+        lookup.navigate(3);
+        lookup.navigate(4);
+        lookup.show_now(Landing::Written(0));
+        lookup.step(Step::Back);
+        assert_eq!(
+            (lookup.on_screen(), lookup.current),
+            (OnScreen::Entry(4), Some(4)),
+            "Back from the found note returns to B, the entry on screen before it"
+        );
+        lookup.step(Step::Forward);
+        assert_eq!(
+            lookup.on_screen(),
+            OnScreen::Written(0),
+            "Forward returns to the found note"
+        );
+        // The notes are read again in another order: the trail finds its note by identity.
+        let mut reordered = notes();
+        reordered.reverse();
+        lookup.navigate(4);
+        lookup.set_written(reordered);
+        lookup.step(Step::Back);
+        assert_eq!(
+            lookup.on_screen(),
+            OnScreen::Written(1),
+            "the same note, by identity"
+        );
+
+        // Row 17 of the session-cycle design: the held NPC's card is a place on the trail too.
+        let tally = || crate::npc_generator::Generated {
             name: "Tally".into(),
             attributes: Default::default(),
-        });
-        lookup.generated_shown = true;
-        lookup.open_position(3);
-        assert_eq!(lookup.current, Some(3));
-        assert!(!lookup.generated_shown && lookup.generated.is_some());
-        lookup.generated_shown = true;
-        let index = lookup.index.clone().unwrap();
-        lookup.open_result(&index, 3);
-        assert_eq!(lookup.current, Some(3));
-        assert!(!lookup.generated_shown, "the entry on screen, chosen again");
-        lookup.generated_shown = true;
+        };
+        lookup.generated = Some(tally());
+        lookup.show_now(Landing::Card);
+        assert_eq!(lookup.on_screen(), OnScreen::Generated);
         lookup.step(Step::Back);
-        assert_eq!(lookup.current, Some(2), "Back is as before");
-        assert!(!lookup.generated_shown && lookup.generated.is_some());
-
-        // Section 7 records these places as they are. A found note is not on Back's trail: an
-        // entry that opens leaves it, and Back does not return to it.
-        lookup.reading_written = Some(0);
-        lookup.generated_shown = true;
-        lookup.open_position(4);
-        lookup.step(Step::Back);
-        assert_eq!((lookup.current, lookup.reading_written), (Some(2), None));
-        assert!(
-            !lookup.generated_shown,
-            "a found note that opens is a view too"
+        assert_eq!(
+            lookup.on_screen(),
+            OnScreen::Written(1),
+            "Back from the card returns to the found note"
         );
+        lookup.step(Step::Forward);
+        assert_eq!(
+            lookup.on_screen(),
+            OnScreen::Generated,
+            "Forward returns to the card"
+        );
+        // An entry that opens takes the card's place under the NPC's row; the NPC stays held,
+        // and Back returns to its card.
+        lookup.open_position(5);
+        assert_eq!(lookup.on_screen(), OnScreen::Entry(5));
+        assert!(lookup.generated.is_some());
+        lookup.step(Step::Back);
+        assert_eq!(lookup.on_screen(), OnScreen::Generated);
+        lookup.step(Step::Forward);
+        // The entry on screen, chosen again, is no new step.
+        let index = lookup.index.clone().unwrap();
+        lookup.open_result(&index, 5);
+        assert_eq!(lookup.on_screen(), OnScreen::Entry(5));
+        assert_eq!(lookup.trail.peek(Step::Back), Some(&Shown::Card));
+        // A card no longer held cannot be shown: Back drops it and stays.
+        lookup.generated = None;
+        lookup.step(Step::Back);
+        assert_eq!(lookup.on_screen(), OnScreen::Entry(5));
+        lookup.generated = Some(tally());
+
         // Lookup closed and opened again reads the notes again, so the found note goes, and
         // the entry, the trail and the held NPC stay.
         lookup.reading_written = Some(0);
@@ -3446,18 +3592,10 @@ mod tests {
         lookup.toggle();
         assert!(lookup.wants_written());
         lookup.set_written(Vec::new());
-        assert_eq!((lookup.current, lookup.reading_written), (Some(2), None));
-        assert!(lookup.trail.peek(Step::Forward).is_some() && lookup.generated.is_some());
+        assert_eq!((lookup.current, lookup.reading_written), (Some(5), None));
+        assert!(lookup.trail.peek(Step::Back).is_some() && lookup.generated.is_some());
         // Ctrl+T and Ctrl+T again, with Lookup open, give back the found note. The shell passes
         // the notes in when Lookup asks for them, in the same frame.
-        let notes = || {
-            vec![Written {
-                title: "Tonight".into(),
-                detail: "Session".into(),
-                text: "The missing captain".into(),
-                place: WrittenIn::Session(Uuid::from_u128(1)),
-            }]
-        };
         lookup.set_written(notes());
         lookup.reading_written = Some(0);
         lookup.toggle_trackers();
@@ -3465,10 +3603,9 @@ mod tests {
             lookup.set_written(notes());
         }
         lookup.toggle_trackers();
-        assert_eq!((lookup.current, lookup.reading_written), (Some(2), Some(0)));
+        assert_eq!((lookup.current, lookup.reading_written), (Some(5), Some(0)));
         // Round 29 FL4: the title line's open button takes the entry on screen. Under the found
         // note, `current` is still an earlier entry; the button must not open it.
-        let index = lookup.index.clone().unwrap();
         assert_eq!(lookup.on_screen(), OnScreen::Written(0));
         assert!(
             lookup.open_target(&index).is_none(),
@@ -3477,7 +3614,7 @@ mod tests {
         lookup.reading_written = None;
         assert_eq!(
             lookup.open_target(&index).map(|item| item.entry.id),
-            Some(index.items[2].entry.id),
+            Some(index.items[5].entry.id),
             "the entry on screen opens"
         );
         lookup.generated_shown = true;
@@ -4186,6 +4323,11 @@ mod tests {
             ("Guard", "guard", true),
             ("Frightened [Condition]", "fright", false),
             ("[Condition]", "condition", false),
+            // Words in brackets that are no kind tag are part of the name.
+            ("Mara [North]", "mara", false),
+            ("Mara [North]", "mara [north]", true),
+            ("Prone [Condition]", "prone", true),
+            ("Cloud [Area of Effect]", "cloud", true),
         ] {
             assert_eq!(
                 names_the_query(name, typed),

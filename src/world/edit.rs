@@ -813,6 +813,40 @@ impl Reader {
         out.extend(self.edits.keys().copied());
     }
 
+    /// Whether this reader's save row names a waiting Log field of the note: its edit form is
+    /// open here, and a Log field of the note is open in either reader (ruling Q-t).
+    pub(super) fn save_row_names_log(&self, key: super::LogKey) -> bool {
+        self.edits
+            .get(&key.1)
+            .is_some_and(|draft| draft.campaign == key.0)
+            && (self.held.log_fields.contains_key(&key) || self.logs_elsewhere.contains(&key))
+    }
+
+    /// Whether this reader's footer names its own waiting Log field: the note's edit form is
+    /// open in the other reader, whose save row is not on screen. One cause, one place.
+    pub(super) fn footer_names_log(&self, key: super::LogKey) -> bool {
+        self.held.log_fields.contains_key(&key)
+            && !self.save_row_names_log(key)
+            && !self.edits.contains_key(&key.1)
+            && self.edited_elsewhere.contains(&key.1)
+            && self.form_shown_elsewhere != Some(key.1)
+    }
+
+    /// Hand the other reader what it needs of this one: the edit forms open here, the Log
+    /// fields open here, and the note whose edit form this reader drew in the last pass (its
+    /// save row is on screen). `pass` is this pass's `cumulative_pass_nr`.
+    pub fn share_with(&self, other: &mut super::Reader, pass: u64) {
+        self.edit_forms_into(&mut other.edited_elsewhere);
+        other.logs_elsewhere.clear();
+        other
+            .logs_elsewhere
+            .extend(self.held.log_fields.keys().copied());
+        other.form_shown_elsewhere = self
+            .form_drawn
+            .filter(|(id, drawn)| *drawn + 1 >= pass && self.edits.contains_key(id))
+            .map(|(id, _)| id);
+    }
+
     /// Drafts whose note was deleted or given a new identity outside Splat, as footer notices
     /// of the reader's pane (round 27 FE6): they are no note's state, so they never sit in the
     /// body of the note on show. They cannot open again, so the DM copies the text or lets the
@@ -1138,8 +1172,8 @@ impl Reader {
         .has_focus();
         // A Log field of this note waits for this form. The save row says so in its one
         // sentence, so one cause is said once (ruling Q-t, FC10); a clean form says Cancel.
-        let log_waits =
-            super::takes_log(item, index) && self.held.log_fields.contains_key(&(campaign.id, id));
+        let log_waits = super::takes_log(item, index) && self.save_row_names_log((campaign.id, id));
+        self.form_drawn = Some((id, ui.ctx().cumulative_pass_nr()));
         let switch = if log_waits {
             super::LOG_WAITS_FOR_SAVE
         } else {

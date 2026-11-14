@@ -1066,14 +1066,94 @@ pub(crate) fn renamed_file(item: &Item, index: &ContentIndex) -> Option<String> 
     (stem != item.entry.name).then(|| stem.into_owned())
 }
 
-/// Whether a World note needs fixing: the one test for its list row, the header's count and
-/// that count's menu, so the three never disagree.
-pub(crate) fn needs_fixing(item: &Item, index: &ContentIndex) -> bool {
-    !broken_links(item, index).is_empty()
-        || index.duplicate_world.contains_key(&item.entry.path)
-        || !item.entry.flags.is_empty()
-        || crate::roll_table::fault_count(&item.entry.body) > 0
-        || renamed_file(item, index).is_some()
+/// A World note's fault, as its list row says it and the header counts it: the first that
+/// holds, in this order. Every kind is a warning (one fault, one tone); a note that cannot be
+/// read at all is the header's error count, not one of these.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum NoteFault {
+    /// Two files claim the note's identity.
+    Duplicate,
+    /// Values that could not be read, with their count.
+    Unread(usize),
+    /// Roll tables with faults, with their count.
+    Tables(usize),
+    /// Links that need fixing.
+    Links(Vec<LinkProblem>),
+    /// The note's name is not its file's name (FI2).
+    Renamed,
+}
+
+impl NoteFault {
+    fn of(item: &Item, index: &ContentIndex) -> Option<Self> {
+        let entry = &item.entry;
+        let problems = broken_links(item, index);
+        let tables = crate::roll_table::fault_count(&entry.body);
+        if index.duplicate_world.contains_key(&entry.path) {
+            Some(Self::Duplicate)
+        } else if !entry.flags.is_empty() {
+            Some(Self::Unread(entry.flags.len()))
+        } else if tables > 0 {
+            Some(Self::Tables(tables))
+        } else if !problems.is_empty() {
+            Some(Self::Links(problems))
+        } else if renamed_file(item, index).is_some() {
+            Some(Self::Renamed)
+        } else {
+            None
+        }
+    }
+
+    /// The list row's words after its warning icon.
+    pub(crate) fn words(&self) -> String {
+        match self {
+            Self::Duplicate => "Same note in two files".into(),
+            Self::Unread(count) => design::count(*count, "value not read", "values not read"),
+            Self::Tables(count) => design::count(*count, "table fault", "table faults"),
+            Self::Links(problems) => link_problem_words(problems),
+            Self::Renamed => "File name differs".into(),
+        }
+    }
+}
+
+/// The faults of one index's World notes, worked out once per index
+/// (`ContentIndex::note_faults`): the list rows, the header's count and the count's menu read
+/// these records, so they never disagree and nothing that grows with the notes runs each frame.
+#[derive(Debug, Default)]
+pub(crate) struct NoteFaults {
+    by_position: HashMap<usize, NoteFault>,
+    /// The notes with a fault, in the World list's order: the count's menu.
+    listed: Vec<usize>,
+    /// Every World note in the list, for the header's note count.
+    notes: usize,
+}
+
+impl NoteFaults {
+    pub(crate) fn of(index: &ContentIndex) -> Self {
+        let mut faults = Self::default();
+        for &(at, _) in index.world_groups("").values().flatten() {
+            faults.notes += 1;
+            if let Some(fault) = NoteFault::of(&index.items[at], index) {
+                faults.by_position.insert(at, fault);
+                faults.listed.push(at);
+            }
+        }
+        faults
+    }
+
+    /// The fault of the note at `at` in the index.
+    pub(crate) fn of_note(&self, at: usize) -> Option<&NoteFault> {
+        self.by_position.get(&at)
+    }
+
+    /// The notes with a fault, in list order.
+    pub(crate) fn listed(&self) -> &[usize] {
+        &self.listed
+    }
+
+    /// How many World notes the list holds.
+    pub(crate) fn notes(&self) -> usize {
+        self.notes
+    }
 }
 
 /// The save row's one reason while a Log field of the note waits for a changed form: the
@@ -2238,6 +2318,14 @@ pub struct Reader {
     /// The entries whose edit form is open in the other reader (Lookup's, or the World
     /// page's). Their Log field waits too, so Splat never makes its own disk conflict.
     pub edited_elsewhere: Vec<Uuid>,
+    /// The other reader's open Log fields, by campaign and note. An edit form here holds them
+    /// back too, so its save row says so (ruling Q-t): the waiting state is the two readers'.
+    pub logs_elsewhere: Vec<LogKey>,
+    /// The note whose edit form the other reader drew in its last pass. Its save row explains
+    /// a waiting Log field, so this reader's footer does not say it again.
+    pub form_shown_elsewhere: Option<Uuid>,
+    /// The note whose edit form this reader drew, and the pass it drew it in.
+    form_drawn: Option<(Uuid, u64)>,
 }
 
 /// A reader's `Add to fight`: what joins the open run, by the run's own add
@@ -3045,11 +3133,9 @@ impl Reader {
         if file_line && let Some(campaign) = campaign {
             // A note that a Part of change found unreadable gets no editor link here either.
             let editor = !(self.group_error && self.group_error_unread_file);
-            let shared_name = index.items.iter().any(|other| {
-                other.entry.id != item.entry.id
-                    && other.entry.kind == "world"
-                    && other.entry.name.eq_ignore_ascii_case(&item.entry.name)
-            });
+            let shared_name = index
+                .position(item.entry.id)
+                .is_some_and(|at| index.shares_name(at));
             entry_file_line(ui, &campaign.path, &item.entry.path, editor, shared_name);
         }
         // Every warning sits below the file line, so the file line keeps its place. Each wraps
@@ -4229,13 +4315,12 @@ impl Reader {
         // An open `Add to Log` field waits while an edit form of its entry is open, here or in
         // the other reader. It ends when the form closes (Save, Discard) or the reader shows
         // another entry.
-        // An edit form in THIS reader says it at its save row (ruling Q-t); the footer says it
-        // only when the form is in the other reader, which has the save row.
+        // One save row says it (ruling Q-t): the form's, in this reader or the other. This
+        // footer says it only while the form is open in the other reader and its save row is
+        // not on screen there.
         if let Some(campaign) = campaign
             && takes_log(item, index)
-            && self.held.log_fields.contains_key(&(campaign.id, id))
-            && !self.editing(id, campaign)
-            && self.edited_elsewhere.contains(&id)
+            && self.footer_names_log((campaign.id, id))
         {
             messages.outcome(Notice::new(crate::sentence!(
                 "Save or discard your edit to add a Log line."
@@ -5441,6 +5526,49 @@ mod tests {
             "Place has 2 matches",
             "FD1-words"
         );
+
+        // Round 29 FI2: one fault record per note, found once per index. The row's words, the
+        // header's count and the count's menu read the same records. Rook keeps `[[Nowhere]]`;
+        // a renamed note and a duplicate join it, and a plain note has none.
+        let mara = create_entry(&campaign, "Mara", "npc").unwrap();
+        fs::rename(
+            dir.path().join("NPCs/Mara.md"),
+            dir.path().join("NPCs/Vell.md"),
+        )
+        .unwrap();
+        let gate = create_entry(&campaign, "Gate", "location").unwrap();
+        let gate_path = {
+            let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+            dir.path()
+                .join(&index.items[index.position(gate).unwrap()].entry.path)
+        };
+        fs::copy(&gate_path, gate_path.with_file_name("Gate copy.md")).unwrap();
+        let plain = create_entry(&campaign, "Hob", "npc").unwrap();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let scans = crate::lookup::FAULT_SCANS.with(std::cell::Cell::get);
+        let faults = index.note_faults();
+        let fault_of = |id| faults.of_note(index.position(id).unwrap()).cloned();
+        assert_eq!(
+            fault_of(id),
+            Some(NoteFault::Links(vec![LinkProblem::PlaceNotFound]))
+        );
+        assert_eq!(fault_of(mara), Some(NoteFault::Renamed));
+        assert_eq!(NoteFault::Renamed.words(), "File name differs");
+        assert_eq!(fault_of(gate), Some(NoteFault::Duplicate));
+        assert_eq!(fault_of(plain), None);
+        // The menu lists exactly the notes with a record, so the count is their number.
+        let listed: Vec<_> = faults.listed().to_vec();
+        assert!(listed.iter().all(|&at| faults.of_note(at).is_some()));
+        for at in index.world_groups("").values().flatten().map(|(at, _)| *at) {
+            assert_eq!(faults.of_note(at).is_some(), listed.contains(&at), "{at}");
+        }
+        // Asked again, as every frame asks: no second scan of the notes' bodies.
+        let _ = index.note_faults();
+        let _ = index.note_faults().listed().len();
+        assert_eq!(
+            crate::lookup::FAULT_SCANS.with(std::cell::Cell::get),
+            scans + 1
+        );
     }
 
     #[test]
@@ -6319,6 +6447,40 @@ mod tests {
         );
         assert_eq!(fs::read_to_string(&path).unwrap(), edited);
         assert_eq!(lookup.held.log_fields[&key].field.words, "Kept.");
+
+        // Round 29 FC10, ruling Q-t: a Log field of Hob open in BOTH readers, and an edit form
+        // of Hob in one of them. The one save row on screen says the cause; the other reader's
+        // footer does not repeat it. Then the same with the readers exchanged.
+        world.open_log(campaign.id, hob, "Hob", "");
+        let pass = 7;
+        let check = |form: &mut Reader, other: &mut Reader| {
+            form.begin_edit(&campaign, item);
+            form.form_drawn = Some((hob, pass - 1));
+            form.share_with(other, pass);
+            other.share_with(form, pass);
+            assert!(form.save_row_names_log(key), "the form's save row says it");
+            assert!(
+                !other.footer_names_log(key),
+                "the other reader's footer is quiet"
+            );
+            assert!(!form.footer_names_log(key) && !other.save_row_names_log(key));
+            // The form's save row is not on screen (its page is hidden): the other reader's
+            // footer says it, once.
+            form.form_drawn = None;
+            form.share_with(other, pass);
+            assert!(other.footer_names_log(key));
+            form.edits.clear();
+            form.share_with(other, pass);
+            other.share_with(form, pass);
+        };
+        check(&mut world, &mut lookup);
+        check(&mut lookup, &mut world);
+        // A Log field in Lookup only, the form in World: World's save row says it too.
+        world.held.log_fields.clear();
+        world.begin_edit(&campaign, item);
+        lookup.share_with(&mut world, pass);
+        assert!(world.save_row_names_log(key));
+        world.edits.clear();
 
         // A note that cannot be read, and a note renamed or deleted under the open field: the
         // act names the file and writes nothing.
