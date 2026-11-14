@@ -335,7 +335,7 @@ fixed height of two text lines (see Files and recovery), so no reason, result or
 draft's parse error takes the same space. Keeping a draft in the close dialog restores
 its editor focus and cursor.
 
-A changed file stops saving. World uses `disk_conflict_choices` with the noun `note`: “This note changed on disk. Your draft is safe until you choose.” Library uses `entry` in the same choices. Encounters says the same sentence with `encounter`, `group` or `creature` (`This encounter changed on disk. Your draft is safe until you choose.`), and never names the file. When the file is gone, its red choice is `Remove encounter and lose draft` (`group`, `creature`), and the result says `<name> removed. Its draft was discarded.` with `Undo remove`, which gives the draft back. Show secondary `Overwrite with my draft` first, then
+A changed file stops saving. The message names the thing, not the file: “Bridge Ambush changed on disk. Your draft is safe until you choose.” `disk_conflict_choices` takes a `ConflictSubject`: the thing's name, or `This <noun>` only for a thing with no name (a World note's repair editor: “This note changed on disk.”). World's edit form names its entry. Library (`entry`) and Encounters (`encounter`, `group`, `creature`) say the same sentence. When the file is gone, its red choice is `Remove encounter and lose draft` (`group`, `creature`), and the result says `<name> removed. Its draft was discarded.` with `Undo remove`, which gives the draft back. Show secondary `Overwrite with my draft` first, then
 red `Reload and lose my draft`. Neither has accent fill. These messages cannot be dismissed. Library and World
 draw the choices through `message_with_actions`: the row starts at the message text, not at the warning bar, and
 an `L` gap comes before the red choice. Library's note of the entries that need a deleted file sits in the same
@@ -977,7 +977,7 @@ group, a group moved or deleted on save, a removed encounter (`Removed encounter
 `Edit in Obsidian` with `message_with_actions`, so the link starts at the warning's words, in the edit form and in a
 reader with no file line.
 
-Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. A full NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader (Lookup) keeps status on the kind line, as the plain evening's contract keeps every text of today, and shows a campaign entry's Status row with its Change below it, so the DM changes a status where the entry is read, with the same write, Log line and `Undo status change` in Lookup's footer. `Change` puts the keyboard in the field with its words selected, in both readers. A compact reader has no file line: while a duplicate-note repair message shows, its kind line drops the fault and names the open file instead (`NPC · Campaign · NPCs/Rook Ambry copy.md`). The result rows keep the fault. Use a fixed label column, aligned
+Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. Status shows once (`ReaderStatus`): when the reader draws a campaign entry's Status row, World's and Lookup's kind line has no status (`NPC · Campaign`); an entry with no Status row (a package entry, a built-in creature) keeps its status on the kind line. Lookup shows a campaign entry's Status row with its Change below it, so the DM changes a status where the entry is read, with the same write, Log line and `Undo status change` in Lookup's footer. `Change` puts the keyboard in the field with its words selected, in both readers. A compact reader has no file line: while a duplicate-note repair message shows, its kind line drops the fault and names the open file instead (`NPC · Campaign · NPCs/Rook Ambry copy.md`). The result rows keep the fault. Use a fixed label column, aligned
 values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
 gap, capped at the value measure. Values wrap within their column, with Change level with the value's first line (a missing link's name line, not
 `Not found` below it). Read mode hides empty relationship and status values. An NPC keeps its empty Stat block row and Change action, so assigning its first stat block still takes three interactions from the reader. This row says `not set`. A set value is `Body` in the text colour, as a set link is, so a value and its absence differ at a glance; only `not set` (muted) and `not read` (warning) stay `Small`. The edit form draws its values the same way, groups included. Edit on the title line opens all fields, including empty ones. A typed page with no set values shows its prose directly, except for this NPC Stat block row: with no row, the value block adds no gap, so the prose starts as far below the file line as a plain note's does. Missing links retain names and keep `Not found` on one line beside a label column. A missing link's icon and name
@@ -1073,7 +1073,7 @@ campaign change, and the campaign switch's guard and the close warning count the
 `“<name>” was deleted. The Log line was not added: “<words>”` with `Copy text` and, an `L` gap after it, `Dismiss`
 (the choices of a lost draft), whatever the reader shows and also while Lookup shows no entry, until the DM copies
 or dismisses it. While the entry's edit form is open, here or in the other reader, the field waits with its words
-and takes no room; the reason `Save or discard your edit first.` is in the pane's footer, so the form never moves. A package's entry has no `Add to Log`. Edit replaces the rows and
+and takes no room; the reason `Save or discard your edit to add a Log line.` is in the pane's footer, so the form never moves. A package's entry has no `Add to Log`. Edit replaces the rows and
 the text with one form. Read and Edit show Stat block, In, Part of, then Status, so a value keeps its place when the DM
 presses Edit; conflict lines after Overwrite use the same order. Text follows in the reader's prose type,
 without the title line. The Text field ends at the same `FORM_WIDTH` edge as Status. One frame holds
@@ -1972,7 +1972,7 @@ the members from their end (Encounter difficulty, above). Every `·` on the row,
 same blank on each side: the font's own spacing around `·` is uneven, so the row moves each `·` by whole pixels. The
 opened row's `Read encounter` line does not say the difficulty again. A fight with no word because an input is not
 known ends its row with that, and whose, in the word's place: `XP not known: Nameless Thing`, or `Level not known:
-<name>`; with more names, the first and `and 2 more`. Where the row has no room, the first name shortens from its end
+<name>`; with more names, the first and `and 2 more`. One exception: a plan row whose every creature lacks its XP already says whose in its summary, so it ends with `XP not known` alone (`5 party · 1 × Nameless Thing · XP not known`); a creature with a known XP beside them keeps the names. Where the row has no room, the first name shortens from its end
 (`XP not known: Namel…`) and goes only when no letter of it fits (X1); hover and the accessible name keep the whole. The names come from `Scale::weigh`'s typed answer
 (`Difficulty::missing`). The encounter editor, where the DM can repair the cause, ends its line with the names: `ROSTER 6 · XP not known: Nameless Thing`, or in the tab row below 760 px, where the word
 would be. Without room the names shorten from their end (`XP not known: Nameless Th…`) and go only when no letter
@@ -2073,7 +2073,7 @@ fight with <name>`), blocked as the editor's is; then `Add to Log` when it is no
 tonight last (`icons::REMOVE`). Remove from tonight says `Removed “<words>” from tonight.` with Undo remove, in
 the success tone, at the removed row's place while that place is drawn. The Undo is the note's: when that
 place is folded, or no longer among the rows (the fight before it was played), the result and its Undo show in
-the plan's message footer. A done scene does not count in Tonight. Read leaves scenes out as it
+the plan's message footer. Tonight counts the rows under it, a done scene too, as every group heading counts its rows. Read leaves scenes out as it
 leaves out link-only plan lines, and its count line names them: `1 fight, 1 group and 2 scenes, in the plan`.
 Scenes fold first, so that the next fight's row and its primary action stay in view. Each row counts as it is
 when closed: when the closed rows, with the scenes, do not fit the pane, every scene folds. An opened row

@@ -1021,6 +1021,21 @@ pub fn broken(d: &mut Driver<'_>) {
         fits,
         "At 960, the longest path's message wraps whole and its choices stay in view",
     );
+    // Round 28 FH9: the title is the file's name, so the file line shows the folder, not the
+    // file name again.
+    let line = d.at_size(SMALL, |d| {
+        d.nodes()
+            .into_iter()
+            .find(|node| node.name.ends_with(long_path))
+            .map(|node| d.painted_in(node.rect))
+    });
+    d.observe(
+        "iter-28-D-FH9",
+        line.as_deref().is_some_and(|words| {
+            words.trim_end().ends_with('/') && !words.contains("Harbour Council.md")
+        }),
+        format!("The file line under the file-name title says {line:?}"),
+    );
     d.state("repair-cannot-open-long", Sizes::Small);
     // A file deleted outside Splat while its pane is open ends the pane on the next load.
     fs::remove_file(&long).unwrap();
@@ -1495,7 +1510,7 @@ pub fn broken(d: &mut Driver<'_>) {
     let outside = format!("{fixed}\nAn outside line.\n");
     fs::write(&path, &outside).unwrap();
     d.click("Save changes");
-    d.expect("This note changed on disk. Your draft is safe until you choose.");
+    d.expect("Repaired watchkeeper changed on disk. Your draft is safe until you choose.");
     d.settle();
     d.click("Reload and lose my draft");
     d.settle();
@@ -1980,7 +1995,7 @@ pub fn facts(d: &mut Driver<'_>) {
     let external = format!("{unchanged}\nWritten in Obsidian while the group draft was open.\n");
     fs::write(&lore_path, &external).unwrap();
     d.click("Save changes");
-    d.expect("This note changed on disk");
+    d.expect("Horn Rings changed on disk");
     assert_eq!(fs::read_to_string(&lore_path).unwrap(), external);
     d.click("Overwrite with my draft");
     d.wait_for_text("Changes saved.");
@@ -2208,6 +2223,25 @@ pub fn facts(d: &mut Driver<'_>) {
             format!("At {size:?} the stamp {stamp:?} and the field {field:?} end at the measure"),
         );
     }
+    // Round 28 AC3, FA6, AA4: beside the field, the stamp is centred on the field's line.
+    for size in [DEFAULT, LARGE] {
+        let (stamp, field) = d.at_size(size, |d| {
+            (
+                d.place_of("Session 1:"),
+                d.nodes()
+                    .into_iter()
+                    .find(|node| node.name == "Log line for Zarel" && node.role == Role::TextInput)
+                    .map(|node| node.rect),
+            )
+        });
+        d.observe(
+            "iter-28-D-FA6",
+            stamp.zip(field).is_some_and(|(stamp, field)| {
+                stamp.right() < field.left() && (stamp.center().y - field.center().y).abs() <= 1.0
+            }),
+            format!("At {size:?} the stamp {stamp:?} beside the field {field:?}"),
+        );
+    }
     d.state("log-field-open", Sizes::All);
     d.type_text("Gave the gate key to Iselle.");
     d.press(Key::Enter);
@@ -2343,8 +2377,38 @@ pub fn facts(d: &mut Driver<'_>) {
     let horn = root(d).join("Lore/Horn Rings.md");
     let open = fs::read_to_string(&horn).unwrap();
     let question = "Open: Can a horn ring be sold?";
+    // The list row just below the Open questions row.
+    let row_below = |d: &Driver<'_>| {
+        let nodes = d.nodes();
+        let open = nodes
+            .iter()
+            .find(|node| node.name.starts_with("Open questions · "))?
+            .rect;
+        nodes
+            .iter()
+            .filter(|node| {
+                node.name.contains(" · ")
+                    && node.rect.top() >= open.bottom() - 0.5
+                    && node.rect.left() < open.right()
+                    && node.rect.right() > open.left()
+            })
+            .map(|node| node.rect)
+            .min_by(|a, b| a.top().total_cmp(&b.top()))
+    };
+    let below_before = row_below(d);
     d.click(question);
     d.expect("Undo tick");
+    // Round 28 FE4: the last question ticked, the row stays while its page is open, says that
+    // none is open, and the row below keeps its place; the page says so too.
+    let below_after = row_below(d);
+    d.observe(
+        "iter-28-D-FE4",
+        d.has("Open questions · No open questions")
+            && d.visible_text("No open questions.")
+            && below_before.is_some()
+            && below_before == below_after,
+        format!("The row below: {below_before:?} → {below_after:?}"),
+    );
     d.observe(
         "T15.5",
         fs::read_to_string(&horn).unwrap()
@@ -4421,6 +4485,8 @@ pub(super) fn lookup_prose_gap(d: &Driver<'_>, title: &str, kind: &str) -> Optio
                 && node.rect.top() <= kind.bottom() + design::XL
                 && (node.name.starts_with("Edit ")
                     || node.name == "Add to Log"
+                    || node.name == "Open this session"
+                    || node.name == "Open on the timeline"
                     || node.name.starts_with("Start a fight with "))
         })
         .map(|node| node.rect.bottom())
@@ -10702,7 +10768,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     );
 
     // A readable list: the draft adds a group while Obsidian adds another.
-    let conflict = "This note changed on disk. Your draft is safe until you choose.";
+    let conflict = "Safe Rook changed on disk. Your draft is safe until you choose.";
     let zarel = "- \"[[Zarel|the Archdevil]]\" # Keep the alias.\n";
     let outside_line = "- '[[Outside Guild]]' # Added in Obsidian.\n";
     let outside = readable.replace(zarel, &format!("{zarel}{outside_line}"));
@@ -11000,7 +11066,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     );
     fs::write(&path, &unread).unwrap();
     d.click("Save changes");
-    d.expect("This note changed on disk. Your draft is safe until you choose.");
+    d.expect("Safe Rook changed on disk. Your draft is safe until you choose.");
     // The save reads the note again, as a refused Part of write does.
     d.settle();
     d.observe_both(
@@ -11023,7 +11089,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         choices_at_text(
             d,
             "iter-15-E-AD3-world-edit",
-            "This note changed on disk",
+            "Safe Rook changed on disk",
             "Overwrite with my draft",
             "Reload and lose my draft",
             None,
@@ -11312,7 +11378,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     d.expect("Added Guild");
     d.click("Added Guild");
     d.click("Save changes");
-    d.expect("This note changed on disk. Your draft is safe until you choose.");
+    d.expect("Safe Rook changed on disk. Your draft is safe until you choose.");
     d.click("Overwrite with my draft");
     d.settle();
     assert_eq!(
