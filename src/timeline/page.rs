@@ -22,12 +22,10 @@ const EVENT_PLACE: design::FieldName = crate::field_id!("event_place");
 const EVENT_KIND: design::FieldName = crate::field_id!("timeline_event_kind");
 const EVENT_SESSION: design::FieldName = crate::field_id!("timeline_event_session");
 const PLACE_AFTER: design::FieldName = crate::field_id!("timeline_place_after");
-/// The page's own view choices: which session it shows, and where new events go. They are the
-/// page's state, not saved object data.
+/// The page's own view choice: which session it shows. It is the page's state, not saved
+/// object data.
 const SESSION_FILTER: design::FieldId =
     crate::field_id!("timeline_session_filter").once(design::Once::PageSearch);
-const NEW_EVENTS_SESSION: design::FieldId =
-    crate::field_id!("timeline_new_events_session").once(design::Once::PageSearch);
 
 #[derive(Clone, Copy, Default, PartialEq)]
 enum Filter {
@@ -578,6 +576,14 @@ impl TimelinePage {
     }
 
     /// Where a new event goes, said before it happens. An encounter run goes there too.
+    ///
+    /// Kept on `egui::ComboBox`: its narrow control shows the chosen session's short form
+    /// (`Session 1`) while its list shows the whole names, and `design::Dropdown` shows only the
+    /// chosen row's own words (a gap sent to the part's owner).
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn new_events_line(
         &mut self,
         ui: &mut egui::Ui,
@@ -585,16 +591,23 @@ impl TimelinePage {
         current: Option<Uuid>,
     ) {
         ui.label(Type::Small.rich(ui, "Adds to").color(colors().muted));
+        let label = current
+            .and_then(|id| sessions.iter().find(|session| session.id == id))
+            .map_or("No session", |session| short_session(&session.label));
         let mut chosen = current;
-        design::Dropdown::new(NEW_EVENTS_SESSION, "Session for new events")
-            .choice(None, "No session")
-            .choices(
-                sessions
-                    .iter()
-                    .map(|session| (Some(session.id), session.label.as_str())),
-            )
+        let inner = egui::ComboBox::from_id_salt("timeline_new_events_session")
+            .truncate()
+            .selected_text(label)
             .width(design::READER_MEASURE / 4.0)
-            .show(ui, &mut chosen);
+            .icon(design::combo_icon)
+            .show_ui(ui, |ui| {
+                design::choice_value(ui, &mut chosen, None, "No session");
+                for session in sessions {
+                    design::choice_value(ui, &mut chosen, Some(session.id), &session.label);
+                }
+            });
+        design::named(ui, &inner.response, "Session for new events");
+        inner.response.on_hover_text(label);
         if chosen != current {
             self.new_events_to = Some(chosen);
         }

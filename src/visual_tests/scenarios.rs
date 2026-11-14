@@ -13032,7 +13032,7 @@ pub mod session_notes {
 
         // Reading last week's note does not send tonight's run there.
         d.click(NAV_TIMELINE);
-        d.click_starting("Session for new events: ");
+        d.click("Session for new events");
         d.click("No session");
         d.click(NAV_SESSIONS);
         d.click("New session");
@@ -16085,20 +16085,29 @@ pub mod session_recording {
             "Enter the model’s name.",
             "Paste a key first.",
         ];
-        let forms: Vec<_> = reasons
-            .iter()
-            .map(|words| {
-                let place = d.place_of(words);
-                (
-                    *words,
-                    place.is_some(),
-                    d.painted_color(words),
-                    place.and_then(|place| d.painted_size(place, words)),
-                )
-            })
-            .collect();
-        let model_reason = d.place_of("Enter the model’s name.");
-        let model_help = d.place_of("The name your service gives it. For OpenAI, gpt-transcribe.");
+        // At 1200 px all three reasons are in view at once. At 960 the key row's reason is under
+        // the footer since round 28 (the field part keeps `L` after each help, where this form
+        // kept `M`); the reasons' form does not depend on the window's size.
+        let (forms, model, model_reason, model_help) = d.at_size(DEFAULT, |d| {
+            let forms: Vec<_> = reasons
+                .iter()
+                .map(|words| {
+                    let place = d.place_of(words);
+                    (
+                        *words,
+                        place.is_some(),
+                        d.painted_color(words),
+                        place.and_then(|place| d.painted_size(place, words)),
+                    )
+                })
+                .collect();
+            (
+                forms,
+                d.place_of("Speech model"),
+                d.place_of("Enter the model’s name."),
+                d.place_of("The name your service gives it. For OpenAI, gpt-transcribe."),
+            )
+        });
         d.observe(
             "iter-26-S-FM6",
             forms.iter().all(|(_, shown, colour, size)| {
@@ -20779,7 +20788,7 @@ pub mod session_plan {
     /// New events go to this session, by the Timeline page's own control.
     fn go_timeline_choose_session(d: &mut Driver<'_>, session: &str) {
         d.click(NAV_TIMELINE);
-        d.click_starting("Session for new events: ");
+        d.click("Session for new events");
         d.click_starting(session);
     }
 

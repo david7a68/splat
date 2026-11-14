@@ -2183,7 +2183,7 @@ top edge of the scrolling fields. Headers end at the fields' right edge. Opening
 headers use only the named calendar icon; days show Starts without Ends, and start time is Kind's help line.
 Field labels have `M` before them. Copy link uses a check and Copied for two seconds. Link text stays in a
 quiet section; Place after is the only ordering control. Adds to shares the filter line. Kind, Session, Place
-after, Show one session and Adds to are `Dropdown`s: the control shows the whole chosen label, cut at its end.
+after and Show one session are `Dropdown`s: the control shows the whole chosen label, cut at its end.
 A title that is empty or only says the event's kind (the plan names a new event by its kind) is no title
 (`Event::own_title`): the header, the row and the label say the kind once (`Day 1`, not `Day 1: Day`). Context shows visible
 out of total while filtering; the filter says Major events.

@@ -898,6 +898,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/slash.rs", "popup_at", &[Ban::Layout(1)]),
         ("src/timeline/page.rs", "detail", &[Ban::Layout(1)]),
         ("src/timeline/page.rs", "list", &[Ban::Layout(1)]),
+        ("src/timeline/page.rs", "new_events_line", &[Ban::Layout(1)]),
         (
             "src/trackers.rs",
             "an_open_history_prepares_its_rows_once_and_draws_only_those_in_view",
