@@ -3160,9 +3160,10 @@ impl<'a> Footer<'a> {
             .join(" ");
         let messages = std::mem::take(&mut self.messages);
         // Ruling R29: the room an open lock keeps for its reason is a reservation. It stays while
-        // the footer has room for it under its cap, so a lock moves nothing; else it gives up its
-        // room first, and never makes the footer scroll. Its height comes from the last pass that
-        // drew it.
+        // the footer has room for it under its cap, so a lock moves nothing; else it is not drawn,
+        // so it never makes the footer scroll. The footer keeps its height (up to the cap) either
+        // way: a message that comes later takes that room, and no pressed choice moves. Its height
+        // comes from the last pass that drew it.
         use super::outcome::{GIVE_UP, RESERVED};
         let (give_up_key, room_key) = (self.id.with("give_up"), self.id.with("reserved"));
         let (give_up, known) = ui.ctx().data(|data| {
@@ -3196,8 +3197,7 @@ impl<'a> Footer<'a> {
             ui.ctx()
                 .request_discard("the message footer's reservations changed");
         }
-        let content = bare + if next { 0.0 } else { room };
-        let wanted = (content + 2.0 * PART_INSET).ceil().min(most);
+        let wanted = (bare + room + 2.0 * PART_INSET).ceil().min(most);
         if (wanted - stored).abs() >= HAIRLINE_WIDTH {
             ui.ctx()
                 .data_mut(|data| data.insert_temp(self.id.with("height"), wanted));
