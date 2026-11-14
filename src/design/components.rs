@@ -582,51 +582,6 @@ pub const LINE_START_HANG: f32 = S;
 /// the pane, inside the parent's clip (`pane::body_clip`).
 pub const LINE_START_REACH: f32 = LINE_START_HANG + super::tokens::ICON_SLOT;
 
-/// A `line_start` action's pointer clicks come only from presses that started inside its room.
-/// The press's origin is kept while the button is down on the action (by its id, until the
-/// release); a press and release in one frame read the press from that frame's input. A refused
-/// click comes back as a quiet response under the same id (no click flag), and the action's
-/// registration, focus and non-pointer activations (Enter, Space, AccessKit) are untouched.
-fn line_start_press(ui: &Ui, response: Response, room: Rect) -> Response {
-    let key = response.id.with("line_start_press_origin");
-    if response.is_pointer_button_down_on()
-        && let Some(origin) = ui.input(|input| input.pointer.press_origin())
-    {
-        ui.data_mut(|data| data.insert_temp(key, origin));
-    }
-    if !response.clicked_by(egui::PointerButton::Primary) {
-        if !response.is_pointer_button_down_on() {
-            ui.data_mut(|data| data.remove::<egui::Pos2>(key));
-        }
-        return response;
-    }
-    let kept = ui.data_mut(|data| data.remove_temp::<egui::Pos2>(key));
-    let origin = kept.or_else(|| {
-        ui.input(|input| {
-            input.raw.events.iter().rev().find_map(|event| match event {
-                egui::Event::PointerButton {
-                    pos,
-                    button: egui::PointerButton::Primary,
-                    pressed: true,
-                    ..
-                } => Some(*pos),
-                _ => None,
-            })
-        })
-    });
-    let keyboard = ui
-        .input(|input| input.key_pressed(egui::Key::Enter) || input.key_pressed(egui::Key::Space));
-    if keyboard || origin.is_none_or(|origin| room.contains(origin)) {
-        return response;
-    }
-    let mut quiet = ui.interact(Rect::NOTHING, response.id.with("refused"), Sense::hover());
-    quiet.id = response.id;
-    quiet.rect = response.rect;
-    quiet.interact_rect = response.interact_rect;
-    quiet.sense = response.sense;
-    quiet
-}
-
 impl<'a> Action<'a> {
     fn new(kind: Kind, label: &'a str) -> Self {
         Self {
@@ -893,15 +848,14 @@ impl<'a> Action<'a> {
             } else {
                 rect
             };
-            // Its target is every painted pixel inside its room, and it is always registered to
-            // take clicks, so focus, the keyboard and AccessKit work whatever the pointer does.
-            // Only a POINTER click is refused, when its press started outside the room (egui
-            // also gives a press to a target up to `interact_radius` away), decided where the
-            // click is handled (`line_start_press`).
+            // Ruling R19: its press area is its painted area inside its room, registered once
+            // for clicks; egui's nearest-target rule applies to it as to every control. It is
+            // never inside a reserved band (`hang_limit`), so a press directly on a splitter
+            // band or a scroll lane is that control's direct hit.
             let room = ui.clip_rect().with_min_x(ui.clip_rect().left().max(limit));
             let clip = ui.clip_rect();
             ui.set_clip_rect(room);
-            let response = line_start_press(ui, ui.interact(target, id, Sense::click()), room);
+            let response = ui.interact(target, id, Sense::click());
             ui.set_clip_rect(clip);
             (rect, response)
         } else {
@@ -4926,6 +4880,76 @@ mod tests {
                 );
             }
         }
+        // P3a, ruling R19 (proof 3): a hanging Undo keeps keyboard focus, Enter, Space and an
+        // AccessKit click with the pointer anywhere; one input frame per step, counted in it.
+        use crate::visual_tests::input_frame::one_pass;
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(360.0, 200.0))
+            .build_ui_state(
+                |ui, count: &mut usize| {
+                    // Behind a parent clip from x 100, so a pointer at x 40 is outside its room;
+                    // 260 px of room wraps the line, so the Undo hangs (`line_start_in_column`).
+                    let room = ui.available_rect_before_wrap().with_min_x(100.0);
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(room), |ui| {
+                        let mut clip = ui.clip_rect();
+                        clip.min.x = 100.0;
+                        ui.set_clip_rect(clip);
+                        *count += usize::from(undo_message(ui, Tone::Success, TEXT, UNDO));
+                    });
+                },
+                0_usize,
+            );
+        super::super::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let undo = harness.get_by_label(UNDO).accesskit_node().id();
+        harness.get_by_label(UNDO).focus();
+        harness.run_steps(2);
+        let focused = |harness: &egui_kittest::Harness<'_, usize>| {
+            harness
+                .ctx
+                .memory(|memory| memory.focused())
+                .map(|id| id.value())
+                == Some(undo.0)
+        };
+        assert!(focused(&harness), "undo-focus-setup: the Undo has focus");
+        let undo_rect = harness.get_by_label(UNDO).rect();
+        one_pass(
+            &mut harness,
+            [egui::Event::PointerMoved(pos2(40.0, undo_rect.center().y))],
+        );
+        assert!(
+            focused(&harness) && *harness.state() == 0,
+            "undo-pointer-away: the pointer away from the Undo keeps its focus and presses nothing ({})",
+            harness.state()
+        );
+        let key = |key, pressed| egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        };
+        let mut counts = Vec::new();
+        for event in [
+            key(egui::Key::Enter, true),
+            key(egui::Key::Enter, false),
+            key(egui::Key::Space, true),
+            key(egui::Key::Space, false),
+            egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+                action: egui::accesskit::Action::Click,
+                target: undo,
+                data: None,
+            }),
+        ] {
+            one_pass(&mut harness, [event]);
+            counts.push(*harness.state());
+        }
+        assert_eq!(
+            counts,
+            vec![1, 1, 2, 2, 3],
+            "undo-keys: Enter, release, Space, release and an AccessKit click with the pointer away"
+        );
     }
 
     /// Every section form says to a screen reader whether it is open, and the state follows a

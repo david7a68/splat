@@ -1065,8 +1065,8 @@ pub(crate) fn reserve(ui: &Ui, band: Rect) {
         reserved.bands.push((layer, band));
     });
     // A band that comes after a column beside it drew cannot move that column's hangs any more
-    // in this pass: the layout owner reserves sibling lanes first (`reserve_lanes`). Refused in
-    // debug builds and tests, as a nested vertical column is.
+    // in this pass: the layout owner reserves sibling lanes first (`reserve_lanes`). This is not
+    // refused and gives no protection: test builds only record it (`late_bands`).
     let late = ui.ctx().data(|data| {
         data.get_temp::<Limits>(limits_id())
             .filter(|limits| limits.pass == pass)
@@ -1082,9 +1082,9 @@ pub(crate) fn reserve(ui: &Ui, band: Rect) {
                     .map(|(_, limit, span)| (*limit, *span))
             })
     });
-    // Test builds keep each one (`late_bands`); the part test asserts it. Not a panic: one
-    // caller does it today (the Library reader, `library-browse` at 960), and its fix is in
-    // that caller (`reserve_lanes`).
+    // Test builds keep each one (`late_bands`); the part test asserts it. Today: Lookup
+    // (`src/lib.rs:2945`) draws before the Library reader reserves its lane
+    // (`src/library.rs:8308`); their common layout owner must reserve before Lookup draws.
     #[cfg(test)]
     if let Some((limit, span)) = late {
         ui.ctx().data_mut(|data| {
@@ -2313,6 +2313,8 @@ mod row_cut_tests {
             label: Rect,
             clip: Rect,
             parent: Rect,
+            /// Clicks of `Stop` and the icon action, counted in the frame egui reports them.
+            presses: usize,
         }
         impl Default for State {
             fn default() -> Self {
@@ -2323,6 +2325,7 @@ mod row_cut_tests {
                     label: Rect::NOTHING,
                     clip: Rect::NOTHING,
                     parent: Rect::NOTHING,
+                    presses: 0,
                 }
             }
         }
@@ -2335,20 +2338,25 @@ mod row_cut_tests {
                 .pane(ui, Body::Content, |ui| {
                     let mut stop = None;
                     let mut icon = None;
+                    let mut presses = 0;
                     if action {
                         let shown = Action::quiet("Stop").line_start().show(ui);
+                        presses += usize::from(shown.clicked());
                         stop = Some((shown.rect, shown.interact_rect));
                         let shown = Action::quiet("Add one")
                             .icon(crate::design::icons::ERROR)
                             .line_start()
                             .show(ui);
+                        presses += usize::from(shown.clicked());
                         icon = Some((shown.rect, shown.interact_rect));
                     }
                     let label = ui.label("A plain label").rect;
-                    (stop, icon, label, ui.clip_rect())
+                    (stop, icon, label, ui.clip_rect(), presses)
                 })
                 .body;
-            (state.stop, state.icon, state.label, state.clip) = drawn;
+            let presses;
+            (state.stop, state.icon, state.label, state.clip, presses) = drawn;
+            state.presses += presses;
         };
         // 1 and 3: a 16 px page margin at the pane's left.
         let mut margin = egui_kittest::Harness::builder()
@@ -2543,7 +2551,7 @@ mod row_cut_tests {
         // first: the second column's surface and hang limit start EXACTLY at the first's lane,
         // and its icon action (28 px hang, 20 px short) is whole there, in both draw orders when
         // the layout owner reserves both lanes first (`reserve_lanes`). Right first without it,
-        // the late lane is refused (debug builds and tests).
+        // the late lane is only recorded (`late_bands`, test builds); nothing protects that pass.
         let two_columns = |right_first: bool, lanes_first: bool| {
             let mut columns = egui_kittest::Harness::builder()
                 .with_size(vec2(700.0, 300.0))
@@ -2694,109 +2702,187 @@ mod row_cut_tests {
                 && stop.height() >= 24.0
                 && stop.width() >= 30.0
                 && (hit.left() - stop.left()).abs() <= 0.5
-                && (hit.width() - stop.width()).abs() <= 0.5,
+                && (hit.width() - stop.width()).abs() <= 0.5
+                && hit.height() >= 24.0,
             "gutter-parent-cut-whole: Stop {stop:?} starts at the clip {:?}, whole, and its press area {hit:?} is all of it",
             state.parent
         );
-        // 8 (lead point 4): a real press 2 px outside the clip, with no other target there, does
-        // not reach `Stop` (egui gives a press to a target up to `interact_radius` away); a press
-        // on Stop's own leftmost pixel does.
-        for (offset, wanted) in [(-2.0_f32, false), (0.5, true)] {
+        // 8 (ruling R19, proofs 1 and 4): with the pointer outside the action's room, ONE input
+        // frame moves it onto the action's first visible pixel, presses and releases: exactly one
+        // activation. Beside a parent's clip (no other target), and in a real menu (the popup's
+        // background takes a press). A press just outside the edge may reach the action by
+        // egui's nearest-target rule, as for every control (R19).
+        let first_pixel_frame = |menu: bool| {
             let mut press = egui_kittest::Harness::builder()
-                .with_size(vec2(700.0, 300.0))
-                .build_ui_state(
-                    move |ui, state: &mut (Rect, Rect, bool)| {
-                        let room = ui.available_rect_before_wrap();
-                        ui.scope_builder(
-                            egui::UiBuilder::new().max_rect(room.with_min_x(100.0)),
-                            |ui| {
-                                let mut clip = ui.clip_rect();
-                                clip.min.x = 100.0;
-                                ui.set_clip_rect(clip);
-                                let shown = Action::quiet("Stop").line_start().show(ui);
-                                state.2 |= shown.clicked();
-                                (state.0, state.1) = (shown.rect, ui.clip_rect());
-                            },
-                        );
-                    },
-                    (Rect::NOTHING, Rect::NOTHING, false),
-                );
-            crate::design::theme::install(&press.ctx);
-            press.run_steps(2);
-            let (stop, clip, _) = *press.state();
-            let radius = egui::Style::default().interaction.interact_radius;
-            let at = pos2(clip.left() + offset, stop.center().y);
-            assert!(
-                stop.left() - at.x < radius && stop.left() >= clip.left() - 0.5,
-                "gutter-press-pressure: the press at {at:?} is within egui's {radius} px of Stop {stop:?}"
-            );
-            press.input_mut().events.push(egui::Event::PointerMoved(at));
-            press.step();
-            for pressed in [true, false] {
-                press.input_mut().events.push(egui::Event::PointerButton {
-                    pos: at,
-                    button: egui::PointerButton::Primary,
-                    pressed,
-                    modifiers: egui::Modifiers::NONE,
-                });
-            }
-            press.step();
-            press.step();
-            assert_eq!(
-                press.state().2,
-                wanted,
-                "gutter-press: a press at {at:?} (clip from {}) reaches Stop {stop:?}: {wanted}",
-                clip.left()
-            );
-        }
-        // 8b (Astra 1): inside a real menu (the popup's background takes a press): a press on the
-        // first visible pixel of a menu choice reaches it; one 2 px outside its clip does not.
-        for (offset, wanted) in [(-2.0_f32, false), (0.5, true)] {
-            let mut menu = egui_kittest::Harness::builder()
                 .with_size(vec2(700.0, 400.0))
                 .build_ui_state(
-                    move |ui, state: &mut (Rect, Rect, bool)| {
-                        let button = crate::design::menu_button(ui, "Roll menu", false);
-                        crate::design::menu_popup(&*ui, &button)
-                            .open(true)
-                            .show(|ui| {
-                                let shown = Action::quiet("Roll")
-                                    .density(crate::design::Density::Read)
-                                    .line_start()
-                                    .show(ui);
-                                state.2 |= shown.clicked();
-                                (state.0, state.1) = (shown.rect, ui.clip_rect());
-                            });
+                    move |ui, state: &mut (Rect, Rect, usize)| {
+                        let choice = |ui: &mut Ui, state: &mut (Rect, Rect, usize)| {
+                            let shown = Action::quiet("Roll")
+                                .density(crate::design::Density::Read)
+                                .line_start()
+                                .show(ui);
+                            state.2 += usize::from(shown.clicked());
+                            (state.0, state.1) = (shown.rect, ui.clip_rect());
+                        };
+                        if menu {
+                            let button = crate::design::menu_button(ui, "Roll menu", false);
+                            crate::design::menu_popup(&*ui, &button)
+                                .open(true)
+                                .show(|ui| choice(ui, state));
+                        } else {
+                            let room = ui.available_rect_before_wrap();
+                            ui.scope_builder(
+                                egui::UiBuilder::new().max_rect(room.with_min_x(100.0)),
+                                |ui| {
+                                    let mut clip = ui.clip_rect();
+                                    clip.min.x = 100.0;
+                                    ui.set_clip_rect(clip);
+                                    choice(ui, state);
+                                },
+                            );
+                        }
                     },
-                    (Rect::NOTHING, Rect::NOTHING, false),
+                    (Rect::NOTHING, Rect::NOTHING, 0),
                 );
-            crate::design::theme::install(&menu.ctx);
-            menu.run_steps(4);
-            let (choice, clip, _) = *menu.state();
-            let at = pos2(clip.left() + offset, choice.center().y);
+            crate::design::theme::install(&press.ctx);
+            press.run_steps(4);
+            let (choice, clip, _) = *press.state();
+            let first = pos2(clip.left() + 0.5, choice.center().y);
             assert!(
                 (choice.left() - clip.left()).abs() <= 0.5,
-                "gutter-menu-pressure: the choice {choice:?} starts at the menu's clip {clip:?}"
+                "gutter-first-pixel-pressure (menu {menu}): the action {choice:?} starts at the clip {clip:?}"
             );
-            menu.input_mut().events.push(egui::Event::PointerMoved(at));
-            menu.step();
-            for pressed in [true, false] {
-                menu.input_mut().events.push(egui::Event::PointerButton {
-                    pos: at,
-                    button: egui::PointerButton::Primary,
-                    pressed,
-                    modifiers: egui::Modifiers::NONE,
-                });
-            }
-            menu.step();
-            menu.step();
+            // The pointer rests outside the room first.
+            crate::visual_tests::input_frame::one_pass(
+                &mut press,
+                [egui::Event::PointerMoved(pos2(
+                    clip.left() - 40.0,
+                    choice.center().y,
+                ))],
+            );
+            press.run_steps(2);
+            let before = press.state().2;
+            crate::visual_tests::input_frame::one_pass(
+                &mut press,
+                [
+                    egui::Event::PointerMoved(first),
+                    egui::Event::PointerButton {
+                        pos: first,
+                        button: egui::PointerButton::Primary,
+                        pressed: true,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                    egui::Event::PointerButton {
+                        pos: first,
+                        button: egui::PointerButton::Primary,
+                        pressed: false,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+            );
             assert_eq!(
-                menu.state().2,
-                wanted,
-                "gutter-menu: a press at {at:?} (menu clip from {}) reaches Roll {choice:?}: {wanted}",
-                clip.left()
+                press.state().2 - before,
+                1,
+                "gutter-first-pixel (menu {menu}): one frame that moves onto {first:?} and clicks activates Roll {choice:?} once"
             );
-        }
+        };
+        first_pixel_frame(false);
+        first_pixel_frame(true);
+        // 9 (R19, proof 2): a press directly on the scroll lane of the column beside the action
+        // goes to the lane (the list scrolls), never to the icon action that hangs toward it.
+        let mut lane = egui_kittest::Harness::builder()
+            .with_size(vec2(700.0, 300.0))
+            .build_ui_state(
+                move |ui, seen: &mut (Rect, Rect, f32, usize)| {
+                    let frame = PaneFrame::new(ui);
+                    let messages = Messages::<NoPress>::new(&frame, "gutter_lane", 680.0);
+                    let (list, rect, offset, clicked) = messages
+                        .pane(
+                            ui,
+                            Body::Fills(Fills::for_test(FillsReason::MarkdownEditor)),
+                            |ui| {
+                                let room = ui.available_rect_before_wrap();
+                                let left = room.with_max_x(room.left() + 200.0);
+                                let right = room.with_min_x(left.right() + S);
+                                reserve_lanes(ui, &[left, right]);
+                                let offset = ui
+                                    .scope_builder(egui::UiBuilder::new().max_rect(left), |ui| {
+                                        ScrollColumn::new("gutter_lane_list").show(ui, |ui| {
+                                            for row in 0..60 {
+                                                ui.label(format!("Row {row}"));
+                                            }
+                                        })
+                                    })
+                                    .inner
+                                    .state
+                                    .offset
+                                    .y;
+                                let (rect, clicked) = ui
+                                    .scope_builder(egui::UiBuilder::new().max_rect(right), |ui| {
+                                        ScrollColumn::new("gutter_lane_reader")
+                                            .show(ui, |ui| {
+                                                let shown = Action::quiet("Add one")
+                                                    .icon(crate::design::icons::ERROR)
+                                                    .line_start()
+                                                    .show(ui);
+                                                (shown.rect, shown.clicked())
+                                            })
+                                            .inner
+                                    })
+                                    .inner;
+                                (left, rect, offset, clicked)
+                            },
+                        )
+                        .body;
+                    seen.0 = list;
+                    seen.1 = rect;
+                    seen.2 = offset;
+                    seen.3 += usize::from(clicked);
+                },
+                (Rect::NOTHING, Rect::NOTHING, 0.0, 0),
+            );
+        crate::design::theme::install(&lane.ctx);
+        lane.run_steps(4);
+        let (list, rect, _, _) = *lane.state();
+        let on_lane = pos2(list.right() - 3.0, rect.center().y);
+        assert!(
+            rect.left() > on_lane.x
+                && on_lane.x - (list.right() + S - crate::design::components::LINE_START_REACH)
+                    > 0.0,
+            "gutter-lane-pressure: the press {on_lane:?} is on the lane, inside the icon action's unrestricted hang, left of the action {rect:?}"
+        );
+        crate::visual_tests::input_frame::one_pass(
+            &mut lane,
+            [
+                egui::Event::PointerMoved(on_lane),
+                egui::Event::PointerButton {
+                    pos: on_lane,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ],
+        );
+        crate::visual_tests::input_frame::next_pass(
+            &mut lane,
+            [egui::Event::PointerMoved(on_lane + vec2(0.0, 60.0))],
+        );
+        crate::visual_tests::input_frame::next_pass(
+            &mut lane,
+            [egui::Event::PointerButton {
+                pos: on_lane + vec2(0.0, 60.0),
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: egui::Modifiers::NONE,
+            }],
+        );
+        lane.run_steps(2);
+        let (_, _, offset, clicked) = *lane.state();
+        assert!(
+            offset > 0.0 && clicked == 0,
+            "gutter-lane: the press on the lane scrolls the list (offset {offset}) and never activates the action ({clicked})"
+        );
         // 2: flush against a splitter.
         let mut flush = egui_kittest::Harness::builder()
             .with_size(vec2(700.0, 300.0))
@@ -2854,7 +2940,46 @@ mod row_cut_tests {
                 "gutter-band: {name} {rect:?} and its press area {hit:?} start clear of the band to {band} (clip {:?}, splitter {splitter:?})",
                 state.clip
             );
+            assert!(
+                hit.height() >= 24.0,
+                "gutter-band-height: {name}'s press area {hit:?} is at least 24 px high"
+            );
         }
+        // R19, proof 2: a press directly on the band beside `Stop` is the splitter's (its
+        // handle is pressed), never `Stop`'s.
+        let stop = state.stop.expect("Stop").0;
+        let on_band = pos2(band - 2.0, stop.center().y);
+        let handle = Id::new("navigation").with("__resize");
+        crate::visual_tests::input_frame::one_pass(
+            &mut flush,
+            [
+                egui::Event::PointerMoved(on_band),
+                egui::Event::PointerButton {
+                    pos: on_band,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ],
+        );
+        let held = flush
+            .ctx
+            .read_response(handle)
+            .is_some_and(|response| response.is_pointer_button_down_on());
+        crate::visual_tests::input_frame::next_pass(
+            &mut flush,
+            [egui::Event::PointerButton {
+                pos: on_band,
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: egui::Modifiers::NONE,
+            }],
+        );
+        assert!(
+            held && flush.state().presses == 0,
+            "gutter-band-press: a press at {on_band:?} on the band is the splitter's ({held}), Stop's count {}",
+            flush.state().presses
+        );
     }
 }
 
