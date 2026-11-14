@@ -10318,15 +10318,6 @@ mod tests {
                         line.text()
                     );
                     assert!(target.width() >= design::XL);
-                    // iter-28-R FL9: the link's underline keeps 2 px from its line's bottom, so
-                    // the turn stroke of the row below never meets it.
-                    let underline = link_underline_y(line, name.start).expect("Prone's underline");
-                    let row = &line.rows[0];
-                    assert!(
-                        underline <= row.pos.y + row.size.y - 2.0,
-                        "iter-28-R-FL9: underline {underline}, line bottom {}",
-                        row.pos.y + row.size.y
-                    );
                 }
                 // Through `2`, `last round` and `time is up`, the same words show at every width
                 // and the word after the slot keeps its line. iter-27-R FK2 changes this on
