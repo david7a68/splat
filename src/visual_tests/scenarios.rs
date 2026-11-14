@@ -17537,8 +17537,9 @@ pub mod encounter_groups {
         );
         d.observe(
             "T13.1",
-            d.visible_text("XP 50")
-                && d.has_containing(
+            // R1: the group's own XP (`XP 50`) is its heading's hover and description now; the
+            // line says the fight after.
+            d.has_containing(
                     "Unknown creature · line\u{a0}13: not in this campaign’s packages.",
                 )
                 // iter-26-R FI8: `Will add:` keeps its first member on its line.
