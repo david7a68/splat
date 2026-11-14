@@ -772,7 +772,12 @@ fn planned_summary_on_road(
             fight_summary_text(facts)
         ))
     };
-    let lines = rows(&alone);
+    // The day never adds a line (review of PR 284): the room is the roster's own lines, and
+    // the day gives way last within it (round 28 FE6).
+    let lines = match day {
+        Some(_) if !roster.trim().is_empty() => rows(&laid(fight_summary_text(roster))),
+        _ => rows(&alone),
+    };
     let missing = difficulty
         .filter(|difficulty| difficulty.rating.is_none())
         .and_then(|difficulty| difficulty.missing.as_ref());
@@ -860,14 +865,18 @@ fn planned_summary_on_road(
                 rows(&with_form(facts, &words.replace(' ', "\u{a0}"))) <= lines
             };
             let short = missing.short();
-            // Round 28 FB6: a summary that already names every creature after the colon keeps
-            // them whole with the short reason; cutting a member to name it again says less.
-            let named = !missing.names.is_empty()
-                && missing.names.iter().all(|name| {
-                    units.iter().any(|(_, unit, _)| {
-                        unit.rsplit_once(" × ").map_or(*unit, |(_, named)| named) == name.as_str()
-                    })
-                });
+            // Round 28 FB6: where every creature of the roster lacks its XP, the summary already
+            // says whose, so it stays whole with the short reason; cutting a member to name it
+            // again says less. With a creature whose XP is known beside them, the reason keeps
+            // its names (review of PR 324: say whose input is missing).
+            let mut members = units
+                .iter()
+                .filter(|(_, _, turn)| *turn == Turn::Member)
+                .map(|(_, unit, _)| unit.rsplit_once(" × ").map_or(*unit, |(_, named)| named))
+                .peekable();
+            let named = missing.what == crate::difficulty::Unknown::Xp
+                && members.peek().is_some()
+                && members.all(|member| missing.names.iter().any(|name| name == member));
             let whole_summary = named && fits_with(summary, short);
             let mut fitted = if whole_summary {
                 Some(short.to_owned())
@@ -2006,8 +2015,9 @@ fn road_days(
 }
 
 /// The day a planned fight is played on, in the form that fits after its summary: `Day 2 of
-/// Road to the ford`, else `Day 2`, else none. As the row's rating word does, the words show
-/// only while the line keeps its rows (rule P): first the journey's name goes, then the day.
+/// Road to the ford`, else `Day 2`. As the row's rating word does, the words keep the row's
+/// lines (rule P): first the journey's name goes; the day itself gives way last, in the row's
+/// cut order (`planned_summary_on_road`).
 /// `planned_summary_on_road` draws it after the summary.
 fn road_day(ui: &egui::Ui, summary: &str, day: Option<&str>) -> Option<String> {
     let day = day?;
@@ -2031,10 +2041,15 @@ fn road_day(ui: &egui::Ui, summary: &str, day: Option<&str>) -> Option<String> {
     };
     let alone = rows(summary).max(1);
     let short = day.split_once(" of ").map_or(day, |(head, _)| head);
-    [day, short]
-        .into_iter()
-        .find(|words| rows(&with(words)) <= alone)
-        .map(str::to_owned)
+    // Where neither form keeps the lines, the short one goes to the row, whose cut order lets
+    // the day give way last (round 28 FE6, review of PR 324).
+    Some(
+        [day, short]
+            .into_iter()
+            .find(|words| rows(&with(words)) <= alone)
+            .unwrap_or(short)
+            .to_owned(),
+    )
 }
 
 /// The help line of **How long** when the clock cannot place the journey.
@@ -4859,7 +4874,7 @@ mod tests {
         let rating = rated(crate::difficulty::above_high());
         let summary = "5 party · 2 × Ember Cultist";
         let day = "Day 2 of The road to the ford beyond the old northern quarry";
-        let (mut full, mut short, mut hidden) = (0, 0, 0);
+        let (mut full, mut short) = (0, 0);
         let _ = ctx.run(Default::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
                 for width in (120..=600).step_by(5) {
@@ -4878,7 +4893,7 @@ mod tests {
                             match words.as_deref() {
                                 Some(words) if words.contains("of The road") => full += 1,
                                 Some(_) => short += 1,
-                                None => hidden += 1,
+                                None => panic!("a day given is always offered to the row"),
                             }
                             planned_summary_on_road(ui, summary, words.as_deref(), Some(&rating));
                         })
@@ -4889,10 +4904,7 @@ mod tests {
                 }
             });
         });
-        assert!(
-            full > 0 && short > 0 && hidden > 0,
-            "{full} {short} {hidden}"
-        );
+        assert!(full > 0 && short > 0, "{full} {short}");
         // Round 28 FE6: where the row is cut, the party's size gives way first, then the
         // roster; the day, which ties the fight to its journey, goes last.
         let mut day_kept_in_a_cut = 0;
@@ -4920,9 +4932,6 @@ mod tests {
             }
             let painted = painted.unwrap_or_else(|| panic!("at {width} px: no summary"));
             seen.push(format!("{width}: {words:?} {painted:?}"));
-            if words.is_none() {
-                continue;
-            }
             if painted.contains("Ember Cultist") {
                 assert!(
                     painted.contains("Day 2"),
@@ -5462,6 +5471,30 @@ mod tests {
             painted.as_deref(),
             Some("1 × Nameless Thing · XP not known"),
             "FB6: the member stays whole and is not named twice, at {width} px"
+        );
+        // Review of PR 324: with a creature whose XP is known beside it, the summary does not say
+        // whose XP is missing, so the reason keeps the name, with room for it.
+        let mixed = "1 × Wolf, 1 × Nameless Thing";
+        let mut painted = None;
+        for _ in 0..2 {
+            let output = ctx.run(Default::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    ui.scope(|ui| {
+                        ui.set_width(600.0);
+                        planned_summary(ui, mixed, Some(&unknown(Unknown::Xp)));
+                    });
+                });
+            });
+            painted = output.shapes.iter().find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) => Some(text.galley.job.text.replace('\u{a0}', " "))
+                    .filter(|words| words.contains("not known")),
+                _ => None,
+            });
+        }
+        assert_eq!(
+            painted.as_deref(),
+            Some("1 × Wolf, 1 × Nameless Thing · XP not known: Nameless Thing"),
+            "a mixed roster names whose XP is missing"
         );
     }
 
