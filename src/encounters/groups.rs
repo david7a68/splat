@@ -2513,18 +2513,7 @@ impl Encounters {
             return;
         }
         if discard {
-            self.clear_notice();
-            let draft = self.group_draft.take().expect("the editor has a draft");
-            if draft.baseline.is_some() {
-                match GroupDraft::open(&active.path, &draft.path) {
-                    Ok(reopened) => self.group_draft = Some(reopened),
-                    Err(e) => self.error = Some(e),
-                }
-            }
-            self.discarded_group = Some(draft);
-            self.discarded_group_order = Some(design::ResultOrder::issue());
-            self.stamp_kept(super::KeptResult::GroupDiscarded);
-            self.discarded = None;
+            self.discard_group_draft(active);
             return;
         }
         if save || save_key {
@@ -2537,7 +2526,6 @@ impl Encounters {
         // The footer's messages are made before the body: the member result, the discard, the
         // copies' separations, newest first by their stores, then the reasons and warnings.
         self.record_member_results();
-        self.refresh_separations();
         let kinds = self.kept_results(false);
         let frame = design::outcome::PaneFrame::new(ui);
         let footer_id = self.group_draft.as_ref().map(|draft| draft.id());
@@ -2579,7 +2567,7 @@ impl Encounters {
                 &super::EncounterFault::Failed(error),
             ));
         }
-        if let Some(error) = self.separation_error.clone() {
+        if let Some(error) = self.separation_failure() {
             messages.outcome(design::outcome::FaultMessage::new(
                 &super::EncounterFault::SeparationFailed(error),
             ));
@@ -2613,6 +2601,28 @@ impl Encounters {
                 _ => {}
             }
         }
+    }
+
+    /// `Discard` in the group editor: the saved group opens clean, and the discarded draft
+    /// waits for `Undo discard` with its results.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    )]
+    pub(super) fn discard_group_draft(&mut self, active: &Campaign) {
+        self.clear_notice();
+        let draft = self.group_draft.take().expect("the editor has a draft");
+        if draft.baseline.is_some() {
+            match GroupDraft::open(&active.path, &draft.path) {
+                Ok(reopened) => self.group_draft = Some(reopened),
+                Err(e) => self.error = Some(e),
+            }
+        }
+        self.discarded_group = Some(draft);
+        // The Session plan's footer reads this order (package S's caller).
+        self.discarded_group_order = Some(design::ResultOrder::issue());
+        self.stamp_kept(super::KeptResult::GroupDiscarded);
+        self.discarded = None;
     }
 
     /// The group editor's body, in the pane: the members and Add creatures, as columns or tabs.
@@ -3797,41 +3807,53 @@ mod tests {
         }
     }
 
-    /// Round 28 (K3 review): a member's key is its identity in the draft. A move keeps each key
-    /// with its member, two members never share one, and the identity is not part of what a
-    /// member is: the draft still equals its saved form, and a member read again equals it.
+    /// Review of PR 339 (1): a member result belongs to its draft's content. Remove a member,
+    /// Discard (the saved group opens clean, with the same identity), then Undo discard: the
+    /// member is still removed and its result comes back with its Undo.
     #[test]
-    fn a_member_keys_its_form_by_its_identity_not_its_place() {
-        let mut draft = GroupDraft::new();
-        let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
-        draft.add(a);
-        draft.add(b);
-        let keys: Vec<String> = draft
-            .setup
-            .members
-            .iter()
-            .map(|member| member_key("g.md", member))
-            .collect();
-        assert_ne!(keys[0], keys[1], "two members, two keys");
-        draft.setup.members.swap(0, 1);
-        assert_eq!(
-            member_key("g.md", &draft.setup.members[1]),
-            keys[0],
-            "A keeps its key"
+    fn undo_discard_brings_back_the_group_member_result() {
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let (goblin, wolf) = (creature(dir.path(), "Goblin"), creature(dir.path(), "Wolf"));
+        let mut saved = GroupDraft::new();
+        saved.name = "Pack".into();
+        saved.add(goblin);
+        saved.add(wolf);
+        saved.save(&active, &[]).unwrap();
+        let mut page = Encounters {
+            active: Some(active.clone()),
+            group_draft: Some(GroupDraft::open(dir.path(), &saved.path).unwrap()),
+            ..Default::default()
+        };
+        // Remove as the member list does: the member's data, then the mark.
+        let draft = page.group_draft.as_mut().unwrap();
+        let member = draft.setup.members.remove(0);
+        draft.removed_member = Some((0, member, "Goblin".into()));
+        draft.member_new = true;
+        draft.touch();
+        let owner = super::super::MemberOwner {
+            root: active.path.clone(),
+            draft: draft.id(),
+        };
+        page.record_member_results();
+        assert!(
+            page.member_results.get(&owner).is_some(),
+            "recorded at the act"
         );
-        assert_eq!(
-            member_key("g.md", &draft.setup.members[0]),
-            keys[1],
-            "B keeps its key"
+        page.discard_group_draft(&active);
+        page.record_member_results();
+        assert!(
+            page.member_results.get(&owner).is_some(),
+            "the discarded draft keeps its result while it waits for Undo discard"
         );
-        // Not a saved part of a member: the same words compare equal.
-        let read: GroupSetup =
-            serde_yaml_ng::from_value(serde_yaml_ng::to_value(&draft.setup).unwrap()).unwrap();
-        assert_eq!(read, draft.setup);
-        assert_ne!(
-            member_key("g.md", &read.members[0]),
-            keys[1],
-            "a member read again is new"
+        assert!(page.undo_kept(super::super::KeptResult::GroupDiscarded, None));
+        page.record_member_results();
+        let draft = page.group_draft.as_mut().unwrap();
+        assert_eq!(draft.setup.members.len(), 1, "the member is still removed");
+        assert!(draft.member_result().is_some());
+        assert!(
+            page.member_results.get(&owner).is_some(),
+            "Undo discard shows the member result again, with its Undo"
         );
     }
 

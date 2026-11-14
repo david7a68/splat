@@ -215,21 +215,6 @@ pub(crate) fn history_edges(d: &mut Driver<'_>) {
                 Some((at_top, edges))
             })
         });
-        // R2: the row goes to the list's top only when the run does not fit below it; then the
-        // top is a clean edge. A least scroll that keeps the row lower may cut a line above it.
-        let at_top = d.at_size(size, |d| {
-            let row = d
-                .nodes()
-                .into_iter()
-                .find(|node| node.name.starts_with("Close the run of "))?;
-            let mut list = None;
-            d.each_painted_text(|text, clip| {
-                if text.galley.job.text == "FINAL STATE" {
-                    list = Some(clip);
-                }
-            });
-            Some(row.rect.top() - list?.top() <= crate::design::L)
-        });
         d.observe(
             "X37-history-clean-edge",
             measured.as_ref().is_some_and(|(at_top, edges)| {

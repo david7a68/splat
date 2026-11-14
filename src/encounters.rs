@@ -1987,13 +1987,42 @@ impl design::results::Kept for Separation {
 }
 
 impl Separation {
-    /// Whether the note on disk still has the identity this separation gave it.
+    /// Whether the separation still holds: false only when the note on disk is read and has
+    /// another identity (another program changed it). A note that cannot be read now (moved
+    /// away for a moment, locked) keeps its result, so its Undo can be tried again.
     fn holds(&self) -> bool {
-        fs::read_to_string(self.owner.root.join(&self.path))
-            .ok()
-            .and_then(|text| crate::content_workspace::note_id(&text))
-            == Some(self.owner.note)
+        #[cfg(test)]
+        SEPARATION_READS.with(|reads| reads.set(reads.get() + 1));
+        match fs::read_to_string(self.owner.root.join(&self.path)) {
+            Ok(text) => crate::content_workspace::note_id(&text) == Some(self.owner.note),
+            Err(_) => true,
+        }
     }
+
+    /// The copy's file name, which tells two separations apart: `Rook copy.md`.
+    fn copy_name(&self) -> &str {
+        self.path.rsplit('/').next().unwrap_or(&self.path)
+    }
+
+    /// Its Undo: `Undo separate Rook copy.md`, whose accessible name names the copy.
+    fn undo_step(&self) -> design::outcome::UndoStep {
+        design::outcome::UndoStep::of(design::outcome::Verb::Separate, self.copy_name())
+    }
+}
+
+/// Why the last separation, or its Undo, failed: kept with its campaign and its copy, and shown
+/// only in that campaign.
+#[derive(Clone, Debug)]
+struct SeparationFailure {
+    root: std::path::PathBuf,
+    path: String,
+    words: String,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How often the separations' disk check read a note.
+    static SEPARATION_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// What a press of a copied note's repair in the creature search did, for the page to record.
@@ -2003,7 +2032,10 @@ enum Separated {
         path: String,
         note: Uuid,
     },
-    Failed(String),
+    Failed {
+        path: String,
+        error: String,
+    },
 }
 
 /// A note's identity changed (a separation or its Undo): the shell reads the campaign again.
@@ -2091,7 +2123,10 @@ fn duplicate_creature_results(
                                 note,
                             }
                         }
-                        Err(error) => Separated::Failed(error),
+                        Err(error) => Separated::Failed {
+                            path: path.clone(),
+                            error,
+                        },
                     }));
                 }
                 if let Some(remaining) = paths.iter().find(|other| *other != path) {
@@ -2855,8 +2890,9 @@ pub struct Encounters {
     /// It lives with the page, so both editors show it and a reload does not drop it; the disk
     /// check ends one whose note changed (`refresh_separations`).
     separations: design::Results<SeparationOwner, Separation>,
-    /// Why the last separation, or its Undo, failed. A new separation or a working Undo ends it.
-    separation_error: Option<String>,
+    /// Why the last separation, or its Undo, failed, with its campaign and copy. A new
+    /// separation or a working Undo ends it; it shows only in its campaign.
+    separation_error: Option<SeparationFailure>,
     /// Each group draft's member result (`MemberMark`), for both editors. It lives with the page,
     /// so a Discard and its Undo, which move the draft, keep the order.
     member_results: design::Results<MemberOwner, MemberMark>,
@@ -3767,6 +3803,8 @@ impl Encounters {
             .is_some_and(crate::encounter_run::Run::pending_sync)
     }
     fn reload(&mut self, ctx: &egui::Context, campaign: Campaign, modules: Vec<Module>) {
+        // A reload is a disk event too: a separated copy changed by another program ends.
+        self.refresh_separations();
         self.creature = None;
         self.history_read = None;
 
@@ -3812,6 +3850,8 @@ impl Encounters {
                 .is_some_and(|c| c.id == active.id && c.path == active.path)
         {
             let _ = root;
+            // A disk change: a separated copy changed by another program ends its result.
+            self.refresh_separations();
             self.refreshing = true;
             self.start_load(ctx, active, campaigns.modules().to_vec());
         }
@@ -4763,7 +4803,15 @@ impl Encounters {
                     self.separation_error = None;
                 }
             }
-            Some(Separated::Failed(error)) => self.separation_error = Some(error),
+            Some(Separated::Failed { path, error }) => {
+                if let Some(root) = self.active.as_ref().map(|active| active.path.clone()) {
+                    self.separation_error = Some(SeparationFailure {
+                        root,
+                        path,
+                        words: error,
+                    });
+                }
+            }
             None => {}
         }
     }
@@ -4789,8 +4837,22 @@ impl Encounters {
             .into_iter()
             .map(|(kind, ..)| kind)
             .collect();
+        // The discarded draft of this encounter keeps its results with it (hidden), so Undo
+        // discard shows them again (review of PR 339).
+        let held: Vec<DraftResult> = self
+            .discarded
+            .as_mut()
+            .filter(|discarded| discarded.id == draft.id)
+            .map(|discarded| {
+                discarded
+                    .result_lines()
+                    .into_iter()
+                    .map(|(kind, ..)| kind)
+                    .collect()
+            })
+            .unwrap_or_default();
         for kind in [DraftResult::RemovedGroup, DraftResult::Replacement] {
-            if !shown.contains(&kind) {
+            if !shown.contains(&kind) && !held.contains(&kind) {
                 self.editor_results.owner_changed(&EditorOwner {
                     root: root.clone(),
                     draft: draft.id,
@@ -4899,6 +4961,19 @@ impl Encounters {
         let Some(root) = self.active.as_ref().map(|active| active.path.clone()) else {
             return;
         };
+        // A discarded draft keeps its member result with it: the result belongs to the draft's
+        // content, so it stays (hidden) while that draft waits for Undo discard, and shows again
+        // with it (review of PR 339).
+        let held: Vec<Uuid> = self
+            .discarded_group
+            .iter_mut()
+            .chain(
+                self.discarded
+                    .iter_mut()
+                    .flat_map(|draft| draft.groups.iter_mut()),
+            )
+            .filter_map(|draft| draft.member_result().map(|_| draft.id()))
+            .collect();
         let drafts = self.group_draft.iter_mut().chain(
             self.draft
                 .iter_mut()
@@ -4912,7 +4987,7 @@ impl Encounters {
             if draft.take_member_new() {
                 self.member_results.record(MemberMark(owner.clone()));
             }
-            if draft.member_result().is_none() {
+            if draft.member_result().is_none() && !held.contains(&draft.id()) {
                 self.member_results.owner_changed(&owner);
             }
         }
@@ -4930,15 +5005,9 @@ impl Encounters {
                 shown.outcome(frame, |separation| {
                     design::outcome::Said::new(outcome_words(separation.change.0.message()))
                         .undo(
-                            design::outcome::UndoStep::act(
-                                separation
-                                    .change
-                                    .0
-                                    .identity_undo_label()
-                                    .trim_start_matches("Undo ")
-                                    .to_owned(),
-                            )
-                            .pressed_as(FooterPress::UndoSeparation),
+                            separation
+                                .undo_step()
+                                .pressed_as(FooterPress::UndoSeparation),
                         )
                         .into()
                 })
@@ -4972,9 +5041,20 @@ impl Encounters {
         self.expanded = None;
     }
 
-    /// The disk end event of the separations: one whose note no longer has its identity ends.
+    /// The disk end event of the separations: one whose note has another identity now ends.
+    /// It runs when the page hears of a disk change (`refresh_content`, `reload`), never per
+    /// frame: each check reads a note.
     fn refresh_separations(&mut self) {
         self.separations.disk_changed(Separation::holds);
+    }
+
+    /// Why the last separation, or its Undo, failed, when it was in the active campaign.
+    fn separation_failure(&self) -> Option<String> {
+        let root = &self.active.as_ref()?.path;
+        self.separation_error
+            .as_ref()
+            .filter(|failure| failure.root == *root)
+            .map(|failure| failure.words.clone())
     }
 
     /// The Undo of the separation a footer press names by its ticket. `Gone` does nothing; a
@@ -4985,15 +5065,24 @@ impl Encounters {
         ticket: design::results::Ticket,
         active: &Campaign,
     ) {
-        match self
-            .separations
-            .undo_by(ticket, |separation| separation.change.0.undo(active))
-        {
+        match self.separations.undo_by(ticket, |separation| {
+            separation
+                .change
+                .0
+                .undo(active)
+                .map_err(|error| (separation.path.clone(), error))
+        }) {
             Ok(_) => {
                 self.separation_error = None;
                 note_identity_changed(ctx);
             }
-            Err(design::results::ByTicket::Failed(error)) => self.separation_error = Some(error),
+            Err(design::results::ByTicket::Failed((path, error))) => {
+                self.separation_error = Some(SeparationFailure {
+                    root: active.path.clone(),
+                    path,
+                    words: error,
+                });
+            }
             Err(design::results::ByTicket::Gone) => {}
         }
     }
@@ -5010,15 +5099,24 @@ impl Encounters {
         owner: &SeparationOwner,
         active: &Campaign,
     ) {
-        match self
-            .separations
-            .undo(owner, |separation| separation.change.0.undo(active))
-        {
+        match self.separations.undo(owner, |separation| {
+            separation
+                .change
+                .0
+                .undo(active)
+                .map_err(|error| (separation.path.clone(), error))
+        }) {
             Some(Ok(_)) => {
                 self.separation_error = None;
                 note_identity_changed(ctx);
             }
-            Some(Err(error)) => self.separation_error = Some(error),
+            Some(Err((path, error))) => {
+                self.separation_error = Some(SeparationFailure {
+                    root: active.path.clone(),
+                    path,
+                    words: error,
+                });
+            }
             None => {}
         }
     }
@@ -5043,7 +5141,7 @@ impl Encounters {
                         ui,
                         Tone::Success,
                         separation.change.0.message(),
-                        separation.change.0.identity_undo_label(),
+                        &separation.undo_step().label(),
                     ) {
                         pressed.set(Some(separation.owner.clone()));
                     }
@@ -6133,7 +6231,6 @@ impl Encounters {
         let separation_pressed = std::cell::Cell::new(None);
         let member_pressed = std::cell::Cell::new(None);
         self.record_member_results();
-        self.refresh_separations();
         // Each of the encounter's groups' member results: its owner in the store, its words.
         let member_lines: Vec<(MemberOwner, String, String)> = self
             .active
@@ -6179,7 +6276,7 @@ impl Encounters {
             &mut footer,
             &self.separations,
             &active.path,
-            self.separation_error.as_deref(),
+            self.separation_failure().as_deref(),
             &separation_pressed,
         );
         Self::members_into(
@@ -8009,6 +8106,8 @@ mod tests {
     #[test]
     fn i20_w1_search_finds_a_hidden_duplicate_and_repairs_it_with_undo() {
         use egui_kittest::kittest::Queryable;
+        // Review of PR 339 (4): the Undo names its copy (`Verb::Separate`).
+        const UNDO_COPY: &str = "Undo separate Rook copy.md";
         let dir = tempfile::tempdir().unwrap();
         let active = campaign(dir.path());
         creature(dir.path(), "Rook", false);
@@ -8037,10 +8136,14 @@ mod tests {
                         "identity_test_footer",
                         ui.available_width(),
                     );
-                    for line in page.separation_lines(&frame, &campaign_for_undo.path) {
+                    let root = page.active.as_ref().map(|active| active.path.clone());
+                    for line in root
+                        .iter()
+                        .flat_map(|root| page.separation_lines(&frame, root))
+                    {
                         messages.kept(line);
                     }
-                    if let Some(error) = page.separation_error.clone() {
+                    if let Some(error) = page.separation_failure() {
                         messages.outcome(design::outcome::FaultMessage::new(
                             &EncounterFault::SeparationFailed(error),
                         ));
@@ -8063,8 +8166,10 @@ mod tests {
                         );
                     });
                     page.record_separation(separated.into_inner());
-                    if let Some(ticket) = paned.pressed.and_then(|press| press.ticket) {
-                        page.undo_separation(ui.ctx(), ticket, &campaign_for_undo);
+                    if let Some(ticket) = paned.pressed.and_then(|press| press.ticket)
+                        && let Some(active) = page.active.clone()
+                    {
+                        page.undo_separation(ui.ctx(), ticket, &active);
                     }
                 });
             },
@@ -8099,10 +8204,18 @@ mod tests {
         harness.run_steps(4);
         search_shown.store(false, std::sync::atomic::Ordering::Relaxed);
         harness.run_steps(4);
-        assert!(harness.query_by_label("Undo: separate entry").is_some());
+        assert!(harness.query_by_label(UNDO_COPY).is_some());
         search_shown.store(true, std::sync::atomic::Ordering::Relaxed);
         harness.run_steps(2);
         assert_eq!(identity_copies(), copies, "redraws copied the change");
+        // Review of PR 339 (5): drawing reads no note: ten unchanged frames, no read.
+        let reads = SEPARATION_READS.with(std::cell::Cell::get);
+        harness.run_steps(10);
+        assert_eq!(
+            SEPARATION_READS.with(std::cell::Cell::get),
+            reads,
+            "a redraw read a separated note"
+        );
         // Review of PR 299: an Undo that fails (the file moved away) keeps the change and its
         // Undo, says why, and works once the file is back.
         let separated = fs::read_to_string(dir.path().join("Rook copy.md")).unwrap();
@@ -8111,13 +8224,38 @@ mod tests {
             dir.path().join("Rook copy.away"),
         )
         .unwrap();
-        harness.get_by_label("Undo: separate entry").click();
+        // Review of PR 339 (2): a copy that cannot be read now is not a changed identity: the
+        // disk event the page hears (`refresh_content` → `refresh_separations`) keeps it.
+        harness.state_mut().refresh_separations();
+        harness.run_steps(2);
+        assert!(
+            harness.query_by_label(UNDO_COPY).is_some(),
+            "a copy moved away for a moment keeps its separation"
+        );
+        harness.get_by_label(UNDO_COPY).click();
         harness.run_steps(2);
         assert!(!dir.path().join("Rook copy.md").exists());
         assert!(
-            harness.query_by_label("Undo: separate entry").is_some(),
+            harness.query_by_label(UNDO_COPY).is_some(),
             "a failed Undo keeps its Undo"
         );
+        // Review of PR 339 (3): the failure is the campaign's: campaign B does not show it,
+        // and A shows it again.
+        let failure = harness
+            .state()
+            .separation_failure()
+            .expect("the failed Undo says why");
+        let other_dir = tempfile::tempdir().unwrap();
+        let other = campaign(other_dir.path());
+        harness.state_mut().active = Some(other);
+        harness.run_steps(2);
+        assert!(
+            harness.query_all_by_label(&failure).next().is_none(),
+            "campaign A's failure shows in campaign B"
+        );
+        harness.state_mut().active = Some(active.clone());
+        harness.run_steps(2);
+        assert!(harness.query_all_by_label(&failure).next().is_some());
         assert!(
             harness
                 .query_all_by_label("Rook copy.md is now a separate entry.")
@@ -8133,7 +8271,7 @@ mod tests {
             fs::read_to_string(dir.path().join("Rook copy.md")).unwrap(),
             separated
         );
-        harness.get_by_label("Undo: separate entry").click();
+        harness.get_by_label(UNDO_COPY).click();
         harness.run_steps(2);
         assert_eq!(
             fs::read_to_string(dir.path().join("Rook copy.md")).unwrap(),
@@ -8152,7 +8290,7 @@ mod tests {
             .get_by_label("Make Rook copy.md a separate entry")
             .click();
         harness.run_steps(2);
-        assert!(harness.query_by_label("Undo: separate entry").is_some());
+        assert!(harness.query_by_label(UNDO_COPY).is_some());
         let copy = dir.path().join("Rook copy.md");
         let text = fs::read_to_string(&copy).unwrap();
         let id = crate::content_workspace::note_id(&text).unwrap();
@@ -8163,15 +8301,44 @@ mod tests {
         .unwrap();
         harness.run_steps(2);
         assert!(
-            harness.query_by_label("Undo: separate entry").is_some(),
+            harness.query_by_label(UNDO_COPY).is_some(),
             "nothing ends it before the disk check"
         );
         harness.state_mut().refresh_separations();
         harness.run_steps(2);
         assert!(
-            harness.query_by_label("Undo: separate entry").is_none(),
+            harness.query_by_label(UNDO_COPY).is_none(),
             "a copy whose identity changed on disk ends its separation"
         );
+        // Review of PR 339 (4): two separations keep two Undos, each named by its copy; the
+        // older one's Undo undoes only its copy.
+        let copy_before = fs::read_to_string(&copy).unwrap();
+        harness
+            .get_by_label("Make Rook copy.md a separate entry")
+            .click();
+        harness.run_steps(2);
+        let before_rook = fs::read_to_string(dir.path().join("Rook.md")).unwrap();
+        harness
+            .get_by_label("Make Rook.md a separate entry")
+            .click();
+        harness.run_steps(2);
+        let separated_rook = fs::read_to_string(dir.path().join("Rook.md")).unwrap();
+        assert_ne!(separated_rook, before_rook);
+        assert!(harness.query_by_label("Undo separate Rook.md").is_some());
+        harness.get_by_label(UNDO_COPY).click();
+        harness.run_steps(2);
+        assert_eq!(
+            fs::read_to_string(dir.path().join("Rook copy.md")).unwrap(),
+            copy_before,
+            "the older Undo took back only its own copy"
+        );
+        assert!(harness.query_by_label(UNDO_COPY).is_none());
+        assert_eq!(
+            fs::read_to_string(dir.path().join("Rook.md")).unwrap(),
+            separated_rook,
+            "the newer separation stays"
+        );
+        assert!(harness.query_by_label("Undo separate Rook.md").is_some());
     }
 
     #[test]
@@ -8903,6 +9070,55 @@ mod tests {
         assert!(encounters.discarded.is_some(), "a refresh keeps the undo");
         encounters.reload(&ctx, second, Vec::new());
         assert!(encounters.discarded.is_none(), "another campaign drops it");
+    }
+    /// Review of PR 339 (1): a result belongs to its draft's content. Discard keeps the
+    /// encounter draft's replacement result in the store (hidden: the clean draft has none),
+    /// and Undo discard shows it again with its Undo.
+    #[test]
+    fn undo_discard_brings_back_the_encounter_draft_results() {
+        let dir = tempfile::tempdir().unwrap();
+        let active = campaign(dir.path());
+        let wolf = creature(dir.path(), "Wolf", false);
+        let mut saved = Draft::new();
+        saved.add(wolf, false);
+        saved.save(&active, &[]).unwrap();
+        let mut page = Encounters {
+            active: Some(active.clone()),
+            draft: Some(Draft::open(dir.path(), &saved.path).unwrap()),
+            ..Default::default()
+        };
+        // A replacement as `Use` makes it: its data on the draft, and the mark.
+        let draft = page.draft.as_mut().unwrap();
+        let roster = draft.setup.roster.clone();
+        draft.replacement = Some(ReplacementUndo {
+            before: roster.clone(),
+            after: roster,
+            new: true,
+            words: "1 Wolf row replaced with Wolf.".into(),
+        });
+        let owner = EditorOwner {
+            root: active.path.clone(),
+            draft: draft.id,
+            kind: DraftResult::Replacement,
+        };
+        page.record_editor_results();
+        assert!(
+            page.editor_results.get(&owner).is_some(),
+            "recorded at the act"
+        );
+        page.discard_draft(&active);
+        page.record_editor_results();
+        assert!(
+            page.editor_results.get(&owner).is_some(),
+            "the discarded draft keeps its result while it waits for Undo discard"
+        );
+        page.undo_discard();
+        page.record_editor_results();
+        assert!(!page.editor_result_lines().is_empty());
+        assert!(
+            page.editor_results.get(&owner).is_some(),
+            "Undo discard shows the result again, with its Undo"
+        );
     }
     /// Older notes do not change, and a note says so only when the DM turned this on.
     #[test]

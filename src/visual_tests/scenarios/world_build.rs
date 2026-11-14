@@ -9265,7 +9265,7 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     };
     let search_before = tops(d);
     d.click("Make Rook Ambry copy.md a separate note");
-    d.wait_for_text("Undo separate note");
+    d.wait_for_text("Undo separate Rook Ambry copy.md");
     d.expect("Rook Ambry copy.md is now a separate note.");
     // iter-27-B FF8, AF1, SF1: the result and its Undo are in the editor's footer, below the
     // search's results, and the search and its filter do not move.
@@ -9296,15 +9296,15 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     d.replace_text_in(FIND_CREATURE, "Guard");
     d.click_beside_exact("Guard", "Add");
     d.expect("7. Guard");
-    let kept = d.has("Undo separate note");
-    d.click("Undo separate note");
+    let kept = d.has("Undo separate Rook Ambry copy.md");
+    d.click("Undo separate Rook Ambry copy.md");
     d.replace_text_in(FIND_CREATURE, "Rook Ambry");
     d.wait_for_text("Make Rook Ambry copy.md a separate note");
     d.observe(
         "iter-27-B-FF8-undo",
         kept && d.has("7. Guard") && !d.has("Rook Ambry copy.md is now a separate note."),
         format!(
-            "Undo separate note ends its result and keeps the Guard added after it (kept through the search: {kept})"
+            "Undo separate Rook Ambry copy.md ends its result and keeps the Guard added after it (kept through the search: {kept})"
         ),
     );
     // The rest of the scenario starts from the saved encounter.
