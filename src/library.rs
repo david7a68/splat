@@ -2781,35 +2781,6 @@ fn moved_file_parts(ui: &mut egui::Ui, root: &Path, relative: &str, from: &str, 
     crate::world::entry_file_links(ui, &path, obsidian);
 }
 
-/// `Will create <path>` on one line of a creation form's kept line. When the line is short, the
-/// path's start gives way (`Will create …/modules/copper_coast`), so its end, the new folder,
-/// stays in view; the hover and the accessible name keep the whole path.
-fn will_create(ui: &mut egui::Ui, path: &Path) {
-    let full = format!("Will create {}", path.display());
-    let font = Type::Small.font(ui);
-    let width = ui.available_width();
-    let mut shown = full.clone();
-    let path = path.display().to_string();
-    let starts: Vec<usize> = path.char_indices().map(|(at, _)| at).collect();
-    if starts.len() > 1 && design::number_width(ui, &full, &font) > width {
-        let fitted = |start: usize| format!("Will create …{}", &path[starts[start]..]);
-        // The fewest characters cut that fit, by halves: a few measures, not one per character.
-        let (mut low, mut high) = (1, starts.len() - 1);
-        while low < high {
-            let middle = (low + high) / 2;
-            if design::number_width(ui, &fitted(middle), &font) <= width {
-                high = middle;
-            } else {
-                low = middle + 1;
-            }
-        }
-        shown = fitted(low);
-    }
-    let response = ui.label(Type::Small.rich(ui, shown).color(colors().muted));
-    design::named(ui, &response, &full);
-    response.on_hover_text(full);
-}
-
 /// Existing folders, with an optional kind folder as the first suggestion.
 fn kind_folder(kind: &str) -> &'static str {
     match kind {
@@ -2985,10 +2956,6 @@ pub(crate) fn use_checkbox(
     // checkbox and does not read as help for the next field.
     ui.add_space(design::L - ui.spacing().item_spacing.y);
 }
-
-/// The commit of `Register a copy`: one word, so the button keeps its width while the DM types
-/// the name (round 27 FD2).
-const REGISTER_COPY: &str = "Register";
 
 crate::create_reasons! {
     /// Why a creation form of Manage packages waits: every reason it can show, so its kept line
@@ -5947,10 +5914,6 @@ impl Library {
     }
 
     /// Registering a package is a form in the page, not a window over it.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn package_form(&mut self, ui: &mut egui::Ui, campaigns: &mut Campaigns) {
         let c = colors();
         let locked = self.draft_reason().or(self
