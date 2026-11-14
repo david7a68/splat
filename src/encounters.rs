@@ -1296,33 +1296,6 @@ pub(super) fn body_above(ui: &mut egui::Ui, bottom: f32) -> egui::Ui {
     )
 }
 
-/// The width of the save state and Discard together: the widest state word with Discard. What
-/// follows them in the save row keeps its x when the first edit changes the word and brings
-/// Discard (FB5).
-fn save_state_slot(ui: &mut egui::Ui) -> f32 {
-    let font = Type::Small.font(ui);
-    let widest = [
-        (icons::ERROR, "Invalid"),
-        (icons::DRAFT, "Unsaved"),
-        (icons::OK, "Saved"),
-        (icons::OK, "No changes"),
-    ]
-    .into_iter()
-    .map(|(icon, word)| {
-        ui.fonts_mut(|fonts| {
-            fonts
-                .layout_no_wrap(format!("{icon} {word}"), font.clone(), colors().text)
-                .size()
-                .x
-        })
-    })
-    .fold(0.0, f32::max);
-    widest
-        + ui.spacing().item_spacing.x
-        + Action::quiet("Discard")
-            .density(Density::Read)
-            .natural_width(ui)
-}
 
 fn editor_save_state(
     ui: &mut egui::Ui,
