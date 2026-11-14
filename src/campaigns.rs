@@ -370,6 +370,17 @@ impl Campaigns {
         }
     }
 
+    /// Add `campaign` if it is new, and make it the active campaign, as the switcher does.
+    #[cfg(test)]
+    pub(crate) fn open_for_test(&mut self, campaign: &Campaign) {
+        let mut data = self.data.clone();
+        if !data.campaigns.iter().any(|known| known.id == campaign.id) {
+            data.campaigns.push(campaign.clone());
+        }
+        data.active_campaign_id = Some(campaign.id);
+        self.persist(data).unwrap();
+    }
+
     /// The same startup load as `default`, from a temporary settings file.
     #[cfg(test)]
     pub fn open_at(path: PathBuf) -> Self {
