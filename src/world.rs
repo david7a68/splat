@@ -578,6 +578,10 @@ const ADD_INITIATIVE: ReaderField = ReaderField {
     page: crate::field_id!("world_add_initiative"),
     compact: crate::field_id!("lookup_add_initiative"),
 };
+const ADD_SIDE: ReaderField = ReaderField {
+    page: crate::field_id!("world_add_side"),
+    compact: crate::field_id!("lookup_add_side"),
+};
 
 /// The width a missing link takes as `missing_link` draws it: one line, or with `stacked` its
 /// name line above `Not found`.
@@ -4789,10 +4793,6 @@ impl Reader {
 }
 
 /// Choose the stat block, side and initiative. Returns how the form ended, if it did.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn add_form(
     ui: &mut egui::Ui,
     item: &Item,
@@ -4836,27 +4836,18 @@ fn add_form(
     if creature(&item.entry).is_none() {
         ui.checkbox(&mut adding.save, "Save this as their stat block");
     }
-    if sides.len() > 1 {
+    if let Some((first, rest)) = sides.split_first()
+        && !rest.is_empty()
+    {
         design::small_field(ui, "Side", None, None, |ui| {
-            let combo = egui::ComboBox::from_id_salt("world_add_side")
-                .selected_text(design::reader::human_label(&adding.side))
-                .icon(design::combo_icon)
-                .show_ui(ui, |ui| {
-                    for side in sides {
-                        // A side's name is the DM's own words, so it can be long: it wraps.
-                        if design::extras::choice_wrapped(
-                            ui,
-                            adding.side == *side,
-                            &design::reader::human_label(side),
-                            None,
-                        )
-                        .clicked()
-                        {
-                            adding.side.clone_from(side);
-                        }
-                    }
-                });
-            design::named(ui, &combo.response, "Side");
+            // A side's name is the DM's own words, so it can be long: the list's rows wrap.
+            let _ = design::Dropdown::new(ADD_SIDE.id(compact, item.entry.id), "Side")
+                .choice(first.clone(), design::reader::human_label(first))
+                .choices(
+                    rest.iter()
+                        .map(|side| (side.clone(), design::reader::human_label(side))),
+                )
+                .show(ui, &mut adding.side);
         });
     }
     design::small_field(

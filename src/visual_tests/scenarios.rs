@@ -11835,6 +11835,14 @@ pub mod world {
             }
         }
         d.state("npc-add-to-run-form", Sizes::All);
+        // Round 28: the Side list is a `Dropdown`. It opens under its control, inside Lookup, at
+        // every size; Escape closes it and keeps the side.
+        d.click("Side: Enemies");
+        d.settle();
+        d.state("npc-add-side-list", Sizes::All);
+        d.press(Key::Escape);
+        d.settle();
+        d.expect("Side: Enemies");
         d.expect("Add to fight");
         let add_buttons = |d: &Driver<'_>| {
             d.nodes()
