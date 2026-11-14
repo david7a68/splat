@@ -1793,14 +1793,25 @@ impl<T> AddFieldForm<'_, T, WithActions> {
         if out.closed_above {
             state.highlight = None;
         }
-        // R30: `Add` adds a line above the field (the list grows), so a pane that holds presses
-        // keeps the pressed `Add` under the pointer; in any other pane these calls do nothing.
+        // R30: `Add` adds a line above the field (the caller's list grows), so the pressed `Add`
+        // is kept under the pointer: the first move of `Add` in the 3 frames after the press is
+        // scrolled back once (the scroll area clamps it at the content's ends).
+        let held = self.id.named_id(self.name).with("add_field_held");
+        let mut corrected = false;
         if let Some(add) = &out.create_control {
-            let key = self.id.named_id(self.name).with("add_field_add");
+            let frame = ui.ctx().cumulative_frame_nr();
             if add.clicked() {
-                super::pane::hold_press(ui, key, add);
+                ui.data_mut(|data| data.insert_temp(held, (add.rect.top(), frame)));
+            } else if let Some((top, pressed)) = ui.data(|data| data.get_temp::<(f32, u64)>(held)) {
+                let moved = add.rect.top() - top;
+                if moved.abs() > 0.5 {
+                    ui.scroll_with_delta(vec2(0.0, -moved));
+                    corrected = true;
+                }
+                if corrected || frame > pressed + 3 {
+                    ui.data_mut(|data| data.remove::<(f32, u64)>(held));
+                }
             }
-            super::pane::held_seen(ui, key, add.rect.top());
         }
         let field = out
             .fields
@@ -1828,7 +1839,8 @@ impl<T> AddFieldForm<'_, T, WithActions> {
             .data(|data| data.get_temp::<Vec2>(view))
             .is_some_and(|last| last != size);
         ui.data_mut(|data| data.insert_temp(view, size));
-        if focus || resized {
+        // Not in the frame that keeps a pressed `Add` in place: `Add` stays where it was, in view.
+        if (focus || resized) && !corrected {
             let shown = Rect::from_x_y_ranges(field.rect.x_range(), top..=ui.cursor().top());
             ui.scroll_to_rect(shown, None);
         }
