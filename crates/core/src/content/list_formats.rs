@@ -1256,7 +1256,6 @@ pub fn patch(text: &str, changes: &[(&str, Option<Value>)]) -> Result<String, St
                 .cloned()
                 .unwrap_or_default();
             let mut seen = std::collections::BTreeSet::new();
-            let mut offset = 0;
             let mut patches = Vec::new();
             // The reader's own lines of the section (code blocks left out), so a write never
             // changes a line the reader does not read as a package choice.
