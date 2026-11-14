@@ -14101,6 +14101,10 @@ mod tests {
             // (`focus_amount`). It may win its own frame; the dialog takes the focus back.
             run.borrow_mut().focus_amount = true;
             harness.run_steps(2);
+            // As in the app (`signed-in` 16): the focus is lost under the open dialog; the
+            // dialog takes it back.
+            harness.ctx.memory_mut(egui::Memory::stop_text_input);
+            harness.run_steps(2);
             let mut seen = Vec::new();
             for _ in 0..3 {
                 harness.run_steps(1);
