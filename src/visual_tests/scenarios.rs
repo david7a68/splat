@@ -9781,17 +9781,20 @@ pub mod run_edge_states {
                     && node.in_view()
             })
         };
-        let (hidden, reached) = d.act_at_size(DEFAULT, |d| {
-            let hidden = !shown(d);
-            let top = roster_places(d).first().map(|(_, rect)| rect.center());
-            if let Some(at) = top {
-                d.scroll_at(at, 3);
-            }
-            let reached = shown(d);
-            if let Some(at) = top {
-                d.scroll_up_at(at, 3);
-            }
-            (hidden, reached)
+        // A proof that ends where it started (scrolled back): no step of the DM's task.
+        let (hidden, reached) = d.aside(|d| {
+            d.act_at_size(DEFAULT, |d| {
+                let hidden = !shown(d);
+                let top = roster_places(d).first().map(|(_, rect)| rect.center());
+                if let Some(at) = top {
+                    d.scroll_at(at, 3);
+                }
+                let reached = shown(d);
+                if let Some(at) = top {
+                    d.scroll_up_at(at, 3);
+                }
+                (hidden, reached)
+            })
         });
         d.observe(
             "iter-29-R1-G131",

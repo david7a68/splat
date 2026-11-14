@@ -2691,6 +2691,7 @@ impl Run {
         let lost = self.unsent_only_here_names();
         let block = self.close_reason();
         let mut keep = ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape));
+        self.closing.drawn(ui.ctx().cumulative_pass_nr());
         let focus = self.closing.owes_focus();
         let mut focused = false;
         let mut close = false;
@@ -13896,12 +13897,14 @@ mod tests {
         // the same view after Keep running.
         let run = Rc::new(RefCell::new(run));
         let shown = run.clone();
+        let away = Rc::new(std::cell::Cell::new(false));
+        let elsewhere = away.clone();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(960.0, 640.0))
             .build(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     let mut run = shown.borrow_mut();
-                    if run.closing.is_open() {
+                    if run.closing.is_open() && !elsewhere.get() {
                         run.close_dialog(ui, "The run stays saved.");
                     }
                 });
@@ -13927,6 +13930,21 @@ mod tests {
             assert!(harness.query_by_label("Keep running").is_none());
             assert!(!run.borrow_mut().request_close());
         }
+        // `signed-in` 16: the dialog stays open while the DM is on another page (it is not
+        // drawn, and the focus goes elsewhere); when it shows again, Keep running has the focus.
+        harness.run_steps(3);
+        assert!(keep_focused(&harness));
+        away.set(true);
+        harness
+            .ctx
+            .memory_mut(|memory| memory.request_focus(egui::Id::new("another page")));
+        harness.run_steps(3);
+        away.set(false);
+        harness.run_steps(3);
+        assert!(
+            keep_focused(&harness),
+            "iter-29-R1-G44: the dialog that shows again focuses Keep running"
+        );
 
         // Spell slots kept only here are lost on close, so the close asks first.
         let mut run = super::super::tests::run();
