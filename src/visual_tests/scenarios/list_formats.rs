@@ -1051,8 +1051,9 @@ pub fn run(d: &mut Driver<'_>) {
         "i20-S3",
         "A Timeline flag names the file, displayed day, and repair routes",
         |d| {
-            d.has("Edit in Obsidian")
-                && d.has("Show file")
+            // The typed file line names each link with the file.
+            d.has(&format!("Edit in Obsidian: {}", crate::timeline::FILE))
+                && d.has(&format!("Show file: {}", crate::timeline::FILE))
                 && d.visible_text("Line 9: “Day 5”")
                 && d.visible_text("Splat renumbers it when it saves.")
         },

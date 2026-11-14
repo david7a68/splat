@@ -836,7 +836,12 @@ fn file_links_at_message_words(
     let nodes = d.nodes();
     let words = nodes
         .iter()
-        .find(|node| node.name.starts_with(message) && node.in_view())
+        // The words' own label, not the footer group that is named with every message.
+        .find(|node| {
+            node.role == egui::accesskit::Role::Label
+                && node.name.starts_with(message)
+                && node.in_view()
+        })
         .ok_or(format!("{message}… is not in view"))?
         .rect;
     let shown = nodes
@@ -855,11 +860,16 @@ fn file_links_at_message_words(
             "message words {words:?}; path {shown:?} paints {painted:?} from {path_left:?}"
         ));
     }
+    // A typed footer file line (`design::outcome::FileLine`) names each link with the file.
+    let file = relative.rsplit('/').next().unwrap_or(relative);
     for link in ["Edit in Obsidian", "Show file"] {
+        let named = format!("{link}: {file}");
         let target = nodes
             .iter()
             .filter(|node| {
-                node.name == link && node.in_view() && node.rect.center().y >= shown.top()
+                (node.name == link || node.name == named)
+                    && node.in_view()
+                    && node.rect.center().y >= shown.top()
             })
             .min_by(|a, b| a.rect.top().total_cmp(&b.rect.top()))
             .ok_or(format!("{link} is not in view below the message"))?
