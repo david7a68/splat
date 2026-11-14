@@ -54,20 +54,6 @@ impl crate::design::results::Owner for TimelineFile {
     }
 }
 
-/// One event of a campaign's Timeline file.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct EventIn {
-    pub file: PathBuf,
-    pub id: String,
-}
-
-impl crate::design::results::Owner for EventIn {
-    type Scope = Path;
-    fn scope(&self) -> &Path {
-        &self.file
-    }
-}
-
 /// `Reloaded. Your version, with <n> events, is gone unless you undo.`: the events a reload
 /// replaced, for `Undo reload`.
 pub struct Reloaded {
@@ -124,34 +110,12 @@ impl crate::design::results::Kept for Ruling {
     }
 }
 
-/// An event's rename made its old links out of date: the offer to update them, one per event.
-/// The words come from the session page's offer (`Sessions::event_link_offer`); the store keeps
-/// the offer's order from the rename.
-pub struct Renamed {
-    owner: EventIn,
-}
-
-impl crate::design::results::Kept for Renamed {
-    type Owner = EventIn;
-    const ENDS: crate::design::results::Ends = crate::design::results::Ends {
-        // A newer rename of the event replaces it (`record`).
-        owner_changed: crate::design::results::OwnerChanged::Ends,
-        disk_changed: crate::design::results::DiskChanged::Stays,
-        // Update links uses it.
-        press: crate::design::results::Press::Use,
-    };
-    fn owner(&self) -> EventIn {
-        self.owner.clone()
-    }
-}
-
 /// The Timeline's kept results, each kind in its own store, owned by the book's file.
 #[derive(Default)]
 pub struct BookResults {
     pub reloaded: crate::design::Results<TimelineFile, Reloaded>,
     pub removal: crate::design::Results<TimelineFile, Removal>,
     pub ruling: crate::design::Results<TimelineFile, Ruling>,
-    pub renamed: crate::design::Results<EventIn, Renamed>,
 }
 
 /// One removed event, until its session changes or Undo puts it back.
@@ -957,7 +921,7 @@ pub(crate) fn next_result_order() -> crate::design::ResultOrder {
 /// A campaign's events, kept in step with its file. Edits save shortly after they stop.
 #[derive(Default)]
 pub struct Book {
-    /// The Timeline's kept results: a reload, a removal, a ruling, a rename's link offer.
+    /// The Timeline's kept results: a reload, a removal, a ruling.
     pub results: BookResults,
     /// While a run's update applies, a removal keeps its place (`apply_run_keeping_removal`).
     keep_removal: bool,
@@ -1149,11 +1113,6 @@ impl Book {
                 if !labels.contains(&old_label) {
                     labels.push(old_label);
                 }
-                let owner = EventIn {
-                    file: file.0.clone(),
-                    id: event.id.clone(),
-                };
-                self.results.renamed.record(Renamed { owner });
             }
         }
         self.dirty = true;
