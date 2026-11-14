@@ -806,6 +806,19 @@ fn scope_name(campaigns: &Campaigns, scope: Scope) -> String {
 /// The action after an empty search or filter that keeps the words in the widest scope.
 pub(crate) const SEARCH_EVERYTHING: &str = "Search Everything";
 
+fn scope_label(ui: &egui::Ui, selected: &str, budget: f32) -> String {
+    let font = Type::Strong.font(ui);
+    let fitted = design::words_that_fit(ui, selected, &font, budget);
+    if design::number_width(ui, &fitted, &font) <= budget {
+        return fitted;
+    }
+    let mut cut = fitted.trim_end_matches('…').to_owned();
+    while !cut.is_empty() && design::number_width(ui, &format!("{cut}…"), &font) > budget {
+        cut.pop();
+    }
+    format!("{cut}…")
+}
+
 fn section_row(ui: &mut egui::Ui, label: &str, count: usize, selected: bool) -> egui::Response {
     design::row(
         ui,
@@ -2498,10 +2511,6 @@ const LIBRARY_SEARCH: design::FieldId =
     crate::field_id!("library_search").once(design::Once::PageSearch);
 const NEW_ENTRY_FOLDER: design::FieldId =
     crate::field_id!("new_entry_folder").once(design::Once::CreateForm);
-const LIBRARY_SECTION: design::FieldId =
-    crate::field_id!("library_section").once(design::Once::PageSearch);
-const LIBRARY_SCOPE: design::FieldId =
-    crate::field_id!("library_scope").once(design::Once::PageSearch);
 const NEW_ENTRY_KIND: design::FieldId =
     crate::field_id!("new_entry_kind").once(design::Once::CreateForm);
 const NEW_ENTRY_PLACE: design::FieldId =
@@ -5270,28 +5279,20 @@ impl Library {
                         ui.allocate_ui_with_layout(egui::vec2(half, 0.0), egui::Layout::top_down(egui::Align::Min), |ui| {
                             Self::scope_menu(ui, compact, campaigns, &mut self.scope, &mut self.section, &mut self.search);
                         });
-                        // About is not a section: with it open, no row has the check.
-                        let mut chosen = (!about_open).then_some(self.section);
-                        let mut rows = Section::GROUPS
-                            .iter()
-                            .flat_map(|&(_, sections)| sections.iter().copied())
-                            .filter(|&section| count_of(section, &counts) > 0)
-                            .map(|section| (Some(section), section.label()));
-                        if let Some((first, label)) = rows.next() {
-                            let picked = design::Dropdown::new(LIBRARY_SECTION, "Section")
-                                .choice(first, label)
-                                .choices(rows)
-                                .width(half)
-                                .show(ui, &mut chosen);
-                            if picked.changed && let Some(section) = chosen {
-                                if about_open && !dirty {
-                                    self.selected = None;
-                                    self.draft.clear();
+                        let combo = egui::ComboBox::from_id_salt("library_section")
+                            .icon(design::combo_icon).width(half).truncate()
+                            .selected_text(match self.section { _ if about_open => "About", Section::All => "All", Section::Characters => "Characters", _ => self.section.label() })
+                            .show_ui(ui, |ui| {
+                                for &(_, sections) in Section::GROUPS {
+                                    for &section in sections {
+                                        if count_of(section, &counts) == 0 { continue; }
+                                        let response = design::choice(ui, self.section == section && !about_open, section.label());
+                                        design::named(ui, &response, &format!("Library section: {}", section.label()));
+                                        if response.clicked() { if about_open && !dirty { self.selected = None; self.draft.clear(); } self.section = section; self.search.clear(); }
+                                    }
                                 }
-                                self.section = section;
-                                self.search.clear();
-                            }
-                        }
+                            });
+                        design::named(ui, &combo.response, "Section");
                     });
                 }
                 let width = ui.available_width();
@@ -5719,6 +5720,10 @@ impl Library {
     }
 
     /// What the catalogue shows. Choosing here never changes the active campaign.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn scope_menu(
         ui: &mut egui::Ui,
         compact: bool,
@@ -5741,32 +5746,66 @@ impl Library {
             let width =
                 ui.available_width()
                     .min(if compact { ui.available_width() } else { 166.0 });
-            // Row 9 (AG2, FG2, SG2): the drop-down part marks the chosen scope with its check,
-            // wraps a long package name inside its column and keeps its list in that column.
-            let rows = active
-                .is_some()
-                .then_some(Scope::Uses)
-                .into_iter()
-                .chain([Scope::All, Scope::Builtin])
-                .chain(campaigns.modules().iter().map(|m| Scope::Package(m.id)))
-                .chain(active.is_some().then_some(Scope::Campaign))
-                .map(|choice| (choice, label(choice)));
-            design::Dropdown::new(LIBRARY_SCOPE, "What the Library shows")
-                .choice(
-                    if active.is_some() {
-                        Scope::Uses
-                    } else {
-                        Scope::All
-                    },
-                    label(if active.is_some() {
-                        Scope::Uses
-                    } else {
-                        Scope::All
-                    }),
-                )
-                .choices(rows.skip(1))
+            let selected = match scope {
+                Scope::Uses => "Can use".to_owned(),
+                Scope::Builtin => "D&D 2024".to_owned(),
+                Scope::Campaign => "Campaign entries".to_owned(),
+                _ => label(scope),
+            };
+            let budget = width - design::XXL - design::L;
+            let fitted = if matches!(scope, Scope::Package(_)) {
+                scope_label(ui, &selected, budget)
+            } else {
+                selected
+            };
+            // Wrapped names make the menu taller, so it may use the window's height below the
+            // control before it scrolls.
+            let height = (ui.ctx().content_rect().bottom()
+                - ui.next_widget_position().y
+                - design::XXL * 2.0)
+                .max(design::XXL * 4.0);
+            let combo = egui::ComboBox::from_id_salt("library_scope")
+                .icon(design::combo_icon)
                 .width(width)
-                .show(ui, &mut scope);
+                .height(height)
+                .wrap()
+                .selected_text(Type::Strong.rich(ui, fitted))
+                .show_ui(ui, |ui| {
+                    // The popup is as wide as the control, so it covers the counts beside it and
+                    // stays in the scope's column, clear of the splitter. Its content is the
+                    // control's width less the popup's frame. A long package name wraps.
+                    let frame = ui.style().spacing.menu_margin.sum().x
+                        + 2.0 * ui.style().visuals.window_stroke.width;
+                    let inner = (width - frame).max(0.0);
+                    ui.set_min_width(inner);
+                    ui.set_max_width(inner);
+                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+                    let mut choose = |ui: &mut egui::Ui, choice: Scope| {
+                        if design::extras::choice_wrapped(ui, scope == choice, &label(choice), None)
+                            .clicked()
+                        {
+                            scope = choice;
+                        }
+                    };
+                    if active.is_some() {
+                        choose(ui, Scope::Uses);
+                    }
+                    choose(ui, Scope::All);
+                    ui.separator();
+                    choose(ui, Scope::Builtin);
+                    for m in campaigns.modules() {
+                        choose(ui, Scope::Package(m.id));
+                    }
+                    if active.is_some() {
+                        choose(ui, Scope::Campaign);
+                    }
+                });
+            combo.response.clone().on_hover_text(label(scope));
+            design::named(
+                ui,
+                &combo.response,
+                &format!("What the Library shows: {}", label(scope)),
+            );
         });
         *current = scope;
         if scope != before {
@@ -9754,6 +9793,23 @@ mod tests {
             loaded.uses.unwrap().contains(&id),
             "the repaired note is Chosen for this campaign"
         );
+    }
+
+    #[test]
+    fn scope_picker_cuts_two_words_with_one_ellipsis() {
+        let ctx = egui::Context::default();
+        let _ = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let budget = design::number_width(ui, "Ashen…", &Type::Strong.font(ui));
+                assert_eq!(scope_label(ui, "Ashen Marches", budget), "Ashen…");
+                assert_eq!(
+                    scope_label(ui, "Ashen Marches", budget / 2.0)
+                        .matches('…')
+                        .count(),
+                    1
+                );
+            });
+        });
     }
 
     #[test]

@@ -6235,13 +6235,12 @@ pub fn package_about(d: &mut Driver<'_>) {
             "The About row warns for the manifest problem the header counts",
         );
         // Round 23 FD8: the About row's warning icon has the warning colour too.
-        // Round 25 FF4: where the marked name would be cut, the row drops `About` first.
-        let about = format!("{} About Emberfall Watch", crate::icons::WARN);
-        let short = format!("{} Emberfall Watch", crate::icons::WARN);
+        // Ruling R13 (row 151): the row keeps `About`; the name may shorten by whole words.
+        let about = format!("{} About Emberfall", crate::icons::WARN);
         let mut marks = Vec::new();
         d.each_painted_text(|text, clip| {
             let job = &text.galley.job;
-            if (job.text == about || job.text == short)
+            if job.text.starts_with(&about)
                 && clip.intersects(text.visual_bounding_rect())
             {
                 marks.push(painted_marks(job));
@@ -6530,8 +6529,7 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
                 .galley
                 .job
                 .text
-                .starts_with(&format!("{} ", design::icons::ERROR))
-                && text.galley.job.text.contains("Ashen Marches")
+                .starts_with(&format!("{} About Ashen", design::icons::ERROR))
                 && clip.intersects(text.visual_bounding_rect())
             {
                 marks.push(painted_marks(&text.galley.job));
@@ -6553,7 +6551,7 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
         if size == DEFAULT {
             let shortened = !d.visible_text(&warned_about);
             let hover = d.painted_tooltip_shows(
-                &format!("{} Ashen Marches", design::icons::ERROR),
+                &format!("{} About Ashen", design::icons::ERROR),
                 &warned_about,
             );
             d.observe(

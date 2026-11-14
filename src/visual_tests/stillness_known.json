@@ -268,7 +268,6 @@
     ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Back\"",1],
     ["G1b/pressed-control-moved","05-reference-outside-package","960x640","Button \"Back\"",1],
     ["G6/footer-far-below-body","01-homebrew-reference","1920x1080","Button \"Source and identifiers\"",1],
-    ["G6/footer-far-below-body","01-homebrew-reference","960x640","Label \"Missing place (not found in this campaign)\"",1],
     ["G6/footer-far-below-body","03-dependency-copy-reconnected","1200x800","Button \"Source and identifiers\"",1],
     ["G6/footer-far-below-body","03-dependency-copy-reconnected","1920x1080","Button \"Source and identifiers\"",1],
     ["N4/quiet-action-line-start","05-reference-outside-package","1200x800","Button \"Filter creatures\"",1],
@@ -365,9 +364,7 @@
     ["N4/quiet-action-line-start","05-log-header-long-title","960x640","Button \"All sessions\"",1],
     ["N4/quiet-action-line-start","06-log-field-blocked-by-edit","960x640","Button \"All sessions\"",1],
     ["N4/quiet-action-line-start","07-log-words-of-a-deleted-entry","960x640","Button \"All sessions\"",1],
-    ["N4/quiet-action-line-start","08-log-words-without-an-entry","960x640","Button \"All sessions\"",1],
-    ["N5/icon-starts-wrapping-text","07-log-words-of-a-deleted-entry","960x640","Text \"\\u{e4e0} Captain Varra Black: told the party who burned the ropes at the ford\"",1],
-    ["N5/icon-starts-wrapping-text","08-log-words-without-an-entry","960x640","Text \"\\u{e4e0} Captain Varra Black: told the party who burned the ropes at the ford\"",1]
+    ["N4/quiet-action-line-start","08-log-words-without-an-entry","960x640","Button \"All sessions\"",1]
   ],
   "markdown-links": [
     ["N4/quiet-action-line-start","06-library-second-link-focused","1200x800","Button \"Filter creatures\"",1],

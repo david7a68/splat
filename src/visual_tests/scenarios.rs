@@ -1302,7 +1302,9 @@ pub mod library_browse {
             "frame times are not stable while scenarios share the CPU",
         );
 
-        d.choose("Section", CREATURES_SECTION);
+        d.click("Section");
+
+        d.click(&format!("Library section: {CREATURES_SECTION}"));
         d.expect(CREATURES_COUNT);
         d.state("creature-list", Sizes::Default);
         d.click_containing(NEXT_CREATURE);
@@ -1321,7 +1323,8 @@ pub mod creature_filter {
     const SEARCH_RESULTS: &str = "SEARCH RESULTS";
 
     pub fn run(d: &mut Driver<'_>) {
-        d.choose("Section", "Creatures");
+        d.click("Section");
+        d.click("Library section: Creatures");
         d.expect(CREATURES_COUNT);
         d.begin_task();
 
@@ -5848,7 +5851,8 @@ pub mod dialogs {
     pub fn run(d: &mut Driver<'_>) {
         go_library(d);
         d.begin_task();
-        d.choose("Section", CREATURES_SECTION);
+        d.click("Section");
+        d.click(&format!("Library section: {CREATURES_SECTION}"));
         d.expect(CREATURE);
         d.click(COPY_TO);
         d.expect(COPY_TITLE);
@@ -11417,7 +11421,8 @@ pub mod nav_table {
         go_library(d);
         d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
         d.click(EVERYTHING);
-        d.choose("Section", SECTION);
+        d.click("Section");
+        d.click(&format!("Library section: {SECTION}"));
         d.expect(ENTRY_ROW);
         d.scroll_at(pos2(720.0, 400.0), 2);
         let entry_scroll = d.scroll_position_of_reader(ENTRY);
@@ -22813,7 +22818,8 @@ pub mod session_plan {
 
         // A save on Encounters reaches the Library, so its next save is not a false conflict.
         go_library(d);
-        d.choose("Section", "Encounters");
+        d.click("Section");
+        d.click("Library section: Encounters");
         d.click_containing("Ford of Ash");
         d.click(EDIT_MARKDOWN);
         d.type_into_editor("More tactics.\n");
