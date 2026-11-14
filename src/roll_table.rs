@@ -390,7 +390,10 @@ fn fault_count_keeps_valid_tables_and_counts_each_invalid_table_once() {
     assert_eq!(fault_count(&format!("{valid}\n{broken}\n{broken}")), 2);
     // An unreadable `per` word is a warning too; a word Splat reads is not.
     let fortnight = valid.replace("dice=1d4", "dice=1d4 per=fortnight");
-    assert_eq!(fault_count(&valid.replace("dice=1d4", "dice=1d4 per=watch")), 0);
+    assert_eq!(
+        fault_count(&valid.replace("dice=1d4", "dice=1d4 per=watch")),
+        0
+    );
     assert_eq!(fault_count(&format!("{fortnight}\n{broken}")), 2);
     assert_eq!(fault_count(&fortnight.replace("1-4", "2-4")), 2);
 }

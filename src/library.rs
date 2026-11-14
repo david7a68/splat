@@ -5753,8 +5753,16 @@ impl Library {
                 .map(|choice| (choice, label(choice)));
             design::Dropdown::new(LIBRARY_SCOPE, "What the Library shows")
                 .choice(
-                    if active.is_some() { Scope::Uses } else { Scope::All },
-                    label(if active.is_some() { Scope::Uses } else { Scope::All }),
+                    if active.is_some() {
+                        Scope::Uses
+                    } else {
+                        Scope::All
+                    },
+                    label(if active.is_some() {
+                        Scope::Uses
+                    } else {
+                        Scope::All
+                    }),
                 )
                 .choices(rows.skip(1))
                 .width(width)
@@ -6405,7 +6413,10 @@ impl Library {
                     self.new_folder = kind_folder(&self.new_kind).into();
                 }
                 design::field(ui, "Destination", None, None, |ui| {
-                    let mut rows = places.iter().enumerate().map(|(i, owner)| (i, owner.label()));
+                    let mut rows = places
+                        .iter()
+                        .enumerate()
+                        .map(|(i, owner)| (i, owner.label()));
                     if let Some((first, label)) = rows.next() {
                         design::Dropdown::new(NEW_ENTRY_PLACE, "Destination")
                             .choice(first, label)
@@ -8244,8 +8255,9 @@ impl Library {
                                             );
                                             let mut draft = self.draft.as_str();
                                             // The field belongs to this note: its owner and path key it.
-                                            let field =
-                                                DISK_DRAFT.of(note.owner.id()).with(note.field_key());
+                                            let field = DISK_DRAFT
+                                                .of(note.owner.id())
+                                                .with(note.field_key());
                                             let response =
                                                 field.multi_line(ui, &mut draft, |edit| {
                                                     edit.font(egui::TextStyle::Monospace)
@@ -10862,7 +10874,11 @@ mod tests {
         assert!(rendered.find("Rage").unwrap() < rendered.find("Relentless Rage").unwrap());
         // The class table names the feature too. The link is in the list below it. Its own
         // title is its heading, once (row 107).
-        assert_eq!(rendered.matches("Barbarian Features").count(), 1, "{rendered}");
+        assert_eq!(
+            rendered.matches("Barbarian Features").count(),
+            1,
+            "{rendered}"
+        );
         assert!(!rendered.contains("Class table"), "{rendered}");
         let link = texts
             .iter()

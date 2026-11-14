@@ -2458,7 +2458,15 @@ mod tests {
         let icon = texts
             .iter()
             .find(|text| text.galley.job.text.starts_with(design::icons::WARN))
-            .unwrap_or_else(|| panic!("row-49: the icon is painted: {:?}", texts.iter().map(|t| t.galley.job.text.clone()).collect::<Vec<_>>()));
+            .unwrap_or_else(|| {
+                panic!(
+                    "row-49: the icon is painted: {:?}",
+                    texts
+                        .iter()
+                        .map(|t| t.galley.job.text.clone())
+                        .collect::<Vec<_>>()
+                )
+            });
         // Every line of the words, also a wrapped one, starts right of the icon's column.
         let icon_right = icon.pos.x + icon.galley.size().x;
         let lines: Vec<(f32, f32)> = texts

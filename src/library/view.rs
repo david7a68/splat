@@ -492,9 +492,7 @@ mod tests {
             .shapes
             .iter()
             .find_map(|shape| match &shape.shape {
-                egui::Shape::Text(text) if text.galley.job.text.contains(words) => {
-                    Some(text.pos.y)
-                }
+                egui::Shape::Text(text) if text.galley.job.text.contains(words) => Some(text.pos.y),
                 _ => None,
             })
             .expect("the words are painted")
