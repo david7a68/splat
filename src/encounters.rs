@@ -9052,6 +9052,8 @@ mod tests {
         assert!(draft.recovery.file_gone());
         let name = draft.name.clone();
         let editor = Encounters {
+            // The kept results are the campaign's (`KeptOwner`).
+            active: Some(campaign.clone()),
             draft: Some(draft),
             snapshot: Some(Snapshot::load(&campaign, &[]).unwrap()),
             ..Default::default()
