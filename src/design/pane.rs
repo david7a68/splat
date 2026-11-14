@@ -883,11 +883,18 @@ pub fn footer_rect(ctx: &egui::Context, local: Id) -> Option<Rect> {
 }
 
 /// The body's clip: what is left of `ui`'s clip above the body's room, and above `row_cut`, the
-/// top of the registered row that the footer or the session banner would cut (N12, ruling R4).
+/// top of the registered row that the footer or the session banner would cut (N12, ruling R4),
+/// widened at the left by the gutter a `line_start` action hangs into.
 /// The one place that decides where the body is cut. egui clips paint and presses alike, so a
 /// row under the cut neither shows nor takes a press.
 fn body_clip(ui: &Ui, body_room: Rect, row_cut: Option<f32>) -> Rect {
     let mut clip = ui.clip_rect();
+    // The gutter that a quiet `line_start` action hangs into, left of the text edge: the text
+    // stays where it is, only the clip is wider (the stat-block pane's `Stop`, package R).
+    clip.min.x = clip
+        .min
+        .x
+        .min(body_room.left() - super::components::LINE_START_HANG);
     clip.max.y = clip.max.y.min(body_room.bottom());
     if let Some(cut) = row_cut {
         clip.max.y = clip.max.y.min(cut);
@@ -1064,13 +1071,6 @@ impl Footer<'_> {
             ui.ctx().request_discard("the message footer emptied");
         }
         let most = (room.height() / 3.0).floor().max(0.0);
-        #[cfg(test)]
-        if local == Id::new("editor_region_test") {
-            eprintln!(
-                "DIAG pass {} shown {shown} stored {stored} room {room:?}",
-                ui.ctx().cumulative_pass_nr()
-            );
-        }
         // Last pass's height; a change is measured below, and the pass is drawn again.
         let height = if shown { stored.min(most) } else { 0.0 };
         let pinned = room.bottom() - height;
@@ -1875,6 +1875,50 @@ mod row_cut_tests {
             );
         }
     }
+    /// Lead note for P2 (package R's counterexample, the stat-block pane's `Stop`): a quiet
+    /// `line_start` action first in a `Body::Content` pane, whose parent clips at the pane's
+    /// left edge, is whole inside the body's clip, and its words keep the text edge of a plain
+    /// label under it.
+    #[test]
+    fn a_line_start_action_keeps_its_gutter_in_a_pane() {
+        use crate::design::components::Action;
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(600.0, 300.0))
+            .build_ui(|ui| {
+                // A parent that clips at its own rect: a column of a page.
+                let column = ui.available_rect_before_wrap().shrink2(vec2(40.0, 0.0));
+                ui.scope_builder(egui::UiBuilder::new().max_rect(column), |ui| {
+                    ui.set_clip_rect(column);
+                    let frame = PaneFrame::new(ui);
+                    let messages = Messages::<NoPress>::new(&frame, "gutter_test", 400.0);
+                    let (action, label, clip) = messages
+                        .pane(ui, Body::Content, |ui| {
+                            let action = Action::quiet("Stop").line_start().show(ui).rect;
+                            let label = ui.label("A plain label").rect;
+                            (action, label, ui.clip_rect())
+                        })
+                        .body;
+                    ui.ctx().data_mut(|data| {
+                        data.insert_temp(Id::new("gutter_test_rects"), (action, label, clip));
+                    });
+                });
+            });
+        crate::design::theme::install(&harness.ctx);
+        harness.run_steps(3);
+        let (action, label, clip) = harness
+            .ctx
+            .data(|data| data.get_temp::<(Rect, Rect, Rect)>(Id::new("gutter_test_rects")))
+            .expect("the pane drew");
+        assert!(
+            clip.expand(0.5).contains_rect(action),
+            "gutter-clip: Stop {action:?} is whole inside the clip {clip:?}"
+        );
+        assert!(
+            (action.left() + crate::design::components::LINE_START_HANG - label.left()).abs()
+                <= 0.5,
+            "gutter-edge: Stop's words {action:?} start at the label's edge {label:?}"
+        );
+    }
 }
 
 #[cfg(test)]
@@ -1981,15 +2025,7 @@ mod editor_region_tests {
     }
 
     fn footer(harness: &egui_kittest::Harness<'_, State>) -> Option<Rect> {
-        let at = footer_rect(&harness.ctx, Id::new(LOCAL));
-        if at.is_none() {
-            eprintln!(
-                "no footer: record {:?}, records {}",
-                pane_record(&harness.ctx, Id::new(LOCAL)),
-                pane_records(&harness.ctx).len()
-            );
-        }
-        at
+        footer_rect(&harness.ctx, Id::new(LOCAL))
     }
 
     /// The clip of the editor's painted text: the region's view.
@@ -2041,20 +2077,20 @@ mod editor_region_tests {
                 ..State::default()
             },
         );
-        eprintln!("DIAG long built: {:?}", footer(&long));
         long.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::End);
         long.run_steps(2);
-        eprintln!("DIAG after end: {:?}", footer(&long));
         long.event(egui::Event::Text("!".into()));
         long.run_steps(4);
         let whole = |harness: &egui_kittest::Harness<'_, State>, case: &str| {
             let save = harness.state().save.expect("the save row draws");
-            let at = footer(harness).expect("the footer shows");
             let room = pane_record(&harness.ctx, Id::new(LOCAL))
                 .expect("a record")
                 .room();
+            // Above the footer, or the room's bottom when the footer is empty.
+            let at = footer(harness);
+            let limit = at.map_or(room.bottom(), |at| at.top() - S);
             assert!(
-                save.top() >= room.top() - 0.5 && save.bottom() <= at.top() - S + 0.5,
+                save.top() >= room.top() - 0.5 && save.bottom() <= limit + 0.5,
                 "p2-save-{case}: the save row {save:?} is whole in the room {room:?} above the footer {at:?}"
             );
             let view = region_view(harness);

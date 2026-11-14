@@ -548,6 +548,10 @@ pub struct Action<'a> {
     min_width: Option<f32>,
 }
 
+/// How far a quiet `line_start` action hangs left of the text edge: its padding. A pane's body
+/// clip keeps this gutter (`pane::body_clip`), so the target is never cut.
+pub const LINE_START_HANG: f32 = S;
+
 impl<'a> Action<'a> {
     fn new(kind: Kind, label: &'a str) -> Self {
         Self {
@@ -689,7 +693,11 @@ impl<'a> Action<'a> {
     }
 
     fn padding(&self) -> f32 {
-        if self.kind == Kind::Quiet { S } else { M }
+        if self.kind == Kind::Quiet {
+            LINE_START_HANG
+        } else {
+            M
+        }
     }
 
     fn icon_width(&self) -> f32 {
