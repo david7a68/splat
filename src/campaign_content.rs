@@ -2439,8 +2439,7 @@ impl CampaignContent {
         });
         let issues_shown = self.repairs.is_empty()
             && !missing_package
-            && !removal_of(&self.results, active.id)
-                .is_some_and(|removed| !removed.users.is_empty());
+            && removal_of(&self.results, active.id).is_none_or(|removed| removed.users.is_empty());
         let flag_lines = |ui: &mut egui::Ui, open_run_settings: &mut bool| {
             for (at, flag) in campaign_flags.iter().enumerate() {
                 // Every flag is about Campaign.md, so one file line follows the last of them.
