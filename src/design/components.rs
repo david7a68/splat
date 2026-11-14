@@ -814,14 +814,22 @@ impl<'a> Action<'a> {
             // The words start at the text edge; the padding and any icon hang in the gutter. The
             // row allocates all but the icon, so the next item keeps the same gap after the
             // target as it has after a `line_start` action without an icon.
-            // P3a: the hang never passes this `Ui`'s clip (its pane's hang room, or whatever
-            // clip encloses it), so the action is always whole. Where that room is shorter than
-            // the hang, the action first gives up its left padding (blank but for the hover
-            // fill), so its words stay at the text edge (a menu's choices under its heading);
-            // only an icon that still does not fit moves the words, by what is missing.
+            // P3a: the action is whole in its room (`pane::hang_limit`: this `Ui`'s clip, its
+            // pane column's surface, and every band a layout part reserved across its hang).
+            // Where the room is shorter than the hang, the action first gives up its left
+            // padding (blank but for the hover fill), so its words stay at the text edge (a
+            // menu's choices under its heading); then it moves its icon and words by what is
+            // still missing, also past the text edge when the room starts there.
             let hang = padding + icon_width;
-            let limit = super::pane::hang_limit(ui);
-            let short = (limit - (ui.cursor().min.x - hang)).clamp(0.0, hang);
+            let start = ui.cursor().min;
+            let limit = super::pane::hang_limit(
+                ui,
+                Rect::from_min_max(
+                    pos2(start.x - hang, start.y),
+                    pos2(start.x, start.y + self.height),
+                ),
+            );
+            let short = (limit - (start.x - hang)).max(0.0);
             let given = short.min(padding);
             let shift = short - given;
             let size = vec2(width - icon_width + shift, self.height);
@@ -840,14 +848,22 @@ impl<'a> Action<'a> {
             } else {
                 rect
             };
-            // egui also gives a press to a target up to `interact_radius` away: the target
-            // starts that far inside the clip, so a press outside the clip never reaches it
-            // (a press on the action's own left pixels still does, as the nearest target).
-            let radius = ui.style().interaction.interact_radius;
-            let press = target.with_min_x(target.min.x.max(limit + radius));
-            let mut response = ui.interact(press, id, Sense::click());
-            // The response (and its accessible bounds) keeps the whole target.
-            response.rect = target;
+            // It takes a press only inside its room: every painted pixel there is its target
+            // (egui's direct hit), and a pointer outside the room cannot reach it as egui's
+            // nearest target either (`interact_radius`), as this frame's sense says.
+            let room = ui.clip_rect().with_min_x(ui.clip_rect().left().max(limit));
+            let outside = ui
+                .input(|input| input.pointer.interact_pos())
+                .is_some_and(|at| !room.contains(at));
+            let sense = if outside {
+                Sense::hover()
+            } else {
+                Sense::click()
+            };
+            let clip = ui.clip_rect();
+            ui.set_clip_rect(room);
+            let response = ui.interact(target, id, sense);
+            ui.set_clip_rect(clip);
             (rect, response)
         } else {
             ui.allocate_exact_size(vec2(width, height), Sense::click())

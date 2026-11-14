@@ -6996,7 +6996,7 @@ pub mod run_long_names {
             d.click_first_frame("Stat block");
             let first = stat_pane(d).and_then(|record| {
                 let footer = record.footer()?;
-                Some((footer, record.room(), record.fits()))
+                Some((footer, record.room(), record.viewport()?, record.fits()))
             });
             d.settle();
             first
@@ -7004,13 +7004,17 @@ pub mod run_long_names {
         let (width, height) = SMALL;
         d.observe(
             "iter-28-P3a",
-            long.is_some_and(|(footer, room, fits)| {
+            // Astra 5: below the visible body and at its pinned place (the room's bottom), not
+            // merely inside the room.
+            long.is_some_and(|(footer, room, viewport, fits)| {
                 !fits
                     && room.contains_rect(footer)
+                    && footer.top() >= viewport.bottom() + crate::design::S - 1.0
+                    && (footer.bottom() - room.bottom()).abs() <= 1.0
                     && footer.bottom() <= height
                     && footer.right() <= width
             }),
-            format!("At 960 the long block's footer is whole in view in the first frame: {long:?}"),
+            format!("At 960 the long block's footer is pinned at the room's bottom, below the visible body, in the first frame: (footer, room, viewport, fits) {long:?}"),
         );
         // At 960 the long block's tiles are below the fold: arm at 1200.
         d.act_at_size(DEFAULT, |d| d.click_starting("Bite · +4"));
