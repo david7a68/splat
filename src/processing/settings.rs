@@ -578,7 +578,7 @@ impl ProcessingSettings {
                                 )
                                 .changed();
                                 for input in &inputs {
-                                    changed |= design::choice_value(
+                                    changed |= design::choice_wrapped_value(
                                         ui,
                                         &mut self.config.input,
                                         Some(input.name.clone()),

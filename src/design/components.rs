@@ -3687,7 +3687,7 @@ fn submenu_place(button: Rect, size: Vec2, gap: f32, inside: Rect) -> egui::Pos2
     clippy::disallowed_methods,
     reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
 )]
-pub fn overflow_tabs(ui: &mut Ui, selected: &mut usize, choices: &[(usize, &str)]) {
+pub fn overflow_tabs(ui: &mut Ui, selected: &mut usize, choices: &[(usize, &'static str)]) {
     let width = |label: &str| number_width(ui, label, &Type::Strong.font(ui)) + L;
     let all: f32 = choices.iter().map(|(_, label)| width(label)).sum();
     if all <= ui.available_width() {
@@ -3824,7 +3824,7 @@ pub fn counted_tab<T: PartialEq + Copy>(
 }
 
 /// Second-level sheet pages keep one Small tab line, with overflow in More.
-pub fn overflow_tabs_small(ui: &mut Ui, selected: &mut usize, choices: &[(usize, &str)]) {
+pub fn overflow_tabs_small(ui: &mut Ui, selected: &mut usize, choices: &[(usize, &'static str)]) {
     ui.scope(|ui| {
         let small = Type::Small.font(ui);
         for role in [

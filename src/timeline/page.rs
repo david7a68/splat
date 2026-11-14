@@ -598,7 +598,7 @@ impl TimelinePage {
             .show_ui(ui, |ui| {
                 design::choice_value(ui, &mut chosen, None, "No session");
                 for session in sessions {
-                    design::choice_value(ui, &mut chosen, Some(session.id), &session.label);
+                    design::choice_wrapped_value(ui, &mut chosen, Some(session.id), &session.label);
                 }
             });
         design::named(ui, &inner.response, "Session for new events");
@@ -657,7 +657,7 @@ impl TimelinePage {
                 .show_ui(ui, |ui| {
                     design::choice_value(ui, &mut self.session, None, "All sessions");
                     for session in sessions {
-                        design::choice_value(
+                        design::choice_wrapped_value(
                             ui,
                             &mut self.session,
                             Some(session.id),
@@ -1520,7 +1520,7 @@ impl TimelinePage {
                         changed |= design::choice_value(ui, &mut event.session, None, "No session")
                             .changed();
                         for session in sessions {
-                            changed |= design::choice_value(
+                            changed |= design::choice_wrapped_value(
                                 ui,
                                 &mut event.session,
                                 Some(session.id),
@@ -1608,7 +1608,7 @@ impl TimelinePage {
                         }
                         for (at, label) in labels.iter().enumerate() {
                             if at != index {
-                                let row = design::choice(ui, at + 1 == index, label);
+                                let row = design::choice_wrapped(ui, at + 1 == index, label, None);
                                 if row.clicked() {
                                     placed = Some(Some(ids[at].clone()));
                                 }

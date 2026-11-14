@@ -1783,12 +1783,29 @@ fn preview_line(ui: &mut Ui, preview: &str) {
 
 /// A menu that opens under `response`, for a row or a control with more actions. The one place
 /// a menu popup is made outside `row_menu`, so a placement rule for menus has one home.
+///
+/// Its room (X2): the menu stays inside the pane that `ui` draws in (its clip), one scroll
+/// lane (`lane_width`, at least `S`) clear of the pane's edges, so it lies over neither a
+/// splitter nor a scroll bar. It starts at the control's left edge and may reach that inner
+/// edge; when the control's right edge leaves more room on its left, it ends there instead. The room is the menu's largest width: its choices ask for their words'
+/// width inside it, so a long choice is cut or wrapped and never pushes the menu past the pane.
 #[allow(
     clippy::disallowed_methods,
     reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
 )]
-pub fn menu_popup(response: &Response) -> egui::Popup<'_> {
+pub fn menu_popup<'a>(ui: &Ui, response: &'a Response) -> egui::Popup<'a> {
+    let pane = ui.clip_rect();
+    let clear = lane_width().max(S);
+    let rightward = pane.right() - clear - response.rect.left();
+    let leftward = response.rect.right() - (pane.left() + clear);
+    let (align, room) = if rightward >= leftward {
+        (egui::RectAlign::BOTTOM_START, rightward)
+    } else {
+        (egui::RectAlign::BOTTOM_END, leftward)
+    };
     egui::Popup::menu(response)
+        .align(align)
+        .width(room.max(Density::Read.control()))
 }
 
 // The popup and status parts, public here so their doc tests can name them

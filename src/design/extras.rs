@@ -165,8 +165,21 @@ pub fn heading(ui: &mut Ui, heading: Heading<'_>) -> Response {
 /// radio (one of a few shown at once), a checkbox (on or off), the toggle (`Action::selected`, a
 /// button that stays pressed), and tabs (`segmented`, `counted_tab`, `overflow_tabs`). The selected
 /// choice shows the check (`icons::OK`) in a fixed column at its left, so every choice's words
-/// start at one x whether or not it is selected, and its accessible state is selected. In a
-/// column it takes the column's width; on a line, its own. `clicked()` chooses it.
+/// start at one x whether or not it is selected, and its accessible state is selected.
+/// `clicked()` chooses it.
+///
+/// **Width (X2).** A choice never takes more width than its column gives. In a column it takes
+/// the column's width, and its words are cut with an ellipsis when they do not fit. On a line it
+/// takes its words' width, at most the rest of the line. In an auto-sized menu, egui first
+/// measures the menu (a sizing pass, inside the room egui gives it: a `ComboBox`'s or a
+/// `Popup::width`'s width, else egui's default menu room, at most the screen; `menu_popup` gives
+/// the room to its pane's edge): there the choice asks for its words' width, at most that room,
+/// so the menu is as wide as its widest choice and never wider than its room. Then each choice
+/// takes the menu's width.
+///
+/// **Words (X2).** The words are the app's own fixed words (`&'static str`). Words from the
+/// user's data (a name, a path, a title) can be any length, so they go through
+/// [`choice_wrapped`], which wraps them inside the row and never cuts them.
 ///
 /// ```
 /// fn f(ui: &mut eframe::egui::Ui, scope: &mut u8) {
@@ -183,8 +196,43 @@ pub fn heading(ui: &mut Ui, heading: Heading<'_>) -> Response {
 ///     let _ = splat::extras::choice(ui, "This campaign");
 /// }
 /// ```
-pub fn choice(ui: &mut Ui, selected: bool, label: &str) -> Response {
+///
+/// A name from the user's data is not the app's fixed words; it goes through `choice_wrapped`:
+///
+/// ```compile_fail,E0308
+/// fn f(ui: &mut eframe::egui::Ui, name: String) {
+///     let _ = splat::extras::choice(ui, true, name);
+/// }
+/// ```
+///
+/// ```compile_fail,E0621
+/// fn f(ui: &mut eframe::egui::Ui, name: &str) {
+///     let _ = splat::extras::choice(ui, true, name);
+/// }
+/// ```
+///
+/// The compiling twin for data words:
+///
+/// ```
+/// fn f(ui: &mut eframe::egui::Ui, name: &str) {
+///     let _ = splat::extras::choice_wrapped(ui, true, name, None);
+/// }
+/// ```
+pub fn choice(ui: &mut Ui, selected: bool, label: &'static str) -> Response {
     choice_row(ui, selected, label, Lines::One)
+}
+
+/// The width a choice row takes: never more than its column or line gives (X2). `natural` is
+/// the row's width with its words on one line.
+fn choice_width(ui: &Ui, natural: f32) -> f32 {
+    let room = ui.available_width().max(0.0);
+    if ui.layout().is_vertical() && !ui.is_sizing_pass() {
+        // A column: its width, whatever the words need.
+        room
+    } else {
+        // A line, or a menu that egui is measuring: the words' width, inside the room.
+        natural.min(room)
+    }
 }
 
 /// How a choice row lays out its words.
@@ -206,20 +254,13 @@ fn choice_row(ui: &mut Ui, selected: bool, label: &str, lines: Lines<'_>) -> Res
         Lines::Wrap { blocked } => blocked,
     };
     let color = if blocked.is_some() { c.muted } else { c.text };
-    let (width, height) = match lines {
-        Lines::One => {
-            let natural = S + ICON_SLOT + number_width(ui, label, &font) + S;
-            let width = if ui.layout().is_vertical() {
-                natural.max(ui.available_width())
-            } else {
-                natural
-            };
-            (width, Density::Read.control())
-        }
-        Lines::Wrap { blocked } => {
-            let width = ui.available_width();
-            (width, choice_wrapped_height(ui, label, blocked, width))
-        }
+    let words = number_width(ui, label, &font).max(
+        blocked.map_or(0.0, |reason| number_width(ui, reason, &Type::Small.font(ui))),
+    );
+    let width = choice_width(ui, S + ICON_SLOT + words + S);
+    let height = match lines {
+        Lines::One => Density::Read.control(),
+        Lines::Wrap { blocked } => choice_wrapped_height(ui, label, blocked, width),
     };
     let sense = if blocked.is_some() {
         Sense::hover()
@@ -295,8 +336,26 @@ fn choice_row(ui: &mut Ui, selected: bool, label: &str, lines: Lines<'_>) -> Res
     response
 }
 
-/// [`choice`] for a value: a click sets `current` to `value`.
-pub fn choice_value<T: PartialEq>(ui: &mut Ui, current: &mut T, value: T, label: &str) -> Response {
+/// [`choice`] for a value: a click sets `current` to `value`. Its words are the app's fixed
+/// words, as [`choice`]'s are; a value named by the user's data uses [`choice_wrapped`].
+///
+/// ```compile_fail,E0308
+/// fn f(ui: &mut eframe::egui::Ui, at: &mut u8, name: String) {
+///     let _ = splat::extras::choice_value(ui, at, 1, name);
+/// }
+/// ```
+///
+/// ```
+/// fn f(ui: &mut eframe::egui::Ui, at: &mut u8) {
+///     let _ = splat::extras::choice_value(ui, at, 1, "First");
+/// }
+/// ```
+pub fn choice_value<T: PartialEq>(
+    ui: &mut Ui,
+    current: &mut T,
+    value: T,
+    label: &'static str,
+) -> Response {
     let mut response = choice(ui, *current == value, label);
     if response.clicked() && *current != value {
         *current = value;
@@ -340,9 +399,26 @@ pub(super) fn choice_wrapped_height(ui: &Ui, label: &str, reason: Option<&str>, 
 /// [`choice`] in a list whose rows wrap (the drop-down's, `Dropdown`): the same check column and
 /// look, its words wrapped inside the row (never cut), so two names that differ at their end
 /// stay apart; a blocked choice shows its reason below its words and takes no press and no
-/// keyboard focus.
+/// keyboard focus. This is the form for words from the user's data (X2): it takes `&str` of any
+/// length. Its width follows [`choice`]'s rule; only its words wrap instead of being cut.
 pub fn choice_wrapped(ui: &mut Ui, selected: bool, label: &str, blocked: Option<&str>) -> Response {
     choice_row(ui, selected, label, Lines::Wrap { blocked })
+}
+
+/// [`choice_wrapped`] for a value named by the user's data: a click sets `current` to `value`,
+/// as [`choice_value`] does.
+pub fn choice_wrapped_value<T: PartialEq>(
+    ui: &mut Ui,
+    current: &mut T,
+    value: T,
+    label: &str,
+) -> Response {
+    let mut response = choice_wrapped(ui, *current == value, label, None);
+    if response.clicked() && *current != value {
+        *current = value;
+        response.mark_changed();
+    }
+    response
 }
 
 #[cfg(test)]
@@ -389,6 +465,54 @@ mod tests {
                 let below = after.rect.top() - next.rect.bottom();
                 assert!(above > below, "{kind:?}: {above} above, {below} below");
             });
+        }
+    }
+
+    /// X2: a choice never takes more width than its column gives. In a 100 px column, a label
+    /// that needs about 300 px keeps each form's row, and every word it paints, inside the
+    /// column: the one-line form cuts its words, the wrapped form wraps them. On a line in that
+    /// column, the row ends at the column's edge too. A short label in a wide column still takes
+    /// the column's width (a menu's rows stay one width).
+    #[test]
+    fn a_choice_stays_inside_a_narrow_column() {
+        const LONG: &str = "A choice whose words need far more room than its narrow column has";
+        let ctx = Context::default();
+        let mut column = egui::Rect::NOTHING;
+        let mut rows = Vec::new();
+        let output = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let words = number_width(ui, LONG, &Type::Body.font(ui));
+                assert!(words >= 300.0, "the label needs {words} px");
+                column = egui::Rect::from_min_size(ui.cursor().min, vec2(100.0, 400.0));
+                ui.scope_builder(egui::UiBuilder::new().max_rect(column), |ui| {
+                    rows.push(choice(ui, true, LONG).rect);
+                    rows.push(choice_wrapped(ui, false, LONG, None).rect);
+                    rows.push(choice_wrapped(ui, false, LONG, Some(LONG)).rect);
+                    rows.push(ui.horizontal(|ui| choice(ui, false, LONG)).inner.rect);
+                    let short = choice(ui, false, "All");
+                    assert_eq!(short.rect.width(), 100.0, "a short choice fills its column");
+                });
+            });
+        });
+        assert_eq!(rows.len(), 4);
+        for (at, row) in rows.iter().enumerate() {
+            assert!(
+                row.left() >= column.left() - 0.5 && row.right() <= column.right() + 0.5,
+                "row {at} {row:?} is inside the column {column:?}"
+            );
+        }
+        let mut words = Vec::new();
+        for clipped in &output.shapes {
+            if let egui::Shape::Text(text) = &clipped.shape {
+                words.push(text.visual_bounding_rect());
+            }
+        }
+        assert!(words.len() >= 5, "the rows painted their words: {}", words.len());
+        for word in words {
+            assert!(
+                word.right() <= column.right() + 0.5,
+                "words {word:?} stay inside the column {column:?}"
+            );
         }
     }
 

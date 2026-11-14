@@ -1015,3 +1015,86 @@ fn a_submenu_in_a_narrow_pane_keeps_its_parent_reachable() {
         assert_eq!(chosen.get(), Some("Aberration"), "the choice at {width}");
     }
 }
+
+/// X2: a menu opened in a 316 px column that ends at a splitter, at 960, with choices whose
+/// words need more than the column: the menu stays inside the column, clear of the splitter and
+/// the lane, whether its control is at the column's left (it opens rightward) or right (it
+/// opens leftward), and every choice's row and words stay inside the menu. With short choices,
+/// the menu is as wide as its widest choice, not its room.
+#[test]
+fn a_menu_of_long_choices_stays_beside_its_splitter() {
+    const COLUMN: f32 = 316.0;
+    const LONG: &str = "Roll initiative for every creature that has not rolled yet, then sort";
+    for (right, label) in [(false, LONG), (true, LONG), (false, "All")] {
+        let ctx = context();
+        let size = vec2(960.0, 640.0);
+        let pane = Rect::from_min_size(Pos2::ZERO, vec2(COLUMN, 640.0));
+        let rows = std::cell::RefCell::new(Vec::new());
+        let button = Cell::new(None::<Response>);
+        let draw = |events| {
+            frame(&ctx, size, events, |ui| {
+                ui.scope_builder(egui::UiBuilder::new().max_rect(pane), |ui| {
+                    // A side panel clips its content to its own rect.
+                    ui.set_clip_rect(pane);
+                    ScrollColumn::new("test_menu_pane").show(ui, |ui| {
+                        let layout = if right {
+                            Layout::right_to_left(Align::Min)
+                        } else {
+                            Layout::left_to_right(Align::Min)
+                        };
+                        let opener = ui.with_layout(layout, |ui| ui.button("Roll")).inner;
+                        rows.borrow_mut().clear();
+                        crate::design::menu_popup(ui, &opener).show(|ui| {
+                            rows.borrow_mut().push(crate::design::choice(ui, true, label).rect);
+                            rows.borrow_mut()
+                                .push(crate::design::choice_wrapped(ui, false, label, None).rect);
+                        });
+                        button.set(Some(opener));
+                    });
+                });
+            })
+        };
+        draw(Vec::new());
+        let opener = button.take().expect("the menu's button");
+        draw(click(opener.rect.center()));
+        draw(Vec::new());
+        let output = draw(Vec::new());
+        let id = egui::Popup::default_response_id(&opener);
+        assert!(egui::Popup::is_id_open(&ctx, id), "open (right: {right})");
+        let menu = ctx
+            .memory(|memory| memory.area_rect(id))
+            .expect("the menu's rect");
+        assert!(
+            menu.left() >= pane.left() - 0.5 && menu.right() <= pane.right() - lane_width() + 0.5,
+            "the menu {menu:?} is inside the column, clear of the splitter and the lane \
+             (right: {right})"
+        );
+        let rows = rows.borrow();
+        assert_eq!(rows.len(), 2, "both choices drawn");
+        for row in rows.iter() {
+            assert!(
+                menu.contains_rect(*row),
+                "the row {row:?} is inside the menu {menu:?}"
+            );
+        }
+        if label != LONG {
+            assert!(
+                menu.width() < (COLUMN - lane_width()) / 2.0,
+                "short choices make a narrow menu: {menu:?}"
+            );
+            continue;
+        }
+        let words: Vec<Text> = texts(&output)
+            .into_iter()
+            .filter(|text| text.words == LONG)
+            .collect();
+        assert_eq!(words.len(), 2, "both choices' words were painted");
+        for word in words {
+            assert!(
+                word.rect.right() <= menu.right() + 0.5,
+                "the words {:?} stay inside the menu {menu:?}",
+                word.rect
+            );
+        }
+    }
+}

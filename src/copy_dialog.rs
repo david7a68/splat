@@ -203,7 +203,7 @@ impl CopyDialog {
                         )
                         .show_ui(ui, |ui| {
                             for (campaign, id, label, ..) in &destinations {
-                                design::choice_value(
+                                design::choice_wrapped_value(
                                     ui,
                                     &mut self.destination,
                                     Some((*campaign, *id)),

@@ -6442,7 +6442,7 @@ impl Library {
                                     let word = kind.replace('_', " ");
                                     let word =
                                         format!("{}{}", word[..1].to_uppercase(), &word[1..]);
-                                    design::choice_value(
+                                    design::choice_wrapped_value(
                                         ui,
                                         &mut self.new_kind,
                                         kind.into(),
@@ -6465,7 +6465,7 @@ impl Library {
                             .selected_text(places[place].label())
                             .show_ui(ui, |ui| {
                                 for (i, owner) in places.iter().enumerate() {
-                                    design::choice_value(ui, &mut place, i, &owner.label());
+                                    design::choice_wrapped_value(ui, &mut place, i, &owner.label());
                                 }
                             })
                     })

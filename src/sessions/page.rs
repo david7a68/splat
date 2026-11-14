@@ -3424,7 +3424,7 @@ impl Sessions {
                     .icon(design::combo_icon)
                     .show_ui(ui, |ui| {
                         for template in &self.templates {
-                            design::choice_value(
+                            design::choice_wrapped_value(
                                 ui,
                                 &mut form.template,
                                 template.name.clone(),
@@ -5412,7 +5412,7 @@ impl Sessions {
                     .icon(design::combo_icon)
                     .show_ui(ui, |ui| {
                         for (at, (time, _)) in reading.parts.iter().enumerate() {
-                            design::choice_value(ui, &mut reading.part, at, time);
+                            design::choice_wrapped_value(ui, &mut reading.part, at, time);
                         }
                     });
                 design::named(ui, &inner.response, "Go to a time");
