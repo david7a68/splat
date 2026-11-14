@@ -2015,17 +2015,23 @@ impl CampaignDocument {
             .retain(|s| s.package.id.is_some() || s.package.key.is_some());
     }
 
-    pub fn save(&mut self) -> Result<(), String> {
+    /// The file's words with `selections` as its package choices, as `save` writes them. Nothing
+    /// is written.
+    pub fn text_with(&self, selections: &[PackageSelection]) -> Result<String, String> {
         let text = content::formats::patch_model(
             &self.text,
             &[(
                 "splat_packages",
-                Some(serde_yaml_ng::to_value(&self.selections).map_err(|e| e.to_string())?),
+                Some(serde_yaml_ng::to_value(selections).map_err(|e| e.to_string())?),
             )],
         )?;
         let mut entries = content::read_directory(&self.campaign.path)?.0;
         entries.extend(content::builtin::entries().iter().cloned());
-        let text = content::list_formats::write_references(&text, &entries)?;
+        content::list_formats::write_references(&text, &entries)
+    }
+
+    pub fn save(&mut self) -> Result<(), String> {
+        let text = self.text_with(&self.selections)?;
         write_note(
             &self.campaign.path,
             &self.path,

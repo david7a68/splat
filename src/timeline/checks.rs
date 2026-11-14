@@ -453,6 +453,26 @@ pub fn apply(
     }))
 }
 
+/// Row 123, review 3, point 4: a plan line's Undo that failed while its journey's block was not
+/// in view: the journey, the failed act and its words (result first). It ends when the journey
+/// goes.
+#[derive(Clone, Debug, PartialEq)]
+pub struct UndoFault {
+    pub journey: String,
+    pub act: Act,
+    pub words: String,
+}
+
+impl UndoFault {
+    /// The words while the fault's journey stands, else nothing.
+    pub fn standing(&self, events: &[Event]) -> Option<&str> {
+        events
+            .iter()
+            .any(|event| event.id == self.journey)
+            .then_some(self.words.as_str())
+    }
+}
+
 /// What one open block needs from its page.
 pub struct View<'a> {
     pub event: &'a Event,
@@ -464,6 +484,9 @@ pub struct View<'a> {
     /// For a name that a result links: nothing when it is not an encounter or a group, else
     /// whether the plan has a row still to come for it.
     pub planned: &'a dyn Fn(&str) -> Option<bool>,
+    /// Round 29 G142: the check just rolled, by its offset: its row (the result and its offer
+    /// lines) scrolls least into view, once.
+    pub reveal: Option<u64>,
 }
 
 /// What the DM typed in one block: a roll for each line, and the last line's fault.
@@ -493,6 +516,16 @@ impl State {
             _ => None,
         };
         self.problem = Some((at, error));
+    }
+
+    /// `failed`, for the block of `journey` only: false, with nothing kept, when this block
+    /// now follows another journey (row 123, point 5: a fault keeps its journey).
+    pub fn failed_for(&mut self, journey: &str, act: &Act, error: String) -> bool {
+        let here = self.event == journey;
+        if here {
+            self.failed(act, error);
+        }
+        here
     }
 
     pub fn clear_problem(&mut self) {
@@ -728,7 +761,14 @@ pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Ac
         act
     };
     for (label, check, at) in &rows {
+        let top = ui.cursor().top();
         act = line(ui, label, *check, Some(*at)).or(act);
+        // The affected check alone, not the block: a block taller than the view would ask for
+        // no scroll at all.
+        if check.is_some() && view.reveal == Some(*at) {
+            let row = egui::Rect::from_x_y_ranges(ui.max_rect().x_range(), top..=ui.cursor().top());
+            ui.scroll_to_rect(row, None);
+        }
     }
     if table.is_none() {
         design::blocked_reason(ui, blocked);
@@ -1239,6 +1279,7 @@ mod tests {
                         length: "",
                         tables: &tables,
                         planned: &|_| None,
+                        reveal: None,
                     };
                     header(ui, &view, &mut State::default());
                 });

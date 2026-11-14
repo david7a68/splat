@@ -399,19 +399,42 @@ pub fn run(d: &mut Driver<'_>) {
         "A suggestion adds a scene that links it, and the field stays open",
     );
     // App round 1, W8-D7: the field's result shows directly under the field, and no row above
-    // the field moves for it.
+    // the field moves for it. Round 29 P-1: the field's form ends at its action line (`Add`,
+    // `Cancel`), so the result is directly under that. R30, amended: where the grown list pushes
+    // the result out of the column, the least scroll that shows it whole is allowed: the rows
+    // move up only so far that `Undo scene` ends at the column's end (1.5 px of tolerance).
     let (now, field, undo) = (
         d.place_of(&format!("Resume: {RUN}")),
-        d.place_of("Plan a scene"),
-        d.place_of("Undo add scene"),
+        d.place_of("Plan a scene")
+            .zip(d.place_of("Cancel"))
+            .map(|(field, cancel)| field.union(cancel)),
+        d.nodes()
+            .into_iter()
+            .find(|node| node.name == "Undo add scene"),
     );
+    let column_end = undo.as_ref().and_then(|undo| {
+        d.pane_records().into_iter().find_map(|pane| {
+            pane.viewport()
+                .filter(|view| view.contains(undo.rect.center()))
+                .map(|view| view.bottom())
+        })
+    });
+    let scroll = first.zip(now).map(|(first, now)| first.top() - now.top());
+    let least = scroll.is_some_and(|scroll| scroll.abs() <= 0.5)
+        || scroll
+            .zip(undo.as_ref())
+            .zip(column_end)
+            .is_some_and(|((scroll, undo), end)| {
+                scroll > 0.0 && undo.fully_in_view() && undo.rect.bottom() >= end - 1.5
+            });
+    let undo = undo.map(|undo| undo.rect);
     d.observe(
         "T12.14",
-        first.zip(now).is_some_and(|(first, now)| (first.top() - now.top()).abs() <= 0.5)
+        least
             && field.zip(undo).is_some_and(|(field, undo)| {
                 undo.top() >= field.bottom() && undo.top() - field.bottom() <= crate::design::XL
             }),
-        format!("The first row was at {first:?} and is at {now:?}; the field is at {field:?}, Undo scene at {undo:?}"),
+        format!("The first row was at {first:?} and is at {now:?} (scroll {scroll:?}, the column ends at {column_end:?}); the field is at {field:?}, Undo scene at {undo:?}"),
     );
     // App round 2, X13: `Undo scene` takes a line of its own only when it is wider than the
     // room after the words in their column, which ends where the rows' menus end.
@@ -473,6 +496,97 @@ pub fn run(d: &mut Driver<'_>) {
         !note(d).contains(KEEP) && !d.has("Plan a scene"),
         "Undo scene takes the line back out, and Escape closed the field",
     );
+    // Ruling R30, amended (round 29, P-1 review): the open field keeps room for its result. A
+    // press on the Add button adds the scene as a row ABOVE the field, so `Add` moves down with
+    // that row (the list grows, as on main with Enter). The result and its Undo are then whole in
+    // view. Where the grown list pushes the room out of the column (960x640), the LEAST scroll that
+    // shows the whole result is allowed (rounded up to a whole pixel, 1 px of tolerance), and
+    // `Add` moves by its row less exactly that scroll; elsewhere nothing scrolls. Words that match
+    // no World entry, so no suggestion comes or goes.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (still, detail) = d.act_at_size(size, |d| {
+            let before_note = note(d);
+            d.click("More Add actions");
+            d.click("Add Scene");
+            d.type_text("Cross at dawn");
+            let add_button = |d: &Driver<'_>| {
+                d.nodes()
+                    .into_iter()
+                    .find(|node| node.name == "Add" && node.role == egui::accesskit::Role::Button)
+                    .map(|node| node.rect)
+            };
+            // The plan's scroll column: the pane whose viewport holds `Add`.
+            let column = |d: &Driver<'_>, add: egui::Rect| {
+                d.pane_records().into_iter().find_map(|pane| {
+                    pane.viewport()
+                        .filter(|view| view.contains(add.center()))
+                        .map(|view| (view, pane.offset()))
+                })
+            };
+            let places = |d: &Driver<'_>| {
+                (
+                    add_button(d),
+                    d.place_of("Plan a scene"),
+                    d.place_of(&format!("Resume: {RUN}")),
+                )
+            };
+            let (add, field, first) = places(d);
+            let before = add.and_then(|add| column(d, add));
+            d.click("Add");
+            d.expect("Undo add scene");
+            let (add_now, field_now, first_now) = places(d);
+            let after = add_now.and_then(|add| column(d, add));
+            let nodes = d.nodes();
+            let find = |name: &str| nodes.iter().find(|node| node.name == name);
+            let (words, undo) = (find("Scene added to tonight."), find("Undo add scene"));
+            // The scroll the press made, and the new row's height: how far the form went down
+            // in the content (on screen, less that scroll).
+            let scroll = before.zip(after).map(|((_, was), (_, now))| now - was);
+            let row = field
+                .zip(field_now)
+                .zip(scroll)
+                .map(|((field, now), scroll)| now.top() - field.top() + scroll);
+            // How far the whole result would reach past the column's end with no scroll.
+            let overflow = after.zip(undo).zip(words).zip(scroll).map(
+                |((((view, _), undo), words), scroll)| {
+                    (undo.rect.bottom().max(words.rect.bottom()) + scroll - view.bottom()).max(0.0)
+                },
+            );
+            let least = scroll.zip(overflow).is_some_and(|(scroll, overflow)| {
+                scroll >= -0.5 && scroll <= overflow.ceil() + 1.0
+            }) && (size == SMALL || scroll.is_some_and(|scroll| scroll.abs() <= 0.5));
+            let still = least
+                && first.zip(first_now).zip(scroll).is_some_and(|((first, now), scroll)| {
+                    (first.top() - now.top() - scroll).abs() <= 0.5
+                })
+                && add.zip(add_now).zip(row).zip(scroll).is_some_and(
+                    |(((add, now), row), scroll)| {
+                        row > 0.0 && (now.top() - add.top() - (row - scroll)).abs() <= 0.5
+                    },
+                )
+                // Whole inside the column's edges, to the hundredth of a point.
+                && after.zip(words).zip(undo).is_some_and(|(((view, _), words), undo)| {
+                    [words.rect, undo.rect].iter().all(|rect| {
+                        rect.top() >= view.top() - 0.01 && rect.bottom() <= view.bottom() + 0.01
+                    })
+                });
+            let detail = format!(
+                "scroll {scroll:?} px for an overflow of {overflow:?} px; the first row at {first:?} then {first_now:?}; Add at {add:?} then {add_now:?}, the new row {row:?} px; the words at {:?} shown {:?}, Undo scene at {:?} shown {:?}",
+                words.map(|node| node.rect),
+                words.map(|node| node.shown),
+                undo.map(|node| node.rect),
+                undo.map(|node| node.shown),
+            );
+            d.click("Undo add scene");
+            d.click("Cancel");
+            (still && note(d) == before_note && !d.has("Plan a scene"), detail)
+        });
+        d.observe(
+            "T12.14",
+            still,
+            format!("At {size:?}, Add moves by its new row (less the least scroll that shows the result), and the result is whole in view: {detail}"),
+        );
+    }
 
     // The box: one click, one character.
     let before = note(d);
@@ -515,6 +629,43 @@ pub fn run(d: &mut Driver<'_>) {
     d.click("Remove from tonight");
     d.expect(&format!("Removed “{MILLER}” from tonight."));
     d.state("scene-removed", Sizes::All);
+    // Round 29 P-1 review (R30): the field's reveal follows its layout room, not the paint clip.
+    // With the field open and a message in the plan's footer, the DM's own wheel scroll (which
+    // changes the footer's whole-row cut) stays where the wheel put it, in a window low enough
+    // (960x520) that the plan scrolls with the field open.
+    let (kept, detail) = d.act_at_size((960.0, 520.0), |d| {
+        d.click("More Add actions");
+        d.click("Add Scene");
+        let column = |d: &Driver<'_>| {
+            let field = d.place_of("Plan a scene")?;
+            d.pane_records().into_iter().find_map(|pane| {
+                let view = pane.viewport().filter(|view| view.contains(field.center()))?;
+                Some((view, pane.offset(), pane.content_height().unwrap_or(0.0)))
+            })
+        };
+        let Some((view, was, content)) = column(d) else {
+            d.click("Cancel");
+            return (false, "no scroll column holds the Scene field".to_owned());
+        };
+        let footer = d.has(&format!("Removed “{MILLER}” from tonight."));
+        // Up, far enough that the field's room leaves the view (a reveal would pull it back);
+        // down when the column is at its top. The scroll area clamps at its ends.
+        let wheel = if was >= 1.0 { -was.min(60.0) } else { 60.0 };
+        d.scroll_points_at(view.center(), wheel);
+        let expected = (was + wheel).clamp(0.0, (content - view.height()).max(0.0));
+        let now = column(d).map(|(_, offset, _)| offset);
+        d.click("Cancel");
+        (
+            // 1 px: the wheel itself lands on physical pixels.
+            footer && now.is_some_and(|now| (now - expected).abs() <= 1.0 && (now - was).abs() > 1.0),
+            format!("footer message shown: {footer}; offset {was} then {now:?}, the wheel put it at {expected}"),
+        )
+    });
+    d.observe(
+        "T12.14",
+        kept,
+        format!("At 960x520, the DM's wheel scroll stays with the Scene field open: {detail}"),
+    );
     d.click("Undo remove");
     d.expect(&format!("Done: {MILLER}"));
     d.observe(
