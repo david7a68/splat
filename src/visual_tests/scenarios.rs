@@ -11519,7 +11519,9 @@ pub mod signed_in {
             above.is_some_and(|above| (above - crate::design::L).abs() <= 1.0),
             format!("D&D BEYOND starts L below the rule over it, as a column heading: {above:?} (heading {heading:?}, rule {rule:?})"),
         );
-        d.state("link-tab-during-run", Sizes::Default);
+        d.state_prepared("link-tab-during-run", Sizes::All, |d| {
+            super::session_recording::link_blocks_in_order(d, false);
+        });
         d.begin_task();
 
         // iter-17-B: the close dialog with a conflict. Signed out, Review conflict follows
@@ -13421,7 +13423,9 @@ pub mod session_notes {
             |d| d.visible_text("No changes") && !d.visible_text("No changes to save."),
         );
         d.expect("Not connected · showing the name saved on this computer");
-        d.state("session-folder-in-campaign", Sizes::All);
+        d.state_prepared("session-folder-in-campaign", Sizes::All, |d| {
+            super::session_recording::link_blocks_in_order(d, false);
+        });
         // Round 26 FN2, FN5: the form's warning and its result sit in the pane's message footer,
         // so the save row keeps its y when the first letter brings the warning, and after a move.
         let save_row = |d: &Driver<'_>| {
@@ -13545,7 +13549,17 @@ pub mod session_notes {
             ),
         );
         d.state_prepared("session-folder-move-offered", Sizes::All, |d| {
-            super::session_recording::check_one_primary(d, "Move files and save", "iter-16-C-FT4");
+            super::session_recording::link_blocks_in_order(d, true);
+            // Early-pass packet (R24): the move choices are the warning's, under the save row,
+            // and Save folder waits in the commit place, so no control in view has the accent.
+            // The old check (Move files and save the one primary) caught two primaries; this one
+            // still fails on any accent-filled control here.
+            let primary = super::session_recording::accent_filled(d);
+            d.observe(
+                "iter-16-C-FT4",
+                primary.is_empty() && d.in_view("Move files and save"),
+                format!("No accent-filled control while the move is offered: {primary:?}"),
+            );
             // iter-23-S FK8: the warning names which choice hides the files.
             d.observe(
                 "iter-23-S-FK8",
@@ -13636,10 +13650,13 @@ pub mod session_notes {
                     })
             },
         );
-        // Round 28: Edit details scrolls its form and Save into view once, because the session
-        // folder's save row above the pane takes room at 960 (campaigns.rs `reveal_details`).
+        // Edit details scrolls its form and Save into view once (campaigns.rs `reveal_details`):
+        // with R24 the form opens below all three blocks, out of view at 960, so the press that
+        // opens it moves Edit details by design; no prepare step can avoid that scroll.
         d.expect_moves("Edit details brings its form and its Save into view");
-        d.state("session-folder-moved", Sizes::All);
+        d.state_prepared("session-folder-moved", Sizes::All, |d| {
+            super::session_recording::link_blocks_in_order(d, true);
+        });
         d.click(NAV_SESSIONS);
         d.expect(&format!("Session 1: {TITLE}"));
 
@@ -14832,6 +14849,73 @@ pub mod session_recording {
             })
             .map(|node| node.name)
             .collect()
+    }
+
+    /// Ruling R24, on Campaign's Link and folder page at the size drawn: the three value blocks
+    /// in order (Session folder, Folder, D&D Beyond); in each, the heading row, the field, the
+    /// save row and the save row's messages each below the one before, the messages exactly `S`
+    /// below the save row; and one heading-row form (one height, one left edge). `messages`:
+    /// whether the Session folder block shows its own messages now (its warning or its result),
+    /// which must then be wholly in view with its save row.
+    pub(super) fn link_blocks_in_order(d: &Driver<'_>, messages: bool) {
+        let blocks = d.value_blocks();
+        let titles: Vec<&str> = blocks.iter().map(|block| block.title.as_str()).collect();
+        assert_eq!(
+            titles,
+            ["Session folder", "Folder", "D&D Beyond"],
+            "R24: the Link and folder blocks, Session folder first"
+        );
+        let mut above = f32::NEG_INFINITY;
+        for block in &blocks {
+            let mut slots = vec![("heading", block.heading), ("field", block.field)];
+            slots.extend(block.save_row.map(|rect| ("save row", rect)));
+            slots.extend(block.messages.map(|rect| ("messages", rect)));
+            for (name, rect) in &slots {
+                assert!(
+                    rect.top() >= above - 0.5,
+                    "R24: {}'s {name} starts below what is before it: {rect:?}, above ends at {above}",
+                    block.title
+                );
+                above = rect.bottom();
+            }
+            if let (Some(save), Some(said)) = (block.save_row, block.messages) {
+                assert!(
+                    (said.top() - save.bottom() - crate::design::S).abs() <= 0.5,
+                    "R24: {}'s messages are S below its save row: {save:?} then {said:?}",
+                    block.title
+                );
+            }
+        }
+        let folder = &blocks[0];
+        assert!(
+            folder.save_row.is_some() && folder.messages.is_some() == messages,
+            "the Session folder block has its save row, and its messages when expected: {folder:?}"
+        );
+        if let (Some(save), Some(said)) = (folder.save_row, folder.messages) {
+            // Every node drawn in the save row and in its messages is wholly in view.
+            let nodes = d.nodes();
+            let inside = |area: egui::Rect| {
+                let found: Vec<_> = nodes
+                    .iter()
+                    .filter(|node| area.expand(1.0).contains_rect(node.rect))
+                    .collect();
+                !found.is_empty() && found.iter().all(|node| node.fully_in_view())
+            };
+            assert!(
+                inside(save) && inside(said),
+                "the save row and its messages are wholly in view: {save:?} {said:?}"
+            );
+        }
+        let first = blocks[0].heading;
+        assert!(
+            blocks.iter().all(|block| {
+                (block.heading.height() - crate::design::Density::Read.control()).abs() <= 0.5
+                    && (block.heading.height() - first.height()).abs() <= 0.5
+                    && (block.heading.left() - first.left()).abs() <= 0.5
+            }),
+            "R24, row 93: one heading-row form, one control high at one left edge: {:?}",
+            blocks.iter().map(|block| block.heading).collect::<Vec<_>>()
+        );
     }
 
     pub(super) fn check_one_primary(d: &mut Driver<'_>, expected: &str, id: &str) {

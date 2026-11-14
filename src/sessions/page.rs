@@ -9284,6 +9284,29 @@ mod tests {
             Some("Unsent words"),
             "the form keeps its unsent words"
         );
+        // Early-pass packet, point 3: the current folder's `Now:` line is one line, so a save to
+        // a long folder and back to a short one never moves the save row under it.
+        switch(&mut harness, &b);
+        let save_top = |harness: &egui_kittest::Harness<'_, State>| {
+            harness.get_by_label("Save folder").rect().top()
+        };
+        let clean = save_top(&harness);
+        let long = "A folder with a name long enough to wrap the current path line twice over at this width";
+        move_to(&mut harness, long);
+        assert!(shows(&harness, "Moved 1 note to A folder with a name long"));
+        let after_long = save_top(&harness);
+        move_to(&mut harness, "B");
+        let after_short = save_top(&harness);
+        assert!(
+            after_long == clean && after_short == clean,
+            "the save row stays: clean {clean}, after the long path {after_long}, after the short one {after_short}"
+        );
+        let now = harness.get_by_label_contains("Now: ");
+        assert!(
+            now.rect().height() <= Type::Small.line() + 1.0,
+            "the Now: line is one line: {:?}",
+            now.rect()
+        );
     }
 
     /// Round 28 K4a, the New session form's facts: the chosen template is read from the folder

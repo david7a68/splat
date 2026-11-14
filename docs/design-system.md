@@ -938,8 +938,11 @@ form (`HeadingRow`): the heading, its note (a state) on the same line, and its a
 control high. The session folder's warning, its save error and its move result are its block's messages (the
 typed `Row` place), so the first typed letter, a refusal or a move never moves the save row or its field; they
 may move the blocks below. The link's and the details form's messages stay in the pane's footer. Folder help
-uses `design::help`. Move files and save is primary when no other primary is in view; it is secondary while a
-run is open or the campaign details form is open. Refuse collisions and copy every owned file before changing the manifest. A run-folder
+uses `design::help`; the current folder's `Now:` line is one line (`design::path_help`: the path rule, whole on
+hover and in its accessible description), so a save never moves the save row. The save row's commit place holds
+`Save folder` in every state: while the current folder keeps files it waits, disabled with its reason, and Move files
+and save and Save without moving are the warning's quiet choices under it, so a second press where Save was never
+moves files. Refuse collisions and copy every owned file before changing the manifest. A run-folder
 change counts saved files left behind. Move runs and save is primary when no other primary is in view; it
 shows only while no run is open. It stages all files without replacement, saves
 settings, then removes unchanged originals. Save without moving leaves files in the old folder. Block
