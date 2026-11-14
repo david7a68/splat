@@ -4896,6 +4896,7 @@ mod tests {
         // Round 28 FE6: where the row is cut, the party's size gives way first, then the
         // roster; the day, which ties the fight to its journey, goes last.
         let mut day_kept_in_a_cut = 0;
+        let mut seen = Vec::new();
         let day = "Day 2 of Travel";
         for width in (120..=600).step_by(10) {
             let mut words = None;
@@ -4909,17 +4910,14 @@ mod tests {
                     });
                 });
                 painted = output.shapes.iter().find_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text) if text.galley.job.text.contains("XP") => Some(
-                        text.galley
-                            .job
-                            .text
-                            .replace('\u{a0}', " ")
-                            .replace('\n', " "),
-                    ),
+                    egui::Shape::Text(text) if text.galley.job.text.contains("XP") => {
+                        Some(text.galley.job.text.replace(['\u{a0}', '\n'], " "))
+                    }
                     _ => None,
                 });
             }
             let painted = painted.unwrap_or_else(|| panic!("at {width} px: no summary"));
+            seen.push(format!("{width}: {words:?} {painted:?}"));
             if words.is_none() {
                 continue;
             }
@@ -4939,7 +4937,10 @@ mod tests {
                 day_kept_in_a_cut += 1;
             }
         }
-        assert!(day_kept_in_a_cut > 0, "no width kept the day in a cut row");
+        assert!(
+            day_kept_in_a_cut > 0,
+            "no width kept the day in a cut row: {seen:#?}"
+        );
     }
 
     #[test]
