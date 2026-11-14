@@ -1314,8 +1314,11 @@ fn session_row(
             let x = rect.left() + design::S;
             let first = galley.size().y;
             ui.painter().galley(egui::pos2(x, top), galley, c.text);
-            ui.painter()
-                .galley(egui::pos2(x, top + first), second, c.muted);
+            // The second line holds the list lock's dimming itself, and a live recording's
+            // status keeps its own colours under it (R5, `design::status_in_text`).
+            let mut full = ui.painter().clone();
+            full.set_opacity(1.0);
+            full.galley(egui::pos2(x, top + first), second, c.muted);
         },
     )
 }

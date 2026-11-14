@@ -120,7 +120,8 @@ mod tests {
                 let job = &text.galley.job;
                 for section in &job.sections {
                     if job.text[section.byte_range.clone()].trim() == part {
-                        found.push(section.format.color);
+                        // The colour as painted: a dimmed painter fades the whole text.
+                        found.push(section.format.color.gamma_multiply(text.opacity_factor));
                     }
                 }
             }
@@ -176,10 +177,32 @@ mod tests {
                     );
                     ui.painter().galley(ui.cursor().min, galley, colors().muted);
                 }
+                // Under a disabled parent (a list's lock) the words around a kind dim; the kind
+                // keeps its colours. The galley holds the dimming, so it is painted at full
+                // opacity (G116).
+                ui.add_enabled_ui(false, |ui| {
+                    let text = format!("May 5 · {} Recording 0:01 · Playing", icons::RECORD);
+                    let word = format!("{} Recording 0:01", icons::RECORD);
+                    let galley = crate::design::status_in_text(
+                        ui,
+                        &text,
+                        Some((word.as_str(), StatusKind::Recording)),
+                        400.0,
+                    );
+                    let mut full = ui.painter().clone();
+                    full.set_opacity(1.0);
+                    full.galley(ui.cursor().min, galley, colors().muted);
+                });
             });
         });
+        let dim = colors()
+            .muted
+            .gamma_multiply(ctx.style().visuals.disabled_alpha());
         let c = colors();
-        assert_eq!(colours(&output, icons::RECORD), [c.recording; 3]);
+        assert_eq!(colours(&output, icons::RECORD), [c.recording; 4]);
+        assert_eq!(colours(&output, "Recording 0:01"), [c.text]);
+        assert_eq!(colours(&output, "May 5 ·"), [dim]);
+        assert_ne!(dim, c.muted);
         assert_eq!(colours(&output, "Recording 12:03"), [c.text]);
         assert_eq!(colours(&output, "Recording 12:04"), [c.text]);
         assert_eq!(colours(&output, icons::OK), [c.muted]);

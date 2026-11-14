@@ -1755,6 +1755,10 @@ impl From<super::StatusKind> for InTextLook {
 
 /// A painted row keeps its status word in the shared status colour. With a kind, the part of
 /// the status up to its kind's icon takes the icon's colour, and the rest the word's.
+///
+/// A disabled parent dims the words around the status and a one-colour status, but never a
+/// kind's colours (R5: a live recording stays in its own colours under any lock). The galley
+/// holds that dimming itself, so paint it at full opacity.
 pub fn status_in_text<L: Into<InTextLook>>(
     ui: &Ui,
     text: &str,
@@ -1763,6 +1767,7 @@ pub fn status_in_text<L: Into<InTextLook>>(
 ) -> Arc<egui::Galley> {
     let mut job = LayoutJob::default();
     job.wrap.max_width = width;
+    let dim = |color: Color32| color.gamma_multiply(ui.opacity());
     let muted = colors().muted;
     let (before, word, after, look) = status
         .and_then(|(word, look)| {
@@ -1771,7 +1776,7 @@ pub fn status_in_text<L: Into<InTextLook>>(
         })
         .unwrap_or((text, "", "", InTextLook::One(muted)));
     let (icon, word, icon_color, word_color) = match look {
-        InTextLook::One(color) => ("", word, color, color),
+        InTextLook::One(color) => ("", word, dim(color), dim(color)),
         InTextLook::Kind(kind) => {
             let at = word
                 .find(kind.icon())
@@ -1785,10 +1790,10 @@ pub fn status_in_text<L: Into<InTextLook>>(
         }
     };
     for (text, color) in [
-        (before, muted),
+        (before, dim(muted)),
         (icon, icon_color),
         (word, word_color),
-        (after, muted),
+        (after, dim(muted)),
     ] {
         job.append(
             text,

@@ -13166,7 +13166,24 @@ pub mod session_notes {
             Some("Reload and lose my draft"),
             &[DEFAULT],
         );
-        d.state("note-conflict-recording", Sizes::Default);
+        d.state_prepared("note-conflict-recording", Sizes::Default, |d| {
+            // G116: the conflict lock still disables the session list's rows, but the live
+            // status in a row keeps its R5 colours, as on the rail and the Record line.
+            d.observe(
+                "iter-29-G116",
+                d.nodes().iter().any(|node| {
+                    node.name.starts_with("Session 1: ")
+                        && node.name.contains(" · ")
+                        && node.disabled
+                }),
+                "Under the conflict lock the session list's row cannot be pressed",
+            );
+            use super::session_recording::{Surface, check_live_recording_colours};
+            check_live_recording_colours(
+                d,
+                &[Surface::Rail, Surface::ListRow, Surface::RecordLine],
+            );
+        });
         d.click("Stop recording");
         d.click(NAV_TIMELINE);
         d.observe(
@@ -14561,7 +14578,7 @@ pub mod session_recording {
 
     /// Where a live recording's status shows (R5, routing row 100).
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-    enum Surface {
+    pub(super) enum Surface {
         Rail,
         ListRow,
         RecordLine,
@@ -14622,7 +14639,7 @@ pub mod session_recording {
     /// R5 (routing row 100): red is a fault. On each named surface a live recording shows its
     /// record icon in the `recording` token, and its word `Recording` and its time in the text
     /// colour (a muted, green or red word fails). Each surface must be found.
-    fn check_live_recording_colours(d: &mut Driver<'_>, surfaces: &[Surface]) {
+    pub(super) fn check_live_recording_colours(d: &mut Driver<'_>, surfaces: &[Surface]) {
         let c = crate::design::colors();
         let record = crate::design::icons::RECORD;
         // Node rects are in pixels; painted texts in points.
@@ -14681,7 +14698,8 @@ pub mod session_recording {
             };
             for section in &job.sections {
                 let part = &job.text[section.byte_range.clone()];
-                let color = section.format.color;
+                // The colour as painted: a disabled parent's painter fades the whole text.
+                let color = section.format.color.gamma_multiply(text.opacity_factor);
                 if part.trim() == record
                     || part.trim_start().starts_with(record) && !live_word(part)
                 {
