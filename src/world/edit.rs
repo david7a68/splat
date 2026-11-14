@@ -1,6 +1,6 @@
 //! Edit, for the DM's own world entries: one form for the status, the stat block, the place and
 //! the text. Save writes them together, with one Undo. Lookup and World show the same form.
-#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
+#![warn(deprecated)] // Its old message functions are gone; the parent file still allows them.
 use super::{
     Change, ChangeKind, Go, Picker, Reader, link_name, reference, status, stored_link, world_field,
 };
@@ -189,6 +189,18 @@ enum Conflict {
 }
 
 impl EditDraft {
+    /// Reload replaced the draft, and it keeps what `Undo reload` brings back.
+    pub(super) fn was_reloaded(&self) -> bool {
+        self.reloaded.is_some()
+    }
+
+    /// `Undo reload`: the draft from before Reload.
+    pub(super) fn undo_reload(&mut self) {
+        if let Some((_, previous)) = self.reloaded.take() {
+            self.now = previous;
+        }
+    }
+
     fn open(campaign: &Campaign, entry: &Entry) -> Result<Self, String> {
         let baseline = super::file_fault::read_note(&campaign.path, &entry.path)?;
         let on_disk = Entry::parse(&entry.path, &baseline)?;
@@ -921,7 +933,6 @@ impl Reader {
             }
         }
         design::gap(ui, design::Gap::M);
-        // The frame the DM chooses Reload: its result, below the save row, scrolls into view.
         let had_conflict = draft.disk.is_some();
         let overwrite = match draft.conflict(ui, index) {
             Conflict::Waiting => {
@@ -931,6 +942,11 @@ impl Reader {
             Conflict::Overwrite => true,
             Conflict::None => false,
         };
+        // The DM chose Reload: its result, with `Undo reload`, is kept in the reader's store from
+        // this act, in the pane's footer.
+        if had_conflict && draft.disk.is_none() && !overwrite && draft.reloaded.is_some() {
+            self.results.record(super::ReaderResult::Reloaded(id));
+        }
         let mut focused = false;
         // The Read order: Stat block, In, Part of, then Status.
         let npc = super::fights(&item.entry);
@@ -1159,6 +1175,7 @@ impl Reader {
         // Right after Reload the form matches the disk. Any edit ends Undo reload.
         if draft.reloaded.is_some() && draft.now != draft.start {
             draft.reloaded = None;
+            self.end(super::Slot::Reloaded);
         }
         let dirty = draft.dirty();
         let reason = (!dirty).then_some("No changes to save.");
@@ -1220,22 +1237,6 @@ impl Reader {
                 design::blocked_reason(ui, Some(switch));
             } else {
                 ui.add_space(reason_line(ui));
-            }
-        }
-        // The reload result sits below the save row, where nothing the DM works on follows it:
-        // the first edit ends it without moving a field (round 25 results family).
-        if draft.reloaded.is_some() {
-            let just_reloaded = had_conflict && draft.disk.is_none() && !overwrite;
-            let shown = ui.scope(|ui| {
-                ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
-                if design::reloaded_draft(ui)
-                    && let Some((_, previous)) = draft.reloaded.take()
-                {
-                    draft.now = previous;
-                }
-            });
-            if just_reloaded {
-                ui.scroll_to_rect(shown.response.rect, None);
             }
         }
         if cancel {

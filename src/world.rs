@@ -2376,6 +2376,8 @@ enum Slot {
     Identity,
     /// An edit draft that Discard let go.
     Discarded,
+    /// An edit draft that a disk conflict's Reload replaced.
+    Reloaded,
 }
 
 impl design::results::Owner for Slot {
@@ -2396,6 +2398,8 @@ enum ReaderResult {
     Identity(Uuid, Change),
     /// The entry and the draft let go.
     Discarded(Uuid, Box<edit::EditDraft>),
+    /// The entry whose open draft Reload replaced; the draft keeps what Undo brings back.
+    Reloaded(Uuid),
 }
 
 impl design::results::Kept for ReaderResult {
@@ -2412,6 +2416,7 @@ impl design::results::Kept for ReaderResult {
             Self::Name(_) => Slot::Name,
             Self::Identity(..) => Slot::Identity,
             Self::Discarded(..) => Slot::Discarded,
+            Self::Reloaded(_) => Slot::Reloaded,
         }
     }
 }
@@ -4107,6 +4112,7 @@ impl Reader {
         let path = item.entry.path.as_str();
         for slot in [
             Slot::Change,
+            Slot::Reloaded,
             Slot::Discarded,
             Slot::FileRename,
             Slot::Name,
@@ -4119,6 +4125,15 @@ impl Reader {
                 // A draft let go whose note is gone keeps its Undo while another entry is edited
                 // (the next Edit ends the Undo of its own entry).
                 ReaderResult::Discarded(..) => self.discarded_shows(campaign, id, index).is_some(),
+                // Its own entry's open form, while the draft still holds what Undo restores.
+                ReaderResult::Reloaded(at) => {
+                    *at == id
+                        && editing
+                        && self
+                            .edits
+                            .get(at)
+                            .is_some_and(edit::EditDraft::was_reloaded)
+                }
                 _ if editing => false,
                 ReaderResult::Change(change) => change.shows_on(campaign, path),
                 ReaderResult::FileRename(rename) => {
@@ -4148,6 +4163,12 @@ impl Reader {
                     ReaderResult::Discarded(_, draft) => {
                         discarded_outcome(&draft.name, FooterAct::Undo)
                     }
+                    ReaderResult::Reloaded(_) => KeptOutcome::Notice(
+                        Notice::new(crate::sentence!(
+                            "Reloaded from disk. Your previous draft is kept until you edit or the file changes again."
+                        )),
+                        UndoStep::verb(Verb::Reload).pressed_as(FooterAct::Undo),
+                    ),
                 }
             }));
         }
@@ -4185,10 +4206,16 @@ impl Reader {
                     }
                     ReaderResult::Identity(_, change) => change.undo(campaign),
                     ReaderResult::FileRename(rename) => rename.undo(campaign),
-                    ReaderResult::Discarded(..) => Ok(()),
+                    ReaderResult::Discarded(..) | ReaderResult::Reloaded(_) => Ok(()),
                 }) {
                     Ok((ReaderResult::Discarded(id, draft), ())) => {
                         self.edits.insert(id, *draft);
+                        None
+                    }
+                    Ok((ReaderResult::Reloaded(id), ())) => {
+                        if let Some(draft) = self.edits.get_mut(&id) {
+                            draft.undo_reload();
+                        }
                         None
                     }
                     Ok((ReaderResult::Identity(_, change), ())) => {
