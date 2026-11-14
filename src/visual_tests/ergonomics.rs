@@ -1030,9 +1030,12 @@ pub fn inspect(
                 continue;
             }
             let overlap = first_shown.intersect(shown(second));
-            // A link or a mark inside a row is the row's second target, meant to be on top.
+            // A link or a mark inside a row is the row's second target, meant to be on top. A
+            // button wholly inside a text field is the field's own action (the search field's
+            // `Clear`, X2), drawn over the field's kept place and taking its own presses.
             let nested = |inner: &Control, outer: &Control| {
-                matches!(inner.role, Role::Link | Role::CheckBox)
+                (matches!(inner.role, Role::Link | Role::CheckBox)
+                    || (inner.role == Role::Button && outer.role == Role::TextInput))
                     && outer.rect.contains_rect(inner.rect)
             };
             // A row can own real status widgets. Its own child labels are its content;
@@ -1688,6 +1691,14 @@ mod tests {
         let a = control("Save", at(10.0, 10.0, 80.0, 30.0));
         let b = control("Send", at(20.0, 10.0, 80.0, 30.0));
         assert!(checks_for(&[a, b]).contains(&"no-overlap".to_owned()));
+        // X2: a button wholly inside a text field is the field's own action; one that only
+        // partly lies over a field is still a fault.
+        let mut field = control("Search", at(10.0, 60.0, 200.0, 30.0));
+        field.role = Role::TextInput;
+        let inside = control("Clear", at(160.0, 60.0, 50.0, 30.0));
+        let across = control("Clear", at(180.0, 60.0, 50.0, 30.0));
+        assert!(overlap_checks(&[field.clone(), inside]).is_empty());
+        assert!(!overlap_checks(&[field, across]).is_empty());
     }
 
     fn overlap_checks(controls: &[Control]) -> Vec<String> {
