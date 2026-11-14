@@ -408,7 +408,8 @@ impl WorldPage {
             self.generated_shown = false;
             self.discarded_npc = None;
             self.marker_copied.owner_changed(&MarkerSlot);
-            self.ticks = design::Results::new();
+            // The ticks' store keeps them: each shows only in its own campaign (`TickOwner`), and
+            // a campaign change is none of a tick's end events.
             self.tick_error = None;
         }
     }

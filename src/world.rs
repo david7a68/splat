@@ -2057,12 +2057,30 @@ pub(crate) fn next_order() -> u64 {
 }
 
 /// Lookup's and the World page's reader, and its controls for the item on show.
+/// What a reader holds for the DM that no reset of the reader may drop: the DM's typed words,
+/// and the results whose end events are their own (`Kept::ENDS`). Lookup's Clear and World's
+/// campaign reset replace the reader, and both carry this whole (`Reader::clear`,
+/// `Reader::keep_log_lines`), so a new field here is kept by both at once (review of PR 333).
+/// Each result shows only in its own campaign, so it can outlive a campaign change.
+#[derive(Default)]
+pub(crate) struct Held {
+    /// Each open `Add to Log` field, by its entry and the session it was opened in. Its words
+    /// wait while the reader shows another entry; a restart loses them, as every held form.
+    log_fields: HashMap<LogKey, LogField>,
+    /// The Log lines whose entry is gone, for the footer, until the DM copies or dismisses each.
+    gone_log_lines: Vec<GoneLog>,
+    /// Log lines the DM dismissed with their typed words, each with its Undo (ruling R3): the
+    /// only copy of those words.
+    dismissed: design::Results<GoneOwner, DismissedLog>,
+    /// The kept results with an Undo, one of each kind (`Slot`), each with its order. A
+    /// discarded draft's Undo holds the only copy of its words.
+    results: design::Results<Slot, ReaderResult>,
+}
+
 #[derive(Default)]
 pub struct Reader {
-    /// The kept results with an Undo, one of each kind (`Slot`), each with its order.
-    results: design::Results<Slot, ReaderResult>,
-    /// Log lines the DM dismissed with their typed words, each with its Undo (ruling R3).
-    dismissed: design::Results<GoneOwner, DismissedLog>,
+    /// What the reader holds for the DM across every reset (`Held`).
+    held: Held,
     showing: Option<Uuid>,
     status: String,
     status_editing: bool,
@@ -2124,11 +2142,6 @@ pub struct Reader {
     pub played: Option<String>,
     /// The campaign's day on the Timeline's clock, when the clock has one.
     pub day: Option<u64>,
-    /// Each open `Add to Log` field, by its entry and the session it was opened in. Its words
-    /// wait while the reader shows another entry; a restart loses them, as every held form.
-    log_fields: HashMap<LogKey, LogField>,
-    /// The Log lines whose entry is gone, for the footer, until the DM copies or dismisses each.
-    gone_log_lines: Vec<GoneLog>,
     /// The entries whose edit form is open in the other reader (Lookup's, or the World
     /// page's). Their Log field waits too, so Splat never makes its own disk conflict.
     pub edited_elsewhere: Vec<Uuid>,
@@ -2544,7 +2557,7 @@ impl Reader {
     /// header's do. The field starts with `words`, selected, unless the DM already typed words
     /// there.
     pub fn open_log(&mut self, campaign: Uuid, id: Uuid, name: &str, words: &str) {
-        let open = self.log_fields.entry((campaign, id)).or_default();
+        let open = self.held.log_fields.entry((campaign, id)).or_default();
         open.field.focus = true;
         name.clone_into(&mut open.name);
         if open.field.words.trim().is_empty() {
@@ -2999,7 +3012,7 @@ impl Reader {
                             });
                         match result {
                             Ok(rename) => {
-                                self.results.record(ReaderResult::FileRename(rename));
+                                self.held.results.record(ReaderResult::FileRename(rename));
                                 return Some(Go::Reload(item.entry.id));
                             }
                             Err(error) => self.error = Some(error),
@@ -3029,7 +3042,7 @@ impl Reader {
                         })();
                         match result {
                             Ok(change) => {
-                                self.results.record(ReaderResult::Name(change));
+                                self.held.results.record(ReaderResult::Name(change));
                                 return Some(Go::Reload(item.entry.id));
                             }
                             Err(error) => self.error = Some(error),
@@ -3073,7 +3086,8 @@ impl Reader {
                 if let Some(path) = chosen {
                     match new_identity(campaign, path) {
                         Ok((undo, id)) => {
-                            self.results
+                            self.held
+                                .results
                                 .record(ReaderResult::Identity(campaign.id, undo));
                             return Some(Go::Reload(id));
                         }
@@ -3457,7 +3471,10 @@ impl Reader {
     ) -> Option<Go> {
         // With no field open, or a field that waits for an edit form, no scope: an empty one
         // still takes an item gap, and would move the form (round 27 FC2).
-        if !self.log_fields.contains_key(&(campaign.id, item.entry.id))
+        if !self
+            .held
+            .log_fields
+            .contains_key(&(campaign.id, item.entry.id))
             || editing
             || self.edited_elsewhere.contains(&item.entry.id)
         {
@@ -3471,7 +3488,7 @@ impl Reader {
         let stamp = self
             .line_stamp()
             .map(|stamp| format!("{}:", sessions::plain_links(&stamp)));
-        let open = self.log_fields.get_mut(&key)?;
+        let open = self.held.log_fields.get_mut(&key)?;
         let select = std::mem::take(&mut open.select);
         let field = &mut open.field;
         let name = format!("Log line for {}", item.entry.name);
@@ -3557,11 +3574,11 @@ impl Reader {
         if ui.input(|input| input.key_pressed(egui::Key::Escape))
             && (response.has_focus() || response.lost_focus())
         {
-            self.log_fields.remove(&key);
+            self.held.log_fields.remove(&key);
         } else if enter {
             let words = field.words.trim().to_owned();
             if words.is_empty() {
-                self.log_fields.remove(&key);
+                self.held.log_fields.remove(&key);
             } else {
                 return self.add_log_line(campaign, item, &words);
             }
@@ -3593,7 +3610,7 @@ impl Reader {
         })();
         let go = self.written(result, item.entry.id);
         if go.is_some() {
-            self.log_fields.remove(&(campaign.id, item.entry.id));
+            self.held.log_fields.remove(&(campaign.id, item.entry.id));
         }
         go
     }
@@ -3606,7 +3623,7 @@ impl Reader {
                 self.error = None;
                 self.group_error = false;
                 self.group_error_unread_file = false;
-                self.results.record(ReaderResult::Change(change));
+                self.held.results.record(ReaderResult::Change(change));
                 self.kept = None;
                 Some(Go::Reload(id))
             }
@@ -4020,12 +4037,12 @@ impl Reader {
 
     /// The reader's kept result of this kind.
     fn result(&self, slot: Slot) -> Option<&ReaderResult> {
-        self.results.get(&slot).map(|shown| shown.value())
+        self.held.results.get(&slot).map(|shown| shown.value())
     }
 
     /// End the reader's result of this kind (its owner changed: another note, an Edit).
     fn end(&mut self, slot: Slot) {
-        self.results.owner_changed(&slot);
+        self.held.results.owner_changed(&slot);
     }
 
     /// A repair of the note at `path` ends a name change's result on it: it has nothing left
@@ -4066,7 +4083,7 @@ impl Reader {
         // another entry.
         if let Some(campaign) = campaign
             && takes_log(item, index)
-            && self.log_fields.contains_key(&(campaign.id, id))
+            && self.held.log_fields.contains_key(&(campaign.id, id))
             && (self.editing(id, campaign) || self.edited_elsewhere.contains(&id))
         {
             messages.outcome(Notice::new(crate::sentence!(
@@ -4118,7 +4135,7 @@ impl Reader {
             Slot::Name,
             Slot::Identity,
         ] {
-            let Some(shown) = self.results.get(&slot) else {
+            let Some(shown) = self.held.results.get(&slot) else {
                 continue;
             };
             let shows = match shown.value() {
@@ -4200,7 +4217,7 @@ impl Reader {
         let go = match press.id {
             FooterAct::Undo => {
                 let ticket = press.ticket?;
-                match self.results.undo_by(ticket, |result| match result {
+                match self.held.results.undo_by(ticket, |result| match result {
                     ReaderResult::Change(change) | ReaderResult::Name(change) => {
                         change.undo(campaign)
                     }
@@ -4235,7 +4252,7 @@ impl Reader {
                 }
             }
             FooterAct::GoneCopy(id) => {
-                if let Some(gone) = self.gone_log_lines.iter().find(|gone| gone.id == id) {
+                if let Some(gone) = self.held.gone_log_lines.iter().find(|gone| gone.id == id) {
                     ctx.copy_text(gone.words.clone());
                 }
                 self.end_gone_log(id);
@@ -4785,7 +4802,7 @@ impl Reader {
                     ) {
                         Ok(mut change) => {
                             change.word = change_words("Stat block", None, Some(&stat_block.name));
-                            self.results.record(ReaderResult::Change(change));
+                            self.held.results.record(ReaderResult::Change(change));
                             self.kept = None;
                         }
                         Err(error) => self.error = Some(error),
@@ -6047,7 +6064,8 @@ mod tests {
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
         let item = &index.items[index.position(hob).unwrap()];
         lookup.open_log(campaign.id, hob, "Hob", "the ropes");
-        lookup.log_fields.get_mut(&key).unwrap().field.words = "Told who burned the ropes.".into();
+        lookup.held.log_fields.get_mut(&key).unwrap().field.words =
+            "Told who burned the ropes.".into();
 
         // An edit in Obsidian a moment before, while the field holds typed words: the line
         // goes after it, in the entry's new Log heading.
@@ -6064,7 +6082,7 @@ mod tests {
             format!("{edited}\n## Log\n\n- [[Session 1]]: Told who burned the ropes.\n")
         );
         assert!(
-            !lookup.log_fields.contains_key(&key),
+            !lookup.held.log_fields.contains_key(&key),
             "Enter closes the field"
         );
 
@@ -6088,7 +6106,7 @@ mod tests {
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
         let item = &index.items[index.position(hob).unwrap()];
         lookup.open_log(campaign.id, hob, "Hob", "");
-        lookup.log_fields.get_mut(&key).unwrap().field.words = "Kept.".into();
+        lookup.held.log_fields.get_mut(&key).unwrap().field.words = "Kept.".into();
         let folder = dir.path().join("NPCs");
         fs::set_permissions(&folder, fs::Permissions::from_mode(0o555)).unwrap();
         let failed = lookup.add_log_line(&campaign, item, "Kept.");
@@ -6101,7 +6119,7 @@ mod tests {
                 .is_some_and(|error| error.contains("NPCs/Hob.md"))
         );
         assert_eq!(fs::read_to_string(&path).unwrap(), edited);
-        assert_eq!(lookup.log_fields[&key].field.words, "Kept.");
+        assert_eq!(lookup.held.log_fields[&key].field.words, "Kept.");
 
         // A note that cannot be read, and a note renamed or deleted under the open field: the
         // act names the file and writes nothing.
@@ -6123,20 +6141,20 @@ mod tests {
                 .is_some_and(|error| error.contains("NPCs/Hob.md"))
         );
         assert!(!path.exists());
-        assert_eq!(lookup.log_fields[&key].field.words, "Kept.");
+        assert_eq!(lookup.held.log_fields[&key].field.words, "Kept.");
 
         // A done scene's words fill only an empty field: words the DM typed stay, and nothing
         // selects them. Clearing Lookup's search keeps them too.
         lookup.open_log(campaign.id, hob, "Hob", "the ropes");
-        assert_eq!(lookup.log_fields[&key].field.words, "Kept.");
+        assert_eq!(lookup.held.log_fields[&key].field.words, "Kept.");
         lookup.clear();
-        assert_eq!(lookup.log_fields[&key].field.words, "Kept.");
+        assert_eq!(lookup.held.log_fields[&key].field.words, "Kept.");
         // The app gives the reader the session being played again on each frame.
         lookup.played = Some("[[Session 1]]".into());
         // Each field keeps its own request to select its words.
         lookup.open_log(campaign.id, oren, "Oren", "paid the toll");
-        assert!(!lookup.log_fields[&key].select);
-        assert!(lookup.log_fields[&(campaign.id, oren)].select);
+        assert!(!lookup.held.log_fields[&key].select);
+        assert!(lookup.held.log_fields[&(campaign.id, oren)].select);
 
         // Typed Log words are unsaved work: the campaign switch's guard and the close warning
         // count them, by the entry's name. An empty field holds nothing to lose.
@@ -6181,7 +6199,7 @@ mod tests {
             }),
             "another campaign's reader shows this campaign's typed words"
         );
-        assert!(!lookup.log_fields.contains_key(&(other.id, hob)));
+        assert!(!lookup.held.log_fields.contains_key(&(other.id, hob)));
 
         // Every draft that the guards count has a field in view. A renamed played session
         // does not hide typed words: the stamp is the session at Enter, not the field's key.
@@ -6238,7 +6256,7 @@ mod tests {
         lookup.open_log(campaign.id, hob, "Hob", "");
         // The words keep every byte the DM typed, for Copy text (review round 1 of PR 287).
         let again = "  \"Again.\"\nsecond line\n  ";
-        lookup.log_fields.get_mut(&key).unwrap().field.words = again.into();
+        lookup.held.log_fields.get_mut(&key).unwrap().field.words = again.into();
         fs::remove_file(&path).unwrap();
         lookup.forget_gone_log_lines(&ContentIndex::load(&[], Some(&campaign)).unwrap());
         assert_eq!(notices(&mut lookup), 2);
@@ -6263,7 +6281,7 @@ mod tests {
         );
         assert_eq!(notices(&mut lookup), 1);
         assert!(
-            !lookup.dismissed.is_empty(),
+            !lookup.held.dismissed.is_empty(),
             "R3: the dismissed words keep an Undo"
         );
     }

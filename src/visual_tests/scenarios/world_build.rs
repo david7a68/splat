@@ -724,14 +724,14 @@ pub fn broken(d: &mut Driver<'_>) {
             ),
         );
     }
-    d.expect("Copy text");
+    d.expect("Copy draft text");
     // Revision 19: with the warning in the footer at 960, the last body action still takes the
     // press, and only it: the type section opens, and the warning and its choices stay.
     let base = d.window_size();
     d.set_base(SMALL);
     d.click("Give this note a type");
     let opened =
-        d.has_label(crate::world::TYPE_HELP) && d.has("Copy text") && d.has("Discard draft");
+        d.has_label(crate::world::TYPE_HELP) && d.has("Copy draft text") && d.has("Discard draft");
     d.click("Give this note a type");
     let opened = opened && !d.has_label(crate::world::TYPE_HELP);
     d.set_base(base);
@@ -745,7 +745,7 @@ pub fn broken(d: &mut Driver<'_>) {
     for size in [SMALL, DEFAULT, LARGE] {
         let (target, edge, splitter) = d.at_size(size, |d| {
             (
-                d.place_of("Copy text"),
+                d.place_of("Copy draft text"),
                 d.painted_left(lost),
                 d.place_of("Resize World notes column"),
             )
@@ -762,7 +762,7 @@ pub fn broken(d: &mut Driver<'_>) {
     // Discard draft has no Undo: an `L` gap separates its target from Copy text's.
     for size in [SMALL, DEFAULT, LARGE] {
         let (copy, discard) = d.at_size(size, |d| {
-            (d.place_of("Copy text"), d.place_of("Discard draft"))
+            (d.place_of("Copy draft text"), d.place_of("Discard draft"))
         });
         d.observe(
             "iter-17-D-discard-gap",
@@ -774,16 +774,27 @@ pub fn broken(d: &mut Driver<'_>) {
         );
     }
     // Round 28 ruling R3 (replaces round 25 AA1): a message choice's weight comes from its
-    // kind. Copy text is a choice, so it is bordered; Discard draft loses the words, so it is the
-    // red choice, `L` after it.
-    let bordered = |d: &Driver<'_>, name: &str| {
+    // kind. Copy draft text is a choice: bordered in the field border. Discard draft loses the
+    // words: the destructive border, exactly `L` after Copy draft text on its line.
+    let stroke = |d: &Driver<'_>, name: &str| {
         d.control_frame(name)
-            .is_some_and(|frame| frame.stroke.width > 0.0)
+            .map(|frame| (frame.stroke.width, frame.stroke.color))
     };
+    let (copy_stroke, discard_stroke) = (stroke(d, "Copy draft text"), stroke(d, "Discard draft"));
+    let gap = d
+        .place_of("Copy draft text")
+        .zip(d.place_of("Discard draft"))
+        .map(|(copy, discard)| discard.left() - copy.right());
     d.observe(
         "iter-28-D-R3-weights",
-        bordered(d, "Copy text") && d.has("Discard draft"),
-        "Copy text is a bordered choice beside Discard draft",
+        copy_stroke
+            .is_some_and(|(width, color)| width > 0.0 && color == design::colors().field_border)
+            && discard_stroke
+                .is_some_and(|(width, color)| width > 0.0 && color == design::colors().destructive)
+            && gap.is_some_and(|gap| (gap - design::L).abs() <= 0.5),
+        format!(
+            "Copy draft text {copy_stroke:?}, Discard draft {discard_stroke:?}, {gap:?} px apart"
+        ),
     );
     // Round 24 FA7: the warning says what happened in the DM's words, not `identity`.
     d.observe(
@@ -796,7 +807,7 @@ pub fn broken(d: &mut Driver<'_>) {
     d.click("Discard draft");
     d.observe(
         "iter-17-D-copy-text-discard",
-        !d.has("Copy text"),
+        !d.has("Copy draft text"),
         "Discard draft removes the lost draft and its message",
     );
     // Round 23 FF1: Discard draft keeps the words for one Undo discard, whatever note is open.
@@ -831,7 +842,7 @@ pub fn broken(d: &mut Driver<'_>) {
     d.click(undo_lost);
     d.observe(
         "iter-23-D-FF1-undo",
-        d.has("Copy text")
+        d.has("Copy draft text")
             && !d.has(undo_lost)
             && fs::read_to_string(&keeper).unwrap() == keeper_after
             && d.has("Undo change place"),
@@ -843,7 +854,7 @@ pub fn broken(d: &mut Driver<'_>) {
     d.click("Edit Lamp Keeper");
     d.observe(
         "iter-23-D-FF1-ends",
-        !d.has(undo_lost) && !d.has("Copy text"),
+        !d.has(undo_lost) && !d.has("Copy draft text"),
         "The next Edit ends the lost draft's Undo discard",
     );
     d.click("Cancel");

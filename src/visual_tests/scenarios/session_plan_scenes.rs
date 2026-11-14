@@ -685,7 +685,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     let field = format!("Log line for {VARRA_BLACK}");
     let added = format!("Added to {VARRA_BLACK}’s Log.");
     let keep = entry(d, "Locations/Ashfall Keep.md", KEEP, "location", "");
-    entry(
+    let varra = entry(
         d,
         "NPCs/Captain Varra Black.md",
         VARRA_BLACK,
@@ -1143,7 +1143,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     // X28 of app round 2: the notice offers the words with `Copy text`, as a lost draft does,
     // and stays until the DM copies or dismisses it, also while Lookup shows no entry.
     let notice = format!("“{VARRA_BLACK}” was deleted. The Log line was not added: “{TYPED}”");
-    let copy = "Copy text".to_owned();
+    let copy = "Copy Log text".to_owned();
     d.observe(
         "T18.2-guard",
         d.has(&copy) && d.has(crate::design::outcome::DISMISS_NAME),
@@ -1178,6 +1178,26 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         d.has(&lost) && !d.has(&undo) && d.has(&copy),
         "Undo discard in Lookup's footer brings the lost draft back, with its choices, and keeps the notice",
     );
+    // Review of PR 333: the two copy choices have two names. Copy draft text puts the lost
+    // draft's text on the clipboard and keeps both notices; Copy Log text (below) puts the Log
+    // words there and ends only its notice.
+    let draft = d
+        .app()
+        .lookup
+        .reader
+        .draft_text(varra)
+        .or(d.app().world_page.reader.draft_text(varra))
+        .map(str::to_owned);
+    d.click("Copy draft text");
+    d.observe(
+        "iter-28-D-copy-draft",
+        draft.is_some()
+            && d.copied_text() == draft
+            && d.has(&lost)
+            && d.visible_text(&notice)
+            && d.has(&copy),
+        format!("Copy draft text copies {draft:?}; both notices stay"),
+    );
     d.click(&lost);
     d.expect(&undo);
     d.app_mut().lookup.search_for(KEEP);
@@ -1200,17 +1220,38 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         !d.visible_text(&notice) && d.has(&undo_dismiss),
         "Dismiss ends the notice and offers Undo dismiss",
     );
+    // Review of PR 333: no unrelated reset drops the dismissed words. Lookup's Clear (the
+    // reader starts again), another entry B, and a campaign round trip; then Undo.
+    let b_path = root(d).join("Locations/Ashfall Keep.md");
+    let b_before = fs::read(&b_path).unwrap();
+    d.type_into(SEARCH_LOOKUP, "Ash");
+    d.click("Clear");
+    d.app_mut().lookup.open_id(keep);
+    d.settle();
+    crate::visual_tests::steps::switch_campaign(d, crate::visual_tests::fixture::QUIET_CAMPAIGN);
+    d.settle();
+    crate::visual_tests::steps::switch_campaign(d, crate::visual_tests::fixture::CAMPAIGN);
+    d.settle();
+    d.app_mut().lookup.open_id(keep);
+    d.settle();
+    d.expect(&undo_dismiss);
     d.click(&undo_dismiss);
     d.observe(
         "iter-28-D-134-undo",
-        d.visible_text(&notice) && d.has(&copy) && !d.has(&undo_dismiss),
-        "Undo dismiss brings the notice and its words back",
+        d.visible_text(&notice)
+            && d.has(&copy)
+            && !d.has(&undo_dismiss)
+            && fs::read(&b_path).unwrap() == b_before,
+        "After Clear, entry B and a campaign round trip, Undo dismiss brings A's exact words back; B is unchanged",
     );
     d.click(&copy);
     d.observe(
         "T18.2-guard",
-        d.copied_text().as_deref() == Some(TYPED) && !d.visible_text(&notice) && !d.has(&copy),
-        "Copy text puts the words on the clipboard and ends the notice",
+        d.copied_text().as_deref() == Some(TYPED)
+            && !d.visible_text(&notice)
+            && !d.has(&copy)
+            && d.has(&undo),
+        "Copy Log text puts the Log words on the clipboard and ends only its notice; the discarded draft's Undo stays",
     );
     // Astra's review: a link that two entries share is not gone; that scene says no `Not found`.
     entry(

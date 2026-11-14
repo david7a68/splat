@@ -665,30 +665,29 @@ impl Reader {
         self.picker.is_some() || self.form_focused
     }
 
-    /// A new reader that keeps only this one's typed Log lines, and the words of those whose
-    /// entry is gone.
+    /// A new reader that keeps only what this one holds for the DM (`Held`): typed Log lines,
+    /// the words of those whose entry is gone or that the DM dismissed, and the kept results.
     pub(crate) fn keep_log_lines(mut old: Self) -> Self {
         Self {
-            log_fields: std::mem::take(&mut old.log_fields),
-            gone_log_lines: std::mem::take(&mut old.gone_log_lines),
+            held: std::mem::take(&mut old.held),
             ..Self::default()
         }
     }
 
-    /// Start again with nothing on show. Unsaved changes stay: edit forms, Log lines, and the
-    /// words of Log lines whose entry is gone.
+    /// Start again with nothing on show. Unsaved changes stay: edit forms, and all the reader
+    /// holds for the DM (`Held`).
     pub fn clear(&mut self) {
         *self = Self {
             edits: std::mem::take(&mut self.edits),
-            log_fields: std::mem::take(&mut self.log_fields),
-            gone_log_lines: std::mem::take(&mut self.gone_log_lines),
+            held: std::mem::take(&mut self.held),
             ..Self::default()
         };
     }
 
     /// The Log lines with typed words, by entry and name.
     fn typed_log_lines(&self) -> impl Iterator<Item = (Uuid, String)> + '_ {
-        self.log_fields
+        self.held
+            .log_fields
             .iter()
             .filter(|(_, open)| !open.field.words.trim().is_empty())
             .map(|((_, id), open)| (*id, open.name.clone()))
@@ -699,22 +698,23 @@ impl Reader {
     /// not lost without a word: the pane's footer says them, with `Copy text`, until the DM
     /// copies or dismisses them.
     pub fn forget_gone_log_lines(&mut self, index: &ContentIndex) {
-        if self.log_fields.is_empty() {
+        if self.held.log_fields.is_empty() {
             return;
         }
         let campaign = index_campaign(index);
         let gone: Vec<_> = self
+            .held
             .log_fields
             .keys()
             .filter(|(owner, id)| *owner == campaign && index.position(*id).is_none())
             .copied()
             .collect();
         for key in gone {
-            if let Some(open) = self.log_fields.remove(&key)
+            if let Some(open) = self.held.log_fields.remove(&key)
                 && !open.field.words.trim().is_empty()
             {
                 // Each lost draft keeps its own notice, also a second one from the same entry.
-                self.gone_log_lines.push(super::GoneLog {
+                self.held.gone_log_lines.push(super::GoneLog {
                     id: super::next_order(),
                     campaign: key.0,
                     name: open.name,
@@ -742,7 +742,7 @@ impl Reader {
             messages.outcome(
                 FaultMessage::new(&super::ReaderFault::Waiting(gone_words(gone)))
                     .choice(Choice::new(
-                        MessageChoice::Choice("Copy text"),
+                        MessageChoice::Choice("Copy Log text"),
                         super::FooterAct::GoneCopy(gone.id),
                     ))
                     .choice(Choice::new(
@@ -751,7 +751,7 @@ impl Reader {
                     )),
             );
         }
-        for shown in self.dismissed.newest_first(&campaign) {
+        for shown in self.held.dismissed.newest_first(&campaign) {
             messages.kept(shown.outcome(frame, |dismissed| {
                 Done::new(Verb::Dismiss, format!("{}’s Log line", dismissed.0.name))
                     .undo(super::FooterAct::UndoDismiss)
@@ -762,7 +762,8 @@ impl Reader {
 
     /// The notices of Log lines whose entry is gone, in this campaign.
     pub(crate) fn gone_logs(&self, campaign: Uuid) -> impl Iterator<Item = &super::GoneLog> {
-        self.gone_log_lines
+        self.held
+            .gone_log_lines
             .iter()
             .filter(move |gone| gone.campaign == campaign)
     }
@@ -770,9 +771,14 @@ impl Reader {
     /// The close icon of a gone Log line's notice: the notice goes, and its words wait in
     /// `dismissed` for `Undo dismiss` (ruling R3).
     pub(crate) fn dismiss_gone_log(&mut self, id: u64) {
-        if let Some(at) = self.gone_log_lines.iter().position(|gone| gone.id == id) {
-            let gone = self.gone_log_lines.remove(at);
-            self.dismissed.record(super::DismissedLog(gone));
+        if let Some(at) = self
+            .held
+            .gone_log_lines
+            .iter()
+            .position(|gone| gone.id == id)
+        {
+            let gone = self.held.gone_log_lines.remove(at);
+            self.held.dismissed.record(super::DismissedLog(gone));
         }
     }
 
@@ -780,15 +786,15 @@ impl Reader {
     /// nothing.
     pub(crate) fn undo_dismiss(&mut self, ticket: crate::design::results::Ticket) {
         if let Ok((super::DismissedLog(gone), ())) =
-            self.dismissed.undo_by(ticket, |_| Ok::<_, ()>(()))
+            self.held.dismissed.undo_by(ticket, |_| Ok::<_, ()>(()))
         {
-            self.gone_log_lines.push(gone);
+            self.held.gone_log_lines.push(gone);
         }
     }
 
     /// The DM copied or dismissed the words of this notice.
     pub(crate) fn end_gone_log(&mut self, id: u64) {
-        self.gone_log_lines.retain(|gone| gone.id != id);
+        self.held.gone_log_lines.retain(|gone| gone.id != id);
     }
 
     /// Put the entries whose edit form is open in this reader in `out`, with no new
@@ -817,7 +823,7 @@ impl Reader {
                 )))
                 .choice(
                     Choice::new(
-                        MessageChoice::Choice("Copy text"),
+                        MessageChoice::Choice("Copy draft text"),
                         super::FooterAct::LostCopy(id),
                     )
                 )
@@ -846,7 +852,13 @@ impl Reader {
         lost
     }
 
-    /// `Copy text` of a lost draft: the draft's text on the clipboard; the draft stays.
+    /// The text of the open edit draft of `id`, for the checks.
+    #[cfg(test)]
+    pub(crate) fn draft_text(&self, id: Uuid) -> Option<&str> {
+        self.edits.get(&id).map(|draft| draft.now.text.as_str())
+    }
+
+    /// `Copy draft text` of a lost draft: the draft's text on the clipboard; the draft stays.
     pub(super) fn copy_lost(&self, ctx: &egui::Context, id: Uuid) {
         if let Some(draft) = self.edits.get(&id) {
             ctx.copy_text(draft.now.text.clone());
@@ -856,7 +868,8 @@ impl Reader {
     /// `Discard draft` of a lost draft: it waits in the reader's store for `Undo discard`.
     pub(super) fn discard_lost(&mut self, id: Uuid) {
         if let Some(draft) = self.edits.remove(&id) {
-            self.results
+            self.held
+                .results
                 .record(super::ReaderResult::Discarded(id, Box::new(draft)));
         }
     }
@@ -870,7 +883,7 @@ impl Reader {
         id: Uuid,
         index: &ContentIndex,
     ) -> Option<&str> {
-        match self.results.get(&super::Slot::Discarded)?.value() {
+        match self.held.results.get(&super::Slot::Discarded)?.value() {
             super::ReaderResult::Discarded(at, draft)
                 if (*at == id || index.position(*at).is_none())
                     && draft.campaign == campaign.id =>
@@ -945,7 +958,7 @@ impl Reader {
         // The DM chose Reload: its result, with `Undo reload`, is kept in the reader's store from
         // this act, in the pane's footer.
         if had_conflict && draft.disk.is_none() && !overwrite && draft.reloaded.is_some() {
-            self.results.record(super::ReaderResult::Reloaded(id));
+            self.held.results.record(super::ReaderResult::Reloaded(id));
         }
         let mut focused = false;
         // The Read order: Stat block, In, Part of, then Status.
@@ -1244,7 +1257,8 @@ impl Reader {
             self.picker = None;
             self.form_focused = false;
             if draft.dirty() {
-                self.results
+                self.held
+                    .results
                     .record(super::ReaderResult::Discarded(id, Box::new(draft)));
             }
             return None;
@@ -1254,7 +1268,9 @@ impl Reader {
                 Ok(Saved::Written(change)) => {
                     self.picker = None;
                     self.form_focused = false;
-                    self.results.record(super::ReaderResult::Change(change));
+                    self.held
+                        .results
+                        .record(super::ReaderResult::Change(change));
                     self.kept = None;
                     return Some(Go::Reload(id));
                 }
@@ -2167,6 +2183,7 @@ mod tests {
         draft.now.status = "gone".into();
         let mut reader = Reader::default();
         reader
+            .held
             .results
             .record(super::super::ReaderResult::Discarded(id, Box::new(draft)));
         // The note goes in its own campaign: the Undo is offered there.
