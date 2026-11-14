@@ -3825,7 +3825,13 @@ impl Run {
         if let Some(fitted) = &fitted {
             let lead = after_name(&fitted.lead);
             if !lead.is_empty() {
-                crate::difficulty::append(&mut job, ui, Type::Small, &format!("{lead} · "), c.muted);
+                crate::difficulty::append(
+                    &mut job,
+                    ui,
+                    Type::Small,
+                    &format!("{lead} · "),
+                    c.muted,
+                );
             }
             crate::difficulty::append_form(&mut job, ui, Type::Small, &fitted.form);
         } else if totals_in_heading {

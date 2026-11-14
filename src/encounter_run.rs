@@ -10196,16 +10196,10 @@ mod tests {
         assert_arrival_wraps(run.state.log.last().unwrap());
         assert_eq!(run.state.order, vec![0, 1, 5, 6, 3, 4, 2]);
         assert_eq!(run.current(), current);
-        assert!(
-            run.state
-                .log
-                .last()
-                .unwrap()
-                .contains(&format!(
-                    "moved before {} at\u{a0}15. It acts next round.",
-                    run.state.participants[3].name
-                ))
-        );
+        assert!(run.state.log.last().unwrap().contains(&format!(
+            "moved before {} at\u{a0}15. It acts next round.",
+            run.state.participants[3].name
+        )));
         run.undo();
         assert_eq!(run.state.order, order);
         assert_eq!(run.current(), current);
