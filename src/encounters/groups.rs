@@ -35,6 +35,9 @@ const MISSING_ENCOUNTER: &str = "Deleted encounter";
 /// the repair together. Save's check refuses with the same words, in place, so the footer does
 /// not say them again.
 const GONE_ENCOUNTER: &str = "Its encounter was deleted, so no fight offers this group. Choose another encounter, or Any encounter.";
+/// The same fault beside Save, while the line under Belongs to is not on screen: the cause and
+/// where to repair it.
+const GONE_BESIDE_SAVE: &str = "Its encounter was deleted. Choose another under Belongs to.";
 /// The Groups list's heading for groups whose encounter is gone; Arrivals says the same words
 /// beside such a group's name (FB10).
 pub(crate) const ENCOUNTER_DELETED: &str = "Encounter deleted";
@@ -170,8 +173,8 @@ pub(super) enum RefusalPlace {
     SaveRow,
     /// Under Belongs to (G122: an encounter that is gone).
     BelongsTo,
-    /// The member row at this index in the draft's members.
-    Member(usize),
+    /// A member's row.
+    Member,
 }
 
 impl Refusal {
@@ -179,36 +182,6 @@ impl Refusal {
     pub(super) fn footer(&self) -> Option<&str> {
         (self.place == RefusalPlace::Footer).then_some(self.text.as_str())
     }
-}
-
-/// G122: a Save refused for a fault the body says in its place brings that place into view, for
-/// a press while the place is scrolled away. The body reads it in the next frames only.
-const REVEAL_REFUSAL: &str = "group_refusal_reveal";
-
-/// Ask the body to bring the place of this refusal into view.
-pub(super) fn reveal_refusal(ctx: &egui::Context, refusal: &Refusal) {
-    if matches!(
-        refusal.place,
-        RefusalPlace::BelongsTo | RefusalPlace::Member(_)
-    ) {
-        let pass = ctx.cumulative_pass_nr();
-        ctx.data_mut(|data| {
-            data.insert_temp(egui::Id::new(REVEAL_REFUSAL), (refusal.place, pass));
-        });
-    }
-}
-
-/// Whether the body should bring `place` into view now. A request lives for two passes, so a
-/// press handled after the body was drawn still reaches it, and a later frame never does.
-fn reveals(ui: &egui::Ui, place: RefusalPlace) -> bool {
-    let pass = ui.ctx().cumulative_pass_nr();
-    let id = egui::Id::new(REVEAL_REFUSAL);
-    let asked = ui.data(|data| data.get_temp::<(RefusalPlace, u64)>(id));
-    let wanted = asked.is_some_and(|(asked, at)| asked == place && pass <= at + 2);
-    if wanted {
-        ui.data_mut(|data| data.remove::<(RefusalPlace, u64)>(id));
-    }
-    wanted
 }
 
 /// What a member result's Undo gives back, held in the page's store with the result's ticket.
@@ -658,10 +631,10 @@ impl GroupDraft {
         #[cfg(test)]
         GROUP_CHECKS.with(|counts| counts.set((counts.get().0, counts.get().1 + 1)));
         self.check_group(snapshot, saving)?;
-        for (index, member) in self.setup.members.iter().enumerate() {
+        for member in &self.setup.members {
             let in_place = |text: String| Refusal {
                 text,
-                place: RefusalPlace::Member(index),
+                place: RefusalPlace::Member,
             };
             // FA1: Save's check names a member as every view does. A draft's lines may have
             // moved since the note was read, so it names no line.
@@ -1537,14 +1510,14 @@ pub(super) fn of_encounter(
 }
 
 /// Who a group is for, in its editor. An encounter being built is a choice before it is saved,
-/// and under the name it has now.
+/// and under the name it has now. True when it says a gone encounter (G122), whole on screen.
 fn belongs_to(
     ui: &mut egui::Ui,
     draft: &mut GroupDraft,
     snapshot: &Snapshot,
     open: Option<(Uuid, &str)>,
     name_right: f32,
-) {
+) -> bool {
     let mut choices: Vec<(Uuid, &str)> = snapshot
         .encounter_choices()
         .filter(|(id, _)| open.is_none_or(|(open, _)| open != *id))
@@ -1588,21 +1561,20 @@ fn belongs_to(
     });
     // In an encounter's editor, belonging to it goes without saying.
     if current.is_some() && current == open.map(|(id, _)| id) {
-        return;
+        return false;
     }
     let help = match current {
         None => "A run of any encounter offers this group.",
         // A group no fight can offer is a fault, not field help.
         Some(_) if shown == MISSING_ENCOUNTER => {
             let said = design::small_message(ui, Tone::Warning, GONE_ENCOUNTER);
-            if reveals(ui, RefusalPlace::BelongsTo) {
-                said.scroll_to_me(Some(egui::Align::Center));
-            }
-            return;
+            // Whole on screen: the save row does not say it again (`GONE_BESIDE_SAVE`).
+            return ui.is_visible() && ui.clip_rect().contains_rect(said.rect);
         }
         Some(_) => "Only runs of this encounter offer this group.",
     };
     design::help(ui, help);
+    false
 }
 
 /// The line under a creature's name in an editor, with the values this block gives it.
@@ -1729,6 +1701,18 @@ pub(super) fn change_word(
 /// Encounters list, the run's setup and Arrivals show a change. The words are the link.
 pub(super) fn change_mark() -> String {
     format!("{}\u{a0}", icons::CHANGED)
+}
+
+/// G135: let `ui` paint a `line_start` hang (`LINE_START_REACH`) left of its text edge, as far as
+/// `outer`, the clip of what encloses it, allows. A panel or a scroll area inside a pane clips
+/// at its own edge; the pane's body clip already holds the hang's room.
+fn keep_hang_room(ui: &mut egui::Ui, outer: egui::Rect) {
+    let mut clip = ui.clip_rect();
+    clip.min.x = clip
+        .min
+        .x
+        .min((ui.max_rect().left() - design::LINE_START_REACH).max(outer.left()));
+    ui.set_clip_rect(clip);
 }
 
 /// What separates a detail line from the change link after it.
@@ -2361,14 +2345,13 @@ impl Encounters {
             return;
         };
         // G122: one refusal path for the button and the keyboard. The refusal keeps its place
-        // and its tone: a fault the body says in its place is not said again in the footer, and
-        // its place comes into view.
+        // and its tone: a fault the body says in its place is not said again in the footer.
         if let Some(refusal) = self
             .snapshot
             .as_ref()
             .and_then(|snapshot| draft.check(snapshot, None).err())
         {
-            self.refuse_group_save(ctx, &refusal);
+            self.refuse_group_save(&refusal);
             return;
         }
         let old_name = draft.baseline.as_ref().map(|_| draft.saved_name.clone());
@@ -2409,7 +2392,7 @@ impl Encounters {
                     .and_then(|snapshot| draft.check(snapshot, None).err())
                     .filter(|refusal| refusal.text == e)
                 {
-                    Some(refusal) => self.refuse_group_save(ctx, &refusal),
+                    Some(refusal) => self.refuse_group_save(&refusal),
                     None => {
                         self.refused(None);
                         self.error = Some(e);
@@ -2419,12 +2402,11 @@ impl Encounters {
         }
     }
 
-    /// Save's check refused the group draft: the watch starts, the footer says the fault only
-    /// when no other place does, and that other place comes into view.
-    fn refuse_group_save(&mut self, ctx: &egui::Context, refusal: &Refusal) {
+    /// Save's check refused the group draft: the watch starts, and the footer says the fault
+    /// only when no other place does.
+    fn refuse_group_save(&mut self, refusal: &Refusal) {
         self.refused(Some(refusal.text.clone().into()));
         self.error = refusal.footer().map(str::to_owned);
-        reveal_refusal(ctx, refusal);
     }
 
     /// Whether something else still has this group's old name. A link with that name may mean
@@ -2586,6 +2568,16 @@ impl Encounters {
         // Each reason: the words its place is measured by (the longest form), and the words it
         // shows now, if any.
         let mut below: Vec<(&'static str, Option<&'static str>)> = Vec::new();
+        // G122, lead ruling: while Save refuses a gone encounter, the save row keeps a place for
+        // its cause, beside Save or on its own line under the row. The body draws first: the
+        // cause shows there only when the line under Belongs to is not whole on screen (another
+        // tab, scrolled away), so it is said once, by the mouse and the keyboard alike.
+        let gone = refusal
+            .as_ref()
+            .is_some_and(|refusal| refusal.place == RefusalPlace::BelongsTo);
+        let gone_words = format!("{} {GONE_BESIDE_SAVE}", icons::WARN);
+        let mut gone_place: Option<egui::Rect> = None;
+        let mut gone_below = false;
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Scan.control());
             discard =
@@ -2593,6 +2585,19 @@ impl Encounters {
             let gap = ui.spacing().item_spacing.x;
             let font = Type::Small.font(ui);
             let mut room = block_right - ui.cursor().left();
+            if gone {
+                let width = design::number_width(ui, &gone_words, &font).ceil();
+                if width + gap <= room {
+                    room -= width + gap;
+                    let row = ui.max_rect();
+                    gone_place = Some(egui::Rect::from_min_max(
+                        egui::pos2(block_right - width, row.top()),
+                        egui::pos2(block_right, row.top() + Density::Scan.control()),
+                    ));
+                } else {
+                    gone_below = true;
+                }
+            }
             // Save's own reason first: it stays at the row's end, under Save, while there is
             // room. A dirty group blocks the campaign switch wherever it is open, so it says so,
             // as the encounter editor does.
@@ -2638,6 +2643,24 @@ impl Encounters {
             super::blocked_reason(ui, shown);
             let used = ui.cursor().top() - top;
             ui.add_space((height + ui.spacing().item_spacing.y - used).max(0.0));
+        }
+        if gone_below {
+            let top = ui.cursor().top();
+            let height = ui
+                .painter()
+                .layout(
+                    gone_words.clone(),
+                    Type::Small.font(ui),
+                    colors().muted,
+                    ui.available_width(),
+                )
+                .size()
+                .y;
+            gone_place = Some(egui::Rect::from_min_size(
+                egui::pos2(ui.cursor().left(), top),
+                egui::vec2(ui.available_width(), height),
+            ));
+            ui.add_space(height + ui.spacing().item_spacing.y);
         }
         design::rule(ui);
         // The file's warnings that no member row states; they go in the footer below.
@@ -2718,6 +2741,8 @@ impl Encounters {
         }
         // FF8: a press of a copied note's repair in the search, for the page's store.
         let separated = std::cell::Cell::new(None);
+        // G122: whether the body drew the gone encounter's line whole on screen.
+        let gone_shown = std::cell::Cell::new(false);
         // The members and Add creatures are columns, each with its own scroll (in the narrow
         // layout, one of them under its tab): the body fills its room above the footer.
         let paned = messages.pane(
@@ -2725,8 +2750,16 @@ impl Encounters {
             design::pane::Body::Fills(design::pane::Fills::because(
                 design::pane::FillsReason::Columns,
             )),
-            |ui| self.group_editor_body(ui, compact, name_right, &separated),
+            |ui| gone_shown.set(self.group_editor_body(ui, compact, name_right, &separated)),
         );
+        if let Some(place) = gone_place.filter(|_| !gone_shown.get()) {
+            let mut beside = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(place)
+                    .layout(egui::Layout::left_to_right(egui::Align::Center)),
+            );
+            design::small_message(&mut beside, Tone::Warning, GONE_BESIDE_SAVE);
+        }
         self.record_separation(separated.into_inner());
         if let Some(press) = paned.pressed {
             match (press.id, press.ticket) {
@@ -2771,13 +2804,13 @@ impl Encounters {
         compact: bool,
         name_right: f32,
         separated: &std::cell::Cell<Option<super::Separated>>,
-    ) {
+    ) -> bool {
         let Some(snapshot) = &self.snapshot else {
             design::spinner(ui);
-            return;
+            return false;
         };
         let Some(draft) = self.group_draft.as_mut() else {
-            return;
+            return false;
         };
         let mut pane = self.editor_pane;
         if compact {
@@ -2807,7 +2840,9 @@ impl Encounters {
         let expanded = &mut self.expanded;
         if compact {
             match pane {
-                EditorPane::Roster => members_pane(ui, draft, snapshot, expanded, true, name_right),
+                EditorPane::Roster => {
+                    return members_pane(ui, draft, snapshot, expanded, true, name_right);
+                }
                 EditorPane::Add => {
                     // No members column is drawn, so the name keeps no edge from an older one.
                     let id = column_right_id(&draft.path);
@@ -2825,8 +2860,11 @@ impl Encounters {
                     )
                 }
             }
-            return;
+            return false;
         }
+        // G135: the members column keeps the room of a `line_start` hang left of its text edge
+        // that the pane gives (its body clip); egui's inner panel would clip at its own edge.
+        let outer = ui.clip_rect();
         let width = design::side_panel_width(ui.ctx().content_rect().width())
             .max(ui.available_width() - ROSTER_MAX_WIDTH)
             .min(ADD_PANE_MAX_WIDTH);
@@ -2859,8 +2897,10 @@ impl Encounters {
             }))
             .show_inside(ui, |ui| {
                 ui.set_max_width(ui.available_width().min(ROSTER_MAX_WIDTH));
-                members_pane(ui, draft, snapshot, expanded, false, name_right);
-            });
+                keep_hang_room(ui, outer);
+                members_pane(ui, draft, snapshot, expanded, false, name_right)
+            })
+            .inner
     }
 }
 
@@ -2972,8 +3012,10 @@ fn members_pane(
     expanded: &mut Option<String>,
     tabbed: bool,
     name_right: f32,
-) {
+) -> bool {
     let top = ui.cursor().top();
+    let outer = ui.clip_rect();
+    let mut gone_shown = false;
     // FH3: the column leaves the scroll bar's lane free whether or not the bar shows, so the
     // name field, `Edit` and `⋯` keep their x when a long list (a replacement search) scrolls.
     let width = super::scroll_lane(ui).min(design::LIST_MEASURE);
@@ -2984,9 +3026,11 @@ fn members_pane(
             let mut clip = ui.clip_rect();
             clip.min.y = clip.min.y.max(top);
             ui.set_clip_rect(clip);
+            // G135: an own-row change link's pencil hangs left of the text edge.
+            keep_hang_room(ui, outer);
             let column = ui.scope(|ui| {
                 ui.set_width(width.min(ui.available_width()));
-                group_fields(ui, draft, snapshot, expanded, None, tabbed, name_right);
+                gone_shown = group_fields(ui, draft, snapshot, expanded, None, tabbed, name_right);
             });
             // The name field is drawn before this column; when the column moves (a resize, a
             // scroll bar), draw the pass again so that both end at the same edge.
@@ -2998,6 +3042,7 @@ fn members_pane(
                     .request_discard("The group name field ends at the members column");
             }
         });
+    gone_shown
 }
 
 /// FB4: `Default side` and `Belongs to` share one label column, the wider label plus `S`, so
@@ -3086,7 +3131,7 @@ fn group_fields(
     open: Option<(Uuid, &str)>,
     _tabbed: bool,
     name_right: f32,
-) {
+) -> bool {
     ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
     ui.horizontal(|ui| {
         choice_label(ui, SIDE_FIELD);
@@ -3101,9 +3146,9 @@ fn group_fields(
         design::help(ui, "Party, enemies, or any other name, such as rivals.");
         design::gap(ui, design::Gap::S);
     }
-    if open.is_none_or(|(id, _)| !draft.belongs_to(id)) {
-        belongs_to(ui, draft, snapshot, open, name_right);
-    }
+    // G122: whether the gone encounter's line is whole on screen, for the save row.
+    let gone_shown = open.is_none_or(|(id, _)| !draft.belongs_to(id))
+        && belongs_to(ui, draft, snapshot, open, name_right);
     design::gap(ui, design::Gap::S);
     let unread = splat::content::list_formats::unread_group_members(&draft.source, &draft.flags);
     let count = draft
@@ -3148,6 +3193,7 @@ fn group_fields(
             &format!("{NOTES_FIELD} for {}", draft.name),
         );
     });
+    gone_shown
 }
 
 /// A group's notes field (`group_fields`).
@@ -3311,10 +3357,6 @@ fn members(
                 )
                 .on_hover_text(&name)
                 .rect;
-            // G122's one refusal path: a refused Save brings the member that says why into view.
-            if reveals(ui, RefusalPlace::Member(index)) {
-                ui.scroll_to_rect(member_row, Some(egui::Align::Center));
-            }
             // FC9: the change words end the detail line, after the muted pencil, as in the
             // encounter editor; a closed form only.
             let word = entry
@@ -5271,8 +5313,7 @@ mod tests {
             })
         );
         // The keyboard's Save goes the same way as the blocked button: the refusal starts the
-        // watch, the footer stays empty, and Belongs to is asked to come into view. A check
-        // after the next edit keeps it so.
+        // watch and the footer stays empty. A check after the next edit keeps it so.
         let ctx = egui::Context::default();
         let mut encounters = Encounters {
             snapshot: Some(snapshot),
@@ -5287,11 +5328,6 @@ mod tests {
                 .as_ref()
                 .map(|invalid| invalid.text.as_str()),
             Some(GONE_ENCOUNTER)
-        );
-        assert_eq!(
-            ctx.data(|data| data.get_temp::<(RefusalPlace, u64)>(egui::Id::new(REVEAL_REFUSAL)))
-                .map(|(place, _)| place),
-            Some(RefusalPlace::BelongsTo)
         );
         encounters.group_draft.as_mut().unwrap().name = "Renamed again".into();
         encounters.refresh_validation_error(true, true);

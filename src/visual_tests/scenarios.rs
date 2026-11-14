@@ -710,6 +710,92 @@ pub(super) fn tones_beside(d: &Driver<'_>, words: &str) -> Vec<&'static str> {
     tones_where(d, |text| text.contains(words))
 }
 
+/// iter-29 G122, lead ruling (source verdict on 77b5da22): a group editor whose encounter is
+/// gone, with a changed name. On the compact `Add creatures` tab, Belongs to is not on screen:
+/// the cause is said once, beside Save, as a warning, also after a press of the blocked Save
+/// group and after Ctrl+S. Back on `Members`, it is said once, under Belongs to only.
+pub(super) fn gone_encounter_said_once(d: &mut Driver<'_>) -> (bool, String) {
+    const BESIDE: &str = "Its encounter was deleted. Choose another under Belongs to.";
+    const FIELD: &str = "Its encounter was deleted, so no fight offers this group.";
+    let said = |d: &Driver<'_>| {
+        let mut count = 0;
+        d.each_painted_text(|text, _| {
+            let words = text.galley.job.text.as_str();
+            count += usize::from(
+                words.contains("encounter was deleted")
+                    || words.contains("no longer has the encounter")
+                    || words.contains("No fight offers"),
+            );
+        });
+        count
+    };
+    // The driver's window is 960 between states: the compact editor, with its tabs.
+    {
+        d.click_starting("Add creatures");
+        let tab = (said(d), d.visible_text(BESIDE), tones_beside(d, BESIDE));
+        if let Some(save) = d.place_of("Save group") {
+            d.click_rect(save, "Click: Save group, blocked");
+        }
+        let button = (said(d), d.visible_text(BESIDE), tones_beside(d, BESIDE));
+        d.press_ctrl(Key::S);
+        let key = (said(d), d.visible_text(BESIDE), tones_beside(d, BESIDE));
+        d.click_starting("Members");
+        let field = (said(d), d.visible_text(FIELD), d.visible_text(BESIDE));
+        let beside = (1, true, vec!["warning"]);
+        (
+            tab == beside && button == beside && key == beside && field == (1, true, false),
+            format!(
+                "Add creatures tab {tab:?}; after Save group {button:?}; after Ctrl+S {key:?}; Members {field:?}"
+            ),
+        )
+    }
+}
+
+/// iter-29 G135 (AN1): Rival Captain's whole change link and all its stats are on screen. The
+/// pencil is painted whole, inside its clip. On a row of its own, the link's words start at the
+/// stats' text edge (N4, the pencil hangs), and its target is at least 24 px and clear of the
+/// Count row below.
+pub(super) fn change_link_whole(d: &Driver<'_>) -> (bool, String) {
+    const LINK: &str = "Changed · 1 to add by hand";
+    const STATS: &str = "as\u{a0}Ember\u{a0}Cultist";
+    let mut pencil = None;
+    let mut stats = None;
+    d.each_painted_text(|text, clip| {
+        let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+        let words = text.galley.job.text.as_str();
+        if words.starts_with(crate::design::icons::CHANGED) && clip.intersects(rect) {
+            pencil = Some(clip.expand(0.5).contains_rect(rect));
+        }
+        if words.contains(STATS) && clip.intersects(rect) {
+            stats = Some(rect);
+        }
+    });
+    let link = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name == LINK && node.in_view())
+        .map(|node| node.rect);
+    let count = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name == "How many of Rival Captain")
+        .map(|node| node.rect);
+    let placed = link
+        .zip(stats)
+        .zip(count)
+        .is_some_and(|((link, stats), count)| {
+            let own_row = link.top() >= stats.bottom() - 0.5;
+            let edge = !own_row || (link.left() - stats.left()).abs() <= 0.5;
+            edge && link.width() >= crate::design::XL
+                && link.height() >= crate::design::XL
+                && link.bottom() <= count.top()
+        });
+    (
+        d.visible_text(LINK) && d.visible_text(STATS) && pencil == Some(true) && placed,
+        format!("link {link:?}, stats {stats:?}, Count {count:?}, pencil whole {pencil:?}"),
+    )
+}
+
 /// The painted rect of the visible paragraph that starts with `words`.
 pub(super) fn painted_paragraph(d: &Driver<'_>, words: &str) -> Option<egui::Rect> {
     let mut found = None;
@@ -19450,6 +19536,16 @@ pub mod encounter_owned_groups {
                 format!("The line under Belongs to is a warning: {tones:?}"),
             );
         });
+        // iter-29 G122: with Belongs to off screen, the save row says the cause once, by the
+        // mouse and the keyboard (Encounters page).
+        let (once, detail) = d.aside(|d| {
+            d.type_into(&format!("Group name: {GROUP_ORPHAN}"), " 2");
+            let once = gone_encounter_said_once(d);
+            d.replace_text_in(&format!("Group name: {GROUP_ORPHAN} 2"), GROUP_ORPHAN);
+            d.expect("No changes");
+            once
+        });
+        d.observe("iter-29-BC5-G122-off-screen", once, detail);
         let inset = notes_inset(
             d,
             &format!("Group notes for {GROUP_ORPHAN}"),
@@ -21459,14 +21555,18 @@ pub mod session_plan_groups {
         // iter-29 G135 (AN1): the whole change link is readable at every size: after the stats
         // where it fits, else on its own row. No stat is left out for it.
         d.state_prepared("plan-group-edit", Sizes::All, |d| {
-            d.observe(
-                "iter-29-BC5-G135",
-                d.visible_text("Changed · 1 to add by hand")
-                    && d.in_view_containing("Changed · 1 to add by hand")
-                    && d.visible_text("as\u{a0}Ember\u{a0}Cultist"),
-                "Rival Captain's stats and its whole change link are on screen",
-            );
+            let (whole, detail) = change_link_whole(d);
+            d.observe("iter-29-BC5-G135", whole, detail);
         });
+        // The same at 960 beside Lookup, where the editor is narrowest.
+        let (whole, detail) = d.aside(|d| {
+            // The driver's window is 960 between states.
+            d.press_ctrl(Key::K);
+            let whole = change_link_whole(d);
+            d.press_ctrl(Key::K);
+            whole
+        });
+        d.observe("iter-29-BC5-G135-lookup", whole, detail);
         // FK1: the first edit adds the campaign-switch reason in its reserved place, so no field
         // moves. A proof aside: Discard puts the clean group back.
         d.aside(|d| {
@@ -21491,6 +21591,30 @@ pub mod session_plan_groups {
             d.click("Discard");
             d.expect(&format!("Group name: {GROUP_RIVALS}"));
         });
+        // iter-29 G122 on the Sessions page: the plan's group comes to belong to an encounter
+        // that is then deleted. With Belongs to off screen, the save row says the cause once,
+        // by the mouse and the keyboard. The file and the group are put back after.
+        let (once, detail) = d.aside(|d| {
+            let arena = d.root.join(format!(
+                "Encounters/{}.md",
+                crate::visual_tests::fixture::RUN_ARENA
+            ));
+            let text = std::fs::read_to_string(&arena).unwrap();
+            d.click("Belongs to: Any encounter");
+            d.click(crate::visual_tests::fixture::RUN_ARENA);
+            std::fs::remove_file(&arena).unwrap();
+            d.focus_window(false);
+            d.focus_window(true);
+            d.wait_for_text("Deleted encounter");
+            let once = gone_encounter_said_once(d);
+            std::fs::write(&arena, text).unwrap();
+            d.focus_window(false);
+            d.focus_window(true);
+            d.click("Discard");
+            d.expect("Belongs to: Any encounter");
+            once
+        });
+        d.observe("iter-29-BC5-G122-off-screen-plan", once, detail);
         d.click("Back to the plan");
         d.expect(&format!("Edit group {GROUP_RIVALS}"));
 
