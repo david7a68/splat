@@ -403,7 +403,7 @@ pub fn run(d: &mut Driver<'_>) {
     let (now, field, undo) = (
         d.place_of(&format!("Resume: {RUN}")),
         d.place_of("Plan a scene"),
-        d.place_of("Undo scene"),
+        d.place_of("Undo add scene"),
     );
     d.observe(
         "T12.14",
@@ -421,7 +421,7 @@ pub fn run(d: &mut Driver<'_>) {
                 painted(d, "Scene added to tonight.")
                     .first()
                     .map(|(rect, _)| *rect),
-                d.place_of("Undo scene"),
+                d.place_of("Undo add scene"),
                 d.place_of(&format!("More actions for {SHRINE}"))
                     .map(|rect| rect.right()),
             )
@@ -467,7 +467,7 @@ pub fn run(d: &mut Driver<'_>) {
     );
     // Escape clears the typed words and closes the field.
     d.press(Key::Escape);
-    d.click("Undo scene");
+    d.click("Undo add scene");
     d.observe(
         "T12.10",
         !note(d).contains(KEEP) && !d.has("Plan a scene"),
@@ -543,10 +543,10 @@ pub fn run(d: &mut Driver<'_>) {
     d.click("Add Long rest");
     d.expect("Undo add");
     let added = events(d) == rests + 1;
-    let both = d.in_view("Undo scene") && d.in_view("Undo add") && added;
+    let both = d.in_view("Undo add scene") && d.in_view("Undo add") && added;
     // Review of PR 274, item 2: live Undo results go newest first, whatever their kind.
     let top = |d: &Driver<'_>, name: &str| d.place_of(name).map(|rect| rect.top());
-    let (rest_top, scene_top) = (top(d, "Undo add"), top(d, "Undo scene"));
+    let (rest_top, scene_top) = (top(d, "Undo add"), top(d, "Undo add scene"));
     d.observe(
         "review-274-2-rest-newest",
         rest_top
@@ -554,7 +554,7 @@ pub fn run(d: &mut Driver<'_>) {
             .is_some_and(|(rest, scene)| rest < scene),
         format!("The newer Long rest's Undo {rest_top:?} is above the older scene's {scene_top:?}"),
     );
-    d.click("Undo scene");
+    d.click("Undo add scene");
     let kept = events(d) == rests + 1;
     let undone = !note(d).contains(KEEP);
     d.observe(
@@ -571,7 +571,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.click(&format!("{KEEP} · Location"));
     d.expect("Scene added to tonight.");
     d.press(Key::Escape);
-    let (rest_top, scene_top) = (top(d, "Undo add"), top(d, "Undo scene"));
+    let (rest_top, scene_top) = (top(d, "Undo add"), top(d, "Undo add scene"));
     d.observe(
         "review-274-2-scene-newest",
         rest_top
@@ -581,7 +581,7 @@ pub fn run(d: &mut Driver<'_>) {
     );
     d.click("Undo add");
     let rest_gone = events(d) == rests;
-    let scene_kept = note(d).contains(KEEP) && d.in_view("Undo scene");
+    let scene_kept = note(d).contains(KEEP) && d.in_view("Undo add scene");
     d.observe(
         "review-274-2-undo-older",
         rest_gone && scene_kept,
@@ -600,7 +600,7 @@ pub fn run(d: &mut Driver<'_>) {
         d.click("Remove this event");
         d.click(NAV_SESSIONS);
         d.expect("Undo remove");
-        let (remove_top, scene_top) = (top(d, "Undo remove"), top(d, "Undo scene"));
+        let (remove_top, scene_top) = (top(d, "Undo remove"), top(d, "Undo add scene"));
         (
             events(d) == rests
                 && remove_top

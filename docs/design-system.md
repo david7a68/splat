@@ -1904,7 +1904,7 @@ against your memory.`, which the embed replaces once What happened has prose), t
 with empty boxes and the open threads, each below what its heading holds and never twice, and the properties
 `carried_from` and `carried_parts`. The result is an `undo_message` in the Session page's message footer (as
 every result of that page, so the Last time line, the tabs and the plan never move), success tone, naming only
-what it added, with `Undo: Carry over`, which puts back the exact text and properties. The result belongs to
+what it added, with `Undo carry over`, which puts back the exact text and properties. The result belongs to
 the new note by its ID: another session or page leaves it, it shows also when the last session can no longer be
 found, and any other change of the note's text ends it. A refusal shows in the same footer, in a warning. Read draws an embed of a session note's heading as that heading's words under a
 `Type::Small` muted `From` and, one `S` after it in every layout, a small link to the session. Its target is resolved as every campaign link is
@@ -2251,7 +2251,7 @@ below the last flag starts at its words and holds `Timeline.md` with the shared 
 use error Timeline not saved. Run updates change only the Result line and never convert Timeline.
 
 Copied sessions say `<first file> and <second file> claim to be the same session.` They offer
-Make <file> a separate session with `Undo: Separate session`. The header names the clock (`Now: Day 1, 00:10`) only once a day sets it. Moved or deleted note drafts
+Make <file> a separate session with `Undo separate session`. The header names the clock (`Now: Day 1, 00:10`) only once a day sets it. Moved or deleted note drafts
 offer the new path, a new file and red `Discard`. Discard follows the moved file when it still holds the note:
 the editor shows that file's words and saves there. With no file left, the editor keeps the last saved words in
 the File gone state, says so, and offers `Save these words as a new file`; no edit or Save writes the old path.

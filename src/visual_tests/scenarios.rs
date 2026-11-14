@@ -12729,7 +12729,7 @@ pub mod session_notes {
         d.state("event-link-update-offered", Sizes::All);
         d.click("Update 1 link");
         d.expect("Links now say “Rest at the mill”.");
-        d.expect("Undo link update");
+        d.expect("Undo change links");
         assert!(!d.has(LINK_OFFER));
         let without_offer = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, kind_top));
         d.observe(
@@ -12745,7 +12745,7 @@ pub mod session_notes {
             ),
         );
         d.state("event-links-updated", Sizes::Default);
-        d.click("Undo link update");
+        d.click("Undo change links");
         d.expect("Update 1 link");
         d.click("Update 1 link");
         d.click_starting("Rest at the mill ·");
@@ -12753,7 +12753,7 @@ pub mod session_notes {
         d.settle();
         d.observe(
             "iter-4-S2",
-            !d.has("Undo link update"),
+            !d.has("Undo change links"),
             "Leaving Timeline clears the link-update Undo",
         );
         read_note(d);
@@ -20590,12 +20590,12 @@ pub mod session_plan_groups {
             d.press(Key::Enter);
             d.expect("Scene added to tonight.");
             d.press(Key::Escape);
-            let first = (top(d, "Undo scene"), top(d, UNDO_DISCARD));
+            let first = (top(d, "Undo add scene"), top(d, UNDO_DISCARD));
             d.click(UNDO_DISCARD);
             d.expect("Back to the plan");
             d.click("Discard");
             d.expect(UNDO_DISCARD);
-            let second = (top(d, "Undo scene"), top(d, UNDO_DISCARD));
+            let second = (top(d, "Undo add scene"), top(d, UNDO_DISCARD));
             d.observe(
                 "review-274-order-repeat",
                 first.0.zip(first.1).is_some_and(|(scene, discard)| scene < discard)
@@ -20604,7 +20604,7 @@ pub mod session_plan_groups {
                     "(scene, discard) Undo tops: first discard {first:?}; after the second discard {second:?}"
                 ),
             );
-            d.click("Undo scene");
+            d.click("Undo add scene");
             d.click(UNDO_DISCARD);
             d.expect("Back to the plan");
         });
@@ -21432,9 +21432,11 @@ pub mod session_plan_groups {
         d.state_prepared("plan-group-no-member-can-join", Sizes::All, |d| {
             show_plan(d);
             // At 960 the plan scrolls to show both new groups.
+            // The wheel goes over the rows: the footer, with the page's messages, holds the
+            // pane's bottom.
             if !d.in_view("Edit group Mill Watch") && !d.in_view_containing("Mill Watch to fight") {
-                d.scroll_until(pos2(650.0, 500.0), "Mill Watch", 10);
-                d.scroll_at(pos2(650.0, 500.0), 1);
+                d.scroll_until(pos2(650.0, 300.0), "Mill Watch", 10);
+                d.scroll_at(pos2(650.0, 300.0), 1);
             }
             let size = d.window_size();
             let tones = (
@@ -21755,11 +21757,11 @@ pub mod session_plan {
                 d.act_at_size(size, |d| {
                     d.type_into("Where", "Old mill");
                     let typed = d.field_text("Where").as_deref() == Some("Old mill")
-                        && d.has("Undo rewards");
-                    let tab = d.tab_to("Undo rewards");
+                        && d.has("Undo add rewards");
+                    let tab = d.tab_to("Undo add rewards");
                     d.clear_text_in("Where");
                     d.click("Shrine of Cinders");
-                    let opened = d.has("Read encounter") && d.has("Undo rewards");
+                    let opened = d.has("Read encounter") && d.has("Undo add rewards");
                     d.click("Shrine of Cinders");
                     let closed = !d.has("Read encounter");
                     (size, typed, tab, opened, closed)
@@ -21779,11 +21781,11 @@ pub mod session_plan {
         d.click(NAV_LOOKUP);
         d.state("rewards-added-beside-lookup", Sizes::Small);
         d.click(NAV_LOOKUP);
-        d.click("Undo rewards");
+        d.click("Undo add rewards");
         d.expect(&action);
         d.observe(
             "T18.1",
-            std::fs::read_to_string(&note).unwrap() == before && !d.has("Undo rewards"),
+            std::fs::read_to_string(&note).unwrap() == before && !d.has("Undo add rewards"),
             "Undo rewards takes back exactly the block",
         );
     }
@@ -22088,13 +22090,19 @@ pub mod session_plan {
             d.visible_text(&notice),
             format!("The removal notice names the removed fight by its state: {notice}"),
         );
+        // Round 28 (slice 4): the removal is the Timeline's kept result, so its Undo is in the
+        // plan's footer, which follows the rows (its press carries the store's ticket); it was
+        // at the removed row's place. It stays with its notice, below the remaining row.
         d.observe(
             "iter-10-C-AT2-undo",
             d.in_view("Undo remove")
                 && d.place_of("Undo remove")
+                    .zip(d.place_of(&notice))
                     .zip(d.place_of(FIRST))
-                    .is_some_and(|(undo, row)| undo.bottom() <= row.top()),
-            "Undo remove stays with the notice, above the remaining row",
+                    .is_some_and(|((undo, words), row)| {
+                        undo.top() >= words.top() && words.top() > row.bottom()
+                    }),
+            "Undo remove stays with the notice, in the footer below the remaining row",
         );
         d.click(&format!("More actions for {FIRST}"));
         assert!(d.in_view("Delete the saved run"));
@@ -22797,7 +22805,7 @@ pub mod session_plan {
         let menu_before = d.at_size(SMALL, menu_right);
         d.click("Long rest");
         d.click("Mark not at full");
-        d.expect("Undo ruling");
+        d.expect("Undo change ruling");
         let menu_after = d.at_size(SMALL, menu_right);
         d.observe(
             "iter-25-S-plan-lane",
@@ -22871,7 +22879,7 @@ pub mod session_plan {
             "The ruling and its message change words and colour; the open row stays in place.",
         );
         d.state("plan-rest-ruling-on", Sizes::All);
-        d.click("Undo ruling");
+        d.click("Undo change ruling");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
         d.click("Mark everyone at full");
         d.click("Long rest");
@@ -23096,7 +23104,7 @@ pub mod session_plan {
         d.click("Mark not at full");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
         // iter-25-S FM2: the ruling's result sits in the list column, so Where keeps its place.
-        d.expect("Undo ruling");
+        d.expect("Undo change ruling");
         let where_after = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, where_top));
         d.observe(
             "iter-25-S-FM2",
@@ -23133,7 +23141,7 @@ pub mod session_plan {
         );
         d.expect_same("Only the long-rest status, its action and its message change; the wide page stays in place.");
         d.state("timeline-rest-ruling-on", Sizes::All);
-        d.click("Undo ruling");
+        d.click("Undo change ruling");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
         d.click("Mark everyone at full");
         d.click(NAV_SESSIONS);
