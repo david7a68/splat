@@ -502,7 +502,7 @@ impl WorldPage {
                             color: colors().result.warning,
                         },
                     );
-                    egui::Popup::menu(&response).show(|ui| {
+                    design::layout::menu_popup(&response).show(|ui| {
                         if let Some(index) = index {
                             for &(at, _) in index.world_groups("").values().flatten() {
                                 let item = &index.items[at];
@@ -1700,10 +1700,6 @@ impl WorldPage {
 }
 
 /// The same next step in the header and in an empty reader.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn new_menu(ui: &mut egui::Ui) -> Option<&'static str> {
     let mut choice = None;
     let label = format!("New {}", icons::DOWN);
@@ -1711,7 +1707,7 @@ fn new_menu(ui: &mut egui::Ui) -> Option<&'static str> {
         .name("New ▾")
         .icon(icons::ADD)
         .show(ui);
-    egui::Popup::menu(&response).show(|ui| {
+    design::layout::menu_popup(&response).show(|ui| {
         for (word, kind) in [
             // `…` marks a choice that asks for a name first. Generate NPC makes its card at once.
             ("Note…", "note"),

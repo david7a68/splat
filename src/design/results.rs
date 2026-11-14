@@ -706,7 +706,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "creation_form",
             &[Ban::Results, Ban::Layout(1), Ban::Pane(1)],
         ),
-        ("src/world/page.rs", "show", &[Ban::Results, Ban::Layout(4)]),
+        ("src/world/page.rs", "show", &[Ban::Results, Ban::Layout(3)]),
         ("src/world/repair.rs", "choose", &[Ban::Results]),
         ("src/world/repair.rs", "edit", &[Ban::Results]),
         (
@@ -928,7 +928,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "show",
             &[Ban::Layout(1), Ban::Extras(1)],
         ),
-        ("src/world/page.rs", "new_menu", &[Ban::Layout(1)]),
         ("src/world/repair.rs", "editor_events", &[Ban::RowKey(1)]),
         // Package M (round 28): the escapes of `design::outcome`, and its own helpers.
         ("src/design/outcome.rs", "__literal", &[Ban::Sentence]),
