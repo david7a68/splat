@@ -8904,47 +8904,62 @@ mod tests {
         };
         const A_MOVED: &str = "Moved 1 note to Moved A.";
         const B_MOVED: &str = "Moved 1 note to Moved B.";
+        const MISSING: &str = "Splat cannot find the session folder ";
         move_to(&mut harness, "Moved A");
-        assert!(shows(&harness, A_MOVED), "A's move says what it moved");
+        assert!(shows(&harness, A_MOVED), "the move in A says what it moved");
         switch(&mut harness, &b);
         assert!(
             !shows(&harness, A_MOVED),
-            "B's page does not show A's result"
+            "the page of B does not show the result of A"
         );
         move_to(&mut harness, "Moved B");
-        assert!(shows(&harness, B_MOVED), "B's move says what it moved");
+        assert!(shows(&harness, B_MOVED), "the move in B says what it moved");
         switch(&mut harness, &a);
         assert!(
             shows(&harness, A_MOVED) && !shows(&harness, B_MOVED),
-            "A's result came back with A, and B's stays B's"
+            "the result of A came back with A, and the result of B stays with B"
         );
-        // A's folder is moved away outside Splat: the disk scan ends A's result and says why.
+        // The folder of A is moved away outside Splat: the disk scan ends the result of A and
+        // says why; the folder back, the next scan ends the fault, and the result stays ended.
         let moved_a = a.path.join("Moved A");
         let aside = a.path.join("Kept aside");
+        let scan = |harness: &mut egui_kittest::Harness<'_, State>| {
+            harness.state_mut().0.simulate_folder_scan();
+            harness.run_steps(3);
+        };
         fs::rename(&moved_a, &aside).unwrap();
-        harness.state_mut().0.simulate_folder_scan();
-        harness.run_steps(3);
-        assert!(!shows(&harness, A_MOVED), "A's result ends with its folder");
+        scan(&mut harness);
         assert!(
-            shows(&harness, "Splat cannot find the session folder ")
-                && shows(&harness, "It may have been moved or renamed."),
+            !shows(&harness, A_MOVED),
+            "the result of A ends with its folder"
+        );
+        assert!(
+            shows(&harness, MISSING) && shows(&harness, "It may have been moved or renamed."),
             "the missing folder is a sentence"
         );
         assert!(harness.state().0.folder_missing());
+        fs::rename(&aside, &moved_a).unwrap();
+        scan(&mut harness);
+        assert!(
+            !shows(&harness, MISSING) && !shows(&harness, A_MOVED),
+            "the folder is back by the scan, and the ended result stays ended"
+        );
+        // Gone again, then a switch to B and back: the result of B stays, and the folder of A,
+        // back before the return, opens with no fault.
+        fs::rename(&moved_a, &aside).unwrap();
+        scan(&mut harness);
         switch(&mut harness, &b);
         assert!(
             shows(&harness, B_MOVED),
-            "B's result stays over A's lost folder"
+            "the result of B stays over the lost folder of A"
         );
-        switch(&mut harness, &a);
         fs::rename(&aside, &moved_a).unwrap();
-        harness.state_mut().0.simulate_folder_scan();
-        harness.run_steps(3);
+        switch(&mut harness, &a);
         assert!(
-            !shows(&harness, "Splat cannot find the session folder ") && !shows(&harness, A_MOVED),
-            "the folder is back, and A's ended result stays ended"
+            !shows(&harness, MISSING) && !shows(&harness, A_MOVED),
+            "the folder is back by the switch, and the ended result stays ended"
         );
-        // The DM's edit of B's folder ends B's result, and only B's.
+        // The edit of the folder of B ends the result of B, and only that one.
         move_to(&mut harness, "Moved A2");
         const A2_MOVED: &str = "Moved 1 note to Moved A2.";
         assert!(shows(&harness, A2_MOVED));
@@ -8958,6 +8973,9 @@ mod tests {
             "an edit of the folder ends its result"
         );
         switch(&mut harness, &a);
-        assert!(shows(&harness, A2_MOVED), "B's edit leaves A's result");
+        assert!(
+            shows(&harness, A2_MOVED),
+            "the edit in B leaves the result of A"
+        );
     }
 }

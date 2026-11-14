@@ -85,6 +85,8 @@ pub(crate) fn folder_typed(campaign: &Campaign) -> Result<PathBuf, page::FolderF
     Ok(path)
 }
 
+/// `open_folder_typed` with the fault's words, for the fixtures. The page keeps the fault typed.
+#[cfg(test)]
 pub(crate) fn open_folder(campaign: &Campaign) -> Result<PathBuf, String> {
     open_folder_typed(campaign).map_err(String::from)
 }
