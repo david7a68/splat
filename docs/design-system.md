@@ -1970,7 +1970,7 @@ the members from their end (Encounter difficulty, above). Every `·` on the row,
 same blank on each side: the font's own spacing around `·` is uneven, so the row moves each `·` by whole pixels. The
 opened row's `Read encounter` line does not say the difficulty again. A fight with no word because an input is not
 known ends its row with that, and whose, in the word's place: `XP not known: Nameless Thing`, or `Level not known:
-<name>`; with more names, the first and `and 2 more`. Where the row has no room, the first name shortens from its end
+<name>`; with more names, the first and `and 2 more`. One exception: a plan row whose every creature lacks its XP already says whose in its summary, so it ends with `XP not known` alone (`5 party · 1 × Nameless Thing · XP not known`); a creature with a known XP beside them keeps the names. Where the row has no room, the first name shortens from its end
 (`XP not known: Namel…`) and goes only when no letter of it fits (X1); hover and the accessible name keep the whole. The names come from `Scale::weigh`'s typed answer
 (`Difficulty::missing`). The encounter editor, where the DM can repair the cause, ends its line with the names: `ROSTER 6 · XP not known: Nameless Thing`, or in the tab row below 760 px, where the word
 would be. Without room the names shorten from their end (`XP not known: Nameless Th…`) and go only when no letter
