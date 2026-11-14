@@ -6115,19 +6115,23 @@ pub fn package_rename(d: &mut Driver<'_>) {
     assert!(!d.has_containing("Splat cannot find Ashen Marches"));
     assert!(!d.has_containing("Ashen Marches is now in"));
     d.state_prepared("package-folder-moved-on-disk", Sizes::All, |d| {
-        let warning = d.place_of("Ashen Marches moved from modules/ashen-marches/ to modules/watch-package/.");
+        // Wave 2 d (C): the warning's words go on with the encounters that use its creatures
+        // (`… Bridge Ambush and Shrine of Cinders use its creatures.`), and each encounter is a
+        // choice; `check_link_spaces` holds the names' phrase.
+        let warning = d
+            .nodes()
+            .into_iter()
+            .find(|node| {
+                node.name
+                    .starts_with("Ashen Marches moved from modules/ashen-marches/ to modules/watch-package/.")
+            })
+            .map(|node| node.rect);
         let action = d.place_of("Use this folder");
-        let first = d.place_of("Bridge Ambush");
-        let second = d.place_of("Shrine of Cinders");
-        let and = d.nodes().into_iter().find(|node| node.name == "and");
         check_link_spaces(d);
         let aligned = warning.zip(action).is_some_and(|(text, action)| {
             (text.left() - action.left()).abs() < 1.0 && action.top() > text.bottom()
         });
-        let spaced = first.zip(second).zip(and).is_some_and(|((first, second), and)| {
-            (and.rect.left() - first.right() - (second.left() - and.rect.right())).abs() < 1.0
-                && and.rect.left() - first.right() < crate::design::S
-        });
+        let spaced = d.has("Open Bridge Ambush") && d.has("Open Shrine of Cinders");
         d.observe("iter-4-C-FD1-FD14", aligned && spaced,
             "One moved-folder warning aligns its recovery action and uses word spaces between affected links");
         // Round 25 family: every action on the message has the secondary border.
@@ -6150,20 +6154,20 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.click("Find the folder…");
     // Round 23 FE3: the fault comes first, and it names the picked folder and the package.
     d.expect(
-        "wrong-package/ holds a different package. Choose the folder that holds Ashen Marches.",
+        "The folder wrong-package/ holds a different package. Choose the folder that holds Ashen Marches.",
     );
     d.state("package-wrong-folder-picked", Sizes::All);
     crate::hermetic::closed::next_folder(moved.clone());
     d.click("Find the folder…");
-    d.wait_for_text("Undo folder recovery");
+    d.wait_for_text("Undo recover modules/watch-package");
     d.expect("Ashen Marches found in modules/watch-package/.");
     d.state_prepared("package-correct-folder-picked", Sizes::All, |d| {
-        check_undo_icon(d, "Undo folder recovery", "iter-6-C-AD3");
+        check_undo_icon(d, "Undo recover modules/watch-package", "iter-6-C-AD3");
     });
-    d.click("Undo folder recovery");
+    d.click("Undo recover modules/watch-package");
     d.wait_for_text("Use this folder");
     d.click("Use this folder");
-    d.wait_for_text("Undo folder recovery");
+    d.wait_for_text("Undo recover modules/watch-package");
     go_library(d);
     d.click("Packages");
     d.click("Reload from disk");

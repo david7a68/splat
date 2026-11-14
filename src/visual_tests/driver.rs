@@ -625,28 +625,16 @@ impl<'a> Driver<'a> {
     }
 
     /// A tone bar beside a linked message, rather than a hand-built warning row.
-    pub fn has_message_bar(&self, first: egui::Rect, color: egui::Color32) -> bool {
-        fn contains(shape: &egui::Shape, first: egui::Rect, color: egui::Color32) -> bool {
-            match shape {
-                egui::Shape::Vec(shapes) => {
-                    shapes.iter().any(|shape| contains(shape, first, color))
-                }
-                egui::Shape::Rect(bar) => {
-                    bar.fill == color
-                        && bar.rect.width() <= crate::design::XS
-                        && bar.rect.right() < first.left()
-                        && first.left() - bar.rect.right() <= crate::design::XXL
-                        && (bar.rect.top() - first.top()).abs() <= crate::design::S
-                        && bar.rect.height() >= crate::design::Type::Body.line()
-                }
-                _ => false,
-            }
-        }
-        self.harness
-            .output()
-            .shapes
-            .iter()
-            .any(|shape| contains(&shape.shape, first, color))
+    /// The typed messages drawn this frame (package M's registry): each one's rect, place and
+    /// tone, which the part takes from the message's kind.
+    pub fn typed_messages(
+        &self,
+    ) -> Vec<(
+        egui::Rect,
+        crate::design::outcome::MessagePlace,
+        crate::design::Tone,
+    )> {
+        crate::design::outcome::message_rects(&self.harness.ctx)
     }
 
     /// A message's tone bar beside one line of its painted words: the bar is as tall as the

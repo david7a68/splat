@@ -646,16 +646,16 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
 pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
     use suppressions::Ban;
     &[
-        (
-            "src/campaign_content.rs",
-            "new_result! statement",
-            &[Ban::Results],
-        ),
-        ("src/campaign_content.rs", "page_footer", &[Ban::Results]),
+        // Campaign content (Wave 2 d, C): body faults with their repairs, and outside words.
+        ("src/campaign_content.rs", "cause", &[Ban::Words]),
+        ("src/campaign_content.rs", "draw_reason", &[Ban::Body]),
+        ("src/campaign_content.rs", "outcome_of", &[Ban::Words]),
+        ("src/campaign_content.rs", "packages_content", &[Ban::Body]),
+        ("src/campaign_content.rs", "page", &[Ban::Body]),
         (
             "src/campaign_content.rs",
             "repair_section_content",
-            &[Ban::Results, Ban::Extras(1)],
+            &[Ban::Extras(1), Ban::Body],
         ),
         (
             "src/campaign_content.rs",
@@ -1332,7 +1332,6 @@ pub(crate) const STAGED: &[Staged] = &[
         "ResultOrder::issue(",
         "Record the result in a `design::Results` store: it issues the order at the action.",
         &[
-            ("src/campaign_content.rs", 1),
             ("src/campaigns.rs", 9),
             ("src/design/components.rs", 16),
             ("src/dndbeyond.rs", 1),
@@ -1350,7 +1349,7 @@ pub(crate) const STAGED: &[Staged] = &[
         "save_row_state(",
         "Use `design::save_row` with a `DraftState`: it decides the word, Save's weight and its reason.",
         &[
-            ("src/campaign_content.rs", 2),
+            ("src/campaign_content.rs", 1),
             ("src/campaigns.rs", 1),
             ("src/design/components.rs", 1),
             ("src/design/gallery.rs", 2),
