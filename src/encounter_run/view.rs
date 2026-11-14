@@ -2226,10 +2226,6 @@ impl Run {
     }
 
     /// Sync and the closing controls. These are kept far from Next turn.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn live_footer(&mut self, ui: &mut egui::Ui) -> bool {
         let mut closed = false;
         design::gap(ui, design::Gap::XS);
@@ -2360,8 +2356,9 @@ impl Run {
                 }
             };
             if menu_needed && !end_menu {
-                let menu = ui.menu_button(format!("Close {}", icons::DOWN), |ui| controls(ui));
-                design::named(ui, &menu.response, "Close menu");
+                let menu = design::menu_button(ui, "Close", false);
+                design::named(ui, &menu, "Close menu");
+                design::menu_popup(&menu).show(|ui| controls(ui));
             } else {
                 controls(ui);
             }
@@ -2809,7 +2806,7 @@ impl Run {
                         ui.add(
                             egui::Label::new(
                                 Type::Small
-                                    .rich(ui, &pending_words(&name))
+                                    .rich(ui, pending_words(&name))
                                     .color(colors().muted),
                             )
                             .wrap(),
@@ -2910,10 +2907,6 @@ impl Run {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn panel_tabs(&mut self, ui: &mut egui::Ui, reference: Option<&str>, conditions: bool) {
         let mut participant = Vec::new();
         if let Some(reference) = reference {
@@ -2953,7 +2946,7 @@ impl Run {
                         .find(|(panel, _)| *panel == self.panel)
                         .map(|(_, label)| *label);
                     let button = design::menu_button(ui, "Fight", false);
-                    egui::Popup::menu(&button).show(|ui| {
+                    design::menu_popup(&button).show(|ui| {
                         for (panel, label) in fight {
                             if design::choice(ui, self.panel == panel, label).clicked() {
                                 self.panel = panel;
@@ -3823,32 +3816,15 @@ impl Run {
             self.initiative.grouping.arrival_rule(),
             shown.map_or_else(String::new, |rating| format!("\n{}", rating.budget_line()))
         ));
-        if group.problem.is_none()
-            && arrival_total(self.group_totals.get(&group.id).map_or("", String::as_str)).is_ok()
-        {
-            grip.dnd_set_drag_payload(GroupDrag(group.id));
-        }
-        if grip.dragged() {
-            ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
-            if let Some(pointer) = ui.input(|i| i.pointer.latest_pos()) {
-                // On a surface of its own, because the list under it is full of words.
-                let painter = ui
-                    .ctx()
-                    .layer_painter(egui::LayerId::new(egui::Order::Tooltip, grip.id));
-                let galley = painter.layout_no_wrap(
-                    format!("{} {name}", icons::ADD),
-                    Type::Strong.font(ui),
-                    c.accent,
-                );
-                let place = pointer + vec2(design::M, -galley.size().y / 2.0);
-                painter.rect_filled(
-                    Rect::from_min_size(place, galley.size()).expand(design::XS),
-                    design::RADIUS_CONTROL,
-                    c.raised,
-                );
-                painter.galley(place, galley, c.accent);
-            }
-        }
+        // A group that cannot join carries no payload; its ghost still follows the pointer.
+        let movable = group.problem.is_none()
+            && arrival_total(self.group_totals.get(&group.id).map_or("", String::as_str)).is_ok();
+        design::drag_source(
+            ui,
+            &grip,
+            movable.then_some(GroupDrag(group.id)),
+            design::Ghost::new(icons::ADD, name),
+        );
         if !totals_in_heading {
             ui.add(egui::Label::new(Type::Small.rich(ui, &totals_text).color(c.muted)).wrap());
         }

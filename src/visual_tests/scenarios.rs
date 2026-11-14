@@ -19316,10 +19316,11 @@ pub mod run_add_creature {
                     "New creature HP",
                     "New creature AC",
                     "New creature initiative total",
-                    "Side of the new creature",
                 ]
                 .iter()
                 .all(|name| d.in_view(name))
+                    // A drop-down's name ends with its choice: `Side of the new creature: Enemies`.
+                    && d.in_view_containing("Side of the new creature: ")
             },
         );
     }
@@ -19350,7 +19351,12 @@ pub mod run_add_creature {
         const ADD_GHOST: &str = "Add Ghost of the Mill to the initiative list";
         // FI4: `Count` and `Initiative` fields start at one x, and `Side` starts where `HP` does.
         let label_left = |d: &Driver<'_>, field: &str, word: &str| {
-            let field = d.place_of(field)?;
+            // A drop-down's name ends with its choice (`Side of the new creature: Enemies`).
+            let field = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name == field || node.name.starts_with(&format!("{field}: ")))
+                .map(|node| node.rect)?;
             let area = egui::Rect::from_min_max(
                 egui::pos2(field.left() - crate::design::XXL * 3.0, field.top()),
                 egui::pos2(field.left(), field.bottom()),
@@ -19370,6 +19376,22 @@ pub mod run_add_creature {
                 if (count - total).abs() < 1.0 && (hp - side).abs() < 1.0),
             format!("Count and Initiative fields, HP and Side words at one x each: {columns:?}"),
         );
+        // iter-28-R: the side is a `Dropdown`; its list opens under it and lists the run's
+        // sides, at 960 px and the other sizes (a menu no scenario opens has no proof).
+        let side = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name.starts_with("Side of the new creature: "))
+            .map(|node| node.name.clone())
+            .expect("the side drop-down");
+        d.click(&side);
+        d.observe(
+            "iter-28-R-side-list",
+            d.in_view("Enemies") && d.in_view("Party"),
+            "The side list opens with the run's sides",
+        );
+        d.state("arrivals-side-list-open", Sizes::All);
+        d.press(Key::Escape);
         // Blocked, the button's name says `this creature`.
         let add_before = d
             .place_of("Add this creature to the initiative list")

@@ -258,6 +258,7 @@ pub fn show(
 const LOOT_LINE: design::FieldName = crate::field_id!("loot_line");
 
 /// One line. Returns its place when the DM removes it.
+#[allow(clippy::too_many_arguments)]
 #[allow(
     clippy::disallowed_methods,
     reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
@@ -413,10 +414,6 @@ fn line_row(
 }
 
 /// The quiet menu of the campaign's tables, with the caret after the word. Returns a choice.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn table_menu(
     ui: &mut egui::Ui,
     word: &str,
@@ -426,7 +423,7 @@ fn table_menu(
     let response = design::menu_button(ui, word, false);
     design::named(ui, &response, name);
     let mut chosen = None;
-    egui::Popup::menu(&response).show(|ui| {
+    crate::design::menu_popup(&response).show(|ui| {
         let tables = sources.map_or(&[][..], |sources| &sources.tables[..]);
         if tables.is_empty() {
             ui.add(egui::Label::new(Type::Small.rich(ui, NO_TABLES).color(colors().muted)).wrap());

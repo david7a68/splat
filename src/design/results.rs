@@ -730,12 +730,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/ad_hoc.rs",
             "add_creature_form",
-            &[Ban::Layout(2), Ban::Extras(1)],
-        ),
-        (
-            "src/encounter_run/rolling.rs",
-            "row_menu",
-            &[Ban::Layout(2)],
+            &[Ban::Layout(1), Ban::Extras(1)],
         ),
         (
             "src/encounter_run/view.rs",
@@ -747,16 +742,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "ended_view",
             &[Ban::Layout(2), Ban::Extras(1)],
         ),
-        (
-            "src/encounter_run/view.rs",
-            "group_row",
-            &[Ban::Layout(3), Ban::Extras(2)],
-        ),
-        (
-            "src/encounter_run/view.rs",
-            "live_footer",
-            &[Ban::Layout(1)],
-        ),
+        ("src/encounter_run/view.rs", "group_row", &[Ban::Extras(2)]),
         ("src/encounter_run/view.rs", "log_tab", &[Ban::Layout(1)]),
         ("src/encounter_run/view.rs", "notes_tab", &[Ban::Layout(1)]),
         (
@@ -764,7 +750,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "optional_number",
             &[Ban::Layout(1)],
         ),
-        ("src/encounter_run/view.rs", "panel_tabs", &[Ban::Layout(1)]),
         (
             "src/encounter_run/view.rs",
             "record_tab",
@@ -842,7 +827,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "line_row",
             &[Ban::Extras(1), Ban::RowKey(1)],
         ),
-        ("src/loot_editor.rs", "table_menu", &[Ban::Layout(1)]),
         (
             "src/markdown_source.rs",
             "press_in_editor",
@@ -880,14 +864,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "src/processing/settings.rs",
             "speech_section",
             &[Ban::Layout(3), Ban::Extras(1)],
-        ),
-        ("src/rolls.rs", "mode_menu", &[Ban::Layout(1)]),
-        ("src/rolls.rs", "more_actions", &[Ban::Layout(1)]),
-        ("src/rolls.rs", "outcome_line", &[Ban::Layout(1)]),
-        (
-            "src/rolls.rs",
-            "rules_on_hover_and_focus",
-            &[Ban::Layout(2)],
         ),
         (
             "src/sessions/page.rs",
