@@ -2405,10 +2405,11 @@ impl Encounters {
             && ui
                 .ctx()
                 .input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
-        let (back_word, back_name) = if in_plan {
-            ("Plan", "Back to the plan")
+        // R17: the link shows the word of its destination.
+        let back_word = if in_plan {
+            crate::word!("Back to the plan")
         } else {
-            ("Encounters", "Back to encounters")
+            crate::word!("Back to encounters")
         };
         let compact = ui.available_width() < 760.0;
 
@@ -2443,10 +2444,8 @@ impl Encounters {
         .min_width(save_width)
         .blocked(state.save_blocked());
         ui.horizontal(|ui| {
-            back = Action::quiet(icons::LEGACY_BACK)
-                .name(back_name)
-                .hint(back_word)
-                .blocked_if(dirty, "Save or discard this group first.")
+            back = design::TitleLine::back(back_word, design::BackEdge::Text)
+                .blocked(dirty.then_some("Save or discard this group first."))
                 .show(ui)
                 .clicked();
             let gap = ui.spacing().item_spacing.x;

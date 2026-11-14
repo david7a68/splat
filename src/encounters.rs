@@ -5839,10 +5839,11 @@ impl Encounters {
         };
         let (roster_right, header_right) = (edge(ROSTER_PANE), edge(ADD_PANE));
         ui.horizontal_wrapped(|ui| {
-            let back_name = if from_session.is_some() {
-                "Back to session"
+            // R17: the link shows the word of its destination, so the DM need not hover.
+            let back_word = if from_session.is_some() {
+                crate::word!("Back to session")
             } else {
-                "Back to encounters"
+                crate::word!("Back to encounters")
             };
             // X51, SB1: Save and Start keep their width on line one, and the name field takes
             // the rest. The actions are measured, as they are drawn. They take a line of their
@@ -5884,9 +5885,7 @@ impl Encounters {
                 };
             let saved_name =
                 design::number_width(ui, &draft_ref.saved_name, &Type::Heading.font(ui));
-            back = Action::quiet(icons::LEGACY_BACK)
-                .name(back_name)
-                .hint(back_name)
+            back = design::TitleLine::back(back_word, design::BackEdge::Text)
                 .blocked(
                     dirty
                         .then_some("Save or discard this encounter first.")

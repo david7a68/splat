@@ -1363,8 +1363,6 @@ pub(crate) const STAGED: &[Staged] = &[
         "A back link that starts a line is `design::TitleLine::back(word!(…), BackEdge)`.",
         &[
             ("src/design/icons.rs", 1),
-            ("src/encounters.rs", 1),
-            ("src/encounters/groups.rs", 1),
             ("src/library.rs", 1),
             ("src/lookup.rs", 2),
         ],
