@@ -772,8 +772,15 @@
     ["N4/quiet-action-line-start","02-travel-checks-rolled-lookup","960x640","Button \"On the road\"",1],
     ["N4/quiet-action-line-start","04-travel-checks-planned-lookup","960x640","Button \"On the road\"",1],
     ["N4/quiet-action-line-start","05-travel-checks-outside","960x640","Button \"On the road\"",1],
+    ["N4/quiet-action-line-start","06-travel-checks-timeline","1200x800","Button \"On the road\"",1],
+    ["N4/quiet-action-line-start","06-travel-checks-timeline","1920x1080","Button \"On the road\"",1],
     ["N4/quiet-action-line-start","06-travel-checks-timeline","960x640","Button \"On the road\"",1],
     ["N4/quiet-action-line-start","07-travel-checks-timeline-lookup","960x640","Button \"On the road\"",1]
+  ],
+  "travel-checks-plan": [
+    ["N4/quiet-action-line-start","01-plan-on-timeline","1200x800","Button \"On the road\"",1],
+    ["N4/quiet-action-line-start","01-plan-on-timeline","1920x1080","Button \"On the road\"",1],
+    ["N4/quiet-action-line-start","01-plan-on-timeline","960x640","Button \"On the road\"",1]
   ],
   "world": [
     ["G1b/pressed-control-moved","08-world-generated-npc-saved","960x640","Button \"Reroll\"",1]

@@ -2009,12 +2009,23 @@ line (`design::undo_line`): reserved while the block shows, so the message moves
 beside Undo give up whole words and end in `…`, never inside a word, and keep their whole text on hover. It is kept by its journey's event: it
 lasts while that event is as the act left it, until the DM leaves the page, and an act on another journey
 leaves it. The length being typed has one owner, the Timeline book, whichever page shows the field; leaving
-the page gives it to the journey, as a loss of focus does. `Plan “<name>”` is a note act through `Draft::apply`: it writes
-`- [[<name>]]` with the hidden mark of the journey and the check (`<!-- splat:check … -->`, F9) before the first plan line still to come, says `“<name>” is in tonight’s plan.` and offers `Undo
-plan line`, which is the note's: it lasts while the note's words are what the act left, also through a page
-change, and ends when they change or another session is selected. The message and its Undo are in the plan's
-message footer, newest first among its results, while the plan shows the journey's session (round 27 FE7), and
-`In the plan` takes the place of the `Plan “<name>”` line of the check the DM clicked. Each offer's place is one
+the page gives it to the journey, as a loss of focus does. The block and its offers are the same on the plan's Travel
+row and on Timeline; there, the offer asks the plan of the journey's own session, and after a roll the detail scrolls
+least so that the result and the lines under it are in view. `Plan “<name>”` is a note act through `Draft::apply`
+(`Apply::Now`): it writes `- [[<name>]]` with the hidden mark of the journey and the check (`<!-- splat:check … -->`,
+F9) into the note of the journey's session, before the first plan line still to come; a fight that the note's words
+already have to come gets no second line. R26: a press on Timeline never changes the Sessions page's selection, open
+draft, scene results or open event. When the journey's session is the open one, the act goes through its draft; a
+draft that waits for a move or a choice refuses (`Plan line not added. Session N’s note needs a choice first. Open it
+in Sessions.`). Another session's note is written on a draft of its own, through the same checked path. The act says
+`“<name>” is in tonight’s plan.` and offers `Undo add plan line`. The result belongs to the note that took the line:
+it shows in that session's plan footer and in Timeline's list footer, newest first among their results, whatever
+session the plan shows or the journey is in now (round 27 FE7). It ends when the note changes after the act (an edit,
+even one typed and deleted again before a save; a save with other words; an outside change; a discard), when the
+campaign changes, when the session's note leaves the folder, at its Undo, or at the next plan line; the act's own
+write and a later save of that same write keep it. Nothing brings an ended result back. A failed Undo says the result
+first, `Plan line not removed. <cause>`, in its journey's open block, else in the footer of the page where Undo was
+pressed, until that journey goes. `In the plan` takes the place of the `Plan “<name>”` line of the check the DM clicked. Each offer's place is one
 control high, so nothing moves when the message comes or goes, and no reserved band stands before Title. Splat rolls and offers; it never plans or starts a fight by itself. The Add strip stays directly below Tonight (or This session), above
 messages and scrolling rows. Fight, Group and Long rest stay visible. If all seven actions do not fit on one line,
 a compact `⋯⌄` button, named `More Add actions`, holds Day, Short rest, Travel and Major event. Its hover text names those actions. Keep the strip on one line at all three supported window sizes. Long rest stays one click away (T11.2). Timeline uses the same width rule.

@@ -132,6 +132,40 @@ fn matches(filter: Filter, search: &str, session: Option<Uuid>, event: &Event, d
     .any(|text| text.to_lowercase().contains(&search))
 }
 
+/// Row 123: the campaign's fights and groups by name, which a check result on Timeline can offer
+/// to the plan of its journey's session. The app gives them each frame, as it gives the Session
+/// page its `Plan`.
+/// One copy for each read of the encounters (`revision`); a clone shares it.
+#[derive(Clone, Debug, Default)]
+pub struct PlanNames {
+    /// The read of the campaign's encounters these names come from (`Encounters::plan_revision`).
+    pub revision: Option<Uuid>,
+    pub fights: std::sync::Arc<[String]>,
+    pub groups: std::sync::Arc<[String]>,
+}
+
+impl PlanNames {
+    pub fn new(revision: Option<Uuid>, fights: Vec<String>, groups: Vec<String>) -> Self {
+        #[cfg(test)]
+        PLAN_NAMES_MADE.with(|made| made.set(made.get() + 1));
+        Self {
+            revision,
+            fights: fights.into(),
+            groups: groups.into(),
+        }
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many times the plan's names were copied from the encounters (row 123, point 4).
+    pub static PLAN_NAMES_MADE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// How many times a session plan was read for Timeline's offers or a plan line's write.
+    pub static JOURNEY_PLAN_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// How many times a plan line's result was checked against its note's words.
+    pub static PLAN_LINE_CHECKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// A session, as the timeline knows it.
 #[derive(Clone, Debug)]
 pub struct SessionLink {
@@ -186,7 +220,16 @@ pub struct TimelinePage {
     pub open_place: Option<Uuid>,
     /// The campaign's marked tables, for a journey's encounter checks.
     pub tables: Option<std::sync::Arc<crate::loot_editor::Sources>>,
+    /// Row 123: the campaign's fights and groups by name, for a check result's plan offer.
+    pub plan_names: PlanNames,
+    /// Row 123, point 5: why the last plan line's Undo failed, while its journey's block is not
+    /// in view. The next act on checks or the next Undo ends it.
+    plan_fault: Option<checks::UndoFault>,
     focus_length: bool,
+    /// Round 29 G142: a roll was made in this journey (its id) at this check (its offset): the
+    /// journey's next draw scrolls least so that the check's result and its offer lines are in
+    /// view, once. Another selection, another journey's draw or a reopened page drops it.
+    reveal_checks: Option<(String, u64)>,
     /// What the DM typed in a journey's checks, and each journey's last result with its Undo.
     checks: checks::State,
     checks_done: checks::Results,
@@ -256,6 +299,7 @@ enum ListAct {
     UndoRuling,
     UndoRemove,
     UndoAdd,
+    UndoPlanLine,
     File(FileAct),
 }
 
@@ -713,8 +757,16 @@ impl TimelinePage {
         }
     }
 
+    /// Tests: a reveal left pending by a roll in `journey` at `at`, as when the DM leaves that
+    /// journey before its next draw.
+    #[cfg(test)]
+    pub fn simulate_pending_reveal(&mut self, journey: &str, at: u64) {
+        self.reveal_checks = Some((journey.to_owned(), at));
+    }
+
     pub fn reopen(&mut self) {
         self.reset_detail = true;
+        self.reveal_checks = None;
         // The journeys' results and their Undo end when the DM leaves the page.
         self.checks_done.clear();
     }
@@ -1013,6 +1065,21 @@ impl TimelinePage {
                         self.selected = None;
                     }
                 }
+                ListAct::UndoPlanLine => {
+                    self.plan_fault = None;
+                    // Row 123, point 5: the fault keeps its journey: that journey's open block,
+                    // else this footer.
+                    if let Some((journey, act, words)) = notes.undo_plan_line()
+                        && !(self.selected.as_deref() == Some(journey.as_str())
+                            && self.checks.failed_for(&journey, &act, words.clone()))
+                    {
+                        self.plan_fault = Some(checks::UndoFault {
+                            journey,
+                            act,
+                            words,
+                        });
+                    }
+                }
                 ListAct::File(act) => file_act(book, act, press.ticket),
             }
         }
@@ -1025,13 +1092,28 @@ impl TimelinePage {
         frame: &'f PaneFrame,
         ui: &egui::Ui,
         book: &Book,
-        notes: &crate::sessions::page::Sessions,
+        notes: &mut crate::sessions::page::Sessions,
         open: Option<&str>,
         offer: Option<&crate::sessions::page::LinkOffer>,
     ) -> Messages<'f, ListAct> {
         let mut messages = Messages::new(frame, "timeline_list_footer", ui.available_width());
         if let Some(line) = notes.event_link_line(frame, ListAct::UndoLinks) {
             messages.kept(line);
+        }
+        notes.plan_line_result(&mut messages, ListAct::UndoPlanLine);
+        // Row 123, point 5: a plan line's Undo that failed while its journey's block is not in
+        // view says why here.
+        match self
+            .plan_fault
+            .as_ref()
+            .map(|fault| fault.standing(&book.events))
+        {
+            Some(Some(words)) => {
+                messages.outcome(design::outcome::Outcome::Refused(as_sentence(words)));
+            }
+            // Its journey is gone: the fault has no owner left.
+            Some(None) => self.plan_fault = None,
+            None => {}
         }
         if let Some(offer) = offer {
             messages.outcome(offer.notice(ListAct::UpdateLinks));
@@ -1180,7 +1262,13 @@ impl TimelinePage {
         clippy::disallowed_methods,
         reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
     )]
-    fn detail(&mut self, ui: &mut egui::Ui, book: &mut Book, sessions: &[SessionLink]) {
+    fn detail(
+        &mut self,
+        ui: &mut egui::Ui,
+        book: &mut Book,
+        sessions: &[SessionLink],
+        notes: &mut crate::sessions::page::Sessions,
+    ) {
         let c = colors();
         let index = self
             .selected
@@ -1395,6 +1483,15 @@ impl TimelinePage {
         // Round 27 FL1: the form leaves the scroll bar's lane free whether or not the bar shows,
         // so its fields and the header's `⋯` end at one x for every event.
         let lane_width = ui.available_width() - ui.spacing().scroll.allocated_width();
+        // This journey's pending reveal, used once; another journey's is dropped.
+        let reveal = self
+            .reveal_checks
+            .take()
+            .filter(|(journey, _)| *journey == id)
+            .map(|(_, at)| at);
+        // Row 123: a check result's offer asks the plan of the journey's session.
+        let journey_plan = checks::shown(&book.events[index])
+            .then(|| notes.journey_plan(book, &id, &self.plan_names));
         area.show(ui, |ui| {
             ui.set_clip_rect(ui.clip_rect().intersect(clip));
             let form_width = lane_width.min(ui.available_width()).min(design::FORM_WIDTH);
@@ -1484,7 +1581,8 @@ impl TimelinePage {
                     start: starts,
                     length: &length,
                     tables,
-                    planned: &|_| None,
+                    planned: &|name| journey_plan.as_ref().and_then(|plan| plan.get(name)),
+                    reveal,
                 };
                 checks_act = checks::header(ui, &view, &mut self.checks).or(checks_act.take());
                 // The act's result keeps its line under the table, so it moves no field.
@@ -1599,13 +1697,30 @@ impl TimelinePage {
         checks::note_taken(book, length_taken);
         if let Some(act) = checks_act {
             self.checks.clear_problem();
+            self.plan_fault = None;
             if act == checks::Act::Start {
                 self.focus_length = book.events[index].duration.trim().is_empty();
             }
-            match checks::apply(book, &id, &act, tables) {
-                Ok(Some(done)) => self.checks_done.keep(done),
-                Ok(None) => {}
-                Err(error) => self.checks.failed(&act, error),
+            // Row 123: `Plan “<name>”` writes the plan of the journey's session, by the plan's
+            // own act; its result and Undo are in the list's footer.
+            if let checks::Act::Plan(chosen) = &act {
+                if let Err(words) = notes.plan_from_timeline(book, &id, chosen, &self.plan_names) {
+                    self.checks.failed(&act, words);
+                }
+            } else {
+                match checks::apply(book, &id, &act, tables) {
+                    Ok(Some(done)) => {
+                        self.checks_done.keep(done);
+                        self.reveal_checks = match &act {
+                            checks::Act::Roll(offsets) => offsets.iter().min().copied(),
+                            checks::Act::Enter(at, _) => Some(*at),
+                            _ => None,
+                        }
+                        .map(|at| (id.clone(), at));
+                    }
+                    Ok(None) => {}
+                    Err(error) => self.checks.failed(&act, error),
+                }
             }
         }
         if undo_checks {
@@ -1652,6 +1767,14 @@ impl TimelinePage {
             };
         }
         self.campaign = Some(campaign_id);
+        // A pending reveal is its journey's: a changed selection drops it before any draw.
+        if self
+            .reveal_checks
+            .as_ref()
+            .is_some_and(|(journey, _)| self.selected.as_deref() != Some(journey.as_str()))
+        {
+            self.reveal_checks = None;
+        }
         design::page_header(
             ui,
             "Timeline",
@@ -1780,8 +1903,8 @@ impl TimelinePage {
                 // so they move no field.
                 notes.expire_event_link_undo(true, book);
                 let open = self.selected.clone();
-                self.list_pane(ui, book, notes, open.as_deref(), |page, ui, book, _| {
-                    page.detail(ui, book, sessions);
+                self.list_pane(ui, book, notes, open.as_deref(), |page, ui, book, notes| {
+                    page.detail(ui, book, sessions, notes);
                 });
             } else {
                 notes.expire_event_link_undo(true, book);
@@ -1808,7 +1931,7 @@ impl TimelinePage {
                         left: design::S as i8,
                         ..Default::default()
                     }))
-                    .show_inside(ui, |ui| self.detail(ui, book, sessions));
+                    .show_inside(ui, |ui| self.detail(ui, book, sessions, notes));
                 egui::CentralPanel::default()
                     // The panel's drag handle lies on this edge, so the rows stop short of it.
                     .frame(egui::Frame::new().inner_margin(egui::Margin {
