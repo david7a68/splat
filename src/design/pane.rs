@@ -412,11 +412,22 @@ fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect
     }
 }
 
+/// What the hold needs of a pass's scroll column, kept until the footer has measured.
+#[derive(Clone, Copy)]
+struct ColumnFacts {
+    state: egui::scroll_area::State,
+    content_size: egui::Vec2,
+    inner_rect: Rect,
+    id: Id,
+}
+
 /// The one correction of a held press (see `ContentScroll::holds_presses`): when the content's
 /// height first differs from the press's, the column scrolls by as much as the control moved,
 /// so it stays under the pointer, and the hold ends. The blank room after the content is only
-/// what the scroll needs.
-fn hold_place<R>(ui: &Ui, mut held: Held, output: &egui::scroll_area::ScrollAreaOutput<R>) -> Held {
+/// what the scroll needs. It runs after the footer has measured, and corrects only in a pass
+/// that egui keeps: the press's result can change the footer's height in the same pass as its
+/// change to the content, and the room of that pass is not the one shown.
+fn hold_place(ui: &Ui, mut held: Held, output: ColumnFacts) -> Held {
     let mut state = output.state;
     let content = output.content_size.y - held.room;
     let scrolled = ui.input(|i| {
@@ -429,6 +440,9 @@ fn hold_place<R>(ui: &Ui, mut held: Held, output: &egui::scroll_area::ScrollArea
         let changed = (*keep.content.get_or_insert(content) - content).abs() > 0.5;
         let end = if scrolled {
             Some("scrolled")
+        } else if changed && ui.ctx().will_discard() {
+            // This pass is drawn again (the footer or a row cut measured): correct in that one.
+            return held;
         } else if changed {
             Some("corrected")
         } else if frame > keep.frame + CHANGE_FRAMES {
@@ -773,6 +787,7 @@ impl Footer<'_> {
         let rows_before = super::components::rows_this_pass(ui.ctx()).len();
         // What a layer opened from the body may use: the body's room, inside the clip.
         let usable = visible.intersect(body_room);
+        let mut hold_facts = None;
         let (inner, scroll) = match body {
             Body::Content => {
                 // The viewport is the real room, however small: egui's own 64 px minimum would
@@ -816,14 +831,19 @@ impl Footer<'_> {
                 let room = if options.holds {
                     ui.ctx()
                         .data_mut(|data| data.insert_temp(holding_id(), None::<Id>));
-                    let held = ui
-                        .ctx()
+                    hold_facts = Some((
+                        held_key,
+                        ColumnFacts {
+                            state: output.state,
+                            content_size: output.content_size,
+                            inner_rect: output.inner_rect,
+                            id: output.id,
+                        },
+                    ));
+                    ui.ctx()
                         .data(|data| data.get_temp::<Held>(held_key))
-                        .unwrap_or_default();
-                    let room = held.room;
-                    let held = hold_place(ui, held, &output);
-                    ui.ctx().data_mut(|data| data.insert_temp(held_key, held));
-                    room
+                        .unwrap_or_default()
+                        .room
                 } else {
                     0.0
                 };
@@ -907,6 +927,15 @@ impl Footer<'_> {
                 ui.ctx()
                     .request_discard("the message footer measures its height");
             }
+        }
+        // The held press, once the footer has measured this pass.
+        if let Some((held_key, facts)) = hold_facts {
+            let held = ui
+                .ctx()
+                .data(|data| data.get_temp::<Held>(held_key))
+                .unwrap_or_default();
+            let held = hold_place(ui, held, facts);
+            ui.ctx().data_mut(|data| data.insert_temp(held_key, held));
         }
         ui.advance_cursor_after_rect(room);
         #[cfg(test)]
