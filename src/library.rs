@@ -9,7 +9,10 @@ pub(crate) mod view;
 use crate::{
     campaigns::Campaigns,
     content_workspace::{CampaignDocument, Catalogue},
-    design::{self, Action, Density, Status, Tone, Type, colors, icons, reader as reader_style},
+    design::{
+        self, Action, Density, Status, Tone, Type, colors, icons, outcome::FaultStatus,
+        reader as reader_style,
+    },
     history::{self, Step, Trail},
     matching::{CLOSE_NAMES, Rank, Typed, with_other},
     persistence::{Campaign, Module},
@@ -940,6 +943,9 @@ pub(crate) struct Note {
     /// Why the file could not be read at all, from the system error's kind. Such a note has no
     /// text, so it offers no source editing or repair until a read succeeds.
     fault: Option<FileFault>,
+    /// The package's manifest was deleted: this note stands in for it. Its entries still
+    /// read, so it is a fault to fix (a warning), not a file that cannot be read.
+    manifest_gone: bool,
     owner: Owner,
 }
 impl Note {
@@ -1897,13 +1903,339 @@ impl view::Links for Loaded {
     }
 }
 
-/// The result after a copied package is registered. It says what the registration did, not what
-/// the campaign uses now: a later source change can make encounters use the copy.
-fn package_registered(name: &str, chosen: bool) -> String {
-    if chosen {
-        format!("{name} is registered, with every entry chosen for this campaign.")
+/// Whose a copied package's registration result is: the copy (its package id) in the campaign
+/// it was registered in. The store keeps one result per owner, shows it only in its campaign,
+/// and keys the copy's `Use the copy in encounters` result by the same owner.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct RegistrationOwner {
+    package: Uuid,
+    campaign: Option<Uuid>,
+}
+
+impl design::results::Owner for RegistrationOwner {
+    type Scope = Option<Uuid>;
+    fn scope(&self) -> &Option<Uuid> {
+        &self.campaign
+    }
+}
+
+/// A copied package's registration and its kept result: everything its words say and its
+/// Undo needs, in its store entry. Undo takes the entry whole, so the words go with the data.
+struct Registration {
+    /// The copy the registration wrote and registered.
+    copy: crate::content_workspace::PackageCopy,
+    /// The campaign open at the registration: the result's scope.
+    campaign: Option<Campaign>,
+    /// The campaign file the registration wrote, when it chose the copy: its path, its words
+    /// before and after.
+    written: Option<(String, String, String)>,
+    /// The copy's choices in that campaign as the registration left them (none when it did not
+    /// choose it). A later use change differs from them.
+    choices: Vec<crate::content_workspace::PackageSelection>,
+    /// R11: the clause (`, with no entries chosen for this campaign`) says what the
+    /// registration chose. It holds until the copy's use changes after it; it never comes back.
+    clause: bool,
+    /// A copied file or the source change's files changed outside Splat: Undo waits.
+    blocked: bool,
+    /// Another campaign chose the copy: its Undo would leave that campaign's choices naming
+    /// identities it removes, so it waits, and names that campaign.
+    used_by: Option<String>,
+}
+
+impl design::results::Kept for Registration {
+    type Owner = RegistrationOwner;
+    const ENDS: design::results::Ends = design::results::Ends {
+        // A second registration of the same folder ends it (`register_copy`).
+        owner_changed: design::results::OwnerChanged::Ends,
+        // A reload ends it once its copy is no longer registered (`reconcile_registrations`).
+        disk_changed: design::results::DiskChanged::Checked,
+        press: design::results::Press::Undo,
+    };
+    fn owner(&self) -> RegistrationOwner {
+        RegistrationOwner {
+            package: self.copy.module.id,
+            campaign: self.campaign.as_ref().map(|campaign| campaign.id),
+        }
+    }
+}
+
+/// What a registration's check reads besides itself, made at the event that runs it.
+struct RegistrationCheck {
+    /// Each source change's owner, and whether its Undo waits.
+    sources: Vec<(RegistrationOwner, bool)>,
+    /// Every registered package's manifest, to read a choice that names a package by its key
+    /// or by a link.
+    manifests: Vec<Entry>,
+    /// Every campaign the DM has.
+    campaigns: Vec<Campaign>,
+}
+
+impl design::results::Reconcile for Registration {
+    type With = RegistrationCheck;
+    /// R11's one end event, at each write or refresh event and each reload (also after an
+    /// outside edit). The clause ends when the copy's choices in the campaign differ from what
+    /// the registration left, or encounters use the copy. Undo waits while a copied file or a
+    /// source-change file changed, or while another campaign chose the copy.
+    fn reconcile(&mut self, check: &RegistrationCheck) {
+        use design::results::Kept;
+        let package = self.copy.module.id;
+        let owner = self.owner();
+        let source = check
+            .sources
+            .iter()
+            .find(|(source, _)| *source == owner)
+            .map(|(_, blocked)| *blocked);
+        self.blocked = source == Some(true) || !self.copy.on_disk();
+        let own = self.campaign.as_ref().map(|campaign| campaign.id);
+        self.used_by = used_elsewhere(package, own, &check.campaigns, &check.manifests);
+        if self.clause {
+            let choices_changed = self.campaign.as_ref().is_some_and(|campaign| {
+                CampaignDocument::load(campaign).is_ok_and(|document| {
+                    copy_choices(&document, package, &check.manifests) != self.choices
+                })
+            });
+            if choices_changed || source.is_some() {
+                self.clause = false;
+            }
+        }
+    }
+}
+
+impl Registration {
+    /// Why Undo waits, if it does.
+    fn lock(&self) -> Option<String> {
+        if self.blocked {
+            Some(crate::content_workspace::UNDO_ENDED.to_owned())
+        } else {
+            self.used_by.as_deref().map(used_reason)
+        }
+    }
+}
+
+/// A campaign file's words without the package list's tasks that name `package`: each one's
+/// lines as the reader gives them (`list_formats::package_tasks`: its task line and its `Only:`
+/// lines), and nothing else, so Undo keeps every other choice and every other word.
+fn without_package_lines(text: &str, package: Uuid, links: &[&str]) -> String {
+    let mut drop: Vec<std::ops::Range<usize>> = content::list_formats::package_tasks(text)
+        .into_iter()
+        .filter(|task| task_names_package(task, package, links))
+        .flat_map(|task| task.lines)
+        .collect();
+    drop.sort_by_key(|range| range.start);
+    let mut out = String::with_capacity(text.len());
+    let mut at = 0;
+    for range in drop {
+        out.push_str(&text[at..range.start]);
+        at = range.end;
+    }
+    out.push_str(&text[at..]);
+    out
+}
+
+/// True when a task of the package list names `package`: by its id after ` ^` (spaces around
+/// the id do not hide it) or, with no id, by one of `links`, the names that named it.
+fn task_names_package(
+    task: &content::list_formats::PackageTask,
+    package: Uuid,
+    links: &[&str],
+) -> bool {
+    if task.id.is_empty() {
+        links.contains(&task.name.as_str())
     } else {
-        format!("{name} is registered, with no entries chosen for this campaign.")
+        Uuid::parse_str(task.id.trim()).is_ok_and(|id| id == package)
+    }
+}
+
+/// Why a registration's Undo is refused when taking the copy out of the campaign's package
+/// list would change another package's choice.
+pub(crate) const PACKAGE_LIST_UNSAFE: &str = "The campaign’s package list has a form Splat cannot change safely, so Undo changed nothing. Remove this package from the list by hand, then undo.";
+
+/// Why a registration's Undo waits while another campaign chose the copy.
+fn used_reason(campaign: &str) -> String {
+    format!("{campaign} uses this package. Remove it from {campaign} first, then undo.")
+}
+
+/// The package a choice in a campaign file names, in each form the file may give: its id, its
+/// key, or a link to its manifest. The one reading of a choice for the clause's check and for
+/// Undo's removal.
+fn chosen_package(
+    reference: &crate::content_workspace::EntryRef,
+    manifests: &[Entry],
+) -> Option<Uuid> {
+    match (reference.id, &reference.key, &reference.link) {
+        (Some(id), _, _) => Some(id),
+        (None, Some(key), _) => manifests
+            .iter()
+            .find(|manifest| manifest.key.as_deref() == Some(key.as_str()))
+            .map(|manifest| manifest.id),
+        (None, None, Some(link)) => content::formats::resolve_readable(link, manifests).ok(),
+        (None, None, None) => None,
+    }
+}
+
+/// Every registered package's manifest.
+fn package_manifests(campaigns: &Campaigns) -> Vec<Entry> {
+    campaigns
+        .modules()
+        .iter()
+        .filter_map(|module| {
+            content::read_folder(&module.path)
+                .ok()?
+                .entries
+                .iter()
+                .find(|entry| entry.kind == "package")
+                .cloned()
+        })
+        .collect()
+}
+
+/// The first campaign other than `own` that chose `package`.
+fn used_elsewhere(
+    package: Uuid,
+    own: Option<Uuid>,
+    campaigns: &[Campaign],
+    manifests: &[Entry],
+) -> Option<String> {
+    campaigns
+        .iter()
+        .filter(|campaign| Some(campaign.id) != own)
+        .find(|campaign| {
+            CampaignDocument::load(campaign)
+                .is_ok_and(|document| !copy_choices(&document, package, manifests).is_empty())
+        })
+        .map(|campaign| campaign.name.clone())
+}
+
+/// The copy's package choices in a campaign file, in any form that names it.
+fn copy_choices(
+    document: &CampaignDocument,
+    package: Uuid,
+    manifests: &[Entry],
+) -> Vec<crate::content_workspace::PackageSelection> {
+    document
+        .selections
+        .iter()
+        .filter(|selection| chosen_package(&selection.package, manifests) == Some(package))
+        .cloned()
+        .collect()
+}
+
+impl Registration {
+    /// The result's words. They say what the registration did, not what the campaign uses now.
+    fn words(&self) -> String {
+        let name = &self.copy.module.name;
+        match (self.clause, self.written.is_some()) {
+            (false, _) => format!("{name} is registered."),
+            (true, true) => {
+                format!("{name} is registered, with every entry chosen for this campaign.")
+            }
+            (true, false) => {
+                format!("{name} is registered, with no entries chosen for this campaign.")
+            }
+        }
+    }
+
+    /// The campaign file's part of Undo: the copy's choices leave it, every other choice and
+    /// word stays. When the file still holds exactly what the registration wrote, it goes back
+    /// to its words before. The write is checked against the words read here.
+    fn campaign_undo(
+        &self,
+        manifests: &[Entry],
+    ) -> Result<Option<(PathBuf, String, String, String)>, String> {
+        let Some(campaign) = &self.campaign else {
+            return Ok(None);
+        };
+        let document = CampaignDocument::load(campaign)?;
+        if let Some((path, before, after)) = &self.written
+            && *path == document.path
+            && document.text == *after
+        {
+            return Ok(Some((
+                campaign.path.clone(),
+                path.clone(),
+                after.clone(),
+                before.clone(),
+            )));
+        }
+        let keep: Vec<_> = document
+            .selections
+            .iter()
+            .filter(|selection| {
+                chosen_package(&selection.package, manifests) != Some(self.copy.module.id)
+            })
+            .cloned()
+            .collect();
+        if keep.len() == document.selections.len()
+            && !document
+                .text
+                .contains(&format!(" ^{}", self.copy.module.id))
+        {
+            return Ok(None);
+        }
+        // Only the copy's own task lines (with their `Only:` lines) leave the file, by the
+        // reader's ranges, from the file's own words. The file's writer (`text_with`) is not
+        // used: it would rewrite other packages' lines (a hand-written `Only: [[spell/aid]]`
+        // becomes a key reference), and this Undo touches nothing but the copy's lines.
+        let links: Vec<&str> = document
+            .selections
+            .iter()
+            .filter(|selection| {
+                chosen_package(&selection.package, manifests) == Some(self.copy.module.id)
+            })
+            .filter_map(|selection| selection.package.link.as_deref())
+            .collect();
+        let text = without_package_lines(&document.text, self.copy.module.id, &links);
+        // The guard after the removal, before the write: the file read back must hold exactly
+        // the choices that stay. A form of the list that the change would alter otherwise (an
+        // item that turns into a code block, say) refuses the Undo, and nothing is written.
+        let read_back = Entry::parse(&document.path, &text).ok().and_then(|entry| {
+            match entry.fields.get("splat_packages") {
+                Some(value) => serde_yaml_ng::from_value::<
+                    Vec<crate::content_workspace::PackageSelection>,
+                >(value.clone())
+                .ok(),
+                None => Some(Vec::new()),
+            }
+        });
+        if read_back.as_ref() != Some(&keep) {
+            return Err(PACKAGE_LIST_UNSAFE.into());
+        }
+        Ok(Some((
+            campaign.path.clone(),
+            document.path.clone(),
+            document.text.clone(),
+            text,
+        )))
+    }
+}
+
+/// `Use the copy in encounters`: the encounter files it changed, with its Undo. It belongs to
+/// its registration's owner: that registration's Undo also reverses it, and no other's does.
+struct RostersUse {
+    owner: RegistrationOwner,
+    edits: crate::content_workspace::ContentEdits,
+    /// One of its files changed outside Splat: its Undo (and the registration's) waits.
+    blocked: bool,
+}
+
+impl design::results::Kept for RostersUse {
+    type Owner = RegistrationOwner;
+    const ENDS: design::results::Ends = design::results::Ends {
+        // Its registration's Undo ends it.
+        owner_changed: design::results::OwnerChanged::Ends,
+        // A reload ends it with its registration (`reconcile_registrations`).
+        disk_changed: design::results::DiskChanged::Checked,
+        press: design::results::Press::Undo,
+    };
+    fn owner(&self) -> RegistrationOwner {
+        self.owner
+    }
+}
+
+impl design::results::Reconcile for RostersUse {
+    type With = ();
+    fn reconcile(&mut self, (): &()) {
+        self.blocked = !self.edits.on_disk();
     }
 }
 
@@ -2130,12 +2462,17 @@ struct PageResults {
     link_offer: Option<(design::results::FooterResult, String)>,
     /// The link update's footer line, with its order from the store.
     links: Option<design::results::FooterResult>,
-    /// The registration's result, and why its Undo waits.
-    registration: Option<(String, Option<&'static str>)>,
+    /// The newest registration result of this campaign: its footer line (its words with its
+    /// order from the store), why its Undo waits, and its owner, which its presses name.
+    registration: Option<(
+        design::results::FooterResult,
+        Option<String>,
+        RegistrationOwner,
+    )>,
     /// `Use the copy in encounters` shows, with why it waits.
     use_copy: Option<Option<&'static str>>,
-    /// The source change's Undo shows, with why it waits.
-    rosters: Option<Option<&'static str>>,
+    /// That registration's source change: its footer line and why its Undo waits.
+    rosters: Option<(design::results::FooterResult, Option<&'static str>)>,
     /// A package unregister's result.
     unregistered: Option<String>,
     /// Why the scope changed to show an entry.
@@ -2158,9 +2495,11 @@ impl PageResults {
 struct PagePress {
     link_offer: bool,
     links: bool,
-    registration: bool,
-    use_copy: bool,
-    rosters: bool,
+    /// Each names the registration whose line was pressed (by owner: the reader footer has no
+    /// tickets until it moves to `Messages`).
+    registration: Option<RegistrationOwner>,
+    use_copy: Option<RegistrationOwner>,
+    rosters: Option<RegistrationOwner>,
     unregistered: bool,
 }
 
@@ -2249,12 +2588,16 @@ impl ReaderResults {
         );
         add(
             ResultKind::Registration,
-            page.registration.as_ref().map(|(words, _)| words.clone()),
+            page.registration
+                .as_ref()
+                .map(|(line, ..)| line.words().to_owned()),
             true,
         );
         add(
             ResultKind::Rosters,
-            page.rosters.map(|_| USE_COPY_RESULT.to_owned()),
+            page.rosters
+                .as_ref()
+                .map(|(line, _)| line.words().to_owned()),
             true,
         );
         add(ResultKind::Unregistered, page.unregistered.clone(), true);
@@ -2321,41 +2664,47 @@ fn show_result(
             }
         }
         ResultKind::Registration => {
-            if let Some((words, blocked)) = &page.registration {
+            if let Some((line, blocked, owner)) = &page.registration {
                 // The Undo sits on the message line, as every Undo after a message does. After
                 // an outside change it stays there, blocked, and the reason follows at the
                 // message words. The result still happened, so its words keep the text colour.
-                pressed.page.registration = kept_undo_message(
+                if kept_undo_message(
                     ui,
                     Tone::Success,
-                    words,
+                    line.words(),
                     "Undo package registration",
-                    *blocked,
+                    blocked.as_deref(),
                     true,
-                );
+                ) {
+                    pressed.page.registration = Some(*owner);
+                }
                 // The other choice starts below, at the message words. Only Undo is quiet.
-                if let Some(blocked) = page.use_copy {
-                    pressed.page.use_copy = design::message_choice_row(ui, Tone::Success, |ui| {
+                if let Some(blocked) = page.use_copy
+                    && design::message_choice_row(ui, Tone::Success, |ui| {
                         Action::secondary(USE_COPY)
                             .density(Density::Read)
                             .blocked(blocked)
                             .show(ui)
                             .clicked()
-                    });
+                    })
+                {
+                    pressed.page.use_copy = Some(*owner);
                 }
             }
         }
         ResultKind::Rosters => {
-            if let Some(blocked) = page.rosters {
-                // After an outside change the Undo stays, blocked, and the reason follows.
-                pressed.page.rosters = kept_undo_message(
+            if let Some((line, blocked)) = &page.rosters
+                && let Some((.., owner)) = &page.registration
+                && kept_undo_message(
                     ui,
                     Tone::Success,
-                    USE_COPY_RESULT,
+                    line.words(),
                     "Undo source change",
-                    blocked,
+                    *blocked,
                     true,
-                );
+                )
+            {
+                pressed.page.rosters = Some(*owner);
             }
         }
         ResultKind::Unregistered => {
@@ -2482,6 +2831,17 @@ pub(crate) fn kept_undo_message(
 
 /// Why a link update wrote nothing: the renamed entry changed on disk since the offer was made.
 pub(crate) const LINKS_NOT_CHANGED: &str = "No links were changed. This entry changed on disk since it was renamed. Reload from disk, then rename it again.";
+
+/// The warning for a draft whose file changed on disk (R10): the entry by its name, or `This
+/// entry` when it has none.
+pub(crate) fn changed_on_disk(name: &str) -> String {
+    let thing = if name.trim().is_empty() {
+        "This entry"
+    } else {
+        name.trim()
+    };
+    format!("{thing} changed on disk. Your draft is safe until you choose.")
+}
 
 /// The warning for a draft whose file moved on disk. Its two choices name what each one does.
 pub(crate) const MOVED_ON_DISK: &str =
@@ -3140,6 +3500,7 @@ fn problem_note(
         text,
         entry: None,
         fault,
+        manifest_gone: false,
         owner,
     })
 }
@@ -3185,6 +3546,7 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
                 entry: (!mismatched).then_some(entry),
                 error: mismatched.then(|| "Package details have another identity. Replace with the registered details, or restore the original id.".into()),
                 fault: None,
+                manifest_gone: false,
                 owner: Owner::Package(module.clone()),
             });
         }
@@ -3195,6 +3557,7 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
                 entry: None,
                 error: Some(crate::content_workspace::DELETED_MANIFEST.into()),
                 fault: None,
+                manifest_gone: true,
                 owner: Owner::Package(module.clone()),
             });
         }
@@ -3217,6 +3580,7 @@ fn load(module: Option<&Module>) -> Result<Loaded, String> {
                 entry: Some(entry),
                 error: None,
                 fault: None,
+                manifest_gone: false,
                 owner: Owner::Builtin,
             });
         }
@@ -3280,6 +3644,7 @@ pub(crate) fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Resul
                         entry: Some(entry),
                         error: None,
                         fault: None,
+                        manifest_gone: false,
                         owner: owner.clone(),
                     });
                 }
@@ -3349,6 +3714,7 @@ pub(crate) fn catalogue_subtitles(
                 entry: Some(e.entry.clone()),
                 error: None,
                 fault: None,
+                manifest_gone: false,
                 owner: Owner::Builtin,
             })
             .collect(),
@@ -3508,11 +3874,12 @@ pub struct Library {
     identity_undo: Option<IdentityUndo>,
     identities_undo: Option<(crate::content_workspace::ContentEdits, String)>,
     manifest_write: Option<crate::content_workspace::ManifestWrite>,
-    package_copy: Option<crate::content_workspace::PackageCopy>,
+    /// Each copied package's registration result, with all its Undo needs, by copy and campaign.
+    registrations: design::Results<RegistrationOwner, Registration>,
     copy_not_used: bool,
-    copy_campaign_before: Option<(Campaign, String, String, String)>,
     unregistered: Option<Module>,
-    copied_rosters: Option<crate::content_workspace::ContentEdits>,
+    /// Each registration's `Use the copy in encounters` result, by the same owner.
+    rosters: design::Results<RegistrationOwner, RostersUse>,
     /// Offers to change links after a rename, each owned by the renamed entry.
     renamed_links: design::Results<LinkOwner, LinkOffer>,
     /// Link updates and the names their links now say, each owned by the renamed entry.
@@ -3600,11 +3967,6 @@ pub struct Library {
     /// files changed; other copies keep theirs (round 26 review).
     dependency_undos: Vec<DependencyUndo>,
     selection_undo: Option<SelectionUndo>,
-    /// The last reload found a registration file changed, so `Undo package registration` would
-    /// refuse. The message stays for its other action; its Undo is blocked with the reason.
-    registration_changed: bool,
-    /// The same for `Undo source change`.
-    rosters_changed: bool,
     link_choices: Vec<Uuid>,
     /// The file, the draft before and after a stat fix, and its result message.
     vital_undo: Option<(String, String, String, String)>,
@@ -3612,6 +3974,9 @@ pub struct Library {
     /// When each kept result's action was done (`stamp_result`), so the message footer lists
     /// results newest first. The next action of the same kind replaces its entry.
     result_orders: ResultOrders,
+    /// Test only: how often the registration results were checked (`reconcile_registrations`).
+    #[cfg(test)]
+    reconciles: usize,
 }
 
 /// A kept result of the Library's panes, for its footer order. A copy result has its own order
@@ -3646,6 +4011,8 @@ fn add_reader_result<'a>(
     let line = match kind {
         ResultKind::LinkOffer => page.link_offer.as_ref().map(|(line, _)| line),
         ResultKind::Links => page.links.as_ref(),
+        ResultKind::Registration => page.registration.as_ref().map(|(line, ..)| line),
+        ResultKind::Rosters => page.rosters.as_ref().map(|(line, _)| line),
         _ => None,
     };
     match line {
@@ -3806,11 +4173,11 @@ impl Library {
         {
             return Err("Choose a separate copied folder first.".into());
         }
+        // Point 2 of the review: the campaign and the copy's choices in it are recorded also
+        // when the registration writes no campaign file, so a later use change shows.
+        let campaign = campaigns.active_campaign();
         let campaign_document = if !self.copy_not_used {
-            campaigns
-                .active_campaign()
-                .map(|campaign| CampaignDocument::load(&campaign))
-                .transpose()?
+            campaign.as_ref().map(CampaignDocument::load).transpose()?
         } else {
             None
         };
@@ -3819,6 +4186,8 @@ impl Library {
             copy.undo()?;
             return Err(error);
         }
+        let mut written = None;
+        let mut choices = Vec::new();
         if let Some(mut document) = campaign_document {
             let before = document.text.clone();
             document
@@ -3837,16 +4206,32 @@ impl Library {
                     restore.err().unwrap_or_default()
                 ));
             }
-            self.copy_campaign_before =
-                Some((document.campaign, document.path, before, document.text));
+            choices = copy_choices(&document, copy.module.id, &package_manifests(campaigns));
+            written = Some((document.path, before, document.text));
         }
-        self.result_orders.insert(
-            OrderKey::Reader(ResultKind::Registration),
-            design::ResultOrder::issue(),
-        );
-        self.package_copy = Some(copy);
-        self.registration_changed = false;
-        self.rosters_changed = false;
+        // One result per copied folder in a campaign: a registration of the same folder again
+        // (after an unregister that no reload has seen yet) ends the older one by the store's
+        // owner event, so its Undo cannot reach the newer registration's files.
+        let scope = campaign.as_ref().map(|campaign| campaign.id);
+        let older: Vec<RegistrationOwner> = self
+            .registrations
+            .newest_first(&scope)
+            .filter(|shown| shown.value().copy.module.path == copy.module.path)
+            .map(|shown| design::results::Kept::owner(shown.value()))
+            .collect();
+        for owner in &older {
+            self.registrations.owner_changed(owner);
+            self.rosters.owner_changed(owner);
+        }
+        self.registrations.record(Registration {
+            copy,
+            campaign,
+            written,
+            choices,
+            clause: true,
+            blocked: false,
+            used_by: None,
+        });
         self.copied_package = None;
         self.copy_name_open = false;
         self.form = false;
@@ -3856,40 +4241,104 @@ impl Library {
         Ok(())
     }
 
-    fn undo_package_registration(&mut self, campaigns: &mut Campaigns) -> Result<(), String> {
-        let copy = self
-            .package_copy
-            .as_ref()
-            .ok_or("No package registration to undo.")?;
-        let mut extra: Vec<_> = self
-            .copy_campaign_before
-            .as_ref()
-            .map(|(campaign, path, before, after)| {
-                (
-                    campaign.path.clone(),
-                    path.clone(),
-                    after.clone(),
-                    before.clone(),
-                )
+    /// Undo the registration `owner` names, with all it owns: the copy's files, its choices in
+    /// the campaign (also those made after it, in Library, Lookup or Campaign; other packages'
+    /// choices stay), and its source change. One checked write; on a failure nothing changes
+    /// and the result keeps its Undo. Another registration's data is never touched.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: a by-owner Undo of the Library page lines (design::results::STAGED_ALLOWS)"
+    )]
+    fn undo_package_registration(
+        &mut self,
+        owner: &RegistrationOwner,
+        campaigns: &mut Campaigns,
+    ) -> Result<(), String> {
+        // Point 1 of the review: while another campaign chose the copy, Undo is refused; its
+        // choices there would name identities that Undo removes. Checked again here, at the
+        // press, as well as by the reconcile event that locks the Undo.
+        let manifests = package_manifests(campaigns);
+        if self.registrations.get(owner).is_some()
+            && let Some(name) =
+                used_elsewhere(owner.package, owner.campaign, campaigns.all(), &manifests)
+        {
+            return Err(used_reason(&name));
+        }
+        let rosters = &self.rosters;
+        let (registered, ()) = self
+            .registrations
+            .undo(owner, |registered| {
+                let mut extra: Vec<_> = registered.campaign_undo(&manifests)?.into_iter().collect();
+                if let Some(source) = rosters.get(owner) {
+                    extra.extend(source.value().edits.inverse_files());
+                }
+                let edits = registered.copy.undo_with(extra)?;
+                if let Err(error) = campaigns.unregister_module(registered.copy.module.id) {
+                    return Err(match edits.undo() {
+                        Ok(()) => error,
+                        Err(restore) => format!("{error}. Could not restore the copy: {restore}"),
+                    });
+                }
+                Ok(())
             })
-            .into_iter()
-            .collect();
-        if let Some(edits) = &self.copied_rosters {
-            extra.extend(edits.inverse_files());
+            .ok_or("No package registration to undo.")??;
+        // The source change it reversed ends with it; so does the result of choosing its
+        // entries, whose data the Undo also reversed.
+        self.rosters.owner_changed(owner);
+        let package = registered.copy.module.id;
+        if self.selection_undo.as_ref().is_some_and(|undo| {
+            registered.campaign.as_ref().map(|c| c.id) == Some(undo.campaign.id)
+                && undo.after.iter().any(|selection| {
+                    chosen_package(&selection.package, &manifests) == Some(package)
+                })
+        }) {
+            self.selection_undo = None;
         }
-        let edits = copy.undo_with(extra)?;
-        if let Err(error) = campaigns.unregister_module(copy.module.id) {
-            return Err(match edits.undo() {
-                Ok(()) => error,
-                Err(restore) => format!("{error}. Could not restore the copy: {restore}"),
-            });
-        }
-        self.content_changed = Some(copy.module.path.clone());
-        self.package_copy = None;
-        self.copy_campaign_before = None;
-        self.copied_rosters = None;
+        self.content_changed = Some(registered.copy.module.path.clone());
         self.stale = true;
         Ok(())
+    }
+
+    /// The registration whose result the page shows: the newest of the open campaign. Another
+    /// campaign's stays in the store and shows when that campaign is open again.
+    fn shown_registration(&self, campaigns: &Campaigns) -> Option<RegistrationOwner> {
+        let scope = campaigns.active_campaign().map(|campaign| campaign.id);
+        self.registrations
+            .newest_first(&scope)
+            .next()
+            .map(|shown| design::results::Kept::owner(shown.value()))
+    }
+
+    /// The registration results at a reload, the one event that every write and every outside
+    /// change reaches: a result whose copy is no longer registered ends (with its source
+    /// change), and each one left checks its clause and its Undo (`Registration::reconcile`).
+    /// It reads the campaign file and the copied files, so it runs once per reload, never per
+    /// frame.
+    fn reconcile_registrations(&mut self, campaigns: &Campaigns) {
+        #[cfg(test)]
+        {
+            self.reconciles += 1;
+        }
+        let registered = |package: Uuid| campaigns.modules().iter().any(|m| m.id == package);
+        self.registrations
+            .disk_changed(|registration| registered(registration.copy.module.id));
+        let registrations = &self.registrations;
+        self.rosters
+            .disk_changed(|source| registrations.get(&source.owner).is_some());
+        self.rosters.reconcile(&());
+        let scopes: Vec<Option<Uuid>> = std::iter::once(None)
+            .chain(campaigns.all().iter().map(|campaign| Some(campaign.id)))
+            .collect();
+        let check = RegistrationCheck {
+            sources: scopes
+                .iter()
+                .flat_map(|scope| self.rosters.newest_first(scope))
+                .map(|shown| (shown.value().owner, shown.value().blocked))
+                .collect(),
+            manifests: package_manifests(campaigns),
+            campaigns: campaigns.all().to_vec(),
+        };
+        self.registrations.reconcile(&check);
     }
 
     /// On reload, each result with an Undo checks that its files still hold what its action
@@ -3926,19 +4375,6 @@ impl Library {
         }
         self.link_edits
             .disk_changed(|result| result.edits.on_disk());
-        self.rosters_changed = self
-            .copied_rosters
-            .as_ref()
-            .is_some_and(|edits| !edits.on_disk());
-        self.registration_changed = self.rosters_changed
-            || self
-                .package_copy
-                .as_ref()
-                .is_some_and(|copy| !copy.on_disk())
-            || self
-                .copy_campaign_before
-                .as_ref()
-                .is_some_and(|(campaign, path, _, after)| !holds(&campaign.path, path, after));
     }
 
     #[allow(
@@ -4106,6 +4542,7 @@ impl Library {
                         entry: note.entry.clone(),
                         error: note.error.clone(),
                         fault: note.fault.clone(),
+                        manifest_gone: note.manifest_gone,
                         owner: note.owner.clone(),
                     },
                     used,
@@ -4324,7 +4761,15 @@ impl Library {
         !self.dirty()
     }
 
-    pub fn refresh_destination(&mut self, root: &Path, _ctx: &egui::Context) {
+    pub fn refresh_destination(
+        &mut self,
+        root: &Path,
+        _ctx: &egui::Context,
+        campaigns: &Campaigns,
+    ) {
+        // Point 3 of the review: the registration results follow the write at its event,
+        // even while a draft holds the reload back.
+        self.reconcile_registrations(campaigns);
         if self.dirty()
             && let Some(note) = self
                 .selected
@@ -4539,6 +4984,7 @@ impl Library {
                             self.focus_repair =
                                 self.selected.is_some_and(|i| l.notes[i].error.is_some());
                             self.forget_changed_undos();
+                            self.reconcile_registrations(campaigns);
                             // An offer whose entry changed outside Splat, or whose names now name
                             // another entry, goes; it is checked again before any write too.
                             self.renamed_links
@@ -4836,6 +5282,7 @@ impl Library {
         // A link offer and a link result show only in their own entry's reader.
         // Each comes with the order its store issued at its action; this draw issues none.
         let open = self.open_link_owner();
+        let registration = self.shown_registration(campaigns);
         self.page_results = PageResults {
             link_offer: open
                 .as_ref()
@@ -4856,21 +5303,27 @@ impl Library {
                 .as_ref()
                 .and_then(|owner| self.link_edits.get(owner))
                 .map(|shown| shown.footer(|result| format!("Links now say “{}”.", result.new))),
-            registration: self.package_copy.as_ref().map(|copy| {
-                (
-                    package_registered(&copy.module.name, self.copy_campaign_before.is_some()),
-                    self.registration_changed
-                        .then_some(crate::content_workspace::UNDO_ENDED),
-                )
+            // This campaign's newest registration result: its words and its order from its
+            // store entry. Another campaign's stays in the store and shows there.
+            registration: registration.and_then(|owner| {
+                let shown = self.registrations.get(&owner)?;
+                let lock = shown.value().lock();
+                Some((shown.footer(Registration::words), lock, owner))
             }),
-            use_copy: (self.package_copy.is_some()
-                && campaigns.active_campaign().is_some()
-                && self.copied_rosters.is_none())
-            .then(|| self.draft_reason()),
-            rosters: self.copied_rosters.as_ref().map(|_| {
-                self.rosters_changed
-                    .then_some(crate::content_workspace::UNDO_ENDED)
-            }),
+            use_copy: registration
+                .filter(|owner| {
+                    campaigns.active_campaign().is_some() && self.rosters.get(owner).is_none()
+                })
+                .map(|_| self.draft_reason()),
+            rosters: registration
+                .and_then(|owner| self.rosters.get(&owner))
+                .map(|shown| {
+                    let blocked = shown.value().blocked;
+                    (
+                        shown.footer(|_| USE_COPY_RESULT.to_owned()),
+                        blocked.then_some(crate::content_workspace::UNDO_ENDED),
+                    )
+                }),
             // Round 25 FG4: the unregister result sits in the pane's message footer, so the scope,
             // the search and the list never move when it comes or goes.
             scope_notice: self.scope_notice.clone(),
@@ -5677,41 +6130,42 @@ impl Library {
                 Some(Err(error)) => self.error = Some(error),
             }
         }
-        if pressed.registration
-            && let Err(error) = self.undo_package_registration(campaigns)
+        if let Some(owner) = pressed.registration
+            && let Err(error) = self.undo_package_registration(&owner, campaigns)
         {
             self.error = Some(error);
         }
-        if pressed.use_copy
-            && let Some(copy) = &self.package_copy
+        // The use changes here; the registration's clause ends at this write's event
+        // (`reconcile_registrations`), as for every other use change.
+        if let Some(owner) = pressed.use_copy
+            && let Some(registered) = self.registrations.get(&owner)
             && let Some(campaign) = campaigns.active_campaign()
-            && self.copied_rosters.is_none()
+            && self.rosters.get(&owner).is_none()
         {
-            match copy.use_in_rosters(&campaign) {
+            match registered.value().copy.use_in_rosters(&campaign) {
                 Ok(edits) => {
-                    self.result_orders.insert(
-                        OrderKey::Reader(ResultKind::Rosters),
-                        design::ResultOrder::issue(),
-                    );
-                    self.copied_rosters = Some(edits);
-                    self.rosters_changed = false;
+                    self.rosters.record(RostersUse {
+                        owner,
+                        edits,
+                        blocked: false,
+                    });
                     self.content_changed = Some(campaign.path);
                     self.stale = true;
+                    self.reconcile_registrations(campaigns);
                 }
                 Err(error) => self.error = Some(error),
             }
         }
-        if pressed.rosters
-            && let Some(edits) = &self.copied_rosters
-        {
-            match edits.undo() {
-                Ok(()) => {
-                    self.copied_rosters = None;
+        if let Some(owner) = pressed.rosters {
+            match self.rosters.undo(&owner, |source| source.edits.undo()) {
+                Some(Ok(_)) => {
                     self.content_changed =
                         campaigns.active_campaign().map(|campaign| campaign.path);
                     self.stale = true;
+                    self.reconcile_registrations(campaigns);
                 }
-                Err(error) => self.error = Some(error),
+                Some(Err(error)) => self.error = Some(error),
+                None => {}
             }
         }
     }
@@ -6550,6 +7004,7 @@ impl Library {
                                     entry: Some(entry),
                                     error: None,
                                     fault: None,
+                                    manifest_gone: false,
                                     owner,
                                 });
                                 l.notes.sort_by_cached_key(|n| natural_key(n.name()));
@@ -7088,10 +7543,26 @@ impl Library {
         let about = note.entry.as_ref().is_some_and(|e| e.kind == "package");
         let mut use_every = None;
         let mut every_chosen = false;
-        let package_word = match &note.owner {
-            Owner::Package(module) if stopped_reading => {
-                format!("{} · Cannot be read", module.name)
+        // Row 125: a fault on the owner line is typed, from the note's typed state (its file
+        // fault, its parse, a deleted manifest), never from its error words. The kind gives the
+        // status words and the tone (`outcome::fault_status`), as the row and the message have.
+        let owner_fault = match &note.owner {
+            Owner::Package(_) if stopped_reading => Some(FaultStatus::CannotRead),
+            Owner::Package(_) if about => None,
+            Owner::Package(_) if note.manifest_gone => Some(FaultStatus::ManifestDeleted),
+            Owner::Package(_) | Owner::Campaign(_)
+                if note.error.is_some() || note.fault.is_some() || stopped_reading =>
+            {
+                Some(FaultStatus::CannotRead)
             }
+            _ => None,
+        };
+        let owner_name = match &note.owner {
+            Owner::Package(module) => module.name.as_str(),
+            _ => "Campaign",
+        };
+        let package_word = match &note.owner {
+            Owner::Package(module) if let Some(fault) = owner_fault => fault.words(&module.name),
             Owner::Package(_) if about && campaigns.active_campaign().is_none() => {
                 "No campaign open".into()
             }
@@ -7116,14 +7587,6 @@ impl Library {
                     .count();
                 every_chosen = chosen == entries.len();
                 chosen_count(chosen, needed, entries.len())
-            }
-            Owner::Package(module)
-                if note.error.as_deref() == Some(crate::content_workspace::DELETED_MANIFEST) =>
-            {
-                format!("{} · Manifest deleted", module.name)
-            }
-            Owner::Package(module) if note.error.is_some() => {
-                format!("{} · Cannot be read", module.name)
             }
             Owner::Package(module) => format!(
                 "{} · {}",
@@ -7468,14 +7931,16 @@ impl Library {
                 && note.error.is_none()
                 && !stopped_reading;
             let read_only_word;
+            let campaign_fault_word;
             let owner_word = match &note.owner {
                 Owner::Package(module) if read_only => {
                     read_only_word = format!("{} · Read only", module.name);
                     read_only_word.as_str()
                 }
                 Owner::Package(_) => package_word.as_str(),
-                Owner::Campaign(_) if note.error.is_some() || stopped_reading => {
-                    "Campaign · Cannot be read"
+                Owner::Campaign(_) if let Some(fault) = owner_fault => {
+                    campaign_fault_word = fault.words(owner_name);
+                    campaign_fault_word.as_str()
                 }
                 _ if read_only => "Campaign · Read only",
                 _ => "Campaign · Editable",
@@ -7531,22 +7996,26 @@ impl Library {
                     }
                     _ => owner_word,
                 };
-                design::status(
-                    ui,
-                    if read_only {
-                        Status {
-                            icon: icons::READ_ONLY,
-                            word: owner_word,
-                            color: d.read_only,
-                        }
-                    } else {
-                        Status {
-                            icon: icons::EDIT,
-                            word: owner_word,
-                            color: d.clean,
-                        }
-                    },
-                );
+                if let Some(fault) = owner_fault {
+                    design::outcome::fault_status(ui, owner_name, fault);
+                } else {
+                    design::status(
+                        ui,
+                        if read_only {
+                            Status {
+                                icon: icons::READ_ONLY,
+                                word: owner_word,
+                                color: d.read_only,
+                            }
+                        } else {
+                            Status {
+                                icon: icons::EDIT,
+                                word: owner_word,
+                                color: d.clean,
+                            }
+                        },
+                    );
+                }
                 if !file_below {
                     if ui.available_width() >= path_room {
                         file_line(ui);
@@ -8054,10 +8523,14 @@ impl Library {
             read_disk_again = again;
             reload_from_disk = reload;
         } else if let Some(change) = &mut self.disk_change {
+            // R10 (G16, G164, G165): a changed entry is named, as Encounters and World name
+            // theirs; `This entry` only for an entry with no name.
+            let changed;
             let text = if change.moved_to.is_some() {
                 MOVED_ON_DISK
             } else if change.text.is_some() {
-                "This entry changed on disk. Your draft is safe until you choose."
+                changed = changed_on_disk(note.entry.as_ref().map_or("", |entry| &entry.name));
+                changed.as_str()
             } else {
                 "This entry’s file was deleted on disk. Your draft is safe until you choose."
             };
@@ -8570,7 +9043,7 @@ impl Library {
         if (read_again || read_disk_again)
             && let Some(root) = note.owner.root().map(Path::to_path_buf)
         {
-            self.refresh_destination(&root, ui.ctx());
+            self.refresh_destination(&root, ui.ctx(), campaigns);
             return;
         }
         if let Some(target) =
@@ -8655,6 +9128,7 @@ impl Library {
                     );
                     self.selection_undo = Some(undo);
                     self.stale = true;
+                    self.reconcile_registrations(campaigns);
                     self.content_changed = Some(campaign.path);
                 }
                 Err(error) => self.error = Some(error),
@@ -8762,6 +9236,7 @@ mod tests {
                 entry: Some(entry),
                 error: None,
                 fault: None,
+                manifest_gone: false,
                 owner: Owner::Builtin,
             });
         }
@@ -8771,6 +9246,7 @@ mod tests {
             entry: None,
             error: Some("Invalid YAML".into()),
             fault: None,
+            manifest_gone: false,
             owner: Owner::Builtin,
         });
         let check = |loaded: &Loaded| {
@@ -9226,7 +9702,8 @@ mod tests {
                 ..Default::default()
             };
             library.register_copy(&mut app.campaigns).unwrap();
-            let id = library.package_copy.as_ref().unwrap().module.id;
+            let owner = library.shown_registration(&app.campaigns).unwrap();
+            let id = owner.package;
             let document = CampaignDocument::load(&campaign).unwrap();
             assert_eq!(
                 document
@@ -9246,7 +9723,7 @@ mod tests {
             fs::write(&path, format!("{manifest}\nLater edit.\n")).unwrap();
             assert!(
                 library
-                    .undo_package_registration(&mut app.campaigns)
+                    .undo_package_registration(&owner, &mut app.campaigns)
                     .is_err()
             );
             assert_eq!(
@@ -9255,7 +9732,7 @@ mod tests {
             );
             fs::write(path, manifest).unwrap();
             library
-                .undo_package_registration(&mut app.campaigns)
+                .undo_package_registration(&owner, &mut app.campaigns)
                 .unwrap();
             assert_eq!(
                 CampaignDocument::load(&campaign).unwrap().text,
@@ -9280,6 +9757,7 @@ mod tests {
                     text,
                     error: None,
                     fault: None,
+                    manifest_gone: false,
                     owner: Owner::Package(Module {
                         id: Uuid::new_v4(),
                         name: name.into(),
@@ -9386,6 +9864,7 @@ mod tests {
             text,
             error: None,
             fault: None,
+            manifest_gone: false,
             owner,
         };
         library.loaded.as_mut().unwrap().notes[1].owner =
@@ -9763,7 +10242,11 @@ mod tests {
             ..Default::default()
         };
         fs::remove_file(module.path.join("Wolf.md")).unwrap();
-        library.refresh_destination(&module.path, &egui::Context::default());
+        library.refresh_destination(
+            &module.path,
+            &egui::Context::default(),
+            &Campaigns::default(),
+        );
         assert!(library.disk_change.as_ref().unwrap().moved_to.is_none());
         library.save_selected(false);
         assert!(!module.path.join("Wolf.md").exists());
@@ -9806,7 +10289,11 @@ mod tests {
             module.path.join("Moved/Rule.md"),
         )
         .unwrap();
-        library.refresh_destination(&module.path, &egui::Context::default());
+        library.refresh_destination(
+            &module.path,
+            &egui::Context::default(),
+            &Campaigns::default(),
+        );
         library.save_selected(true);
         assert!(
             !module.path.join("Rule.md").exists(),
@@ -10155,6 +10642,7 @@ mod tests {
                 entry: None,
                 error: None,
                 fault: None,
+                manifest_gone: false,
                 owner: Owner::Builtin,
             }],
             ..Default::default()
@@ -10167,6 +10655,7 @@ mod tests {
             entry: None,
             error: None,
             fault: None,
+            manifest_gone: false,
             owner: Owner::Builtin,
         });
         loaded.invalidate();
@@ -10387,6 +10876,7 @@ mod tests {
                         entry: Some(entry),
                         error: None,
                         fault: None,
+                        manifest_gone: false,
                         owner: Owner::Builtin,
                     }],
                     diagnostics: vec![],
@@ -10448,6 +10938,7 @@ mod tests {
                 text: source.into(),
                 error: None,
                 fault: None,
+                manifest_gone: false,
                 owner: Owner::Builtin,
             }
         })
@@ -10564,6 +11055,7 @@ mod tests {
             entry: duplicate.entry.clone(),
             error: None,
             fault: None,
+            manifest_gone: false,
             owner: Owner::Builtin,
         });
         assert_eq!(loaded.resolve_spell(&by_id), None);
@@ -10581,6 +11073,7 @@ mod tests {
                     entry: Some(Entry::parse(path, source).unwrap()),
                     error: None,
                     fault: None,
+                    manifest_gone: false,
                     owner: Owner::Builtin,
                 }],
                 ..Default::default()
@@ -10802,6 +11295,7 @@ mod tests {
                         entry: Some(Entry::parse("Long rule.md", &source).unwrap()),
                         error: None,
                         fault: None,
+                        manifest_gone: false,
                         owner: Owner::Builtin,
                     }],
                     ..Default::default()
@@ -11071,6 +11565,7 @@ mod tests {
                         entry: Some(entry.clone()),
                         error: None,
                         fault: None,
+                        manifest_gone: false,
                         owner: Owner::Builtin,
                     }],
                     diagnostics: vec![],
@@ -11237,6 +11732,14 @@ mod tests {
             assert!(rendered.contains("Write the manifest again"), "{rendered}");
             assert!(!rendered.contains("Missing YAML frontmatter"), "{rendered}");
             assert!(rendered.contains("Test · Manifest deleted"), "{rendered}");
+            // Row 125 (G148): the owner line states the warning the About row and the message
+            // state, with its icon and tone; not a muted edit pencil.
+            let warning = colors().result.warning;
+            assert_eq!(
+                owner_line_look(&mut library, "Test · Manifest deleted"),
+                Some((icons::WARN.to_owned(), warning, warning)),
+                "row-125-manifest-deleted ({filename})"
+            );
             assert!(rendered.contains("Show folder"), "{rendered}");
             assert!(!rendered.contains("Show file"), "{rendered}");
             assert!(!rendered.contains("Package.md"), "{rendered}");
@@ -11542,18 +12045,6 @@ mod tests {
         change_outside(&mut library);
         assert!(library.link_edits.is_empty());
 
-        // `Undo source change` keeps its data for registration, and blocks both Undos.
-        library.copied_rosters = Some(edit("rosters"));
-        library.forget_changed_undos();
-        assert!(!library.rosters_changed && !library.registration_changed);
-        change_outside(&mut library);
-        assert!(library.copied_rosters.is_some());
-        assert!(library.rosters_changed && library.registration_changed);
-        // The file holds the written text again: Undo comes back.
-        library.forget_changed_undos();
-        assert!(!library.rosters_changed && !library.registration_changed);
-        library.copied_rosters = None;
-
         // `Undo package choice`: only the package choices count.
         let mut document = CampaignDocument::load(&campaign).unwrap();
         library.selection_undo = Some(SelectionUndo {
@@ -11579,51 +12070,736 @@ mod tests {
         assert_eq!(fs::read(&campaign_file).unwrap(), cleared);
         fs::write(&campaign_file, saved).unwrap();
 
-        // `Undo package registration`: a copied file or the campaign file changed.
-        let copied = temp.path().join("copied");
-        fs::create_dir(&copied).unwrap();
-        for entry in content::read_directory(&original.path).unwrap().0 {
-            let path = copied.join(&entry.path);
-            fs::create_dir_all(path.parent().unwrap()).unwrap();
-            fs::copy(original.path.join(&entry.path), path).unwrap();
-        }
-        let mut library = Library {
-            copied_package: Some(local_module(&copied).unwrap()),
-            copy_name: "Reaches".into(),
-            ..Default::default()
+        // `Undo package registration`: a copied file changed. Each registration result lives in
+        // its store entry, with all its Undo needs (review of PR 367, points 1 to 4).
+        let copy_folder = |name: &str| {
+            let copied = temp.path().join(name);
+            fs::create_dir(&copied).unwrap();
+            for entry in content::read_directory(&original.path).unwrap().0 {
+                let path = copied.join(&entry.path);
+                fs::create_dir_all(path.parent().unwrap()).unwrap();
+                fs::copy(original.path.join(&entry.path), path).unwrap();
+            }
+            copied
         };
-        library.register_copy(&mut app.campaigns).unwrap();
+        let copied = copy_folder("copied");
+        let scope = Some(campaign.id);
+        let register =
+            |library: &mut Library, campaigns: &mut Campaigns, folder: &Path, used: bool| {
+                library.copied_package = Some(local_module(folder).unwrap());
+                library.copy_name = "Reaches".into();
+                library.copy_not_used = !used;
+                library.register_copy(campaigns).unwrap();
+                library.shown_registration(campaigns).unwrap()
+            };
+        // A reload: every write makes one, and so does `Reload from disk`.
+        let reload = |library: &mut Library, campaigns: &Campaigns| {
+            library.forget_changed_undos();
+            library.reconcile_registrations(campaigns);
+        };
+        let words = |library: &Library, owner: &RegistrationOwner| {
+            library
+                .registrations
+                .get(owner)
+                .map(|shown| shown.value().words())
+        };
+        let blocked = |library: &Library, owner: &RegistrationOwner| {
+            library
+                .registrations
+                .get(owner)
+                .is_some_and(|shown| shown.value().blocked)
+        };
+        let count = |library: &Library| library.registrations.newest_first(&scope).count();
+        let copy_chosen = |package: Uuid| {
+            CampaignDocument::load(&campaign)
+                .unwrap()
+                .selections
+                .iter()
+                .any(|selection| selection.package.id == Some(package))
+        };
+        let mut library = Library::default();
+        let a = register(&mut library, &mut app.campaigns, &copied, true);
         // Round 23 AD1: the result says what the registration chose, not the campaign's use now.
         assert_eq!(
-            package_registered(
-                &library.package_copy.as_ref().unwrap().module.name,
-                library.copy_campaign_before.is_some()
-            ),
-            "Reaches is registered, with every entry chosen for this campaign.",
+            words(&library, &a).as_deref(),
+            Some("Reaches is registered, with every entry chosen for this campaign."),
             "iter-23-L-AD1-chosen"
         );
-        library.forget_changed_undos();
-        assert!(!library.registration_changed);
+        reload(&mut library, &app.campaigns);
+        assert!(!blocked(&library, &a));
         let manifest = copied.join("Module.md");
         let written = fs::read(&manifest).unwrap();
         fs::write(&manifest, &outside).unwrap();
-        library.forget_changed_undos();
-        assert!(library.registration_changed && library.package_copy.is_some());
+        reload(&mut library, &app.campaigns);
+        assert!(blocked(&library, &a) && words(&library, &a).is_some());
         assert_eq!(fs::read(&manifest).unwrap(), outside);
         fs::write(&manifest, &written).unwrap();
-        library.forget_changed_undos();
-        assert!(!library.registration_changed);
-        let (_, path, _, _) = library.copy_campaign_before.clone().unwrap();
-        let campaign_text = fs::read(campaign.path.join(&path)).unwrap();
-        fs::write(campaign.path.join(&path), &outside).unwrap();
-        library.forget_changed_undos();
-        assert!(library.registration_changed);
-        fs::write(campaign.path.join(&path), campaign_text).unwrap();
-        library.forget_changed_undos();
-        assert!(!library.registration_changed);
+        reload(&mut library, &app.campaigns);
+        assert!(!blocked(&library, &a));
+        // Another edit of the campaign file keeps Undo: Undo takes out only the copy's choices,
+        // so the edit stays (it used to block Undo, which restored the whole file).
+        let campaign_file = campaign
+            .path
+            .join(&CampaignDocument::load(&campaign).unwrap().path);
+        let mut edited = fs::read_to_string(&campaign_file).unwrap();
+        edited.push_str("\nA later note.\n");
+        fs::write(&campaign_file, &edited).unwrap();
+        reload(&mut library, &app.campaigns);
+        assert!(!blocked(&library, &a));
+        assert_eq!(
+            words(&library, &a).as_deref(),
+            Some("Reaches is registered, with every entry chosen for this campaign."),
+            "an edit that leaves the choices of the copy keeps the clause"
+        );
+
+        // R11 (row 127, G147): result A (this registration) and an unrelated result B (a link
+        // update of another entry). The copy's use changes: A's clause ends at the reload, its
+        // Undo stays, and B stays.
+        let b = || LinkResult {
+            owner: Uuid::nil(),
+            source: OfferSource {
+                root: root.clone(),
+                path: paths[0].clone(),
+                text: String::new(),
+            },
+            edits: edit("links-b"),
+            old: "Cinder Wolf".into(),
+            new: "Ash Wolf".into(),
+        };
+        library.link_edits.record(b());
+        library.apply_page_press(
+            PagePress {
+                use_copy: Some(a),
+                ..Default::default()
+            },
+            &mut app.campaigns,
+        );
+        assert!(library.error.is_none(), "{:?}", library.error);
+        reload(&mut library, &app.campaigns);
+        assert_eq!(
+            words(&library, &a).as_deref(),
+            Some("Reaches is registered."),
+            "R11-clause-ends"
+        );
+        assert!(!blocked(&library, &a), "R11-undo-stays");
+        assert!(!library.link_edits.is_empty(), "R11-b-stays");
+        let source_files = library
+            .rosters
+            .get(&a)
+            .unwrap()
+            .value()
+            .edits
+            .inverse_files();
+
+        // Point 1: A's source change, then copy C registered and its registration undone: A's
+        // source change stays on disk and with A.
+        let c_folder = copy_folder("copied-c");
+        let c = register(&mut library, &mut app.campaigns, &c_folder, true);
+        assert_ne!(a, c);
+        assert_eq!(count(&library), 2);
         library
-            .undo_package_registration(&mut app.campaigns)
+            .undo_package_registration(&c, &mut app.campaigns)
             .unwrap();
+        reload(&mut library, &app.campaigns);
+        assert!(
+            library
+                .rosters
+                .get(&a)
+                .is_some_and(|source| source.value().edits.on_disk()),
+            "point-1-undo-c-keeps-a-source-change"
+        );
+        for (root, path, written, _) in &source_files {
+            assert!(
+                crate::content_workspace::holds(root, path, written),
+                "point-1: {path} keeps the source change of A"
+            );
+        }
+        assert_eq!(library.shown_registration(&app.campaigns), Some(a));
+
+        // Undo of the use change does not bring the clause back: it ended.
+        library.apply_page_press(
+            PagePress {
+                rosters: Some(a),
+                ..Default::default()
+            },
+            &mut app.campaigns,
+        );
+        reload(&mut library, &app.campaigns);
+        assert!(library.rosters.get(&a).is_none());
+        assert_eq!(
+            words(&library, &a).as_deref(),
+            Some("Reaches is registered.")
+        );
+        // Undo of A: its words go with its data (the copy unregistered, its choices out of the
+        // campaign), B stays, and the campaign file keeps its other edit.
+        let modules = app.campaigns.modules().len();
+        library.apply_page_press(
+            PagePress {
+                registration: Some(a),
+                ..Default::default()
+            },
+            &mut app.campaigns,
+        );
+        assert!(library.error.is_none(), "{:?}", library.error);
+        assert_eq!(words(&library, &a), None, "R11-undo-a-words");
+        assert_eq!(
+            app.campaigns.modules().len(),
+            modules - 1,
+            "R11-undo-a-data"
+        );
+        assert!(!copy_chosen(a.package), "R11-undo-a-choice");
+        assert!(
+            fs::read_to_string(&campaign_file)
+                .unwrap()
+                .contains("A later note."),
+            "Undo keeps the other edit of the campaign file"
+        );
+        assert!(!library.link_edits.is_empty(), "R11-undo-a-b-stays");
+
+        // Point 2: an unchosen copy's clause ends at the reload after each use change: through
+        // Lookup's or Library's choice of one entry, the Campaign page's choice, an outside edit.
+        let entry_of = |package: &Module| {
+            content::read_directory(&package.path)
+                .unwrap()
+                .0
+                .into_iter()
+                .find(|entry| entry.kind != "package")
+                .unwrap()
+                .id
+        };
+        // Point 3 (second pass): the encounter search's event, while an unrelated Library draft
+        // is unsaved, so no reload can run: the clause ends in the same pass as the write. Point 2 (second pass): an outside edit that names the copy by
+        // its key.
+        let original_path = &paths[0];
+        const SRD: Uuid = uuid::uuid!("71871979-b5d2-59a8-81c8-2081b92bb2fe");
+        const SRD_TASK: &str =
+            "- [x] System Reference Document 5.2.1 ^71871979-b5d2-59a8-81c8-2081b92bb2fe\n";
+        const SRD_ONLY: &str = "  - Only: [[spell/aid]]\n";
+        // Another package's choice and indented prose, written under the copy's task.
+        let b_id = Uuid::new_v4();
+        let nested = format!("  - [x] Package B ^{b_id}\n  Indented prose stays.\n");
+        // An unclosed fence inside the copy's list item: B's task ends the item, so the reader
+        // reads B. Without the copy's line, the fence would open at the top level and hold B.
+        let fenced_item = |name: &str, id: Uuid| {
+            format!("\n- [x] {name} ^{id}\n  ```\n- [x] Package B ^{b_id}\n")
+        };
+        let errands = |name: &str| {
+            format!(
+                "\n## Errands\n\n- [ ] {name}\n  Buy rope.\n\n```markdown\n## Packages\n- [ ] {name}\n  Buy rope.\n```\n"
+            )
+        };
+        for path in [
+            "encounter search with a draft",
+            "campaign page",
+            "outside edit",
+            "outside name link",
+            "outside id, trailing spaces",
+            "outside nested choice",
+            "outside nested four spaces",
+            "outside fence in the copy's item",
+            "outside other package's hand-written Only",
+            "outside indented task",
+        ] {
+            // The reader does not read a task line whose id has spaces after it (a fault on
+            // that line), but Undo still takes that line out: it names the copy's identity.
+            let read_as_choice = path != "outside id, trailing spaces";
+            let d = register(&mut library, &mut app.campaigns, &copied, false);
+            assert_eq!(
+                words(&library, &d).as_deref(),
+                Some("Reaches is registered, with no entries chosen for this campaign."),
+                "{path}"
+            );
+            let module = app
+                .campaigns
+                .modules()
+                .iter()
+                .find(|module| module.id == d.package)
+                .unwrap()
+                .clone();
+            let choices_before = CampaignDocument::load(&campaign).unwrap().selections;
+            let choose_by_hand = |reference: crate::content_workspace::EntryRef| {
+                let document = CampaignDocument::load(&campaign).unwrap();
+                let mut selections = document.selections.clone();
+                selections.push(crate::content_workspace::PackageSelection {
+                    name: Some(module.name.clone()),
+                    package: reference,
+                    selection: crate::content_workspace::Selection::All,
+                });
+                let text = document.text_with(&selections).unwrap();
+                fs::write(&campaign_file, text).unwrap();
+            };
+            match path {
+                "encounter search with a draft" => {
+                    let loaded = load_all(app.campaigns.modules(), Some(&campaign)).unwrap();
+                    let unrelated = loaded
+                        .notes
+                        .iter()
+                        .position(|note| {
+                            note.owner.id() == Some(original.id) && note.path == *original_path
+                        })
+                        .unwrap();
+                    library.draft = format!("{}\nUnsaved words.\n", loaded.notes[unrelated].text);
+                    library.loaded = Some(loaded);
+                    library.selected = Some(unrelated);
+                    assert!(library.dirty(), "fixture: an unrelated draft is unsaved");
+                    app.library = std::mem::take(&mut library);
+                    // The encounter search's `Use it` (src/encounters.rs, `use_package_entry`):
+                    // the one producer of this event that no Library draft locks (Lookup's
+                    // `Open in Library` and Library's `Choose for this campaign` wait for the
+                    // draft). Its act is this insert; `route` is the app's own consumer.
+                    let ctx = egui::Context::default();
+                    ctx.data_mut(|data| {
+                        data.insert_temp(
+                            egui::Id::new("use_package_entry"),
+                            (module.id, entry_of(&module)),
+                        )
+                    });
+                    app.route(&ctx);
+                    assert!(
+                        crate::content_workspace::CampaignDocument::load(&campaign)
+                            .unwrap()
+                            .selections
+                            .iter()
+                            .any(|selection| selection.package.id == Some(module.id)),
+                        "fixture: the event wrote the choice"
+                    );
+                    library = std::mem::take(&mut app.library);
+                    assert!(
+                        library.dirty() && library.pending.is_none(),
+                        "no reload ran"
+                    );
+                }
+                "campaign page" => {
+                    let mut document = CampaignDocument::load(&campaign).unwrap();
+                    document
+                        .selections
+                        .push(crate::content_workspace::PackageSelection {
+                            name: Some(module.name.clone()),
+                            package: crate::content_workspace::EntryRef::id(module.id),
+                            selection: crate::content_workspace::Selection::All,
+                        });
+                    document.save().unwrap();
+                }
+                "outside edit" => {
+                    choose_by_hand(crate::content_workspace::EntryRef::id(module.id));
+                }
+                "outside nested choice"
+                | "outside nested four spaces"
+                | "outside fence in the copy's item"
+                | "outside indented task" => {
+                    let task = if path == "outside nested choice" {
+                        format!("- [x] {} ^{}\n{nested}", module.name, module.id)
+                    } else if path == "outside fence in the copy's item" {
+                        fenced_item(&module.name, module.id)
+                    } else if path == "outside nested four spaces" {
+                        format!(
+                            "\n- [x] {} ^{}\n    - [x] Package B ^{b_id}\n",
+                            module.name, module.id
+                        )
+                    } else {
+                        format!("  - [x] {} ^{}\n", module.name, module.id)
+                    };
+                    let text = fs::read_to_string(&campaign_file).unwrap();
+                    fs::write(
+                        &campaign_file,
+                        text.replacen("## Packages\n", &format!("## Packages\n{task}"), 1),
+                    )
+                    .unwrap();
+                    let chosen = CampaignDocument::load(&campaign).unwrap().selections;
+                    assert!(
+                        chosen.iter().any(|s| s.package.id == Some(module.id))
+                            && (path == "outside indented task"
+                                || chosen.iter().any(|s| s.package.id == Some(b_id))),
+                        "fixture: the reader reads the choices ({path})"
+                    );
+                }
+                "outside other package's hand-written Only" => {
+                    let text = fs::read_to_string(&campaign_file).unwrap();
+                    assert!(text.contains(SRD_TASK), "fixture: the SRD's task\n{text}");
+                    let text = text.replacen(SRD_TASK, &format!("{SRD_TASK}{SRD_ONLY}"), 1);
+                    let text = text.replacen(
+                        "## Packages\n",
+                        &format!("## Packages\n- [x] {} ^{}\n", module.name, module.id),
+                        1,
+                    );
+                    fs::write(&campaign_file, text).unwrap();
+                }
+                "outside id, trailing spaces" => {
+                    choose_by_hand(crate::content_workspace::EntryRef::id(module.id));
+                    let mark = format!(" ^{}\n", module.id);
+                    let text = fs::read_to_string(&campaign_file).unwrap();
+                    assert!(text.contains(&mark), "fixture: the id-bearing line\n{text}");
+                    fs::write(
+                        &campaign_file,
+                        text.replacen(&mark, &format!(" ^{}  \n", module.id), 1),
+                    )
+                    .unwrap();
+                }
+                _ => {
+                    // A campaign file's package list names a package by its id or, written by
+                    // hand, by its name alone (a link). The key form is not in the file's list;
+                    // the one reading of a choice resolves it too.
+                    let manifests = package_manifests(&app.campaigns);
+                    let key = manifests
+                        .iter()
+                        .find(|manifest| manifest.id == module.id)
+                        .and_then(|manifest| manifest.key.clone())
+                        .expect("fixture: the manifest of the copy has a key");
+                    assert_eq!(
+                        chosen_package(
+                            &crate::content_workspace::EntryRef {
+                                id: None,
+                                key: Some(key),
+                                link: None,
+                            },
+                            &manifests,
+                        ),
+                        Some(module.id),
+                        "point-2-key-form"
+                    );
+                    let text = fs::read_to_string(&campaign_file).unwrap();
+                    let text = text.replacen(
+                        "## Packages\n",
+                        &format!("## Packages\n- [x] {}\n", module.name),
+                        1,
+                    );
+                    // An unrelated checklist item with the same name, under another heading, and
+                    // a fenced example that holds a `## Packages` list of its own.
+                    let text = format!("{text}{}", errands(&module.name));
+                    fs::write(&campaign_file, text).unwrap();
+                    assert!(
+                        CampaignDocument::load(&campaign)
+                            .unwrap()
+                            .selections
+                            .iter()
+                            .any(|selection| selection.package.id.is_none()
+                                && selection.package.link.as_deref() == Some(module.name.as_str())),
+                        "fixture: the file names the copy by its name\n{}\n{:?}",
+                        fs::read_to_string(&campaign_file).unwrap(),
+                        CampaignDocument::load(&campaign).unwrap().selections
+                    );
+                }
+            }
+            if path != "encounter search with a draft" {
+                reload(&mut library, &app.campaigns);
+            }
+            if path == "outside other package's hand-written Only" {
+                // Undo takes out the copy's choice and touches no other line: the SRD's
+                // hand-written `Only:` line stays byte for byte, its choice stays, and the guard
+                // has nothing to refuse.
+                library.apply_page_press(
+                    PagePress {
+                        registration: Some(d),
+                        ..Default::default()
+                    },
+                    &mut app.campaigns,
+                );
+                assert_eq!(library.error, None, "srd-only-undo-succeeds");
+                let text = fs::read_to_string(&campaign_file).unwrap();
+                assert!(
+                    text.contains(&format!("{SRD_TASK}{SRD_ONLY}"))
+                        && !text.contains(&d.package.to_string()),
+                    "srd-only-line-byte-equal\n{text}"
+                );
+                let srd = CampaignDocument::load(&campaign)
+                    .unwrap()
+                    .selections
+                    .into_iter()
+                    .find(|s| s.package.id == Some(SRD))
+                    .map(|s| s.selection);
+                assert!(
+                    matches!(
+                        &srd,
+                        Some(crate::content_workspace::Selection::Selected { entries })
+                            if entries.iter().any(|e| e.link.as_deref() == Some("[[spell/aid]]"))
+                    ),
+                    "srd-aid-choice-stays: {srd:?}"
+                );
+                fs::write(&campaign_file, text.replacen(SRD_ONLY, "", 1)).unwrap();
+                reload(&mut library, &app.campaigns);
+                continue;
+            }
+            if path == "outside fence in the copy's item" {
+                // Taking the copy's line out would put B (and every later line) inside a code
+                // block, so B's choice would be lost: the read-back guard refuses the Undo, and
+                // nothing is written. The registration and its result stay; the reason shows.
+                let before_undo = fs::read(&campaign_file).unwrap();
+                library.apply_page_press(
+                    PagePress {
+                        registration: Some(d),
+                        ..Default::default()
+                    },
+                    &mut app.campaigns,
+                );
+                assert_eq!(
+                    library.error.as_deref(),
+                    Some(PACKAGE_LIST_UNSAFE),
+                    "guard-refused\nbefore:\n{}\nafter:\n{}\nselections {:?}",
+                    String::from_utf8_lossy(&before_undo),
+                    fs::read_to_string(&campaign_file).unwrap(),
+                    CampaignDocument::load(&campaign).map(|d| d.selections)
+                );
+                assert_eq!(
+                    fs::read(&campaign_file).unwrap(),
+                    before_undo,
+                    "guard-nothing-written"
+                );
+                assert!(
+                    CampaignDocument::load(&campaign)
+                        .unwrap()
+                        .selections
+                        .iter()
+                        .any(|s| s.package.id == Some(b_id)),
+                    "guard-b-stays"
+                );
+                assert!(words(&library, &d).is_some(), "guard-result-stays");
+                assert!(
+                    app.campaigns.modules().iter().any(|m| m.id == d.package),
+                    "guard-registration-stays"
+                );
+                // The DM takes the copy out by hand; then Undo works.
+                library.error = None;
+                let text = String::from_utf8(before_undo).unwrap();
+                fs::write(
+                    &campaign_file,
+                    text.replacen(&fenced_item(&module.name, module.id), "", 1),
+                )
+                .unwrap();
+                reload(&mut library, &app.campaigns);
+                library
+                    .undo_package_registration(&d, &mut app.campaigns)
+                    .unwrap();
+                reload(&mut library, &app.campaigns);
+                continue;
+            }
+            if read_as_choice {
+                assert_eq!(
+                    words(&library, &d).as_deref(),
+                    Some("Reaches is registered."),
+                    "point-2-{path}"
+                );
+                // Undo of the registration takes the later choice out with it, in whatever
+                // form it names the copy; the other packages' choices stay, and the choice's
+                // own result ends with its data.
+                library.selection_undo = Some(SelectionUndo {
+                    campaign: campaign.clone(),
+                    before: choices_before.clone(),
+                    after: CampaignDocument::load(&campaign).unwrap().selections,
+                });
+            }
+            library
+                .undo_package_registration(&d, &mut app.campaigns)
+                .unwrap();
+            let after: Vec<_> = CampaignDocument::load(&campaign)
+                .unwrap()
+                .selections
+                .into_iter()
+                .filter(|s| s.package.id != Some(b_id))
+                .collect();
+            assert_eq!(after, choices_before, "point-3-{path}");
+            if path == "outside nested four spaces" {
+                // With this reader B stays a choice after the copy's line goes (the guard
+                // checks it): B's line stays byte for byte.
+                let text = fs::read_to_string(&campaign_file).unwrap();
+                let b_line = format!("    - [x] Package B ^{b_id}\n");
+                assert!(
+                    text.contains(&b_line)
+                        && CampaignDocument::load(&campaign)
+                            .unwrap()
+                            .selections
+                            .iter()
+                            .any(|s| s.package.id == Some(b_id)),
+                    "point-3-four-spaces-b-stays\n{text}"
+                );
+                fs::write(&campaign_file, text.replacen(&b_line, "", 1)).unwrap();
+            }
+            if path == "outside nested choice" {
+                // B's choice and the indented prose stay, byte for byte; only the copy's task
+                // line went.
+                let text = fs::read_to_string(&campaign_file).unwrap();
+                assert!(
+                    text.contains(&format!("## Packages\n{nested}"))
+                        && CampaignDocument::load(&campaign)
+                            .unwrap()
+                            .selections
+                            .iter()
+                            .any(|s| s.package.id == Some(b_id)),
+                    "point-3-nested-b-stays\n{text}"
+                );
+                fs::write(&campaign_file, text.replacen(&nested, "", 1)).unwrap();
+            }
+            if path == "outside name link" {
+                let text = fs::read_to_string(&campaign_file).unwrap();
+                // The other heading's item and the fenced example stay, byte for byte.
+                assert!(
+                    text.ends_with(&errands(&module.name)),
+                    "point-2-unrelated-item-stays\n{text}"
+                );
+                let rest = text.split("\n## Errands").next().unwrap().to_owned() + "\n";
+                fs::write(&campaign_file, rest).unwrap();
+            }
+            let text = fs::read_to_string(&campaign_file).unwrap();
+            assert!(
+                !text.contains(&d.package.to_string())
+                    && !text.contains(&format!("] {}\n", module.name)),
+                "point-3-text-{path}: the file still names the copy\n{text}"
+            );
+            assert!(library.selection_undo.is_none(), "point-3-result-{path}");
+            library.loaded = None;
+            library.selected = None;
+            library.draft.clear();
+            reload(&mut library, &app.campaigns);
+        }
+
+        // Point 1 (second pass): another campaign chose the copy, so the registration's Undo
+        // waits with that campaign's name and is refused; when it stops using the copy, Undo
+        // works again.
+        let other = Campaign {
+            id: Uuid::new_v4(),
+            name: "Other".into(),
+            path: temp.path().join("other"),
+            dndbeyond_campaign_id: None,
+            dndbeyond_campaign_name: None,
+        };
+        fs::create_dir(&other.path).unwrap();
+        CampaignDocument::new(&other).unwrap().save().unwrap();
+        app.campaigns.open_for_test(&other);
+        app.campaigns.open_for_test(&campaign);
+        let h = register(&mut library, &mut app.campaigns, &copied, false);
+        let h_module = app
+            .campaigns
+            .modules()
+            .iter()
+            .find(|module| module.id == h.package)
+            .unwrap()
+            .clone();
+        crate::content_workspace::use_in_campaign(&other, h_module.id, &h_module.name, None)
+            .unwrap();
+        reload(&mut library, &app.campaigns);
+        let lock = library
+            .registrations
+            .get(&h)
+            .and_then(|shown| shown.value().lock());
+        assert!(
+            lock.as_deref()
+                .is_some_and(|lock| lock.starts_with("Other uses this package.")),
+            "point-1-lock: {lock:?}"
+        );
+        let refused = library.undo_package_registration(&h, &mut app.campaigns);
+        assert!(
+            refused
+                .as_ref()
+                .is_err_and(|reason| reason.contains("Other")),
+            "point-1-refused: {refused:?}"
+        );
+        assert!(
+            words(&library, &h).is_some(),
+            "the refused Undo keeps its result"
+        );
+        let mut document = CampaignDocument::load(&other).unwrap();
+        document.selections.clear();
+        document.save().unwrap();
+        reload(&mut library, &app.campaigns);
+        assert_eq!(
+            library
+                .registrations
+                .get(&h)
+                .and_then(|shown| shown.value().lock()),
+            None,
+            "point-1-free"
+        );
+        library
+            .undo_package_registration(&h, &mut app.campaigns)
+            .unwrap();
+        reload(&mut library, &app.campaigns);
+
+        // Point 4: the result is the campaign's. In another campaign it does not show; back in
+        // its campaign it does. An unregister ends it at the reload, with its source change.
+        let e = register(&mut library, &mut app.campaigns, &copied, false);
+        app.campaigns.open_for_test(&other);
+        assert_eq!(
+            library.shown_registration(&app.campaigns),
+            None,
+            "point-4-switch"
+        );
+        app.campaigns.open_for_test(&campaign);
+        assert_eq!(library.shown_registration(&app.campaigns), Some(e));
+        library.apply_page_press(
+            PagePress {
+                use_copy: Some(e),
+                ..Default::default()
+            },
+            &mut app.campaigns,
+        );
+        assert!(library.rosters.get(&e).is_some());
+        app.campaigns.unregister_module(e.package).unwrap();
+        reload(&mut library, &app.campaigns);
+        assert_eq!(words(&library, &e), None, "point-4-unregister");
+        assert!(
+            library.rosters.get(&e).is_none(),
+            "point-4-unregister-source"
+        );
+
+        // One result per copied folder in a campaign: registered again (an unregister that no
+        // reload has seen), the older result ends by the store's owner event; Undo reverses
+        // only the newest registration's own files.
+        let f = register(&mut library, &mut app.campaigns, &copied, false);
+        let after_first = fs::read(&manifest).unwrap();
+        app.campaigns.unregister_module(f.package).unwrap();
+        let g = register(&mut library, &mut app.campaigns, &copied, false);
+        assert_eq!(count(&library), 1, "one-result-per-folder");
+        assert_eq!(words(&library, &f), None);
+        library
+            .undo_package_registration(&g, &mut app.campaigns)
+            .unwrap();
+        assert_eq!(
+            fs::read(&manifest).unwrap(),
+            after_first,
+            "undo-newest-only"
+        );
+        assert_eq!(count(&library), 0);
+
+        // The check runs at events, never per frame: with a registration and its source change
+        // kept, idle frames of the page after the load leave its count as it was.
+        let i = register(&mut library, &mut app.campaigns, &copied, false);
+        library.apply_page_press(
+            PagePress {
+                use_copy: Some(i),
+                ..Default::default()
+            },
+            &mut app.campaigns,
+        );
+        assert!(
+            library.rosters.get(&i).is_some(),
+            "fixture: the work's state is there"
+        );
+        let ctx = egui::Context::default();
+        crate::design::theme::install(&ctx);
+        let frame = |library: &mut Library, campaigns: &mut Campaigns| {
+            let _ = ctx.run(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| library.show(ui, campaigns));
+            });
+        };
+        for _ in 0..400 {
+            frame(&mut library, &mut app.campaigns);
+            if library.loaded.is_some() && library.pending.is_none() && !library.stale {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(
+            library.loaded.is_some() && library.pending.is_none(),
+            "the load settled"
+        );
+        frame(&mut library, &mut app.campaigns);
+        let settled = library.reconciles;
+        for _ in 0..20 {
+            frame(&mut library, &mut app.campaigns);
+        }
+        assert_eq!(
+            library.reconciles, settled,
+            "idle-frames-do-no-registration-work"
+        );
     }
 
     #[test]
@@ -11733,6 +12909,7 @@ mod tests {
             entry: None,
             error: None,
             fault: None,
+            manifest_gone: false,
             owner: Owner::Package(module.clone()),
         };
         let discarded = (Some(first.id), "a.md".to_string(), "words".to_string());
@@ -12052,6 +13229,48 @@ mod tests {
         }
     }
 
+    /// Row 125: the owner line's status that ends with `words`, after two frames: its icon, the
+    /// icon's colour and the words' colour.
+    fn owner_line_look(
+        library: &mut Library,
+        words: &str,
+    ) -> Option<(String, egui::Color32, egui::Color32)> {
+        let ctx = egui::Context::default();
+        crate::design::theme::install(&ctx);
+        let mut look = None;
+        for _ in 0..2 {
+            let output = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(1200.0, 1400.0),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        library.editor(ui, "Entry", &Campaigns::default());
+                    });
+                },
+            );
+            look = output.shapes.iter().find_map(|shape| {
+                let egui::Shape::Text(text) = &shape.shape else {
+                    return None;
+                };
+                let job = &text.galley.job;
+                (job.text.ends_with(words) && job.sections.len() >= 3).then(|| {
+                    let icon = &job.sections[0];
+                    (
+                        job.text[icon.byte_range.clone()].to_owned(),
+                        icon.format.color,
+                        job.sections[job.sections.len() - 1].format.color,
+                    )
+                })
+            });
+        }
+        look
+    }
+
     fn sd1_select(loaded: Loaded, owner: Option<Uuid>, path: &str) -> Library {
         let selected = loaded
             .notes
@@ -12219,6 +13438,14 @@ mod tests {
 
         let loaded = load_all(&[], Some(&campaign)).unwrap();
         let mut library = sd1_select(loaded, Some(campaign.id), "Notes/Yaml.md");
+        // Row 125 (G143, G144): `Cannot be read` on the owner line is the error, with its icon and
+        // tone, as the row and the header have it; not a muted edit pencil.
+        let error = colors().result.error;
+        assert_eq!(
+            owner_line_look(&mut library, "Campaign · Cannot be read"),
+            Some((icons::ERROR.to_owned(), error, error)),
+            "row-125-cannot-be-read"
+        );
         let yaml_painted = sd1_painted(&mut library);
         for words in ["Edit in Obsidian", "Fix in Edit Markdown", "Show file"] {
             assert!(
@@ -12775,7 +14002,7 @@ mod tests {
 
         // A later disk check (focus, or Try again) finds the same fault, not a deleted file.
         library.disk_change = None;
-        library.refresh_destination(&module.path, &ctx);
+        library.refresh_destination(&module.path, &ctx, &Campaigns::default());
         assert_eq!(
             fault(&library),
             Some(crate::world::file_fault::Kind::NotText),
@@ -12785,13 +14012,13 @@ mod tests {
 
         // The file reads as before again: the fault ends and the draft stays.
         fs::write(&file, &text).unwrap();
-        library.refresh_destination(&module.path, &ctx);
+        library.refresh_destination(&module.path, &ctx, &Campaigns::default());
         assert!(library.disk_change.is_none(), "SD1-fault-ends");
         assert_eq!(library.draft, draft);
 
         // Reload and lose my draft: the note becomes the unreadable file; Undo keeps the draft.
         fs::write(&file, NOT_TEXT).unwrap();
-        library.refresh_destination(&module.path, &ctx);
+        library.refresh_destination(&module.path, &ctx, &Campaigns::default());
         let selected = library.selected.unwrap();
         library.reload_note_from_disk(selected);
         let note = &library.loaded.as_ref().unwrap().notes[selected];
@@ -12819,7 +14046,7 @@ mod tests {
             "Wolf.md",
         );
         fs::write(&file, NOT_TEXT).unwrap();
-        library.refresh_destination(&module.path, &ctx);
+        library.refresh_destination(&module.path, &ctx, &Campaigns::default());
         assert!(library.disk_change.is_none() && library.stale);
         let loaded = load(Some(&module)).unwrap();
         let note = loaded.notes.iter().find(|n| n.path == "Wolf.md").unwrap();

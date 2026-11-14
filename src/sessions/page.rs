@@ -1631,6 +1631,8 @@ impl Sessions {
             .iter()
             .map(|note| (note.id, note.link()))
             .collect();
+        // Row 123: the note's own events end a plan line's result, on every page.
+        self.follow_plan_line();
         book.poll(ctx);
     }
 
@@ -2264,6 +2266,9 @@ impl Sessions {
         self.removed_fight = None;
         self.scenes = plan::Scenes::default();
         self.rewards = plan::Rewards::default();
+        // Row 123: a journey's acts, results and plan line are the campaign's: the change ends
+        // them here, as it happens.
+        self.travel = plan::Travel::default();
         self.campaign = active.cloned();
         self.folder_error = None;
         match active {

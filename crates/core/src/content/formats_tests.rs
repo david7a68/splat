@@ -802,6 +802,24 @@ fn fmt_f3_campaign_golden_toggle_noise_and_bad_rows() {
     )
     .unwrap();
     assert_eq!(on, new);
+    // Adding a package writes its line in the real `## Packages` section, also when a fenced
+    // example before it holds `## Packages` and `## Rule choices` of its own.
+    for example in ["", "```markdown\n## Packages\n\n## Rule choices\n```\n\n"] {
+        let shown = new.replacen("\n## Packages\n", &format!("\n{example}## Packages\n"), 1);
+        let without = shown.replace(&format!("- [x] Core ^{id}\n"), "");
+        let added = formats::patch_model(
+            &without,
+            &[(
+                "splat_packages",
+                Some(model(&old)["splat_packages"].clone()),
+            )],
+        );
+        assert_eq!(
+            added.as_deref(),
+            Ok(shown.as_str()),
+            "added after {example:?}"
+        );
+    }
     let bad = new
         .replace("- [x] Core", "- [q] Core")
         .replace(&format!("id={id}"), "id=oops");
