@@ -3704,28 +3704,53 @@ mod tests {
             .content
             .refresh_destination(&packages.join("watch-moved"));
         settle(&mut harness);
-        let order = [
-            "Use this folder",
-            "Find the folder…",
-            "Technical details",
-            "Remove from this campaign",
-        ]
-        .map(|name| harness.get_by_label(name).rect());
+        // `L` after the choice before it on a shared line; else a line of its own at the words,
+        // `M` below the others (`docs/design-system.md`, the destructive choice rule).
+        let check = |harness: &egui_kittest::Harness<'_, Page>| {
+            let order = [
+                "Use this folder",
+                "Find the folder…",
+                "Technical details",
+                "Remove from this campaign",
+            ]
+            .map(|name| harness.get_by_label(name).rect());
+            assert!(
+                order
+                    .windows(2)
+                    .all(|pair| (pair[0].center().y - pair[1].center().y).abs() < 1.0
+                        && pair[0].right() < pair[1].left()
+                        || pair[0].bottom() <= pair[1].top()),
+                "the moved-folder choices are not in the order repairs, links, Remove: {order:?}"
+            );
+            let (before, remove) = (order[2], order[3]);
+            let shares = (before.center().y - remove.center().y).abs() < 1.0;
+            let gap = remove.left() - before.right();
+            let above = remove.top()
+                - order[..3]
+                    .iter()
+                    .map(|rect| rect.bottom())
+                    .fold(f32::MIN, f32::max);
+            assert!(
+                if shares {
+                    (gap - design::L).abs() < 0.5
+                } else {
+                    (remove.left() - order[0].left()).abs() < 0.5 && (above - design::M).abs() < 0.5
+                },
+                "`Remove from this campaign` has not its room: shares a line {shares}, gap {gap}, \
+                 above {above}"
+            );
+            shares
+        };
         assert!(
-            order
-                .windows(2)
-                .all(|pair| (pair[0].center().y - pair[1].center().y).abs() < 1.0
-                    && pair[0].right() < pair[1].left()
-                    || pair[0].bottom() <= pair[1].top()),
-            "the moved-folder choices are not in the order repairs, links, Remove: {order:?}"
+            check(&harness),
+            "at 1200 px Remove shares the safe choices' line"
         );
-        let (before, remove) = (order[2], order[3]);
-        let gap = remove.left() - before.right();
-        assert!(
-            (before.center().y - remove.center().y).abs() < 1.0 && (gap - design::L).abs() < 0.5
-                || (remove.left() - order[0].left()).abs() < 0.5,
-            "`Remove from this campaign` is not `L` after the choice before it: gap {gap}"
-        );
+        // Narrow: Remove wraps to a line of its own.
+        harness.set_size(egui::vec2(500.0, 900.0));
+        harness.run_steps(2);
+        assert!(!check(&harness), "at 500 px Remove wraps");
+        harness.set_size(egui::vec2(1200.0, 900.0));
+        harness.run_steps(2);
         // A finds Watch in watch-a/ and Toll in toll-a/.
         find(&mut harness, "watch-moved", "watch-a");
         find(&mut harness, "toll", "toll-a");
