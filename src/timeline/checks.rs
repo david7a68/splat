@@ -528,10 +528,6 @@ pub fn header(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<A
 
 /// The table menu, then `· 1d20 each day`. Dice words that move to a line of their own start
 /// with the words, not with `·`.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn table_line(ui: &mut egui::Ui, view: &View<'_>, table: Option<&Table>, act: &mut Option<Act>) {
     let c = colors();
     ui.spacing_mut().item_spacing.x = design::S;
@@ -541,7 +537,7 @@ fn table_line(ui: &mut egui::Ui, view: &View<'_>, table: Option<&Table>, act: &m
         _ => "Choose a table",
     };
     let button = design::menu_button(ui, word, false);
-    egui::Popup::menu(&button).show(|ui| {
+    design::menu_popup(ui, &button).show(|ui| {
         let mut names: Vec<&Table> = view.tables.iter().collect();
         names.sort_by(|a, b| a.name().cmp(b.name()).then(a.key.cmp(&b.key)));
         for option in names {

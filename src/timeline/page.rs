@@ -17,6 +17,15 @@ const COPIED_FOR: Duration = Duration::from_secs(2);
 const TIMELINE_SEARCH: design::FieldId =
     crate::field_id!("timeline_search").once(design::Once::PageSearch);
 const EVENT_NOTES: design::FieldName = crate::field_id!("event_notes");
+const EVENT_TITLE: design::FieldName = crate::field_id!("event_title");
+const EVENT_PLACE: design::FieldName = crate::field_id!("event_place");
+const EVENT_KIND: design::FieldName = crate::field_id!("timeline_event_kind");
+const EVENT_SESSION: design::FieldName = crate::field_id!("timeline_event_session");
+const PLACE_AFTER: design::FieldName = crate::field_id!("timeline_place_after");
+/// The page's own view choice: which session it shows. It is the page's state, not saved
+/// object data.
+const SESSION_FILTER: design::FieldId =
+    crate::field_id!("timeline_session_filter").once(design::Once::PageSearch);
 
 #[derive(Clone, Copy, Default, PartialEq)]
 enum Filter {
@@ -64,8 +73,6 @@ pub struct TimelinePage {
     focus_title: bool,
     reset_detail: bool,
     scroll_to: Option<usize>,
-    /// The Place after list just opened, so it shows the event's own place.
-    show_place: bool,
     /// An event just added with the buttons, with one step of undo.
     /// The event just added, when, and the add's footer order.
     just_added: Option<(String, Instant, design::ResultOrder)>,
@@ -266,10 +273,6 @@ pub fn rest_ruling(ui: &mut egui::Ui, event: &Event, undo: bool) -> Option<RestR
 
 /// The ruling now in force and the action that changes it. The action changes data, so it is a
 /// quiet button after the status, never a link.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub fn rest_ruling_line(ui: &mut egui::Ui, event: &Event) -> Option<RestRulingAction> {
     if event.kind != Kind::LongRest {
         return None;
@@ -277,7 +280,8 @@ pub fn rest_ruling_line(ui: &mut egui::Ui, event: &Event) -> Option<RestRulingAc
     let mut action = None;
     ui.horizontal_wrapped(|ui| {
         design::status(ui, long_rest_status(event.restores));
-        ui.add_space(design::L - ui.spacing().item_spacing.x);
+        // The line's item gap (`S`, the theme's) and this `S` make `L`.
+        design::gap(ui, design::Gap::S);
         if Action::quiet(if event.restores {
             "Mark not at full"
         } else {
@@ -478,10 +482,6 @@ pub fn file_act(book: &mut Book, act: Option<FileAct>) {
 
 /// What stops the timeline from saving. The DM must choose, so this cannot be dismissed.
 /// Returns true when the comparison needs the rest of the pane.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
     if let Some(error) = book.unreadable.clone() {
         // Message choices start at the message text. The old-format notice draws its own.
@@ -513,8 +513,8 @@ pub fn problems(ui: &mut egui::Ui, book: &mut Book) -> bool {
                     {
                         book.overwrite();
                     }
-                    // One `L` gap before the red choice.
-                    ui.add_space(design::L - ui.spacing().item_spacing.x);
+                    // One `L` gap before the red choice: the line's item gap (`S`) and this `S`.
+                    design::gap(ui, design::Gap::S);
                     if Action::destructive("Reload and lose my timeline")
                         .show(ui)
                         .clicked()
@@ -576,6 +576,10 @@ impl TimelinePage {
     }
 
     /// Where a new event goes, said before it happens. An encounter run goes there too.
+    ///
+    /// Kept on `egui::ComboBox`: its narrow control shows the chosen session's short form
+    /// (`Session 1`) while its list shows the whole names, and `design::Dropdown` shows only the
+    /// chosen row's own words (a gap sent to the part's owner).
     #[allow(
         clippy::disallowed_methods,
         reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
@@ -609,10 +613,6 @@ impl TimelinePage {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn filters(&mut self, ui: &mut egui::Ui, sessions: &[SessionLink], current: Option<Uuid>) {
         let before = (self.filter, self.search.clone(), self.session);
         let tabs = |ui: &mut egui::Ui, filter: &mut Filter| {
@@ -645,29 +645,15 @@ impl TimelinePage {
                 "Search",
                 160.0,
             );
-            let label = self
-                .session
-                .and_then(|id| sessions.iter().find(|session| session.id == id))
-                .map_or("All sessions", |session| session.label.as_str())
-                .to_owned();
-            let inner = egui::ComboBox::from_id_salt("timeline_session_filter")
-                .truncate()
-                .selected_text(&label)
+            design::Dropdown::new(SESSION_FILTER, "Show one session")
+                .choice(None, "All sessions")
+                .choices(
+                    sessions
+                        .iter()
+                        .map(|session| (Some(session.id), session.label.as_str())),
+                )
                 .width(150.0)
-                .icon(design::combo_icon)
-                .show_ui(ui, |ui| {
-                    design::choice_value(ui, &mut self.session, None, "All sessions");
-                    for session in sessions {
-                        design::choice_wrapped_value(
-                            ui,
-                            &mut self.session,
-                            Some(session.id),
-                            &session.label,
-                        );
-                    }
-                });
-            design::named(ui, &inner.response, "Show one session");
-            inner.response.on_hover_text(label);
+                .show(ui, &mut self.session);
             self.new_events_line(ui, sessions, current);
         });
         if before != (self.filter, self.search.clone(), self.session) {
@@ -1260,7 +1246,7 @@ impl TimelinePage {
         }
         let event = &book.events[index];
         let title = event.label(days[index]);
-        let icon_only = event.kind == Kind::Day || event.title.trim().is_empty();
+        let icon_only = event.kind == Kind::Day || event.own_title().is_none();
         let kind = header_kind(event);
         let needed = design::number_width(ui, &title, &Type::Heading.font(ui))
             + design::number_width(ui, &kind, &Type::Small.font(ui))
@@ -1301,7 +1287,7 @@ impl TimelinePage {
                 icons::EXPAND,
                 &format!("More actions for {}", event.label(days[index])),
             );
-            egui::Popup::menu(&more).show(|ui| {
+            design::menu_popup(ui, &more).show(|ui| {
                 if checks::offered(event, tables)
                     && Action::quiet("Roll for encounters").show(ui).clicked()
                 {
@@ -1382,7 +1368,8 @@ impl TimelinePage {
             design::gap(ui, design::Gap::XS);
             let hint = (event.kind == Kind::Day)
                 .then_some("Optional. Days number themselves, so a name is extra.");
-            let title = design::text_field(ui, "Title", &mut event.title, hint, None);
+            let title = EVENT_TITLE.of(design::TextKey::of(&*event));
+            let title = design::labelled_field(ui, title, "Title", &mut event.title, hint, None);
             changed |= title.changed();
             if std::mem::take(&mut self.focus_title) {
                 title.request_focus();
@@ -1416,18 +1403,14 @@ impl TimelinePage {
             let day_start = starts
                 .filter(|_| event.kind == Kind::Day)
                 .map(|start| format!("Starts: {}", clock_words(start)));
+            let kind_id = EVENT_KIND.of(design::TextKey::of(&*event));
             design::field(ui, "Kind", day_start.as_deref(), None, |ui| {
-                let inner = egui::ComboBox::from_id_salt("timeline_event_kind")
-                    .selected_text(event.kind.word())
-                    .width(ui.available_width().min(design::FORM_WIDTH))
-                    .icon(design::combo_icon)
-                    .show_ui(ui, |ui| {
-                        for kind in Kind::ALL {
-                            changed |= design::choice_value(ui, &mut event.kind, kind, kind.word())
-                                .changed();
-                        }
-                    });
-                design::named(ui, &inner.response, "Kind of event");
+                let [first, rest @ ..] = Kind::ALL;
+                changed |= design::Dropdown::new(kind_id, "Kind of event")
+                    .choice(first, first.word())
+                    .choices(rest.into_iter().map(|kind| (kind, kind.word())))
+                    .show(ui, &mut event.kind)
+                    .changed;
             });
             if event.kind != Kind::Day {
                 design::gap(ui, design::Gap::M);
@@ -1504,33 +1487,22 @@ impl TimelinePage {
                 checks_act = checks::lines(ui, &view, &mut self.checks).or(checks_act.take());
             }
             design::gap(ui, design::Gap::M);
-            changed |= design::text_field(ui, "Where", &mut event.place, None, None).changed();
+            let place = EVENT_PLACE.of(design::TextKey::of(&*event));
+            changed |=
+                design::labelled_field(ui, place, "Where", &mut event.place, None, None).changed();
             changed |= self.place_help(ui, event);
             design::gap(ui, design::Gap::M);
+            let session_id = EVENT_SESSION.of(design::TextKey::of(&*event));
             design::field(ui, "Session", None, None, |ui| {
-                let label = event
-                    .session
-                    .and_then(|id| sessions.iter().find(|session| session.id == id))
-                    .map_or("No session", |session| session.label.as_str());
-                let inner = egui::ComboBox::from_id_salt("timeline_event_session")
-                    .truncate()
-                    .selected_text(label)
-                    .width(ui.available_width().min(design::FORM_WIDTH))
-                    .icon(design::combo_icon)
-                    .show_ui(ui, |ui| {
-                        changed |= design::choice_value(ui, &mut event.session, None, "No session")
-                            .changed();
-                        for session in sessions {
-                            changed |= design::choice_wrapped_value(
-                                ui,
-                                &mut event.session,
-                                Some(session.id),
-                                &session.label,
-                            )
-                            .changed();
-                        }
-                    });
-                design::named(ui, &inner.response, "Session of this event");
+                changed |= design::Dropdown::new(session_id, "Session of this event")
+                    .choice(None, "No session")
+                    .choices(
+                        sessions
+                            .iter()
+                            .map(|session| (Some(session.id), session.label.as_str())),
+                    )
+                    .show(ui, &mut event.session)
+                    .changed;
             });
             // A session whose note has gone has nothing to open.
             if let Some(session) = event.session
@@ -1594,34 +1566,23 @@ impl TimelinePage {
             }
             design::gap(ui, design::Gap::XS);
             design::gap(ui, design::Gap::M);
+            let place_after = PLACE_AFTER.of(design::TextKey::of(&*event));
             design::field(ui, "Place after", None, None, |ui| {
-                let before = index
-                    .checked_sub(1)
-                    .map(|at| labels[at].clone())
-                    .unwrap_or_else(|| "Start of the timeline".to_owned());
-                let inner = egui::ComboBox::from_id_salt("timeline_place_after")
-                    .selected_text(before)
-                    .width(ui.available_width().min(design::FORM_WIDTH))
-                    .icon(design::combo_icon)
-                    .show_ui(ui, |ui| {
-                        if design::choice(ui, false, "Start of the timeline").clicked() {
-                            placed = Some(None);
-                        }
-                        for (at, label) in labels.iter().enumerate() {
-                            if at != index {
-                                let row = design::choice_wrapped(ui, at + 1 == index, label, None);
-                                if row.clicked() {
-                                    placed = Some(Some(ids[at].clone()));
-                                }
-                                if at + 1 == index && std::mem::take(&mut self.show_place) {
-                                    row.scroll_to_me(Some(egui::Align::Center));
-                                }
-                            }
-                        }
-                    });
-                design::named(ui, &inner.response, "Place this event after");
-                if inner.response.clicked() {
-                    self.show_place = true;
+                // The event before this one; the list opens on it.
+                let before = index.checked_sub(1).map(|at| ids[at].clone());
+                let mut after = before.clone();
+                design::Dropdown::new(place_after, "Place this event after")
+                    .choice(None, "Start of the timeline")
+                    .choices(
+                        labels
+                            .iter()
+                            .enumerate()
+                            .filter(|(at, _)| *at != index)
+                            .map(|(at, label)| (Some(ids[at].clone()), label.as_str())),
+                    )
+                    .show(ui, &mut after);
+                if after != before {
+                    placed = Some(after);
                 }
             });
             // With the list hidden, the event's results end its form, so they move no field.
@@ -1924,7 +1885,7 @@ fn second_line(
 }
 
 fn header_kind(event: &Event) -> String {
-    if event.kind == Kind::Day || event.title.trim().is_empty() {
+    if event.kind == Kind::Day || event.own_title().is_none() {
         event.kind.icon().to_owned()
     } else {
         format!("{} {}", event.kind.icon(), event.kind.word())
@@ -2049,6 +2010,17 @@ mod tests {
         event.title = "Rest at the mill".into();
         assert!(header_kind(&event).contains("Long rest"));
         assert_eq!(event.label(1), "Rest at the mill");
+        // Round 28 FL8, FN3, FH7: the plan gives a new event its kind as its title. The header,
+        // the label and the row's second line then say the kind once.
+        for (kind, word) in [(Kind::Travel, "Travel"), (Kind::Day, "Day")] {
+            let mut book = Book::default();
+            book.add(kind, None);
+            let mut event = book.events.remove(0);
+            event.title = word.into();
+            let header = format!("{} {}", header_kind(&event), event.label(1));
+            assert_eq!(header.matches(word).count(), 1, "{header}");
+            assert!(!event.facts().contains(word), "{}", event.facts());
+        }
     }
 
     #[test]

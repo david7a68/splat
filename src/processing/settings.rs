@@ -6,7 +6,7 @@ use super::{
 };
 use crate::{
     credentials::{self, KeySlot},
-    design::{self, Action, Tone, Type, colors, icons},
+    design::{self, Action, Density, Tone, Type, colors, icons},
     recording::{self, Probe},
 };
 use eframe::egui;
@@ -17,6 +17,15 @@ use std::{
     sync::mpsc,
 };
 use zeroize::{Zeroize, Zeroizing};
+
+/// Which text setting a [`ProcessingSettings::setting_field`] edits.
+#[derive(Clone, Copy)]
+enum Text {
+    SpeechUrl,
+    SpeechModel,
+    LlmUrl,
+    LlmModel,
+}
 
 /// Common services, to fill the address. The DM can still enter any other.
 const LLM_CHOICES: [(&str, Provider, &str, &str); 6] = [
@@ -68,6 +77,14 @@ const LLM_KEY: design::FieldId = crate::field_id!("llm_api_key").once(design::On
 const CLEAN_PROMPT: design::FieldId = crate::field_id!("clean_prompt").once(design::Once::Settings);
 const REVIEW_PROMPT: design::FieldId =
     crate::field_id!("review_prompt").once(design::Once::Settings);
+const INPUT: design::FieldId = crate::field_id!("recording_input").once(design::Once::Settings);
+const SPEECH_SERVICE: design::FieldId =
+    crate::field_id!("speech_service").once(design::Once::Settings);
+const SPEECH_URL: design::FieldId = crate::field_id!("speech_url").once(design::Once::Settings);
+const SPEECH_MODEL: design::FieldId = crate::field_id!("speech_model").once(design::Once::Settings);
+const LLM_SERVICE: design::FieldId = crate::field_id!("llm_service").once(design::Once::Settings);
+const LLM_URL: design::FieldId = crate::field_id!("llm_url").once(design::Once::Settings);
+const LLM_MODEL: design::FieldId = crate::field_id!("llm_model").once(design::Once::Settings);
 
 #[derive(Default)]
 struct Store {
@@ -367,10 +384,6 @@ impl ProcessingSettings {
             .map(|error| format!("These settings were not saved. {error}"));
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn key_row(&mut self, ui: &mut egui::Ui, slot: KeySlot, label: &str) {
         let (tx, ctx) = (
             self.replies.as_ref().map(|(tx, _)| tx.clone()),
@@ -390,9 +403,8 @@ impl ProcessingSettings {
             KeySlot::Speech => &self.config.speech_url,
             KeySlot::Llm => &self.config.llm_url,
         });
-        let warning = format!(
-            "The saved key is for {owner}, so Splat will not send it to {target}. Save a key for it."
-        );
+        let warning =
+            format!("The saved key is for {owner}, so Splat will not send it to {target}.");
         let slot_word = if slot == KeySlot::Speech {
             "speech"
         } else {
@@ -462,7 +474,7 @@ impl ProcessingSettings {
                     // The line stays, so the reason coming and going moves nothing.
                     let font = Type::Small.font(ui);
                     let height = ui.fonts_mut(|fonts| fonts.row_height(&font));
-                    ui.allocate_space(egui::vec2(0.0, height));
+                    ui.allocate_exact_size(egui::vec2(0.0, height), egui::Sense::hover());
                 }
             }
         });
@@ -515,10 +527,6 @@ impl ProcessingSettings {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn input_section(&mut self, ui: &mut egui::Ui) {
         let heading = design::heading(
             ui,
@@ -554,43 +562,28 @@ impl ProcessingSettings {
                 );
                 if tool.can_choose_input() {
                     let inputs = inputs.clone();
-                    let current = self.config.input.clone();
-                    let label = current.as_deref().map_or_else(
-                        || "System default".to_owned(),
-                        |name| {
-                            inputs.iter().find(|input| input.name == name).map_or_else(
-                                || format!("{name} (not found now)"),
-                                |i| i.description.clone(),
-                            )
-                        },
-                    );
+                    // A chosen input that is not plugged in now stays the choice, and says so.
+                    let missing = self
+                        .config
+                        .input
+                        .clone()
+                        .filter(|name| !inputs.iter().any(|input| input.name == *name));
                     let mut changed = false;
                     design::small_field(ui, "Input", None, None, |ui| {
-                        let inner = egui::ComboBox::from_id_salt("recording_input")
-                            .selected_text(&label)
-                            .width(ui.available_width().min(design::FORM_WIDTH))
-                            .icon(design::combo_icon)
-                            .show_ui(ui, |ui| {
-                                changed |= design::choice_value(
-                                    ui,
-                                    &mut self.config.input,
-                                    None,
-                                    "System default",
-                                )
-                                .changed();
-                                for input in &inputs {
-                                    changed |= design::choice_wrapped_value(
-                                        ui,
-                                        &mut self.config.input,
-                                        Some(input.name.clone()),
-                                        &input.description,
-                                    )
-                                    .changed();
-                                }
-                            });
-                        design::named(ui, &inner.response, "Recording input");
+                        let shown =
+                            design::Dropdown::new(INPUT, "Recording input")
+                                .choice(None, "System default")
+                                .choices(inputs.iter().map(|input| {
+                                    (Some(input.name.clone()), input.description.clone())
+                                }))
+                                .choices(missing.map(|name| {
+                                    let words = format!("{name} (not found now)");
+                                    (Some(name), words)
+                                }))
+                                .show(ui, &mut self.config.input);
+                        changed = shown.changed;
                         if std::mem::take(&mut self.focus_input) {
-                            inner.response.request_focus();
+                            shown.response.request_focus();
                         }
                     });
                     if changed {
@@ -608,41 +601,57 @@ impl ProcessingSettings {
         }
     }
 
-    /// A value that blocks processing says so below its own field, in the notice's tone, so the
-    /// DM need not scroll away from the field to learn why. Reasons follow the config's order.
-    /// Round 26 FM6: a missing value's reason is the plain `Small` line directly below its
-    /// field, as the key row's `Paste a key first.` is. The page's top notice has the icon and
-    /// the bar, and names the first missing value.
-    /// Round 27 FI7: the reason is `XS` below its field; when a label follows it, `M` comes
-    /// before that label, so the reason reads as its own field's.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
-    fn field_reason(
+    /// A one-line setting with its label above it. A value that blocks processing says so
+    /// directly below its own field in the field's help form (round 26 FM6), before the field's
+    /// own help; the field part then keeps `L` before the next label (N3), so the reason reads
+    /// as its own field's (round 27 FI7). The first reason's place is kept for the reveal.
+    fn setting_field(
         &mut self,
         ui: &mut egui::Ui,
-        field: egui::Rect,
-        blocks: bool,
-        words: &str,
-        label_next: bool,
-    ) {
-        if blocks {
-            ui.add_space(field.bottom() + design::XS - ui.cursor().top());
-            let rect = ui
-                .add(egui::Label::new(Type::Small.rich(ui, words).color(colors().muted)).wrap())
-                .rect;
-            self.reason_rect.get_or_insert(rect);
-            if label_next {
-                ui.add_space(rect.bottom() + design::M - ui.cursor().top());
+        field: (design::FieldId, &str, &str),
+        text: Text,
+        reason: &str,
+        help: Option<&str>,
+    ) -> bool {
+        let (id, label, name) = field;
+        let value = match text {
+            Text::SpeechUrl => &mut self.config.speech_url,
+            Text::SpeechModel => &mut self.config.speech_model,
+            Text::LlmUrl => &mut self.config.llm_url,
+            Text::LlmModel => &mut self.config.llm_model,
+        };
+        let blocks = value.trim().is_empty();
+        // With no help of its own, the reason is the field's help; else it comes first.
+        let (help, first) = match help {
+            None => (blocks.then_some(reason), None),
+            Some(help) => (Some(help), blocks.then_some(reason)),
+        };
+        let response = design::small_field(ui, label, help, None, |ui| {
+            let width = ui.available_width().min(design::FORM_WIDTH) - 2.0 * design::S;
+            let response = id.single_line(ui, value, |edit| {
+                edit.desired_width(width)
+                    .min_size(egui::vec2(0.0, Density::Read.control()))
+                    .margin(egui::vec2(design::S, 5.0))
+            });
+            if let Some(reason) = first {
+                design::help(ui, reason);
             }
+            response
+        });
+        design::named(ui, &response, name);
+        if blocks {
+            // The reason is the first line below the field.
+            let font = Type::Small.font(ui);
+            let line = ui.fonts_mut(|fonts| fonts.row_height(&font));
+            let below = egui::Rect::from_min_size(
+                response.rect.left_bottom(),
+                egui::vec2(response.rect.width(), design::XS + line),
+            );
+            self.reason_rect.get_or_insert(below);
         }
+        response.changed()
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn speech_section(&mut self, ui: &mut egui::Ui) {
         design::help(
             ui,
@@ -652,67 +661,49 @@ impl ProcessingSettings {
             .iter()
             .find(|(_, url, _)| self.config.speech_url == *url)
             .map_or(OTHER_SERVICE, |(name, ..)| name);
-        let mut chosen = None;
-        design::small_field(ui, "Service", None, None, |ui| {
-            let inner = egui::ComboBox::from_id_salt("speech_service")
-                .selected_text(current)
-                .width(ui.available_width().min(design::FORM_WIDTH))
-                .icon(design::combo_icon)
-                .show_ui(ui, |ui| {
-                    for (name, url, model) in SPEECH_CHOICES {
-                        if design::choice(ui, current == name, name).clicked() {
-                            chosen = Some((url, model));
-                        }
-                    }
-                    if design::choice(ui, current == OTHER_SERVICE, OTHER_SERVICE).clicked() {
-                        chosen = Some(("", ""));
-                    }
-                });
-            design::named(ui, &inner.response, "Speech service");
+        let mut chosen = current;
+        // Round 28 FI7: the custom service's help is the Service field's own, so `L` follows it
+        // and it never reads as help for Address.
+        let custom = (current == OTHER_SERVICE)
+            .then_some("The custom service must support the OpenAI audio/transcriptions API.");
+        design::small_field(ui, "Service", custom, None, |ui| {
+            design::Dropdown::new(SPEECH_SERVICE, "Speech service")
+                .choice(SPEECH_CHOICES[0].0, SPEECH_CHOICES[0].0)
+                .choices(SPEECH_CHOICES[1..].iter().map(|(name, ..)| (*name, *name)))
+                .choice(OTHER_SERVICE, OTHER_SERVICE)
+                .show(ui, &mut chosen)
         });
-        if let Some((url, model)) = chosen {
+        if chosen != current {
+            let (url, model) = SPEECH_CHOICES
+                .iter()
+                .find(|(name, ..)| *name == chosen)
+                .map_or(("", ""), |(_, url, model)| (*url, *model));
             self.config.speech_url = url.to_owned();
             self.config.speech_model = model.to_owned();
             self.persist();
             self.reveal_problem = true;
             ui.ctx().request_repaint();
         }
-        if current == OTHER_SERVICE {
-            design::help(
-                ui,
-                "The custom service must support the OpenAI audio/transcriptions API.",
-            );
-        }
-        let mut changed = false;
-        let response =
-            design::small_text_field(ui, "Address", &mut self.config.speech_url, None, None);
-        design::named(ui, &response, "Speech address");
-        changed |= response.changed();
-        let empty = self.config.speech_url.trim().is_empty();
-        self.field_reason(ui, response.rect, empty, "Enter the address.", true);
-        let response =
-            design::small_text_field(ui, "Model", &mut self.config.speech_model, None, None);
-        design::named(ui, &response, "Speech model");
-        changed |= response.changed();
-        let empty = self.config.speech_model.trim().is_empty();
-        // The reason sits directly below the field, as Address's does; the help follows it, and
-        // `L` comes before the next label.
-        self.field_reason(ui, response.rect, empty, "Enter the model’s name.", false);
-        let help = design::help(
+        let mut changed = self.setting_field(
             ui,
-            "The name your service gives it. For OpenAI, gpt-transcribe.",
+            (SPEECH_URL, "Address", "Speech address"),
+            Text::SpeechUrl,
+            "Enter the address.",
+            None,
         );
-        ui.add_space(help.rect.bottom() + design::L - ui.cursor().top());
+        changed |= self.setting_field(
+            ui,
+            (SPEECH_MODEL, "Model", "Speech model"),
+            Text::SpeechModel,
+            "Enter the model’s name.",
+            Some("The name your service gives it. For OpenAI, gpt-transcribe."),
+        );
         if changed {
             self.persist();
         }
         self.key_row(ui, KeySlot::Speech, "Speech API key");
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn llm_section(&mut self, ui: &mut egui::Ui) {
         design::help(
             ui,
@@ -724,25 +715,22 @@ impl ProcessingSettings {
                 self.config.provider == *provider && self.config.llm_url == *url
             })
             .map_or(OTHER_SERVICE, |(name, ..)| name);
-        let mut chosen = None;
+        let mut chosen = current;
         design::small_field(ui, "Service", None, None, |ui| {
-            let inner = egui::ComboBox::from_id_salt("llm_service")
-                .selected_text(current)
-                .width(ui.available_width().min(design::FORM_WIDTH))
-                .icon(design::combo_icon)
-                .show_ui(ui, |ui| {
-                    for (name, provider, url, model) in LLM_CHOICES {
-                        if design::choice(ui, current == name, name).clicked() {
-                            chosen = Some((provider, url, model));
-                        }
-                    }
-                    if design::choice(ui, current == OTHER_SERVICE, OTHER_SERVICE).clicked() {
-                        chosen = Some((Provider::OpenAiCompatible, "", ""));
-                    }
-                });
-            design::named(ui, &inner.response, "Transcript and summary service");
+            design::Dropdown::new(LLM_SERVICE, "Transcript and summary service")
+                .choice(LLM_CHOICES[0].0, LLM_CHOICES[0].0)
+                .choices(LLM_CHOICES[1..].iter().map(|(name, ..)| (*name, *name)))
+                .choice(OTHER_SERVICE, OTHER_SERVICE)
+                .show(ui, &mut chosen)
         });
-        if let Some((provider, url, model)) = chosen {
+        if chosen != current {
+            let (provider, url, model) = LLM_CHOICES
+                .iter()
+                .find(|(name, ..)| *name == chosen)
+                .map_or(
+                    (Provider::OpenAiCompatible, "", ""),
+                    |(_, provider, url, model)| (*provider, *url, *model),
+                );
             self.config.provider = provider;
             self.config.llm_url = url.to_owned();
             self.config.llm_model = model.to_owned();
@@ -750,24 +738,24 @@ impl ProcessingSettings {
             self.reveal_problem = true;
             ui.ctx().request_repaint();
         }
-        let mut changed = false;
         let codex = self.config.provider == Provider::CodexCli;
+        let mut changed = false;
         if !codex {
-            let response =
-                design::small_text_field(ui, "Address", &mut self.config.llm_url, None, None);
-            design::named(ui, &response, "Transcript and summary address");
-            changed |= response.changed();
-            let empty = self.config.llm_url.trim().is_empty();
-            self.field_reason(ui, response.rect, empty, "Enter the address.", true);
+            changed |= self.setting_field(
+                ui,
+                (LLM_URL, "Address", "Transcript and summary address"),
+                Text::LlmUrl,
+                "Enter the address.",
+                None,
+            );
         }
-        let response =
-            design::small_text_field(ui, "Model", &mut self.config.llm_model, None, None);
-        design::named(ui, &response, "Transcript and summary model");
-        changed |= response.changed();
-        let empty = self.config.llm_model.trim().is_empty();
-        self.field_reason(ui, response.rect, empty, "Enter the model’s name.", false);
-        let help = design::help(ui, "The name your service gives it.");
-        ui.add_space(help.rect.bottom() + design::L - ui.cursor().top());
+        changed |= self.setting_field(
+            ui,
+            (LLM_MODEL, "Model", "Transcript and summary model"),
+            Text::LlmModel,
+            "Enter the model’s name.",
+            Some("The name your service gives it."),
+        );
         if changed {
             self.persist();
         }

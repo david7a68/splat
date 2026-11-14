@@ -374,9 +374,11 @@ fn machine_line(event: &Event) -> String {
         )
     }
 }
-fn head(event: &Event, day: u32) -> String {
+/// An event's first line in the file. It takes the stored fields only, so it cannot write the
+/// shown label.
+fn head(event: Stored<'_>, day: u32) -> String {
     if event.kind == Kind::Day {
-        format!("## {}\n", clean(&event.label(day)))
+        format!("## {}\n", clean(&event.name(day)))
     } else {
         format!(
             "- {}{} ^{}\n",
@@ -384,7 +386,7 @@ fn head(event: &Event, day: u32) -> String {
             if event.title.is_empty() {
                 String::new()
             } else {
-                format!(": **{}**", clean(&event.title))
+                format!(": **{}**", clean(event.title))
             },
             event.id
         )
@@ -431,7 +433,7 @@ fn checks_text(event: &Event) -> String {
     out
 }
 fn event_text(event: &Event, day: u32, sessions: &BTreeMap<Uuid, String>) -> String {
-    let mut out = head(event, day);
+    let mut out = head(Stored::of(event), day);
     for (label, value) in [
         ("Place", &event.place),
         ("Duration", &event.duration),
@@ -551,7 +553,7 @@ pub fn patch(
         if row.event.kind != event.kind || row.event.title != event.title || row.missing_id {
             edits.push((
                 row.head.range.clone(),
-                head(event, day_numbers(events)[index]).replace('\n', newline),
+                head(Stored::of(event), day_numbers(events)[index]).replace('\n', newline),
             ));
         }
         let mut addition = String::new();
@@ -743,7 +745,7 @@ pub fn patch(
     // Normalize headings after moving chunks, using the app's words and day numbers.
     let (current, _) = rows(&after);
     for (row, day) in current.iter().zip(day_numbers(events)).rev() {
-        let heading = head(&row.event, day).replace('\n', newline);
+        let heading = head(Stored::of(&row.event), day).replace('\n', newline);
         if after[row.head.range.clone()] != heading {
             after.replace_range(row.head.range.clone(), &heading);
         }
@@ -868,6 +870,24 @@ mod tests {
         let after = patch(&outside, &events, &sessions, true).unwrap();
         assert!(after.contains("## Day 1: Start"));
         assert!(parse(&after).1.is_empty());
+        // Review of PR 322: a day the plan titled `Day` keeps that title through an unrelated
+        // edit, a save and a reload. The screen says `Day 1`; the file keeps `## Day 1: Day`.
+        let mut plan_day = days.clone();
+        plan_day[0].title = "Day".into();
+        let text = render(&plan_day, &sessions);
+        assert!(text.contains("## Day 1: Day\n"), "{text}");
+        let (mut events, flags) = parse(&text);
+        assert!(flags.is_empty());
+        assert_eq!(events[0].label(1), "Day 1");
+        events[2].title = "Storm at dusk".into();
+        let after = patch(&text, &events, &sessions, false).unwrap();
+        assert!(after.contains("## Day 1: Day\n"), "{after}");
+        let (reloaded, flags) = parse(&after);
+        assert!(flags.is_empty());
+        assert_eq!(reloaded[0].title, "Day");
+        assert_eq!(reloaded[2].title, "Storm at dusk");
+        // The link to that day keeps its stored words too.
+        assert!(crate::timeline::reference(&reloaded[0], 1).ends_with("|Day 1: Day]]"));
     }
 
     #[test]
