@@ -6632,8 +6632,13 @@ impl Encounters {
         // notes are the pane's one editor (round 28, P2): when the column is full they scroll
         // in a region of their own, so the groups after them stay in reach. A line-start quiet
         // action paints its hang into the margin left of the pane.
+        // The pane is scoped to its parent `Ui`; the scope's id is the draft's alone, so the
+        // column keeps its scroll and its region when the window crosses to the narrow layout,
+        // whose parent differs (iter 7), and another encounter opens at its own top.
         let width = ui.available_width();
-        design::Footer::new(("encounter_roster", draft.id), width).pane_editor(ui, |ui, region| {
+        let scope = egui::UiBuilder::new().id(("encounter_roster", draft.id));
+        ui.scope_builder(scope, |ui| {
+        design::Footer::new("encounter_roster", width).pane_editor(ui, |ui, region| {
             ui.set_width(ui.available_width().min(design::LIST_MEASURE));
             if let Some(difficulty) = heading {
                 roster_heading(ui, draft.setup.roster.len(), difficulty);
@@ -6677,6 +6682,8 @@ impl Encounters {
             });
             groups::of_encounter(ui, draft, snapshot, focus_search, expanded)
         })
+        })
+        .inner
     }
 
     /// What the party finds when this fight is over, one line each. The note keeps it as its
@@ -8312,14 +8319,26 @@ mod tests {
         let focus = harness.ctx.memory(|memory| memory.focused()).unwrap();
         let text = draft.borrow().body.clone();
         assert!(text.contains("Unsent tactics."));
-        // Outer scroll moves down to the caret; keep that same scroll state when the parent changes.
-        let scroll_id = egui::Id::new(("encounter_roster", draft.borrow().id))
-            .with(egui::Id::new("encounter_editor"));
-        let offset = egui::scroll_area::State::load(&harness.ctx, scroll_id)
-            .unwrap()
-            .offset
-            .y;
-        assert!(offset > 0.0, "Exercise a scrolled editor");
+        // The notes are the roster pane's editor region (round 28, P2): the region scrolls to the
+        // caret. Where the notes' text is painted, and the view it is clipped to.
+        let painted = |harness: &egui_kittest::Harness<'_>, words: &str| {
+            harness
+                .output()
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.text().starts_with(words) => Some((
+                        egui::Rect::from_min_size(text.pos, text.galley.size()),
+                        shape.clip_rect,
+                    )),
+                    _ => None,
+                })
+        };
+        let (notes, view) = painted(&harness, "Unsent tactics.").unwrap();
+        assert!(
+            notes.top() < view.top() && notes.bottom() <= view.bottom() + 1.0,
+            "Exercise a scrolled editor: the text {notes:?} in its view {view:?}"
+        );
         for width in [600.0, 960.0] {
             harness.set_size(egui::vec2(width, 640.0));
             harness.run_steps(2);
@@ -8329,13 +8348,47 @@ mod tests {
                 Some(focus),
                 "The same notes control keeps focus"
             );
-            let current = egui::scroll_area::State::load(&harness.ctx, scroll_id)
-                .unwrap()
-                .offset
-                .y;
+            // The caret (at the text's end) stays in view; the text is not back at its top.
+            let (notes, view) = painted(&harness, "Unsent tactics.").unwrap();
             assert!(
-                (current - offset).abs() < 1.0,
-                "Scroll survives parent changes: {offset} -> {current}"
+                notes.top() < view.top()
+                    && notes.bottom() <= view.bottom() + 1.0
+                    && notes.bottom() > view.top() + design::S,
+                "Scroll survives parent changes at {width}: the text {notes:?} in {view:?}"
+            );
+        }
+        // Round 28 P2: another encounter opens at its own top, with its own text. Its notes are
+        // the pane's editor region: on the FIRST frame, at 960, 1280 and 1920 wide, a 600-line
+        // text keeps at least 64 px and the groups after it stay whole in view; at a short
+        // height the region still keeps 64 px.
+        let long: String = (1..=600).map(|n| format!("Second line {n}.\n")).collect();
+        for (width, height) in [
+            (960.0, 640.0),
+            (1280.0, 800.0),
+            (1920.0, 1080.0),
+            (960.0, 400.0),
+        ] {
+            let mut second = Draft::new();
+            second.body = long.clone();
+            *draft.borrow_mut() = second;
+            harness.set_size(egui::vec2(width, height));
+            harness.step();
+            let shown = painted(&harness, "Second line 1.");
+            let groups = painted(&harness, "Groups for this encounter");
+            let top = shown.is_some_and(|(notes, view)| {
+                view.height() >= 64.0 && (notes.top() - view.top()).abs() <= design::S + 1.0
+            });
+            let after = height < 640.0
+                || groups
+                    .zip(shown)
+                    .is_some_and(|((groups, clip), (_, view))| {
+                        groups.top() >= view.bottom()
+                            && groups.bottom() <= clip.bottom()
+                            && groups.bottom() <= height
+                    });
+            assert!(
+                top && after,
+                "At {width}x{height}, first frame: the notes and their region {shown:?}, the groups heading {groups:?}"
             );
         }
     }
@@ -8896,8 +8949,10 @@ mod tests {
         // A replacement as `Use` makes it: its data on the draft, and the mark.
         let draft = page.draft.as_mut().unwrap();
         let roster = draft.setup.roster.clone();
+        let mut before = roster.clone();
+        before[0].initial.insert("hp".into(), 3.into());
         draft.replacement = Some(ReplacementUndo {
-            before: roster.clone(),
+            before: before.clone(),
             after: roster,
             new: true,
             words: "1 Wolf row replaced with Wolf.".into(),
@@ -8924,6 +8979,57 @@ mod tests {
         assert!(
             page.editor_results.get(&owner).is_some(),
             "Undo discard shows the result again, with its Undo"
+        );
+        // Round 28 P2: the editor's own footer shows it, and its Undo goes by its ticket. An
+        // unrelated edit after it (the notes) stays through that Undo; the result's words leave
+        // with its data.
+        use egui_kittest::kittest::Queryable;
+        const WORDS: &str = "1 Wolf row replaced with Wolf.";
+        let campaign = active.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(960.0, 640.0))
+            .build_state(
+                move |ctx, page: &mut Encounters| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let frame = design::outcome::PaneFrame::new(ui);
+                        let messages = page.editor_messages(
+                            &frame,
+                            ui.available_width(),
+                            &campaign.path,
+                            None,
+                        );
+                        let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
+                            ui.label("The editor's body");
+                        });
+                        if let Some(press) = paned.pressed {
+                            page.editor_press(ui.ctx(), press, &campaign, &[]);
+                        }
+                    });
+                },
+                page,
+            );
+        harness.run_steps(2);
+        assert!(harness.query_by_label(WORDS).is_some(), "the result shows");
+        harness
+            .state_mut()
+            .draft
+            .as_mut()
+            .unwrap()
+            .body
+            .push_str("Ash falls on the ford.");
+        harness.run_steps(2);
+        harness.get_by_label("Undo replace").click();
+        harness.run_steps(2);
+        let draft = harness.state().draft.as_ref().unwrap();
+        assert_eq!(draft.setup.roster, before, "Undo gives the roster back");
+        assert!(
+            draft.body.contains("Ash falls on the ford."),
+            "the later, unrelated edit stays"
+        );
+        assert!(
+            harness.query_by_label(WORDS).is_none()
+                && harness.query_by_label("Undo replace").is_none(),
+            "the result's words leave with its data"
         );
     }
     /// Older notes do not change, and a note says so only when the DM turned this on.
