@@ -1878,6 +1878,45 @@ struct GroupFault {
 /// The kind of the Part of flag, which World shows with its Change action.
 const PART_OF: FlagKind = FlagKind::Unread(Field::PartOf);
 
+/// Where a reader shows an entry's status: once (ruling R9, N9). A campaign entry whose reader
+/// draws the editable Status row shows its status there, and its kind line has none
+/// (`NPC · Campaign`); every other entry keeps its status on the kind line. The kind line's words
+/// and the Status row both come from this one value, so the two can never both show it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ReaderStatus {
+    /// The Status row shows it, with its Change.
+    Row,
+    /// The kind line shows it (`NPC · alive`), or the entry has none.
+    KindLine,
+}
+
+impl ReaderStatus {
+    /// The place for this entry's status. `campaign` is the campaign whose entries the reader
+    /// may change; `editing` is true while the Status field is open.
+    pub(crate) fn of(item: &Item, index: &ContentIndex, campaign: bool, editing: bool) -> Self {
+        let entry = &item.entry;
+        let set = !status(entry).trim().is_empty();
+        let row = if entry.kind != "world" || !campaign || !item.is_private() {
+            false
+        } else if index.duplicate_world.contains_key(&entry.path) {
+            // A duplicate note's read-only values have their own Status line.
+            set
+        } else {
+            set || status_unread(entry) || editing
+        };
+        if row { Self::Row } else { Self::KindLine }
+    }
+
+    /// The kind line's first words: the entry's kind, with its status only when no Status row
+    /// shows it.
+    pub(crate) fn kind_words(self, item: &Item) -> String {
+        match self {
+            Self::Row => type_label(world_type(&item.entry)),
+            Self::KindLine => item.subtitle.clone(),
+        }
+    }
+}
+
 /// True when the note's Status value was not read.
 fn status_unread(entry: &Entry) -> bool {
     entry
@@ -2647,26 +2686,15 @@ impl Reader {
             campaign.filter(|campaign| edit::editable(item, index) && !self.editing(id, campaign));
         // Lookup has no file line. While the repair message names the fault, the kind line
         // names the open file in place of the fault.
+        let kind = ReaderStatus::of(item, index, campaign.is_some(), self.status_editing)
+            .kind_words(item);
         let kind_line = if self.compact
             && campaign.is_some()
             && index.duplicate_world.contains_key(&item.entry.path)
         {
-            format!(
-                "{} · {} · {}",
-                crate::library::presentation::subtitle(&item.entry),
-                item.owner,
-                item.entry.path
-            )
+            format!("{kind} · {} · {}", item.owner, item.entry.path)
         } else {
-            format!(
-                "{} · {}",
-                if !self.compact && world_type(&item.entry) == "npc" {
-                    "NPC"
-                } else {
-                    &item.subtitle
-                },
-                item.owner
-            )
+            format!("{kind} · {}", item.owner)
         };
         // While a run is open, an NPC has Add to fight below, and Arrivals adds a creature.
         let start = (self.sides.is_none()
@@ -4544,7 +4572,7 @@ impl Reader {
         // and one Undo wherever the DM reads the entry.
         let value_width = self.relationship_value_width(ui, item, index);
         if !self.status_editing
-            && (!status(&item.entry).trim().is_empty() || status_unread(&item.entry))
+            && ReaderStatus::of(item, index, true, false) == ReaderStatus::Row
         {
             let value = status(&item.entry);
             let unread = status_unread(&item.entry);
@@ -5285,6 +5313,24 @@ mod tests {
             // Neighbour: Part of adds no In or Stat block warning.
             assert_eq!(problems.len(), expected, "FD1-only-groups-{groups}");
         }
+    }
+
+    #[test]
+    fn r9_status_shows_in_the_status_row_or_on_the_kind_line_never_both() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = sample_campaign(dir.path());
+        let id = create_entry(&campaign, "Rook", "npc").unwrap();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let item = &index.items[index.position(id).unwrap()];
+        assert_eq!(status(&item.entry), "alive", "R9-fixture: a new NPC is alive");
+        // A campaign NPC in a reader that may change it: the Status row shows the status.
+        let place = ReaderStatus::of(item, &index, true, false);
+        assert_eq!(place, ReaderStatus::Row, "R9-row");
+        assert_eq!(place.kind_words(item), "NPC", "R9-row: no status on the kind line");
+        // The same entry where no Status row is drawn: the kind line keeps its status.
+        let place = ReaderStatus::of(item, &index, false, false);
+        assert_eq!(place, ReaderStatus::KindLine, "R9-kind-line");
+        assert_eq!(place.kind_words(item), "NPC · alive", "R9-kind-line: the status stays");
     }
 
     #[test]

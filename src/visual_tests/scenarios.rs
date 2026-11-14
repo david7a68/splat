@@ -11769,8 +11769,14 @@ pub mod world {
         d.click(&format!("New NPC “{NPC}”"));
         d.settle();
         d.expect("Add to fight");
-        d.expect("NPC · alive · Campaign");
         d.expect("Change Status");
+        // Ruling R9 (AF2, FF2): the status shows once. The Status row shows `alive` with its
+        // Change, so the kind line has no status.
+        d.observe(
+            "iter-28-D-R9",
+            d.has("NPC · Campaign") && !d.has("NPC · alive · Campaign") && d.visible_text("alive"),
+            "Lookup's reader shows the NPC's status in its Status row only, not on the kind line",
+        );
         d.state("world-new-npc", Sizes::Default);
         d.click("Add to fight");
         d.type_into("Stat block", "Guard");
