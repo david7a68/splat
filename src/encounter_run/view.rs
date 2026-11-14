@@ -3462,9 +3462,16 @@ impl Run {
                     Some((group.id, (fight, adds)))
                 })
                 .collect();
-            // A group that is no longer offered drops its kept line.
-            let offered: std::collections::BTreeSet<Uuid> =
-                groups.iter().map(|group| group.id).collect();
+            // A group that is no longer offered here (`OfferedGroups::of`, as the list shows
+            // them) drops its kept line.
+            let shown = super::OfferedGroups::of(groups, self.source);
+            let offered: std::collections::BTreeSet<Uuid> = shown
+                .own
+                .iter()
+                .chain(&shown.any)
+                .chain(&shown.other)
+                .map(|group| group.id)
+                .collect();
             self.arrival_lines.retain(|id| offered.contains(id));
             self.arrival_words = Some((key, words));
         }
@@ -3984,6 +3991,11 @@ impl Run {
                 crate::difficulty::append(&mut job, ui, Type::Small, &lead, c.muted);
             }
             crate::difficulty::append_form(&mut job, ui, Type::Small, &fitted.form);
+        }
+        // Point 3 of the third review: an answer wider than its own line wraps at word
+        // boundaries there; it is never cut with `…`.
+        if fitted.as_ref().is_some_and(|fitted| fitted.wrap) {
+            job.wrap.max_width = room.max(1.0);
         }
         let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
         // Point 3: with no room for the title's first word and the answer together, the answer
@@ -11584,6 +11596,31 @@ mod tests {
                     !end.ends_with("Conc") && !end.ends_with("Conc\u{a0}save"),
                     "iter-29-R1-G176: {line}"
                 );
+                // Across widths: where the DC gave way and the result is beside the mark, the
+                // mark reads `Conc save due`; and that form is reached (so this check can fail).
+                let mut due = 0;
+                for width in (300..=900).step_by(4) {
+                    let layout = RowLayout::fitted(
+                        ui,
+                        width as f32,
+                        &wolf,
+                        (None, Some(10), false),
+                        scale,
+                        RowFit::Natural,
+                        0.0,
+                    )
+                    .with_badge(ui, Some("Saved · 1 damage (half)"));
+                    let line = layout.second_line.as_ref().unwrap().text().to_owned();
+                    let end = line.trim_end();
+                    if !layout.badge_below && !line.contains("save DC 10") {
+                        assert!(
+                            end.ends_with("Conc\u{a0}save\u{a0}due"),
+                            "iter-29-R1-G176 at {width}: {line}"
+                        );
+                        due += 1;
+                    }
+                }
+                assert!(due > 0, "iter-29-R1-G176: no width reached `Conc save due`");
                 // The earlier trap: with conditions after the mark, `due` changes nothing, and
                 // no condition word folds into `N more` for it, at 450 px.
                 let crowded = || {
@@ -13591,6 +13628,41 @@ mod tests {
         assert!(!run.request_close());
         assert!(run.closing.is_open());
         assert!(!run.confirm_close);
+    }
+
+    /// Point 3 of the third review: which widths reach the own-line form. A group's heading is
+    /// as wide as the group block, which is never narrower than Initiative, its field and Add
+    /// (or the panel at its smallest, 340 px less its margins). At that width every smallest
+    /// answer fits on its own line, so the wrap of `Line::fit_or_wrap` is not reached in the
+    /// app; it is there for any narrower room.
+    #[test]
+    fn iter_29_r1_the_smallest_arrivals_heading_holds_every_shortest_answer() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let font = Type::Small.font(ui);
+                let gap = ui.spacing().item_spacing.x;
+                let controls = design::number_width(ui, "Initiative", &font)
+                    + gap
+                    + ARRIVAL_FIELD_WIDTH
+                    + design::XS
+                    + gap
+                    + Action::secondary("Add")
+                        .density(Density::Read)
+                        .natural_width(ui);
+                let smallest = controls.min(design::PANEL_MIN_WIDTH - 2.0 * design::L);
+                for answer in [
+                    "Fight after: Above High",
+                    "Fight after: Moderate",
+                    "Fight after: XP not known",
+                    "Fight after: Level not known",
+                ] {
+                    let width = design::number_width(ui, answer, &font);
+                    assert!(width <= smallest, "{answer}: {width} in {smallest}");
+                }
+            });
+        });
     }
 
     /// Points 2 and 3 of the round 29 reviews (R1): an Arrivals heading reserves the smallest

@@ -405,8 +405,9 @@ impl Summary {
     /// row's summary as built words (`encounters::roster_summary`; the typed handoff is routed
     /// to the Encounters package). Only a leading party count (`5 party`) is read; everything
     /// after it is ONE opaque fact: never parsed into members, never narrowed member by member.
-    /// It is shown as it came, and it gives way whole, after the XP number (Q-s). A name such as
-    /// `Ghost, 02 × Echo` keeps its words at every width.
+    /// It is shown as it came; after the XP number (Q-s) it shortens from its end at whole
+    /// words with `…`, as the line did before typed parts, and goes last. A name such as
+    /// `Ghost, 02 × Echo` keeps its words: never reformatted, only cut from the end.
     pub fn from_built(text: &str) -> Self {
         let (party, rest) = match text.split_once(" · ") {
             Some((first, rest)) => (first, rest),
@@ -493,7 +494,16 @@ struct Unit<'a> {
     summary: bool,
     /// The member this unit shows, by its name (an opaque value).
     member: Option<String>,
+    /// Built words (a fact, not a member): before it goes, it shortens from its end.
+    opaque: bool,
     _line: std::marker::PhantomData<&'a ()>,
+}
+
+/// One stage of giving way: the parts gone, and an opaque fact shortened from its end.
+#[derive(Clone, Debug, Default)]
+struct Stage {
+    gone: Vec<Give>,
+    cut: Option<(usize, String)>,
 }
 
 /// One step of giving way.
@@ -512,6 +522,9 @@ pub struct Fitted {
     pub form: Vec<Part>,
     /// Something gave way: hover and the accessible name keep the whole line.
     pub cut: bool,
+    /// The protected answer is wider than its room: the caller wraps it at word boundaries
+    /// and never cuts it (`Line::fit_or_wrap`).
+    pub wrap: bool,
 }
 
 impl Fitted {
@@ -574,6 +587,7 @@ impl<'a> Line<'a> {
                 gives: Some(PARTY_GOES),
                 summary: false,
                 member: None,
+                opaque: false,
                 _line: std::marker::PhantomData,
             });
         }
@@ -584,6 +598,7 @@ impl<'a> Line<'a> {
                 gives: None,
                 summary: true,
                 member: Some(member.name.clone()),
+                opaque: false,
                 _line: std::marker::PhantomData,
             });
         }
@@ -594,6 +609,7 @@ impl<'a> Line<'a> {
                 gives: None,
                 summary: true,
                 member: None,
+                opaque: true,
                 _line: std::marker::PhantomData,
             });
         }
@@ -622,6 +638,7 @@ impl<'a> Line<'a> {
             gives,
             summary: false,
             member: None,
+            opaque: false,
             _line: std::marker::PhantomData,
         };
         let worth = if difficulty.parts().is_some() {
@@ -643,8 +660,10 @@ impl<'a> Line<'a> {
         }
     }
 
-    /// Every step of giving way, in rank order.
-    fn order(&self) -> Vec<Give> {
+    /// Every stage of giving way, in rank order. A part goes whole, except an opaque fact
+    /// (built words, `Summary::from_built`): before it goes, it shortens from its end at whole
+    /// words with `…`, as the line did before typed parts (point 2 of the third review).
+    fn stages(&self) -> Vec<Stage> {
         let rated = self.difficulty.rating.is_some();
         let mut ranked: Vec<(usize, Give)> = self
             .units
@@ -657,15 +676,41 @@ impl<'a> Line<'a> {
             ranked.push((NUMBER_GOES, Give::Number));
         }
         ranked.sort_by_key(|(rank, _)| *rank);
-        ranked.into_iter().map(|(_, give)| give).collect()
+        let order: Vec<Give> = ranked.into_iter().map(|(_, give)| give).collect();
+        let mut stages = Vec::new();
+        for count in 0..=order.len() {
+            let gone = order[..count].to_vec();
+            stages.push(Stage {
+                gone: gone.clone(),
+                cut: None,
+            });
+            if let Some(Give::Unit(at)) = order.get(count)
+                && self.units[*at].opaque
+            {
+                let words: Vec<&str> = self.units[*at].words.split(' ').collect();
+                for kept in (1..words.len()).rev() {
+                    let start = words[..kept]
+                        .join(" ")
+                        .trim_end_matches(['·', ',', ' ', '…'])
+                        .to_owned();
+                    if !start.is_empty() {
+                        stages.push(Stage {
+                            gone: gone.clone(),
+                            cut: Some((*at, format!("{start}…"))),
+                        });
+                    }
+                }
+            }
+        }
+        stages
     }
 
-    /// The words before the form, with these units gone.
-    fn lead(&self, gone: &[Give]) -> String {
+    /// The words before the form, at this stage.
+    fn lead(&self, stage: &Stage) -> String {
         let mut text = String::new();
         let mut cut = false;
         for (at, unit) in self.units.iter().enumerate() {
-            if gone.contains(&Give::Unit(at)) {
+            if stage.gone.contains(&Give::Unit(at)) {
                 if unit.summary && !cut {
                     cut = true;
                     if !text.is_empty() {
@@ -679,15 +724,21 @@ impl<'a> Line<'a> {
             if !text.is_empty() {
                 text.push_str(unit.before);
             }
-            text.push_str(&unit.words);
+            match &stage.cut {
+                Some((shortened, words)) if *shortened == at => {
+                    cut = true;
+                    text.push_str(words);
+                }
+                _ => text.push_str(&unit.words),
+            }
         }
         text
     }
 
     /// Whether a member that is still on the line is this creature: equal names, nothing else.
-    fn shows(&self, gone: &[Give], name: &str) -> bool {
+    fn shows(&self, stage: &Stage, name: &str) -> bool {
         self.units.iter().enumerate().any(|(at, unit)| {
-            unit.member.as_deref() == Some(name) && !gone.contains(&Give::Unit(at))
+            unit.member.as_deref() == Some(name) && !stage.gone.contains(&Give::Unit(at))
         })
     }
 
@@ -703,8 +754,8 @@ impl<'a> Line<'a> {
     /// `Fight after: XP not known` (point 2: the room a heading reserves before its title).
     /// `None` as `fit`.
     pub fn shortest(&self) -> Option<Fitted> {
-        let order = self.order();
-        let lead = self.lead(&order);
+        let last = self.stages().pop()?;
+        let lead = self.lead(&last);
         let form = match (&self.difficulty.rating, &self.difficulty.missing) {
             (Some(rating), _) => self.with_label(vec![(rating.word.text().to_owned(), true)]),
             (None, Some(missing)) => self.with_label(vec![(missing.short().to_owned(), false)]),
@@ -714,8 +765,27 @@ impl<'a> Line<'a> {
         Some(Fitted {
             lead,
             form,
-            cut: !order.is_empty(),
+            cut: !last.gone.is_empty(),
+            wrap: false,
         })
+    }
+
+    /// Point 3 of the third review (R1 at its boundary): the protected answer is never cut
+    /// with `…`. Where even [`Line::shortest`] does not fit, that answer is given whole with
+    /// `wrap`: the caller lays it out at its room, wrapping at word boundaries. Else as `fit`.
+    pub fn fit_or_wrap(&self, fits: impl Fn(&str) -> bool) -> Option<Fitted> {
+        if let Some(shortest) = self.shortest()
+            && self.label.is_some()
+            && !fits(&shortest.text())
+        {
+            count_work(0, 1);
+            return Some(Fitted {
+                wrap: true,
+                cut: true,
+                ..shortest
+            });
+        }
+        self.fit(fits)
     }
 
     /// The longest line that `fits` (one line, plain words), in the order this type states.
@@ -726,13 +796,13 @@ impl<'a> Line<'a> {
             count_work(0, 1);
             fits(text)
         };
-        let order = self.order();
-        let stages: Vec<&[Give]> = (0..=order.len()).map(|count| &order[..count]).collect();
-        let last = stages.last().copied().unwrap_or(&[]);
-        let line = |gone: &[Give], form: Vec<Part>, cut: bool| Fitted {
-            lead: self.lead(gone),
+        let stages = self.stages();
+        let last = stages.last().cloned().unwrap_or_default();
+        let line = |stage: &Stage, form: Vec<Part>, cut: bool| Fitted {
+            lead: self.lead(stage),
             form,
-            cut: cut || !gone.is_empty(),
+            cut: cut || !stage.gone.is_empty() || stage.cut.is_some(),
+            wrap: false,
         };
         let fallback = |fitted: Fitted| {
             if fits(&fitted.text()) {
@@ -742,66 +812,67 @@ impl<'a> Line<'a> {
                 lead: String::new(),
                 form: vec![(cut_at_words(&fitted.text(), &fits), false)],
                 cut: true,
+                wrap: false,
             }
         };
         match (&self.difficulty.rating, &self.difficulty.missing) {
             (Some(rating), _) => {
-                let form = |gone: &[Give]| {
-                    self.with_label(if gone.contains(&Give::Number) {
+                let form = |stage: &Stage| {
+                    self.with_label(if stage.gone.contains(&Give::Number) {
                         vec![(rating.word.text().to_owned(), true)]
                     } else {
-                        rating.parts(!gone.contains(&Give::Limit))
+                        rating.parts(!stage.gone.contains(&Give::Limit))
                     })
                 };
-                for gone in &stages {
-                    let fitted = line(gone, form(gone), false);
+                for stage in &stages {
+                    let fitted = line(stage, form(stage), false);
                     if fits(&fitted.text()) {
                         return Some(fitted);
                     }
                 }
-                Some(fallback(line(last, form(last), true)))
+                Some(fallback(line(&last, form(&last), true)))
             }
             (None, Some(missing)) => {
                 // A member that the summary still shows is not named again (AB4, FB5, SB5).
-                let unsaid = |gone: &[Give]| Missing {
+                let unsaid = |stage: &Stage| Missing {
                     names: missing
                         .names
                         .iter()
-                        .filter(|name| !self.shows(gone, name))
+                        .filter(|name| !self.shows(stage, name))
                         .cloned()
                         .collect(),
                     ..missing.clone()
                 };
                 let reason = |words: String| self.with_label(vec![(words, false)]);
-                let whole = |gone: &[Give]| {
-                    unsaid(gone)
+                let whole = |stage: &Stage| {
+                    unsaid(stage)
                         .words()
                         .unwrap_or_else(|| missing.short().to_owned())
                 };
                 // The names whole (the first and a count), the facts giving way first.
-                for gone in &stages {
-                    let fitted = line(gone, reason(whole(gone)), false);
+                for stage in &stages {
+                    let fitted = line(stage, reason(whole(stage)), false);
                     if fits(&fitted.text()) {
                         return Some(fitted);
                     }
                 }
                 // Then the first name shortened from its end, with the fewest facts.
-                let compose = |words: &str| line(last, reason(words.to_owned()), false).text();
-                let words = unsaid(last)
+                let compose = |words: &str| line(&last, reason(words.to_owned()), false).text();
+                let words = unsaid(&last)
                     .fitted(|words| fits(&compose(words)))
                     .unwrap_or_else(|| missing.short().to_owned());
-                let cut = words != whole(last);
-                Some(fallback(line(last, reason(words), cut)))
+                let cut = words != whole(&last);
+                Some(fallback(line(&last, reason(words), cut)))
             }
             (None, None) if self.label.is_some() => {
                 // No form: the facts alone, in the same order of giving way.
-                for gone in &stages {
-                    let fitted = line(gone, Vec::new(), false);
+                for stage in &stages {
+                    let fitted = line(stage, Vec::new(), false);
                     if fits(&fitted.text()) {
                         return Some(fitted);
                     }
                 }
-                Some(fallback(line(last, Vec::new(), true)))
+                Some(fallback(line(&last, Vec::new(), true)))
             }
             (None, None) => None,
         }
@@ -836,7 +907,7 @@ impl<K: std::hash::Hash + Eq + Clone> Kept<K> {
         {
             return answer.clone();
         }
-        let answer = line().fit(|text| crate::design::number_width(ui, text, font) <= room);
+        let answer = line().fit_or_wrap(|text| crate::design::number_width(ui, text, font) <= room);
         self.fits.insert(id.clone(), (key, answer.clone()));
         answer
     }
@@ -862,6 +933,18 @@ impl<K: std::hash::Hash + Eq + Clone> Kept<K> {
         });
         self.shortest.insert(id.clone(), (key, width));
         width
+    }
+
+    /// Test builds: whether a line is kept for `id`, and a kept entry put in by hand.
+    #[cfg(test)]
+    pub(crate) fn holds(&self, id: &K) -> bool {
+        self.fits.contains_key(id) || self.shortest.contains_key(id)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn seed(&mut self, id: K) {
+        self.fits.insert(id.clone(), (0, None));
+        self.shortest.insert(id, (0, 0.0));
     }
 
     /// Drop the lines whose owner no longer shows them (a group no longer offered).
@@ -1199,16 +1282,59 @@ mod tests {
             at(200),
             "5 party · 1 × Ghost, 02 × Echo · XP 400 · Low (up to 2,800)"
         );
+        // Never reformatted: whatever of the built words shows is their own start, cut at a
+        // whole word with `…` (point 2 of the third review), and `02` stays `02`.
+        let words = "1 × Ghost, 02 × Echo";
         for room in (1..=70).rev() {
             let text = at(room);
+            let shown = text
+                .split(" · ")
+                .find(|part| part.starts_with("1 ×"))
+                .unwrap_or("");
             assert!(
-                text.contains("1 × Ghost, 02 × Echo") || !text.contains("Ghost"),
-                "never halved at {room}: {text}"
+                shown.is_empty()
+                    || shown == words
+                    || shown.strip_suffix('…').is_some_and(|cut| {
+                        words.starts_with(cut) && words[cut.len()..].starts_with([' ', ','])
+                    }),
+                "built words at {room}: {text}"
             );
+            assert!(!text.contains(" 2 × Echo"), "{room}: {text}");
         }
         assert_eq!(at(40), "1 × Ghost, 02 × Echo · XP 400 · Low");
         assert_eq!(at(30), "1 × Ghost, 02 × Echo · Low");
-        assert_eq!(at(20), "… · Low");
+        assert_eq!(at(20), "1 × Ghost, 02… · Low");
+        // Point 2 of the third review: built words shorten FROM THEIR END; a useful start stays
+        // (the leading creature), as before typed parts. They go whole only where no word fits.
+        let long = Line::roster(
+            &low,
+            Summary::from_built("5 party · 1 × Goblin, 1 × Ashen Warden of the Ninth Gate"),
+        );
+        let at = |room| long.fit(fits(room)).unwrap().text();
+        assert_eq!(at(35), "1 × Goblin, 1 × Ashen Warden… · Low");
+        assert_eq!(at(30), "1 × Goblin, 1 × Ashen… · Low");
+        assert_eq!(at(7), "… · Low");
+        // Point 3 of the third review: the protected answer is never cut with `…`. Where even
+        // its smallest form is wider than the room, it is given whole, to wrap at words.
+        let arrivals = Line::fight_after(&low, patrol());
+        let narrow = arrivals.fit_or_wrap(fits(10)).unwrap();
+        assert_eq!(
+            (narrow.text().as_str(), narrow.wrap),
+            ("Fight after: Low", true)
+        );
+        let room = arrivals.fit_or_wrap(fits(16)).unwrap();
+        assert_eq!(
+            (room.text().as_str(), room.wrap),
+            ("Fight after: Low", false)
+        );
+        for width in 1..=80 {
+            let fitted = arrivals.fit_or_wrap(fits(width)).unwrap();
+            assert!(
+                fitted.text().contains("Fight after: ") && !fitted.text().contains('…'),
+                "{width}: {}",
+                fitted.text()
+            );
+        }
         // Point 2: the smallest complete line, every part that can give way gone.
         assert_eq!(
             Line::fight_after(&low, patrol()).shortest().unwrap().text(),

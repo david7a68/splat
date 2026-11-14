@@ -10988,6 +10988,23 @@ mod tests {
             p.present = true;
         }
         assert!(weigh(&mut run).is_some());
+        // Point 1 of the third review: a group that is no longer offered here (it now belongs
+        // to another encounter) drops its kept Arrivals line; an offered one keeps it.
+        let mut elsewhere = (*group_of("Elsewhere", "enemies", Vec::new())).clone();
+        elsewhere.encounter = Some(Uuid::new_v4());
+        let elsewhere = Arc::new(elsewhere);
+        run.source = Some(Uuid::new_v4());
+        run.groups = Some(Arc::new(vec![group.clone(), elsewhere.clone()]));
+        run.arrival_lines.seed(group.id);
+        run.arrival_lines.seed(elsewhere.id);
+        run.revision += 1;
+        run.arrival_words();
+        assert!(
+            run.arrival_lines.holds(&group.id) && !run.arrival_lines.holds(&elsewhere.id),
+            "iter-29-R1 point 1: only offered groups keep their lines"
+        );
+        run.source = None;
+        run.groups = Some(Arc::new(vec![group.clone()]));
         // Point 4 (round 29 review): one owner of a group's facts. The Encounters list and the
         // plan (`summary`) and Arrivals' heading with no form start with the same words.
         let facts = group.facts(true);
