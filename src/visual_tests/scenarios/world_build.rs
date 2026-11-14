@@ -5328,13 +5328,17 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         !d.has(&row) && d.has("Back"),
         "Show makes the NPC's card the view again",
     );
-    // Back is as before: it opens the entry that was open, under the NPC's row.
+    // Round 29 (FL4, Back's trail holds what was on screen): Back from the card opens Rook
+    // Ambry, the entry on screen before Show, under the NPC's row; Back again opens Watch House.
+    d.click("Back");
+    d.expect("Edit Rook Ambry");
+    let rook = d.has(&row) && !d.has("Save NPC");
     d.click("Back");
     d.wait_for_text("Location · Campaign");
     d.observe(
         "P1c-row-17",
-        d.has(&row) && !d.has("Save NPC"),
-        "Back opens the last entry under the NPC's row, and the NPC stays held",
+        rook && d.has(&row) && !d.has("Save NPC"),
+        "Back opens Rook Ambry, then Watch House, under the NPC's row, and the NPC stays held",
     );
     // Round 28 FJ6: the rail names the NPC that Lookup holds, also with Lookup closed, and its
     // status opens Lookup again, where the NPC's row is.
@@ -10396,7 +10400,8 @@ pub fn world_note_renamed(d: &mut Driver<'_>) {
     // the header's count, so the DM finds it without opening the note.
     d.observe(
         "iter-29-D-FI2",
-        d.has_containing("File name differs") && d.has_containing("1 note needs fixing"),
+        d.has_containing("File name differs: Mara Vell.md")
+            && d.has_containing("1 note needs fixing"),
         "The renamed note's row says File name differs and the header counts 1 note needs fixing",
     );
     d.state("renamed-npc-keeps-old-name-in-world", Sizes::All);

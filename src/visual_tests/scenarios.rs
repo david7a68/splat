@@ -12239,7 +12239,14 @@ pub mod world {
                 .into_iter()
                 .any(|node| node.name == add && node.role == Role::Button)
         };
-        let one_way = !title_action(d) && painted == 1;
+        // Round 29 SF3: the reader's own `Stat block · not set · Change` waits while the form's
+        // Stat block row is the way to set it.
+        let reader_change = lookup.is_some_and(|lookup| {
+            d.nodes()
+                .into_iter()
+                .any(|node| node.name == "Change Stat block" && lookup.contains(node.rect.center()))
+        });
+        let one_way = !title_action(d) && painted == 1 && !reader_change;
         d.click("Cancel");
         let back = d.place_of(&add);
         d.click(&add);

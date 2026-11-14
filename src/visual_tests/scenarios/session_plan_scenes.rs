@@ -918,7 +918,12 @@ pub fn log_from_play(d: &mut Driver<'_>) {
                 .into_iter()
                 .any(|node| node.role == egui::accesskit::Role::Link && node.name == label);
             (
-                pane.is_some() && !words.contains(&session) && words.contains(&label) && link,
+                // Round 29 SF3: Lookup's `Stat block · not set` row puts the Log line at the
+                // fold at 960, cut by the pane; its link in view counts as painted there.
+                pane.is_some()
+                    && !words.contains(&session)
+                    && (words.contains(&label) || d.in_view(&label))
+                    && link,
                 format!("link {link}, painted {words:?}"),
             )
         });

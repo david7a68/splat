@@ -1079,8 +1079,9 @@ pub(crate) enum NoteFault {
     Tables(usize),
     /// Links that need fixing.
     Links(Vec<LinkProblem>),
-    /// The note's name is not its file's name (FI2).
-    Renamed,
+    /// The note's name is not its file's name (FI2), with the file's name: it tells the note
+    /// apart from another of the same name, as a same-name row's file name does.
+    Renamed(String),
 }
 
 impl NoteFault {
@@ -1096,8 +1097,8 @@ impl NoteFault {
             Some(Self::Tables(tables))
         } else if !problems.is_empty() {
             Some(Self::Links(problems))
-        } else if renamed_file(item, index).is_some() {
-            Some(Self::Renamed)
+        } else if let Some(stem) = renamed_file(item, index) {
+            Some(Self::Renamed(format!("{stem}.md")))
         } else {
             None
         }
@@ -1110,7 +1111,7 @@ impl NoteFault {
             Self::Unread(count) => design::count(*count, "value not read", "values not read"),
             Self::Tables(count) => design::count(*count, "table fault", "table faults"),
             Self::Links(problems) => link_problem_words(problems),
-            Self::Renamed => "File name differs".into(),
+            Self::Renamed(file) => format!("File name differs: {file}"),
         }
     }
 }
@@ -4811,7 +4812,12 @@ impl Reader {
             let width = self.relationship_value_width(ui, item, index);
             // An NPC with no stat block says so here too, with its Change, as World's reader
             // does (SF3): a reader never hides a missing value or the act that sets it.
-            if fights(&item.entry) && reader_field(&item.entry, "creature").is_none() {
+            // While the join form is open, its own Stat block row is the one way to set it
+            // (review of PR 355), so the reader's row waits.
+            if fights(&item.entry)
+                && reader_field(&item.entry, "creature").is_none()
+                && self.adding.is_none()
+            {
                 ui.push_id("creature", |ui| {
                     if Self::relationship_row(
                         ui,
@@ -5561,8 +5567,11 @@ mod tests {
             fault_of(id),
             Some(NoteFault::Links(vec![LinkProblem::PlaceNotFound]))
         );
-        assert_eq!(fault_of(mara), Some(NoteFault::Renamed));
-        assert_eq!(NoteFault::Renamed.words(), "File name differs");
+        assert_eq!(fault_of(mara), Some(NoteFault::Renamed("Vell.md".into())));
+        assert_eq!(
+            NoteFault::Renamed("Vell.md".into()).words(),
+            "File name differs: Vell.md"
+        );
         assert_eq!(
             faults.of_note(at_path(&gate_path)).cloned(),
             Some(NoteFault::Duplicate)
