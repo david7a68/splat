@@ -1647,6 +1647,12 @@ pub struct AddFieldResult<T> {
     pub cancel: bool,
 }
 
+/// The room an add field keeps under its action line for its one-line result (R30): the gap
+/// before a message and one message line, as tall as a control at reading density.
+fn result_room() -> f32 {
+    XS + Density::Read.control()
+}
+
 /// Typestate of an [`AddFieldForm`]: its actions are not given yet, so it cannot show.
 pub struct NoActions;
 /// Typestate of an [`AddFieldForm`]: `Add` and `Cancel` are given.
@@ -1654,6 +1660,9 @@ pub struct WithActions;
 
 /// The suggestions of an add field for its typed words.
 type Suggest<'a, T> = Box<dyn FnOnce(&str) -> Vec<Suggestions<T>> + 'a>;
+
+/// What draws an add field's result in the room the form keeps for it.
+type ResultDraw<'a> = Box<dyn FnOnce(&mut Ui) + 'a>;
 
 /// A field that an action opened, which adds typed words to a list (`Add to Log`, `Scene`): an
 /// [`InlineCreate`](super::layout::InlineCreate) form of one field, with its hint in place of a
@@ -1689,6 +1698,8 @@ pub struct AddFieldForm<'a, T, A> {
     hint: &'a str,
     actions: Option<(super::layout::Word, super::layout::Word)>,
     suggest: Option<Suggest<'a, T>>,
+    /// The caller's one-line result, drawn in the room the form keeps for it.
+    result: Option<ResultDraw<'a>>,
     state: std::marker::PhantomData<A>,
 }
 
@@ -1705,6 +1716,7 @@ pub fn add_field<'a, T>(
         hint,
         actions: None,
         suggest: None,
+        result: None,
         state: std::marker::PhantomData,
     }
 }
@@ -1722,6 +1734,7 @@ impl<'a, T> AddFieldForm<'a, T, NoActions> {
             hint: self.hint,
             actions: Some((add, cancel)),
             suggest: self.suggest,
+            result: self.result,
             state: std::marker::PhantomData,
         }
     }
@@ -1731,6 +1744,15 @@ impl<'a, T, A> AddFieldForm<'a, T, A> {
     /// The suggestions for the typed words, which show only while there are words.
     pub fn suggest(mut self, suggest: impl FnOnce(&str) -> Vec<Suggestions<T>> + 'a) -> Self {
         self.suggest = Some(Box::new(suggest));
+        self
+    }
+
+    /// Ruling R30: room for the caller's one-line result (`Scene added to tonight.` with its
+    /// Undo) under the action line, kept while the field is open, whether or not a result shows,
+    /// so a press on `Add` moves nothing: the result comes in room that is already in view.
+    /// `draw` draws the result, or nothing, in that room; suggestions go under it.
+    pub fn result_room(mut self, draw: impl FnOnce(&mut Ui) + 'a) -> Self {
+        self.result = Some(Box::new(draw));
         self
     }
 }
@@ -1754,6 +1776,7 @@ impl<T> AddFieldForm<'_, T, WithActions> {
         let create = self.create();
         let (_, cancel) = self.actions.expect("WithActions holds its actions");
         let focus = std::mem::take(&mut state.focus);
+        let top = ui.cursor().top();
         // A chosen suggestion is a layer above the form: Escape lets go of it first, through
         // the form's input-method guard.
         let out = InlineCreate::<_, NoReason>::new()
@@ -1778,6 +1801,20 @@ impl<T> AddFieldForm<'_, T, WithActions> {
         let (enter, cancel) = (out.create, out.cancel);
         if cancel {
             state.clear();
+        }
+        if let Some(draw) = self.result {
+            let width = ui.available_width();
+            ui.allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
+                ui.set_min_height(result_room());
+                draw(ui);
+            });
+        }
+        // R30: when the field takes the keyboard (it opens, or the caller gives it back after
+        // an act), the least scroll that shows the field, its actions and the result's room.
+        // Already in view, nothing moves; only the DM's own scrolling can have hidden them.
+        if focus {
+            let shown = Rect::from_x_y_ranges(field.rect.x_range(), top..=ui.cursor().top());
+            ui.scroll_to_rect(shown, None);
         }
         let chosen = suggestion_rows(ui, state, &field, enter, self.suggest);
         AddFieldResult {

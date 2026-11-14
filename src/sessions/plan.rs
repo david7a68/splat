@@ -1640,10 +1640,6 @@ pub(super) struct Scenes {
     fold: Fold,
     /// The Scene field had focus on the last frame.
     typing: bool,
-    /// A scene was just added from the Scene field: its result under the field is kept whole in
-    /// view (also when the window changes size) until the DM moves the view, types in the
-    /// field, or the result goes.
-    reveal_added: bool,
 }
 
 impl Scenes {
@@ -3919,13 +3915,15 @@ impl Sessions {
         shown: Shown,
         act: &mut Option<SceneAct>,
     ) {
-        let Some(state) = &mut self.scenes.field else {
+        // The field's state leaves `scenes` while the form draws, so the result's room can draw
+        // the plan's result (R30); it goes back unless the field closed.
+        let Some(mut state) = self.scenes.field.take() else {
             self.scenes.typing = false;
             return;
         };
-        let reveal = state.focus;
         design::gap(ui, design::Gap::S);
         let id = crate::field_id!("plan_scene").once(crate::layout::Once::CreateForm);
+        let mut undo = false;
         let result = design::add_field(
             id,
             "Plan a scene",
@@ -3954,77 +3952,40 @@ impl Sessions {
                 rows,
             }]
         })
-        .show(ui, state);
+        .result_room(|ui| self.field_result(ui, shown, &mut undo))
+        .show(ui, &mut state);
         let typed = state.words.trim().to_owned();
         let emptied = state.words.is_empty();
         self.scenes.typing = result.field.has_focus();
-        if result.field.changed() || user_moved_the_view(ui) {
-            self.scenes.reveal_added = false;
+        if undo {
+            *act = Some(SceneAct::UndoAdd);
         }
-        self.field_result(ui, result.field.rect, reveal, shown, act);
         if let Some(link) = result.chosen {
             *act = Some(SceneAct::Add(link));
         } else if result.enter && !typed.is_empty() {
             *act = Some(SceneAct::Add(typed));
         }
-        if result.cancel && emptied {
-            self.scenes.field = None;
+        if !(result.cancel && emptied) {
+            self.scenes.field = Some(state);
         }
     }
 
-    /// The Scene field's fault, and `Scene added to tonight.` with `Undo scene`, under the open
-    /// field, so the field never moves for its own result. With `reveal`, the field's rectangle,
-    /// the field and its words scroll into view together.
-    fn field_result(
-        &mut self,
-        ui: &mut egui::Ui,
-        field: egui::Rect,
-        reveal: bool,
-        shown: Shown,
-        act: &mut Option<SceneAct>,
-    ) {
+    /// The Scene field's fault, and `Scene added to tonight.` with `Undo scene`, in the room the
+    /// open field keeps for its result (R30), so neither the field nor `Add` moves for it.
+    /// `undo`: Undo was pressed.
+    fn field_result(&self, ui: &mut egui::Ui, shown: Shown, undo: &mut bool) {
         self.row_fault(ui, Place::Field, shown);
-        let mut added = None;
         if shown.added == Some(Place::Field)
-            && let Some(undo) = &self.scenes.added
-            && self.draft.as_ref().is_some_and(|draft| undo.live(draft))
+            && let Some(added) = &self.scenes.added
+            && self.draft.as_ref().is_some_and(|draft| added.live(draft))
         {
-            let top = ui.cursor().top();
             design::gap(ui, design::Gap::XS);
-            if design::undo_message(
+            *undo |= design::undo_message(
                 ui,
                 Tone::Success,
                 "Scene added to tonight.",
                 "Undo add scene",
-            ) {
-                *act = Some(SceneAct::UndoAdd);
-            }
-            added = Some(egui::Rect::from_x_y_ranges(
-                field.x_range(),
-                top..=ui.cursor().top(),
-            ));
-        }
-        if reveal {
-            let bottom = ui.cursor().top().max(field.bottom());
-            ui.scroll_to_rect(field.with_max_y(bottom), None);
-        }
-        // Round 29 P-1: after Add, the result and its Undo, the answer to the act, are whole in
-        // view, with the field above them while both fit; else the result wins. The least
-        // scroll that shows them, while the reveal holds (`Scenes::reveal_added`).
-        match added {
-            Some(result) if self.scenes.reveal_added => {
-                let clip = ui.clip_rect();
-                if !clip.contains_rect(result) {
-                    if field.union(result).height() <= clip.height() {
-                        ui.scroll_to_rect(field.union(result), None);
-                    } else {
-                        ui.scroll_to_rect(result, None);
-                    }
-                }
-            }
-            Some(_) => {}
-            // The result went (Undo, another act, the field closed).
-            None => self.scenes.reveal_added = false,
+            );
         }
     }
 
@@ -4059,7 +4020,6 @@ impl Sessions {
                     if let Some(field) = &mut scenes.field {
                         field.clear();
                         field.focus = true;
-                        scenes.reveal_added = true;
                     }
                 }
                 (result.map(drop), Place::Field)
