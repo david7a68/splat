@@ -1125,6 +1125,75 @@ mod iter_2_c_tests {
         );
     }
 
+    /// Astra review of PR 231, on the menu part since round 28: a row menu opens below or above
+    /// its button, never beside it, and stays inside the pane it opens from, one scroll lane
+    /// clear of the pane's right edge (a splitter or a scroll bar): at the pane's right edge
+    /// near the window's bottom, and near the pane's left edge.
+    #[test]
+    fn iter22_b_row_menu_opens_below_or_above_inside_its_pane() {
+        use egui::{pos2, vec2};
+        use egui_kittest::kittest::Queryable;
+        let pane = egui::Rect::from_min_max(pos2(150.0, 90.0), pos2(590.0, 632.0));
+        let size = vec2(24.0, 28.0);
+        for (case, button) in [
+            (
+                // A row's `⋯` ends at its list's scroll lane, as every row's action does.
+                "right edge, near the bottom",
+                egui::Rect::from_min_size(pos2(548.0, 600.0), size),
+            ),
+            (
+                "left edge, near the top",
+                egui::Rect::from_min_size(pos2(160.0, 100.0), size),
+            ),
+        ] {
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(960.0, 640.0))
+                .build(move |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.scope_builder(egui::UiBuilder::new().max_rect(pane), |ui| {
+                            ui.set_clip_rect(pane);
+                            ui.scope_builder(egui::UiBuilder::new().max_rect(button), |ui| {
+                                row_menu(ui, "Bridge Ambush", |ui| {
+                                    let _ = menu_action(ui, "Edit encounter", None);
+                                    let _ = menu_action(ui, "Delete the saved run", None);
+                                });
+                            });
+                        });
+                    });
+                });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            harness
+                .get_by_label("More actions for Bridge Ambush")
+                .click();
+            harness.run_steps(4);
+            let shown = harness
+                .get_by_label("More actions for Bridge Ambush")
+                .rect();
+            let lane = design::lane_width().max(design::S);
+            let rows: Vec<egui::Rect> = ["Edit encounter", "Delete the saved run"]
+                .iter()
+                .map(|name| {
+                    harness
+                        .query_all_by_label(name)
+                        .map(|node| node.rect())
+                        .reduce(|a, b| a.union(b))
+                        .unwrap_or(egui::Rect::NOTHING)
+                })
+                .collect();
+            let inside = rows.iter().all(|row| {
+                row.is_positive()
+                    && row.left() >= pane.left() + lane - 0.5
+                    && row.right() <= pane.right() - lane + 0.5
+                    && (row.bottom() <= shown.top() + 0.5 || row.top() >= shown.bottom() - 0.5)
+            });
+            assert!(
+                inside,
+                "{case}: the menu's rows {rows:?} lie below or above the button {shown:?}, inside the pane {pane:?} less a lane of {lane}"
+            );
+        }
+    }
+
     /// T12.12: Remove is offered only for an encounter with no saved run: none unfinished,
     /// none ended, and no unreadable run that names it.
     #[test]
