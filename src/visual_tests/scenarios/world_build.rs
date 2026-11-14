@@ -9699,20 +9699,20 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.expect("This folder is a copy of Ashen Marches.");
     assert!(d.is_disabled("Add folder"));
     assert_eq!(d.app_mut().campaigns.modules().len(), 1);
-    // Round 27 FA7, FD6: the warning is the reason. The kept reason line under Add folder stays
-    // empty; Add folder's accessible description and hover keep `This folder is a copy.`
+    // Round 27 FA7, FD6; round 28 FA7 (InlineCreate): the warning says the fact, once. The kept
+    // reason line under Add folder says the next step, and Add folder's accessible description
+    // and hover carry that reason too. `This folder is a copy.` shows nowhere.
+    let next = "Register it as a new package to add it.";
     let copy_reason_once = |d: &mut Driver<'_>, id: &str| {
-        let line_empty = !d.visible_text("This folder is a copy.");
-        let described = d
-            .descriptions()
-            .iter()
-            .any(|words| words == "This folder is a copy.");
-        let hover = d.tooltip_contains("Add folder", "This folder is a copy.");
+        let fact_once = !d.visible_text("This folder is a copy.");
+        let line = d.visible_text(next);
+        let described = d.descriptions().iter().any(|words| words == next);
+        let hover = d.tooltip_contains("Add folder", next);
         d.observe(
             id,
-            d.visible_text("This folder is a copy of Ashen Marches.") && line_empty && described && hover,
+            d.visible_text("This folder is a copy of Ashen Marches.") && fact_once && line && described && hover,
             format!(
-                "The copy fact shows once, as the warning; Add folder keeps the reason (line empty {line_empty}, description {described}, hover {hover})"
+                "The copy fact shows once, as the warning; the kept line and Add folder say the next step (fact once {fact_once}, line {line}, description {described}, hover {hover})"
             ),
         );
     };
@@ -9739,11 +9739,15 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
                 let choice = d.place_of("Choose for this campaign")?;
                 let register = d.place_of("Register")?;
                 let cancel = d.place_of("Cancel")?;
+                // Round 28 FA7: the kept line is `InlineCreate`'s, as tall as its longest declared
+                // reason wrapped beside Cancel; a short reason starts `L` after Cancel, inside
+                // that line (it was centred on Cancel when the form drew its own line).
                 let reason_ok = reason.is_none_or(|reason| {
                     d.painted_rect_in(reason, egui::Rect::EVERYTHING)
                         .is_some_and(|words| {
                             words.left() >= cancel.right() + design::L - 1.0
-                                && (words.center().y - cancel.center().y).abs() <= 1.0
+                                && words.top() >= cancel.top() - design::L
+                                && words.bottom() <= cancel.bottom() + design::L
                         })
                 });
                 (choice.bottom() < field.top()
