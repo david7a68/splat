@@ -384,7 +384,7 @@ fn crowded_banner(d: &mut Driver<'_>, folder: &std::path::Path, note: &std::path
         "Tab reaches Reload and lose my draft, and it scrolls into view",
     );
     d.click("Overwrite with my draft");
-    d.click("Dismiss this error");
+    d.click(crate::design::outcome::DISMISS_NAME);
     for copy in &copies {
         fs::remove_file(copy).unwrap();
     }

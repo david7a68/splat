@@ -986,20 +986,13 @@ impl Splat {
                     egui::pos2(rail_rect.right(), lower_top.max(slot_top)),
                 )),
                 |ui| {
-                    if let (Some((icon, state, color)), Some(word)) = (
-                        self.sessions
-                            .rail_recording_status()
-                            .map(|status| (status.icon, status.word, status.color)),
+                    // R5: the status's kind gives its colours; the rail picks none.
+                    if let (Some(status), Some(word)) = (
+                        self.sessions.rail_recording_status(),
                         self.sessions.recording_detail(),
                     ) {
-                        let response = design::status_link(
-                            ui,
-                            Status {
-                                icon,
-                                word: &word,
-                                color,
-                            },
-                        );
+                        let state = status.word;
+                        let response = design::status_link(ui, status.tinted(&word));
                         let full = if state == "Processed" && self.sessions.job_warned() {
                             sessions::page::processed_warning().word.to_owned()
                         } else {

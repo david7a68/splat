@@ -2321,6 +2321,69 @@ impl<'f, A: 'static> Messages<'f, A> {
     }
 }
 
+/// N6, the one placement of a message's close icon: `words` draws the message in the room left of
+/// the icon (capped at `LIST_MEASURE`) and gives back the y of the centre of its first line; the
+/// icon goes at the right end of that line, centred on it. A locked icon is disabled, with its
+/// reason. `Body::draw` (a footer's `MessageChoice::Dismiss`) and [`dismiss_on_first_line`] use it.
+fn dismiss_at_first_line(
+    ui: &mut Ui,
+    lock: Option<&str>,
+    room: IconRoom,
+    words: impl FnOnce(&mut Ui) -> f32,
+) -> Response {
+    let size = Density::Read.control();
+    ui.scope(|ui| {
+        ui.set_max_width(ui.available_width().min(LIST_MEASURE));
+        let right = ui.max_rect().right();
+        let line = ui
+            .scope(|ui| {
+                ui.set_max_width(ui.available_width() - size - S);
+                words(ui)
+            })
+            .inner;
+        let centre = egui::pos2(right - size / 2.0, line);
+        let place = Rect::from_center_size(centre, egui::Vec2::splat(size));
+        let icon = |ui: &mut Ui| match lock {
+            Some(reason) => ui
+                .add_enabled_ui(false, |ui| icon_button(ui, icons::CLOSE, DISMISS_NAME))
+                .inner
+                .on_disabled_hover_text(reason),
+            None => icon_button(ui, icons::CLOSE, DISMISS_NAME),
+        };
+        match room {
+            IconRoom::Measured => ui.put(place, icon),
+            IconRoom::Overhang => icon(&mut ui.new_child(
+                egui::UiBuilder::new().max_rect(place).layout(
+                    egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                ),
+            )),
+        }
+    })
+    .inner
+}
+
+/// Whether the close icon's target counts in the message's measured content.
+#[derive(Clone, Copy)]
+enum IconRoom {
+    /// A footer's message: the target is part of the message's rect (unchanged since N6).
+    Measured,
+    /// A message in a banner with padding: the target, taller than the first line, reaches into
+    /// the padding; the message's height stays its words'.
+    Overhang,
+}
+
+/// A message drawn outside a pane's footer (the session's bottom banner) with its close icon, as
+/// a footer's `MessageChoice::Dismiss` places it: at the right end of the words' first line,
+/// centred on it (N6). `words` draws the message from the top of its room. The icon's
+/// accessible name is [`DISMISS_NAME`]. Returns the icon's response.
+pub fn dismiss_on_first_line(ui: &mut Ui, words: impl FnOnce(&mut Ui)) -> Response {
+    dismiss_at_first_line(ui, None, IconRoom::Overhang, |ui| {
+        let line = ui.cursor().top() + Type::Body.line() / 2.0;
+        words(ui);
+        line
+    })
+}
+
 impl Body {
     /// With a `Dismiss`, the close icon at the right end of the first line, centred on that
     /// line; the words and the other choices keep the room to its left. A locked `Dismiss` is
@@ -2335,33 +2398,14 @@ impl Body {
             self.draw_words(ui, place, &mut pressed);
             return pressed;
         };
-        let size = Density::Read.control();
         let lock = self.locks.get(at).and_then(holding);
         let mut pressed = None;
-        ui.scope(|ui| {
-            ui.set_max_width(ui.available_width().min(LIST_MEASURE));
-            let right = ui.max_rect().right();
-            let line = ui
-                .scope(|ui| {
-                    ui.set_max_width(ui.available_width() - size - S);
-                    self.draw_words(ui, place, &mut pressed)
-                })
-                .inner;
-            let centre = egui::pos2(right - size / 2.0, line);
-            let icon = ui.put(
-                Rect::from_center_size(centre, egui::Vec2::splat(size)),
-                |ui: &mut Ui| match lock {
-                    Some(reason) => ui
-                        .add_enabled_ui(false, |ui| icon_button(ui, icons::CLOSE, DISMISS_NAME))
-                        .inner
-                        .on_disabled_hover_text(reason),
-                    None => icon_button(ui, icons::CLOSE, DISMISS_NAME),
-                },
-            );
-            // The words and their controls are drawn before the close icon: they come first.
-            let words = self.words.as_str();
-            activated(ui, &mut pressed, icon.clicked(), words, Pressed::Choice(at));
+        let icon = dismiss_at_first_line(ui, lock, IconRoom::Measured, |ui| {
+            self.draw_words(ui, place, &mut pressed)
         });
+        // The words and their controls are drawn before the close icon: they come first.
+        let words = self.words.as_str();
+        activated(ui, &mut pressed, icon.clicked(), words, Pressed::Choice(at));
         pressed
     }
 
