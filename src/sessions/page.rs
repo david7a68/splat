@@ -35,6 +35,8 @@ use uuid::Uuid;
 
 #[path = "carry.rs"]
 mod carry;
+#[path = "kept.rs"]
+mod kept;
 #[path = "plan.rs"]
 mod plan;
 #[cfg(test)]
@@ -85,17 +87,6 @@ enum SessionAct {
     OpenSettings,
     UndoCarry(Uuid),
     UndoMarker,
-}
-
-/// Round 27 FI3, FN2: a marker's `Add` result, kept by the session whose recording holds the
-/// marker and the Timeline event it made. It shows in that session's footer while the event
-/// stands; `Undo add`, leaving the Recordings tab or a campaign change ends it.
-struct MarkerAdded {
-    session: Option<Uuid>,
-    id: String,
-    title: String,
-    /// When the marker was added: its result's footer order.
-    order: design::ResultOrder,
 }
 
 #[derive(Clone, Copy, Default, PartialEq)]
@@ -307,7 +298,8 @@ fn new_notice(
 
 #[derive(Default)]
 pub struct Sessions {
-    identity_undo: Option<super::IdentityUndo>,
+    /// `<file> is now a separate session.` and its Undo.
+    separate: design::Results<kept::Page, kept::Separate>,
     /// The DM showed or hid the party bar. Otherwise it shows while a session is played.
     pub party_bar: Option<bool>,
     /// The party has members, and the bar does not show, so the header offers it.
@@ -325,9 +317,6 @@ pub struct Sessions {
     pub(super) row_reveal: Option<(String, u8, u64)>,
     /// When the link update's result was made.
     link_order: Option<design::ResultOrder>,
-    /// When the separate-session result in `identity_undo` was made: its footer order. Each
-    /// result keeps its own order, issued by its action (review of PR 298).
-    identity_order: design::ResultOrder,
     /// When the group removal in `removed_group` was done.
     pub(super) removed_group_order: design::ResultOrder,
     /// When the run deletion in `deleted_run` was done.
@@ -427,7 +416,8 @@ pub struct Sessions {
     job_warned: bool,
     alerts: Vec<Alert>,
     added: Option<Added>,
-    recording_added: Option<MarkerAdded>,
+    /// A marker's `Add` result, by the session whose recording holds the marker.
+    markers: design::Results<kept::OfSession, kept::MarkerAdd>,
     notice_context: Option<(Option<Uuid>, View)>,
     job: Option<(Job, Uuid)>,
     reading: Option<Reading>,
@@ -447,7 +437,8 @@ pub struct Sessions {
     break_before_words: bool,
     note_editor_id: Option<egui::Id>,
     move_run_here: Option<(Uuid, String)>,
-    moved_run: Option<MovedRun>,
+    /// The open run moved to another session, with `Undo move`.
+    moves: design::Results<kept::Page, kept::Moved>,
     /// When a recording last stopped, so the rail can say it was kept.
     saved_at: Option<Instant>,
     note_had_focus: bool,
@@ -503,16 +494,6 @@ pub struct Sessions {
     pub wants_content_refresh: bool,
     /// The session notes came, went or moved: Lookup's index reads them again.
     pub wants_index_refresh: bool,
-}
-
-struct MovedRun {
-    before: timeline::Event,
-    open_run: Option<(String, Uuid)>,
-    body: String,
-    events: Vec<timeline::Event>,
-    words: String,
-    /// When the move was done: its result's footer order.
-    order: design::ResultOrder,
 }
 
 fn processing_llm(settings: &ProcessingSettings) -> String {
