@@ -105,6 +105,43 @@ impl<'a> From<KindStatus<'a>> for Tinted<'a> {
     }
 }
 
+/// Each section's colour as painted, in the order of its job's sections. A painter's opacity
+/// (a disabled parent) changes the galley's vertex colours, not its sections' formats, so this
+/// reads the first drawn glyph's vertex in each section. Glyphs follow the job's characters in
+/// order (a line break draws none). A section with no drawn glyph keeps its format's colour.
+#[cfg(test)]
+pub(crate) fn painted_section_colours(text: &eframe::egui::epaint::TextShape) -> Vec<Color32> {
+    let job = &text.galley.job;
+    let mut chars = job.sections.iter().enumerate().flat_map(|(at, section)| {
+        job.text[section.byte_range.clone()]
+            .chars()
+            .map(move |chr| (at, chr))
+    });
+    let mut colours: Vec<Option<Color32>> = vec![None; job.sections.len()];
+    for placed in &text.galley.rows {
+        let row = &placed.row;
+        for glyph in &row.glyphs {
+            let Some((at, _)) = chars.by_ref().find(|(_, chr)| *chr == glyph.chr) else {
+                break;
+            };
+            if !glyph.uv_rect.is_nothing()
+                && let Some(vertex) = row.visuals.mesh.vertices.get(glyph.first_vertex as usize)
+            {
+                colours[at] = colours[at].or(Some(vertex.color));
+            }
+        }
+    }
+    colours
+        .into_iter()
+        .zip(&job.sections)
+        .map(|(painted, section)| {
+            painted
+                .unwrap_or(section.format.color)
+                .gamma_multiply(text.opacity_factor)
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use eframe::egui::{self, Pos2, Rect, vec2};
@@ -118,10 +155,10 @@ mod tests {
         for clipped in &output.shapes {
             if let egui::Shape::Text(text) = &clipped.shape {
                 let job = &text.galley.job;
-                for section in &job.sections {
+                // The colour as painted: a dimmed painter fades the whole text.
+                for (section, color) in job.sections.iter().zip(painted_section_colours(text)) {
                     if job.text[section.byte_range.clone()].trim() == part {
-                        // The colour as painted: a dimmed painter fades the whole text.
-                        found.push(section.format.color.gamma_multiply(text.opacity_factor));
+                        found.push(color);
                     }
                 }
             }

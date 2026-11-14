@@ -14661,10 +14661,12 @@ pub mod session_recording {
             let at = text.visual_bounding_rect().center();
             // The Recordings tab's live row has its time on its own line: `0:00 recorded · …`.
             if job.text.contains(" recorded · ") && !rows.iter().any(|row| row.contains(at)) {
+                let painted = crate::design::status::painted_section_colours(text);
                 let first = job
                     .sections
                     .first()
-                    .map(|s| (job.text[s.byte_range.clone()].to_owned(), s.format.color));
+                    .zip(painted.first())
+                    .map(|(s, color)| (job.text[s.byte_range.clone()].to_owned(), *color));
                 let (part, color) = first.unwrap_or_default();
                 // The time alone is its first part; a whole muted line has no time part.
                 if clock_like(&part) {
@@ -14696,10 +14698,10 @@ pub mod session_recording {
             } else {
                 Surface::RecordingsTab
             };
-            for section in &job.sections {
+            // The colour as painted: a disabled parent's painter fades the whole text.
+            let painted = crate::design::status::painted_section_colours(text);
+            for (section, color) in job.sections.iter().zip(painted) {
                 let part = &job.text[section.byte_range.clone()];
-                // The colour as painted: a disabled parent's painter fades the whole text.
-                let color = section.format.color.gamma_multiply(text.opacity_factor);
                 if part.trim() == record
                     || part.trim_start().starts_with(record) && !live_word(part)
                 {
