@@ -3162,37 +3162,35 @@ impl<'a> Footer<'a> {
         // Ruling R29: the room an open lock keeps for its reason is a reservation. It stays while
         // the footer has room for it under its cap, so a lock moves nothing; else it is not drawn,
         // so it never makes the footer scroll. The footer keeps its height (up to the cap) either
-        // way: a message that comes later takes that room, and no pressed choice moves. Its height
-        // comes from the last pass that drew it.
-        use super::outcome::{GIVE_UP, RESERVED};
-        let (give_up_key, room_key) = (self.id.with("give_up"), self.id.with("reserved"));
-        let (give_up, known) = ui.ctx().data(|data| {
-            (
-                data.get_temp::<bool>(give_up_key).unwrap_or(false),
-                data.get_temp::<f32>(room_key).unwrap_or(0.0),
-            )
-        });
+        // way: a message that comes later takes that room, and no pressed choice moves. The room
+        // the reservations want is measured in this pass, at this width, for these messages.
+        use super::outcome::{DRAWN, GIVE_UP, RESERVED};
+        let give_up_key = self.id.with("give_up");
+        let give_up = ui
+            .ctx()
+            .data(|data| data.get_temp::<bool>(give_up_key).unwrap_or(false));
         ui.ctx().data_mut(|data| {
             data.insert_temp(Id::new(GIVE_UP), give_up);
             data.insert_temp(Id::new(RESERVED), 0.0_f32);
+            data.insert_temp(Id::new(DRAWN), 0.0_f32);
         });
         let (_, content) = scroll_part(ui, rect, self.id, &name, |ui| {
             for (_, _, _, draw) in messages {
                 draw(ui);
             }
         });
-        let drawn = ui.ctx().data_mut(|data| {
+        let (room, drawn) = ui.ctx().data_mut(|data| {
             data.remove::<bool>(Id::new(GIVE_UP));
-            data.remove_temp::<f32>(Id::new(RESERVED)).unwrap_or(0.0)
+            (
+                data.remove_temp::<f32>(Id::new(RESERVED)).unwrap_or(0.0),
+                data.remove_temp::<f32>(Id::new(DRAWN)).unwrap_or(0.0),
+            )
         });
-        let room = if give_up { known } else { drawn };
-        let bare = content - if give_up { 0.0 } else { drawn };
+        let bare = content - drawn;
         let fits = (bare + room + 2.0 * PART_INSET).ceil() <= most;
         let next = room > 0.0 && !fits;
-        ui.ctx().data_mut(|data| {
-            data.insert_temp(room_key, room);
-            data.insert_temp(give_up_key, next);
-        });
+        ui.ctx()
+            .data_mut(|data| data.insert_temp(give_up_key, next));
         if next != give_up {
             ui.ctx()
                 .request_discard("the message footer's reservations changed");

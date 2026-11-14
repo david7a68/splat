@@ -1005,9 +1005,11 @@ fn before_lose(ui: &mut Ui, width: f32, gap: f32) {
 }
 
 /// Ruling R29, set by the pinned footer around its messages' draw (`draw_messages`): the open
-/// locks' reason rooms give up their room (`GIVE_UP`), and how much room they took (`RESERVED`).
+/// locks' reason rooms give up their room (`GIVE_UP`), how much room they want now
+/// (`RESERVED`), and how much they took (`DRAWN`).
 pub(in crate::design) const GIVE_UP: &str = "design_reasons_give_up";
 pub(in crate::design) const RESERVED: &str = "design_reasons_reserved";
+pub(in crate::design) const DRAWN: &str = "design_reasons_drawn";
 
 /// The close icon's accessible name and hover words.
 pub const DISMISS_NAME: &str = "Dismiss this message";
@@ -2560,30 +2562,53 @@ impl Body {
             }
         }
         // Ruling R29: an open lock's room is a reservation, not content. A pinned footer that
-        // has no room for it under its cap tells `reasons` to give it up (`GIVE_UP`), and learns
-        // how tall it is from `RESERVED`; a locked reason always shows.
+        // has no room for it under its cap tells `reasons` to give it up (`GIVE_UP`). Each pass
+        // `reasons` tells the footer how much room the reservations want now (`RESERVED`,
+        // measured whether or not they take it) and how much they took (`DRAWN`), so nothing
+        // older than this pass decides. A locked reason always shows.
         let give_up = ui
             .ctx()
             .data(|data| data.get_temp::<bool>(egui::Id::new(GIVE_UP)))
             .unwrap_or(false);
+        // Only inside a pinned footer's draw, which set the sums; a body message keeps its room
+        // and counts nothing.
+        let add = |ui: &Ui, key: &str, room: f32| {
+            ui.ctx().data_mut(|data| {
+                if let Some(sum) = data.get_temp::<f32>(egui::Id::new(key)) {
+                    data.insert_temp(egui::Id::new(key), sum + room);
+                }
+            });
+        };
         for (reason, locked) in said {
             if locked {
                 message_choice_row(ui, self.tone, |ui| blocked_reason(ui, Some(reason)));
-            } else if !give_up {
+                continue;
+            }
+            // What the reservation wants at this width, laid out where it would go, in a child
+            // that takes no room and paints nothing.
+            let mut probe = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(Rect::from_min_size(
+                        ui.cursor().min,
+                        egui::vec2(ui.available_width(), 10_000.0),
+                    ))
+                    .layout(*ui.layout())
+                    .invisible(),
+            );
+            message_choice_row(&mut probe, self.tone, |ui| blocked_reason(ui, Some(reason)));
+            add(
+                ui,
+                RESERVED,
+                probe.min_rect().height() + ui.spacing().item_spacing.y,
+            );
+            if !give_up {
                 let before = ui.cursor().top();
                 message_choice_row(ui, self.tone, |ui| {
                     ui.scope_builder(egui::UiBuilder::new().invisible(), |ui| {
                         blocked_reason(ui, Some(reason));
                     });
                 });
-                let room = ui.cursor().top() - before;
-                // Only inside a pinned footer's draw, which set the sum; a body message keeps
-                // its room and counts nothing.
-                ui.ctx().data_mut(|data| {
-                    if let Some(sum) = data.get_temp::<f32>(egui::Id::new(RESERVED)) {
-                        data.insert_temp(egui::Id::new(RESERVED), sum + room);
-                    }
-                });
+                add(ui, DRAWN, ui.cursor().top() - before);
             }
         }
     }
@@ -4832,15 +4857,15 @@ mod tests {
         assert_eq!(tops(&h), open, "a lock that goes moves no line");
 
         // Ruling R29: the open lock's room is a reservation, never a reason to scroll. Shrink
-        // the pane until the footer is at its cap (a third of the pane). At each size, a wheel
-        // over the footer may move its words only when a line the DM can see is cut; the
-        // invisible room alone never makes it scroll.
-        // The footer's view, as the pane drew it in the last pass.
-        let footer = |h: &egui_kittest::Harness<'_, App>| {
+        // the pane until the footer is at its cap (a third of the pane). At each size a wheel
+        // over the footer moves its words exactly when a line the DM can see is cut: the
+        // invisible room alone never makes it scroll, and a cut line can always be reached.
+        let view = |h: &egui_kittest::Harness<'_, App>| {
             crate::design::pane::pane_records(&h.ctx)
                 .first()
                 .and_then(|record| record.footer())
                 .expect("the footer's view")
+                .shrink(crate::design::components::PART_INSET)
         };
         let shown = [
             "Folder saved.",
@@ -4849,46 +4874,45 @@ mod tests {
             "Undo change newer",
             "Register as a new campaign",
         ];
-        let room = footer(&h).height();
+        let top = |h: &egui_kittest::Harness<'_, App>, words: &str| {
+            h.get_by_role_and_label(egui::accesskit::Role::Label, words)
+                .rect()
+                .top()
+        };
+        let wheel = |h: &mut egui_kittest::Harness<'_, App>, at: egui::Pos2, by: f32| {
+            h.event(egui::Event::PointerMoved(at));
+            h.event(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, by),
+                modifiers: egui::Modifiers::NONE,
+            });
+            h.run_steps(6);
+            // No hover tip of a locked control stays over the footer.
+            h.event(egui::Event::PointerGone);
+            h.run_steps(2);
+        };
+        let room = view(&h).height();
         let mut capped_whole = None;
         for height in (200..=800).rev().step_by(6) {
             h.set_size(egui::vec2(960.0, height as f32));
             h.run_steps(6);
-            let part = footer(&h);
+            let part = view(&h);
             let cut = shown.iter().any(|name| {
-                h.query_by_label(name).is_some_and(|node| {
-                    node.rect().bottom()
-                        > part.bottom() - crate::design::components::PART_INSET + 0.5
-                })
-            });
-            let top = |h: &egui_kittest::Harness<'_, App>| {
-                h.get_by_role_and_label(egui::accesskit::Role::Label, "Folder saved.")
-                    .rect()
-                    .top()
-            };
-            h.run_steps(6);
-            let before = top(&h);
-            h.event(egui::Event::PointerMoved(part.center()));
-            h.event(egui::Event::MouseWheel {
-                unit: egui::MouseWheelUnit::Point,
-                delta: egui::vec2(0.0, -400.0),
-                modifiers: egui::Modifiers::NONE,
+                h.query_by_label(name)
+                    .is_some_and(|node| node.rect().bottom() > part.bottom() + 0.5)
             });
             h.run_steps(6);
-            let after = top(&h);
+            let before = top(&h, "Folder saved.");
+            wheel(&mut h, part.center(), -400.0);
+            let after = top(&h, "Folder saved.");
+            wheel(&mut h, part.center(), 400.0);
             // The trailing item spacing can pass the edge by a point or two; the reservation
             // is a whole reason line (76 px here).
             let moved = (after - before).abs() > XS;
-            h.event(egui::Event::MouseWheel {
-                unit: egui::MouseWheelUnit::Point,
-                delta: egui::vec2(0.0, 400.0),
-                modifiers: egui::Modifiers::NONE,
-            });
-            h.run_steps(6);
-            assert!(
-                !moved || cut,
-                "at 960 x {height} the footer {part:?} scrolls ({before} to {after}) with every \
-                 line whole: only its invisible room is past its edge"
+            assert_eq!(
+                moved, cut,
+                "at 960 x {height} the footer {part:?} scrolls ({before} to {after}) exactly when \
+                 a line the DM can see is cut"
             );
             if part.height() < room - 0.5 && !cut && capped_whole.is_none() {
                 capped_whole = Some(height);
@@ -4896,30 +4920,112 @@ mod tests {
         }
         let height =
             capped_whole.expect("a size where the footer is at its cap with its lines whole");
-        // Locked there, the reason is content: it shows whole, and the footer may scroll.
         h.set_size(egui::vec2(960.0, height as f32));
         h.run_steps(6);
+
+        // Locked at the cap, each reason is content. The first message's words and actions stay
+        // where they were (its reason comes under them); every reason is there, and a wheel
+        // brings each one whole into the footer's view, under its own message's actions.
         let open = tops(&h);
+        let actions = ["Undo change newer", "Undo change older"];
+        let placed = |h: &egui_kittest::Harness<'_, App>| {
+            actions.map(|name| h.get_by_label(name).rect().left_top())
+        };
+        let first = placed(&h)[0];
         h.state_mut().run_live = true;
         h.run_steps(6);
-        // There was no room for the reservation here: the reason pushes the lines under it;
-        // the line above it stays.
         assert_eq!(
             tops(&h)[0],
             open[0],
             "at its cap, a lock moves nothing above its reason"
         );
+        assert_eq!(placed(&h)[0], first, "the first message's action stays");
         let line = Type::Small.line();
-        let reasons: Vec<_> = h
-            .query_all_by_role_and_label(egui::accesskit::Role::Label, LOCK.as_str())
-            .map(|node| node.rect())
-            .collect();
-        assert!(
-            !reasons.is_empty()
-                && reasons
-                    .iter()
-                    .all(|reason| reason.height() >= 2.0 * line - 1.0),
-            "a locked reason shows whole in a capped footer: {reasons:?}"
-        );
+        for (at, action) in actions.iter().enumerate() {
+            let reason = |h: &egui_kittest::Harness<'_, App>| {
+                let mut reasons: Vec<_> = h
+                    .query_all_by_role_and_label(egui::accesskit::Role::Label, LOCK.as_str())
+                    .map(|node| node.rect())
+                    .collect();
+                assert_eq!(reasons.len(), 2, "one reason line per message: {reasons:?}");
+                reasons.sort_by(|a, b| a.top().total_cmp(&b.top()));
+                reasons[at]
+            };
+            for _ in 0..40 {
+                if reason(&h).bottom() <= view(&h).bottom() + 0.5 {
+                    break;
+                }
+                let centre = view(&h).center();
+                wheel(&mut h, centre, -24.0);
+            }
+            let (shown, part) = (reason(&h), view(&h));
+            let control = h.get_by_label(action).rect();
+            assert!(
+                shown.top() >= part.top() - 0.5
+                    && shown.bottom() <= part.bottom() + 0.5
+                    && shown.height() >= 2.0 * line - 1.0
+                    && control.bottom() <= shown.top(),
+                "reason {at} {shown:?} is not whole in the footer's view {part:?} under its \
+                 action {control:?}"
+            );
+        }
+        let centre = view(&h).center();
+        wheel(&mut h, centre, 4000.0);
+        h.state_mut().run_live = false;
+        h.run_steps(6);
+
+        // The reservation's room is measured for the messages and the width of this pass: a
+        // change of either leaves the footer as a fresh footer in that state draws it, open and
+        // locked.
+        let fresh = |app: App| {
+            let mut fresh = harness_sized(app, 960.0);
+            fresh.set_size(egui::vec2(960.0, height as f32));
+            fresh.run_steps(8);
+            fresh
+        };
+        let same = |h: &mut egui_kittest::Harness<'static, App>,
+                    other: &mut egui_kittest::Harness<'static, App>,
+                    what: &str| {
+            let words: Vec<_> = ["Folder saved.", "Campaign link saved."]
+                .into_iter()
+                .filter(|words| h.query_by_label(words).is_some())
+                .collect();
+            let state = |h: &egui_kittest::Harness<'_, App>| {
+                (
+                    view(h),
+                    words.iter().map(|words| top(h, words)).collect::<Vec<_>>(),
+                )
+            };
+            assert_eq!(state(h), state(other), "{what}: open, as a fresh footer");
+            for one in [&mut *h, &mut *other] {
+                one.state_mut().run_live = true;
+                one.run_steps(6);
+            }
+            assert_eq!(state(h), state(other), "{what}: locked, as a fresh footer");
+            for one in [&mut *h, &mut *other] {
+                one.state_mut().run_live = false;
+                one.run_steps(6);
+            }
+        };
+        // Wider: the reasons need fewer lines.
+        h.state_mut().narrow = Some(560.0);
+        h.run_steps(8);
+        let mut wide = two();
+        wide.narrow = Some(560.0);
+        same(&mut h, &mut fresh(wide), "wider");
+        // Back to the cap, then one message goes.
+        h.state_mut().narrow = Some(320.0);
+        h.run_steps(8);
+        h.state_mut()
+            .dndbeyond
+            .results
+            .owner_changed(&Campaign("newer"));
+        h.run_steps(8);
+        let mut one = App::default();
+        one.dndbeyond
+            .results
+            .record(Saved(Campaign("older"), "Campaign link saved"));
+        one.narrow = Some(320.0);
+        same(&mut h, &mut fresh(one), "one message removed");
     }
 }
