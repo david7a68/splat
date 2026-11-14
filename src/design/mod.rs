@@ -43,7 +43,7 @@ pub use layout::{
 };
 // Wave 2 callers name the pane's escape through `design`.
 #[allow(unused_imports)]
-pub use pane::{Body, Fills, FillsReason, Placement};
+pub use pane::{Body, EditorRegion, Fills, FillsReason, Placement};
 // Wave 2 callers name the popup parts through `design`, as they name the components.
 #[allow(unused_imports)]
 pub use popups::{Dropdown, DropdownResponse, Ghost, ImageSize, TipLine, drag_source, rich_tip};

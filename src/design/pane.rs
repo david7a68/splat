@@ -195,6 +195,218 @@ impl ContentScroll {
     }
 }
 
+/// The one editor of a `Footer::pane_editor` body that grows with its text, drawn once by
+/// [`EditorRegion::editor`]. Only the pane makes one, for its body closure alone: the region
+/// cannot be kept, copied, used twice or taken out of the closure, so a pane has at most one
+/// region, and nothing but the editor is drawn in it.
+///
+/// While the content fits the pane's room, the region is as tall as the editor's text, and the
+/// pane is a plain `Body::Content` pane. When it would not fit, the region is the room less the
+/// rest of the content (as measured in the last pass; a change draws the pass again) and less
+/// the footer, never less than `REGION_LEAST`; the editor scrolls inside it (a `ScrollColumn`,
+/// its lane kept), and what comes after the region (a save row) and the footer stay in view.
+/// When the region's height changes under a focused editor (the footer gains or loses a line),
+/// the caret is brought back into view. A `ScrollColumn` inside the region is refused, as in a
+/// `Content` body.
+///
+/// A second use does not compile:
+///
+/// ```compile_fail,E0382
+/// use splat::pane::Footer;
+/// fn two(ui: &mut eframe::egui::Ui, a: &mut String, b: &mut String) {
+///     const NOTE: splat::layout::FieldName = splat::field_id!("doc_region_note");
+///     Footer::new("pane", 400.0).pane_editor(ui, |ui, region| {
+///         region.editor(ui, NOTE.once(splat::layout::Once::Example), a, |edit| edit);
+///         region.editor(ui, NOTE.once(splat::layout::Once::Settings), b, |edit| edit);
+///     });
+/// }
+/// ```
+///
+/// ```
+/// use splat::pane::Footer;
+/// fn one(ui: &mut eframe::egui::Ui, a: &mut String) {
+///     const NOTE: splat::layout::FieldName = splat::field_id!("doc_region_note");
+///     Footer::new("pane", 400.0).pane_editor(ui, |ui, region| {
+///         region.editor(ui, NOTE.once(splat::layout::Once::Example), a, |edit| edit);
+///         ui.label("A save row");
+///     });
+/// }
+/// ```
+///
+/// It cannot leave its closure, to be used after the pane:
+///
+/// ```compile_fail
+/// use splat::pane::Footer;
+/// fn kept(ui: &mut eframe::egui::Ui, a: &mut String) {
+///     const NOTE: splat::layout::FieldName = splat::field_id!("doc_region_note");
+///     let region = Footer::new("pane", 400.0).pane_editor(ui, |_, region| region);
+///     region.editor(ui, NOTE.once(splat::layout::Once::Example), a, |edit| edit);
+/// }
+/// ```
+///
+/// ```
+/// use splat::pane::Footer;
+/// fn used(ui: &mut eframe::egui::Ui, a: &mut String) -> bool {
+///     const NOTE: splat::layout::FieldName = splat::field_id!("doc_region_note");
+///     Footer::new("pane", 400.0)
+///         .pane_editor(ui, |ui, region| region.editor(ui, NOTE.once(splat::layout::Once::Example), a, |edit| edit))
+///         .response
+///         .changed()
+/// }
+/// ```
+///
+/// Nor can a caller make one, or copy one:
+///
+/// ```compile_fail,E0451
+/// fn made() -> splat::pane::EditorRegion<'static> {
+///     splat::pane::EditorRegion { pane: eframe::egui::Id::NULL, max: 100.0, _scope: std::marker::PhantomData }
+/// }
+/// ```
+///
+/// ```compile_fail,E0382
+/// use splat::pane::Footer;
+/// fn copied(ui: &mut eframe::egui::Ui, a: &mut String) {
+///     const NOTE: splat::layout::FieldName = splat::field_id!("doc_region_note");
+///     Footer::new("pane", 400.0).pane_editor(ui, |ui, region| {
+///         let copy = region;
+///         region.editor(ui, NOTE.once(splat::layout::Once::Example), a, |edit| edit);
+///         let _ = copy;
+///     });
+/// }
+/// ```
+pub struct EditorRegion<'r> {
+    pane: Id,
+    max: f32,
+    /// Ties the region to the body closure (invariant in `'r`): it cannot be returned from it.
+    _scope: std::marker::PhantomData<fn(&'r ()) -> &'r ()>,
+}
+
+/// The least height of an editor region: a pane too small for its content and this much of
+/// the editor scrolls as a whole, as `Body::Content` does.
+const REGION_LEAST: f32 = super::tokens::XXL * 2.0;
+
+/// The region's height for a room of `room` with `rest` around it (unknown before the first
+/// measure: the whole room, and the pass is drawn again).
+fn region_height(room: f32, rest: Option<f32>) -> f32 {
+    (room - rest.unwrap_or(0.0))
+        .floor()
+        .max(REGION_LEAST.min(room))
+}
+
+fn region_drawn_id(pane: Id) -> Id {
+    pane.with("region_drawn")
+}
+
+/// The height the pane's editor region took in this pass, if it drew.
+fn region_drawn(ui: &Ui, pane: Id) -> Option<f32> {
+    let pass = ui.ctx().cumulative_pass_nr();
+    ui.ctx()
+        .data(|data| data.get_temp::<(u64, f32)>(region_drawn_id(pane)))
+        .filter(|(drawn, _)| *drawn == pass)
+        .map(|(_, height)| height)
+}
+
+impl EditorRegion<'_> {
+    /// The pane's one editor, drawn through `field` (its id and text guard, `FieldId::editor`)
+    /// inside the region, as tall as its text up to the region's height, then scrolling.
+    pub fn editor(
+        self,
+        ui: &mut Ui,
+        field: super::layout::FieldId,
+        text: &mut dyn egui::TextBuffer,
+        style: impl for<'t> FnOnce(egui::TextEdit<'t>) -> egui::TextEdit<'t>,
+    ) -> super::layout::Editor {
+        let pane = innermost(ui);
+        assert!(
+            pane.is_some_and(|open| open.pane == self.pane && open.content)
+                || !cfg!(debug_assertions),
+            "an editor region is drawn in its own pane's body, not in a pane inside it"
+        );
+        let key = self.pane.with("editor_region");
+        let max = self.max;
+        let top = ui.cursor().top();
+        // The focused caret of the last pass, in the region's content (top, bottom), with that
+        // pass's view height and offset. When the view's height changes under it (the footer
+        // gained or lost a line, the window changed), the offset that keeps the caret in view
+        // is set before this pass lays out, with no animation: the first frame shown has the
+        // caret in view. Only then, so the DM's own wheel is never pulled back.
+        let caret_key = key.with("caret");
+        let kept = ui
+            .ctx()
+            .data(|data| data.get_temp::<(f32, f32, f32, f32)>(caret_key));
+        let mut column = ScrollColumn::new(key)
+            .max_height(max)
+            .min_scrolled_height(max)
+            .fit_height();
+        if let Some((caret_top, caret_bottom, view, offset)) = kept
+            && (view - max).abs() > 0.5
+        {
+            let keep = if caret_bottom > offset + max {
+                caret_bottom - max
+            } else if caret_top < offset {
+                caret_top
+            } else {
+                offset
+            };
+            if (keep - offset).abs() > 0.5 {
+                column = column.vertical_scroll_offset(keep.max(0.0));
+            }
+        }
+        let output = column.show_in_region(ui, |ui| {
+            // A scroll inside the region is refused, as in a `Content` body.
+            open(
+                ui,
+                Some(OpenPane {
+                    layer: ui.layer_id(),
+                    content: true,
+                    usable: pane.map_or(ui.clip_rect(), |open| open.usable),
+                    edge: false,
+                    pane: self.pane,
+                }),
+            );
+            // Where the content starts in this layout (the view's top less the offset used).
+            let origin = ui.max_rect().top();
+            let editor = field.editor(ui, text, style);
+            open(ui, None);
+            (editor, origin)
+        });
+        let pass = ui.ctx().cumulative_pass_nr();
+        // What the region took in the body, as the body laid it out (the scroll output's view
+        // is not always what the body allocated).
+        let height = (ui.cursor().top() - top - ui.spacing().item_spacing.y).max(0.0);
+        let (editor, origin) = output.inner;
+        // Keep the focused caret for the next pass, in content coordinates.
+        let caret = editor
+            .response
+            .has_focus()
+            .then_some(())
+            .and(editor.cursor_range.map(|range| {
+                editor
+                    .galley
+                    .pos_from_cursor(range.primary)
+                    .translate(editor.galley_pos.to_vec2())
+            }));
+        ui.ctx().data_mut(|data| match caret {
+            Some(caret) => {
+                data.insert_temp(
+                    caret_key,
+                    (
+                        caret.top() - origin,
+                        caret.bottom() - origin,
+                        max,
+                        output.state.offset.y,
+                    ),
+                );
+            }
+            None => data.remove::<(f32, f32, f32, f32)>(caret_key),
+        });
+        ui.ctx().data_mut(|data| {
+            data.insert_temp(region_drawn_id(self.pane), (pass, height));
+        });
+        editor
+    }
+}
+
 /// A held press, kept by the pane (one owner: the pane's id).
 #[derive(Clone, Copy, Debug, Default)]
 struct Held {
@@ -299,20 +511,36 @@ pub enum Placement {
     Pinned,
 }
 
+/// One open pane body (or the inside of an editor region, which counts as a `Content` body:
+/// it refuses a scroll inside it).
+#[derive(Clone, Copy)]
+struct OpenPane {
+    layer: LayerId,
+    /// The body is a scroll column already (`Body::Content`, or an editor region's inside).
+    content: bool,
+    /// What a layer opened from the body may use.
+    usable: Rect,
+    /// An edge (the footer, the session banner) ends the body: a `Fills` body's scroll columns
+    /// then cut at their last whole registered row.
+    edge: bool,
+    /// The pane's footer id.
+    pane: Id,
+}
+
 /// What kind of pane is open now, innermost last, per layer, with its body's usable rect.
 #[derive(Clone, Default)]
 struct Open {
     pass: u64,
-    panes: Vec<(LayerId, bool, Rect)>,
+    panes: Vec<OpenPane>,
 }
 
 fn open_id() -> Id {
     Id::new("design_open_panes")
 }
 
-/// Open (`Some((content, usable))`) or close (`None`) the innermost pane on `ui`'s layer.
-fn open(ui: &Ui, content: Option<(bool, Rect)>) {
-    let (layer, pass) = (ui.layer_id(), ui.ctx().cumulative_pass_nr());
+/// Open (`Some(pane)`) or close (`None`) the innermost pane on `ui`'s layer.
+fn open(ui: &Ui, content: Option<OpenPane>) {
+    let pass = ui.ctx().cumulative_pass_nr();
     ui.ctx().data_mut(|data| {
         let open = data.get_temp_mut_or_default::<Open>(open_id());
         if open.pass != pass {
@@ -322,7 +550,7 @@ fn open(ui: &Ui, content: Option<(bool, Rect)>) {
             };
         }
         match content {
-            Some((content, usable)) => open.panes.push((layer, content, usable)),
+            Some(pane) => open.panes.push(pane),
             None => {
                 open.panes.pop();
             }
@@ -330,10 +558,26 @@ fn open(ui: &Ui, content: Option<(bool, Rect)>) {
     });
 }
 
+/// The innermost open pane body on `ui`'s layer in this pass.
+fn innermost(ui: &Ui) -> Option<OpenPane> {
+    let (layer, pass) = (ui.layer_id(), ui.ctx().cumulative_pass_nr());
+    ui.ctx().data(|data| {
+        data.get_temp::<Open>(open_id())
+            .filter(|open| open.pass == pass)
+            .and_then(|open| {
+                open.panes
+                    .iter()
+                    .rev()
+                    .find(|pane| pane.layer == layer)
+                    .copied()
+            })
+    })
+}
+
 /// Whether a vertical `ScrollColumn` about to be drawn on `ui` is inside a `Body::Content` pane,
-/// which is a scroll column already. Debug builds and tests refuse it (a panic, so that its caller
-/// is fixed); a release build draws its content in place (`ScrollColumn::inline`), and the pane
-/// scrolls it.
+/// which is a scroll column already (or inside an editor region, which scrolls its editor).
+/// Debug builds and tests refuse it (a panic, so that its caller is fixed); a release build draws
+/// its content in place (`ScrollColumn::inline`), and the pane scrolls it.
 pub(super) fn column_in_content(ui: &Ui) -> bool {
     let (layer, pass) = (ui.layer_id(), ui.ctx().cumulative_pass_nr());
     let inside = ui.ctx().data(|data| {
@@ -342,7 +586,7 @@ pub(super) fn column_in_content(ui: &Ui) -> bool {
                 && open
                     .panes
                     .last()
-                    .is_some_and(|(at, content, _)| *at == layer && *content)
+                    .is_some_and(|pane| pane.layer == layer && pane.content)
         })
     });
     assert!(
@@ -358,18 +602,7 @@ pub(super) fn column_in_content(ui: &Ui) -> bool {
 /// above the footer, inside the clip. A part that opens a layer from a body (a drop-down's list)
 /// keeps inside it, so it never covers the pane's footer. `None` outside a pane.
 pub fn body_room(ui: &Ui) -> Option<Rect> {
-    let (layer, pass) = (ui.layer_id(), ui.ctx().cumulative_pass_nr());
-    ui.ctx().data(|data| {
-        data.get_temp::<Open>(open_id())
-            .filter(|open| open.pass == pass)
-            .and_then(|open| {
-                open.panes
-                    .iter()
-                    .rev()
-                    .find(|(at, _, _)| *at == layer)
-                    .map(|(_, _, usable)| *usable)
-            })
-    })
+    innermost(ui).map(|pane| pane.usable)
 }
 
 /// Each pane identity drawn in this pass. Two live panes with one identity would share their
@@ -684,11 +917,20 @@ pub fn footer_rect(ctx: &egui::Context, local: Id) -> Option<Rect> {
 }
 
 /// The body's clip: what is left of `ui`'s clip above the body's room, and above `row_cut`, the
-/// top of the registered row that the footer or the session banner would cut (N12, ruling R4).
+/// top of the registered row that the footer or the session banner would cut (N12, ruling R4),
+/// widened at the left by the most a `line_start` action hangs, inside the parent's clip.
 /// The one place that decides where the body is cut. egui clips paint and presses alike, so a
 /// row under the cut neither shows nor takes a press.
 fn body_clip(ui: &Ui, body_room: Rect, row_cut: Option<f32>) -> Rect {
     let mut clip = ui.clip_rect();
+    // A quiet `line_start` action hangs its padding and its icon left of the text edge: the
+    // clip reaches that far into the margin left of the pane, but never past what encloses the
+    // pane (the parent's clip). Where the parent leaves less room, the parent cuts the action as
+    // it cuts any content: a caller's layout fault that the gate reports. No content moves.
+    clip.min.x = clip
+        .min
+        .x
+        .max(body_room.left() - super::components::LINE_START_REACH);
     clip.max.y = clip.max.y.min(body_room.bottom());
     if let Some(cut) = row_cut {
         clip.max.y = clip.max.y.min(cut);
@@ -707,6 +949,92 @@ fn whole_row_cut(rows: &[Rect], viewport: Rect) -> Option<f32> {
         })
         .map(|row| row.top())
         .reduce(f32::min)
+}
+
+/// The registered rows that a `Fills` body's scroll column already cut, in this pass: a column
+/// that holds another leaves the inner column's rows to it.
+#[derive(Clone, Default)]
+struct Claimed {
+    pass: u64,
+    rows: Vec<std::ops::Range<usize>>,
+}
+
+fn claimed_id() -> Id {
+    Id::new("design_pane_claimed_rows")
+}
+
+/// The content of a `ScrollColumn` (`ui` is its content `Ui`, its clip the column's view).
+/// Directly in a `Body::Fills` pane that an edge ends (the footer, the session banner), the
+/// column never cuts through a registered row (N12, ruling R4): its clip ends at the top of the
+/// lowest row that its view's bottom would cut, as measured in the last pass with the same view
+/// (a new cut draws the pass again), and a hairline marks it. Each column cuts at its own last
+/// whole row; a row that starts at the view's top keeps the plain cut, as in `Body::Content`.
+/// Elsewhere it only runs `add`.
+pub(super) fn whole_rows<R>(ui: &mut Ui, column: Id, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let Some(pane) = innermost(ui).filter(|pane| !pane.content && pane.edge) else {
+        return add(ui);
+    };
+    let view = ui.clip_rect();
+    let key = pane.pane.with(("column_cut", column));
+    let kept = ui
+        .ctx()
+        .data(|data| data.get_temp::<(Rect, f32)>(key))
+        .filter(|(at, _)| *at == view)
+        .map(|(_, cut)| cut);
+    if let Some(cut) = kept {
+        let mut clip = view;
+        clip.max.y = clip.max.y.min(cut);
+        ui.set_clip_rect(clip);
+    }
+    let before = super::components::rows_this_pass(ui.ctx()).len();
+    let first = widget_count(ui);
+    let inner = add(ui);
+    let last = widget_count(ui);
+    let rows = super::components::rows_this_pass(ui.ctx());
+    let after = rows.len();
+    let pass = ui.ctx().cumulative_pass_nr();
+    let own: Vec<Rect> = ui.ctx().data_mut(|data| {
+        let claimed = data.get_temp_mut_or_default::<Claimed>(claimed_id());
+        if claimed.pass != pass {
+            *claimed = Claimed {
+                pass,
+                rows: Vec::new(),
+            };
+        }
+        let own = (before..after)
+            .filter(|at| !claimed.rows.iter().any(|range| range.contains(at)))
+            .filter_map(|at| rows.get(at).copied())
+            .collect();
+        claimed.rows.push(before..after);
+        own
+    });
+    let cut = whole_row_cut(&own, view);
+    // The column's visible room: a focused control of this column that the new room hides (a
+    // footer line came and its cut crossed the focused row) comes whole into view, as in a
+    // `Content` body; the column scrolls by the least distance.
+    let mut visible = view;
+    if let Some(cut) = cut {
+        visible.max.y = visible.max.y.min(cut);
+    }
+    reveal_focus(ui, key, first..last, view, visible);
+    if cut != kept {
+        ui.ctx().data_mut(|data| match cut {
+            Some(cut) => data.insert_temp(key, (view, cut)),
+            None => data.remove::<(Rect, f32)>(key),
+        });
+        ui.ctx().request_discard("a column's whole-row cut moved");
+    }
+    if let Some(cut) = cut {
+        ui.painter().with_clip_rect(view).hline(
+            view.x_range(),
+            cut - super::tokens::HAIRLINE_WIDTH / 2.0,
+            egui::Stroke::new(
+                super::tokens::HAIRLINE_WIDTH,
+                super::tokens::colors().hairline,
+            ),
+        );
+    }
+    inner
 }
 
 fn banner_id() -> Id {
@@ -734,7 +1062,7 @@ impl Footer<'_> {
     /// height (and `S`) while the footer holds a message. The pane takes the rest of `ui`. `ui`
     /// lays out top down. Returns what `add` returns.
     pub fn pane<R>(self, ui: &mut Ui, body: Body, add: impl FnOnce(&mut Ui) -> R) -> R {
-        self.place(ui, body, ContentScroll::default(), add)
+        self.place(ui, body, ContentScroll::default(), |ui, _| add(ui))
     }
 
     /// `pane` with `Body::Content`, whose scroll column behaves as `scroll` says.
@@ -744,7 +1072,26 @@ impl Footer<'_> {
         scroll: ContentScroll,
         add: impl FnOnce(&mut Ui) -> R,
     ) -> R {
-        self.place(ui, Body::Content, scroll, add)
+        self.place(ui, Body::Content, scroll, |ui, _| add(ui))
+    }
+
+    /// A `Body::Content` pane whose body holds one editor that grows with its text: the body
+    /// gets an [`EditorRegion`], which draws the editor once. While the content fits, the pane
+    /// is exactly `Body::Content` (the footer `S` below the content). When it does not, the
+    /// region gives way: its height is the room less the rest of the content (and less the
+    /// footer), the editor scrolls inside it, and what comes after it (a save row) and the
+    /// footer stay in view. A body that does not use the region is `Body::Content`.
+    ///
+    /// The contract: the region's height is `max(floor(room − rest), min(64, room))`. Save stays
+    /// in view while the rest of the content fits the room less 64 px; else the region keeps
+    /// 64 px and the pane scrolls as a whole, as `Body::Content` does (below 64 px of room, the
+    /// region is the room).
+    pub fn pane_editor<R>(
+        self,
+        ui: &mut Ui,
+        add: impl for<'r> FnOnce(&mut Ui, EditorRegion<'r>) -> R,
+    ) -> R {
+        self.place(ui, Body::Content, ContentScroll::default(), add)
     }
 
     fn place<R>(
@@ -752,7 +1099,7 @@ impl Footer<'_> {
         ui: &mut Ui,
         body: Body,
         options: ContentScroll,
-        add: impl FnOnce(&mut Ui) -> R,
+        add: impl for<'r> FnOnce(&mut Ui, EditorRegion<'r>) -> R,
     ) -> R {
         debug_assert!(
             ui.layout().main_dir() == egui::Direction::TopDown,
@@ -804,6 +1151,8 @@ impl Footer<'_> {
         let visible = body_clip(ui, body_room, row_cut);
         body_ui.set_clip_rect(visible);
         let rows_before = super::components::rows_this_pass(ui.ctx()).len();
+        // An edge (the footer, the session banner) ends the body: no registered row is cut.
+        let edge = shown || banner_below(ui.ctx());
         // What a layer opened from the body may use: the body's room, inside the clip.
         let usable = visible.intersect(body_room);
         let mut hold_facts = None;
@@ -843,10 +1192,31 @@ impl Footer<'_> {
                         data.insert_temp(holding_id(), Some(held_key));
                     });
                 }
+                // The editor region's height: the room less the rest of the content, as last
+                // measured; a change of the rest draws the pass again (below).
+                let rest_key = id.with("region_rest");
+                let rest = ui.ctx().data(|data| data.get_temp::<f32>(rest_key));
+                let region_max = region_height(room_height, rest);
                 let output = column.show(&mut body_ui, |ui| {
-                    open(ui, Some((true, usable)));
+                    open(
+                        ui,
+                        Some(OpenPane {
+                            layer: ui.layer_id(),
+                            content: true,
+                            usable,
+                            edge,
+                            pane: id,
+                        }),
+                    );
                     let first = widget_count(ui);
-                    let inner = add(ui);
+                    let inner = add(
+                        ui,
+                        EditorRegion {
+                            pane: id,
+                            max: region_max,
+                            _scope: std::marker::PhantomData,
+                        },
+                    );
                     let last = widget_count(ui);
                     open(ui, None);
                     reveal_focus(ui, id, first..last, body_room, visible);
@@ -878,18 +1248,45 @@ impl Footer<'_> {
                     height: output.content_size.y - room,
                     offset: output.state.offset.y,
                 };
+                // The rest of the content around the editor region, for the next pass.
+                let drawn = region_drawn(ui, id);
+                let now = drawn.map(|drawn| (scroll.height - drawn).max(0.0));
+                if let Some(now) = now
+                    && rest.is_none_or(|rest| (rest - now).abs() > 0.5)
+                {
+                    ui.ctx().data_mut(|data| data.insert_temp(rest_key, now));
+                    ui.ctx()
+                        .request_discard("the editor region measured the content around it");
+                } else if now.is_none() && rest.is_some() {
+                    ui.ctx().data_mut(|data| data.remove::<f32>(rest_key));
+                }
                 (output.inner, Some(scroll))
             }
             Body::Fills(_) => {
-                open(&body_ui, Some((false, usable)));
-                let inner = add(&mut body_ui);
+                open(
+                    &body_ui,
+                    Some(OpenPane {
+                        layer: body_ui.layer_id(),
+                        content: false,
+                        usable,
+                        edge,
+                        pane: id,
+                    }),
+                );
+                let inner = add(
+                    &mut body_ui,
+                    EditorRegion {
+                        pane: id,
+                        max: 0.0,
+                        _scope: std::marker::PhantomData,
+                    },
+                );
                 open(&body_ui, None);
                 (inner, None)
             }
         };
         drop(body_ui);
         // N12: an edge (the footer, the session banner) never cuts through a registered row.
-        let edge = shown || banner_below(ui.ctx());
         let new_cut = match scroll {
             Some(scroll) if edge && scroll.cut() => {
                 let rows = super::components::rows_this_pass(ui.ctx());
@@ -1258,93 +1655,187 @@ mod row_cut_tests {
     /// N12 (ruling R4): a footer never cuts through a registered row. At every height, each
     /// registered row is whole above the body's clip or wholly under it; the hairline marks the
     /// cut; and with no footer, the rows keep the plain cut of the scroll column. Rung 1 for a
-    /// caller (the clip is the pane's; no caller sets one), this test for the part.
+    /// caller (the clip is the pane's; no caller sets one), this test for the part. Round 28, P2:
+    /// the same in a `Body::Fills` pane for the rows of its scroll columns, two side by side with
+    /// rows of different heights: each column cuts at its own last whole row.
     #[test]
     fn a_footer_never_cuts_through_a_registered_row() {
+        use crate::design::layout::ScrollColumn;
         let mut hidden_by_the_cut = 0;
-        for message in [true, false] {
-            for height in (300..=360).step_by(7) {
-                let mut harness = egui_kittest::Harness::builder()
-                    .with_size(vec2(600.0, height as f32))
-                    .build_ui(move |ui| {
-                        let frame = PaneFrame::new(ui);
-                        let mut messages =
-                            Messages::<NoPress>::new(&frame, "row_cut_test", ui.available_width());
-                        if message {
-                            messages.outcome(Outcome::Refused(crate::sentence!(
-                                "Save the draft first."
-                            )));
-                        }
-                        let _ = messages.pane(ui, Body::Content, |ui| {
-                            for at in 0..30 {
-                                let _ = two_line_row(
-                                    ui,
-                                    44.0,
-                                    false,
-                                    &format!("Row {at}"),
-                                    "Its second line",
-                                );
+        let (mut columns_apart, mut plain_fills_cut) = (0, 0);
+        for fills in [false, true] {
+            for message in [true, false] {
+                for height in (300..=360).step_by(7) {
+                    let mut harness = egui_kittest::Harness::builder()
+                        .with_size(vec2(600.0, height as f32))
+                        .build_ui(move |ui| {
+                            let frame = PaneFrame::new(ui);
+                            let mut messages = Messages::<NoPress>::new(
+                                &frame,
+                                "row_cut_test",
+                                ui.available_width(),
+                            );
+                            if message {
+                                messages.outcome(Outcome::Refused(crate::sentence!(
+                                    "Save the draft first."
+                                )));
+                            }
+                            let rows = |ui: &mut Ui, name: &str, height: f32| {
+                                for at in 0..30 {
+                                    let _ = two_line_row(
+                                        ui,
+                                        height,
+                                        false,
+                                        &format!("{name} {at}"),
+                                        "Its second line",
+                                    );
+                                }
+                            };
+                            if fills {
+                                let body = Body::Fills(Fills::for_test(FillsReason::Columns));
+                                let _ = messages.pane(ui, body, |ui| {
+                                    // Two columns side by side, each half of the body.
+                                    let all = ui.available_rect_before_wrap();
+                                    let (left, right) = all.split_left_right_at_fraction(0.5);
+                                    let column =
+                                        |ui: &mut Ui, at: Rect, id: &str, name: &str, tall: f32| {
+                                            ui.scope_builder(
+                                                egui::UiBuilder::new().max_rect(at),
+                                                |ui| {
+                                                    ScrollColumn::new(id)
+                                                        .show(ui, |ui| rows(ui, name, tall));
+                                                },
+                                            );
+                                        };
+                                    column(ui, left, "rows_left", "Row", 44.0);
+                                    column(ui, right, "rows_right", "Tall", 60.0);
+                                });
+                            } else {
+                                let _ =
+                                    messages.pane(ui, Body::Content, |ui| rows(ui, "Row", 44.0));
                             }
                         });
-                    });
-                crate::design::theme::install(&harness.ctx);
-                harness.run_steps(4);
-                let output = harness.output();
-                let rows = harness
-                    .ctx
-                    .data(|data| data.get_temp::<(u64, Vec<Rect>)>(Id::new(ROW_RECTS)))
-                    .map(|(_, rows)| rows)
-                    .unwrap_or_default();
-                assert!(rows.len() == 30, "{message} {height}: rows {}", rows.len());
-                let clip = output
-                    .shapes
-                    .iter()
-                    .find(|clipped| {
-                        matches!(&clipped.shape, egui::Shape::Text(text) if text.galley.job.text == "Row 0")
-                    })
-                    .map(|clipped| clipped.clip_rect.bottom())
-                    .expect("Row 0 is painted");
-                let record = pane_records(&harness.ctx)
-                    .into_iter()
-                    .next()
-                    .expect("the pane keeps its record");
-                let viewport = record.viewport().expect("a Content body");
-                // With no footer the column keeps its plain cut (a row may show in part).
-                for row in rows.iter().filter(|_| message) {
+                    crate::design::theme::install(&harness.ctx);
+                    harness.run_steps(4);
+                    let output = harness.output();
+                    let rows = harness
+                        .ctx
+                        .data(|data| data.get_temp::<(u64, Vec<Rect>)>(Id::new(ROW_RECTS)))
+                        .map(|(_, rows)| rows)
+                        .unwrap_or_default();
+                    let count = if fills { 60 } else { 30 };
                     assert!(
-                        row.bottom() <= clip + 0.5 || row.top() >= clip - 0.5,
-                        "n12-cut: message {message}, height {height}: row {row:?} cut at {clip}"
+                        rows.len() == count,
+                        "{fills} {message} {height}: rows {}",
+                        rows.len()
                     );
-                }
-                if message {
-                    hidden_by_the_cut += rows
-                        .iter()
-                        .filter(|row| row.top() >= clip - 0.5 && row.top() < viewport.bottom())
-                        .count();
-                    let hairline = output.shapes.iter().any(|clipped| {
-                        matches!(&clipped.shape, egui::Shape::LineSegment { points, .. }
-                            if (points[0].y - clip).abs() <= 1.0 && points[0].y == points[1].y)
-                    });
-                    assert!(
-                        hairline || clip >= viewport.bottom() - 0.5,
-                        "n12-hairline: height {height}, cut {clip}"
-                    );
-                } else {
-                    assert!(
-                        (clip - viewport.bottom()).abs() <= 0.5,
-                        "n12-plain: with no footer the column keeps its own cut: {clip} {viewport:?}"
-                    );
+                    // Each column: its rows (by side) and the clip its first row is painted in.
+                    let clip_of = |first: &str| {
+                        output
+                            .shapes
+                            .iter()
+                            .find(|clipped| {
+                                matches!(&clipped.shape, egui::Shape::Text(text) if text.galley.job.text == first)
+                            })
+                            .map(|clipped| clipped.clip_rect)
+                            .unwrap_or_else(|| panic!("{first} is painted"))
+                    };
+                    let sides: Vec<(Rect, Vec<Rect>)> = if fills {
+                        let middle = 300.0;
+                        vec![
+                            (
+                                clip_of("Row 0"),
+                                rows.iter()
+                                    .copied()
+                                    .filter(|row| row.center().x < middle)
+                                    .collect(),
+                            ),
+                            (
+                                clip_of("Tall 0"),
+                                rows.iter()
+                                    .copied()
+                                    .filter(|row| row.center().x >= middle)
+                                    .collect(),
+                            ),
+                        ]
+                    } else {
+                        vec![(clip_of("Row 0"), rows.clone())]
+                    };
+                    let record = pane_records(&harness.ctx)
+                        .into_iter()
+                        .next()
+                        .expect("the pane keeps its record");
+                    let room = record.room();
+                    for (view, side) in &sides {
+                        let clip = view.bottom();
+                        // The column's own view: a `Content` pane's viewport, or the clip of
+                        // a `Fills` column with no cut (the room's bottom bounds it).
+                        let body_bottom = footer_rect(&harness.ctx, Id::new("row_cut_test"))
+                            .map_or(room.bottom(), |footer| footer.top() - S);
+                        let viewport = record.viewport().unwrap_or(Rect::from_min_max(
+                            view.min,
+                            pos2(view.right(), body_bottom),
+                        ));
+                        // With no footer the column keeps its plain cut (a row may show in part).
+                        for row in side.iter().filter(|_| message) {
+                            assert!(
+                                row.bottom() <= clip + 0.5 || row.top() >= clip - 0.5,
+                                "n12-cut: fills {fills}, message {message}, height {height}: row {row:?} cut at {clip}"
+                            );
+                        }
+                        if message {
+                            hidden_by_the_cut += side
+                                .iter()
+                                .filter(|row| {
+                                    row.top() >= clip - 0.5 && row.top() < viewport.bottom()
+                                })
+                                .count();
+                            let hairline = output.shapes.iter().any(|clipped| {
+                                matches!(&clipped.shape, egui::Shape::LineSegment { points, .. }
+                                    if (points[0].y - clip).abs() <= 1.0 && points[0].y == points[1].y
+                                        && points[0].x <= view.center().x && points[1].x >= view.center().x)
+                            });
+                            assert!(
+                                hairline || clip >= viewport.bottom() - 0.5,
+                                "n12-hairline: fills {fills}, height {height}, cut {clip}"
+                            );
+                        } else if fills {
+                            plain_fills_cut += side
+                                .iter()
+                                .filter(|row| row.top() < clip - 0.5 && row.bottom() > clip + 0.5)
+                                .count();
+                        } else {
+                            assert!(
+                                (clip - viewport.bottom()).abs() <= 0.5,
+                                "n12-plain: with no footer the column keeps its own cut: {clip} {viewport:?}"
+                            );
+                        }
+                    }
+                    if fills && message && (sides[0].0.bottom() - sides[1].0.bottom()).abs() > 0.5 {
+                        columns_apart += 1;
+                    }
                 }
             }
         }
         assert!(hidden_by_the_cut > 0, "n12-reached: some height cut a row");
+        assert!(
+            columns_apart > 0,
+            "n12-columns: each column cuts at its own last whole row"
+        );
+        assert!(
+            plain_fills_cut > 0,
+            "n12-plain-fills: with no edge a `Fills` column keeps its plain cut"
+        );
     }
 
     /// Review of PR 306: with keyboard focus on a registered row near the bottom, a footer (or
     /// the session banner) that comes without a change of focus brings that row whole into view
-    /// before a key reaches it, and Enter fires exactly its one action. Both edges.
+    /// before a key reaches it, and Enter fires exactly its one action. Both edges. Review of PR
+    /// 337 (D): the same in a scroll column of a `Body::Fills` pane, beside a second column with
+    /// taller rows.
     #[test]
     fn a_new_edge_brings_the_focused_row_whole_into_view() {
+        use crate::design::layout::ScrollColumn;
         #[derive(Default)]
         struct State {
             message: bool,
@@ -1354,7 +1845,7 @@ mod row_cut_tests {
             rows: Vec<Rect>,
             clip: f32,
         }
-        for banner in [false, true] {
+        for (fills, banner) in [(false, false), (false, true), (true, false), (true, true)] {
             let mut harness = egui_kittest::Harness::builder()
                 .with_size(vec2(600.0, 420.0))
                 .build_state(
@@ -1380,16 +1871,15 @@ mod row_cut_tests {
                                 )));
                             }
                             let focus = state.focus.take();
-                            let (rows, presses, clip) = messages
-                                .pane(ui, Body::Content, |ui| {
+                            let draw = move |ui: &mut Ui, name: &str, tall: f32, focus: Option<usize>| {
                                 let mut rows = Vec::new();
                                 let mut presses = Vec::new();
                                 for at in 0..30 {
                                     let row = two_line_row(
                                         ui,
-                                        44.0,
+                                        tall,
                                         false,
-                                        &format!("Row {at}"),
+                                        &format!("{name} {at}"),
                                         "Its second line",
                                     );
                                     if focus == Some(at) {
@@ -1401,8 +1891,32 @@ mod row_cut_tests {
                                     rows.push(row.rect);
                                 }
                                 (rows, presses, ui.clip_rect().bottom())
-                            })
-                                .body;
+                            };
+                            let (rows, presses, clip) = if fills {
+                                let body = Body::Fills(Fills::for_test(FillsReason::Columns));
+                                messages
+                                    .pane(ui, body, |ui| {
+                                        let all = ui.available_rect_before_wrap();
+                                        let (left, right) = all.split_left_right_at_fraction(0.5);
+                                        let shown = ui
+                                            .scope_builder(egui::UiBuilder::new().max_rect(left), |ui| {
+                                                ScrollColumn::new("focus_left")
+                                                    .show(ui, |ui| draw(ui, "Row", 44.0, focus))
+                                                    .inner
+                                            })
+                                            .inner;
+                                        ui.scope_builder(egui::UiBuilder::new().max_rect(right), |ui| {
+                                            ScrollColumn::new("focus_right")
+                                                .show(ui, |ui| draw(ui, "Tall", 60.0, None));
+                                        });
+                                        shown
+                                    })
+                                    .body
+                            } else {
+                                messages
+                                    .pane(ui, Body::Content, |ui| draw(ui, "Row", 44.0, focus))
+                                    .body
+                            };
                             state.rows = rows;
                             state.pressed.extend(presses);
                             state.clip = clip;
@@ -1432,14 +1946,502 @@ mod row_cut_tests {
             let (row, clip) = (harness.state().rows[target], harness.state().clip);
             assert!(
                 row.bottom() <= clip + 0.5 && row.top() >= 0.0,
-                "n12-focus banner {banner}: row {target} {row:?} not whole above {clip}"
+                "n12-focus fills {fills} banner {banner}: row {target} {row:?} not whole above {clip}"
             );
             harness.key_press(egui::Key::Enter);
             harness.run_steps(2);
             assert_eq!(
                 harness.state().pressed,
                 vec![target],
-                "n12-enter banner {banner}: exactly the focused row's action"
+                "n12-enter fills {fills} banner {banner}: exactly the focused row's action"
+            );
+        }
+    }
+    /// Lead note for P2 (package R's counterexample, the stat-block pane's `Stop`), and the
+    /// review of PR 337 (E). The hang of a quiet `line_start` action paints into the margin left
+    /// of the pane, inside the parent's clip; no content moves.
+    /// 1. A pane with a 16 px page margin at its left: `Stop` is whole inside the clip; the clip
+    ///    reaches the icon action's 28 px hang as far as the parent allows; both actions' words
+    ///    start at a plain label's edge.
+    /// 2. A pane flush against a `Column`'s splitter: the parent's clip wins; neither action's
+    ///    paint nor its hit area reaches into the splitter's grab band (they may be cut).
+    /// 3. The text edge of a `Content` pane is the same before and after a `line_start` action
+    ///    first draws in it.
+    #[test]
+    fn a_line_start_action_keeps_its_gutter_in_a_pane() {
+        use crate::design::components::{Action, LINE_START_HANG};
+        use egui_kittest::kittest::{NodeT, Queryable};
+        struct State {
+            action: bool,
+            stop: Option<(Rect, Rect)>,
+            icon: Option<(Rect, Rect)>,
+            label: Rect,
+            clip: Rect,
+            parent: Rect,
+        }
+        impl Default for State {
+            fn default() -> Self {
+                Self {
+                    action: false,
+                    stop: None,
+                    icon: None,
+                    label: Rect::NOTHING,
+                    clip: Rect::NOTHING,
+                    parent: Rect::NOTHING,
+                }
+            }
+        }
+        // The pane: an optional `Stop` and icon action (their rect and hit rect), then a label.
+        let pane = |ui: &mut Ui, state: &mut State| {
+            let frame = PaneFrame::new(ui);
+            let messages = Messages::<NoPress>::new(&frame, "gutter_test", 400.0);
+            let action = state.action;
+            let drawn = messages
+                .pane(ui, Body::Content, |ui| {
+                    let mut stop = None;
+                    let mut icon = None;
+                    if action {
+                        let shown = Action::quiet("Stop").line_start().show(ui);
+                        stop = Some((shown.rect, shown.interact_rect));
+                        let shown = Action::quiet("Add one")
+                            .icon(crate::design::icons::ERROR)
+                            .line_start()
+                            .show(ui);
+                        icon = Some((shown.rect, shown.interact_rect));
+                    }
+                    let label = ui.label("A plain label").rect;
+                    (stop, icon, label, ui.clip_rect())
+                })
+                .body;
+            (state.stop, state.icon, state.label, state.clip) = drawn;
+        };
+        // 1 and 3: a 16 px page margin at the pane's left.
+        let mut margin = egui_kittest::Harness::builder()
+            .with_size(vec2(700.0, 300.0))
+            .build_ui_state(
+                move |ui, state: &mut State| {
+                    let room = ui.available_rect_before_wrap();
+                    let inner = room.with_min_x(room.left() + crate::design::tokens::L);
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(inner), |ui| pane(ui, state));
+                },
+                State::default(),
+            );
+        crate::design::theme::install(&margin.ctx);
+        margin.run_steps(3);
+        let before = margin.state().label;
+        margin.state_mut().action = true;
+        margin.run_steps(1);
+        let first = margin.state().label;
+        margin.run_steps(3);
+        let state = margin.state();
+        assert!(
+            (first.left() - before.left()).abs() <= 0.5
+                && (state.label.left() - before.left()).abs() <= 0.5,
+            "gutter-still: the text edge {} stays when a line_start action first draws: {} then {}",
+            before.left(),
+            first.left(),
+            state.label.left()
+        );
+        let (stop, icon) = (
+            state.stop.expect("Stop"),
+            state.icon.expect("the icon action"),
+        );
+        // `Stop` hangs 8 px: whole inside the clip. The icon action hangs 28 px, more than this
+        // margin: the clip reaches as far as the parent lets it (the window), no further.
+        assert!(
+            state.clip.expand(0.5).contains_rect(stop.0),
+            "gutter-inside: Stop {:?} is whole inside the clip {:?}",
+            stop.0,
+            state.clip
+        );
+        let edge = state.label.left();
+        assert!(
+            (state.clip.left() - (edge - crate::design::components::LINE_START_REACH).max(0.0))
+                .abs()
+                <= 0.5,
+            "gutter-reach: the clip {:?} reaches the icon action's hang left of the text edge {edge}, inside the parent",
+            state.clip
+        );
+        assert!(
+            (stop.0.left() + LINE_START_HANG - state.label.left()).abs() <= 0.5
+                && (icon.0.left() + LINE_START_HANG + crate::design::tokens::ICON_SLOT
+                    - state.label.left())
+                .abs()
+                    <= 0.5,
+            "gutter-edge: the words of Stop {stop:?} and of the icon action {icon:?} start at the label's edge {:?}",
+            state.label
+        );
+        // 2: flush against a splitter.
+        let mut flush = egui_kittest::Harness::builder()
+            .with_size(vec2(700.0, 300.0))
+            .build_ui_state(
+                move |ui, state: &mut State| {
+                    crate::design::Column::left("navigation", 200.0, 150.0..=300.0)
+                        .show_inside(ui, |ui| ui.label("Left"));
+                    egui::CentralPanel::default()
+                        .frame(egui::Frame::new())
+                        .show_inside(ui, |ui| {
+                            state.parent = ui.clip_rect();
+                            pane(ui, state);
+                        });
+                },
+                State {
+                    action: true,
+                    ..State::default()
+                },
+            );
+        crate::design::theme::install(&flush.ctx);
+        flush.run_steps(3);
+        let splitter = flush
+            .query_all(
+                egui_kittest::kittest::By::new()
+                    .predicate(|node| node.role() == egui::accesskit::Role::Splitter),
+            )
+            .find_map(|node| {
+                let b = node.accesskit_node().bounding_box()?;
+                Some(Rect::from_min_max(
+                    pos2(b.x0 as f32, b.y0 as f32),
+                    pos2(b.x1 as f32, b.y1 as f32),
+                ))
+            })
+            .expect("the column's splitter");
+        let state = flush.state();
+        // The parent's clip wins: the hang adds nothing left of it. (Here the parent's clip starts
+        // inside the splitter's grab band, so content at the pane's own text edge overlaps the
+        // band too: a caller's layout fault, which the gate reports; the pane does not hide it.)
+        for (name, (_, hit)) in [
+            ("Stop", state.stop.expect("Stop")),
+            ("Add one", state.icon.expect("the icon action")),
+        ] {
+            assert!(
+                state.clip.left() >= state.parent.left() - 0.5
+                    && hit.left() >= state.parent.left() - 0.5,
+                "gutter-parent: {name}'s paint clip {:?} and hit area {hit:?} stay inside the parent's clip {:?} (splitter {splitter:?})",
+                state.clip,
+                state.parent
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod editor_region_tests {
+    use super::*;
+    use crate::design::{
+        layout::Once,
+        outcome::{Messages, NoPress, Outcome, PaneFrame},
+    };
+
+    const LOCAL: &str = "editor_region_test";
+
+    #[derive(Default)]
+    struct State {
+        lines: usize,
+        /// Messages in the footer: 0, 1 or 2.
+        messages: usize,
+        /// Draw the region (`pane_editor`); `false` with `plain` draws `Body::Content`.
+        region: bool,
+        plain: bool,
+        text: String,
+        save: Option<Rect>,
+        caret: Option<Rect>,
+        focus: bool,
+    }
+
+    fn harness(height: f32, state: State) -> egui_kittest::Harness<'static, State> {
+        harness_after(height, state, 4)
+    }
+
+    /// The harness after `steps` frames: 1 is the first frame shown.
+    fn harness_after(
+        height: f32,
+        state: State,
+        steps: usize,
+    ) -> egui_kittest::Harness<'static, State> {
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(600.0, height))
+            .build_ui_state(
+                |ui, state: &mut State| {
+                    let want = state.lines;
+                    if state.text.lines().count() != want {
+                        state.text = (0..want)
+                            .map(|line| format!("Line {line}"))
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                    }
+                    let frame = PaneFrame::new(ui);
+                    let mut messages =
+                        Messages::<NoPress>::new(&frame, LOCAL, ui.available_width());
+                    if state.messages > 0 {
+                        messages
+                            .outcome(Outcome::Refused(crate::sentence!("Save the draft first.")));
+                    }
+                    if state.messages > 1 {
+                        messages.outcome(Outcome::Refused(crate::sentence!(
+                            "Line 3 opens a list that never closes."
+                        )));
+                    }
+                    const FIELD: crate::design::layout::FieldName =
+                        crate::field_id!("editor_region_test_text");
+                    let focus = std::mem::take(&mut state.focus);
+                    let text = &mut state.text;
+                    let save_row = |ui: &mut Ui| ui.button("Save").rect;
+                    let (save, caret) = if state.plain {
+                        let paned = messages.pane(ui, Body::Content, |ui| {
+                            ui.label("Title");
+                            for line in 0..want {
+                                ui.label(format!("Line {line}"));
+                            }
+                            (save_row(ui), None)
+                        });
+                        paned.body
+                    } else {
+                        let region = state.region;
+                        messages
+                            .pane_editor(ui, |ui, editor| {
+                                ui.label("Title");
+                                let mut caret = None;
+                                if region {
+                                    let output = editor.editor(
+                                        ui,
+                                        FIELD.once(Once::Example),
+                                        text,
+                                        |edit| edit.desired_width(f32::INFINITY),
+                                    );
+                                    if focus {
+                                        output.response.request_focus();
+                                    }
+                                    caret = output.cursor_range.map(|range| {
+                                        output
+                                            .galley
+                                            .pos_from_cursor(range.primary)
+                                            .translate(output.galley_pos.to_vec2())
+                                    });
+                                } else {
+                                    for line in 0..want {
+                                        ui.label(format!("Line {line}"));
+                                    }
+                                }
+                                (save_row(ui), caret)
+                            })
+                            .body
+                    };
+                    state.save = Some(save);
+                    state.caret = caret;
+                },
+                state,
+            );
+        crate::design::theme::install(&harness.ctx);
+        harness.run_steps(steps);
+        harness
+    }
+
+    /// The footer's rect as the pane placed it in the last pass (the first frame after a resize
+    /// included; a response read back can be the frame before's).
+    fn footer(harness: &egui_kittest::Harness<'_, State>) -> Option<Rect> {
+        pane_record(&harness.ctx, Id::new(LOCAL)).and_then(|record| record.footer())
+    }
+
+    /// The clip of the editor's painted text: the region's view.
+    fn region_view(harness: &egui_kittest::Harness<'_, State>) -> Rect {
+        harness
+            .output()
+            .shapes
+            .iter()
+            .find(|clipped| {
+                matches!(&clipped.shape, egui::Shape::Text(text)
+                    if text.galley.job.text.starts_with("Line 0\nLine 1"))
+            })
+            .map(|clipped| clipped.clip_rect)
+            .expect("the editor's text is painted")
+    }
+
+    /// Round 28, P2: a pane's editor region. A short draft: the footer is `S` under the save
+    /// row, as for `Body::Content`. A 600-line draft at 300 px: the save row is whole in the room
+    /// above the footer, the region scrolls, the caret at the end is in view; the footer gains a
+    /// line: the save row stays whole in view, and so does the caret. Growing past the room, the
+    /// save row never moves by more than the growth. A body that does not use the region is
+    /// `Body::Content`.
+    #[test]
+    fn an_editor_region_keeps_its_save_row_and_caret_in_view() {
+        // Short: the footer follows the save row.
+        let short = harness(
+            640.0,
+            State {
+                lines: 4,
+                messages: 1,
+                region: true,
+                ..State::default()
+            },
+        );
+        let save = short.state().save.expect("the save row draws");
+        let at = footer(&short).expect("the footer shows");
+        assert!(
+            (at.top() - (save.bottom() + S)).abs() <= 1.0,
+            "p2-short: the footer {at:?} is `S` under the save row {save:?}"
+        );
+        // ... because the content is short, not because the region filled the room.
+        let room = pane_record(&short.ctx, Id::new(LOCAL))
+            .expect("a record")
+            .room();
+        assert!(
+            at.bottom() < room.bottom() - 4.0 * super::super::tokens::XXL,
+            "p2-short-follows: the footer {at:?} follows the short content, far above the room's bottom {room:?}"
+        );
+        // Long, 300 px room: the save row whole above the footer, the region scrolls.
+        let mut long = harness(
+            300.0,
+            State {
+                lines: 600,
+                messages: 1,
+                region: true,
+                focus: true,
+                ..State::default()
+            },
+        );
+        long.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::End);
+        long.run_steps(2);
+        long.event(egui::Event::Text("!".into()));
+        long.run_steps(4);
+        let whole_at = |harness: &egui_kittest::Harness<'_, State>, case: &str, caret: bool| {
+            let save = harness.state().save.expect("the save row draws");
+            let room = pane_record(&harness.ctx, Id::new(LOCAL))
+                .expect("a record")
+                .room();
+            // Above the footer, or the room's bottom when the footer is empty.
+            let at = footer(harness);
+            let limit = at.map_or(room.bottom(), |at| at.top() - S);
+            assert!(
+                save.top() >= room.top() - 0.5 && save.bottom() <= limit + 0.5,
+                "p2-save-{case}: the save row {save:?} is whole in the room {room:?} above the footer {at:?}"
+            );
+            let view = region_view(harness);
+            if caret {
+                let caret = harness.state().caret.expect("the editor has its caret");
+                assert!(
+                    view.expand(0.5).contains_rect(caret),
+                    "p2-caret-{case}: the caret {caret:?} is in the region's view {view:?}"
+                );
+            }
+            assert!(
+                view.bottom() <= save.top() + 0.5 && view.height() < 600.0,
+                "p2-region-{case}: the region {view:?} scrolls above the save row {save:?}"
+            );
+        };
+        let whole = |harness: &egui_kittest::Harness<'_, State>, case: &str| {
+            whole_at(harness, case, true);
+        };
+        assert!(
+            long.state().text.ends_with("Line 599!"),
+            "p2-typed: the caret is at the end"
+        );
+        whole(&long, "long");
+        // The footer gains a line with the caret at the end: the first frame shown keeps the
+        // save row whole and the caret in view, and so do the frames after.
+        long.state_mut().messages = 2;
+        long.run_steps(1);
+        whole(&long, "footer-grew-first-frame");
+        long.run_steps(3);
+        whole(&long, "footer-grew");
+        // A resize, both ways: the first frame shown.
+        for height in [340.0, 300.0] {
+            long.set_size(vec2(600.0, height));
+            long.run_steps(1);
+            whole(&long, &format!("resize-{height}-first-frame"));
+        }
+        long.state_mut().messages = 0;
+        long.run_steps(4);
+        whole(&long, "footer-emptied");
+
+        // The first frame shown on open: the save row whole above the footer.
+        let open = harness_after(
+            300.0,
+            State {
+                lines: 600,
+                messages: 1,
+                region: true,
+                ..State::default()
+            },
+            1,
+        );
+        whole_at(&open, "open-first-frame", false);
+
+        // Growing past the room: the save row never moves by more than the growth, and it is
+        // whole above the footer at every count.
+        let mut grow = harness(
+            300.0,
+            State {
+                lines: 2,
+                messages: 1,
+                region: true,
+                ..State::default()
+            },
+        );
+        let line = grow.ctx.style().text_styles[&egui::TextStyle::Body].size * 1.5;
+        let mut last = grow.state().save.expect("the save row draws").top();
+        let mut moved = 0;
+        let mut held = 0;
+        // Each count's first frame shown.
+        for lines in 3..30 {
+            grow.state_mut().lines = lines;
+            grow.run_steps(1);
+            let save = grow.state().save.expect("the save row draws");
+            let at = footer(&grow).expect("the footer shows");
+            assert!(
+                save.top() - last >= -0.5 && save.top() - last <= line,
+                "p2-growth: {lines} lines moved the save row from {last} to {}",
+                save.top()
+            );
+            assert!(
+                save.bottom() <= at.top() - S + 0.5,
+                "p2-growth-whole: {lines} lines, save row {save:?}, footer {at:?}"
+            );
+            if save.top() - last > 0.5 {
+                moved += 1;
+            } else {
+                held += 1;
+            }
+            last = save.top();
+        }
+        assert!(
+            moved > 0 && held > 0,
+            "p2-growth-reached: moved {moved}, held {held}"
+        );
+
+        // No region: exactly `Body::Content`.
+        for lines in [3, 60] {
+            let with = harness(
+                400.0,
+                State {
+                    lines,
+                    messages: 1,
+                    ..State::default()
+                },
+            );
+            let plain = harness(
+                400.0,
+                State {
+                    lines,
+                    messages: 1,
+                    plain: true,
+                    ..State::default()
+                },
+            );
+            let facts = |harness: &egui_kittest::Harness<'_, State>| {
+                let record = pane_record(&harness.ctx, Id::new(LOCAL)).expect("a record");
+                (
+                    harness.state().save.expect("the save row draws"),
+                    record.placement(),
+                    record.viewport(),
+                    record.content_height(),
+                    footer(harness),
+                    record.cut(),
+                )
+            };
+            assert_eq!(
+                facts(&with),
+                facts(&plain),
+                "p2-plain: {lines} lines, a body with no region is `Body::Content`"
             );
         }
     }
