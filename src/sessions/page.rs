@@ -11,7 +11,14 @@ use super::{
 };
 use crate::{
     credentials::{self, KeySlot},
-    design::{self, Action, Density, Status, Tone, Type, colors, icons},
+    design::{
+        self, Action, Density, Status, Tone, Type, colors, icons,
+        outcome::{
+            Choice, Fault, FaultMessage, KeptOutcome, Lost, MessageChoice, Messages, Notice,
+            PaneFrame, Press, Said, Sentence, Severity, UndoStep, Verb,
+        },
+        results::ByTicket,
+    },
     encounter_run::FightSummary,
     encounters::PlanFight,
     lookup::{Written, WrittenIn},
@@ -21,7 +28,7 @@ use crate::{
     recording::{Health, Recorder},
     timeline::{
         self, Book,
-        page::{LiveUndos, SessionLink, added_message, body_above},
+        page::{LiveUndos, SessionLink, body_above},
     },
 };
 use eframe::egui::{self, Color32};
@@ -87,6 +94,8 @@ enum SessionAct {
     OpenSettings,
     UndoCarry(Uuid),
     UndoMarker,
+    /// `Undo reload` or `Undo discard` of the draft's dropped words.
+    UndoDrop,
 }
 
 #[derive(Clone, Copy, Default, PartialEq)]
@@ -494,6 +503,37 @@ pub struct Sessions {
     pub wants_content_refresh: bool,
     /// The session notes came, went or moved: Lookup's index reads them again.
     pub wants_index_refresh: bool,
+}
+
+/// A page notice that is a fault: an act that failed, or one the DM must check. Its words are
+/// the page's own sentence; the kind gives the tone.
+enum PageFault {
+    Failed(Sentence),
+    Check(Sentence),
+}
+
+impl Fault for PageFault {
+    fn severity(&self) -> Severity {
+        match self {
+            Self::Failed(_) => Severity::NotSaved,
+            Self::Check(_) => Severity::NeedsFixing,
+        }
+    }
+    fn cause(&self) -> Sentence {
+        match self {
+            Self::Failed(words) | Self::Check(words) => words.clone(),
+        }
+    }
+}
+
+/// The page's notice slot holds its words as a sentence; an error of the system comes as its
+/// own text and is made a sentence here, the one place the page takes words from outside.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "an error of the system or of a file keeps its own words (design::results::STAGED_ALLOWS)"
+)]
+fn notice_sentence(words: &str) -> Sentence {
+    Sentence::outside(words).unwrap_or(crate::sentence!("Something went wrong."))
 }
 
 fn processing_llm(settings: &ProcessingSettings) -> String {
@@ -1440,8 +1480,10 @@ impl Sessions {
                 ) {
                     match super::new_identity(copy) {
                         Ok(undo) => {
-                            self.identity_order = design::ResultOrder::issue();
-                            self.identity_undo = Some(undo);
+                            self.separate.record(kept::Separate {
+                                page: self.page(),
+                                undo,
+                            });
                             self.refresh();
                         }
                         Err(error) => {
@@ -1893,7 +1935,6 @@ impl Sessions {
 
     fn open_campaign(&mut self, active: Option<&Campaign>) {
         self.flush();
-        self.identity_undo = None;
         // A live recording blocks a campaign switch, so none is lost here.
         self.draft = None;
         self.template_draft = None;
@@ -2175,7 +2216,7 @@ impl Sessions {
     }
 
     /// The words for working in a session other than the one being played.
-    fn not_being_played(&self) -> Option<String> {
+    fn not_being_played(&self) -> Option<Sentence> {
         if self.selected.is_none() || self.selected == self.current() {
             return None;
         }
@@ -2191,16 +2232,68 @@ impl Sessions {
         Some(
             if let Some(played) = played.filter(|played| played.number == note.number) {
                 let (open, played) = session_warning_names(note, played);
-                format!(
-                    "{open} is not the session being played. The session being played is {played}. What you write and add on this page goes into {destination}."
+                crate::sentence!(
+                    "{} is not the session being played. The session being played is {}. What you write and add on this page goes into {}.",
+                    open,
+                    played,
+                    destination
                 )
             } else {
-                format!(
-                    "Session {} is not the session being played. What you write and add on this page goes into {destination}.",
-                    note.number
+                crate::sentence!(
+                    "Session {} is not the session being played. What you write and add on this page goes into {}.",
+                    note.number,
+                    destination
                 )
             },
         )
+    }
+
+    /// `not_being_played`, or, while a group is being assembled in another session, where.
+    fn not_being_played_words(&self, note: &Note, plan: &Plan<'_>) -> Option<Sentence> {
+        let words = self.not_being_played()?;
+        if plan.group_open
+            && let Some(group) = self
+                .notes
+                .iter()
+                .find(|note| Some(note.id) == self.group_session)
+        {
+            let (open, group) = session_warning_names(note, group);
+            return Some(crate::sentence!(
+                "{} is not the session being played. A group is being assembled in {}.",
+                open,
+                group
+            ));
+        }
+        Some(words)
+    }
+
+    /// The session page's body kind. The Recordings tab is rows, a reader or a form: the pane's
+    /// scroll column, so its footer follows short content. The note's editor and the plan
+    /// manage their own room (the plan's own footer and its scroll, until the plan moves to
+    /// this footer).
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the pane's one named escape: `Fills::because` (design::results::STAGED_ALLOWS)"
+    )]
+    fn session_body_kind(&self, ui: &egui::Ui, plan: &Plan<'_>) -> design::pane::Body {
+        let conflict = self
+            .draft
+            .as_ref()
+            .is_some_and(|draft| draft.state == DraftState::Conflict);
+        let editing_group_here = plan.group_open && self.group_session == self.selected;
+        let beside_from = if editing_group_here {
+            design::LIST_MEASURE + design::L + design::READER_MEASURE
+        } else {
+            PLAN_BESIDE_NOTE_FROM
+        };
+        let beside = ui.available_width() >= beside_from;
+        use design::pane::{Body, Fills, FillsReason};
+        match self.tab {
+            _ if conflict => Body::Fills(Fills::because(FillsReason::NoteEditor)),
+            Tab::Recordings => Body::Content,
+            Tab::Note if !beside => Body::Fills(Fills::because(FillsReason::NoteEditor)),
+            _ => Body::Fills(Fills::because(FillsReason::Columns)),
+        }
     }
 
     /// The DM chose where new events and runs go.
@@ -3470,7 +3563,7 @@ impl Sessions {
 
     /// The warning about an old session has gone, and the open run's event has not moved.
     fn say_where_the_run_stays(&mut self, new: Uuid) {
-        self.moved_run = None;
+        self.moves.owner_changed(&self.page());
         let Some((name, session)) = self.open_run.clone().filter(|(_, session)| *session != new)
         else {
             return;
@@ -3486,14 +3579,20 @@ impl Sessions {
         self.move_run_here = self.notice.as_ref().map(|(_, words)| (new, words.clone()));
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
+    /// `Move it here`: the open run's event moves to `session`, and its result with `Undo move`
+    /// is kept in `moves`, the act's own entry.
     fn move_run_to_session(&mut self, book: &mut Book, run: Uuid, session: Uuid) {
-        let Some(event) = book.events.iter_mut().find(|event| event.run == Some(run)) else {
-            return;
-        };
+        if let Some(moved) = self.move_run(book, run, session) {
+            self.moves.record(moved);
+        }
+    }
+
+    /// The move itself, and what its Undo needs.
+    fn move_run(&mut self, book: &mut Book, run: Uuid, session: Uuid) -> Option<kept::Moved> {
+        let event = book
+            .events
+            .iter_mut()
+            .find(|event| event.run == Some(run))?;
         let before = event.clone();
         event.session = Some(session);
         event.continued_in = None;
@@ -3505,11 +3604,13 @@ impl Sessions {
             .iter()
             .find(|note| note.id == session)
             .map_or(1, |note| note.number);
-        let words = format!("{name} moved to Session {number}.");
-        self.notice = new_notice(&mut self.notice_order, (Tone::Success, words.clone()));
-        self.notice_session = Some(session);
-        self.moved_run = Some(MovedRun {
-            order: design::ResultOrder::issue(),
+        let name = name.to_owned();
+        // The `stays in` notice is answered: the result takes its place.
+        self.notice = None;
+        self.notice_session = None;
+        let moved = kept::Moved {
+            page: self.page(),
+            session,
             before,
             open_run,
             body: self
@@ -3517,47 +3618,55 @@ impl Sessions {
                 .as_ref()
                 .map_or_else(String::new, |draft| draft.body.clone()),
             events: book.events.clone(),
-            words,
-        });
+            name,
+            number,
+        };
         self.open_run = self.open_run.take().map(|(name, _)| (name, session));
         self.move_run_here = None;
+        Some(moved)
     }
 
+    /// A move's result ends when the Timeline or the note changed since (`Moved`'s end event).
     fn expire_move(&mut self, book: &Book) {
-        if self.moved_run.as_ref().is_some_and(|moved| {
-            self.notice
-                .as_ref()
-                .is_none_or(|(_, words)| *words != moved.words)
-        }) {
-            self.moved_run = None;
-        }
-        if self.moved_run.as_ref().is_some_and(|moved| {
+        let page = self.page();
+        let changed = self.moves.get(&page).is_some_and(|shown| {
+            let moved = shown.value();
             moved.events != book.events
                 || self
                     .draft
                     .as_ref()
                     .is_none_or(|draft| draft.body != moved.body)
-        }) {
-            self.moved_run = None;
-            self.notice = None;
-            self.notice_session = None;
+        });
+        if changed {
+            self.moves.owner_changed(&page);
         }
     }
 
-    fn undo_move(&mut self, book: &mut Book) {
-        self.expire_move(book);
-        if let Some(moved) = self.moved_run.take() {
-            if let Some(event) = book
-                .events
-                .iter_mut()
-                .find(|event| event.id == moved.before.id)
-            {
-                *event = moved.before;
-                book.touch();
-            }
-            self.open_run = moved.open_run;
-            self.notice = None;
-            self.notice_session = None;
+    /// `Undo move`: the run's event goes back, and the run's session with it.
+    fn undo_moved(&mut self, book: &mut Book, moved: kept::Moved) {
+        if let Some(event) = book
+            .events
+            .iter_mut()
+            .find(|event| event.id == moved.before.id)
+        {
+            *event = moved.before;
+            book.touch();
+        }
+        self.open_run = moved.open_run;
+    }
+
+    /// The Session page of this campaign's folder: the owner of the page's kept results.
+    fn page(&self) -> kept::Page {
+        kept::Page {
+            root: self.folder.clone().unwrap_or_default(),
+        }
+    }
+
+    /// One session of this campaign's folder.
+    fn of_session(&self, session: Option<Uuid>) -> kept::OfSession {
+        kept::OfSession {
+            root: self.folder.clone().unwrap_or_default(),
+            session,
         }
     }
 
@@ -5236,9 +5345,11 @@ impl Sessions {
                                 {
                                     let id = book.add_marker(marker, key, session);
                                     book.save();
-                                    self.recording_added = Some(MarkerAdded {
-                                        order: design::ResultOrder::issue(),
-                                        session,
+                                    self.markers.record(kept::MarkerAdd {
+                                        owner: kept::OfSession {
+                                            root: self.folder.clone().unwrap_or_default(),
+                                            session,
+                                        },
                                         id,
                                         title: (*title).to_owned(),
                                     });
@@ -5422,106 +5533,107 @@ impl Sessions {
             });
         }
         design::gap(ui, design::Gap::XS);
-        egui::ScrollArea::vertical()
-            .id_salt((
-                "recording_text",
-                &reading.recording,
-                reading.made.word(),
-                reading.part,
-            ))
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                note_width(ui, |ui| {
-                    let body = &reading.parts[reading.part].1;
-                    let body = body.replace(
-                        "> This is a draft from an LLM. Check it against your own memory.\n",
-                        "",
-                    );
-                    let heading = format!("## {}", reading.parts[reading.part].0);
-                    let body = if count > 1 {
-                        body.trim_start()
-                            .strip_prefix(&heading)
-                            .filter(|rest| rest.starts_with('\n'))
-                            .map(str::trim_start)
-                            .unwrap_or(&body)
-                    } else {
-                        &body
-                    };
-                    let at = reading
-                        .marker
-                        .as_ref()
-                        .map(|(marker, _)| marker.reading_words())
-                        .as_deref()
-                        .or(reading.mark.as_deref())
-                        .and_then(|mark| body.find(mark));
-                    match at {
-                        Some(at) => {
-                            markdown_view::show_reader(ui, &body[..at]);
-                            if reading.mark.is_some() {
-                                ui.scroll_to_cursor(Some(egui::Align::TOP));
-                            }
-                            if let Some((marker, key)) = &reading.marker {
-                                let line_end =
-                                    body[at..].find('\n').map_or(body.len(), |end| at + end);
-                                ui.horizontal_wrapped(|ui| {
-                                    markdown_view::show_reader(ui, &body[at..line_end]);
-                                    if let Some(event) = book.event_of_marker(key) {
-                                        if design::status_link(
-                                            ui,
-                                            Status {
-                                                icon: icons::OK,
-                                                word: "On the timeline",
-                                                color: c.result.success,
-                                            },
-                                        )
-                                        .clicked()
-                                        {
-                                            self.wants_event = Some(event.id.clone());
-                                        }
-                                    } else if Action::secondary("Add")
-                                        .name("Add this event to the timeline")
-                                        .blocked_if(
-                                            book.unreadable.is_some(),
-                                            "The timeline file must be repaired first.",
-                                        )
-                                        .show(ui)
-                                        .clicked()
-                                    {
-                                        let id = book.add_marker(marker, key, session);
-                                        book.save();
-                                        let title = if marker.title.is_empty() {
-                                            marker.kind.word()
-                                        } else {
-                                            marker.title.as_str()
-                                        };
-                                        self.recording_added = Some(MarkerAdded {
-                                            order: design::ResultOrder::issue(),
-                                            session,
-                                            id,
-                                            title: title.to_owned(),
-                                        });
-                                    }
-                                });
-                                markdown_view::show_reader(ui, &body[line_end..]);
-                            } else {
-                                markdown_view::show_reader(ui, &body[at..]);
-                            }
+        // In the session page's pane: the text flows in its scroll column, and the footer
+        // follows a short part.
+        design::ScrollColumn::new((
+            "recording_text",
+            &reading.recording,
+            reading.made.word(),
+            reading.part,
+        ))
+        .show(ui, |ui| {
+            note_width(ui, |ui| {
+                let body = &reading.parts[reading.part].1;
+                let body = body.replace(
+                    "> This is a draft from an LLM. Check it against your own memory.\n",
+                    "",
+                );
+                let heading = format!("## {}", reading.parts[reading.part].0);
+                let body = if count > 1 {
+                    body.trim_start()
+                        .strip_prefix(&heading)
+                        .filter(|rest| rest.starts_with('\n'))
+                        .map(str::trim_start)
+                        .unwrap_or(&body)
+                } else {
+                    &body
+                };
+                let at = reading
+                    .marker
+                    .as_ref()
+                    .map(|(marker, _)| marker.reading_words())
+                    .as_deref()
+                    .or(reading.mark.as_deref())
+                    .and_then(|mark| body.find(mark));
+                match at {
+                    Some(at) => {
+                        markdown_view::show_reader(ui, &body[..at]);
+                        if reading.mark.is_some() {
+                            ui.scroll_to_cursor(Some(egui::Align::TOP));
                         }
-                        None => markdown_view::show_reader(ui, body),
+                        if let Some((marker, key)) = &reading.marker {
+                            let line_end = body[at..].find('\n').map_or(body.len(), |end| at + end);
+                            ui.horizontal_wrapped(|ui| {
+                                markdown_view::show_reader(ui, &body[at..line_end]);
+                                if let Some(event) = book.event_of_marker(key) {
+                                    if design::status_link(
+                                        ui,
+                                        Status {
+                                            icon: icons::OK,
+                                            word: "On the timeline",
+                                            color: c.result.success,
+                                        },
+                                    )
+                                    .clicked()
+                                    {
+                                        self.wants_event = Some(event.id.clone());
+                                    }
+                                } else if Action::secondary("Add")
+                                    .name("Add this event to the timeline")
+                                    .blocked_if(
+                                        book.unreadable.is_some(),
+                                        "The timeline file must be repaired first.",
+                                    )
+                                    .show(ui)
+                                    .clicked()
+                                {
+                                    let id = book.add_marker(marker, key, session);
+                                    book.save();
+                                    let title = if marker.title.is_empty() {
+                                        marker.kind.word()
+                                    } else {
+                                        marker.title.as_str()
+                                    };
+                                    self.markers.record(kept::MarkerAdd {
+                                        owner: kept::OfSession {
+                                            root: self.folder.clone().unwrap_or_default(),
+                                            session,
+                                        },
+                                        id,
+                                        title: title.to_owned(),
+                                    });
+                                }
+                            });
+                            markdown_view::show_reader(ui, &body[line_end..]);
+                        } else {
+                            markdown_view::show_reader(ui, &body[at..]);
+                        }
                     }
-                });
-                reading.mark = None;
-                // A part fills several screens, so the way on is also where the reading ends.
-                design::gap(ui, design::Gap::S);
-                if reading.part + 1 < count
-                    && Action::secondary("Go on to the next part")
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
-                {
-                    reading.part += 1;
+                    None => markdown_view::show_reader(ui, body),
                 }
             });
+            reading.mark = None;
+            // A part fills several screens, so the way on is also where the reading ends.
+            design::gap(ui, design::Gap::S);
+            if reading.part + 1 < count
+                && Action::secondary("Go on to the next part")
+                    .density(Density::Read)
+                    .show(ui)
+                    .clicked()
+            {
+                reading.part += 1;
+            }
+        });
         if back {
             self.reading = None;
         }
@@ -5584,50 +5696,47 @@ impl Sessions {
         // The rows leave the scroll bar's lane free whether or not the bar shows, so a row's menu
         // keeps its x when the list grows long enough to scroll.
         let lane_width = ui.available_width() - ui.spacing().scroll.allocated_width();
-        egui::ScrollArea::vertical()
-            .id_salt(("session_recordings", self.selected))
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                ui.set_max_width(
-                    lane_width
-                        .min(ui.available_width())
-                        .min(design::LIST_MEASURE),
-                );
-                let recovery = self.recording_recovery_row();
-                let destination = recordings.iter().position(|recording| {
-                    !recording.summary
-                        && recording.path.exists()
-                        && self.job.is_none()
-                        && settings.problem().is_none()
-                        && self
-                            .live
-                            .as_ref()
-                            .is_none_or(|live| live.recorder.path() != recording.path)
-                });
-                let primary = recovery.or(destination);
-                for (index, recording) in recordings.iter().enumerate() {
-                    design::gap(ui, design::Gap::S);
-                    let row = ui.scope_builder(
-                        egui::UiBuilder::new().id(("recording_row", &recording.path)),
-                        |ui| {
-                            self.recording_row(
-                                ui,
-                                recording,
-                                settings,
-                                book,
-                                primary == Some(index) && !self.confirm_record && !banner_primary,
-                                destination == Some(index),
-                            );
-                        },
-                    );
-                    design::register_row(ui, row.response.rect);
-                    self.markers(ui, recording, book);
-                    // Each marker row ends in a rule already.
-                    if recording.markers.is_empty() {
-                        design::rule(ui);
-                    }
-                }
+        design::ScrollColumn::new(("session_recordings", self.selected)).show(ui, |ui| {
+            ui.set_max_width(
+                lane_width
+                    .min(ui.available_width())
+                    .min(design::LIST_MEASURE),
+            );
+            let recovery = self.recording_recovery_row();
+            let destination = recordings.iter().position(|recording| {
+                !recording.summary
+                    && recording.path.exists()
+                    && self.job.is_none()
+                    && settings.problem().is_none()
+                    && self
+                        .live
+                        .as_ref()
+                        .is_none_or(|live| live.recorder.path() != recording.path)
             });
+            let primary = recovery.or(destination);
+            for (index, recording) in recordings.iter().enumerate() {
+                design::gap(ui, design::Gap::S);
+                let row = ui.scope_builder(
+                    egui::UiBuilder::new().id(("recording_row", &recording.path)),
+                    |ui| {
+                        self.recording_row(
+                            ui,
+                            recording,
+                            settings,
+                            book,
+                            primary == Some(index) && !self.confirm_record && !banner_primary,
+                            destination == Some(index),
+                        );
+                    },
+                );
+                design::register_row(ui, row.response.rect);
+                self.markers(ui, recording, book);
+                // Each marker row ends in a rule already.
+                if recording.markers.is_empty() {
+                    design::rule(ui);
+                }
+            }
+        });
     }
 
     fn delete_dialog(&mut self, ctx: &egui::Context) {
@@ -5710,256 +5819,267 @@ impl Sessions {
     }
 
     /// Round 26 FM4, FD3: the session page's results and notices that come and go sit in its
-    /// message footer, pinned at the pane's bottom, so the title's line, Last time, the tabs and
-    /// the recordings never move when one comes. Returns where the body ends.
+    /// message footer, so the title's line, Last time, the tabs and the recordings never move
+    /// when one comes. Made before the body draws (`Messages` hold no borrow of the page), so
+    /// the body may change anything; `session_press` acts on the footer's press after it.
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+        reason = "staged: the draft's dropped words and the page's notice slot keep their own orders (`outcome_at`, design::results::STAGED_ALLOWS)"
     )]
-    fn session_footer(
+    fn session_messages<'f>(
         &mut self,
-        ui: &mut egui::Ui,
+        frame: &'f PaneFrame,
         settings: &ProcessingSettings,
-        book: &mut Book,
+        book: &Book,
         plan: &Plan<'_>,
         note: &Note,
-    ) -> f32 {
+        width: f32,
+    ) -> Messages<'f, SessionAct> {
         self.expire_move(book);
         self.end_carry_results();
         let shown = self.notice_session.is_none() || self.notice_session == self.selected;
         if shown && self.job_done() {
             self.job_done = false;
         }
-        let act = std::cell::Cell::new(None);
-        let undo_dropped = std::cell::Cell::new(false);
-        let mut footer =
-            design::Footer::new(("session_footer", self.selected), ui.available_width());
-        let mut undos = LiveUndos::new();
+        let mut messages = Messages::new(frame, ("session_footer", self.selected), width);
+        let dismiss = || Choice::new(MessageChoice::Dismiss(Lost::Nothing), SessionAct::Dismiss);
+        // The draft's dropped words keep the order the drop took (`Draft::dropped_order`).
         if let Some(draft) = &self.draft {
-            draft_result_in(&mut undos, draft, &undo_dropped);
+            match draft.dropped {
+                Some(Dropped::Reloaded(_)) => {
+                    messages.outcome_at(
+                        draft.dropped_order,
+                        KeptOutcome::Notice(
+                            Notice::new(crate::sentence!(
+                                "Reloaded from disk. Your previous draft is kept until you edit or the file changes again."
+                            )),
+                            UndoStep::verb(Verb::Reload).pressed_as(SessionAct::UndoDrop),
+                        ),
+                    );
+                }
+                Some(Dropped::Discarded(_)) => {
+                    messages.outcome_at(
+                        draft.dropped_order,
+                        KeptOutcome::Notice(
+                            Notice::new(crate::sentence!("Draft discarded.")),
+                            UndoStep::verb(Verb::Discard).pressed_as(SessionAct::UndoDrop),
+                        ),
+                    );
+                }
+                None => {}
+            }
         }
         if let Some((tone, words)) = self
             .notice
             .clone()
             .filter(|_| shown && !self.notice_arrived())
         {
-            // Every notice is made with its order (`new_notice`); a draw never issues one.
-            let order = self.notice_order.unwrap_or_default();
-            let act = &act;
-            if let Some(session) = self
+            let here = self
                 .move_run_here
                 .as_ref()
                 .filter(|(session, notice)| {
                     Some(*session) == self.selected && *notice == words && plan.open_run.is_some()
                 })
-                .map(|(session, _)| *session)
-            {
-                footer.result(order, words.clone(), false, move |ui| {
-                    if design::message_with_action(ui, tone, &words, "Move it here") {
-                        act.set(Some(SessionAct::MoveRunHere(session)));
-                    }
-                });
-            } else if self.moved_run.is_some() {
-                let order = self
-                    .moved_run
-                    .as_ref()
-                    .map(|moved| moved.order)
-                    .unwrap_or_default();
-                undos.push(order, words.clone(), move |ui| {
-                    if design::undo_message(ui, tone, &words, "Undo move") {
-                        act.set(Some(SessionAct::UndoMove));
-                    }
-                });
+                .map(|(session, _)| *session);
+            let sentence = notice_sentence(&words);
+            if let Some(session) = here {
+                messages.outcome(Notice::new(sentence).choice(Choice::new(
+                    MessageChoice::Choice("Move it here"),
+                    SessionAct::MoveRunHere(session),
+                )));
             } else {
-                let draw = move |ui: &mut egui::Ui| {
-                    ui.horizontal_top(|ui| {
-                        let button = Density::Read.control() + design::S;
-                        let width = ui.available_width() - button;
-                        ui.allocate_ui_with_layout(
-                            egui::vec2(width, 0.0),
-                            egui::Layout::top_down(egui::Align::Min),
-                            |ui| design::message(ui, tone, &words),
+                match tone {
+                    Tone::Error => {
+                        messages.outcome(
+                            FaultMessage::new(&PageFault::Failed(sentence)).choice(dismiss()),
                         );
-                        if design::icon_button(ui, icons::CLOSE, "Dismiss").clicked() {
-                            act.set(Some(SessionAct::Dismiss));
-                        }
-                    });
-                };
-                let name = self
-                    .notice
-                    .as_ref()
-                    .map(|(_, words)| words.clone())
-                    .unwrap_or_default();
-                if tone == Tone::Error {
-                    footer.reason(name, draw);
-                } else {
-                    footer.result(order, name, false, draw);
+                    }
+                    Tone::Warning => {
+                        messages.outcome(
+                            FaultMessage::new(&PageFault::Check(sentence)).choice(dismiss()),
+                        );
+                    }
+                    Tone::Success => {
+                        // Every success notice is made with its order (`new_notice`).
+                        messages.outcome_at(
+                            self.notice_order.unwrap_or_default(),
+                            Said::new(sentence).choice(dismiss()),
+                        );
+                    }
+                    Tone::Info => {
+                        messages.outcome(Notice::new(sentence).choice(dismiss()));
+                    }
                 }
             }
         }
+        let page = self.page();
         // A copy that claims this session arrives from the folder, so it sits in the bottom
         // banner (`banner_notices`); its result is here.
-        if let Some(undo) = &self.identity_undo {
-            let filename = undo.path.file_name().unwrap_or_default().to_string_lossy();
-            let words = format!("{filename} is now a separate session.");
-            let act = &act;
-            let order = self.identity_order;
-            undos.push(order, words.clone(), move |ui| {
-                if design::undo_message(ui, Tone::Success, &words, "Undo separate session") {
-                    act.set(Some(SessionAct::UndoIdentity));
-                }
-            });
+        if let Some(shown) = self.separate.get(&page) {
+            messages.kept(shown.outcome(frame, |separate| {
+                let filename = separate.undo.file_name();
+                Said::new(crate::sentence!("{} is now a separate session.", filename))
+                    .undo(UndoStep::act("Separate session").pressed_as(SessionAct::UndoIdentity))
+                    .into()
+            }));
+        }
+        if let Some(shown) = self
+            .moves
+            .get(&page)
+            .filter(|shown| Some(shown.value().session) == self.selected)
+        {
+            messages.kept(shown.outcome(frame, |moved| {
+                Said::new(crate::sentence!(
+                    "{} moved to Session {}.",
+                    moved.name,
+                    moved.number
+                ))
+                .undo(UndoStep::verb(Verb::Move).pressed_as(SessionAct::UndoMove))
+                .into()
+            }));
         }
         let today = self.today();
         let writing = self.tab != Tab::Recordings && !self.reading_note;
-        if writing
-            && self.selected == self.current()
-            && let Some(words) = dated_before_today(note, &today)
-        {
-            let act = &act;
-            footer.notice(words.clone(), move |ui| {
-                if design::message_with_action(ui, Tone::Warning, &words, "Play this one") {
-                    act.set(Some(SessionAct::PlayThisOne));
-                }
-            });
+        if writing && self.selected == self.current() && note.date.as_str() < today.as_str() {
+            messages.outcome(
+                Notice::new(crate::sentence!(
+                    "This session is dated {}. Play it tonight, or start a new one.",
+                    note.date
+                ))
+                .choice(Choice::new(
+                    MessageChoice::Choice("Play this one"),
+                    SessionAct::PlayThisOne,
+                )),
+            );
         }
-        if let Some(mut words) = self.not_being_played() {
+        if let Some(words) = self.not_being_played_words(note, plan) {
             let current = if plan.group_open {
                 self.group_session
             } else {
                 self.current()
             };
-            if plan.group_open
-                && let Some(group) = self
-                    .notes
-                    .iter()
-                    .find(|note| Some(note.id) == self.group_session)
-            {
-                let (open, group) = session_warning_names(note, group);
-                words = format!(
-                    "{open} is not the session being played. A group is being assembled in {group}."
-                );
-            }
             let next = self
                 .notes
                 .iter()
-                .find(|note| Some(note.id) == current)
-                .map(|destination| {
+                .any(|note| Some(note.id) == current)
+                .then(|| {
                     if current == self.current() {
-                        "Return to the session being played".to_owned()
+                        "Return to the session being played"
                     } else {
-                        let (_, destination) = session_warning_names(note, destination);
-                        format!("Open {destination}")
+                        "Go to it"
                     }
                 });
-            let act = &act;
-            footer.notice(words.clone(), move |ui| {
-                if let Some(next) = next {
-                    if design::message_with_action(ui, Tone::Warning, &words, &next) {
-                        act.set(Some(SessionAct::Open(current)));
-                    }
-                } else {
-                    design::message(ui, Tone::Warning, &words);
-                }
-            });
+            let mut notice = Notice::new(words);
+            if let Some(next) = next {
+                notice = notice.choice(Choice::new(
+                    MessageChoice::Choice(next),
+                    SessionAct::Open(current),
+                ));
+            }
+            messages.outcome(notice);
         }
-        // Another session's recording: its state, time and title, as a notice. As on the
-        // recording row, the state's colour is only on its icon and word.
-        // Round 27 FE8: while the bottom banner says this recording stopped saving audio (with
-        // what was kept), the footer does not say it again.
-        if let (Some(live), Some((icon, word, color))) = (&self.live, self.recording_status())
+        // Another session's recording: its state, time and session, as a notice. Round 27 FE8:
+        // while the bottom banner says this recording stopped saving audio, the footer does not
+        // say it again.
+        if let (Some(live), Some((_, word, _))) = (&self.live, self.recording_status())
             && Some(live.session) != self.selected
             && self.stalled_elsewhere().is_none()
         {
-            let detail = format!(" {} in {}", clock(live.recorder.seconds()), live.label);
-            let (icon, word) = (icon.to_owned(), word.to_owned());
-            footer.notice(format!("{word}{detail}"), move |ui| {
-                let format = |color| egui::TextFormat {
-                    font_id: Type::Small.font(ui),
-                    color,
-                    ..Default::default()
-                };
-                let mut job = egui::text::LayoutJob::default();
-                job.append(&icon, 0.0, format(color));
-                job.append(" ", 0.0, format(color));
-                job.append(&word, 0.0, format(color));
-                job.append(&detail, 0.0, format(colors().muted));
-                ui.add(egui::Label::new(job).wrap())
-                    .on_hover_text(format!("{word}{detail}"));
-            });
+            messages.outcome(Notice::new(crate::sentence!(
+                "{} {} in {}.",
+                word,
+                clock(live.recorder.seconds()),
+                live.label
+            )));
         }
         // The input went away by itself: a notice, not the recording's state line.
         if self.live.is_none() && !self.confirm_record && settings.input_missing() {
-            const MISSING: &str = "The input chosen in Settings is not connected.";
-            let act = &act;
-            footer.notice(MISSING, move |ui| {
-                if design::message_with_action(ui, Tone::Warning, MISSING, "Open Settings") {
-                    act.set(Some(SessionAct::OpenSettings));
-                }
-            });
+            messages.outcome(
+                Notice::new(crate::sentence!(
+                    "The input chosen in Settings is not connected."
+                ))
+                .choice(Choice::new(
+                    MessageChoice::Choice("Open Settings"),
+                    SessionAct::OpenSettings,
+                )),
+            );
         }
         // Round 27 FI3, FN2: a marker's Add result, in its own session's footer while its event
         // stands. The marker row keeps `✓ On the timeline`.
-        if let Some(added) = self.recording_added.as_ref().filter(|added| {
-            added.session == self.selected && book.events.iter().any(|event| event.id == added.id)
-        }) {
-            let words = added_message(
-                &added.title,
-                self.session_name(added.session).as_deref(),
-                None,
-            );
-            let order = added.order;
-            let act = &act;
-            undos.push(order, words.clone(), move |ui| {
-                if design::undo_message(ui, Tone::Success, &words, "Undo add") {
-                    act.set(Some(SessionAct::UndoMarker));
-                }
-            });
-        }
-        self.carry_in_footer(&mut undos, &mut footer, &act);
-        undos.into_footer(&mut footer);
-        let bottom = footer.show_by_hand(ui);
-        if undo_dropped.get()
-            && let Some(draft) = &mut self.draft
+        let mine = self.of_session(self.selected);
+        if let Some(shown) = self
+            .markers
+            .get(&mine)
+            .filter(|shown| book.events.iter().any(|event| event.id == shown.value().id))
         {
-            draft.undo_dropped();
+            let session = self.session_name(self.selected);
+            messages.kept(shown.outcome(frame, |added| {
+                let words = match &session {
+                    Some(session) => crate::sentence!("{} added to {}.", added.title, session),
+                    None => crate::sentence!("{} added.", added.title),
+                };
+                Said::new(words)
+                    .undo(UndoStep::verb(Verb::Add).pressed_as(SessionAct::UndoMarker))
+                    .into()
+            }));
         }
-        match act.take() {
-            Some(SessionAct::MoveRunHere(session)) => {
+        self.carry_in_messages(&mut messages);
+        messages
+    }
+
+    /// What a press in the session page's footer does. A kept result's Undo acts on the entry
+    /// its ticket names; an entry replaced or ended since is gone, and nothing happens.
+    fn session_press(&mut self, press: Press<SessionAct>, book: &mut Book, plan: &Plan<'_>) {
+        match press.id {
+            SessionAct::MoveRunHere(session) => {
                 if let Some(run) = plan.open_run {
                     self.move_run_to_session(book, run, session);
                 }
             }
-            Some(SessionAct::UndoMove) => self.undo_move(book),
-            Some(SessionAct::Dismiss) => {
+            SessionAct::UndoMove => {
+                self.expire_move(book);
+                if let Some(ticket) = press.ticket
+                    && let Ok((moved, ())) = self.moves.undo_by(ticket, |_| Ok::<(), ()>(()))
+                {
+                    self.undo_moved(book, moved);
+                }
+            }
+            SessionAct::Dismiss => {
                 self.notice = None;
                 self.notice_session = None;
             }
-            Some(SessionAct::UndoIdentity) => {
-                if let Some(undo) = &self.identity_undo {
-                    match undo.undo() {
-                        Ok(()) => {
-                            self.identity_undo = None;
-                            self.refresh();
+            SessionAct::UndoIdentity => {
+                if let Some(ticket) = press.ticket {
+                    match self
+                        .separate
+                        .undo_by(ticket, |separate| separate.undo.undo())
+                    {
+                        Ok(_) => self.refresh(),
+                        // The result stays, with its Undo, beside the reason.
+                        Err(ByTicket::Failed(error)) => {
+                            self.notice = new_notice(&mut self.notice_order, (Tone::Error, error));
                         }
-                        Err(error) => {
-                            self.notice = new_notice(&mut self.notice_order, (Tone::Error, error))
-                        }
+                        Err(ByTicket::Gone) => {}
                     }
                 }
             }
-            Some(SessionAct::PlayThisOne) => self.play_this_one(),
-            Some(SessionAct::Open(session)) => self.select(session),
-            Some(SessionAct::OpenSettings) => self.wants_processing_settings = true,
-            Some(SessionAct::UndoCarry(session)) => self.undo_carry(session),
-            Some(SessionAct::UndoMarker) => {
-                if let Some(added) = self.recording_added.take() {
+            SessionAct::PlayThisOne => self.play_this_one(),
+            SessionAct::Open(session) => self.select(session),
+            SessionAct::OpenSettings => self.wants_processing_settings = true,
+            SessionAct::UndoCarry(session) => self.undo_carry(session),
+            SessionAct::UndoMarker => {
+                if let Some(ticket) = press.ticket
+                    && let Ok((added, ())) = self.markers.undo_by(ticket, |_| Ok::<(), ()>(()))
+                {
                     book.undo_add(&added.id);
                 }
             }
-            None => {}
+            SessionAct::UndoDrop => {
+                if let Some(draft) = &mut self.draft {
+                    draft.undo_dropped();
+                }
+            }
         }
-        bottom
     }
 
     fn session_pane(
@@ -6019,12 +6139,18 @@ impl Sessions {
             });
         });
         self.record_line(ui, settings);
-        // The body (Last time, the tabs and their pane) ends above the footer: its own `Ui`
-        // ends there, so an editor or a list that fills its height stops above the footer.
-        let bottom = self.session_footer(ui, settings, book, plan, &note);
-        body_above(ui, bottom, |ui| {
+        // The body (Last time, the tabs and their pane) is the pane's; the part places the
+        // footer below it.
+        let frame = PaneFrame::new(ui);
+        let messages =
+            self.session_messages(&frame, settings, book, plan, &note, ui.available_width());
+        let body = self.session_body_kind(ui, plan);
+        let paned = messages.pane(ui, body, |ui| {
             self.session_body(ui, settings, book, plan, &note, title_on_own_line);
         });
+        if let Some(press) = paned.pressed {
+            self.session_press(press, book, plan);
+        }
     }
 
     /// The session page below its title and state line, above its message footer.
@@ -6935,7 +7061,8 @@ impl Sessions {
 
     pub fn clear_notice(&mut self) {
         self.added = None;
-        self.recording_added = None;
+        // Leaving the Recordings tab ends the marker's result (`MarkerAdd`'s owner event).
+        self.markers.owner_changed(&self.of_session(self.selected));
     }
 
     pub fn show(
@@ -7407,7 +7534,7 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            sessions.not_being_played().as_deref(),
+            sessions.not_being_played().as_ref().map(Sentence::as_str),
             Some(
                 "Session 1 - The Bridge 2.md is not the session being played. The session being played is Session 1 - The Bridge.md. What you write and add on this page goes into Session 1 - The Bridge 2.md."
             ),
@@ -7415,7 +7542,7 @@ mod tests {
         );
         sessions.notes[1].number = 2;
         assert_eq!(
-            sessions.not_being_played().as_deref(),
+            sessions.not_being_played().as_ref().map(Sentence::as_str),
             Some(
                 "Session 2 is not the session being played. What you write and add on this page goes into Session 1 - The Bridge 2.md."
             )
@@ -7507,11 +7634,18 @@ mod tests {
         let undo = super::super::new_identity(&path).unwrap();
         let after = fs::read(&path).unwrap();
         let mut sessions = Sessions {
-            identity_undo: Some(undo),
+            folder: Some(dir.path().into()),
             ..Default::default()
         };
+        sessions.separate.record(kept::Separate {
+            page: sessions.page(),
+            undo,
+        });
+        let here = sessions.page();
         sessions.open_campaign(None);
-        assert!(sessions.identity_undo.is_none());
+        // Another campaign shows none of it; the file keeps the new identity.
+        assert!(sessions.separate.get(&sessions.page()).is_none());
+        assert!(sessions.separate.get(&here).is_some());
         assert_eq!(fs::read(path).unwrap(), after);
     }
 
@@ -8152,20 +8286,20 @@ mod tests {
         book.events[0].run = Some(run);
         book.events[0].continued_in = Some(new);
         let before = book.events.clone();
-        sessions.move_run_to_session(&mut book, run, new);
+        let moved = sessions.move_run(&mut book, run, new).unwrap();
         assert_eq!(book.events[0].session, Some(new));
         assert_eq!(book.events[0].continued_in, None);
-        sessions.undo_move(&mut book);
+        sessions.undo_moved(&mut book, moved);
         assert_eq!(book.events, before);
         assert_eq!(sessions.open_run.as_ref().unwrap().1, old);
         sessions.move_run_to_session(&mut book, run, new);
         sessions.draft.as_mut().unwrap().body.push_str("A note.");
         sessions.expire_move(&book);
-        assert!(sessions.moved_run.is_none() && sessions.notice.is_none());
+        assert!(sessions.moves.is_empty());
         sessions.move_run_to_session(&mut book, run, old);
         book.add(Kind::Travel, Some(new));
         sessions.expire_move(&book);
-        assert!(sessions.moved_run.is_none() && sessions.notice.is_none());
+        assert!(sessions.moves.is_empty());
     }
 
     #[test]

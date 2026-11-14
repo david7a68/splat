@@ -285,6 +285,15 @@ pub(crate) fn new_identity(path: &Path) -> Result<IdentityUndo, String> {
 }
 
 impl IdentityUndo {
+    /// The copy's file name, which its result names.
+    pub(crate) fn file_name(&self) -> String {
+        self.path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned()
+    }
+
     pub fn undo(&self) -> Result<(), String> {
         if fs::read_to_string(&self.path).ok().as_deref() != Some(self.after.as_str()) {
             return Err("This session changed on disk. Undo did not replace it.".into());

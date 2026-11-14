@@ -88,7 +88,9 @@ pub(super) struct Moved {
     pub open_run: Option<(String, Uuid)>,
     pub body: String,
     pub events: Vec<crate::timeline::Event>,
-    pub words: String,
+    /// The fight's name and the session's number, for `<fight> moved to Session <n>.`
+    pub name: String,
+    pub number: u32,
 }
 
 impl Kept for Moved {
