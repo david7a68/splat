@@ -7299,6 +7299,7 @@ impl RowWords {
 
 /// A row layout's whole input. `RowLayout::measured` reads nothing else, and the hash names
 /// every field, so the cache's key holds all of it.
+#[derive(Clone)]
 struct RowInput {
     words: RowWords,
     sync: Option<SyncState>,
@@ -7469,6 +7470,9 @@ struct RowLayout {
     ac_right: f32,
     temp_right: f32,
     hp_right: f32,
+    /// The input this layout was made from, so that a roll result can lay the row out again
+    /// with fewer condition words (R8). Shared, so a cached layout's copy costs no work.
+    input: Option<std::sync::Arc<RowInput>>,
 }
 
 pub(super) fn header_height(scale: RunScale) -> f32 {
@@ -7477,11 +7481,12 @@ pub(super) fn header_height(scale: RunScale) -> f32 {
 
 impl RowLayout {
     /// The row's roll words, after its second line. FI2 (iter-27-R): a roll result does not
-    /// change a row's height while one of its words fits there. In order: the result (its last
-    /// two parts) whole after the effects and the save DC; whole on the row without them; cut
-    /// to the room by whole words (`badge_words`) on the row, then on the row without them.
-    /// Only where not one word fits does it take a line of its own, and the row grows by it.
-    /// The hover and the Log keep it whole.
+    /// change a row's height while it fits there. R8 (SL2): the result's two parts (the
+    /// comparison or save outcome, and the damage) are never cut. In order: the result whole
+    /// after the effects and the save DC; whole on the row without them; whole on that row
+    /// with fewer condition words (the rest in its `N more`), at the row's height. Only when
+    /// the two parts fit in none of these does the result take a line of its own, and the row
+    /// grows by it. The hover and the Log keep it whole.
     fn with_badge(mut self, ui: &egui::Ui, badge: Option<&str>) -> Self {
         self.badge_below = false;
         let base = self
@@ -7494,26 +7499,71 @@ impl RowLayout {
             let result = parts[parts.len().saturating_sub(2)..].join(" · ");
             let whole = design::number_width(ui, &result, &font);
             let room = |layout: &Self| badge_place(layout, 0.0).2;
-            let cut = |layout: &Self| badge_words(ui, badge, &font, room(layout)).is_some();
-            let base_fits = |fits: &dyn Fn(&Self) -> bool| {
-                base.as_ref()
-                    .filter(|base| !base.badge_below && fits(base))
-                    .cloned()
-            };
             if whole > room(&self) {
-                if let Some(base) = base_fits(&|base| whole <= room(base)) {
-                    return base;
+                if let Some(base) = base
+                    .as_ref()
+                    .filter(|base| !base.badge_below && whole <= room(base))
+                {
+                    return base.clone();
                 }
-                if !cut(&self) {
-                    if let Some(base) = base_fits(&cut) {
-                        return base;
-                    }
-                    self.badge_below = true;
+                let plain = base.as_ref().unwrap_or(&self);
+                if let Some(fewer) = plain.with_fewer_conditions(ui, |layout| whole <= room(layout))
+                {
+                    return Self {
+                        art: self.art.clone(),
+                        ..fewer
+                    };
                 }
+                self.badge_below = true;
             }
         }
         self.without_effects = base.map(Box::new);
         self
+    }
+
+    /// R8: this row (with no effect and no save DC) with fewer condition words shown, the
+    /// rest in its `N more`: the first form, from the most words down, that keeps the row's
+    /// height and in which `fits` holds. Each form is laid out once and kept by its input.
+    fn with_fewer_conditions(&self, ui: &egui::Ui, fits: impl Fn(&Self) -> bool) -> Option<Self> {
+        let input = self.input.as_ref()?;
+        let shown = self
+            .condition_spans
+            .iter()
+            .filter(|(name, _)| !["Run conditions", "Run changes"].contains(&name.as_str()))
+            .count();
+        let scale = input.scale;
+        (0..shown).rev().find_map(|count| {
+            let key = {
+                use std::hash::{Hash, Hasher};
+                let mut hash = std::collections::hash_map::DefaultHasher::new();
+                ("fewer conditions", count).hash(&mut hash);
+                input.hash(&mut hash);
+                hash.finish()
+            };
+            let cache = egui::Id::new("run_row_layouts");
+            let layout = ui
+                .data_mut(|data| {
+                    data.get_temp_mut_or_default::<RowCache>(cache)
+                        .0
+                        .get(&key)
+                        .cloned()
+                })
+                .unwrap_or_else(|| {
+                    let extra = Extra {
+                        as_plain: true,
+                        ..Extra::default()
+                    };
+                    let mut layout = Self::measured(ui, input, (count, BonusFit::All, &extra));
+                    layout.input = Some(input.clone());
+                    ui.data_mut(|data| {
+                        data.get_temp_mut_or_default::<RowCache>(cache)
+                            .0
+                            .insert(key, layout.clone());
+                    });
+                    layout
+                });
+            (layout.height(scale) == self.height(scale) && fits(&layout)).then_some(layout)
+        })
     }
 
     /// The second line and, when they have their own, the roll words' line under it.
@@ -7597,7 +7647,12 @@ impl RowLayout {
         }) {
             return layout;
         }
-        let layout = Self::laid_out(ui, &input);
+        let mut layout = Self::laid_out(ui, &input);
+        let input = std::sync::Arc::new(input);
+        layout.input = Some(input.clone());
+        if let Some(base) = layout.without_effects.as_mut() {
+            base.input = Some(input);
+        }
         ui.data_mut(|data| {
             let layouts = &mut data.get_temp_mut_or_default::<RowCache>(cache).0;
             if layouts.len() > 512 {
@@ -7911,9 +7966,10 @@ impl RowLayout {
         }
         let initiative_span =
             (w.present && !w.initiative).then(|| add_parts(&[("No initiative", c.accent)], 0.0));
+        let mut conc_end = None;
         if w.concentration {
             let (words, color) = concentration_mark();
-            add_parts(&[(&*words, color)], 0.0);
+            conc_end = Some(add_parts(&[(&*words, color)], 0.0).end);
         }
         // Effects take the conditions' place, before the plain conditions (section 1.4). Each
         // count has a slot as wide as its widest form, so that a change of count moves no word.
@@ -8126,6 +8182,10 @@ impl RowLayout {
         }
         // Damage to a row marked Conc: its save, until the next step, in the room left.
         if let Some(dc) = extra.conc_dc {
+            // R7 (FL6): right after the row's own `Conc` mark the save says `save DC 10`; the
+            // hover and the accessible name keep `Conc save DC 10`, as does a save that does
+            // not stand beside the mark.
+            let beside_mark = conc_end == Some(job.text.chars().count());
             if !job.is_empty() {
                 job.append(
                     " ·\u{a0}",
@@ -8134,7 +8194,11 @@ impl RowLayout {
                 );
             }
             job.append(
-                &format!("Conc save DC {dc}"),
+                &if beside_mark {
+                    format!("save DC {dc}")
+                } else {
+                    format!("Conc save DC {dc}")
+                },
                 0.0,
                 egui::TextFormat::simple(font.clone(), c.participant.concentrating),
             );
@@ -8275,6 +8339,7 @@ impl RowLayout {
             ac_right,
             temp_right,
             hp_right,
+            input: None,
         }
     }
 
@@ -10299,9 +10364,31 @@ mod tests {
                         0.0,
                     );
                     let text = layout.second_line.as_ref().unwrap().text().to_owned();
+                    // iter-28-R R7: a save that does not stand beside the mark (a condition is
+                    // between) keeps `Conc save DC 12`.
                     assert_eq!(text.ends_with("Conc save DC 12"), shows, "{width}: {text}");
                     assert_eq!(layout.height(scale), base.height(scale));
                 }
+                // iter-28-R R7 (FL6): beside the row's own `Conc` mark the save is `save DC 12`;
+                // the word `Conc` is not written twice.
+                let mut beside = conc.clone();
+                beside.conditions.clear();
+                let text = RowLayout::fitted(
+                    ui,
+                    900.0,
+                    &beside,
+                    (None, Some(12), false),
+                    design::RUN_REGULAR,
+                    RowFit::Natural,
+                    0.0,
+                )
+                .second_line
+                .map(|line| line.text().to_owned())
+                .unwrap_or_default();
+                assert!(
+                    text.ends_with("Conc ·\u{a0}save DC 12") && text.matches("Conc").count() == 1,
+                    "iter-28-R-R7: {text}"
+                );
                 // The DC folds no condition and no bonus that shows without it.
                 let mut crowded = conc.clone();
                 crowded.conditions = ["Poisoned", "Prone", "Restrained", "Blinded"]
@@ -10877,9 +10964,11 @@ mod tests {
         );
     }
 
-    /// Review repair 4: roll words always fit their place. When a row's conditions leave no
-    /// room for one word, the words take a line of their own at the name's edge, and the row
-    /// grows by that line. iter-27-R FI2: only then; else they stay on the second line.
+    /// Review repair 4: roll words always fit their place. iter-27-R FI2, iter-28-R R8: when a
+    /// row's conditions fill the line, condition words give way (into `N more`) and the result
+    /// stays whole on the second line, at the row's height. Only when its two parts alone do
+    /// not fit do the words take a line of their own at the name's edge, and the row grows by
+    /// that line.
     #[test]
     fn roll_words_take_their_own_line_when_the_conditions_fill_it() {
         let mut p = super::super::tests::run().state.participants[0].clone();
@@ -10896,10 +10985,22 @@ mod tests {
                 let badge = "84% to hit · advantage";
                 let scale = design::RUN_COMPACT;
                 let plain = RowLayout::new(ui, 442.0, &p, None, scale, RowFit::Natural, 0.0);
-                let layout = RowLayout::new(ui, 442.0, &p, None, scale, RowFit::Natural, 0.0)
+                // R8: the conditions give way; the words stay whole on the second line.
+                let kept = RowLayout::new(ui, 442.0, &p, None, scale, RowFit::Natural, 0.0)
                     .with_badge(ui, Some(badge));
+                assert!(!kept.badge_below, "iter-28-R-R8");
+                assert_eq!(kept.height(scale), plain.height(scale), "iter-28-R-R8");
+                assert_eq!(
+                    badge_words(ui, badge, &font, badge_place(&kept, 0.0).2).as_deref(),
+                    Some(badge),
+                    "iter-28-R-R8"
+                );
+                // Two parts that fit in no form of the row take a line of their own.
+                let long = "84% to hit with the Greatsword of the Ember Hills · advantage from Help and Faerie Fire";
+                let layout = RowLayout::new(ui, 442.0, &p, None, scale, RowFit::Natural, 0.0)
+                    .with_badge(ui, Some(long));
                 let (left, top, room) = badge_place(&layout, 0.0);
-                let words = badge_words(ui, badge, &font, room);
+                let words = badge_words(ui, long, &font, room);
                 assert!(
                     words
                         .as_ref()
@@ -10944,18 +11045,25 @@ mod tests {
                     )
                     .with_badge(ui, badge)
                 };
+                // iter-28-R R8 changes this on purpose: the result is never cut. Bloodied and
+                // Conc are state words and do not give way, so at 442 px the whole result takes
+                // a line of its own and the row grows by it (before R8 it was cut to `Saved…`).
                 let saved = row(Some("Saved · 1 damage (half)"));
-                assert!(!saved.badge_below, "iter-27-R-FI2");
+                let (_, _, room) = badge_place(&saved, 0.0);
+                assert_eq!(
+                    badge_words(ui, "Saved · 1 damage (half)", &font, room).as_deref(),
+                    Some("Saved · 1 damage (half)"),
+                    "iter-28-R-R8: the result is whole in {room}"
+                );
                 assert_eq!(
                     saved.height(scale),
-                    row(None).height(scale),
-                    "iter-27-R-FI2"
-                );
-                let (_, _, room) = badge_place(&saved, 0.0);
-                assert!(
-                    badge_words(ui, "Saved · 1 damage (half)", &font, room)
-                        .is_some_and(|words| words.starts_with("Saved")),
-                    "iter-27-R-FI2: the result's words show in {room}"
+                    row(None).height(scale)
+                        + if saved.badge_below {
+                            Type::Small.line()
+                        } else {
+                            0.0
+                        },
+                    "iter-27-R-FI2: the row grows only by the result's own line"
                 );
             });
         });
@@ -10983,6 +11091,30 @@ mod tests {
         let _ = ctx.run(egui::RawInput::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
                 let font = Type::Small.font(ui);
+                // iter-28-R R8 (SL2): with three conditions at 960 the result is whole and the
+                // row keeps its height; condition words give way into the row's `N more`.
+                let mut three = plain.clone();
+                three.conditions = ["Poisoned", "Prone", "Restrained"]
+                    .map(super::super::Condition::from)
+                    .to_vec();
+                let result = "11 vs AC 13 · 12 damage";
+                let row = |badge| {
+                    RowLayout::new(ui, 442.0, &three, None, design::RUN_COMPACT, RowFit::Natural, 0.0)
+                        .with_badge(ui, badge)
+                };
+                let (without, with) = (row(None), row(Some(result)));
+                assert!(!with.badge_below, "iter-28-R-R8: no line of its own");
+                assert_eq!(
+                    with.height(design::RUN_COMPACT),
+                    without.height(design::RUN_COMPACT),
+                    "iter-28-R-R8: the row keeps its height"
+                );
+                assert_eq!(
+                    badge_words(ui, result, &font, badge_place(&with, 0.0).2).as_deref(),
+                    Some(result),
+                    "iter-28-R-R8: the result is whole: {:?}",
+                    with.second_line.as_ref().map(|line| line.text().to_owned())
+                );
                 for (scale, width) in [
                     (design::RUN_COMPACT, 442.0),
                     (design::RUN_REGULAR, 596.0),
@@ -11038,6 +11170,8 @@ mod tests {
                                         && full[kept.len()..].starts_with(' ')),
                                 "{at}: {shown:?} is {full:?} or cut by whole words"
                             );
+                            // iter-28-R R8 (SL2): the result's two parts are never cut.
+                            assert_eq!(shown, full, "iter-28-R-R8 {at}: room {room}");
                             // With at most `Conc` before them, they are whole from 1200 up.
                             if scale.row >= design::RUN_REGULAR.row && p.conditions.is_empty() {
                                 assert_eq!(
@@ -13066,7 +13200,7 @@ mod tests {
                 assert!(
                     detail.text().contains("Conc")
                         && detail.text().contains("Blessed")
-                        && detail.text().contains("Changed")
+                        && detail.text().contains(icons::CHANGED)
                 );
                 assert_eq!(detail.rows.len(), 1, "{}", detail.text());
                 Arc::make_mut(&mut live.definition).name = "Ember Cultist".into();
@@ -13080,7 +13214,7 @@ mod tests {
                     0.0,
                 );
                 let detail = layout.second_line.as_ref().unwrap();
-                assert!(detail.text().contains("Blessed") && detail.text().contains("Changed"));
+                assert!(detail.text().contains("Blessed") && detail.text().contains(icons::CHANGED));
                 assert_eq!(detail.rows.len(), 1, "{}", detail.text());
             });
         });

@@ -1594,7 +1594,8 @@ total's hover say `Rolled 2 for Cinder Drake: Fire Breath still spent.` until th
 Undo. The row's
 hover and accessible name hold every whole word. After damage to a row marked Conc, `Conc save DC 12` ends
 its second line until the next step, only in the room that the effects leave; else only in the hover and the
-accessible name. In Conditions an official condition's count is on its tick, `✓ Frightened 10`, while the
+accessible name. Right after the row's own `Conc` mark it says `save DC 12` (`✧ Conc · save DC 12`); the hover and
+the accessible name keep `Conc save DC 12`. In Conditions an official condition's count is on its tick, `✓ Frightened 10`, while the
 grid fits its room; else it is listed under Other effects, which lists other words with their whole words. The
 tab's help says `No HP, AC or roll changes by itself. A time you type counts down at the end of that creature’s turn: Bless 10 rounds goes from 10 to 9.` An
 ended run shows them as words, and a click does nothing.
@@ -1678,10 +1679,10 @@ name, after its conditions (and after its state word where the row has no state 
 They are the chance to hit it while an attack is armed, with the way it rolls (`51% to hit · advantage`), then the
 result against it, a plain comparison with no hit or miss verdict (`17 vs AC 13 · 10 damage`). They take the longest
 form that fits whole, dropping words before the result first; the result's last two parts (the comparison or save
-outcome, and the damage with its `(half)`) never drop. A roll result does not change a row's height: when the result
-does not fit whole after the effects and the save DC, the row without them shows it whole if it can; else the words are
-cut by whole words after the conditions. Only where not one word fits there do they take a line of their own under
-the conditions, at the name's edge, and that row grows by the line. The row's accessible name holds them whole. Roll words
+outcome, and the damage with its `(half)`) never drop. A roll result is never cut, and it does not change a row's height while it fits: when the
+result does not fit whole after the effects and the save DC, the row without them shows it whole if it can; else
+condition words give way into the row's `N more` until it fits. Only when its two parts fit in none of these does it
+take a line of its own under the conditions, at the name's edge, and that row grows by the line. The row's accessible name holds them whole. Roll words
 never move a row's columns. A save's creature targets show their roll in the AC
 cell. After `Roll damage`, each target says its own result, from the amount Enter gives it (`Saved · 1 damage
 (half)`, `Failed · 3 damage`), and keeps it after Enter. Enter finishes the save: its tile disarms, the hint and `Roll
