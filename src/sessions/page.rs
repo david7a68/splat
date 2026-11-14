@@ -76,8 +76,159 @@ enum View {
     Templates,
 }
 
-/// The current session folder's files, or why they could not be listed.
-type FolderFiles = Result<Option<Vec<PathBuf>>, String>;
+/// What one listing of the current session folder found, or why it could not list it. `None`:
+/// no folder.
+type FolderFiles = Result<Option<super::StorageCounts>, String>;
+
+/// The session folder's listing, kept for the folder it lists. Its owner is that folder; it
+/// ends at each disk scan (`end_folder_listing`, also while the New session form is open), a
+/// campaign switch and a folder save, so the Link and folder page lists the folder once per
+/// scan, not once a frame. It decides only what is drawn: an act on the disk lists the folder
+/// at the act (`move_storage`, and the check before Save folder).
+struct FolderScan {
+    folder: PathBuf,
+    listed: FolderFiles,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The session folder listing's end events (`refresh`) on this thread.
+    static FOLDER_SCAN_ENDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How often `refresh` ended the session folder's listing on this thread.
+#[cfg(test)]
+pub(crate) fn folder_scan_ends() -> usize {
+    FOLDER_SCAN_ENDS.with(std::cell::Cell::get)
+}
+
+/// Why the session folder cannot be used, or why a write to it failed. The kind gives the tone,
+/// in the page's own place and in the footer of the Session folder form.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum FolderFault {
+    /// The folder the campaign names is gone: the DM chooses it again (routing row 136).
+    Missing(PathBuf),
+    /// The campaign's note or the folder cannot be read, in the system's own words.
+    CannotRead(String),
+    /// A write failed: the folder setting, the move, or the notes' list.
+    NotSaved(String),
+    /// A folder save waited, because the open note could not be saved first.
+    NoteNotSaved,
+    /// Save folder found files in the current folder that the form did not show yet.
+    FilesCame,
+}
+
+impl From<String> for FolderFault {
+    fn from(error: String) -> Self {
+        Self::CannotRead(error)
+    }
+}
+
+impl From<FolderFault> for String {
+    fn from(fault: FolderFault) -> Self {
+        design::outcome::fault_words(&fault).as_str().to_owned()
+    }
+}
+
+impl Fault for FolderFault {
+    fn severity(&self) -> Severity {
+        match self {
+            Self::Missing(_) => Severity::NeedsFixing,
+            Self::CannotRead(_) => Severity::CannotRead,
+            Self::NotSaved(_) | Self::NoteNotSaved => Severity::NotSaved,
+            Self::FilesCame => Severity::NeedsFixing,
+        }
+    }
+    fn cause(&self) -> Sentence {
+        match self {
+            Self::Missing(folder) => crate::sentence!(
+                "Splat cannot find the session folder {}. It may have been moved or renamed.",
+                folder.display()
+            ),
+            Self::CannotRead(words) | Self::NotSaved(words) => notice_sentence(words),
+            Self::NoteNotSaved => crate::sentence!(
+                "Not changed. Your note could not be saved. Choose what to do with it first."
+            ),
+            Self::FilesCame => crate::sentence!(
+                "Not changed. The current folder now keeps session files. Choose to move them or not, then save again."
+            ),
+        }
+    }
+}
+
+/// The Session folder form's messages for a footer that is not typed yet: Campaign's Link and
+/// folder page, until package C moves it to `Messages` and calls `Sessions::folder_messages`.
+/// Owned lines with the same words and the same store entry; `add_to` gives them to the footer.
+pub struct FolderFooter {
+    fault: Option<(Tone, String)>,
+    keeps: Option<String>,
+    moved: Option<design::results::FooterResult>,
+}
+
+impl FolderFooter {
+    /// The lines, in the old footer's places: the fault with the reasons, the warning with the
+    /// notices, the move's result with the results, by the order its store issued.
+    pub fn add_to<'a>(&'a self, footer: &mut design::Footer<'a>) {
+        if let Some((tone, words)) = &self.fault {
+            footer.reason(words.as_str(), move |ui| {
+                design::message(ui, *tone, words);
+            });
+        }
+        // Kept on the old call: the typed footer has no warning that is not a fault or a
+        // refusal (`Notice` is info). Package C's typed footer shows it as a `Notice`.
+        if let Some(words) = &self.keeps {
+            footer.notice(words.as_str(), move |ui| {
+                design::message(ui, Tone::Warning, words);
+            });
+        }
+        if let Some(moved) = &self.moved {
+            footer.kept_line(moved, false, |words, ui| {
+                design::message(ui, Tone::Success, words);
+            });
+        }
+    }
+}
+
+/// `The current folder keeps <counts>. …`: what Save without moving would hide.
+fn folder_keeps(counts: &str) -> Sentence {
+    crate::sentence!(
+        "The current folder keeps {}. If you save without moving, Splat no longer shows these files.",
+        counts
+    )
+}
+
+/// The counts of one listing in words (`1 note, 4 events and 2 templates`), with the Timeline's
+/// events; `None` when it lists no file.
+fn storage_words(counts: super::StorageCounts, events: usize) -> Option<String> {
+    if counts.files == 0 {
+        return None;
+    }
+    let mut words = vec![
+        design::count(counts.notes, "note", "notes"),
+        design::count(events, "event", "events"),
+        design::count(counts.templates, "template", "templates"),
+        design::count(counts.recordings, "recording", "recordings"),
+    ]
+    .into_iter()
+    .filter(|count| !count.is_empty())
+    .collect::<Vec<_>>();
+    let last = words.pop().unwrap_or_default();
+    let words = if words.is_empty() {
+        last
+    } else {
+        format!("{} and {last}", words.join(", "))
+    };
+    Some(if words.is_empty() {
+        "Timeline.md".to_owned()
+    } else {
+        words
+    })
+}
+
+/// `Moved <counts> to <folder>.`, from the store's own value.
+fn folder_moved<A>(moved: &kept::FolderMoved) -> design::outcome::Done<A> {
+    design::outcome::Done::new(Verb::Move, format!("{} to {}", moved.counts, moved.typed))
+}
 
 /// What the DM chose in the session page's message footer, done after the footer is drawn.
 #[derive(Clone, Debug, PartialEq)]
@@ -346,10 +497,13 @@ pub struct Sessions {
     pub run_open: bool,
     campaign: Option<Campaign>,
     folder: Option<PathBuf>,
-    folder_error: Option<String>,
-    /// The current folder's files as `folder_messages` scanned them this frame, with the scan's
-    /// error, for the form drawn after it: one scan a frame, as before the footer.
-    folder_files: Option<FolderFiles>,
+    /// Why the folder cannot be used, or why the last write to it failed.
+    folder_error: Option<FolderFault>,
+    /// The current folder's listing, for the Session folder form and its footer. See
+    /// `FolderScan`.
+    folder_scan: Option<FolderScan>,
+    /// `Moved <counts> to <folder>.`, one per campaign (`kept::FolderMoved`).
+    folder_moves: design::Results<kept::FolderLink, kept::FolderMoved>,
     /// Review of PR 274, item 1: the plan row the DM just added or acted on, until the row
     /// after it is in view above the footer (or a few draws pass), the draws it took, and the
     /// pass it was last drawn in.
@@ -362,9 +516,6 @@ pub struct Sessions {
     /// When the run deletion in `deleted_run` was done.
     pub(super) deleted_run_order: design::ResultOrder,
     folder_text: String,
-    folder_notice: Option<String>,
-    /// When the folder move that made `folder_notice` was done, for its footer order.
-    folder_notice_order: Option<design::ResultOrder>,
     view: View,
     tab: Tab,
     /// The list of sessions stands beside this one, and it already gives the date.
@@ -1861,6 +2012,9 @@ impl Sessions {
     }
 
     fn scan_folder(&mut self) {
+        // The folder's listing follows the disk also while the New session form is open; the
+        // form and its unsent words are not refreshed.
+        self.end_folder_listing();
         if self.form.is_some() {
             return;
         }
@@ -2012,11 +2166,11 @@ impl Sessions {
             Some(campaign) => {
                 self.folder_text =
                     folder_setting(campaign).unwrap_or_else(|_| DEFAULT_FOLDER.to_owned());
-                match super::open_folder(campaign) {
+                match super::open_folder_typed(campaign) {
                     Ok(folder) => self.folder = Some(folder),
-                    Err(error) => {
+                    Err(fault) => {
                         self.folder = None;
-                        self.folder_error = Some(error);
+                        self.folder_error = Some(fault);
                     }
                 }
             }
@@ -2033,7 +2187,8 @@ impl Sessions {
         self.processed_recording = None;
         self.job_done = false;
         self.job_warned = false;
-        self.folder_notice = None;
+        // A folder move's result stays its campaign's (`folder_moves`): this campaign's scope
+        // hides it, and coming back shows it again.
         self.notice_session = None;
         self.select(self.current().or(self.notes.first().map(|note| note.id)));
     }
@@ -2043,7 +2198,18 @@ impl Sessions {
         self.events_to
     }
 
+    /// The end event of the folder's listing (`FolderScan`): the next draw lists the folder again.
+    fn end_folder_listing(&mut self) {
+        #[cfg(test)]
+        FOLDER_SCAN_ENDS.with(|ends| ends.set(ends.get() + 1));
+        self.folder_scan = None;
+    }
+
     pub fn refresh(&mut self) {
+        // The disk event of the folder's listing and of a move's result: the next draw lists
+        // the folder again, and a result whose folder is gone ends.
+        self.end_folder_listing();
+        self.folder_moves.disk_changed(|moved| moved.to.is_dir());
         let Some(folder) = &self.folder else {
             self.notes.clear();
             self.mentions.clear();
@@ -2051,7 +2217,7 @@ impl Sessions {
             return;
         };
         if !folder.is_dir() {
-            self.folder_error = Some(super::missing_folder("Session", folder));
+            self.folder_error = Some(FolderFault::Missing(folder.clone()));
             return;
         }
         self.folder_error = None;
@@ -2070,7 +2236,7 @@ impl Sessions {
         self.last_time = None;
         self.carries.scanned();
         if let Err(error) = super::remember_notes(folder, &self.notes) {
-            self.folder_error = Some(error);
+            self.folder_error = Some(FolderFault::NotSaved(error));
         }
         self.unreadable = unreadable_notes(folder);
         self.templates = list_templates(folder);
@@ -2102,9 +2268,7 @@ impl Sessions {
     }
 
     pub fn folder_missing(&self) -> bool {
-        self.folder_error
-            .as_ref()
-            .is_some_and(|error| error.starts_with("Session folder not found"))
+        matches!(self.folder_error, Some(FolderFault::Missing(_)))
             || self.folder.as_ref().is_some_and(|folder| !folder.is_dir())
     }
 
@@ -7003,8 +7167,11 @@ impl Sessions {
                 .accesskit_node_builder(response.id, |node| node.set_description(reason));
             response.clone().on_disabled_hover_text(reason);
         }
-        if response.changed() {
-            self.folder_notice = None;
+        if response.changed()
+            && let Some(link) = self.folder_link()
+        {
+            // The DM's next edit of the folder ends its move's result (`kept::FolderMoved`).
+            self.folder_moves.owner_changed(&link);
         }
         if let Some(folder) = &self.folder {
             design::help(ui, &format!("Now: {}", folder.display()));
@@ -7018,10 +7185,6 @@ impl Sessions {
     /// The Session folder form's title line and save row: its state word, Discard, the reason
     /// and Save, at the form's right edge. `details_open`: the campaign details form, with its
     /// own primary save, is in view.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     pub fn folder_save_row(
         &mut self,
         ui: &mut egui::Ui,
@@ -7041,13 +7204,9 @@ impl Sessions {
             },
         );
         let changed = super::resolve(&campaign, &self.folder_text).ok() != self.folder.clone();
-        // `folder_messages` scanned the folder this frame, before the pane's body.
-        let files = self
-            .folder_files
-            .take()
-            .unwrap_or_else(|| self.scan_folder_files());
-        let move_counts = self.folder_move_counts(book, &files).unwrap_or_default();
-        let has_files = !move_counts.is_empty();
+        // The listing the footer read this frame (`folder_scan`, kept until the next scan).
+        let files = self.folder_files();
+        let has_files = self.folder_move_counts(book, &files).is_some();
         let blocked = if self.live.is_some() {
             Some("Stop the recording first.")
         } else if self.job.is_some() {
@@ -7124,24 +7283,50 @@ impl Sessions {
             self.flush();
             // The save just now can fail. Those words stay on screen, as `select` keeps them.
             if self.draft.as_ref().is_some_and(Draft::needs_attention) {
-                self.folder_error = Some(
-                    "Not changed. Your note could not be saved. Choose what to do with it first."
-                        .to_owned(),
-                );
+                self.folder_error = Some(FolderFault::NoteNotSaved);
                 return;
             }
+            // Save folder was offered from the listing drawn, which can be older than the disk:
+            // the act reads the folder now, and files that came since stop it.
+            if !has_files {
+                self.end_folder_listing();
+                match self.folder_files() {
+                    Err(error) => {
+                        self.folder_error = Some(FolderFault::CannotRead(error));
+                        return;
+                    }
+                    Ok(Some(now)) if now.files > 0 => {
+                        self.folder_error = Some(FolderFault::FilesCame);
+                        return;
+                    }
+                    Ok(_) => {}
+                }
+            }
+            let link = kept::FolderLink {
+                campaign: campaign.path.clone(),
+            };
+            // A save or a failed save of the folder ends the last move's result.
+            self.folder_moves.owner_changed(&link);
+            let events = book.events.len();
             let saved = if move_files {
+                // What it moved, listed at the act: never the listing drawn.
                 super::move_storage(&campaign, &self.folder_text)
+                    .map(|(folder, moved)| (folder, storage_words(moved, events)))
             } else {
-                save_folder(&campaign, &self.folder_text)
+                save_folder(&campaign, &self.folder_text).map(|folder| (folder, None))
             };
             match saved {
-                Ok(folder) => {
+                Ok((folder, moved)) => {
+                    if let Some(counts) = moved {
+                        self.folder_moves.record(kept::FolderMoved {
+                            link,
+                            counts,
+                            typed: self.folder_text.clone(),
+                            to: folder.clone(),
+                        });
+                    }
                     self.folder = Some(folder);
                     self.folder_error = None;
-                    self.folder_notice =
-                        move_files.then(|| format!("Moved {move_counts} to {}.", self.folder_text));
-                    self.folder_notice_order = Some(design::ResultOrder::issue());
                     self.manifest_changed = Some(campaign.path.clone());
                     self.draft = None;
                     self.template_draft = None;
@@ -7150,89 +7335,114 @@ impl Sessions {
                     self.select(self.notes.first().map(|note| note.id));
                 }
                 Err(error) => {
-                    self.folder_error = Some(error);
-                    self.folder_notice = None;
+                    self.folder_error = Some(FolderFault::NotSaved(error));
                 }
             }
         }
     }
 
-    /// The current folder's files, or why they could not be listed. One scan.
-    fn scan_folder_files(&self) -> FolderFiles {
-        self.folder
-            .as_ref()
-            .map(|folder| super::storage_files(folder))
-            .transpose()
-    }
-
-    /// What a Move files and save would move from the current folder, in words, when the typed
-    /// folder differs and the current one keeps files. The form's warning and its result say it.
-    fn folder_move_counts(&self, book: &Book, files: &FolderFiles) -> Option<String> {
-        let campaign = self.campaign.as_ref()?;
-        let changed = super::resolve(campaign, &self.folder_text).ok() != self.folder.clone();
-        let folder = self.folder.as_ref().filter(|_| changed)?;
-        let files = files.as_ref().ok()?.as_ref()?;
-        if files.is_empty() {
-            return None;
-        }
-        let notes = self.notes.len();
-        let templates = files
-            .iter()
-            .filter(|path| path.starts_with(folder.join(super::TEMPLATES)))
-            .count();
-        let recordings = files
-            .iter()
-            .filter(|path| path.extension().is_some_and(|ext| ext == "wav"))
-            .count();
-        let mut counts = vec![
-            design::count(notes, "note", "notes"),
-            design::count(book.events.len(), "event", "events"),
-            design::count(templates, "template", "templates"),
-            design::count(recordings, "recording", "recordings"),
-        ]
-        .into_iter()
-        .filter(|count| !count.is_empty())
-        .collect::<Vec<_>>();
-        let last = counts.pop().unwrap_or_default();
-        let counts = if counts.is_empty() {
-            last
-        } else {
-            format!("{} and {last}", counts.join(", "))
-        };
-        Some(if counts.is_empty() {
-            "Timeline.md".to_owned()
-        } else {
-            counts
+    /// The Session folder form's owner in the results store: the open campaign.
+    fn folder_link(&self) -> Option<kept::FolderLink> {
+        self.campaign.as_ref().map(|campaign| kept::FolderLink {
+            campaign: campaign.path.clone(),
         })
     }
 
-    /// Round 26 FN2, FN5: the Session folder form's messages, in the message footer of the pane
-    /// that holds the form, so a typed letter, a refusal or a result never moves its save row.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    /// The current folder's listing: kept for its folder (`folder_scan`) until `refresh` ends
+    /// it, so a frame with the form in view does not list the folder again.
+    fn folder_files(&mut self) -> FolderFiles {
+        let Some(folder) = &self.folder else {
+            return Ok(None);
+        };
+        if self
+            .folder_scan
+            .as_ref()
+            .is_none_or(|scan| &scan.folder != folder)
+        {
+            let listed = super::storage_files(folder)
+                .map(|files| Some(super::StorageCounts::of(folder, &files)));
+            self.folder_scan = Some(FolderScan {
+                folder: folder.clone(),
+                listed,
+            });
+        }
+        self.folder_scan
+            .as_ref()
+            .map_or(Ok(None), |scan| scan.listed.clone())
+    }
+
+    /// What a Move files and save would move from the current folder, in words, when the typed
+    /// folder differs and the listing drawn finds files. The form's warning says it; the move's
+    /// result says what `move_storage` moved (`storage_words`).
+    fn folder_move_counts(&self, book: &Book, files: &FolderFiles) -> Option<String> {
+        let campaign = self.campaign.as_ref()?;
+        let changed = super::resolve(campaign, &self.folder_text).ok() != self.folder.clone();
+        self.folder.as_ref().filter(|_| changed)?;
+        storage_words(*files.as_ref().ok()?.as_ref()?, book.events.len())
+    }
+
+    /// Round 26 FN2, FN5: the Session folder form's messages, for the footer of the pane that
+    /// holds the form (Campaign's Link and folder page), so a typed letter, a refusal or a
+    /// result never moves its save row: why the folder cannot be used or a write failed
+    /// (`FolderFault`), what Save without moving would hide, and the open campaign's move
+    /// result from its store. Nothing here can be pressed, so any pane's `Messages` takes them.
+    /// Call it before the body, with the pane's frame:
+    /// `sessions.folder_messages(&frame, &mut messages, &timeline)`. The folder's listing is
+    /// read once per disk scan (`folder_scan`).
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "the Link and folder page (package C) calls it when its footer moves to `Messages`; until then that page calls `folder_footer`"
+        )
     )]
-    pub fn folder_messages<'a>(&mut self, footer: &mut design::Footer<'a>, book: &Book) {
-        let files = self.scan_folder_files();
-        let counts = self.folder_move_counts(book, &files);
-        self.folder_files = Some(files);
-        if let Some(error) = self.folder_error.clone() {
-            footer.reason(error.clone(), move |ui| {
-                design::message(ui, Tone::Error, &error);
-            });
+    pub fn folder_messages<'f, A: 'static>(
+        &mut self,
+        frame: &'f PaneFrame,
+        messages: &mut Messages<'f, A>,
+        book: &Book,
+    ) {
+        let files = self.folder_files();
+        if let Some(fault) = &self.folder_error {
+            messages.outcome(FaultMessage::new(fault));
         }
-        if let Some(counts) = counts {
-            let words = format!(
-                "The current folder keeps {counts}. If you save without moving, Splat no longer shows these files."
-            );
-            footer.notice(words.clone(), move |ui| {
-                design::message(ui, Tone::Warning, &words);
-            });
+        if let Some(counts) = self.folder_move_counts(book, &files) {
+            messages.outcome(Notice::new(folder_keeps(&counts)));
         }
-        if let (Some(words), Some(order)) = (self.folder_notice.clone(), self.folder_notice_order) {
-            footer.result(order, words.clone(), false, move |ui| {
-                design::message(ui, Tone::Success, &words);
-            });
+        if let Some(shown) = self.folder_link().and_then(|link| {
+            self.folder_moves
+                .get(&link)
+                .map(|shown| shown.outcome(frame, |moved| folder_moved(moved).into()))
+        }) {
+            messages.kept(shown);
+        }
+    }
+
+    /// `folder_messages` for a footer that is not typed yet (`FolderFooter`): the same fault,
+    /// the same words, and the same store entry with its own order.
+    pub fn folder_footer(&mut self, book: &Book) -> FolderFooter {
+        let files = self.folder_files();
+        FolderFooter {
+            fault: self.folder_error.as_ref().map(|fault| {
+                let tone = match fault.severity() {
+                    Severity::NeedsFixing => Tone::Warning,
+                    Severity::CannotRead | Severity::NotSaved => Tone::Error,
+                };
+                (tone, String::from(fault.clone()))
+            }),
+            keeps: self
+                .folder_move_counts(book, &files)
+                .map(|counts| folder_keeps(&counts).as_str().to_owned()),
+            moved: self.folder_link().and_then(|link| {
+                self.folder_moves.get(&link).map(|shown| {
+                    shown.footer(|moved| {
+                        folder_moved::<design::outcome::NoPress>(moved)
+                            .words()
+                            .as_str()
+                            .to_owned()
+                    })
+                })
+            }),
         }
     }
 
@@ -7323,15 +7533,13 @@ impl Sessions {
             self.open_form();
         }
         if folder_missing {
-            // The only way out of this page, so it has the bordered recovery action.
-            if design::message_with_action(
-                ui,
-                Tone::Warning,
-                self.folder_error
-                    .as_deref()
-                    .unwrap_or("The session folder is not available."),
-                "Choose folder",
-            ) {
+            // The only way out of this page, so it has the bordered recovery action. The words
+            // are the fault's, as the Session folder form's footer says them.
+            let words = self.folder_error.as_ref().map_or_else(
+                || "The session folder is not available.".to_owned(),
+                |fault| String::from(fault.clone()),
+            );
+            if design::message_with_action(ui, Tone::Warning, &words, "Choose folder") {
                 self.wants_campaign_link = true;
             }
             return;
@@ -8636,5 +8844,231 @@ mod tests {
             );
             assert_eq!(sessions.played_session(), expected, "{case}");
         }
+    }
+
+    /// The Session folder form's messages, as another page's typed pane shows them
+    /// (`folder_messages`), drawn as the Link and folder page draws the form: the campaign
+    /// switch (`poll`), the save row, then the pane with the fields. A move's result is its
+    /// campaign's: A → B → A shows each campaign its own; a disk scan ends A's when its folder
+    /// is gone, and A's folder coming back does not bring it back; the DM's edit of the folder
+    /// ends B's only. The missing folder is a typed fault in a sentence (routing row 136).
+    #[test]
+    fn a_folder_move_result_is_its_campaigns_over_a_switch_and_a_lost_folder() {
+        use crate::design::outcome::NoPress;
+        use egui_kittest::kittest::Queryable;
+        let dirs = [
+            tempfile::tempdir().unwrap(),
+            tempfile::tempdir().unwrap(),
+            tempfile::tempdir().unwrap(),
+        ];
+        let [a, b, c] = [0, 1, 2].map(|at| {
+            let campaign = Campaign {
+                id: Uuid::from_u128(at + 1),
+                name: format!("Campaign {at}"),
+                path: dirs[at as usize].path().into(),
+                dndbeyond_campaign_id: None,
+                dndbeyond_campaign_name: None,
+            };
+            crate::content_workspace::CampaignDocument::new(&campaign)
+                .unwrap()
+                .save()
+                .unwrap();
+            let folder = super::super::open_folder(&campaign).unwrap();
+            if at == 2 {
+                // C keeps no session file yet: its form offers Save folder.
+                return campaign;
+            }
+            if at == 0 {
+                fs::create_dir_all(folder.join(super::super::TEMPLATES)).unwrap();
+                for name in ["One", "Two"] {
+                    fs::write(
+                        folder
+                            .join(super::super::TEMPLATES)
+                            .join(format!("{name}.md")),
+                        name,
+                    )
+                    .unwrap();
+                }
+            }
+            create_note(
+                &folder,
+                &NewNote {
+                    number: 1,
+                    title: "One",
+                    date: "2026-11-01",
+                    campaign: &campaign.name,
+                    template: "",
+                },
+            )
+            .unwrap();
+            campaign
+        });
+        type State = (Sessions, Book, Campaign);
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(900.0, 700.0))
+            .build_state(
+                |ctx, (sessions, book, campaign): &mut State| {
+                    sessions.poll(ctx, Some(campaign), book);
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        sessions.folder_save_row(ui, book, None, false);
+                        let frame = PaneFrame::new(ui);
+                        let mut messages =
+                            Messages::<NoPress>::new(&frame, ("folder_test", campaign.id), 600.0);
+                        sessions.folder_messages(&frame, &mut messages, book);
+                        let _ = messages.pane(ui, design::Body::Content, |ui| {
+                            sessions.folder_view(ui, None);
+                        });
+                    });
+                },
+                (Sessions::default(), Book::default(), a.clone()),
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let shows = |harness: &egui_kittest::Harness<'_, State>, words: &str| {
+            harness.query_all_by_label_contains(words).next().is_some()
+        };
+        let move_to = |harness: &mut egui_kittest::Harness<'_, State>, typed: &str| {
+            harness.state_mut().0.folder_text = typed.to_owned();
+            harness.run_steps(2);
+            harness.get_by_label(MOVE_FILES).click();
+            harness.run_steps(3);
+        };
+        let switch = |harness: &mut egui_kittest::Harness<'_, State>, to: &Campaign| {
+            harness.state_mut().2 = to.clone();
+            harness.run_steps(3);
+        };
+        const A_MOVED: &str = "Moved 1 note and 1 template to Moved A.";
+        const B_MOVED: &str = "Moved 1 note to Moved B.";
+        const MISSING: &str = "Splat cannot find the session folder ";
+        // Review of PR 346, item 1: the form shows two templates; one is deleted outside Splat
+        // before the next scan, and the move's result says what it moved, not what was drawn.
+        harness.state_mut().0.folder_text = "Moved A".to_owned();
+        harness.run_steps(2);
+        assert!(shows(
+            &harness,
+            "The current folder keeps 1 note and 2 templates."
+        ));
+        let templates_a = a.path.join("Sessions").join(super::super::TEMPLATES);
+        fs::remove_file(templates_a.join("Two.md")).unwrap();
+        move_to(&mut harness, "Moved A");
+        assert!(shows(&harness, A_MOVED), "the move in A says what it moved");
+        switch(&mut harness, &b);
+        assert!(
+            !shows(&harness, A_MOVED),
+            "the page of B does not show the result of A"
+        );
+        move_to(&mut harness, "Moved B");
+        assert!(shows(&harness, B_MOVED), "the move in B says what it moved");
+        switch(&mut harness, &a);
+        assert!(
+            shows(&harness, A_MOVED) && !shows(&harness, B_MOVED),
+            "the result of A came back with A, and the result of B stays with B"
+        );
+        // The folder of A is moved away outside Splat: the disk scan ends the result of A and
+        // says why; the folder back, the next scan ends the fault, and the result stays ended.
+        let moved_a = a.path.join("Moved A");
+        let aside = a.path.join("Kept aside");
+        let scan = |harness: &mut egui_kittest::Harness<'_, State>| {
+            harness.state_mut().0.simulate_folder_scan();
+            harness.run_steps(3);
+        };
+        fs::rename(&moved_a, &aside).unwrap();
+        scan(&mut harness);
+        assert!(
+            !shows(&harness, A_MOVED),
+            "the result of A ends with its folder"
+        );
+        assert!(
+            shows(&harness, MISSING) && shows(&harness, "It may have been moved or renamed."),
+            "the missing folder is a sentence"
+        );
+        assert!(harness.state().0.folder_missing());
+        fs::rename(&aside, &moved_a).unwrap();
+        scan(&mut harness);
+        assert!(
+            !shows(&harness, MISSING) && !shows(&harness, A_MOVED),
+            "the folder is back by the scan, and the ended result stays ended"
+        );
+        // Gone again, then a switch to B and back: the result of B stays, and the folder of A,
+        // back before the return, opens with no fault.
+        fs::rename(&moved_a, &aside).unwrap();
+        scan(&mut harness);
+        switch(&mut harness, &b);
+        assert!(
+            shows(&harness, B_MOVED),
+            "the result of B stays over the lost folder of A"
+        );
+        fs::rename(&aside, &moved_a).unwrap();
+        switch(&mut harness, &a);
+        assert!(
+            !shows(&harness, MISSING) && !shows(&harness, A_MOVED),
+            "the folder is back by the switch, and the ended result stays ended"
+        );
+        // The edit of the folder of B ends the result of B, and only that one.
+        move_to(&mut harness, "Moved A2");
+        const A2_MOVED: &str = "Moved 1 note and 1 template to Moved A2.";
+        assert!(shows(&harness, A2_MOVED));
+        switch(&mut harness, &b);
+        harness.get_by_label("Folder").click();
+        harness.run_steps(2);
+        harness.get_by_label("Folder").type_text("x");
+        harness.run_steps(3);
+        assert!(
+            !shows(&harness, B_MOVED),
+            "an edit of the folder ends its result"
+        );
+        switch(&mut harness, &a);
+        assert!(
+            shows(&harness, A2_MOVED),
+            "the edit in B leaves the result of A"
+        );
+        // Review of PR 346, item 2 and the question: C keeps no file, and the New session form
+        // is open with unsent words. Save folder was drawn from the listing; a template that
+        // came outside Splat stops it at the press, and the folder setting stays. A scan while
+        // the form is open ends the listing, and the next draw counts what is on the disk.
+        switch(&mut harness, &c);
+        {
+            let sessions = &mut harness.state_mut().0;
+            sessions.open_form();
+            sessions.form.as_mut().unwrap().title = "Unsent words".to_owned();
+            sessions.folder_text = "Elsewhere".to_owned();
+        }
+        // The page's own list of note paths is the one file; with it gone, a scan while the
+        // form is open ends the listing (no refresh writes it again), and Save folder shows.
+        fs::remove_file(c.path.join("Sessions").join(super::super::NOTE_PATHS)).unwrap();
+        harness.state_mut().0.simulate_folder_scan();
+        harness.run_steps(2);
+        assert!(shows(&harness, "Save folder") && !shows(&harness, MOVE_FILES));
+        let templates_c = c.path.join("Sessions").join(super::super::TEMPLATES);
+        fs::create_dir_all(&templates_c).unwrap();
+        fs::write(templates_c.join("Late.md"), "Late").unwrap();
+        harness.get_by_label("Save folder").click();
+        harness.run_steps(3);
+        assert!(
+            shows(&harness, "The current folder now keeps session files."),
+            "Save folder reads the disk at the press"
+        );
+        assert_eq!(super::super::folder_setting(&c).unwrap(), DEFAULT_FOLDER);
+        assert!(
+            shows(&harness, MOVE_FILES) && shows(&harness, "The current folder keeps 1 template."),
+            "after the refused press the form shows what is on the disk"
+        );
+        fs::write(templates_c.join("Later.md"), "Later").unwrap();
+        harness.state_mut().0.simulate_folder_scan();
+        harness.run_steps(3);
+        assert!(
+            shows(&harness, "The current folder keeps 2 templates."),
+            "a scan with the New session form open ends the listing"
+        );
+        assert_eq!(
+            harness
+                .state()
+                .0
+                .form
+                .as_ref()
+                .map(|form| form.title.as_str()),
+            Some("Unsent words"),
+            "the form keeps its unsent words"
+        );
     }
 }

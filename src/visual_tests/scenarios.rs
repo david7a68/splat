@@ -13244,19 +13244,51 @@ pub mod session_notes {
         });
         d.replace_text_in("Folder", "30 Sessions");
         d.expect("Save without moving");
-        // Review of PR 274, item 3: the footer and the form share one scan of the current folder,
-        // so an unchanged frame lists its files at most once, as before the footer. The count is
-        // kept inside `storage_files`.
+        // Review of PR 274, item 3: the footer and the form share one listing of the current
+        // folder. Wave 2 d (S): the listing is kept until the next disk scan (`refresh`), so
+        // unchanged frames list the folder at most once per scan, not once a frame. The counts
+        // are kept inside `storage_files` and `refresh`.
         let scans = || crate::sessions::storage_scans();
-        let (passes, before) = (d.passes(), scans());
+        let ends = || crate::sessions::page::folder_scan_ends();
+        let (passes, before, ended) = (d.passes(), scans(), ends());
         for size in [SMALL, DEFAULT, LARGE] {
             d.at_size(size, |_| ());
         }
-        let (frames, done) = (d.passes() - passes, scans() - before);
+        let (frames, done, ended) = (d.passes() - passes, scans() - before, ends() - ended);
         d.observe(
             "review-274-3",
-            frames > 0 && done > 0 && done <= frames,
-            format!("{frames} unchanged frames scanned the session folder {done} times"),
+            frames > ended + 1 && done <= ended + 1,
+            format!(
+                "{frames} unchanged frames listed the session folder {done} times, with {ended} disk scans"
+            ),
+        );
+        // Review of PR 346, item 3: the kept listing ends at the disk scan. A template added
+        // outside Splat shows in the warning after the next scan, and leaves after the one
+        // after its removal.
+        const KEEPS_NOW: &str =
+            "The current folder keeps 1 note, 4 events, 2 templates and 1 recording.";
+        const KEEPS_ADDED: &str =
+            "The current folder keeps 1 note, 4 events, 3 templates and 1 recording.";
+        let campaign = d.app_mut().campaigns.active_campaign().unwrap();
+        let added = crate::sessions::folder(&campaign)
+            .unwrap()
+            .join("Templates")
+            .join("Added outside.md");
+        let before_scan = d.visible_text(KEEPS_NOW);
+        std::fs::write(&added, "Added outside Splat").unwrap();
+        d.app_mut().sessions.simulate_folder_scan();
+        d.settle();
+        let after_scan = d.visible_text(KEEPS_ADDED);
+        std::fs::remove_file(&added).unwrap();
+        d.app_mut().sessions.simulate_folder_scan();
+        d.settle();
+        d.observe(
+            "review-346-3",
+            before_scan && after_scan && d.visible_text(KEEPS_NOW),
+            format!(
+                "The warning follows a template added and removed outside Splat at each scan: \
+                 before {before_scan}, added {after_scan}"
+            ),
         );
         // FT4 (round 16): with no run and no other form, moving the files is the one primary,
         // as Move runs and save is on Rules and runs.
