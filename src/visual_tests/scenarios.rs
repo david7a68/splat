@@ -22562,16 +22562,24 @@ pub mod session_plan {
             ),
         );
         // The message part places its Undo: beside the words when it fits, else under them,
-        // from their first letter (proofs-M2). Here: it is offered, in view, at the words.
+        // from their first letter (proofs-M2). Here: it is offered, in view, at the words. The
+        // header's Undo names the same step with the same words (FH4), so the message's is the
+        // lower of the two.
+        let message_undo = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .filter(|node| node.name == SAVED_HP_UNDO && node.in_view())
+                .map(|node| node.rect)
+                .max_by(|a, b| a.top().total_cmp(&b.top()))
+        };
         d.observe(
             "iter-16-B-FT2-message-undo",
-            d.in_view(SAVED_HP_UNDO)
-                && d.place_of(SAVED_HP_UNDO)
-                    .zip(d.place_of(SAVED_HP_SET))
-                    .is_some_and(|(undo, words)| {
-                        (undo.center().y - words.center().y).abs() < crate::design::S
-                            || undo.top() >= words.bottom() - 0.5
-                    }),
+            message_undo(d)
+                .zip(d.place_of(SAVED_HP_SET))
+                .is_some_and(|(undo, words)| {
+                    (undo.center().y - words.center().y).abs() < crate::design::S
+                        || undo.top() >= words.bottom() - 0.5
+                }),
             "The result offers its Undo, at its words",
         );
         d.observe(
@@ -22613,21 +22621,34 @@ pub mod session_plan {
             "iter-26-R-FI2-setup-undo-b",
             d.field_text(&field).as_deref() != Some("12")
                 && d.visible_text(SAVED_HP_SET)
-                && d.in_view(SAVED_HP_UNDO)
+                && d.nodes()
+                    .iter()
+                    .filter(|node| node.name == SAVED_HP_UNDO && node.in_view())
+                    .count()
+                    == 2
                 && kestrel(d).contains("HP 11/41")
                 && row_tops(d) == rows_result,
             "Undo of B gives back A's result and its Undo, with A's HP",
         );
-        // AT1: this Undo has the shape of every Undo after a message: quiet, with its icon.
-        // Without keyboard focus (the press can leave the focus on the line's Undo).
-        d.clear_focus();
-        let saved_hp_undo = undo_shape(d, SAVED_HP_UNDO);
+        // AT1: this Undo has the shape of every Undo after a message: quiet, with its icon (the
+        // message's own Undo, the lower of the two with these words).
+        let saved_hp_undo = message_undo(d).and_then(|target| {
+            let frame = d.control_frame_at(target)?;
+            Some((
+                frame.stroke,
+                frame.fill,
+                target.height().round() as i32,
+                d.painted_in(target).contains(crate::design::icons::UNDO),
+            ))
+        });
         d.observe(
             "iter-17-B-AT1",
             saved_hp_undo.is_some_and(|(stroke, _, _, icon)| stroke == egui::Stroke::NONE && icon),
             format!("The saved-HP result's Undo is quiet with the Undo icon: {saved_hp_undo:?}"),
         );
-        d.click(SAVED_HP_UNDO);
+        // The message's own Undo (its press goes to the step's store by its ticket).
+        let target = message_undo(d).expect("the message's Undo");
+        d.click_rect(target, "Click: the message's Undo: use saved HP");
         d.observe(
             "iter-16-B-FT2-undo",
             kestrel(d).contains("HP 41/41"),
