@@ -2237,7 +2237,9 @@ struct LogReveal {
     id: Uuid,
     /// The line as written, without the list mark.
     line: String,
-    /// The line as the entry's body holds it, its links written for the Markdown reader.
+    /// The end of the line as the entry's body holds it: from its last link's target on, as
+    /// the Markdown reader's form writes it (`](<splat-note:The Arena>).`), or the whole line.
+    /// A link's words can be a session's name there, so only its target is compared.
     read: String,
     /// The pass in which the reader last drew while this waited; `None` before the first.
     drawn: Option<u64>,
@@ -2260,7 +2262,11 @@ impl LogReveal {
             campaign,
             id,
             line: line.to_owned(),
-            read: with_links(line, &HashMap::new()),
+            read: {
+                let read = with_links(line, &HashMap::new());
+                read.rfind("](")
+                    .map_or(read.clone(), |at| read[at..].to_owned())
+            },
             drawn: None,
         }
     }
@@ -2270,7 +2276,7 @@ impl LogReveal {
         self.drawn = Some(pass);
         if missed || campaign != Some(self.campaign) || id != self.id {
             RevealStep::Drop
-        } else if body.contains(&self.read) {
+        } else if last_log_line(body).is_some_and(|last| last.trim_end().ends_with(&self.read)) {
             RevealStep::Show
         } else {
             RevealStep::Wait
