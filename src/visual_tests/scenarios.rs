@@ -14788,11 +14788,25 @@ pub mod session_recording {
                 .map(|y| y / scale)
             });
             let gap = words.zip(top).map(|(words, top)| words.top() - top);
+            // And its last row of choices ends `XS` (the inner margin) above the window's bottom.
+            let bottom = words.and_then(|words| {
+                d.nodes()
+                    .into_iter()
+                    .filter(|node| node.role == egui::accesskit::Role::Button)
+                    .map(|node| node.rect * (1.0 / scale))
+                    .filter(|rect| rect.top() > words.top())
+                    .map(|rect| rect.bottom())
+                    .reduce(f32::max)
+            });
+            let end = bottom.map(|bottom| d.window_size().1 - bottom);
             d.observe(
                 "iter-28-S-banner-height",
                 // The rule's line is its 1 px rect's centre: the margin's top is half a pixel below it.
-                gap.is_some_and(|gap| (gap - (crate::design::XS - 0.5)).abs() <= 0.5),
-                format!("The banner's top line is XS above its first words: {gap:?} (top {top:?}, words {words:?})"),
+                gap.is_some_and(|gap| (gap - (crate::design::XS - 0.5)).abs() <= 0.5)
+                    && end.is_some_and(|end| (end - crate::design::XS).abs() <= 1.0),
+                format!(
+                    "The banner is XS above its first words and XS below its last choices: {gap:?}, {end:?} (top {top:?}, words {words:?}, bottom {bottom:?})"
+                ),
             );
         });
         let tabs_stopped = recording_tabs(d);
