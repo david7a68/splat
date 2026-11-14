@@ -1774,16 +1774,16 @@ member of a shared-roll block. Keep tie details in Arrivals and Log, outside the
 
 ### Saving and closing
 
-Recovery copies keep the encounter name and preserve the other file. Start their second line with `Copy 2`, before `Played last`, round and state. Only file names keep the UTC save-time suffix.
+Recovery copies keep the encounter name and preserve the other file. Start their second line with `Copy 2`, before `Opened last`, round and state. Only file names keep the UTC save-time suffix.
 The last closed run owns primary Resume, unless the encounter's editor holds unsaved changes (then `Save
-encounter` is primary). `Played last` follows a copy number; Changed on disk marks a preserved disk version, after the copy number when present. Keep last-change wording from the close dialog. Saved rows use relative time today and yesterday,
+encounter` is primary). `Opened last` (the run closed last, also in Setup) follows a copy number; Changed on disk marks a preserved disk version, after the copy number when present. Keep last-change wording from the close dialog. Saved rows use relative time today and yesterday,
 then a short UTC date. Edit stays for recovery copies whose encounter exists; reserve an empty slot otherwise.
 Measure actions before assigning paused-row text width. Saved time follows turn without a full stop. State
 words come from one function: Setup, Setup · Paused, Round 2, Round 2 · Paused, Ended · Round 2. An open run
 with other unfinished copies names its copy beside Saved and in rail hover.
 
 A disconnected run has Connect to sync on its header only; blocked footer Sync party uses that cause on hover.
-End encounter… shortens to End… before it moves into a menu. Keep End… visible while it fits, including on recovery copies. Hover and accessibility keep End encounter…. Keys keeps its word beside Lookup, Notes and a wide panel. With Keys on, the panel's title is `Keyboard commands`, and the
+End encounter… shortens to End… before it moves into a menu. Keep End… visible while it fits, including on recovery copies. Hover and accessibility keep End encounter…. Keys keeps its word beside Lookup, Notes and a wide panel. With Keys on, the panel's title is `This fight · Keys`, as the other fight panels name theirs, and the
 list has no label of its own. Saved and Undo
 align with the roster's right edge. The footer uses error status when saving stops. Ended runs put short
 conflict and pending-change counts below blocked Close after sync at the panel's right edge, with an `L` gap
@@ -1809,7 +1809,7 @@ labels (`Undo: 2 loot rolls`), with the full action in hover and its accessible 
 secondary `Continue fight` on its own line under Read-only, blocked with `Close the open run first.` while another
 run is open. Continue fight is offered only for the fight that was played last (`README.md`, Running an encounter
 as DM). For any other ended fight the control is absent, and one muted `Small` sentence stands in its place and says
-why: `A later fight or rest was played. Start a new run to play this one again.` It is a sentence and not a blocked
+why: `A later fight or rest was played, so this fight cannot go on. Start a new run to play it again.` It is a sentence and not a blocked
 button, because no step in this view makes the control work. In the ended header the sentence wraps to at most
 `15 × L` wide, so Close run and the title keep their places; on the two-line header it follows Undo on the second
 line. In History it is the line under Read-only, `S` below it and `M` above `FINAL STATE`. Neither is modal, and Undo names the step: `Undo: continue fight`. After Continue fight, the

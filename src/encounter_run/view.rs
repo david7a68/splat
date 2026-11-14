@@ -339,6 +339,13 @@ fn arrival_add_word(group: &super::RunGroup) -> String {
     }
 }
 
+/// FL4: the line under a pending sync block in the ended view.
+fn pending_words(name: &str) -> String {
+    format!(
+        "{name}’s changes have not reached D&D Beyond yet. Splat tries again by itself. To close now, stop sync for {name}."
+    )
+}
+
 pub(super) fn sync_status(state: SyncState) -> Status<'static> {
     let s = colors().sync;
     match state {
@@ -2755,12 +2762,22 @@ impl Run {
             return;
         }
         design::heading(ui, design::Heading::Label("D&D Beyond sync"));
+        // FL4: `Choose which values to keep` only when a block offers values to choose.
+        let any_conflict = names.iter().any(|(index, _)| {
+            self.syncs
+                .get(index)
+                .is_some_and(|sync| sync.state() == SyncState::Conflict)
+        });
         ui.add(
             egui::Label::new(
                 Type::Small
                     .rich(
                         ui,
-                        "Splat and D&D Beyond differ. Choose which values to keep.",
+                        if any_conflict {
+                            "Splat and D&D Beyond differ. Choose which values to keep."
+                        } else {
+                            "Splat and D&D Beyond differ."
+                        },
                     )
                     .color(colors().muted),
             )
@@ -2783,6 +2800,17 @@ impl Run {
                         &format!("{} {}", status.icon, status.word),
                         status.color,
                     );
+                    if sync.state() == SyncState::Pending {
+                        // FL4: say what waits, that it needs no step, and the way to close now.
+                        ui.add(
+                            egui::Label::new(
+                                Type::Small
+                                    .rich(ui, &pending_words(&name))
+                                    .color(colors().muted),
+                            )
+                            .wrap(),
+                        );
+                    }
                 }
                 if Action::quiet(&format!("Stop sync for {name}"))
                     .density(Density::Read)
@@ -2872,8 +2900,8 @@ impl Run {
             Panel::Log => "This fight · Log",
             Panel::Encounter => "This fight · Prep",
             Panel::Groups => "This fight · Arrivals",
-            // FE14 (iter-27-R): the title names what the panel shows.
-            Panel::Keys => "Keyboard commands",
+            // FE14: the title names what the panel shows, in the form of the other fight panels.
+            Panel::Keys => "This fight · Keys",
             _ => "This fight",
         }
     }
@@ -3553,7 +3581,7 @@ impl Run {
                 if heading == "For one encounter" && !list.is_empty() {
                     design::help(
                         ui,
-                        "This run was saved before groups had an encounter, so all groups show.",
+                        "This run does not say which encounter it came from, so the groups of every encounter show.",
                     );
                 }
                 for group in list {
@@ -8008,7 +8036,28 @@ impl RowLayout {
             add_parts(&[(&*format!("as {name}"), c.muted)], 0.0);
         }
         let mut bonus_start = None;
-        if let Some(bonuses) = &w.bonuses {
+        if let Some(bonuses) = &w.bonuses
+            && bonus_fit == BonusFit::None
+            && !bonuses.is_empty()
+        {
+            // FJ3: with no change shown, `N more` would follow another kind (a condition or
+            // the side) and read as more of it. The count names its own kind and is the link.
+            condition_spans.push((
+                "Run changes".into(),
+                add_parts(
+                    &[(
+                        &*format!(
+                            "{}\u{a0}{}",
+                            icons::CHANGED,
+                            design::count(bonuses.len(), "change", "changes")
+                        )
+                        .replace(' ', "\u{a0}"),
+                        c.participant.changed,
+                    )],
+                    0.0,
+                ),
+            ));
+        } else if let Some(bonuses) = &w.bonuses {
             add_parts(
                 &[(
                     &*format!("{}\u{a0}Changed", icons::CHANGED),
@@ -8027,20 +8076,13 @@ impl RowLayout {
                 );
                 bonus_start.get_or_insert(span.start);
             }
-            if !bonuses.is_empty()
-                && (bonus_fit == BonusFit::None
-                    || (bonus_fit == BonusFit::One && bonuses.len() > 1))
-            {
-                // FI10: a hidden count keeps its number.
-                let shown = match bonus_fit {
-                    BonusFit::One => 1,
-                    _ => 0,
-                };
+            if bonus_fit == BonusFit::One && bonuses.len() > 1 {
+                // FI10: a hidden count keeps its number, after a shown change of its kind.
                 condition_spans.push((
                     "Run changes".into(),
                     add_parts(
                         &[(
-                            &*design::count(bonuses.len() - shown, "more", "more")
+                            &*design::count(bonuses.len() - 1, "more", "more")
                                 .replace(' ', "\u{a0}"),
                             c.participant.changed,
                         )],
@@ -8310,6 +8352,15 @@ impl RowLayout {
     }
 }
 
+/// The y of a link's underline in its galley: 2 px below the baseline of the link's first
+/// letter, as a reader link has it.
+fn link_underline_y(galley: &egui::Galley, at: usize) -> Option<f32> {
+    let cursor = galley.layout_from_cursor(egui::text::CCursor::new(at));
+    let row = galley.rows.get(cursor.row)?;
+    let glyph = row.glyphs.get(cursor.column)?;
+    Some(row.pos.y + glyph.pos.y + design::HAIRLINE_WIDTH * 2.0)
+}
+
 /// Each official condition on a row opens its rule, beside the run. Returns the entry the
 /// DM asked for. Words the DM typed for another effect have no rule to open.
 fn condition_links(
@@ -8338,12 +8389,21 @@ fn condition_links(
         if entry.is_none() && !custom {
             continue;
         }
-        // A count's link is its word `more`; a long effect's span is already its last word.
-        let start = galley.pos_from_cursor(egui::text::CCursor::new(if changes || conditions {
-            span.end.saturating_sub(4)
+        // A count's link is its last word (`more`, or `changes` with no change shown); a long
+        // effect's span is already its last word.
+        let link_start = if changes || conditions {
+            let words: String = galley
+                .text()
+                .chars()
+                .skip(span.start)
+                .take(span.len())
+                .collect();
+            let last = words.rsplit([' ', '\u{a0}']).next().unwrap_or(&words);
+            span.end.saturating_sub(last.chars().count())
         } else {
             span.start
-        }));
+        };
+        let start = galley.pos_from_cursor(egui::text::CCursor::new(link_start));
         let end = galley.pos_from_cursor(egui::text::CCursor::new(span.end));
         if start.top() != end.top() {
             continue;
@@ -8375,9 +8435,13 @@ fn condition_links(
         response.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Link, ui.is_enabled(), &name)
         });
+        // FL9: 2 px below the words' baseline, as reader links do; at the row's bottom the line
+        // touched the next row's turn stroke.
+        let underline = link_underline_y(galley, link_start)
+            .map_or(word.bottom(), |y| ui.painter().round_to_pixel_center(origin.y + y));
         ui.painter().hline(
             word.x_range(),
-            word.bottom(),
+            underline,
             Stroke::new(
                 1.0,
                 if response.hovered() {
@@ -10163,6 +10227,15 @@ mod tests {
                         line.text()
                     );
                     assert!(target.width() >= design::XL);
+                    // iter-28-R FL9: the link's underline keeps 2 px from its line's bottom, so
+                    // the turn stroke of the row below never meets it.
+                    let underline = link_underline_y(line, name.start).expect("Prone's underline");
+                    let row = &line.rows[0];
+                    assert!(
+                        underline <= row.pos.y + row.size.y - 2.0,
+                        "iter-28-R-FL9: underline {underline}, line bottom {}",
+                        row.pos.y + row.size.y
+                    );
                 }
                 // Through `2`, `last round` and `time is up`, the same words show at every width
                 // and the word after the slot keeps its line. iter-27-R FK2 changes this on
@@ -10593,7 +10666,8 @@ mod tests {
                 )
                 .unwrap();
                 let mut counted = 0;
-                for width in [180.0, 220.0, 260.0, 300.0, 340.0] {
+                let mut bare = 0;
+                for width in [140.0, 180.0, 220.0, 260.0, 300.0, 340.0] {
                     let layout = RowLayout::new(
                         ui,
                         width,
@@ -10612,21 +10686,36 @@ mod tests {
                     };
                     let text = layout.second_line.as_ref().unwrap().text().to_owned();
                     let words: String = text.chars().take(span.end).collect();
-                    let hidden = words
-                        .trim_end_matches("more")
-                        .trim_end_matches('\u{a0}')
+                    let kind = if words.ends_with("more") { "more" } else { "changes" };
+                    let before = words.trim_end_matches(kind).trim_end_matches('\u{a0}');
+                    let hidden = before
                         .rsplit([' ', '\u{a0}'])
                         .next()
                         .unwrap_or_default()
                         .to_owned();
                     assert!(
-                        words.ends_with("more")
+                        words.ends_with(kind)
                             && hidden.parse::<usize>().is_ok_and(|n| (1..=2).contains(&n)),
                         "iter-26-R-FI10 at {width}: {text}"
                     );
+                    // iter-28-R FJ3: `N more` follows a shown change, never the bare `Changed`
+                    // word (after it, the DM reads more of the conditions before it). With no
+                    // change shown, the link is `✎ N changes` and `Changed` is not written.
+                    let before = before[..before.len() - hidden.len()]
+                        .trim_end_matches([' ', '\u{a0}', '·']);
+                    if kind == "more" {
+                        assert!(!before.ends_with("Changed"), "iter-28-R-FJ3 at {width}: {text}");
+                    } else {
+                        assert!(
+                            before.ends_with(icons::CHANGED) && !text.contains("Changed"),
+                            "iter-28-R-FJ3 at {width}: {text}"
+                        );
+                        bare += 1;
+                    }
                     counted += 1;
                 }
                 assert!(counted > 0, "iter-26-R-FI10: some width hides a change");
+                assert!(bare > 0, "iter-28-R-FJ3: some width shows no change");
             });
         });
     }

@@ -677,9 +677,7 @@
     ["G3/far-action","16-history-not-the-last-fight","1920x1080","Button \"Close the run of Sunken Vault, Fled · Ended · Round 2 · Saved just now\"",1],
     ["G3/far-action","17-history-not-the-last-fight-beside-lookup","1920x1080","Button \"Close the run of Sunken Vault, Fled · Ended · Round 2 · Saved just now\"",1],
     ["G6/footer-far-below-body","14-undo-steps-unread","1920x1080","Button \"Ember Cultist, enemies, HP 33/33, Temp 0, AC 12, Initiative 9\"",1],
-    ["G6/footer-far-below-body","15-undo-steps-unread-beside-lookup","1920x1080","Button \"Ember Cultist, enemies, HP 33/33, Temp 0, AC 12, Initiative 9\"",1],
-    ["N4/quiet-action-line-start","09-fight-continued-beside-lookup","1200x800","Button \"Death saves\"",1],
-    ["N4/quiet-action-line-start","09-fight-continued-beside-lookup","960x640","Button \"Death saves\"",1]
+    ["G6/footer-far-below-body","15-undo-steps-unread-beside-lookup","1920x1080","Button \"Ember Cultist, enemies, HP 33/33, Temp 0, AC 12, Initiative 9\"",1]
   ],
   "run-edge-states": [
     ["G1b/pressed-control-moved","01-long-effect-text","960x640","Button \"Add\"",1],

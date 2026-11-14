@@ -1401,13 +1401,13 @@ impl Run {
         let death_saves = self.state.participants[self.selected].hp == Some(0);
         let open_side = ui
             .horizontal(|ui| {
-                let open = death_saves && {
-                    crate::design::gap(ui, crate::design::Gap::S);
-                    crate::design::Action::quiet("Death saves")
+                // FK7: a quiet action that starts the line; its word starts at the dock's edge.
+                let open = death_saves
+                    && crate::design::Action::quiet("Death saves")
                         .density(crate::design::Density::Read)
+                        .line_start()
                         .show(ui)
-                        .clicked()
-                };
+                        .clicked();
                 rolls::compact_tiles(ui, &chips);
                 open
             })

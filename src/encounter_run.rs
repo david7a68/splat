@@ -973,13 +973,13 @@ const REST_LOG: &str = "Party HP is full after the long rest.";
 const SAVED_HP_STEP: &str = "use saved HP";
 /// Why Continue fight is not offered: a fight or a rest has a later place in the order of play.
 pub(crate) const CONTINUE_LATER: &str =
-    "A later fight or rest was played. Start a new run to play this one again.";
+    "A later fight or rest was played, so this fight cannot go on. Start a new run to play it again.";
 /// Why Continue fight is not offered: the Timeline has no event for this fight.
 const CONTINUE_NO_EVENT: &str =
-    "This fight is not on the Timeline. Start a new run to play it again.";
+    "This fight is not on the Timeline, so it cannot go on. Start a new run to play it again.";
 /// The cause alone, for a fight whose encounter is deleted: no new run can start from it.
-const CONTINUE_LATER_GONE: &str = "A later fight or rest was played.";
-const CONTINUE_NO_EVENT_GONE: &str = "This fight is not on the Timeline.";
+const CONTINUE_LATER_GONE: &str = "A later fight or rest was played, so this fight cannot go on.";
+const CONTINUE_NO_EVENT_GONE: &str = "This fight is not on the Timeline, so it cannot go on.";
 /// The words for a `continue_blocked` reason. A reason's next step, `Start a new run …`, is
 /// true only while the fight's encounter exists; for a deleted encounter only the cause stays.
 pub(crate) fn continue_reason(reason: &'static str, encounter_exists: bool) -> &'static str {
@@ -991,12 +991,12 @@ pub(crate) fn continue_reason(reason: &'static str, encounter_exists: bool) -> &
 }
 /// Why Continue fight is not offered: the Timeline cannot say which fight was played last.
 const CONTINUE_NEEDS_TIMELINE: &str =
-    "Splat cannot read Timeline.md. Fix that on the Timeline page first.";
+    "Splat cannot read Timeline.md. Fix it on the Timeline page to continue this fight.";
 /// Why the act refused: `Timeline.md` changed on disk under an edit that is not saved yet, so
 /// Splat cannot be sure which fight was played last. It is never a run error, so it goes when
 /// the Timeline's next change works the rule out again.
 const CONTINUE_DISK_CHANGED: &str =
-    "Timeline.md changed on disk. Settle that on the Timeline page first.";
+    "Timeline.md changed on disk. Settle it on the Timeline page to continue this fight.";
 /// Every sentence that can stand where Continue fight would be, so the ended header keeps room
 /// for the widest and the tallest of them (X38).
 const CONTINUE_REASONS: [&str; 6] = [
@@ -4755,7 +4755,7 @@ impl Run {
                 .and_then(|id| identities.get(&id))
                 .is_some_and(|paths| paths.len() > 1);
             let at = if duplicate { 0 } else { after_copy(run) };
-            run.label.insert_str(at, "Played last · ");
+            run.label.insert_str(at, "Opened last · ");
         }
         let all_recent = runs
             .iter()
@@ -6854,7 +6854,7 @@ mod tests {
         let copies = Run::list(dir.path(), campaign).unwrap();
         assert_eq!(copies[0].id, Some(latest));
         assert_eq!(copies[0].encounter, "Ambush");
-        assert!(copies[0].label.starts_with("Copy 1 · Played last · "));
+        assert!(copies[0].label.starts_with("Copy 1 · Opened last · "));
         assert!(copies[0].label.contains(" · Last: "));
         let old = copies
             .iter()
@@ -9264,14 +9264,23 @@ mod tests {
         // FI1: a deleted encounter cannot start a new run, so its reason keeps only the cause.
         // While the encounter exists, and for a reason that names no new run, the words stay.
         for (reason, gone) in [
-            (CONTINUE_LATER, "A later fight or rest was played."),
-            (CONTINUE_NO_EVENT, "This fight is not on the Timeline."),
+            (CONTINUE_LATER, "A later fight or rest was played, so this fight cannot go on."),
+            (CONTINUE_NO_EVENT, "This fight is not on the Timeline, so it cannot go on."),
             (CONTINUE_NEEDS_TIMELINE, CONTINUE_NEEDS_TIMELINE),
             (CONTINUE_DISK_CHANGED, CONTINUE_DISK_CHANGED),
         ] {
             assert_eq!(continue_reason(reason, true), reason);
             assert_eq!(continue_reason(reason, false), gone);
             assert!(!continue_reason(reason, false).contains("new run"));
+            // FJ4, FK4 (iter-28-R): the sentence stands where Continue fight would be, so each
+            // form says that result; `first` with no object is not a result.
+            for shown in [continue_reason(reason, true), continue_reason(reason, false)] {
+                assert!(
+                    shown.contains("cannot go on") || shown.contains("to continue this fight"),
+                    "the reason says the fight cannot go on: {shown}"
+                );
+                assert!(!shown.ends_with("first."), "{shown}");
+            }
         }
         // The app starts again with A open, as A was when the app closed. A's ending comes
         // from its file, so Undo of it goes by the rule, as Continue fight does, though no

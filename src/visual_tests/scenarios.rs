@@ -9856,6 +9856,15 @@ pub mod run_sync_states {
                     .all(|(_, colors)| colors[0] == text && colors[2] != text),
             format!("Sync block headings, one form: {headings:?}"),
         );
+        // iter-28-R FL4: the pending block says what waits, that Splat tries again, and how to
+        // close now; the conflict block beside it keeps `Choose which values to keep`.
+        d.observe(
+            "iter-28-R-FL4",
+            d.has_containing("changes have not reached D&D Beyond yet")
+                && d.has_containing("Splat tries again by itself")
+                && d.has_containing("Choose which values to keep"),
+            "The pending sync block says what waits and what the DM can do",
+        );
         d.state("ended-with-conflict", Sizes::All);
         // FJ3: the closed Prep and Combat log sections start at one x.
         for size in [SMALL, DEFAULT, LARGE] {
@@ -18736,6 +18745,13 @@ pub mod encounter_owned_groups {
             d.has(&add_group(GROUP_ARENA)) && d.has_containing("For Arena Final"),
             "A run from an older save lists every group, and says who each is for",
         );
+        // iter-28-R FB11: the help speaks of the DM's run, not of Splat's versions.
+        d.observe(
+            "iter-28-R-FB11",
+            d.has_containing("This run does not say which encounter it came from")
+                && !d.has_containing("saved before groups"),
+            "The older save's help says what the run lacks, not when Splat changed",
+        );
         // iter-26-B FB10: a group whose encounter is gone says the Groups list's heading words,
         // short enough to sit beside its name as `For Arena Final` does.
         d.observe(
@@ -22452,14 +22468,16 @@ pub mod session_plan {
                 && !d.has_containing("Last: Party"),
             "Last: after a long rest says full HP, in lower case",
         );
-        // iter-25-S FK8: the run closed last says it in the DM's words.
+        // iter-25-S FK8, iter-28-R FM8: the run closed last says it in the DM's words, and the
+        // words are true for a run still in Setup (no turn was played in it).
         d.observe(
-            "iter-25-S-FK8",
+            "iter-28-R-FM8",
             d.nodes()
                 .iter()
-                .any(|node| node.name.contains("Played last"))
-                && !d.has_containing("Closed last"),
-            "The saved run's second line says Played last",
+                .any(|node| node.name.contains("Opened last"))
+                && !d.has_containing("Closed last")
+                && !d.has_containing("Played last"),
+            "The saved run's second line says Opened last",
         );
         d.state("saved-runs-history", Sizes::All);
         d.observe(
