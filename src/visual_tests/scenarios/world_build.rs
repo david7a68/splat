@@ -7396,6 +7396,35 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         dirty,
         "Choosing a replacement edits the draft; it does not save it",
     );
+    // iter-28-B FB9, FC13: the unfinished run's state ends the save row; it no longer stands
+    // between Discard and the reason that follows Discard.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let placed = d.at_size(size, |d| {
+            let mut reason = None;
+            let mut run = None;
+            d.each_painted_text(|text, clip| {
+                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                if !clip.intersects(rect) {
+                    return;
+                }
+                let words = text.galley.job.text.replace('\u{a0}', " ");
+                if words == "Save or discard to switch campaign." {
+                    reason = Some(rect);
+                }
+                if words.ends_with("Round 2 · Paused") {
+                    run = Some(rect);
+                }
+            });
+            Some((reason?, run?))
+        });
+        d.observe(
+            "iter-28-B-FB9",
+            placed.is_some_and(|(reason, run)| {
+                run.left() > reason.right() && (run.center().y - reason.center().y).abs() < 4.0
+            }),
+            format!("At {size:?}, the switch reason and the run state on the save row: {placed:?}"),
+        );
+    }
     d.state("deleted-package-entry-replaced", Sizes::All);
     // iter-23 FD10: on a replaced row, the separator before the change link has the same gap on
     // each side as the separators between the stats.
