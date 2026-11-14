@@ -5,6 +5,7 @@
 //! beside the view.
 use super::*;
 use crate::trackers::view::RULES_ROUTE;
+use egui::accesskit::Role;
 use std::fs;
 
 const EXAMPLE: &str = include_str!("../../../docs/design/world-examples/heralds-tournament.md");
@@ -168,6 +169,41 @@ fn same_edges(now: &[f32], before: &[f32]) -> bool {
     now.len() == LINES.len()
         && now.len() == before.len()
         && now.iter().zip(before).all(|(a, b)| (a - b).abs() <= 1.0)
+}
+
+/// FA2: each line of Seals keeps its actions with it. `Lose seal` starts at or after its line's
+/// first action, never left of the line's name, and a line whose `Lose seal` wrapped stands
+/// closer to it than the next line does. Returns the check, how many lines wrapped, and where.
+fn seal_actions_with_their_line(d: &Driver<'_>) -> (bool, usize, String) {
+    let places: Vec<_> = ["Party", "Old Guard", "Keyring", "Convicts"]
+        .iter()
+        .map(|line| {
+            (
+                d.place_of(&format!("Take seal: {line}")),
+                d.place_of(&format!("Lose seal: {line}")),
+            )
+        })
+        .collect();
+    let mut held = places.iter().all(|p| matches!(p, (Some(_), Some(_))));
+    let mut wrapped = 0;
+    for (at, place) in places.iter().enumerate() {
+        let (Some(take), Some(lose)) = place else {
+            continue;
+        };
+        held &= lose.left() >= take.left() - 0.5;
+        if lose.top() > take.bottom() {
+            wrapped += 1;
+            let inside = lose.top() - take.bottom();
+            if let Some((Some(next), _)) = places.get(at + 1) {
+                held &= next.top() - lose.bottom() > inside + 0.5;
+            }
+        }
+    }
+    let shown: Vec<_> = places
+        .iter()
+        .map(|(take, lose)| (take.map(|r| r.min), lose.map(|r| r.min)))
+        .collect();
+    (held, wrapped, format!("Take and Lose seal at {shown:?}"))
 }
 
 /// The panel's columns hold: every value ends at one edge, and the first actions either all
@@ -343,13 +379,18 @@ const PURSES: &str = "> trackers:\n>   purses:\n>     name: Purses\n>     pin: t
 /// first, as the panel's footer covers its lower rows. Are Ann's `Pay` and Bo's `Tip` wholly in
 /// view?
 fn purses_in_view(d: &mut Driver<'_>) -> bool {
+    in_view_after_scroll(d, &["Pay: Ann", "Tip: Bo"])
+}
+
+/// Scroll the panel until each named control of Purses is wholly in view.
+fn in_view_after_scroll(d: &mut Driver<'_>, names: &[&str]) -> bool {
     let wheel = d
         .place_of(SEARCH_LOOKUP)
         .map_or(egui::pos2(780.0, 300.0), |field| {
             egui::pos2(field.center().x, field.bottom() + 200.0)
         });
     let whole = |d: &Driver<'_>| {
-        ["Pay: Ann", "Tip: Bo"].iter().all(|name| {
+        names.iter().all(|name| {
             d.nodes()
                 .iter()
                 .any(|node| node.name == *name && node.fully_in_view())
@@ -571,6 +612,18 @@ pub fn run(d: &mut Driver<'_>) {
         format!(
             "Values, actions and names of the pinned lines: {:?} {:?} {:?} at 960x640, {:?} {:?} at 1200x800, {:?} {:?} at 1920x1080",
             small.values, small.actions, small.names, wide.values, wide.actions, big.values, big.actions
+        ),
+    );
+    // FA2: at 1200x800 beside Lookup `Lose seal` wraps; it stays right of its line's name, at
+    // the first action's edge, and closer to its own line than to the next.
+    let (wide_held, wraps, wide_where) = d.at_size(DEFAULT, seal_actions_with_their_line);
+    let (big_held, _, big_where) = d.at_size(LARGE, seal_actions_with_their_line);
+    let (small_held, _, small_where) = seal_actions_with_their_line(d);
+    d.observe(
+        "T19.2",
+        wide_held && wraps > 0 && big_held && small_held,
+        format!(
+            "A wrapped action stays with its line: {wraps} wrapped at 1200x800, {wide_where}; at 1920x1080 {big_where}; at 960x640 {small_where}"
         ),
     );
     d.state("trackers-beside-the-plan", Sizes::All);
@@ -903,11 +956,42 @@ pub fn run(d: &mut Driver<'_>) {
         d.has_label("Start 0")
             && d.has(keyring)
             && d.has_containing("Take seal: Old Guard +1")
-            && !d.has("More actions for Take seal: Old Guard +1")
             && d.has_containing("3 notices are due"),
-        "The history opens under its tracker with the start values; only another session's row has Remove",
+        "The history opens under its tracker with the start values",
     );
     d.state("tracker-history-in-the-reader", Sizes::All);
+    // FE9: every row has its menu, so two rows look alike; on a row of the session being
+    // played, Remove is off and says that Undo in Trackers takes it back.
+    let played = "More actions for Take seal: Old Guard +1";
+    // Opened by keyboard, the off Remove takes no focus and shows no tooltip: its reason is
+    // painted in the menu.
+    let reached = d.tab_to(played);
+    d.press(Key::Enter);
+    let painted = d
+        .painted_in(egui::Rect::EVERYTHING)
+        .contains(crate::trackers::history::REMOVE_PLAYED);
+    d.observe(
+        "T19.6",
+        reached && painted && d.is_disabled("Remove"),
+        format!("Opened by keyboard, the played row's menu paints why Remove is off: Tab reached it {reached}, reason painted {painted}"),
+    );
+    d.press(Key::Escape);
+    d.click(played);
+    let off = d.is_disabled("Remove");
+    let why = d.tooltip_contains("Remove", crate::trackers::history::REMOVE_PLAYED);
+    d.observe(
+        "T19.6",
+        off && why,
+        format!("A row of the session being played has its menu, with Remove off ({off}) and its reason ({why})"),
+    );
+    d.press(Key::Escape);
+    d.click(keyring);
+    d.observe(
+        "T19.6",
+        d.has("Remove") && !d.is_disabled("Remove"),
+        "Another session's row has Remove on",
+    );
+    d.press(Key::Escape);
     d.click(keyring);
     d.click("Remove");
     // AE1, FE11: of two rows named `Take seal`, the result names the one that went.
@@ -1006,8 +1090,91 @@ pub fn run(d: &mut Driver<'_>) {
 
     // An amount field takes exactly its action's column at a target's height, so no action
     // moves; Enter is the press, and the action keeps its place when that raises a Due row.
+    // Two amount fields with one owner (tracker, line, label) would share one id and one draft:
+    // Purses still shows, the first keeps its field, a later one is left out, and the problem
+    // stands under the line that leaves it out. Two actions with one label and fixed amounts
+    // have no field: they load as before, and each press makes its own change.
     let note = root(d).join("Tournament.md");
     let text = fs::read_to_string(&note).unwrap();
+    let show = |d: &mut Driver<'_>, purses: &str| {
+        fs::write(&note, text.replacen("> trackers:\n", purses, 1)).unwrap();
+        d.app_mut().lookup.refresh();
+        d.app_mut().lookup.files_changed = true;
+        d.settle();
+        if !d.has_containing("Elapsed race time") {
+            d.press_ctrl(Key::T);
+        }
+    };
+    let count = |d: &Driver<'_>, name: &str| {
+        d.nodes()
+            .iter()
+            .filter(|node| node.name == name && node.role != Role::Label)
+            .count()
+    };
+    let mut repeats = Vec::new();
+    for (purses, why, field, kept) in [
+        (
+            PURSES.replace("[Ann, Bo]", "[Ann, Ann]"),
+            "Two lines are named “Ann”, and an action asks for an amount. Give each line its own name.",
+            "Pay: Ann",
+            "Tip: Ann",
+        ),
+        (
+            PURSES.replace("{label: Tip, add: 1}", "{label: Pay, add: 1}"),
+            "Two actions are named “Pay”, and one asks for an amount. Give each action its own name.",
+            "Pay: Bo",
+            "Pay: Ann",
+        ),
+    ] {
+        show(d, &purses);
+        in_view_after_scroll(d, &[field]);
+        repeats.push((
+            d.has_containing(why),
+            count(d, field),
+            count(d, kept),
+            d.has_containing("Purses"),
+        ));
+    }
+    // Ann twice: one Pay (the first Ann's), Tip on both lines. Pay twice: one Pay on each line.
+    d.observe(
+        "T19.2",
+        repeats == [(true, 1, 2, true), (true, 1, 1, true)],
+        format!("A repeated amount field is left out after the first, and its problem shows with the tracker: {repeats:?}"),
+    );
+    show(
+        d,
+        &PURSES.replace("{label: Pay, add: ask}", "{label: Tip, add: 2}"),
+    );
+    let tips = in_view_after_scroll(d, &["Tip: Ann"]);
+    let mut buttons: Vec<egui::Rect> = d
+        .nodes()
+        .iter()
+        .filter(|node| node.name == "Tip: Ann" && node.role != Role::Label)
+        .map(|node| node.shown)
+        .collect();
+    buttons.sort_by(|a, b| {
+        (a.top(), a.left())
+            .partial_cmp(&(b.top(), b.left()))
+            .unwrap()
+    });
+    let problem = d.has_containing("Give each action its own name.");
+    let mut said = Vec::new();
+    for rect in buttons.iter().take(2) {
+        d.click_rect(*rect, "Click: Tip: Ann");
+        said.push((
+            d.has_containing("Purses for Ann changed to 2."),
+            d.has_containing("Purses for Ann changed to 3."),
+        ));
+    }
+    let each_its_own = said.len() == 2 && said[0] == (true, false) && said[1].1;
+    d.observe(
+        "T19.2",
+        tips && buttons.len() == 2 && !problem && each_its_own,
+        format!("Two Tip actions with fixed amounts load with no problem, and each press makes its own change (+2, then +1): {} buttons, problem {problem}, results {said:?}", buttons.len()),
+    );
+    for _ in 0..said.len() {
+        d.click("Undo: Tip");
+    }
     fs::write(&note, text.replacen("> trackers:\n", PURSES, 1)).unwrap();
     d.app_mut().lookup.refresh();
     d.app_mut().lookup.files_changed = true;

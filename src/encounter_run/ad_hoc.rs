@@ -14,6 +14,7 @@ use std::sync::Arc;
 
 const FIELD: &str = "Find or name a creature";
 const DEFAULT_SIDE: &str = "enemies";
+const AD_HOC_SIDE: design::FieldName = crate::field_id!("run_add_side");
 const MATCHES_SHOWN: usize = 5;
 /// How many matches Show all lists before it scrolls.
 const MATCHES_LISTED: usize = 8;
@@ -392,13 +393,15 @@ impl Run {
             // As wide as the group block below, so the panel has one right edge.
             let width = block
                 .unwrap_or_else(|| (ui.available_width() - design::M).min(design::LIST_MEASURE));
-            design::search_field(
-                ui,
-                FIELD,
-                &mut self.ad_hoc.query,
-                "Find or name a creature…",
-                width,
-            );
+            let _ = crate::field_id!("run_add_creature_search")
+                .once(crate::design::Once::PageSearch)
+                .search(
+                    ui,
+                    FIELD,
+                    &mut self.ad_hoc.query,
+                    "Find or name a creature…",
+                    width,
+                );
             let typed = self.ad_hoc.query.trim().to_lowercase();
             // Show all lasts while the words stay the same: new words start a short list again.
             if self.ad_hoc.show_all.as_deref() != Some(typed.as_str()) {
@@ -575,26 +578,21 @@ impl Run {
             );
             design::gap(ui, design::Gap::M);
             ui.label(Type::Small.rich(ui, "Side").color(c.muted));
-            let chosen = self.ad_hoc.side().to_owned();
-            let combo = egui::ComboBox::from_id_salt("ad_hoc_side")
-                .icon(design::combo_icon)
-                .width(110.0)
-                .selected_text(design::reader::human_label(&chosen))
-                .show_ui(ui, |ui| {
-                    for side in &sides {
-                        if design::extras::choice_wrapped(
-                            ui,
-                            *side == chosen,
-                            &design::reader::human_label(side),
-                            None,
-                        )
-                        .clicked()
-                        {
-                            self.ad_hoc.side = Some(side.clone());
-                        }
-                    }
-                });
-            design::named(ui, &combo.response, "Side of the new creature");
+            let mut chosen = self.ad_hoc.side().to_owned();
+            // A side's name is the DM's own words; the drop-down's list wraps a long one.
+            if let Some((first, rest)) = sides.split_first()
+                && design::Dropdown::new(AD_HOC_SIDE.of(self.id), "Side of the new creature")
+                    .width(110.0)
+                    .choice(first.clone(), design::reader::human_label(first))
+                    .choices(
+                        rest.iter()
+                            .map(|side| (side.clone(), design::reader::human_label(side))),
+                    )
+                    .show(ui, &mut chosen)
+                    .changed
+            {
+                self.ad_hoc.side = Some(chosen);
+            }
         });
         let checked = self.ad_hoc.check(&known);
         let total = self.ad_hoc.total();

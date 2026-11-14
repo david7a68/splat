@@ -149,7 +149,7 @@ fn challenge_menu(ui: &mut egui::Ui, filter: &mut Filter, values: &[(String, usi
                 } else {
                     &mut filter.challenge.0
                 };
-                let response = design::choice(ui, *bound == Some(number), value);
+                let response = design::choice_wrapped(ui, *bound == Some(number), value, None);
                 design::named(ui, &response, &format!("{title} CR {value}"));
                 if response.clicked() {
                     *bound = (*bound != Some(number)).then_some(number);

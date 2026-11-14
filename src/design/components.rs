@@ -67,6 +67,29 @@ pub fn words_that_fit(ui: &Ui, text: &str, font: &FontId, width: f32) -> String 
     "…".to_owned()
 }
 
+/// A search hint inside its text area (X2): whole words that fit, as [`words_that_fit`];
+/// when not even the first word fits, its start that fits with an ellipsis (a word with no
+/// spaces, in any script, is cut between characters); nothing when even an ellipsis does not
+/// fit. A hint is never wider than its area.
+fn hint_that_fits(ui: &Ui, hint: &str, font: &FontId, width: f32) -> String {
+    let words = words_that_fit(ui, hint, font, width);
+    if number_width(ui, &words, font) <= width {
+        return words;
+    }
+    let chars: Vec<char> = words.trim_end_matches('…').chars().collect();
+    for end in (1..chars.len()).rev() {
+        let start = format!("{}…", chars[..end].iter().collect::<String>());
+        if number_width(ui, &start, font) <= width {
+            return start;
+        }
+    }
+    if number_width(ui, "…", font) <= width {
+        "…".to_owned()
+    } else {
+        String::new()
+    }
+}
+
 /// Temporary HP, with its mark, in every place that shows it.
 pub fn temp_hp_text(temp: i64) -> String {
     format!("{} +{temp}", icons::TEMP_HP)
@@ -546,6 +569,9 @@ pub struct Action<'a> {
     /// A `line_start` Undo whose target stays in its message's column: the row's left edge.
     column: bool,
     min_width: Option<f32>,
+    /// Its words wrap onto more lines in the room it has, and it grows taller, in place of an
+    /// ellipsis (a choice whose fixed words must all show).
+    wraps: bool,
 }
 
 impl<'a> Action<'a> {
@@ -564,8 +590,16 @@ impl<'a> Action<'a> {
             line_start: false,
             column: false,
             min_width: None,
+            wraps: false,
         }
     }
+
+    /// Its words wrap in the room it has, and it grows taller, instead of being cut.
+    pub(in crate::design) fn wraps(mut self) -> Self {
+        self.wraps = true;
+        self
+    }
+
     pub fn primary(label: &'a str) -> Self {
         Self::new(Kind::Primary, label)
     }
@@ -725,7 +759,24 @@ impl<'a> Action<'a> {
             Kind::Secondary | Kind::Quiet => c.text,
             Kind::Destructive => c.destructive,
         };
-        let galley = one_line(ui, self.label, font, foreground, room);
+        let galley = if self.wraps {
+            let mut job = LayoutJob::simple(
+                self.label.replace(['\n', '\r'], " "),
+                font,
+                foreground,
+                room.max(1.0),
+            );
+            job.wrap.break_anywhere = false;
+            ui.fonts_mut(|fonts| fonts.layout_job(job))
+        } else {
+            one_line(ui, self.label, font, foreground, room)
+        };
+        // A wrapped label grows the control by its extra lines; one line keeps its height.
+        let height = if self.wraps {
+            self.height.max(galley.size().y + 2.0 * XS)
+        } else {
+            self.height
+        };
         let key = self.key.map(|key| {
             one_line(
                 ui,
@@ -760,7 +811,7 @@ impl<'a> Action<'a> {
             };
             (rect, ui.interact(target, id, Sense::click()))
         } else {
-            ui.allocate_exact_size(vec2(width, self.height), Sense::click())
+            ui.allocate_exact_size(vec2(width, height), Sense::click())
         };
         let name = self.name.unwrap_or(self.label);
         response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), name));
@@ -1203,16 +1254,6 @@ pub fn text_field(
     text_field_label(ui, label, Type::Small, text, help, error)
 }
 
-pub fn small_text_field(
-    ui: &mut Ui,
-    label: &str,
-    text: &mut String,
-    help: Option<&str>,
-    error: Option<&str>,
-) -> Response {
-    text_field_label(ui, label, Type::Small, text, help, error)
-}
-
 #[allow(
     clippy::disallowed_methods,
     reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
@@ -1312,19 +1353,7 @@ pub fn number_field_with_id(
     response
 }
 
-/// Search with an icon. The hint is what can be searched. Staged: use `FieldId::search`, which
-/// always draws its `Clear` (Clippy refuses this outside `src/design/`).
-pub fn search_field(
-    ui: &mut Ui,
-    name: &str,
-    text: &mut String,
-    hint: &str,
-    width: f32,
-) -> Response {
-    search_box(ui, focus_id(name), name, text, hint, width)
-}
-
-/// The search field of `search_field` and `FieldId::search`, with this id.
+/// The search field of `FieldId::search`, with this id.
 #[allow(
     clippy::disallowed_methods,
     reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
@@ -1336,32 +1365,65 @@ pub(super) fn search_box(
     text: &mut String,
     hint: &str,
     width: f32,
+    kept: f32,
 ) -> Response {
     let c = colors();
     let height = Density::Scan.control();
+    // The frame is the whole row. Inside it: the icon's margin at the left, then the text area,
+    // then `kept` px for `Clear` and the frame's own margin at the right. When the row is
+    // narrower than all of that, the text area gives way first, then the right margin: the frame
+    // never leaves the row.
+    // egui's margins are whole pixels: the right one is rounded down and the text area takes
+    // the rest, so the margins and the text area add up to exactly the row.
+    let width = width.max(0.0);
+    let left = SEARCH_LEFT.min(width).floor();
+    let right = (SEARCH_RIGHT + kept).min(width - left).max(0.0).floor();
+    let text_room = (width - left - right).max(0.0);
+    // The hint keeps whole words inside the text area: a narrow field cuts it with an
+    // ellipsis, never past the area. It shows only while the field is empty, so it is measured
+    // only then.
+    let hint = if text.is_empty() {
+        hint_that_fits(ui, hint, &Type::Body.font(ui), text_room)
+    } else {
+        String::new()
+    };
     let response = ui.add(
         egui::TextEdit::singleline(text)
             .id(id)
-            .desired_width(width - 36.0)
+            .desired_width(text_room)
             .min_size(vec2(width, height))
             .margin(egui::Margin {
-                left: 28,
-                right: 8,
+                left: left as i8,
+                right: right.min(i8::MAX as f32) as i8,
                 top: 6,
                 bottom: 6,
             })
-            .hint_text(Type::Body.rich(ui, hint).color(c.faint)),
+            .hint_text(Type::Body.rich(ui, hint).color(c.faint))
+            // With no text area the words have no room: they are kept but not shown, so no
+            // edge of them lies under `Clear`.
+            .text_color(if text_room < 1.0 {
+                Color32::TRANSPARENT
+            } else {
+                c.text
+            }),
     );
     named(ui, &response, name);
-    ui.painter().text(
-        pos2(response.rect.left() + S, response.rect.center().y),
-        Align2::LEFT_CENTER,
-        icons::SEARCH,
-        Type::Body.font(ui),
-        c.muted,
-    );
+    // The icon's place meets `Clear`'s place below this width: the icon is not painted there.
+    if width >= SEARCH_LEFT + kept {
+        ui.painter().text(
+            pos2(response.rect.left() + S, response.rect.center().y),
+            Align2::LEFT_CENTER,
+            icons::SEARCH,
+            Type::Body.font(ui),
+            c.muted,
+        );
+    }
     response
 }
+
+/// A search field's left margin (the icon's place) and right margin, around its text area.
+pub(super) const SEARCH_LEFT: f32 = 28.0;
+pub(super) const SEARCH_RIGHT: f32 = 8.0;
 
 /// The width of a segment's words in its widest state: selected words are `Strong`, the others
 /// `Body`. A segment takes this width in both states, so no word moves when the choice changes
@@ -2465,6 +2527,27 @@ pub fn register_row(ui: &Ui, rect: Rect) {
     keep_for_pass(ui, ROW_RECTS, rect);
 }
 
+/// Where `register_field_action` keeps this pass's pairs: a field's id and the id of the button
+/// that the field's part draws inside it (the search field's `Clear`).
+pub const FIELD_ACTIONS: &str = "design_field_actions";
+
+/// A field part registers the button it draws inside its field (the search field's `Clear`),
+/// so the gate's `no-overlap` check knows that pair, and only that pair, is meant.
+pub(super) fn register_field_action(ui: &Ui, field: Id, action: Id) {
+    keep_for_pass(ui, FIELD_ACTIONS, (field.value(), action.value()));
+}
+
+/// The pairs `register_field_action` registered in the last pass: (field id, button id), as
+/// AccessKit ids. Only the gate reads them.
+#[cfg(test)]
+pub fn field_actions(ctx: &egui::Context) -> Vec<(u64, u64)> {
+    let pass = ctx.cumulative_pass_nr();
+    ctx.data(|data| data.get_temp::<(u64, Vec<(u64, u64)>)>(Id::new(FIELD_ACTIONS)))
+        .filter(|(kept, _)| kept + 1 >= pass)
+        .map(|(_, pairs)| pairs)
+        .unwrap_or_default()
+}
+
 /// The rects `register_row` registered so far in this pass.
 pub(super) fn rows_this_pass(ctx: &egui::Context) -> Vec<Rect> {
     let pass = ctx.cumulative_pass_nr();
@@ -3151,12 +3234,33 @@ pub enum DiskConflictChoice {
     Reload,
 }
 
-pub fn disk_conflict_choices(ui: &mut Ui, noun: &str) -> Option<DiskConflictChoice> {
+/// What changed on disk, in a disk conflict's message: the thing's own name, or, only when it
+/// has none, `This <noun>`. An enum, so a caller says which: a noun cannot pass as a name.
+#[derive(Clone, Copy, Debug)]
+pub enum ConflictSubject<'a> {
+    /// The name the DM knows the thing by (`Bridge Ambush`), and the noun for it when the name
+    /// is blank.
+    Named { name: &'a str, noun: &'static str },
+    /// A thing with no name of its own: `note` gives `This note`.
+    This(&'static str),
+}
+
+/// The message names the thing the DM knows (`Bridge Ambush changed on disk.`), not its file
+/// (ruling R10); `This <noun>` only for a thing with no name of its own. Callers: World's edit
+/// form and World's repair editor (`src/world/edit.rs`, `src/world/repair.rs`).
+pub fn disk_conflict_choices(
+    ui: &mut Ui,
+    subject: ConflictSubject<'_>,
+) -> Option<DiskConflictChoice> {
+    let thing = match subject {
+        ConflictSubject::Named { name, .. } if !name.trim().is_empty() => name.trim().to_owned(),
+        ConflictSubject::Named { noun, .. } | ConflictSubject::This(noun) => format!("This {noun}"),
+    };
     // The choices start at the message text, like every other message with choices.
     actions_message(
         ui,
         Tone::Warning,
-        &format!("This {noun} changed on disk. Your draft is safe until you choose."),
+        &format!("{thing} changed on disk. Your draft is safe until you choose."),
         |ui| {
             ui.horizontal_wrapped(|ui| {
                 let mut choice = None;
@@ -3278,7 +3382,7 @@ pub(super) fn undo_message_capped(
     action: &str,
     name: Option<&str>,
 ) -> bool {
-    undo_message_line(ui, tone, text, action, name, None).0
+    undo_message_line(ui, tone, text, action, name, None, false).0
 }
 
 /// `undo_message_capped`, with Undo blocked for `blocked`'s reason (only Undo greys, and the line
@@ -3291,10 +3395,11 @@ pub(super) fn undo_message_line(
     action: &str,
     name: Option<&str>,
     blocked: Option<&str>,
+    tipped: bool,
 ) -> (bool, f32) {
     ui.scope(|ui| {
         ui.set_max_width(ui.available_width().min(LIST_MEASURE));
-        undo_message_inside(ui, tone, text, action, name, blocked)
+        undo_message_inside(ui, tone, text, action, name, blocked, tipped)
     })
     .inner
 }
@@ -3306,7 +3411,17 @@ fn undo_message_inside(
     action: &str,
     name: Option<&str>,
     blocked: Option<&str>,
+    tipped: bool,
 ) -> (bool, f32) {
+    // With `tipped`, a cut label (`name` differs) shows its whole words on hover and on focus.
+    let tip = |response: Response| match (tipped, name) {
+        (true, Some(name)) => {
+            let mut lines = vec![super::popups::TipLine::body(name)];
+            lines.extend(blocked.map(super::popups::TipLine::detail));
+            super::popups::rich_tip(response, &lines)
+        }
+        _ => response,
+    };
     let button = Action::quiet(action)
         .icon(icons::UNDO)
         .density(Density::Read)
@@ -3328,7 +3443,7 @@ fn undo_message_inside(
         let words = tone_message(ui, tone, text);
         ui.horizontal(|ui| {
             space(ui, inset);
-            pressed = button.line_start_in_column().show(ui).clicked();
+            pressed = tip(button.line_start_in_column().show(ui)).clicked();
         });
         words
     } else {
@@ -3340,7 +3455,7 @@ fn undo_message_inside(
                     tone_message(ui, tone, text)
                 })
                 .inner;
-            pressed = button.show(ui).clicked();
+            pressed = tip(button.show(ui)).clicked();
             words
         })
         .inner
@@ -3413,13 +3528,6 @@ fn dialog_width<R>(
                 .inner
         })
         .inner
-}
-
-/// An image at full size, within the window, its size not known. Returns true when the DM closes
-/// it, by a click or Escape. Use `design::popups::image_viewer` with an `ImageSize`: Clippy bans
-/// this one outside `src/design/`.
-pub fn image_viewer(ctx: &egui::Context, name: &str, uri: &str) -> bool {
-    super::popups::image_viewer(ctx, name, uri, super::popups::ImageSize::Unknown)
 }
 
 /// The width of a panel beside a page: Lookup, or the run's side panel.
@@ -3704,7 +3812,7 @@ fn submenu_place(button: Rect, size: Vec2, gap: f32, inside: Rect) -> egui::Pos2
     clippy::disallowed_methods,
     reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
 )]
-pub fn overflow_tabs(ui: &mut Ui, selected: &mut usize, choices: &[(usize, &str)]) {
+pub fn overflow_tabs(ui: &mut Ui, selected: &mut usize, choices: &[(usize, &'static str)]) {
     let width = |label: &str| number_width(ui, label, &Type::Strong.font(ui)) + L;
     let all: f32 = choices.iter().map(|(_, label)| width(label)).sum();
     if all <= ui.available_width() {
@@ -3841,7 +3949,7 @@ pub fn counted_tab<T: PartialEq + Copy>(
 }
 
 /// Second-level sheet pages keep one Small tab line, with overflow in More.
-pub fn overflow_tabs_small(ui: &mut Ui, selected: &mut usize, choices: &[(usize, &str)]) {
+pub fn overflow_tabs_small(ui: &mut Ui, selected: &mut usize, choices: &[(usize, &'static str)]) {
     ui.scope(|ui| {
         let small = Type::Small.font(ui);
         for role in [

@@ -1,6 +1,5 @@
 //! Conflict-aware combat sheet synchronization with D&D Beyond.
 //! Writes use source identities and absolute values, followed by a raw read-back.
-#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use crate::auth::Session;
 use eframe::egui;
 use reqwest::{Method, blocking::Client, redirect::Policy};
@@ -834,19 +833,60 @@ impl RestForm {
 /// What happened to the last sheet action, as the panel says it.
 #[derive(Clone, Debug, PartialEq)]
 enum ActionNotice {
-    /// D&D Beyond took it. This message goes at the next read.
-    Taken(String),
+    /// D&D Beyond took it (the action's name, `long rest`). This message goes at the next read.
+    Taken(&'static str),
     /// It did not go, or Splat could not confirm it. This message stays until the DM closes it.
     Failed(String),
 }
 
-/// A new action notice, with the order of the action that made it.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-)]
-fn noticed(notice: ActionNotice) -> Option<(ActionNotice, crate::design::ResultOrder)> {
-    Some((notice, crate::design::ResultOrder::issue()))
+/// The sync panel of the character on show: the one owner of a sheet action's result. A new
+/// action replaces the result; another character, a stop or the close icon ends it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SyncPanel;
+
+impl crate::design::results::Owner for SyncPanel {
+    type Scope = ();
+    fn scope(&self) -> &() {
+        &()
+    }
+}
+
+impl crate::design::results::Kept for ActionNotice {
+    type Owner = SyncPanel;
+    const ENDS: crate::design::results::Ends = crate::design::results::Ends {
+        // Another character, the next read after a success, `request`: `end_action_notice`.
+        owner_changed: crate::design::results::OwnerChanged::Ends,
+        disk_changed: crate::design::results::DiskChanged::Stays,
+        // Its close icon uses it up.
+        press: crate::design::results::Press::Use,
+    };
+    fn owner(&self) -> SyncPanel {
+        SyncPanel
+    }
+}
+
+/// What the DM pressed in the sheet pane's footer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SyncPress {
+    /// The close icon of the sheet action's result.
+    Dismiss,
+}
+
+/// A failed sheet action: the words D&D Beyond or the sync gave (outside words).
+struct ActionFailed<'a>(&'a str);
+
+impl crate::design::outcome::Fault for ActionFailed<'_> {
+    fn severity(&self) -> crate::design::outcome::Severity {
+        crate::design::outcome::Severity::NotSaved
+    }
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "a failed sheet action says D&D Beyond’s or the sync’s own words"
+    )]
+    fn cause(&self) -> crate::design::outcome::Sentence {
+        crate::design::outcome::Sentence::outside(self.0)
+            .unwrap_or(crate::sentence!("The sheet action did not go."))
+    }
 }
 
 #[derive(Default)]
@@ -882,8 +922,8 @@ pub struct CombatSync {
     first_read: bool,
     /// A sheet action the DM asked for. The next exchange takes it and sends it once.
     action: Option<SheetAction>,
-    /// What happened to the last sheet action, with the order the action took for the footer.
-    action_notice: Option<(ActionNotice, crate::design::ResultOrder)>,
+    /// What happened to the last sheet action: one kept result, with the order its action took.
+    action_notice: crate::design::Results<SyncPanel, ActionNotice>,
     /// A rest the DM is setting up in the panel, before they send it.
     rest_form: Option<RestForm>,
     /// Unsent HP, death saves and conditions also last until the next first read. A run holds
@@ -950,7 +990,7 @@ impl CombatSync {
         }
         // A rest on its way may have reached D&D Beyond. Splat will not hear back.
         if let Some(name) = self.pending.as_ref().and_then(|pending| pending.action) {
-            self.action_notice = noticed(ActionNotice::Failed(format!(
+            self.action_notice.record(ActionNotice::Failed(format!(
                 "Sync stopped before Splat heard back about the {name}. Check the sheet on D&D Beyond before you try again."
             )));
         }
@@ -983,7 +1023,7 @@ impl CombatSync {
             return Err(reason);
         }
         self.action = Some(action);
-        self.action_notice = None;
+        self.end_action_notice();
         Ok(())
     }
     /// Each class's hit dice, from the last read.
@@ -1168,23 +1208,21 @@ impl CombatSync {
                     Ok((outcome, taken)) => {
                         self.accept(outcome, &sent);
                         // A success says so until the next read. An error stays until closed.
-                        if action.is_none()
-                            && matches!(self.action_notice, Some((ActionNotice::Taken(_), _)))
+                        if action.is_none() && matches!(self.notice(), Some(ActionNotice::Taken(_)))
                         {
-                            self.action_notice = None;
+                            self.end_action_notice();
                         }
                         if let (Some(name), Some(taken)) = (action, taken) {
-                            self.action_notice = noticed(match taken {
-                                Ok(()) => ActionNotice::Taken(format!(
-                                    "D&D Beyond took the {name}. The values below are the sheet’s new values."
-                                )),
+                            self.action_notice.record(match taken {
+                                Ok(()) => ActionNotice::Taken(name),
                                 Err(e) => ActionNotice::Failed(e),
                             });
                         }
                     }
                     Err(error) => {
                         if action.is_some() {
-                            self.action_notice = noticed(ActionNotice::Failed(error.clone()));
+                            self.action_notice
+                                .record(ActionNotice::Failed(error.clone()));
                         }
                         self.error = Some(error);
                         if let Some(remote) = &self.remote {
@@ -1294,7 +1332,7 @@ impl CombatSync {
             .map(|remote| remote.groups)
             .or_else(|| self.matched.take());
         self.stop();
-        let notice = self.action_notice.take();
+        let notice = std::mem::take(&mut self.action_notice);
         *self = Self::default();
         self.enabled = enabled;
         self.keeps_all_unsent = keeps_all_unsent;
@@ -1641,41 +1679,69 @@ impl CombatSync {
         );
     }
     /// Round 26: a sync action's result (a rest taken, or why it failed), in the footer of the
-    /// sheet pane. It lives until its dismiss, the next action or another character; the
-    /// dismiss is the close icon at the message end, in the one Party form.
-    /// A press on its close icon sets `dismissed`; then call `end_action_notice`.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
-    pub fn footer_messages<'a>(
+    /// sheet pane. It lives until its close icon, the next action or another character. A taken
+    /// action is a kept result (its store gives its order); a failed one is a reason, and stays
+    /// until its close icon. Give the pane's press to `footer_press`.
+    pub fn footer_messages<'f>(
         &self,
-        footer: &mut crate::design::Footer<'a>,
-        dismissed: &'a std::cell::Cell<bool>,
+        frame: &'f crate::design::outcome::PaneFrame,
+        messages: &mut crate::design::outcome::Messages<'f, SyncPress>,
     ) {
-        use crate::design::{self, Tone};
-        let Some((tone, words, order)) =
-            self.action_notice
-                .as_ref()
-                .map(|(notice, order)| match notice {
-                    ActionNotice::Taken(words) => (Tone::Success, words.clone(), *order),
-                    ActionNotice::Failed(words) => (Tone::Error, words.clone(), *order),
-                })
+        use crate::design::outcome::{Choice, FaultMessage, Lost, MessageChoice, Said};
+        let dismiss = || Choice::new(MessageChoice::Dismiss(Lost::Nothing), SyncPress::Dismiss);
+        let Some(shown) = self.action_notice.get(&SyncPanel) else {
+            return;
+        };
+        match shown.value() {
+            ActionNotice::Failed(words) => {
+                messages.outcome(FaultMessage::new(&ActionFailed(words)).choice(dismiss()));
+            }
+            ActionNotice::Taken(_) => {
+                messages.kept(shown.outcome(frame, |notice| {
+                    let name = match notice {
+                        ActionNotice::Taken(name) => name,
+                        ActionNotice::Failed(_) => "action",
+                    };
+                    Said::new(crate::sentence!(
+                        "D&D Beyond took the {}. The values below are the sheet’s new values.",
+                        name
+                    ))
+                    .choice(dismiss())
+                    .into()
+                }));
+            }
+        }
+    }
+
+    /// The sheet pane's footer press: the close icon ends the result it was drawn with.
+    pub fn footer_press(&mut self, pressed: Option<crate::design::outcome::Press<SyncPress>>) {
+        let Some(crate::design::outcome::Press {
+            id: SyncPress::Dismiss,
+            ticket,
+        }) = pressed
         else {
             return;
         };
-        footer.result(order, words.clone(), false, move |ui| {
-            if crate::party::dismissable(ui, |ui| {
-                design::message(ui, tone, &words);
-            }) {
-                dismissed.set(true);
+        match ticket {
+            // A taken action's line: its own entry, or nothing when a newer one replaced it.
+            Some(ticket) => {
+                let _ = self.action_notice.use_press_by(ticket);
             }
-        });
+            // A failed action's line is a reason with no ticket: it was this frame's notice.
+            None => self.end_action_notice(),
+        }
+    }
+
+    /// The last sheet action's result, if any.
+    fn notice(&self) -> Option<&ActionNotice> {
+        self.action_notice
+            .get(&SyncPanel)
+            .map(|shown| shown.value())
     }
 
     /// The action's result ends: its close icon was pressed.
     pub fn end_action_notice(&mut self) {
-        self.action_notice = None;
+        self.action_notice.owner_changed(&SyncPanel);
     }
     /// The conflict heading for a group: its name on the sheet, where it has one.
     fn group_name(&self, key: &str) -> String {
@@ -2141,10 +2207,6 @@ impl CombatSync {
     }
 }
 /// A small label, the value's stepper and an optional note, kept together on one line.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn labelled_stepper(
     ui: &mut egui::Ui,
     column: Column,
@@ -2156,13 +2218,20 @@ fn labelled_stepper(
 ) -> bool {
     use crate::design::{Type, colors};
     ui.horizontal(|ui| {
-        let left = ui.cursor().left();
-        ui.label(Type::Small.rich(ui, label).color(colors().muted));
-        // The stepper starts at the block's label column, whatever this label's width.
-        let gap = left + column.label - ui.cursor().left();
-        if gap > 0.0 {
-            ui.add_space(gap);
-        }
+        // The stepper starts at the block's label column, whatever this label's width: the
+        // label takes a cell that ends one item gap before it.
+        let cell = egui::vec2(
+            (column.label - ui.spacing().item_spacing.x).max(0.0),
+            ui.spacing().interact_size.y,
+        );
+        ui.allocate_ui_with_layout(
+            cell,
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                ui.set_min_size(cell);
+                ui.label(Type::Small.rich(ui, label).color(colors().muted));
+            },
+        );
         ui.spacing_mut().interact_size.x = column.well;
         stepper_and_note(ui, name, value, range, note)
     })
@@ -3117,7 +3186,7 @@ mod tests {
         assert!(sync.request(long).is_err());
         // Stopping sync drops a rest that has not gone, and says nothing about it.
         sync.stop();
-        assert!(sync.action.is_none() && sync.action_notice.is_none());
+        assert!(sync.action.is_none() && sync.action_notice.is_empty());
         // A rest on its way when sync stops has an unknown result, and the panel says so.
         let (_tx, rx) = mpsc::channel();
         sync.pending = Some(Pending {
@@ -3127,7 +3196,7 @@ mod tests {
         });
         sync.stop();
         assert!(
-            matches!(&sync.action_notice, Some((ActionNotice::Failed(words), _)) if words.contains("Check the sheet"))
+            matches!(sync.notice(), Some(ActionNotice::Failed(words)) if words.contains("Check the sheet"))
         );
     }
     #[test]
@@ -3140,7 +3209,8 @@ mod tests {
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
         // Round 25 FD3: the action notice ends with its close icon, after its words.
-        const TAKEN: &str = "D&D Beyond took the long rest.";
+        const TAKEN: &str =
+            "D&D Beyond took the long rest. The values below are the sheet’s new values.";
         // Round 25 review, round 26: the result sits in the sheet's footer, drawn as Party draws
         // it (the sheet's scroll column in the footer's pane), so the first editable field keeps
         // its y before the result, while it shows, after an error result and after it ends, at
@@ -3153,17 +3223,17 @@ mod tests {
                 },
                 |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
-                        let dismissed = std::cell::Cell::new(false);
-                        let mut footer = crate::design::Footer::new(
+                        let frame = crate::design::outcome::PaneFrame::new(ui);
+                        let mut messages = crate::design::outcome::Messages::new(
+                            &frame,
                             "sync_test_sheet",
                             crate::design::LIST_MEASURE,
                         );
-                        sync.footer_messages(&mut footer, &dismissed);
+                        sync.footer_messages(&frame, &mut messages);
                         // The pane is the sheet's scroll column.
-                        footer.pane(ui, crate::design::Body::Content, |ui| sync.show(ui));
-                        if dismissed.get() {
-                            sync.end_action_notice();
-                        }
+                        let paned =
+                            messages.pane(ui, crate::design::Body::Content, |ui| sync.show(ui));
+                        sync.footer_press(paned.pressed);
                     });
                 },
             );
@@ -3217,14 +3287,17 @@ mod tests {
             let mut gaps = Vec::new();
             for notice in [
                 None,
-                Some(ActionNotice::Taken(TAKEN.into())),
+                Some(ActionNotice::Taken("long rest")),
                 Some(ActionNotice::Failed(
                     "D&D Beyond did not take the long rest. Check the sheet in D&D Beyond, then read it again before you send another change.".into(),
                 )),
                 None,
             ] {
                 let expected = notice.is_some();
-                sync.action_notice = notice.and_then(noticed);
+                sync.end_action_notice();
+                if let Some(notice) = notice {
+                    sync.action_notice.record(notice);
+                }
                 // Two passes: the first lays out, the second reads the settled place.
                 field_top(&mut sync, size);
                 let (top, notice, fits, gap) = field_top(&mut sync, size);
@@ -3253,7 +3326,7 @@ mod tests {
             fitting.iter().any(|fits| *fits),
             "the sheet is short at one size at least, so the footer check above can fail: {fitting:?}"
         );
-        sync.action_notice = noticed(ActionNotice::Taken(TAKEN.into()));
+        sync.action_notice.record(ActionNotice::Taken("long rest"));
         let before = sync.desired.clone();
         for form in [
             None,
@@ -3278,13 +3351,16 @@ mod tests {
                 |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         // Round 26: the result sits in the sheet's footer.
-                        let dismissed = std::cell::Cell::new(false);
-                        let mut footer = crate::design::Footer::new("sync_test_footer", 600.0);
-                        sync.footer_messages(&mut footer, &dismissed);
-                        footer.pane(ui, crate::design::Body::Content, |ui| sync.show(ui));
-                        if dismissed.get() {
-                            sync.end_action_notice();
-                        }
+                        let frame = crate::design::outcome::PaneFrame::new(ui);
+                        let mut messages = crate::design::outcome::Messages::new(
+                            &frame,
+                            "sync_test_footer",
+                            600.0,
+                        );
+                        sync.footer_messages(&frame, &mut messages);
+                        let paned =
+                            messages.pane(ui, crate::design::Body::Content, |ui| sync.show(ui));
+                        sync.footer_press(paned.pressed);
                     });
                 },
             );

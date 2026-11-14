@@ -3835,6 +3835,44 @@ mod tests {
         );
     }
 
+    /// Round 28 (K3 review): a member's key is its identity in the draft. A move keeps each key
+    /// with its member, two members never share one, and the identity is not part of what a
+    /// member is: the draft still equals its saved form, and a member read again equals it.
+    #[test]
+    fn a_member_keys_its_form_by_its_identity_not_its_place() {
+        let mut draft = GroupDraft::new();
+        let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
+        draft.add(a);
+        draft.add(b);
+        let keys: Vec<String> = draft
+            .setup
+            .members
+            .iter()
+            .map(|member| member_key("g.md", member))
+            .collect();
+        assert_ne!(keys[0], keys[1], "two members, two keys");
+        draft.setup.members.swap(0, 1);
+        assert_eq!(
+            member_key("g.md", &draft.setup.members[1]),
+            keys[0],
+            "A keeps its key"
+        );
+        assert_eq!(
+            member_key("g.md", &draft.setup.members[0]),
+            keys[1],
+            "B keeps its key"
+        );
+        // Not a saved part of a member: the same words compare equal.
+        let read: GroupSetup =
+            serde_yaml_ng::from_value(serde_yaml_ng::to_value(&draft.setup).unwrap()).unwrap();
+        assert_eq!(read, draft.setup);
+        assert_ne!(
+            member_key("g.md", &read.members[0]),
+            keys[1],
+            "a member read again is new"
+        );
+    }
+
     /// iter-26-B, review 2: a control's change that lands after the comparison, in a frame with
     /// editing input, is seen in the next frame even when that frame has no input; after it, an
     /// unchanged frame compares nothing.
