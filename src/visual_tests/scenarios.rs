@@ -11828,8 +11828,37 @@ pub mod world {
         d.click(&format!("New NPC “{NPC}”"));
         d.settle();
         d.expect("Add to fight");
-        d.expect("NPC · alive · Campaign");
         d.expect("Change Status");
+        // Ruling R9 (AF2, FF2): the status shows once. The Status row shows `alive` with its
+        // Change, so the kind line has no status.
+        d.observe(
+            "iter-28-D-R9",
+            d.has("NPC · Campaign") && !d.has("NPC · alive · Campaign") && d.visible_text("alive"),
+            "Lookup's reader shows the NPC's status in its Status row only, not on the kind line",
+        );
+        // Round 28 FF4: `Nothing written yet.` stands where prose starts, `L` below the control
+        // above it (here the NPC's `Add to fight`), so it does not read as that control's reason.
+        let gap = d
+            .painted_rect_in("Nothing written yet.", egui::Rect::EVERYTHING)
+            .and_then(|words| {
+                let above = d
+                    .nodes()
+                    .into_iter()
+                    .filter(|node| {
+                        node.role == Role::Button
+                            && node.rect.bottom() <= words.top()
+                            && node.rect.left() < words.right()
+                            && node.rect.right() > words.left()
+                    })
+                    .max_by(|a, b| a.rect.bottom().total_cmp(&b.rect.bottom()))?;
+                Some((above.name, words.top() - above.rect.bottom()))
+            });
+        d.observe(
+            "iter-28-D-FF4",
+            gap.as_ref()
+                .is_some_and(|(_, gap)| *gap >= crate::design::L - 1.0),
+            format!("The control above the words, and the gap: {gap:?}"),
+        );
         d.state("world-new-npc", Sizes::Default);
         d.click("Add to fight");
         d.type_into("Stat block", "Guard");
@@ -11878,6 +11907,26 @@ pub mod world {
             }
         }
         d.state("npc-add-to-run-form", Sizes::All);
+        // Round 28: the Side list is a `Dropdown`. It opens under its control, inside Lookup;
+        // Escape closes it and keeps the side. (Its capture is left out: the part's list holds an
+        // unnamed egui handle over its rows, a gap sent to the part's owner.)
+        d.click("Side: Enemies");
+        d.settle();
+        let control = d.place_of("Side: Enemies");
+        d.observe(
+            "iter-28-D-side-list",
+            control.is_some_and(|control| {
+                d.nodes().into_iter().any(|node| {
+                    node.name == "Party"
+                        && node.rect.top() >= control.bottom() - 0.5
+                        && node.rect.left() >= control.left() - 0.5
+                })
+            }),
+            format!("The Side list opens under its control {control:?}"),
+        );
+        d.press(Key::Escape);
+        d.settle();
+        d.expect("Side: Enemies");
         d.expect("Add to fight");
         let add_buttons = |d: &Driver<'_>| {
             d.nodes()
@@ -11897,6 +11946,24 @@ pub mod world {
         d.expect("Undo stat block change");
         let (success, detail) = world_build::finished_change_tone(d, "Stat block set to Guard.");
         d.observe("iter-20-D-FD5-stat-block", success, detail);
+        // Round 28 FF3: Lookup's values share one value column. The Stat block's value starts
+        // where the Status row's value starts, each in its own row.
+        let edges = d.place_of("Change Status").map(|change| {
+            let block = egui::Rect::from_min_max(
+                egui::pos2(0.0, change.top() - crate::design::XXL * 3.0),
+                egui::pos2(change.left(), change.bottom()),
+            );
+            (
+                d.painted_word_rect("Guard", block),
+                d.painted_word_rect("alive", block),
+            )
+        });
+        d.observe(
+            "iter-28-D-FF3",
+            matches!(edges, Some((Some(link), Some(value)))
+                if (link.left() - value.left()).abs() <= 0.5 && link.bottom() <= value.top()),
+            format!("Stat block's value and Status's value (left edge, rows): {edges:?}"),
+        );
         d.state("world-npc-in-run", Sizes::All);
         d.observe(
             "NPC arrival",
@@ -13979,6 +14046,33 @@ pub mod session_notes {
                 && !d.has_containing("“Toll At The Old Mill”"),
             "Lookup offers New NPC “Toll at the old mill” for the typed toll at the old mill",
         );
+        // Round 28 FN2: the card's action is a title-line action: on the title's line when it
+        // fits, else under the title from its text edge; never above the title.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let places = d.at_size(size, |d| {
+                let action = d.place_of("Open this session")?;
+                // The card's title in Lookup, not the Session page's title of the same words.
+                let lookup = d.place_of(SEARCH_LOOKUP)?;
+                let pane = egui::Rect::from_min_max(
+                    egui::pos2(lookup.left() - 1.0, lookup.bottom()),
+                    egui::pos2(f32::MAX, f32::MAX),
+                );
+                let title = d.painted_word_rect("Session 4: Ferry Watch", pane)?;
+                Some((action, title))
+            });
+            d.observe(
+                "iter-28-D-FN2",
+                places.is_some_and(|(action, title)| {
+                    let beside = action.center().y >= title.top()
+                        && action.center().y <= title.bottom()
+                        && action.left() >= title.right();
+                    let under = action.top() >= title.bottom() - 0.5
+                        && (action.left() - title.left()).abs() <= crate::design::S + 0.5;
+                    beside || under
+                }),
+                format!("At {size:?}, the action and the title: {places:?}"),
+            );
+        }
         d.state("lookup-written-card-link", Sizes::Default);
         look_up_again(d, "bless");
         d.wait_for_text("Spell · Level 1 · Campaign");
@@ -14790,8 +14884,9 @@ pub mod session_recording {
     }
 
     fn choose_view(d: &mut Driver<'_>, name: &str) {
-        if d.has("Recording view") {
-            d.click("Recording view");
+        // The drop-down's name says its chosen view: `Recording view: Summary`.
+        if !d.name_starting("Recording view:").is_empty() {
+            d.click_starting("Recording view:");
         }
         d.click(name);
     }
@@ -15236,6 +15331,19 @@ pub mod session_recording {
         );
         // Round 27 AN1: Cancel's place, to compare with a later stage's longer words.
         let cancel_speech = d.place_of("Cancel processing");
+        // Round 28 FM10: the progress line takes the status line's place: size, status (the
+        // progress words, Cancel under them), then the result links, as in every other state.
+        let size = d.place_of("1 s · 0 MB");
+        let links = d.place_of("Raw transcript");
+        d.observe(
+            "round-28-S-FM10",
+            size.zip(cancel_speech)
+                .zip(links)
+                .is_some_and(|((size, cancel), links)| {
+                    size.bottom() <= cancel.top() && cancel.bottom() <= links.top()
+                }),
+            format!("The status keeps line 3 while processing: size {size:?}, Cancel {cancel_speech:?}, links {links:?}"),
+        );
         d.state("processing-speech", Sizes::Default);
         d.request_close();
         d.expect("Continue processing goes on from there");

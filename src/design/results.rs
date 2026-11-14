@@ -762,7 +762,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/sessions/page.rs",
             "reading_view",
-            &[Ban::Results, Ban::Layout(3)],
+            &[Ban::Results, Ban::Layout(1)],
         ),
         (
             "src/sessions/page.rs",
@@ -772,13 +772,13 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/sessions/page.rs",
             "template_editor",
-            &[Ban::Results, Ban::Layout(4)],
+            &[Ban::Results, Ban::Layout(3)],
         ),
         (
             "src/sessions/plan.rs",
             "plan_pane",
             // `ByOwner`: `checks::Results::undo(id, book)`, not the footer store's; counted by name.
-            &[Ban::Results, Ban::Layout(2), Ban::Pane(1), Ban::ByOwner(1)],
+            &[Ban::Results, Ban::Layout(1), Ban::Pane(1), Ban::ByOwner(1)],
         ),
         (
             "src/sessions/plan.rs",
@@ -824,7 +824,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "creation_form",
             &[Ban::Results, Ban::Layout(1), Ban::Pane(1)],
         ),
-        ("src/world/page.rs", "show", &[Ban::Results, Ban::Layout(4)]),
+        ("src/world/page.rs", "show", &[Ban::Results, Ban::Layout(3)]),
         ("src/world/repair.rs", "choose", &[Ban::Results]),
         ("src/world/repair.rs", "edit", &[Ban::Results]),
         (
@@ -1019,12 +1019,9 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/page.rs", "notes_view", &[Ban::Layout(3)]),
         ("src/sessions/page.rs", "read_tab", &[Ban::Layout(1)]),
         ("src/sessions/page.rs", "recordings_tab", &[Ban::Layout(1)]),
-        ("src/sessions/page.rs", "show_form", &[Ban::Layout(1)]),
         ("src/sessions/page.rs", "template_list", &[Ban::Layout(1)]),
-        ("src/sessions/plan.rs", "event_fields", &[Ban::Layout(2)]),
         ("src/sessions/plan.rs", "fight_block", &[Ban::Layout(1)]),
-        ("src/sessions/plan.rs", "place_field", &[Ban::Layout(1)]),
-        ("src/sessions/plan.rs", "plan_menu", &[Ban::Layout(2)]),
+        ("src/sessions/plan.rs", "plan_menu", &[Ban::Layout(1)]),
         ("src/sessions/slash.rs", "note", &[Ban::Layout(1)]),
         ("src/sessions/slash.rs", "popup_at", &[Ban::Layout(1)]),
         ("src/timeline/checks.rs", "table_line", &[Ban::Layout(1)]),
@@ -1043,9 +1040,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Layout(1)],
         ),
         ("src/trackers/view.rs", "amount_field", &[Ban::RowKey(3)]),
-        ("src/world.rs", "add_form", &[Ban::Layout(1)]),
-        ("src/world/page.rs", "new_menu", &[Ban::Layout(1)]),
-        ("src/world/repair.rs", "editor_events", &[Ban::Layout(2)]),
+        ("src/world/repair.rs", "editor_events", &[Ban::RowKey(1)]),
         // Package M (round 28): the escapes of `design::outcome`, and its own helpers.
         ("src/design/outcome.rs", "__literal", &[Ban::Sentence]),
         ("src/design/outcome.rs", "check_literal", &[Ban::Sentence]),
@@ -1175,7 +1170,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/carry.rs", "last_time_line", &[Ban::Extras(1)]),
         ("src/sessions/page.rs", "draft_warning", &[Ban::Extras(2)]),
         ("src/sessions/page.rs", "record_line", &[Ban::Extras(1)]),
-        ("src/sessions/page.rs", "recording_row", &[Ban::Extras(3)]),
+        ("src/sessions/page.rs", "recording_row", &[Ban::Extras(2)]),
         (
             "src/sessions/plan.rs",
             "gone_scene_words",

@@ -14,6 +14,10 @@ pub(crate) fn editor_name(path: &str) -> String {
     format!("Note text: {path}")
 }
 
+/// The repair editor's field. A broken note has no identity that the app can read (its text
+/// does not parse), so its path is its owner: two repairs open at once are two fields.
+const REPAIR_TEXT: design::layout::FieldName = crate::field_id!("world_repair_text");
+
 /// The source editor, with its two events apart: the DM changed the text, and focus moved into
 /// it. A caller that keeps a result for one draft ends it on a change, not on focus.
 #[allow(
@@ -27,14 +31,15 @@ pub(crate) fn editor_events(
     error_line: Option<usize>,
 ) -> (bool, bool) {
     const MAX_HEIGHT: f32 = design::XXL * 6.0 + design::L + design::S + design::XS;
-    let editor = egui::ScrollArea::vertical()
+    let field = REPAIR_TEXT.of(design::TextKey::from_data(path));
+    let editor = design::ScrollColumn::new(("repair", path))
         .max_height(MAX_HEIGHT)
-        .id_salt(("repair", path))
+        .fit_height()
         .show(ui, |ui| {
-            let output = egui::TextEdit::multiline(draft)
-                .font(egui::TextStyle::Monospace)
-                .desired_width(f32::INFINITY)
-                .show(ui);
+            let output = field.editor(ui, draft, |edit| {
+                edit.font(egui::TextStyle::Monospace)
+                    .desired_width(f32::INFINITY)
+            });
             design::named(ui, &output.response, &editor_name(path));
             let active = (output.response.changed(), output.response.gained_focus());
             if let Some(line) = error_line {
@@ -260,7 +265,7 @@ impl Repair {
         );
         super::file_actions(ui, campaign, &self.path);
         if let Some(disk) = self.disk.clone() {
-            let choice = design::disk_conflict_choices(ui, "note");
+            let choice = design::disk_conflict_choices(ui, design::ConflictSubject::This("note"));
             design::grouped_draft_comparison(ui, &self.draft, &disk, &self.path, true);
             if let Some(choice) = choice {
                 return self.choose(campaign, choice, disk, problem.is_some());
