@@ -204,6 +204,10 @@ pub struct WorldPage {
     view: View,
     /// The checks for one load of the index.
     checks: Option<(u64, super::checks::Checks)>,
+    /// Check rows with nothing left that stay in the list (FE4): a row whose page was open when
+    /// its last item went. Leaving the page keeps it, so no press moves the list; the next check
+    /// of the notes (a new index) ends it.
+    kept_empty: Vec<View>,
     /// Repair causes are read and parsed only when the index generation changes.
     broken_details: std::collections::BTreeMap<String, BrokenDetail>,
     /// Ticked questions with a live `Undo tick`, oldest first.
@@ -256,6 +260,7 @@ impl WorldPage {
             return;
         }
         self.checks = Some((index.generation(), super::checks::run(index)));
+        self.kept_empty.clear();
         // A tick's Undo lives while its note holds the ticked line where the tick wrote it.
         self.ticks.retain(|tick| {
             index
@@ -1264,16 +1269,21 @@ impl WorldPage {
                 checks.problems(),
             ),
         ];
-        // A row with nothing left stays while its page is open (FE4): the list does not move
-        // under the DM, and the row still shows which page is open.
+        // A row with nothing left stays while its page is open (FE4), and after the DM leaves
+        // that page until the notes are checked again: the list does not move under the DM, and
+        // the row still shows which page is open.
         for (view, title, detail, count) in rows {
             let open = self.view == view;
+            if count == 0 && open && !self.kept_empty.contains(&view) {
+                self.kept_empty.push(view);
+            }
+            let kept = self.kept_empty.contains(&view);
             let detail = match (count, view) {
                 (0, View::Questions) => "No open questions".to_owned(),
                 (0, _) => "No suggestions".to_owned(),
                 _ => detail,
             };
-            if (count > 0 || open) && design::two_line_row(ui, ROW, open, title, &detail).clicked()
+            if (count > 0 || kept) && design::two_line_row(ui, ROW, open, title, &detail).clicked()
             {
                 self.view = view;
                 self.keep_repair();

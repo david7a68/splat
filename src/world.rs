@@ -1957,10 +1957,12 @@ impl ReaderStatus {
     }
 
     /// The kind line's first words: the entry's kind, with its status only when no Status row
-    /// shows it.
-    pub(crate) fn kind_words(self, item: &Item) -> String {
+    /// shows it. A duplicate note's line names its file, not the fault its row names, so it
+    /// takes the plain kind and status (`subtitle`), not its row's words.
+    pub(crate) fn kind_words(self, item: &Item, duplicate: bool) -> String {
         match self {
             Self::Row => type_label(world_type(&item.entry)),
+            Self::KindLine if duplicate => crate::library::presentation::subtitle(&item.entry),
             Self::KindLine => item.subtitle.clone(),
         }
     }
@@ -2735,12 +2737,12 @@ impl Reader {
             campaign.filter(|campaign| edit::editable(item, index) && !self.editing(id, campaign));
         // Lookup has no file line. While the repair message names the fault, the kind line
         // names the open file in place of the fault.
-        let kind =
-            ReaderStatus::of(item, index, campaign.is_some(), self.status_editing).kind_words(item);
-        let kind_line = if self.compact
+        let duplicate = self.compact
             && campaign.is_some()
-            && index.duplicate_world.contains_key(&item.entry.path)
-        {
+            && index.duplicate_world.contains_key(&item.entry.path);
+        let kind = ReaderStatus::of(item, index, campaign.is_some(), self.status_editing)
+            .kind_words(item, duplicate);
+        let kind_line = if duplicate {
             format!("{kind} · {} · {}", item.owner, item.entry.path)
         } else {
             format!("{kind} · {}", item.owner)
@@ -4581,7 +4583,6 @@ impl Reader {
                 }
             }
             let width = self.relationship_value_width(ui, item, index);
-            let stacked = Self::stacked(ui);
             for (label, ats) in rows {
                 Self::value_row(
                     ui,
@@ -4610,7 +4611,8 @@ impl Reader {
                     ui,
                     "Stat block",
                     width,
-                    |ui| missing_link(ui, &name, stacked),
+                    // Its name and `Not found` share a line when they fit, as before (FD6).
+                    |ui| missing_link(ui, &name, false),
                     None,
                 );
             }
@@ -4653,7 +4655,7 @@ impl Reader {
                 && let Some(place) = reader_field(&item.entry, "in").and_then(Value::as_str)
             {
                 let name = place.trim_matches(['[', ']']);
-                Self::value_row(ui, "In", width, |ui| missing_link(ui, name, stacked), None);
+                Self::value_row(ui, "In", width, |ui| missing_link(ui, name, false), None);
             }
             if go.is_some() {
                 return go;
@@ -5412,7 +5414,7 @@ mod tests {
         let place = ReaderStatus::of(item, &index, true, false);
         assert_eq!(place, ReaderStatus::Row, "R9-row");
         assert_eq!(
-            place.kind_words(item),
+            place.kind_words(item, false),
             "NPC",
             "R9-row: no status on the kind line"
         );
@@ -5420,7 +5422,7 @@ mod tests {
         let place = ReaderStatus::of(item, &index, false, false);
         assert_eq!(place, ReaderStatus::KindLine, "R9-kind-line");
         assert_eq!(
-            place.kind_words(item),
+            place.kind_words(item, false),
             "NPC · alive",
             "R9-kind-line: the status stays"
         );
