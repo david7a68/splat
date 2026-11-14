@@ -1052,6 +1052,30 @@ pub(crate) fn link_problem_words(problems: &[LinkProblem]) -> String {
     }
 }
 
+/// The file's own name, when a World note's name is not its file's name (a rename in Obsidian
+/// or in the note's heading). The reader shows the warning with its two repairs; the list row
+/// and the header count show it too (FI2). A duplicate has its own repair first.
+pub(crate) fn renamed_file(item: &Item, index: &ContentIndex) -> Option<String> {
+    if item.entry.kind != "world" || index.duplicate_world.contains_key(&item.entry.path) {
+        return None;
+    }
+    let stem = Path::new(&item.entry.path)
+        .file_stem()
+        .unwrap_or_default()
+        .to_string_lossy();
+    (stem != item.entry.name).then(|| stem.into_owned())
+}
+
+/// Whether a World note needs fixing: the one test for its list row, the header's count and
+/// that count's menu, so the three never disagree.
+pub(crate) fn needs_fixing(item: &Item, index: &ContentIndex) -> bool {
+    !broken_links(item, index).is_empty()
+        || index.duplicate_world.contains_key(&item.entry.path)
+        || !item.entry.flags.is_empty()
+        || crate::roll_table::fault_count(&item.entry.body) > 0
+        || renamed_file(item, index).is_some()
+}
+
 /// The links on this note that need fixing, in the order the reader shows them.
 pub(crate) fn broken_links(item: &Item, index: &ContentIndex) -> Vec<LinkProblem> {
     let mut problems = Vec::new();
@@ -3027,118 +3051,111 @@ impl Reader {
             }
         });
         if let Some(campaign) = campaign {
-            if item.entry.kind == "world" && !index.duplicate_world.contains_key(&item.entry.path) {
-                let stem = Path::new(&item.entry.path)
-                    .file_stem()
-                    .unwrap_or_default()
-                    .to_string_lossy();
-                if stem != item.entry.name {
-                    let message = format!(
-                        "The file is {stem}.md, but the name is {}.",
-                        item.entry.name
-                    );
-                    // Two safe choices: the note takes the file's name, or the file takes the
-                    // note's name (FD5). An open edit form keeps its file, so the file keeps
-                    // its name while one is open.
-                    let file = renamed_path(&item.entry.path, &item.entry.name)
-                        .filter(|_| !self.editing(id, campaign));
-                    let (note, rename_file) =
-                        design::message_with_actions(ui, Tone::Warning, &message, |ui| {
-                            // A choice whose words do not fit the message's width says only
-                            // its verb; the warning above names the name, and the accessible
-                            // name keeps the whole choice.
-                            let room = ui.available_width();
-                            let choice = |full: String, short: &'static str| {
-                                let action = Action::secondary(&full).density(Density::Read);
-                                if action.natural_width(ui) <= room {
-                                    (full.clone(), full)
-                                } else {
-                                    (short.to_owned(), full)
-                                }
-                            };
-                            let (note_words, note_name) =
-                                choice(format!("Rename the note to {stem}"), "Rename the note");
-                            let file_words = file.as_ref().map(|to| {
-                                choice(
-                                    format!(
-                                        "Rename the file to {}",
-                                        to.rsplit('/').next().unwrap_or(to)
-                                    ),
-                                    "Rename the file",
-                                )
-                            });
-                            ui.horizontal_wrapped(|ui| {
-                                let note = Action::secondary(&note_words)
-                                    .name(&note_name)
+            if let Some(stem) = renamed_file(item, index) {
+                let message = format!(
+                    "The file is {stem}.md, but the name is {}.",
+                    item.entry.name
+                );
+                // Two safe choices: the note takes the file's name, or the file takes the
+                // note's name (FD5). An open edit form keeps its file, so the file keeps
+                // its name while one is open.
+                let file = renamed_path(&item.entry.path, &item.entry.name)
+                    .filter(|_| !self.editing(id, campaign));
+                let (note, rename_file) =
+                    design::message_with_actions(ui, Tone::Warning, &message, |ui| {
+                        // A choice whose words do not fit the message's width says only
+                        // its verb; the warning above names the name, and the accessible
+                        // name keeps the whole choice.
+                        let room = ui.available_width();
+                        let choice = |full: String, short: &'static str| {
+                            let action = Action::secondary(&full).density(Density::Read);
+                            if action.natural_width(ui) <= room {
+                                (full.clone(), full)
+                            } else {
+                                (short.to_owned(), full)
+                            }
+                        };
+                        let (note_words, note_name) =
+                            choice(format!("Rename the note to {stem}"), "Rename the note");
+                        let file_words = file.as_ref().map(|to| {
+                            choice(
+                                format!(
+                                    "Rename the file to {}",
+                                    to.rsplit('/').next().unwrap_or(to)
+                                ),
+                                "Rename the file",
+                            )
+                        });
+                        ui.horizontal_wrapped(|ui| {
+                            let note = Action::secondary(&note_words)
+                                .name(&note_name)
+                                .density(Density::Read)
+                                .show(ui)
+                                .clicked();
+                            let rename_file = file_words.as_ref().is_some_and(|(words, name)| {
+                                // The layout's own gap after a control, with this, is `L`.
+                                ui.add_space(design::L - ui.spacing().item_spacing.x);
+                                Action::secondary(words)
+                                    .name(name)
                                     .density(Density::Read)
                                     .show(ui)
-                                    .clicked();
-                                let rename_file =
-                                    file_words.as_ref().is_some_and(|(words, name)| {
-                                        // The layout's own gap after a control, with this, is `L`.
-                                        ui.add_space(design::L - ui.spacing().item_spacing.x);
-                                        Action::secondary(words)
-                                            .name(name)
-                                            .density(Density::Read)
-                                            .show(ui)
-                                            .clicked()
-                                    });
-                                (note, rename_file)
-                            })
-                            .inner
-                        });
-                    if rename_file && let Some(to) = &file {
-                        // The whole file must still be the whole file the index read, which
-                        // produced the reader: a changed comment, line end or byte order mark
-                        // counts as a change. The move checks the same text again.
-                        let result = file_fault::read_note(&campaign.path, &item.entry.path)
-                            .and_then(|text| {
-                                if item.source_text() == Some(crate::lookup::text_hash(&text)) {
-                                    FileRename::apply(campaign, &item.entry.path, to, &text)
-                                } else {
-                                    Err(format!(
-                                        "{} changed on disk. Nothing was renamed.",
-                                        item.entry.path
-                                    ))
-                                }
+                                    .clicked()
                             });
-                        match result {
-                            Ok(rename) => {
-                                self.held.results.record(ReaderResult::FileRename(rename));
-                                return Some(Go::Reload(item.entry.id));
+                            (note, rename_file)
+                        })
+                        .inner
+                    });
+                if rename_file && let Some(to) = &file {
+                    // The whole file must still be the whole file the index read, which
+                    // produced the reader: a changed comment, line end or byte order mark
+                    // counts as a change. The move checks the same text again.
+                    let result =
+                        file_fault::read_note(&campaign.path, &item.entry.path).and_then(|text| {
+                            if item.source_text() == Some(crate::lookup::text_hash(&text)) {
+                                FileRename::apply(campaign, &item.entry.path, to, &text)
+                            } else {
+                                Err(format!(
+                                    "{} changed on disk. Nothing was renamed.",
+                                    item.entry.path
+                                ))
                             }
-                            Err(error) => self.error = Some(error),
+                        });
+                    match result {
+                        Ok(rename) => {
+                            self.held.results.record(ReaderResult::FileRename(rename));
+                            return Some(Go::Reload(item.entry.id));
                         }
+                        Err(error) => self.error = Some(error),
                     }
-                    if note {
-                        let result = (|| {
-                            let before = file_fault::read_note(&campaign.path, &item.entry.path)?;
-                            let after = crate::content_workspace::patch_fields(
-                                &before,
-                                &[("splat_name", Some(stem.to_string().into()))],
-                            )?;
-                            let after = crate::content_workspace::rename_first_heading(
-                                after,
-                                &item.entry.name,
-                                &stem,
-                            );
-                            write_note(&campaign.path, &item.entry.path, Some(&before), &after)?;
-                            Ok::<_, String>(Change {
-                                campaign: campaign.id,
-                                path: item.entry.path.clone(),
-                                before,
-                                after,
-                                word: format!("Name changed to {stem}."),
-                                kind: ChangeKind::Name,
-                            })
-                        })();
-                        match result {
-                            Ok(change) => {
-                                self.held.results.record(ReaderResult::Name(change));
-                                return Some(Go::Reload(item.entry.id));
-                            }
-                            Err(error) => self.error = Some(error),
+                }
+                if note {
+                    let result = (|| {
+                        let before = file_fault::read_note(&campaign.path, &item.entry.path)?;
+                        let after = crate::content_workspace::patch_fields(
+                            &before,
+                            &[("splat_name", Some(stem.to_string().into()))],
+                        )?;
+                        let after = crate::content_workspace::rename_first_heading(
+                            after,
+                            &item.entry.name,
+                            &stem,
+                        );
+                        write_note(&campaign.path, &item.entry.path, Some(&before), &after)?;
+                        Ok::<_, String>(Change {
+                            campaign: campaign.id,
+                            path: item.entry.path.clone(),
+                            before,
+                            after,
+                            word: format!("Name changed to {stem}."),
+                            kind: ChangeKind::Name,
+                        })
+                    })();
+                    match result {
+                        Ok(change) => {
+                            self.held.results.record(ReaderResult::Name(change));
+                            return Some(Go::Reload(item.entry.id));
                         }
+                        Err(error) => self.error = Some(error),
                     }
                 }
             }
@@ -4674,6 +4691,32 @@ impl Reader {
                 }
             }
             let width = self.relationship_value_width(ui, item, index);
+            // An NPC with no stat block says so here too, with its Change, as World's reader
+            // does (SF3): a reader never hides a missing value or the act that sets it.
+            if fights(&item.entry) && reader_field(&item.entry, "creature").is_none() {
+                ui.push_id("creature", |ui| {
+                    if Self::relationship_row(
+                        ui,
+                        "Stat block",
+                        width,
+                        |ui| {
+                            ui.label(Type::Small.rich(ui, "not set").color(colors().muted));
+                        },
+                        None,
+                    ) {
+                        self.picker = Some(Picker {
+                            key: "creature",
+                            focus: true,
+                            ..Default::default()
+                        });
+                    }
+                });
+                if self.picker.as_ref().is_some_and(|p| p.key == "creature")
+                    && let Some(value) = self.pick(ui, item, index, campaign, None)
+                {
+                    return self.change(campaign, item, index, "creature", value);
+                }
+            }
             for (label, ats) in rows {
                 Self::value_row(
                     ui,

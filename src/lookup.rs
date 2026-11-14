@@ -1648,6 +1648,16 @@ impl view::Links for ContentIndex {
     }
 }
 
+/// What Lookup's reader shows, in the order the body decides it: the held NPC's card, a found
+/// note, an entry, or nothing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OnScreen {
+    Generated,
+    Written(usize),
+    Entry(usize),
+    Nothing,
+}
+
 #[derive(Default)]
 pub struct Lookup {
     pub open: bool,
@@ -2101,6 +2111,33 @@ impl Lookup {
         }
     }
 
+    /// What the reader shows: the one answer for the body and for the title line's open
+    /// button, so the button never acts on an entry that is not on screen (FL4).
+    fn on_screen(&self) -> OnScreen {
+        if self.generated.is_some() && self.generated_shown {
+            OnScreen::Generated
+        } else if let Some(at) = self.reading_written {
+            OnScreen::Written(at)
+        } else if let Some(at) = self.current {
+            OnScreen::Entry(at)
+        } else {
+            OnScreen::Nothing
+        }
+    }
+
+    /// The entry that the title line's open button opens: the entry on screen, when it has a
+    /// page to open on. Every World note opens on World, plain notes too (FD4). A found note or
+    /// a session note has no such page; it has its own card action.
+    fn open_target<'a>(&self, index: &'a ContentIndex) -> Option<&'a Item> {
+        let OnScreen::Entry(at) = self.on_screen() else {
+            return None;
+        };
+        index
+            .items
+            .get(at)
+            .filter(|item| !item.is_note() || item.is_world_note())
+    }
+
     /// An entry or a found note, which Trackers keeps while it is in view.
     fn holds_something(&self) -> bool {
         self.current.is_some() || self.reading_written.is_some()
@@ -2148,11 +2185,10 @@ impl Lookup {
             ui.horizontal(|ui| {
                 // The count belongs to the `DUE N` heading below; the title says nothing more (FH8).
                 ui.label(Type::Heading.rich(ui, "Trackers"));
+                // After the title, so the word keeps the target's own padding (R17: word first,
+                // its arrow after it). Alt+Left still steps back (`history`).
                 back = self.holds_something()
-                    && Action::quiet("Back")
-                        .icon(icons::LEGACY_BACK)
-                        .key("Alt+Left")
-                        .density(Density::Read)
+                    && design::TitleLine::back(crate::word!("Back"), design::BackEdge::Segments)
                         .show(ui)
                         .clicked();
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -2166,12 +2202,9 @@ impl Lookup {
             ui.horizontal(|ui| {
                 ui.label(Type::Heading.rich(ui, "Lookup"));
                 if self.trail.peek(Step::Back).is_some()
-                // The icon buttons' density, so the title line keeps one height with or without
-                // Back, and the search field below never moves.
-                && Action::quiet("Back")
-                    .icon(icons::LEGACY_BACK)
-                    .key("Alt+Left")
-                    .density(Density::Read)
+                // A `Read` target, the icon buttons' density, so the title line keeps one height
+                // with or without Back, and the search field below never moves.
+                && design::TitleLine::back(crate::word!("Back"), design::BackEdge::Segments)
                     .show(ui)
                     .clicked()
                 {
@@ -2180,29 +2213,27 @@ impl Lookup {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     close = design::icon_button(ui, icons::CLOSE, "Close Lookup").clicked();
                     if let Some(current) = self
-                    .index
-                    .as_ref()
-                    .and_then(|index| self.current.and_then(|at| index.items.get(at)))
-                    // Every World note opens on World, plain notes too (FD4). A session note
-                    // has no World page.
-                    && (!current.is_note() || current.is_world_note())
-                    && design::locked(
-                        ui,
-                        self.library_draft
-                            .then_some("Save or discard the Library draft first."),
-                        |ui| {
-                            design::icon_button(
-                                ui,
-                                icons::OPEN_OUT,
-                                if current.entry.kind == "world" || current.is_world_note() {
-                                    "Open in World"
-                                } else {
-                                    "Open in Library"
-                                },
-                            )
-                            .clicked()
-                        },
-                    ) {
+                        .index
+                        .as_ref()
+                        .and_then(|index| self.open_target(index))
+                        && design::locked(
+                            ui,
+                            self.library_draft
+                                .then_some("Save or discard the Library draft first."),
+                            |ui| {
+                                design::icon_button(
+                                    ui,
+                                    icons::OPEN_OUT,
+                                    if current.entry.kind == "world" || current.is_world_note() {
+                                        "Open in World"
+                                    } else {
+                                        "Open in Library"
+                                    },
+                                )
+                                .clicked()
+                            },
+                        )
+                    {
                         self.open_in_library = Some(current.entry.clone());
                     }
                 });
@@ -2584,15 +2615,16 @@ impl Lookup {
             }
         }
         design::rule(ui);
-        if let Some(npc) = &self.generated {
-            if self.generated_shown {
-                return;
-            }
-            if world::page::unsaved_npc_row(ui, &npc.name) {
-                self.generated_shown = true;
-            }
+        let shown = self.on_screen();
+        if shown == OnScreen::Generated {
+            return;
         }
-        if let Some(at) = self.reading_written {
+        if let Some(npc) = &self.generated
+            && world::page::unsaved_npc_row(ui, &npc.name)
+        {
+            self.generated_shown = true;
+        }
+        if let OnScreen::Written(at) = shown {
             self.written_reader(ui, at, &query);
             return;
         }
@@ -3416,6 +3448,25 @@ mod tests {
         }
         lookup.toggle_trackers();
         assert_eq!((lookup.current, lookup.reading_written), (Some(2), Some(0)));
+        // Round 29 FL4: the title line's open button takes the entry on screen. Under the found
+        // note, `current` is still an earlier entry; the button must not open it.
+        let index = lookup.index.clone().unwrap();
+        assert_eq!(lookup.on_screen(), OnScreen::Written(0));
+        assert!(
+            lookup.open_target(&index).is_none(),
+            "a found note on screen offers no open button for the entry under it"
+        );
+        lookup.reading_written = None;
+        assert_eq!(
+            lookup.open_target(&index).map(|item| item.entry.id),
+            Some(index.items[2].entry.id),
+            "the entry on screen opens"
+        );
+        lookup.generated_shown = true;
+        assert!(
+            lookup.open_target(&index).is_none(),
+            "the held NPC's card on screen offers no open button for the entry under it"
+        );
     }
 
     /// Beside the Library, Lookup takes a side button only under the pointer, and leaves

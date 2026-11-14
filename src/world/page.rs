@@ -557,14 +557,7 @@ impl WorldPage {
                 .world_groups("")
                 .values()
                 .flatten()
-                .filter(|(at, _)| {
-                    !super::broken_links(&index.items[*at], index).is_empty()
-                        || index
-                            .duplicate_world
-                            .contains_key(&index.items[*at].entry.path)
-                        || !index.items[*at].entry.flags.is_empty()
-                        || crate::roll_table::fault_count(&index.items[*at].entry.body) > 0
-                })
+                .filter(|(at, _)| super::needs_fixing(&index.items[*at], index))
                 .count()
         });
         let mut create = None;
@@ -599,10 +592,7 @@ impl WorldPage {
                         if let Some(index) = index {
                             for &(at, _) in index.world_groups("").values().flatten() {
                                 let item = &index.items[at];
-                                if (!super::broken_links(item, index).is_empty()
-                                    || index.duplicate_world.contains_key(&item.entry.path)
-                                    || !item.entry.flags.is_empty()
-                                    || crate::roll_table::fault_count(&item.entry.body) > 0)
+                                if super::needs_fixing(item, index)
                                     && design::link(ui, &item.entry.name).clicked()
                                 {
                                     self.open_note(item.entry.id);
@@ -1745,6 +1735,9 @@ impl WorldPage {
                     )
                 } else if !problems.is_empty() {
                     format!("{} {}", icons::WARN, super::link_problem_words(&problems))
+                } else if super::renamed_file(&index.items[position], index).is_some() {
+                    // The reader's warning says which file and which name (FI2).
+                    format!("{} File name differs", icons::WARN)
                 } else if entry.kind == "world" {
                     if index.items.iter().any(|other| {
                         other.entry.id != entry.id

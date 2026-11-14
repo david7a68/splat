@@ -12184,6 +12184,31 @@ pub mod world {
                 format!("At {size:?}, the new NPC's Add to fight is on its title line: {detail}"),
             );
         }
+        // Round 29 SF3: Lookup's reader keeps the NPC's missing stat block in view, with its
+        // Change, as World's reader does: `Stat block · not set · Change`.
+        let in_lookup = d.place_of(SEARCH_LOOKUP).map(|search| {
+            let stat_block = |name: &str| {
+                d.nodes()
+                    .into_iter()
+                    .any(|node| node.name == name && node.rect.left() >= search.left() - 1.0)
+            };
+            (
+                stat_block("Change Stat block"),
+                d.painted_rect_in(
+                    "not set",
+                    egui::Rect::from_min_max(
+                        egui::pos2(search.left() - 1.0, search.bottom()),
+                        egui::pos2(f32::MAX, f32::MAX),
+                    ),
+                )
+                .is_some(),
+            )
+        });
+        d.observe(
+            "iter-29-D-SF3",
+            in_lookup == Some((true, true)),
+            format!("Lookup's Change Stat block and its `not set`: {in_lookup:?}"),
+        );
         d.state("world-new-npc", Sizes::Default);
         let title_place = d.place_of(&add);
         d.click(&add);
@@ -14510,6 +14535,13 @@ pub mod session_notes {
                 format!("At {size:?}, the action and the title: {places:?}"),
             );
         }
+        // Round 29 FL4: the title line's open button acts on the card on screen. A session note
+        // has no page for it, so the header has none; the card has `Open this session`.
+        d.observe(
+            "iter-29-D-FL4",
+            !d.has("Open in Library") && !d.has("Open in World"),
+            "Lookup's header offers no open button while a session note is on screen",
+        );
         d.state("lookup-written-card-link", Sizes::Default);
         look_up_again(d, "bless");
         d.wait_for_text("Spell · Level 1 · Campaign");
