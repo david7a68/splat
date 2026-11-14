@@ -5642,15 +5642,17 @@ impl Sessions {
                 }
             });
             reading.mark = None;
-            // A part fills several screens, so the way on is also where the reading ends.
-            design::gap(ui, design::Gap::S);
-            if reading.part + 1 < count
-                && Action::secondary("Go on to the next part")
+            // A part fills several screens, so the way on is also where the reading ends. With
+            // no part after it, nothing follows the words: the footer comes `S` below them.
+            if reading.part + 1 < count {
+                design::gap(ui, design::Gap::S);
+                if Action::secondary("Go on to the next part")
                     .density(Density::Read)
                     .show(ui)
                     .clicked()
-            {
-                reading.part += 1;
+                {
+                    reading.part += 1;
+                }
             }
         });
         if back {

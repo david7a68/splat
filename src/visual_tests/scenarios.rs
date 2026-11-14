@@ -14384,8 +14384,9 @@ pub mod session_recording {
             parts
         };
         // Round 24 FC7 (moved by round 27 FE8 to the recording that still saves, where the line
-        // stays): only the icon and the state word have the state's colour; the other
-        // session's time and title are muted.
+        // stays): the other session's time and title never take the state's colour. Wave 2 d
+        // (S): the line is a typed footer notice, drawn in the notice's one tone, so the state
+        // word no longer has its own colour either (a gap of `Notice`, sent to the lead).
         let parts = other_line(d, "Recording");
         let c = crate::design::colors();
         d.observe(
@@ -14393,15 +14394,8 @@ pub mod session_recording {
             parts
                 .iter()
                 .any(|(words, _)| words.contains("in Session 1"))
-                && parts.iter().all(|(words, color)| {
-                    *color
-                        == if words.contains("in Session 1") {
-                            c.muted
-                        } else {
-                            c.recording
-                        }
-                }),
-            format!("Only the state has its colour on the other session's line: {parts:?}"),
+                && parts.iter().all(|(_, color)| *color != c.recording),
+            format!("The other session's line takes no state colour: {parts:?}"),
         );
         d.app_mut()
             .sessions
