@@ -855,11 +855,11 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     d.click(NAV_LOOKUP);
     d.expect(&added);
     d.state("log-line-added-in-lookup", Sizes::All);
-    d.click("Undo Log line");
+    d.click("Undo add Log line");
     d.observe(
         "T18.2",
-        fs::read_to_string(&path).unwrap() == before && !d.has("Undo Log line"),
-        "Undo Log line takes back that one line, and the note is as before",
+        fs::read_to_string(&path).unwrap() == before && !d.has("Undo add Log line"),
+        "Undo add Log line takes back that one line, and the note is as before",
     );
     // The measured journeys of app round 2 (J6 step 2): Lookup's reader of a campaign World
     // entry has `Change` on Status, as the World page's reader has. One act writes the value
@@ -879,7 +879,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     );
     d.type_text("missing");
     d.press(Key::Enter);
-    d.expect("Undo status change");
+    d.expect("Undo change status");
     let changed = fs::read_to_string(&path).unwrap();
     d.observe(
         "T15.4",
@@ -890,11 +890,11 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         format!("Change on Status in Lookup writes the value and its Log line: {changed:?}"),
     );
     d.state("status-changed-in-lookup", Sizes::Default);
-    d.click("Undo status change");
+    d.click("Undo change status");
     d.observe(
         "T15.4",
         fs::read_to_string(&path).unwrap() == away && d.has(&format!("Edit {VARRA_BLACK}")),
-        "Undo status change in Lookup takes back the value and its Log line",
+        "Undo change status in Lookup takes back the value and its Log line",
     );
     fs::write(&path, &before).unwrap();
     d.app_mut().lookup.refresh();
@@ -1143,10 +1143,10 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     // X28 of app round 2: the notice offers the words with `Copy text`, as a lost draft does,
     // and stays until the DM copies or dismisses it, also while Lookup shows no entry.
     let notice = format!("“{VARRA_BLACK}” was deleted. The Log line was not added: “{TYPED}”");
-    let copy = format!("Copy the Log line for {VARRA_BLACK}");
+    let copy = "Copy text".to_owned();
     d.observe(
         "T18.2-guard",
-        d.has(&copy) && d.has(&format!("Dismiss the Log line for {VARRA_BLACK}")),
+        d.has(&copy) && d.has(crate::design::outcome::DISMISS_NAME),
         "The deleted entry's notice has Copy text and Dismiss",
     );
     // Round 27 FC1, AC1, SC1: the lost draft's `Undo discard` is no body place of Ashfall
@@ -1172,7 +1172,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     }
     d.state("log-words-of-a-deleted-entry", Sizes::Default);
     d.click(&undo);
-    let lost = format!("Discard the draft of {VARRA_BLACK}");
+    let lost = "Discard draft".to_owned();
     d.observe(
         "iter-27-D-FC1-undo",
         d.has(&lost) && !d.has(&undo) && d.has(&copy),
@@ -1191,6 +1191,21 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     d.state("log-words-without-an-entry", Sizes::Default);
     d.app_mut().lookup.open_id(keep);
     d.settle();
+    // Round 28 row 134, ruling R3: the close icon lets the typed words go only with an Undo,
+    // and the Undo brings the notice and its words back.
+    let undo_dismiss = format!("Undo dismiss {VARRA_BLACK}’s Log line");
+    d.click(crate::design::outcome::DISMISS_NAME);
+    d.observe(
+        "iter-28-D-134-dismiss",
+        !d.visible_text(&notice) && d.has(&undo_dismiss),
+        "Dismiss ends the notice and offers Undo dismiss",
+    );
+    d.click(&undo_dismiss);
+    d.observe(
+        "iter-28-D-134-undo",
+        d.visible_text(&notice) && d.has(&copy) && !d.has(&undo_dismiss),
+        "Undo dismiss brings the notice and its words back",
+    );
     d.click(&copy);
     d.observe(
         "T18.2-guard",

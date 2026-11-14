@@ -553,13 +553,13 @@ pub fn broken(d: &mut Driver<'_>) {
         "iter-26-D-FG1",
         "Change Stat block",
         &rows,
-        Some("Undo changes"),
+        Some("Undo change"),
     );
     d.state("repaired-note-saved", Sizes::Default);
-    d.click("Undo changes");
+    d.click("Undo change");
     d.observe(
         "iter-17-D-FD1-undo",
-        fs::read_to_string(&path).unwrap() == fixed && !d.has("Undo changes"),
+        fs::read_to_string(&path).unwrap() == fixed && !d.has("Undo change"),
         "Undo changes restores the repaired note",
     );
     // An edit's Undo from before the note broke does not hide the later repair's result. The
@@ -591,7 +591,7 @@ pub fn broken(d: &mut Driver<'_>) {
         "iter-17-D-repaired-after-edit",
         fs::read_to_string(&path).unwrap() == fixed
             && d.visible_text("Note repaired.")
-            && !d.has("Undo changes"),
+            && !d.has("Undo change"),
         "A repair after an edit shows Note repaired., and the old edit's Undo is gone",
     );
     // Another note's rename Undo survives this repair.
@@ -600,7 +600,7 @@ pub fn broken(d: &mut Driver<'_>) {
     reload(d);
     d.click_containing("Old Warden · ");
     d.click("Rename the note to Gate Warden");
-    d.wait_for_text("Undo name change");
+    d.wait_for_text("Undo change name");
     let renamed = fs::read_to_string(&warden).unwrap();
     d.click_containing("Things to check · ");
     fs::write(&path, "---\nsplat_schema: 2\nsplat_id: [\n---\n").unwrap();
@@ -615,12 +615,12 @@ pub fn broken(d: &mut Driver<'_>) {
     d.click_containing("Gate Warden · ");
     d.observe(
         "iter-17-D-rename-undo-kept",
-        fs::read_to_string(&warden).unwrap() == renamed && d.has("Undo name change"),
-        "Repairing another note keeps this note's Undo name change",
+        fs::read_to_string(&warden).unwrap() == renamed && d.has("Undo change name"),
+        "Repairing another note keeps this note's Undo change name",
     );
     // The note goes after this check, so its Undo is only pressed when it is there.
-    if d.has("Undo name change") {
-        d.click("Undo name change");
+    if d.has("Undo change name") {
+        d.click("Undo change name");
     }
     fs::remove_file(&warden).unwrap();
     reload(d);
@@ -677,15 +677,14 @@ pub fn broken(d: &mut Driver<'_>) {
             ),
         );
     }
-    d.expect("Copy the text of Repaired watchkeeper");
+    d.expect("Copy text");
     // Revision 19: with the warning in the footer at 960, the last body action still takes the
     // press, and only it: the type section opens, and the warning and its choices stay.
     let base = d.window_size();
     d.set_base(SMALL);
     d.click("Give this note a type");
-    let opened = d.has_label(crate::world::TYPE_HELP)
-        && d.has("Copy the text of Repaired watchkeeper")
-        && d.has("Discard the draft of Repaired watchkeeper");
+    let opened =
+        d.has_label(crate::world::TYPE_HELP) && d.has("Copy text") && d.has("Discard draft");
     d.click("Give this note a type");
     let opened = opened && !d.has_label(crate::world::TYPE_HELP);
     d.set_base(base);
@@ -697,7 +696,7 @@ pub fn broken(d: &mut Driver<'_>) {
     action_at_text_edge(
         d,
         "iter-17-D-copy-text",
-        "Copy the text of Repaired watchkeeper",
+        "Copy text",
         "Resize World notes column",
         &[SMALL, DEFAULT, LARGE],
         |d| d.painted_left(lost),
@@ -705,10 +704,7 @@ pub fn broken(d: &mut Driver<'_>) {
     // Discard draft has no Undo: an `L` gap separates its target from Copy text's.
     for size in [SMALL, DEFAULT, LARGE] {
         let (copy, discard) = d.at_size(size, |d| {
-            (
-                d.place_of("Copy the text of Repaired watchkeeper"),
-                d.place_of("Discard the draft of Repaired watchkeeper"),
-            )
+            (d.place_of("Copy text"), d.place_of("Discard draft"))
         });
         d.observe(
             "iter-17-D-discard-gap",
@@ -719,18 +715,17 @@ pub fn broken(d: &mut Driver<'_>) {
             format!("At {size:?}, Copy text {copy:?} and Discard draft {discard:?} share a line, {} px apart", copy.zip(discard).map_or(f32::NAN, |(copy, discard)| discard.left() - copy.right())),
         );
     }
-    // Round 25 AA1: Discard draft is a message action without an icon, so it has the secondary
-    // border. Copy text keeps its icon and stays quiet.
+    // Round 28 ruling R3 (replaces round 25 AA1): a message choice's weight comes from its
+    // kind. Copy text is a choice, so it is bordered; Discard draft loses the words, so it is the
+    // red choice, `L` after it.
     let bordered = |d: &Driver<'_>, name: &str| {
-        d.control_frame(name).is_some_and(|frame| {
-            frame.stroke.width > 0.0 && frame.stroke.color == design::colors().field_border
-        })
+        d.control_frame(name)
+            .is_some_and(|frame| frame.stroke.width > 0.0)
     };
     d.observe(
-        "iter-25-D-AA1",
-        bordered(d, "Discard the draft of Repaired watchkeeper")
-            && !bordered(d, "Copy the text of Repaired watchkeeper"),
-        "Discard draft has the secondary border; Copy text with its icon does not",
+        "iter-28-D-R3-weights",
+        bordered(d, "Copy text") && d.has("Discard draft"),
+        "Copy text is a bordered choice beside Discard draft",
     );
     // Round 24 FA7: the warning says what happened in the DM's words, not `identity`.
     d.observe(
@@ -740,10 +735,10 @@ pub fn broken(d: &mut Driver<'_>) {
         "The lost draft's warning names no identity",
     );
     d.state("lost-draft-choices", Sizes::Default);
-    d.click("Discard the draft of Repaired watchkeeper");
+    d.click("Discard draft");
     d.observe(
         "iter-17-D-copy-text-discard",
-        !d.has("Copy the text of Repaired watchkeeper"),
+        !d.has("Copy text"),
         "Discard draft removes the lost draft and its message",
     );
     // Round 23 FF1: Discard draft keeps the words for one Undo discard, whatever note is open.
@@ -768,7 +763,7 @@ pub fn broken(d: &mut Driver<'_>) {
     let keeper_before = fs::read_to_string(&keeper).unwrap();
     d.click("Change In");
     d.click("Clear value");
-    d.expect("Undo place change");
+    d.expect("Undo change place");
     let keeper_after = fs::read_to_string(&keeper).unwrap();
     d.observe(
         "iter-23-D-FF1-b-changed",
@@ -778,19 +773,19 @@ pub fn broken(d: &mut Driver<'_>) {
     d.click(undo_lost);
     d.observe(
         "iter-23-D-FF1-undo",
-        d.has("Copy the text of Repaired watchkeeper")
+        d.has("Copy text")
             && !d.has(undo_lost)
             && fs::read_to_string(&keeper).unwrap() == keeper_after
-            && d.has("Undo place change"),
+            && d.has("Undo change place"),
         "Undo discard brings the lost draft back; B's change and its Undo stay",
     );
     // The next Edit ends the Undo: it is offered again after a second Discard, then goes.
-    d.click("Discard the draft of Repaired watchkeeper");
+    d.click("Discard draft");
     d.expect(undo_lost);
     d.click("Edit Lamp Keeper");
     d.observe(
         "iter-23-D-FF1-ends",
-        !d.has(undo_lost) && !d.has("Copy the text of Repaired watchkeeper"),
+        !d.has(undo_lost) && !d.has("Copy text"),
         "The next Edit ends the lost draft's Undo discard",
     );
     d.click("Cancel");
@@ -1132,7 +1127,7 @@ pub fn broken(d: &mut Driver<'_>) {
             "With the file text again, the change saves and the editor link returns",
         );
         // Leave the page as the steps below expect it.
-        d.click("Undo group change");
+        d.click("Undo change Part of");
         for path in [
             "NPCs/Mira Vell.md",
             "Factions/Lantern Guild.md",
@@ -1196,17 +1191,17 @@ pub fn broken(d: &mut Driver<'_>) {
         "re-check-3-D-after-save",
         !path.exists()
             && fs::read_to_string(&after_save).ok().as_deref() == Some(fixed.as_str())
-            && d.has("Undo file rename"),
+            && d.has("Undo rename file"),
         "Right after the DM's Save, Rename the file moves the saved note",
     );
-    if d.has("Undo file rename") {
-        d.click("Undo file rename");
+    if d.has("Undo rename file") {
+        d.click("Undo rename file");
         d.settle();
     }
     d.observe(
         "re-check-3-D-after-save-undo",
         fs::read_to_string(&path).ok().as_deref() == Some(fixed.as_str()) && !after_save.exists(),
-        "Undo file rename moves the saved note back",
+        "Undo rename file moves the saved note back",
     );
     d.expect("Rename the file to Repaired watchkeeper.md");
     // Re-check 2, repair 2: the rename compares the whole file with the whole file the index
@@ -1296,7 +1291,7 @@ pub fn broken(d: &mut Driver<'_>) {
         "iter-24-D-FD5",
         !path.exists()
             && fs::read_to_string(&moved).ok().as_deref() == Some(fixed.as_str())
-            && d.has("Undo file rename")
+            && d.has("Undo rename file")
             && !d.has_containing("but the name is"),
         "Rename the file moves the note's bytes to its name, and the warning goes",
     );
@@ -1322,9 +1317,9 @@ pub fn broken(d: &mut Driver<'_>) {
     d.click("Discard");
     let discard = d.name_starting("Undo discard of ");
     d.click("Rename the note to Lamp");
-    d.wait_for_text("Undo name change");
-    let first = newer_above(d, "Undo name change", &discard);
-    d.click("Undo name change");
+    d.wait_for_text("Undo change name");
+    let first = newer_above(d, "Undo change name", &discard);
+    d.click("Undo change name");
     d.settle();
     assert_eq!(
         fs::read_to_string(&lamp).unwrap(),
@@ -1332,12 +1327,12 @@ pub fn broken(d: &mut Driver<'_>) {
         "A's rename undone"
     );
     d.click("Rename the note to Lamp");
-    d.wait_for_text("Undo name change");
+    d.wait_for_text("Undo change name");
     d.click("Edit Lamp");
     d.type_into("Status", "asleep");
     d.click("Discard");
     let discard = d.name_starting("Undo discard of ");
-    let second = newer_above(d, &discard, "Undo name change");
+    let second = newer_above(d, &discard, "Undo change name");
     d.observe(
         "iter-26-D-newest-first",
         first.0 && second.0,
@@ -1349,7 +1344,7 @@ pub fn broken(d: &mut Driver<'_>) {
     // The next Edit ends the discard's Undo; the clean form closes with Cancel.
     d.click("Edit Lamp");
     d.click("Cancel");
-    d.expect("Undo name change");
+    d.expect("Undo change name");
     let lamp_renamed = fs::read_to_string(&lamp).unwrap();
     assert!(
         lamp_renamed.contains("splat_name: Lamp\n"),
@@ -1364,20 +1359,20 @@ pub fn broken(d: &mut Driver<'_>) {
     d.click("Guard");
     d.wait_for_text("Stat block set to Guard.");
     let lamp_both = fs::read_to_string(&lamp).unwrap();
-    let listed = d.in_view("Undo name change") && d.in_view("Undo stat block change");
-    d.click("Undo name change");
+    let listed = d.in_view("Undo change name") && d.in_view("Undo change stat block");
+    d.click("Undo change name");
     d.settle();
     let refused = fs::read_to_string(&lamp).unwrap() == lamp_both
         && d.has_containing("changed on disk")
-        && d.in_view("Undo stat block change")
-        && d.in_view("Undo name change");
-    d.click("Undo stat block change");
+        && d.in_view("Undo change stat block")
+        && d.in_view("Undo change name");
+    d.click("Undo change stat block");
     d.settle();
     let stat_back = fs::read_to_string(&lamp).unwrap() == lamp_renamed;
-    d.click("Undo name change");
+    d.click("Undo change name");
     d.settle();
     let restored = fs::read_to_string(&lamp).unwrap() == lamp_original;
-    let undo_left = d.has("Undo name change");
+    let undo_left = d.has("Undo change name");
     let refusal_left = d.has_containing("changed on disk");
     d.observe(
         "iter-26-D-two-results",
@@ -1386,22 +1381,22 @@ pub fn broken(d: &mut Driver<'_>) {
             && refused
             && stat_back
             && fs::read_to_string(&lamp).unwrap() == lamp_original
-            && !d.has("Undo name change")
+            && !d.has("Undo change name")
             && !d.has_containing("changed on disk"),
         format!(
             "Both listed {listed}; older refused {refused}; newer undone {stat_back}; restored \
-             {restored}, Undo name change left {undo_left}, refusal left {refusal_left}"
+             {restored}, Undo change name left {undo_left}, refusal left {refusal_left}"
         ),
     );
     d.click("Rename the note to Lamp");
-    d.wait_for_text("Undo name change");
+    d.wait_for_text("Undo change name");
     assert_eq!(
         fs::read_to_string(&lamp).unwrap(),
         lamp_renamed,
         "B changed state again"
     );
     d.click_containing("Repaired watchkeeper · ");
-    d.click("Undo file rename");
+    d.click("Undo rename file");
     d.settle();
     d.observe(
         "iter-24-D-FD5-undo",
@@ -1409,7 +1404,7 @@ pub fn broken(d: &mut Driver<'_>) {
             && !moved.exists()
             && fs::read_to_string(&lamp).unwrap() == lamp_renamed
             && d.has("Rename the file to Repaired watchkeeper.md"),
-        "Undo file rename moves the file back; the other note keeps its new name",
+        "Undo rename file moves the file back; the other note keeps its new name",
     );
     // Review repair 3: the rename's Undo belongs to its campaign. Lookup keeps its reader across
     // a campaign change, and Quiet Harbor has a note at the same relative path. A (rename in
@@ -1442,11 +1437,11 @@ pub fn broken(d: &mut Driver<'_>) {
     d.wait_for_text("Keeps the harbour light.");
     d.observe(
         "review-3-D-campaign-owner",
-        !d.has("Undo file rename") && quiet_note.exists(),
+        !d.has("Undo rename file") && quiet_note.exists(),
         "Emberfall's file rename offers no Undo on Quiet Harbor's note at the same path",
     );
     d.click("Rename the note to Repaired watchkeeper");
-    d.wait_for_text("Undo name change");
+    d.wait_for_text("Undo change name");
     let quiet_after = fs::read_to_string(&quiet_note).unwrap();
     assert!(
         quiet_after.contains("splat_name: Repaired watchkeeper\n"),
@@ -1456,14 +1451,14 @@ pub fn broken(d: &mut Driver<'_>) {
     d.settle();
     look_up_again(d, "Repaired watchkeeper");
     d.wait_for_text("The watchkeeper is back.");
-    // Lead ruling: B's `Undo name change` belongs to Quiet Harbor. Emberfall's note now sits at
+    // Lead ruling: B's `Undo change name` belongs to Quiet Harbor. Emberfall's note now sits at
     // the same relative path, and it does not offer B's Undo; it offers its own A.
     d.observe(
         "review-3-D-name-undo-owner",
-        !d.has("Undo name change") && d.has("Undo file rename"),
-        "Quiet Harbor's Undo name change does not show on Emberfall's note at the same path",
+        !d.has("Undo change name") && d.has("Undo rename file"),
+        "Quiet Harbor's Undo change name does not show on Emberfall's note at the same path",
     );
-    d.click("Undo file rename");
+    d.click("Undo rename file");
     d.settle();
     d.observe(
         "review-3-D-undo-after-b",
@@ -1478,13 +1473,13 @@ pub fn broken(d: &mut Driver<'_>) {
     // New words, so Lookup searches Quiet Harbor's notes again.
     look_up_again(d, "Repaired");
     d.wait_for_text("Keeps the harbour light.");
-    d.click("Undo name change");
+    d.click("Undo change name");
     d.settle();
     d.observe(
         "review-3-D-name-undo-home",
         fs::read_to_string(&quiet_note).ok().as_deref() == Some(quiet_before.as_str())
             && fs::read_to_string(&path).ok().as_deref() == Some(fixed.as_str()),
-        "Undo name change in Quiet Harbor restores its note; Emberfall's note stays",
+        "Undo change name in Quiet Harbor restores its note; Emberfall's note stays",
     );
     // Review re-check 1: an edit draft belongs to its campaign. In Lookup, Emberfall's form
     // reloads after an outside change, so its draft is clean and the switch is allowed. Quiet
@@ -1981,7 +1976,7 @@ pub fn facts(d: &mut Driver<'_>) {
         saved.contains("splat_part_of:") && saved.contains("Words kept across pane sizes."),
         "iter-7-D-FD6-save: text and groups save together"
     );
-    d.click("Undo changes");
+    d.click("Undo change");
     assert_eq!(
         fs::read_to_string(&lore_path).unwrap(),
         unchanged,
@@ -2008,7 +2003,7 @@ pub fn facts(d: &mut Driver<'_>) {
                 .starts_with(crate::sessions::split_note(&external).unwrap().1),
         "iter-7-D-FD6-conflict: a group-only overwrite keeps the disk text"
     );
-    d.click("Undo changes");
+    d.click("Undo change");
     assert_eq!(fs::read_to_string(&lore_path).unwrap(), external);
     fs::write(&lore_path, &unchanged).unwrap();
     reload(d);
@@ -2188,7 +2183,7 @@ pub fn facts(d: &mut Driver<'_>) {
         "A change in play writes the value and one Log line in the entry",
     );
     d.state("group-joined-with-log", Sizes::All);
-    d.click("Undo group change");
+    d.click("Undo change Part of");
     d.observe(
         "T15.4",
         fs::read_to_string(&path).unwrap() == before,
@@ -2254,11 +2249,11 @@ pub fn facts(d: &mut Driver<'_>) {
         "Enter adds one line at the end of the Log, with the change's stamp, and closes the field",
     );
     d.state("log-line-added", Sizes::All);
-    d.click("Undo Log line");
+    d.click("Undo add Log line");
     d.observe(
         "T18.2",
-        fs::read_to_string(&path).unwrap() == after && !d.has("Undo Log line"),
-        "Undo Log line takes back that one line",
+        fs::read_to_string(&path).unwrap() == after && !d.has("Undo add Log line"),
+        "Undo add Log line takes back that one line",
     );
     reload(d);
     d.click(NAV_SESSIONS);
@@ -2326,7 +2321,7 @@ pub fn facts(d: &mut Driver<'_>) {
         older.contains("- '[[The Arena]]'") && !older.contains("## Log"),
         "After the session's date, with no fight or recording, a Change writes no Log line",
     );
-    d.click("Undo group change");
+    d.click("Undo change Part of");
     fs::write(&note, &dated).unwrap();
     fs::write(&path, &after).unwrap();
     d.app_mut().sessions.refresh();
@@ -2373,7 +2368,7 @@ pub fn facts(d: &mut Driver<'_>) {
     );
     d.state("open-questions", Sizes::All);
     // X45 of app round 2: a question is ticked where the DM reads it. Its box writes `[x]` to
-    // that line of its note at once, with `Undo tick` in the pane's footer.
+    // that line of its note at once, with `Undo: tick` in the pane's footer.
     let horn = root(d).join("Lore/Horn Rings.md");
     let open = fs::read_to_string(&horn).unwrap();
     let question = "Open: Can a horn ring be sold?";
@@ -2397,7 +2392,7 @@ pub fn facts(d: &mut Driver<'_>) {
     };
     let below_before = row_below(d);
     d.click(question);
-    d.expect("Undo tick");
+    d.expect("Undo: tick");
     // Round 28 FE4: the last question ticked, the row stays while its page is open, says that
     // none is open, and the row below keeps its place; the page says so too.
     let below_after = row_below(d);
@@ -2422,11 +2417,11 @@ pub fn facts(d: &mut Driver<'_>) {
         "The box ticks that line of its note, and the question leaves the list",
     );
     d.state("question-ticked", Sizes::Default);
-    d.click("Undo tick");
+    d.click("Undo: tick");
     d.observe(
         "T15.5",
-        fs::read_to_string(&horn).unwrap() == open && d.has(question) && !d.has("Undo tick"),
-        "Undo tick opens that box again",
+        fs::read_to_string(&horn).unwrap() == open && d.has(question) && !d.has("Undo: tick"),
+        "Undo: tick opens that box again",
     );
     // The line changed on disk since it was read: the tick writes nothing and says so.
     let changed = open.replace(
@@ -2439,7 +2434,7 @@ pub fn facts(d: &mut Driver<'_>) {
         "T15.5",
         fs::read_to_string(&horn).unwrap() == changed
             && d.visible_text("This question changed in Horn Rings. Nothing was written.")
-            && !d.has("Undo tick"),
+            && !d.has("Undo: tick"),
         "A question whose line changed on disk is not ticked, and the footer says why",
     );
     // Another note took the file's place outside Splat, with the same question on the same
@@ -2455,7 +2450,7 @@ pub fn facts(d: &mut Driver<'_>) {
         "T15.5",
         fs::read_to_string(&horn).unwrap() == other
             && d.visible_text("Horn Rings changed on disk. Nothing was written.")
-            && !d.has("Undo tick"),
+            && !d.has("Undo: tick"),
         "A note that took the question's file is not ticked",
     );
     fs::write(&horn, &open).unwrap();
@@ -2555,11 +2550,11 @@ pub fn places(d: &mut Driver<'_>) {
         "iter-26-D-SH1",
         "Change In",
         &rows,
-        Some("Undo stat block change"),
+        Some("Undo change stat block"),
     );
     d.expect_same("Adding the stat block keeps the note's content and offers Undo.");
     d.state("npc-stat-block-changed", Sizes::All);
-    d.click("Undo stat block change");
+    d.click("Undo change stat block");
     body_kept(d, "iter-26-D-SH1-undo", "Change In", &rows, None);
     d.observe(
         "W3",
@@ -2589,7 +2584,7 @@ pub fn places(d: &mut Driver<'_>) {
         |d| d.place_of("Find a location").map(|field| field.left()),
     );
     d.click("Clear value");
-    d.expect("Undo place change");
+    d.expect("Undo change place");
     // Round 23 FG3: the message names the place as its row did (`Ashfall Keep`), not the words
     // in the file (`The Keep`).
     d.observe(
@@ -2599,27 +2594,27 @@ pub fn places(d: &mut Driver<'_>) {
     );
     d.observe(
         "iter-7-D-FD6-cleared",
-        !d.has("Change In") && d.in_view("Undo place change"),
+        !d.has("Change In") && d.in_view("Undo change place"),
         "A cleared place row disappears and its Undo stays visible",
     );
     // FD1, must stay true: a change that names a row value, with no row to sit beside, sits
     // below the row block, not in the page-result place.
     let (undo, row) = (
-        d.place_of("Undo place change"),
+        d.place_of("Undo change place"),
         d.place_of("Change Stat block"),
     );
     d.observe(
         "iter-17-D-FD1-row-change",
         undo.zip(row)
             .is_some_and(|(undo, row)| undo.top() >= row.bottom()),
-        format!("Undo place change at {undo:?}, below the last row at {row:?}"),
+        format!("Undo change place at {undo:?}, below the last row at {row:?}"),
     );
     body_kept(
         d,
         "iter-26-D-FH2",
         "Change Stat block",
         &rows,
-        Some("Undo place change"),
+        Some("Undo change place"),
     );
     let cleared = prose_at(d);
     d.observe(
@@ -2633,7 +2628,7 @@ pub fn places(d: &mut Driver<'_>) {
         format!("The prose moves up one row pitch with the In row: {prose:?} → {cleared:?}"),
     );
     d.state("cleared-place-keeps-undo", Sizes::All);
-    d.click("Undo place change");
+    d.click("Undo change place");
     assert_eq!(
         fs::read(root(d).join("NPCs/Rook Ambry.md")).unwrap(),
         original
@@ -2647,7 +2642,7 @@ pub fn places(d: &mut Driver<'_>) {
         finished_change_tone(d, "Place set to Watch House. It was Ashfall Keep.");
     d.observe("iter-20-D-FD5-place", success, detail);
     d.state("npc-new-place", Sizes::All);
-    d.click("Undo place change");
+    d.click("Undo change place");
     d.click("Ashfall Keep");
     d.observe(
         "World places",
@@ -2724,7 +2719,7 @@ pub fn places(d: &mut Driver<'_>) {
     );
     d.wait_for_text("Obsidian added the watch schedule.");
     d.state("place-change-keeps-disk-edit", Sizes::All);
-    d.click("Undo place change");
+    d.click("Undo change place");
     assert_eq!(fs::read_to_string(&path).unwrap(), external);
     // Review repair 5: the place picker names a shared name's folder (`Bell House (Ruins)`)
     // with no search on each frame, even when many notes give that name as an alias. The
@@ -3003,7 +2998,7 @@ pub fn round_trip(d: &mut Driver<'_>) {
         fs::read_to_string(&faction_path).unwrap().contains("ready"),
         "iter-6-D-ST1-shortcut: Ctrl+S must save the focused form",
     );
-    d.click("Undo changes");
+    d.click("Undo change");
     assert_eq!(fs::read_to_string(&faction_path).unwrap(), faction_before);
     go_campaign(d);
     d.click(TAB_ENTRIES);
@@ -3128,7 +3123,7 @@ pub fn round_trip(d: &mut Driver<'_>) {
         saved.contains(&unread_groups),
         "iter-8-D2-group-bytes: another field's save must keep the raw group block"
     );
-    d.click("Undo changes");
+    d.click("Undo change");
     assert_eq!(fs::read_to_string(&unread_path).unwrap(), before);
     // Removing the unread property leaves the parsed fields unchanged. The open form
     // must still notice its cleared flag and make the group picker available again.
@@ -4822,10 +4817,10 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         "iter-26-D-FJ3",
         "Add to fight",
         &add,
-        Some("Undo changes"),
+        Some("Undo change"),
     );
     d.state("npc-edit-saved-in-lookup", Sizes::All);
-    d.click("Undo changes");
+    d.click("Undo change");
     d.wait_for_text("Watch House");
     assert_eq!(fs::read_to_string(&path).unwrap(), before);
     body_kept(d, "iter-26-D-FJ3-undo", "Add to fight", &add, None);
@@ -8673,7 +8668,7 @@ pub fn world_note_moved(d: &mut Driver<'_>) {
     }
     d.state("duplicate-place-chooser-in-world", Sizes::All);
     d.click("Always use Locations/Watch House.md");
-    d.expect("Undo place change");
+    d.expect("Undo change place");
     d.observe_both(
         "iter-12-D-FD1-cleared",
         "After Always use this one, the list row and the header count no longer warn",
@@ -8686,7 +8681,7 @@ pub fn world_note_moved(d: &mut Driver<'_>) {
                     .all(|row| !row.name.contains("Place has") && row.in_view())
                 && !d.has_containing("note needs fixing")
                 && !d.has_containing("notes need fixing")
-                && d.in_view("Undo place change")
+                && d.in_view("Undo change place")
         },
     );
     // Round 24 AD2, FD3, SD2: two notes have the name, so the result names the chosen one's
@@ -8698,7 +8693,7 @@ pub fn world_note_moved(d: &mut Driver<'_>) {
         "The place result names the folder of the file the DM chose",
     );
     d.state("place-choice-kept-with-undo", Sizes::All);
-    d.click("Undo place change");
+    d.click("Undo change place");
     // From another note, the header count's menu opens the note whose place waits.
     d.click_containing("North Gate · ");
     d.expect("Edit North Gate");
@@ -9235,7 +9230,7 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     };
     let search_before = tops(d);
     d.click("Make Rook Ambry copy.md a separate note");
-    d.wait_for_text("Undo separate note");
+    d.wait_for_text("Undo: separate note");
     d.expect("Rook Ambry copy.md is now a separate note.");
     // iter-27-B FF8, AF1, SF1: the result and its Undo are in the editor's footer, below the
     // search's results, and the search and its filter do not move.
@@ -9266,15 +9261,15 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     d.replace_text_in(FIND_CREATURE, "Guard");
     d.click_beside_exact("Guard", "Add");
     d.expect("7. Guard");
-    let kept = d.has("Undo separate note");
-    d.click("Undo separate note");
+    let kept = d.has("Undo: separate note");
+    d.click("Undo: separate note");
     d.replace_text_in(FIND_CREATURE, "Rook Ambry");
     d.wait_for_text("Make Rook Ambry copy.md a separate note");
     d.observe(
         "iter-27-B-FF8-undo",
         kept && d.has("7. Guard") && !d.has("Rook Ambry copy.md is now a separate note."),
         format!(
-            "Undo separate note ends its result and keeps the Guard added after it (kept through the search: {kept})"
+            "Undo: separate note ends its result and keeps the Guard added after it (kept through the search: {kept})"
         ),
     );
     // The rest of the scenario starts from the saved encounter.
@@ -9585,7 +9580,7 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     d.state("duplicate-world-files-in-lookup", Sizes::All);
     d.press(Key::Escape);
     d.click("Make Rook Ambry copy.md a separate note");
-    d.wait_for_text("Undo separate note");
+    d.wait_for_text("Undo: separate note");
     d.expect("Rook Ambry copy.md is now a separate note.");
     assert_eq!(
         crate::content_workspace::note_id(&fs::read_to_string(&original).unwrap()),
@@ -9598,7 +9593,7 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     assert_eq!(fs::read_to_string(&original).unwrap(), before);
     d.expect("Rook Ambry copy");
     d.state("world-copy-repaired", Sizes::All);
-    d.click("Undo separate note");
+    d.click("Undo: separate note");
     d.wait_for_text("Make Rook Ambry copy.md a separate note");
     assert_eq!(fs::read_to_string(&copy).unwrap(), before);
     d.expect_same("Undo restores the same copied files and identity warning.");
@@ -9616,7 +9611,7 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     d.click_starting("Rook Ambry.md ·");
     d.expect("Make Rook Ambry copy.md a separate note");
     d.click("Make Rook Ambry copy.md a separate note");
-    d.wait_for_text("Undo separate note");
+    d.wait_for_text("Undo: separate note");
     d.expect("Rook Ambry copy.md is now a separate note.");
     let same_name = before.replace("splat_name: Rook Ambry", "splat_name: Rook Ambry copy");
     fs::write(&original, same_name).unwrap();
@@ -9651,12 +9646,12 @@ pub fn world_note_renamed(d: &mut Driver<'_>) {
     d.state("renamed-npc-keeps-old-name-in-lookup", Sizes::All);
     d.press(Key::Escape);
     d.click("Rename the note to Mara Vell");
-    d.wait_for_text("Undo name change");
+    d.wait_for_text("Undo change name");
     let (success, detail) = finished_change_tone(d, "Name changed to Mara Vell.");
     d.observe("iter-20-D-FD5-name", success, detail);
     for size in [SMALL, DEFAULT, LARGE] {
         let icon = d.at_size(size, |d| {
-            d.place_of("Undo name change")
+            d.place_of("Undo change name")
                 .is_some_and(|rect| d.painted_in(rect).contains(design::icons::UNDO))
         });
         d.observe(
@@ -9670,7 +9665,7 @@ pub fn world_note_renamed(d: &mut Driver<'_>) {
     d.expect("Mara Vell");
     d.state("renamed-npc-new-name-in-lookup", Sizes::All);
     d.press(Key::Escape);
-    d.click("Undo name change");
+    d.click("Undo change name");
     d.wait_for_text("Rename the note to Mara Vell");
 }
 
@@ -10810,7 +10805,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
             .as_bytes(),
         "iter-10-D-SD1-add-raw: Overwrite saves A, B and C; A and C keep their raw text"
     );
-    d.click("Undo changes");
+    d.click("Undo change");
     assert_eq!(fs::read(&path).unwrap(), outside.as_bytes());
     // The draft removes A while Obsidian adds C.
     fs::write(&path, &readable).unwrap();
@@ -10869,7 +10864,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         outside.replace(zarel, "").as_bytes(),
         "iter-10-D-SD1-remove-raw: Overwrite saves C alone, as raw text"
     );
-    d.click("Undo changes");
+    d.click("Undo change");
     assert_eq!(fs::read(&path).unwrap(), outside.as_bytes());
     // The draft removes A while Obsidian respells it. Overwrite still removes it.
     let part_of_line = "splat_part_of: # Keep the stored groups.\n";
@@ -10897,7 +10892,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
             .as_bytes(),
         "iter-11-D-SD1-respelled-raw: Overwrite removes the group Obsidian respelled"
     );
-    d.click("Undo changes");
+    d.click("Undo change");
     assert_eq!(fs::read(&path).unwrap(), respelled.as_bytes());
     // The draft adds B while Obsidian adds B in another spelling: one line, the note's own.
     let other_line = "- \"[[Factions/Added Guild|Guild]]\" # Added in Obsidian.\n";
@@ -10942,7 +10937,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         |d| {
             d.expect(ALREADY_SAVED);
             // Neighbour: the note's groups still show in the reader.
-            !d.has("Undo changes")
+            !d.has("Undo change")
                 && !d.has("Changes saved.")
                 && !d.has("Save changes")
                 && !d.has("Overwrite with my draft")
@@ -11109,7 +11104,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         "Overwrite saves other fields, keeps disk groups, explains the refusal and closes the form",
         |d| {
             d.expect(reason);
-            d.expect("Undo changes");
+            d.expect("Undo change");
             !d.has("Save changes")
         },
     );
@@ -11152,7 +11147,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     );
     d.expect_moves("Overwrite ends the disk-conflict choice, and the note's rows come back.");
     d.state("overwrite-keeps-unread-disk-groups", Sizes::All);
-    d.click("Undo changes");
+    d.click("Undo change");
     // The rows keep their place when the result goes with its Undo.
     body_kept(d, "iter-26-D-FE2", "Change Status", &rows, None);
     assert_eq!(fs::read(&path).unwrap(), unread.as_bytes());
@@ -11303,8 +11298,8 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         ready_over_gone.as_bytes(),
         "iter-13-D-FD2-second-overwrite: Overwrite writes the DM's ready over gone"
     );
-    d.expect("Undo changes");
-    d.click("Undo changes");
+    d.expect("Undo change");
+    d.click("Undo change");
     assert_eq!(
         fs::read(&path).unwrap(),
         gone.as_bytes(),
@@ -11354,8 +11349,8 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
             expected,
             "iter-13-D-FD2-second-overwrite-{case}: only the DM's status goes over disk2"
         );
-        d.expect("Undo changes");
-        d.click("Undo changes");
+        d.expect("Undo change");
+        d.click("Undo change");
         assert_eq!(
             fs::read(&path).unwrap(),
             disk2.as_bytes(),
@@ -11389,7 +11384,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     // The group change did not go in, so the form does not say it is in the note.
     d.observe(
         "iter-12-D-AD2-refused",
-        !d.has(ALREADY_SAVED) && !d.has("Undo changes"),
+        !d.has(ALREADY_SAVED) && !d.has("Undo change"),
         "A refused group change writes nothing, gives no Undo and does not say it is in the note",
     );
     d.expect(reason);
@@ -11471,7 +11466,7 @@ pub fn empty_links(d: &mut Driver<'_>) {
                 && saved.contains(&format!("splat_stat_block: {value}\n")),
             "iter-9-D-empty-bytes: unrelated save keeps both raw optional fields"
         );
-        d.click("Undo changes");
+        d.click("Undo change");
         assert_eq!(fs::read(root(d).join(&path)).unwrap(), before);
     }
 }

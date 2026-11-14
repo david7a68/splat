@@ -729,13 +729,10 @@ impl Reader {
         for gone in self.gone_logs(campaign) {
             messages.outcome(
                 FaultMessage::new(&super::ReaderFault::Waiting(gone_words(gone)))
-                    .choice(
-                        Choice::new(
-                            MessageChoice::Choice("Copy text"),
-                            super::FooterAct::GoneCopy(gone.id),
-                        )
-                        .hover(format!("Copy the Log line for {}", gone.name)),
-                    )
+                    .choice(Choice::new(
+                        MessageChoice::Choice("Copy text"),
+                        super::FooterAct::GoneCopy(gone.id),
+                    ))
                     .choice(Choice::new(
                         MessageChoice::Dismiss(Lost::TypedWords),
                         super::FooterAct::GoneDismiss(gone.id),
@@ -811,14 +808,12 @@ impl Reader {
                         MessageChoice::Choice("Copy text"),
                         super::FooterAct::LostCopy(id),
                     )
-                    .hover(format!("Copy the text of {name}")),
                 )
                 .choice(
                     Choice::new(
                         MessageChoice::Lose("Discard draft"),
                         super::FooterAct::LostDiscard(id),
                     )
-                    .hover(format!("Discard the draft of {name}")),
                 ),
             );
         }
@@ -850,7 +845,7 @@ impl Reader {
     pub(super) fn discard_lost(&mut self, id: Uuid) {
         if let Some(draft) = self.edits.remove(&id) {
             self.results
-                .record(super::ReaderResult::Discarded(id, draft));
+                .record(super::ReaderResult::Discarded(id, Box::new(draft)));
         }
     }
 
@@ -1249,7 +1244,7 @@ impl Reader {
             self.form_focused = false;
             if draft.dirty() {
                 self.results
-                    .record(super::ReaderResult::Discarded(id, draft));
+                    .record(super::ReaderResult::Discarded(id, Box::new(draft)));
             }
             return None;
         }
@@ -2172,7 +2167,7 @@ mod tests {
         let mut reader = Reader::default();
         reader
             .results
-            .record(super::super::ReaderResult::Discarded(id, draft));
+            .record(super::super::ReaderResult::Discarded(id, Box::new(draft)));
         // The note goes in its own campaign: the Undo is offered there.
         fs::remove_file(home_dir.path().join(&entry.path)).unwrap();
         let home_index = ContentIndex::load(&[], Some(&home)).unwrap();

@@ -2395,7 +2395,7 @@ enum ReaderResult {
     /// The campaign it was made in, and the change.
     Identity(Uuid, Change),
     /// The entry and the draft let go.
-    Discarded(Uuid, edit::EditDraft),
+    Discarded(Uuid, Box<edit::EditDraft>),
 }
 
 impl design::results::Kept for ReaderResult {
@@ -4188,7 +4188,7 @@ impl Reader {
                     ReaderResult::Discarded(..) => Ok(()),
                 }) {
                     Ok((ReaderResult::Discarded(id, draft), ())) => {
-                        self.edits.insert(id, draft);
+                        self.edits.insert(id, *draft);
                         None
                     }
                     Ok((ReaderResult::Identity(_, change), ())) => {
