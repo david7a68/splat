@@ -981,7 +981,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/encounters/list.rs", "row_menu", &[Ban::Layout(1)]),
         ("src/encounters/list.rs", "side_control", &[Ban::Layout(2)]),
-        ("src/library.rs", "above_footer", &[Ban::Layout(1)]),
         (
             "src/library.rs",
             "new_entry",
@@ -1218,7 +1217,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "integrity_d8_a_changed_encounter_compares_and_keeps_unknown_fields",
             &[Ban::Pane(1)],
         ),
-        ("src/library.rs", "form_footer", &[Ban::Pane(1)]),
         ("src/campaign_content.rs", "show", &[Ban::Pane(1)]),
         ("src/party.rs", "show", &[Ban::Pane(1)]),
     ]

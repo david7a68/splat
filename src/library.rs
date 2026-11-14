@@ -447,38 +447,20 @@ fn add_results<'a>(
 }
 
 /// The pane's message footer when it has no reader: below a form, or below the empty state of a
-/// scope with no entries. It holds the page's results and its error. Returns what was pressed.
-#[allow(clippy::disallowed_methods)]
-fn form_footer(
-    ui: &mut egui::Ui,
-    id: &str,
-    results: &ReaderResults,
-    orders: &ResultOrders,
-    (form_error, error): (Option<&str>, Option<&str>),
-) -> (ResultPress, f32) {
-    let pressed = std::cell::Cell::new(ResultPress::default());
-    let mut footer = design::Footer::new(id, ui.available_width().min(design::READER_MEASURE));
-    add_results(&mut footer, results, orders, &pressed);
+/// scope with no entries. It holds the page's results and its error; `pressed` gets the press.
+/// The caller draws its body through the footer's `pane`, so the footer follows a short form.
+fn form_footer<'a>(
+    width: f32,
+    results: &'a ReaderResults,
+    orders: &'a ResultOrders,
+    (form_error, error): (Option<&'a str>, Option<&'a str>),
+    pressed: &'a std::cell::Cell<ResultPress>,
+) -> design::Footer<'a> {
+    let mut footer = design::Footer::new("library_form_footer", width.min(design::READER_MEASURE));
+    add_results(&mut footer, results, orders, pressed);
     page_error(&mut footer, form_error);
     page_error(&mut footer, error);
-    let bottom = footer.show_by_hand(ui);
-    (pressed.get(), bottom)
-}
-
-/// The form above a form footer, in a scroll area that ends at the footer's top, so a long form
-/// never runs under the footer.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
-fn above_footer<R>(ui: &mut egui::Ui, bottom: f32, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    let height = (bottom - ui.cursor().top()).max(0.0);
-    egui::ScrollArea::vertical()
-        .id_salt("library_form_body")
-        .max_height(height)
-        .auto_shrink([false, true])
-        .show(ui, add)
-        .inner
+    footer
 }
 
 /// What the DM pressed in the reader's messages in the pane's message footer.
@@ -4974,53 +4956,56 @@ impl Library {
                 page: std::mem::take(&mut self.page_results),
                 ..Default::default()
             };
-            let (pressed, bottom) = form_footer(
-                ui,
-                "library_form_footer",
+            let pressed = std::cell::Cell::new(ResultPress::default());
+            let (new_error, error) = (self.new_error.clone(), self.error.clone());
+            let footer = form_footer(
+                ui.available_width(),
                 &results,
                 &self.result_orders,
                 (
-                    self.new_form.then_some(self.new_error.as_deref()).flatten(),
-                    self.error.as_deref(),
+                    self.new_form.then_some(new_error.as_deref()).flatten(),
+                    error.as_deref(),
                 ),
+                &pressed,
             );
-            self.page_pressed = pressed.page;
-            if self.new_form {
-                above_footer(ui, bottom, |ui| self.new_entry(ui, dirty, campaigns));
-            } else {
-                // The empty state is short; the pane already ends at the footer's top.
-                let mut can_use = false;
-                design::empty_state_with_body(
-                    ui,
-                    icons::LIBRARY,
-                    "No entries of your own yet",
-                    |ui| {
-                        ui.horizontal_wrapped(|ui| {
-                            ui.spacing_mut().item_spacing.x = 0.0;
-                            ui.label(Type::Body.rich(ui, "Copy an ").color(colors().muted));
-                            can_use = design::link(ui, "entry you can use").clicked();
-                            ui.label(
-                                Type::Body
-                                    .rich(ui, ", or make a new one here.")
-                                    .color(colors().muted),
-                            );
-                        });
-                    },
-                    |ui| {
-                        if Action::primary("New entry")
-                            .icon(icons::ADD)
-                            .show(ui)
-                            .clicked()
-                        {
-                            self.new_form = true;
-                            self.new_folder = kind_folder(&self.new_kind).into();
-                        }
-                    },
-                );
-                if can_use {
-                    self.scope = Scope::Uses;
+            let mut can_use = false;
+            footer.pane(ui, design::Body::Content, |ui| {
+                if self.new_form {
+                    self.new_entry(ui, dirty, campaigns);
+                } else {
+                    design::empty_state_with_body(
+                        ui,
+                        icons::LIBRARY,
+                        "No entries of your own yet",
+                        |ui| {
+                            ui.horizontal_wrapped(|ui| {
+                                ui.spacing_mut().item_spacing.x = 0.0;
+                                ui.label(Type::Body.rich(ui, "Copy an ").color(colors().muted));
+                                can_use = design::link(ui, "entry you can use").clicked();
+                                ui.label(
+                                    Type::Body
+                                        .rich(ui, ", or make a new one here.")
+                                        .color(colors().muted),
+                                );
+                            });
+                        },
+                        |ui| {
+                            if Action::primary("New entry")
+                                .icon(icons::ADD)
+                                .show(ui)
+                                .clicked()
+                            {
+                                self.new_form = true;
+                                self.new_folder = kind_folder(&self.new_kind).into();
+                            }
+                        },
+                    );
                 }
+            });
+            if can_use {
+                self.scope = Scope::Uses;
             }
+            self.page_pressed = pressed.get().page;
             let pressed = std::mem::take(&mut self.page_pressed);
             self.apply_page_press(pressed, campaigns);
             return;
@@ -5513,31 +5498,33 @@ impl Library {
                 bottom: 0,
             }))
             .show_inside(ui, |ui| {
-                let mut form_bottom = f32::INFINITY;
                 if self.form || self.new_form {
                     // A form has no reader: the page's results sit in the pane's message footer,
-                    // below the form, so they never move it (round 26).
+                    // `S` below a short form, pinned under a long one (round 26; round 28 pane).
                     let results = ReaderResults {
                         page: std::mem::take(&mut self.page_results),
                         ..Default::default()
                     };
-                    let (pressed, bottom) = form_footer(
-                        ui,
-                        "library_form_footer",
+                    let pressed = std::cell::Cell::new(ResultPress::default());
+                    let (new_error, error) = (self.new_error.clone(), self.error.clone());
+                    let footer = form_footer(
+                        ui.available_width(),
                         &results,
                         &self.result_orders,
                         (
-                            self.new_form.then_some(self.new_error.as_deref()).flatten(),
-                            self.error.as_deref(),
+                            self.new_form.then_some(new_error.as_deref()).flatten(),
+                            error.as_deref(),
                         ),
+                        &pressed,
                     );
-                    self.page_pressed = pressed.page;
-                    form_bottom = bottom;
-                }
-                if self.form {
-                    above_footer(ui, form_bottom, |ui| self.package_form(ui, campaigns));
-                } else if self.new_form {
-                    above_footer(ui, form_bottom, |ui| self.new_entry(ui, dirty, campaigns));
+                    footer.pane(ui, design::Body::Content, |ui| {
+                        if self.form {
+                            self.package_form(ui, campaigns);
+                        } else {
+                            self.new_entry(ui, dirty, campaigns);
+                        }
+                    });
+                    self.page_pressed = pressed.get().page;
                 } else {
                     self.editor(ui, &subtitle, campaigns);
                 }
@@ -5935,10 +5922,8 @@ impl Library {
         if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
             self.form = false;
         }
-        egui::ScrollArea::vertical()
-            .id_salt("package_form")
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
+        // The pane scrolls the form; it has no scroll area of its own.
+        ui.scope(|ui| {
                 ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
                 design::gap(ui, design::Gap::L);
                 ui.horizontal(|ui| {
