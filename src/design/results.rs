@@ -601,12 +601,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "editor_pane",
             &[
                 Ban::Results,
-                Ban::Layout(4),
+                Ban::Layout(3),
                 Ban::Extras(1),
                 Ban::Pane(3),
-                Ban::RowKey(1),
             ],
         ),
+        ("src/library.rs", "field_key", &[Ban::RowKey(1)]),
         ("src/library.rs", "give_new_identity", &[Ban::Results]),
         (
             "src/library.rs",

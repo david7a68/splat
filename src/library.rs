@@ -1023,6 +1023,20 @@ impl Note {
             .as_ref()
             .map_or(Section::Unreadable, Section::for_entry)
     }
+    /// The key of this note's text fields (its Markdown, the read-only copy of the DM's draft),
+    /// with its owner's id. A file has no identity but its path, so the path is the key: a counted
+    /// escape (`Ban::RowKey`), the one place that builds it.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: a text key from data (design::results::STAGED_ALLOWS)"
+    )]
+    fn field_key(&self) -> design::TextKey {
+        design::TextKey::from_data(self.path.clone())
+    }
+    /// This note's Markdown editor.
+    fn markdown_field(&self) -> design::FieldId {
+        LIBRARY_MARKDOWN.of(self.owner.id()).with(self.field_key())
+    }
     /// How the row matches, as `matching::with_other` ranks it, or None if it does not. Plain
     /// words match the name (in any order, or with a typo), path or section, or a creature's
     /// facts. `habitat:forest` and the other fact terms match creatures only.
@@ -2498,6 +2512,7 @@ const NEW_ENTRY_KIND: design::FieldId =
 const NEW_ENTRY_PLACE: design::FieldId =
     crate::field_id!("new_entry_place").once(design::Once::CreateForm);
 const DISK_DRAFT: design::FieldName = crate::field_id!("library_disk_draft");
+const LIBRARY_MARKDOWN: design::FieldName = crate::field_id!("library_markdown");
 /// A row's short cause for an entry whose identity or key another file claims too.
 pub(crate) const SAME_ENTRY: &str = "Same entry in two files";
 /// A row's short cause for a first heading that does not say the entry's name.
@@ -8122,19 +8137,16 @@ impl Library {
                         .max_height(visible_height)
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
-                            let output = egui::TextEdit::multiline(&mut self.draft)
-                                .id(egui::Id::new((
-                                    "library_markdown",
-                                    note.owner.id(),
-                                    &note.path,
-                                )))
-                                .font(egui::TextStyle::Monospace)
-                                .frame(false)
-                                .margin(egui::Vec2::ZERO)
-                                .desired_width(ui.available_width())
-                                .min_size(egui::vec2(0.0, visible_height))
-                                .interactive(editable)
-                                .show(ui);
+                            let width = ui.available_width();
+                            let output =
+                                note.markdown_field().editor(ui, &mut self.draft, |edit| {
+                                    edit.font(egui::TextStyle::Monospace)
+                                        .frame(false)
+                                        .margin(egui::Vec2::ZERO)
+                                        .desired_width(width)
+                                        .min_size(egui::vec2(0.0, visible_height))
+                                        .interactive(editable)
+                                });
                             // Each edit is a new draft: a failed Save of the old words ends.
                             if output.response.changed() {
                                 self.draft_revision += 1;
@@ -8241,10 +8253,8 @@ impl Library {
                                             );
                                             let mut draft = self.draft.as_str();
                                             // The field belongs to this note: its owner and path key it.
-                                            let field = DISK_DRAFT.of(note.owner.id());
-                                            let field = field.with(design::TextKey::from_data(
-                                                note.path.clone(),
-                                            ));
+                                            let field =
+                                                DISK_DRAFT.of(note.owner.id()).with(note.field_key());
                                             let response =
                                                 field.multi_line(ui, &mut draft, |edit| {
                                                     edit.font(egui::TextStyle::Monospace)
@@ -11851,7 +11861,7 @@ mod tests {
         let ctx = egui::Context::default();
         crate::design::theme::install(&ctx);
         let note = &library.loaded.as_ref().unwrap().notes[library.selected.unwrap()];
-        let id = egui::Id::new(("library_markdown", note.owner.id(), &note.path));
+        let id = note.markdown_field().id();
         let input = |events, time| egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(
                 egui::Pos2::ZERO,
