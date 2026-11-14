@@ -5650,10 +5650,6 @@ impl Sessions {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn recordings_tab(
         &mut self,
         ui: &mut egui::Ui,
@@ -5824,7 +5820,7 @@ impl Sessions {
     /// the body may change anything; `session_press` acts on the footer's press after it.
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: the draft's dropped words and the page's notice slot keep their own orders (`outcome_at`, design::results::STAGED_ALLOWS)"
+        reason = "staged: the dropped words of a draft and the notice slot of the page keep their own orders (`outcome_at`, design::results::STAGED_ALLOWS)"
     )]
     fn session_messages<'f>(
         &mut self,

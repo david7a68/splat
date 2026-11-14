@@ -1425,7 +1425,6 @@ mod tests {
         assert_eq!(fs::read_to_string(&tonight.path).unwrap(), drafted);
     }
 
-    #[allow(clippy::disallowed_methods)]
     fn harness(
         dir: &Path,
         selected: Uuid,
@@ -1655,7 +1654,7 @@ mod tests {
         assert_eq!(read(), changed);
         assert!(
             harness
-                .query_all_by_label("Notes not saved")
+                .query_all_by_label("Notes not saved.")
                 .next()
                 .is_some()
         );
@@ -1686,7 +1685,7 @@ mod tests {
         assert!(read().contains("Who burned the ropes?"));
         assert!(
             harness
-                .query_all_by_label("Notes not saved")
+                .query_all_by_label("Notes not saved.")
                 .next()
                 .is_none()
         );
