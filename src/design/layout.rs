@@ -2726,7 +2726,8 @@ fn cancel_at_line_start(ui: &Ui, word: Word) -> Action<'static> {
 
 /// The input method's composition in one form: the text field it types into. It ends when that
 /// field loses the keyboard (a press on another control, the form closed: egui takes the
-/// keyboard from a field that is not drawn), and when a commit or a `Disabled` event arrives.
+/// keyboard from a field that is not drawn), when the window loses the keyboard, and when a
+/// commit or a `Disabled` event arrives.
 /// A field that has not had the keyboard since the frame before never composes.
 #[derive(Clone, Copy)]
 struct Composing(Id);
@@ -2912,10 +2913,21 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
         let focused = ui
             .memory(|memory| memory.focused())
             .filter(|id| text_ids.contains(id));
-        // The state of the frame before, only while its field still has the keyboard.
-        let was_composing = ime_key
-            .and_then(|key| ui.data(|data| data.get_temp::<Composing>(key)))
-            .is_some_and(|Composing(field)| Some(field) == focused);
+        // The window lost the keyboard: egui keeps a field's focus then (`has_focus` ignores the
+        // window), but the input method's composition ends, and no commit may follow.
+        let window_left = ui.input(|input| {
+            input.viewport().focused == Some(false)
+                || input
+                    .events
+                    .iter()
+                    .any(|event| matches!(event, egui::Event::WindowFocused(false)))
+        });
+        // The state of the frame before, only while its field still has the keyboard and the
+        // window has kept it.
+        let was_composing = !window_left
+            && ime_key
+                .and_then(|key| ui.data(|data| data.get_temp::<Composing>(key)))
+                .is_some_and(|Composing(field)| Some(field) == focused);
         let (ime_event, composing) = ui.input(|input| {
             let ime = || {
                 input.events.iter().filter_map(|event| match event {
@@ -2926,7 +2938,10 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
             let composing = ime().fold(was_composing, |_, ime| {
                 matches!(ime, egui::ImeEvent::Enabled | egui::ImeEvent::Preedit(_))
             });
-            (ime().next().is_some(), focused.is_some() && composing)
+            (
+                ime().next().is_some(),
+                !window_left && focused.is_some() && composing,
+            )
         });
         if focused.is_some() && (was_composing || ime_event) {
             ui.input_mut(|input| {

@@ -1265,6 +1265,41 @@ fn inline_create_moves_nothing_while_the_dm_types() {
     assert!(focused(&nodes) == title, "the title has the keyboard again");
     let (out, _, _) = draw_form(key(egui::Key::Enter), 0, None, None, false);
     assert!(out.create, "a composition ends with its form");
+    // Second re-check of PR 351: the window loses the keyboard during a composition, with no
+    // commit and no `Disabled`, and gets it back. egui keeps the title's focus; the composition
+    // ends, so a fresh Enter creates and a fresh Escape cancels. The same with no composition:
+    // nothing changes.
+    let window = |focused: bool| vec![egui::Event::WindowFocused(focused)];
+    for compose in [true, false] {
+        for then in [egui::Key::Enter, egui::Key::Escape] {
+            reset();
+            let _ = draw_form(Vec::new(), 0, None, None, true);
+            let (_, nodes, _) = draw_form(
+                if compose { preedit() } else { Vec::new() },
+                0,
+                None,
+                None,
+                false,
+            );
+            assert!(
+                focused(&nodes) == title,
+                "the pressure: the title has the keyboard"
+            );
+            let _ = draw_form(window(false), 0, None, None, false);
+            let (_, nodes, _) = draw_form(window(true), 0, None, None, false);
+            assert!(
+                focused(&nodes) == title,
+                "the title keeps the keyboard across the window's focus ({compose})"
+            );
+            let (out, nodes, _) = draw_form(key(then), 0, None, None, false);
+            assert!(
+                out.create == (then == egui::Key::Enter)
+                    && out.cancel == (then == egui::Key::Escape)
+                    && focused(&nodes).is_none(),
+                "after the window's focus comes back, a fresh {then:?} is the form's (composed: {compose})"
+            );
+        }
+    }
 }
 
 /// Whether `after` is `before` with `letter` inserted at one place: every letter of `before`
