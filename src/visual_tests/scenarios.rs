@@ -1885,6 +1885,40 @@ pub mod library_navigation {
             "The row's broken link also counts in the Library header",
         );
         d.state("homebrew-reference", Sizes::All);
+        // Round 28 (the G6 line that left the list in PR 331): the reader is a pane. Its message
+        // footer follows a body that fits by `S` (1200x800), and is pinned only when the body
+        // scrolls (960x640, where this entry is taller than its room). G6 finds nothing.
+        let placed = |d: &Driver<'_>| {
+            let record = d
+                .pane_records()
+                .into_iter()
+                .find(|record| record.footer().is_some())?;
+            let (footer, viewport, height) = (
+                record.footer()?,
+                record.viewport()?,
+                record.content_height()?,
+            );
+            let gap = footer.top() - (viewport.top() + height);
+            Some(if record.fits() && record.offset() <= 0.5 {
+                (
+                    (gap - crate::design::S).abs() <= 1.0,
+                    format!("follows by {gap}"),
+                )
+            } else {
+                (
+                    height > viewport.height(),
+                    format!("pinned, content {height} in {}", viewport.height()),
+                )
+            })
+        };
+        for size in [SMALL, DEFAULT] {
+            let (placed, gaps) = d.at_size(size, |d| (placed(d), d.short_body_gaps()));
+            d.observe(
+                "iter-28-L-G6",
+                placed.as_ref().is_some_and(|(right, _)| *right) && gaps.is_empty(),
+                format!("At {size:?} the reader's footer follows a short body or is pinned under a long one: {placed:?}, G6 {gaps:?}"),
+            );
+        }
         // From another entry, the header count's menu opens the entry with the broken link.
         d.click_starting("Ashfall · ");
         d.wait_for_text("Hot ash falls");
@@ -11508,6 +11542,8 @@ pub mod nav_table {
     const SECTION: &str = "Creatures";
     const ENTRY_ROW: &str = "Aboleth · ";
     const ENTRY: &str = "Aboleth";
+    const OTHER_ROW: &str = "Adult Black Dragon · ";
+    const OTHER: &str = "Adult Black Dragon";
     const LOOKUP_QUERY: &str = "fireball";
     const LOOKUP_ENTRY: &str = "Fireball";
     const SELECTED: &str = "Cinder Wolf 7";
@@ -11558,6 +11594,7 @@ pub mod nav_table {
         d.click("Section");
         d.click(&format!("Library section: {SECTION}"));
         d.expect(ENTRY_ROW);
+        let entry_top = d.scroll_position_of_reader(ENTRY);
         d.scroll_at(pos2(720.0, 400.0), 2);
         let entry_scroll = d.scroll_position_of_reader(ENTRY);
         d.begin_task();
@@ -11623,6 +11660,26 @@ pub mod nav_table {
             scope && entry && scroll == entry_scroll && entry_scroll.is_some_and(|y| y < 300.0),
             format!(
                 "Library: scope {scope}, entry {entry}, scroll {scroll:?} was {entry_scroll:?}"
+            ),
+        );
+        // Each entry keeps its own scroll (PR 341 review, P2): another long entry opens at its
+        // top, not at Aboleth's offset; back on Aboleth, its offset is as the DM left it, as on
+        // main, where the body scroll was keyed by the entry.
+        let (other, back) = d.aside(|d| {
+            d.click_starting(OTHER_ROW);
+            d.wait_for_text(OTHER);
+            let other = d.scroll_position_of_reader(OTHER);
+            d.click_starting(ENTRY_ROW);
+            d.wait_for_text(ENTRY);
+            (other, d.scroll_position_of_reader(ENTRY))
+        });
+        d.observe(
+            "G2-reader-own-scroll",
+            entry_top.is_some_and(|top| entry_scroll.is_some_and(|y| y < top - 1.0))
+                && other.zip(entry_top).is_some_and(|(y, top)| (y - top).abs() < 1.0)
+                && back == entry_scroll,
+            format!(
+                "Library: {OTHER} opens at its top {other:?} (top {entry_top:?}), and {ENTRY} comes back at {back:?} (left at {entry_scroll:?})"
             ),
         );
         go_party(d);

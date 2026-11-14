@@ -1516,17 +1516,6 @@ impl Campaigns {
     }
 }
 
-/// An inline creation form's blocked reason, on its own `Small` line below the Create action.
-/// The line stays when the reason is empty, so the rows below never move as the DM types
-/// (round 26 FB6). Settings, Manage packages and New entry share it.
-pub(crate) fn creation_reason(ui: &mut egui::Ui, reason: Option<&str>) {
-    // Not a wrapping row: that pads its line to a control's height.
-    ui.vertical(|ui| {
-        ui.set_min_height(Type::Small.line());
-        design::blocked_reason(ui, reason);
-    });
-}
-
 /// The Browse button and the gap before it, beside the details form's folder field.
 const BROWSE_WIDTH: f32 = 92.0;
 crate::create_reasons! {
