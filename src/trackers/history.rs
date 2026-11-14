@@ -12,8 +12,9 @@ use super::{
     result_words, with_dependents,
 };
 use crate::design::outcome::PagePlaceholder;
-use crate::design::{self, Action, Density, Gap, Tone, Type, colors};
-use crate::world::{FooterAct, FooterKind, FooterLine, FooterRank};
+use crate::design::outcome::{FaultMessage, Messages, Outcome, Said, UndoStep, Verb};
+use crate::design::{self, Action, Density, Gap, Type, colors};
+use crate::world::FooterAct;
 use eframe::egui;
 use ledger::{Entry, Ledger, Op};
 use std::collections::HashMap;
@@ -333,8 +334,24 @@ impl Trackers {
     }
 }
 
-/// The reader's footer lines of the history of `note`: why the last `Remove` or its Undo wrote
-/// nothing, and the last `Remove` with `Undo remove`. A note turned off shows nothing.
+/// One footer message of a note's history, as `footer_lines` selects it: its words, and its kind.
+pub(crate) struct FooterLine {
+    pub words: String,
+    kind: LineKind,
+}
+
+enum LineKind {
+    /// Why the last `Remove` or its Undo wrote nothing: the files refused it.
+    Refused,
+    /// The save of the history failed, in `view::not_saved`'s words.
+    NotSaved(crate::design::outcome::Sentence),
+    /// The last `Remove`, with the order `remove` issued for it.
+    Removed(crate::design::ResultOrder),
+}
+
+/// The footer messages of the history of `note`, in the footer's order: why the last `Remove`
+/// or its Undo wrote nothing, and the last `Remove` with `Undo remove`. A note turned off shows
+/// nothing. The one selection: `footer` draws exactly these, and the checks read them.
 pub(crate) fn footer_lines(trackers: &Trackers, note: Uuid) -> Vec<FooterLine> {
     let mut lines = Vec::new();
     if !in_play(&trackers.rules, note) {
@@ -345,32 +362,66 @@ pub(crate) fn footer_lines(trackers: &Trackers, note: Uuid) -> Vec<FooterLine> {
         .as_ref()
         .filter(|(owner, _)| *owner == note)
     {
-        let (tone, words) = match reason {
-            Unrecorded::Refused(why) => (Tone::Warning, why.clone()),
-            Unrecorded::NotSaved(error) => (Tone::Error, super::view::not_saved(error).to_string()),
-        };
-        lines.push(FooterLine::new(
-            FooterRank::Reason,
-            tone,
-            &words,
-            FooterKind::Plain,
-        ));
+        lines.push(match reason {
+            Unrecorded::Refused(why) => FooterLine {
+                words: why.clone(),
+                kind: LineKind::Refused,
+            },
+            Unrecorded::NotSaved(error) => {
+                let words = super::view::not_saved(error);
+                FooterLine {
+                    words: words.to_string(),
+                    kind: LineKind::NotSaved(words),
+                }
+            }
+        });
     }
     if let Some(removed) = trackers.removed.as_ref().filter(|r| r.note == note) {
-        lines.push(
-            FooterLine::new(
-                FooterRank::Undo,
-                crate::world::CHANGED,
-                &removed.words,
-                FooterKind::Undo {
-                    label: "Undo remove",
-                    act: FooterAct::Trackers,
-                },
-            )
-            .at(removed.order),
-        );
+        lines.push(FooterLine {
+            words: removed.words.clone(),
+            kind: LineKind::Removed(removed.order),
+        });
     }
     lines
+}
+
+/// The reader's footer messages of the history of `note` (`footer_lines`), typed. (A named lead
+/// exception in package D's slice: only this footer path moves to the typed footer. `remove`
+/// still issues its own order, so the result goes in by the staged path.)
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: the last Remove keeps the order `remove` issued (design::results::STAGED_ALLOWS)"
+)]
+pub(crate) fn footer(trackers: &Trackers, note: Uuid, messages: &mut Messages<'_, FooterAct>) {
+    for line in footer_lines(trackers, note) {
+        match line.kind {
+            LineKind::Refused => {
+                messages.outcome(Outcome::Refused(crate::world::said(&line.words)));
+            }
+            LineKind::NotSaved(words) => {
+                messages.outcome(FaultMessage::new(&NotSaved(words)));
+            }
+            LineKind::Removed(order) => {
+                messages.outcome_at(
+                    order,
+                    Said::new(crate::world::said(&line.words))
+                        .undo(UndoStep::verb(Verb::Remove).pressed_as(FooterAct::Trackers)),
+                );
+            }
+        }
+    }
+}
+
+/// A failed save of the history, in the words `view::not_saved` gives it.
+struct NotSaved(crate::design::outcome::Sentence);
+
+impl crate::design::outcome::Fault for NotSaved {
+    fn severity(&self) -> crate::design::outcome::Severity {
+        crate::design::outcome::Severity::NotSaved
+    }
+    fn cause(&self) -> crate::design::outcome::Sentence {
+        self.0.clone()
+    }
 }
 
 /// The problems list and each member's folded history, in the reader of a house rule note in

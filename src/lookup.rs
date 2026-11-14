@@ -5,7 +5,12 @@
 use crate::{
     campaigns::Campaigns,
     content_workspace::Catalogue,
-    design::{self, Action, Density, Tone, Type, colors, icons, reader as style},
+    design::{
+        self, Action, Density, Tone, Type, colors, icons,
+        outcome::{Messages, PaneFrame},
+        pane::Body,
+        reader as style,
+    },
     history::{self, Step, Trail},
     library::{presentation, view},
     persistence::{Campaign, Module},
@@ -2047,10 +2052,6 @@ impl Lookup {
         response
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn panel(&mut self, ui: &mut egui::Ui, trackers: &mut crate::trackers::Trackers) {
         // With the margin, so a press anywhere on the panel counts as here.
         let panel = ui.max_rect().expand(PANEL_MARGIN);
@@ -2308,10 +2309,10 @@ impl Lookup {
             let follow = std::mem::take(&mut self.follow_highlight);
             // Every row keeps its control, so Tab reaches a match below the list's edge. A row
             // paints only while it is in view.
-            egui::ScrollArea::vertical()
-                .id_salt("lookup_results")
+            design::ScrollColumn::new("lookup_results")
                 .max_height(RESULT_ROW * rows.min(RESULTS_LISTED) as f32)
-                .auto_shrink([false, true])
+                .fit_height()
+                .full_width()
                 .show(ui, |ui| {
                     for row in 0..rows {
                         let (title, detail, selected) = &results[row];
@@ -2516,11 +2517,22 @@ impl Lookup {
             let _ = self.reader.choices(ui, &index).map(|nav| self.follow(nav));
         }
         let Some(current) = self.current.and_then(|c| index.items.get(c)) else {
-            self.gone_log_footer(ui);
-            if query.is_empty() {
-                design::gap(ui, design::Gap::S);
-                // Help keeps the reader measure, as every help line does (round 26 AB2).
-                design::help(ui, SEARCH_HELP);
+            // With no entry on show, the words of a Log line whose entry is gone still sit in
+            // Lookup's footer, with `Copy text`, until the DM copies or dismisses them.
+            let frame = PaneFrame::new(ui);
+            let mut messages = Messages::new(&frame, "lookup_footer", ui.available_width());
+            let campaign = self.campaign.as_ref();
+            self.reader
+                .gone_log_messages(&frame, &mut messages, campaign.map(|c| c.id));
+            let paned = messages.pane(ui, Body::Content, |ui| {
+                if query.is_empty() {
+                    design::gap(ui, design::Gap::S);
+                    // Help keeps the reader measure, as every help line does (round 26 AB2).
+                    design::help(ui, SEARCH_HELP);
+                }
+            });
+            if let (Some(press), Some(campaign)) = (paned.pressed, campaign) {
+                let _ = self.reader.footer_act(ui.ctx(), press, None, campaign);
             }
             return;
         };
@@ -2532,53 +2544,49 @@ impl Lookup {
         }
         self.reader.compact = true;
         let (reader, campaign) = (&mut self.reader, self.campaign.as_ref());
-        // The reader's results and their Undo sit in Lookup's footer, pinned below the reader,
-        // so a result never moves the kind line, `Add to fight` or the text (round 26 FJ3).
-        let lines = world::with_lines(
-            reader.footer_lines(current, &index, campaign, None),
-            crate::trackers::history::footer_lines(trackers, current.entry.id),
+        // The reader's results and their Undo sit in Lookup's footer, below the reader, so a
+        // result never moves the kind line, `Add to fight` or the text (round 26 FJ3). The
+        // reader is the pane's scroll column, one for each entry.
+        let frame = PaneFrame::new(ui);
+        let mut messages = Messages::new(
+            &frame,
+            ("lookup_reader", current.entry.id),
+            ui.available_width(),
         );
-        let (pressed, bottom) = world::draw_footer(ui, "lookup_footer", &lines);
-        match pressed {
-            Some(world::FooterAct::Trackers) => trackers.undo_remove(),
-            Some(act) => {
+        reader.footer(&frame, &mut messages, current, &index, campaign);
+        crate::trackers::history::footer(trackers, current.entry.id, &mut messages);
+        // The results list above sets its own row spacing. The reader keeps the app's, so an
+        // entry reads the same whether a search or a link opened it. The pane is always the
+        // editor form (P2), so an edit form's text gives way and Save stays in view from the
+        // first frame the form shows.
+        let paned = messages.pane_editor(ui, |ui, region| {
+            ui.spacing_mut().item_spacing.y = ui.ctx().style().spacing.item_spacing.y;
+            reader.read_in_pane(
+                ui,
+                current,
+                &index,
+                campaign,
+                Some(&mut *trackers),
+                Some(region),
+            )
+        });
+        nav = nav.take().or(paned.body);
+        match paned.pressed {
+            Some(press) if press.id == world::FooterAct::Trackers => trackers.undo_remove(),
+            Some(press) => {
                 if let Some(campaign) = campaign {
-                    nav = nav
-                        .take()
-                        .or(reader.footer_act(ui.ctx(), act, current, campaign));
+                    nav = nav.take().or(reader.footer_act(
+                        ui.ctx(),
+                        press,
+                        Some(current.entry.id),
+                        campaign,
+                    ));
                 }
             }
             None => {}
         }
-        egui::ScrollArea::vertical()
-            .max_height((bottom - ui.cursor().top()).max(0.0))
-            .id_salt(("lookup_reader", current.entry.id))
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                // The results list above sets its own row spacing. The reader keeps the app's,
-                // so an entry reads the same whether a search or a link opened it.
-                ui.spacing_mut().item_spacing.y = ui.ctx().style().spacing.item_spacing.y;
-                let read = reader.read_with(ui, current, &index, campaign, Some(trackers));
-                nav = nav.take().or(read);
-            });
         if let Some(nav) = nav {
             self.follow(nav);
-        }
-    }
-
-    /// With no entry on show, the words of a Log line whose entry is gone still sit in
-    /// Lookup's footer, with `Copy text`, until the DM copies or dismisses them.
-    fn gone_log_footer(&mut self, ui: &mut egui::Ui) {
-        let lines = self
-            .reader
-            .gone_log_notices(self.campaign.as_ref().map(|campaign| campaign.id));
-        if lines.is_empty() {
-            return;
-        }
-        if let (Some(world::FooterAct::GoneLog(id)), _) =
-            world::draw_footer(ui, "lookup_footer", &lines)
-        {
-            self.reader.end_gone_log(id);
         }
     }
 
@@ -2598,65 +2606,65 @@ impl Lookup {
             WrittenIn::Event(_) => "Open on the timeline",
         };
         let mut open = false;
-        egui::ScrollArea::vertical()
-            .id_salt(("lookup_written", at))
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                // The card's one action is a title-line action, as every reader's is (FN2, FM5):
-                // after the title when it fits, else in one row under it, from the text edge.
-                let width = ui.available_width();
-                let cell = ui
-                    .allocate_ui_with_layout(
-                        egui::vec2(width, 0.0),
-                        egui::Layout::top_down(egui::Align::Min),
-                        |ui| {
-                            style::title(ui, &written.title);
-                            style::subtitle(ui, &written.detail);
-                        },
-                    )
-                    .response
-                    .rect;
-                let title = ui
-                    .painter()
-                    .layout(
-                        written.title.clone(),
-                        Type::Display.font(ui),
-                        colors().text,
-                        width.max(design::XXL),
-                    )
-                    .size()
-                    .x;
-                let action = Action::quiet(place)
-                    .icon(icons::OPEN_OUT)
-                    .density(Density::Read);
-                open = world::title_line_actions(ui, cell, title, width, vec![action])
-                    .first()
-                    .copied()
-                    .unwrap_or(false);
-                // The `L` gap after the kind line, as every other Lookup entry has. Their reader
-                // also keeps one row gap for its line warnings above the prose, so the card's
-                // words start where a spell's do.
-                ui.add_space(design::L + ui.spacing().item_spacing.y);
-                let found: Vec<&str> = written
-                    .text
-                    .lines()
-                    .filter(|line| !query.is_empty() && line.to_lowercase().contains(query))
-                    .take(FOUND_LINES)
-                    .collect();
-                // A short note is all in view, and needs no second copy of its own line.
-                if !found.is_empty() && written.text.lines().count() > FOUND_FROM_LINES {
-                    design::heading(ui, design::Heading::Label("Found here"));
-                    for line in found {
-                        let words = line.trim_start_matches(['#', '-', '*', ' ']);
-                        ui.add(
-                            egui::Label::new(Type::Body.rich(ui, words).color(colors().text))
-                                .wrap(),
-                        );
-                    }
-                    design::rule(ui);
+        // The card is its pane's scroll column; it has no footer messages.
+        let frame = PaneFrame::new(ui);
+        let messages: Messages<'_, world::FooterAct> =
+            Messages::new(&frame, ("lookup_written", at), ui.available_width());
+        let _ = messages.pane(ui, Body::Content, |ui| {
+            // The card's one action is a title-line action, as every reader's is (FN2, FM5):
+            // after the title when it fits, else in one row under it, from the text edge.
+            let width = ui.available_width();
+            let cell = ui
+                .allocate_ui_with_layout(
+                    egui::vec2(width, 0.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        style::title(ui, &written.title);
+                        style::subtitle(ui, &written.detail);
+                    },
+                )
+                .response
+                .rect;
+            let title = ui
+                .painter()
+                .layout(
+                    written.title.clone(),
+                    Type::Display.font(ui),
+                    colors().text,
+                    width.max(design::XXL),
+                )
+                .size()
+                .x;
+            let action = Action::quiet(place)
+                .icon(icons::OPEN_OUT)
+                .density(Density::Read);
+            open = world::title_line_actions(ui, cell, title, width, vec![action])
+                .first()
+                .copied()
+                .unwrap_or(false);
+            // The `L` gap after the kind line, as every other Lookup entry has. Their reader
+            // also keeps one row gap for its line warnings above the prose, so the card's
+            // words start where a spell's do.
+            ui.add_space(design::L + ui.spacing().item_spacing.y);
+            let found: Vec<&str> = written
+                .text
+                .lines()
+                .filter(|line| !query.is_empty() && line.to_lowercase().contains(query))
+                .take(FOUND_LINES)
+                .collect();
+            // A short note is all in view, and needs no second copy of its own line.
+            if !found.is_empty() && written.text.lines().count() > FOUND_FROM_LINES {
+                design::heading(ui, design::Heading::Label("Found here"));
+                for line in found {
+                    let words = line.trim_start_matches(['#', '-', '*', ' ']);
+                    ui.add(
+                        egui::Label::new(Type::Body.rich(ui, words).color(colors().text)).wrap(),
+                    );
                 }
-                crate::markdown_view::show_compact(ui, &written.text);
-            });
+                design::rule(ui);
+            }
+            crate::markdown_view::show_compact(ui, &written.text);
+        });
         if open {
             self.open_written = Some(written.place.clone());
         }
@@ -2814,6 +2822,9 @@ pub(crate) const OWN_NAMES_HELP: &str = "Built-in names. To use your own, add a 
 pub(crate) const NAMES_MARKER: &str = "<!-- splat:rolls key=npc-name dice=1d6 -->";
 pub(crate) const COPY_MARKER: &str = "Copy the marker";
 /// After the copy: what the DM changes in the pasted line. The dice are the marker's own.
+/// The words of the card's copy result, for the checks: World's footer says them with a checked
+/// `sentence!` of the same words.
+#[cfg(test)]
 pub(crate) const MARKER_COPIED: &str = "Copied. Change 1d6 to the number of names.";
 pub(crate) const BUILT_IN_NAMES: &str = "Built-in names.";
 pub(crate) const USE_OWN_NAMES: &str = "Use your own names";

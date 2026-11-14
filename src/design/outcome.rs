@@ -428,13 +428,14 @@ impl Verb {
 
     /// The word between the verb and its object in an Undo, decided here for every verb (no
     /// wildcard: a new verb must decide). `of` for discard (what was discarded is a draft *of*
-    /// the object); none for the others.
+    /// the object); `to` for change (the Undo takes back the change *to* the field or note:
+    /// `Undo change to Part of`, ruling R16); none for the others.
     pub const fn join(self) -> Option<&'static str> {
         match self {
             Self::Discard => Some("of"),
+            Self::Change => Some("to"),
             Self::Add
             | Self::CarryOver
-            | Self::Change
             | Self::Clear
             | Self::Copy
             | Self::Delete
@@ -2733,6 +2734,15 @@ mod tests {
         );
         assert_eq!(UndoStep::act("Take seal").label(), "Undo: Take seal");
         assert_eq!(UndoStep::verb(Verb::Add).label(), "Undo add");
+        // Ruling R16: a change's Undo joins its object with `to`; a discard's with `of`.
+        assert_eq!(
+            UndoStep::of(Verb::Change, "Part of").label(),
+            "Undo change to Part of"
+        );
+        assert_eq!(
+            UndoStep::of(Verb::Discard, "Bridge Ambush").label(),
+            "Undo discard of Bridge Ambush"
+        );
         // M3 gap 1: each verb's two forms, from one entry of the table, with its joining word.
         for verb in Verb::ALL {
             let done = Done::new(verb, "Bridge Ambush").undo(0u8);

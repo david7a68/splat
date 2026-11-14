@@ -299,13 +299,6 @@ pub(crate) fn end_menu_frame(ctx: &egui::Context) {
     }
 }
 
-/// A control whose menu egui opens (a `ComboBox`, whose popup is `<control id>.with("popup")`)
-/// joins the same focus model: call this the frame its menu opens, `keep_menu_owner` every
-/// frame, and `menu_choice_focus` for each choice.
-pub(crate) fn own_menu(response: &egui::Response, by_keys: bool) {
-    opened_menu(response, by_keys);
-}
-
 /// `response` opened its menu: it owns the menu until it closes, and `end_menu_frame` gives
 /// the focus back when the menu closes. Opened by the keys, the first choice takes the focus.
 fn opened_menu(response: &egui::Response, by_keys: bool) {

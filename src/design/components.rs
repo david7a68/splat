@@ -3236,20 +3236,6 @@ pub fn disk_conflict_choices(
     )
 }
 
-/// After Reload and lose my draft: the old draft can still come back. True when it should.
-#[deprecated(
-    note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."
-)]
-pub fn reloaded_draft(ui: &mut Ui) -> bool {
-    undo_message_capped(
-        ui,
-        Tone::Info,
-        "Reloaded from disk. Your previous draft is kept until you edit or the file changes again.",
-        "Undo reload",
-        None,
-    )
-}
-
 /// A recovery message whose action restores the previous state.
 #[deprecated(
     note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."

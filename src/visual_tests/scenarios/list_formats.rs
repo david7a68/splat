@@ -311,7 +311,8 @@ pub fn run(d: &mut Driver<'_>) {
     d.click(NAV_CAMPAIGN);
     d.click("Rules and runs");
     d.expect(REPAIR_STATE);
-    d.click("Roll NPC initiative");
+    // The drop-down's name says its value too (`Roll NPC initiative: …`).
+    d.click_starting("Roll NPC initiative: ");
     d.click("Individually");
     d.click("Save run settings");
     d.expect("No changes");
@@ -1081,6 +1082,38 @@ pub fn run(d: &mut Driver<'_>) {
             format!("At {size:?}, the Timeline warning's file line: {placed:?}"),
         );
     }
+    // Review of PR 340: over long content, the warning and its file line stay in view at the top
+    // of the Timeline list and of the plan: they are below the pane, outside its scroll.
+    d.aside(|d| {
+        let flagged = fs::read_to_string(&path).unwrap();
+        let session = d.app_mut().sessions.current();
+        for _ in 0..40 {
+            d.app_mut()
+                .timeline
+                .add(crate::timeline::Kind::Event, session);
+        }
+        d.app_mut().timeline.save();
+        let long = fs::read_to_string(&path).unwrap();
+        fs::write(&path, long.replace("## Day 1:", "## Day 5:")).unwrap();
+        d.app_mut().timeline.reload();
+        d.settle();
+        d.click(NAV_TIMELINE);
+        d.scroll_up_at(pos2(500.0, 300.0), 30);
+        let list = super::file_links_at_message_words(d, "Line ", &path, crate::timeline::FILE);
+        d.click(NAV_SESSIONS);
+        show_plan(d);
+        d.scroll_up_at(pos2(500.0, 300.0), 30);
+        let plan = super::file_links_at_message_words(d, "Line ", &path, crate::timeline::FILE);
+        d.observe(
+            "round-28-S-flags-in-view",
+            list.is_ok() && plan.is_ok(),
+            format!("Over 40 more events, at the top: the list's file line {list:?}, the plan's {plan:?}"),
+        );
+        fs::write(&path, flagged).unwrap();
+        d.app_mut().timeline.reload();
+        d.settle();
+        d.click(NAV_TIMELINE);
+    });
     // Round 13 FD6: the flagged day keeps its Day icon and says what its heading was written as.
     d.observe_both(
         "iter-13-C-FD6",
