@@ -28,6 +28,33 @@ pub mod trackers;
 pub mod travel_checks;
 pub mod world_build;
 
+/// R17 (B-1): an editor's back link shows its word whole, at the text edge, before the name
+/// field (`field` is the field's accessible-name prefix), and the field still has room. The
+/// word is the accessible name, so the DM sees what a screen reader says.
+fn back_word_whole(d: &mut Driver<'_>, id: &str, word: &str, field: &str) {
+    let nodes = d.nodes();
+    let back = nodes.iter().find(|node| node.name == word);
+    let name = nodes.iter().find(|node| node.name.starts_with(field));
+    let size = d.window_size();
+    let detail = match (back, name) {
+        (Some(back), Some(name)) => format!(
+            "At {size:?}, `{word}` spans x {:.0} to {:.0} (disabled {}); the name field spans x {:.0} to {:.0}, {:.0} px wide",
+            back.rect.left(),
+            back.rect.right(),
+            back.disabled,
+            name.rect.left(),
+            name.rect.right(),
+            name.rect.width()
+        ),
+        _ => format!("At {size:?}, `{word}` or the `{field}` field is not on screen"),
+    };
+    let whole = d.visible_text(word)
+        && back.zip(name).is_some_and(|(back, name)| {
+            back.rect.right() <= name.rect.left() + 0.5 && name.rect.width() >= 200.0
+        });
+    d.observe(id, whole, detail);
+}
+
 /// The middle of the reading pane and of the entry list, at the minimum window.
 const READER: Pos2 = pos2(720.0, 400.0);
 const ENTRY_LIST: Pos2 = pos2(400.0, 400.0);
@@ -4354,7 +4381,9 @@ pub mod encounter_build {
         d.click(NEW_ENCOUNTER);
         d.type_text(NEW_NAME);
         d.expect("5. ");
-        d.state("new-encounter", Sizes::Default);
+        d.state_prepared("new-encounter", Sizes::All, |d| {
+            back_word_whole(d, "iter-29-B1-back", "Back to encounters", "Encounter name");
+        });
 
         // The party is already there, and Enter goes on to the search.
         d.press(Key::Enter);
@@ -4667,7 +4696,20 @@ pub mod encounter_build {
             clean_x.iter().all(|x| !x.is_empty()) && clean_x == edited_x,
             format!("The run state's x, clean {clean_x:?} and after the first edit {edited_x:?}"),
         );
-        d.state("saved-roster-sync-off", Sizes::Default);
+        d.state_prepared("saved-roster-sync-off", Sizes::All, |d| {
+            back_word_whole(d, "iter-29-B1-back", "Back to encounters", "Encounter name");
+            // The draft is unsaved: the link keeps its word, is dimmed, and says why (G159).
+            d.observe(
+                "iter-29-B1-G159",
+                d.nodes()
+                    .iter()
+                    .any(|node| node.name == "Back to encounters" && node.disabled)
+                    && d.descriptions()
+                        .iter()
+                        .any(|text| text == "Save or discard this encounter first."),
+                "While the draft is unsaved, the back link keeps its word, is dimmed and gives its reason",
+            );
+        });
         d.observe(
             "T5.6",
             d.visible_text(LOCAL_ONLY) && !d.visible_text(PARTY_NOW),
@@ -17441,7 +17483,9 @@ pub mod encounter_groups {
         d.click(&format!("Edit group {GROUP_RIVALS}"));
         d.expect("MEMBERS 3");
         d.expect("XP 600");
-        d.state("group-editor", Sizes::All);
+        d.state_prepared("group-editor", Sizes::All, |d| {
+            back_word_whole(d, "iter-29-B1-back", "Back to encounters", "Group name");
+        });
         // FD3: where FORM_WIDTH ends first, the name and Belongs to still share one edge, and it
         // is clearly apart from the members column's.
         for size in [SMALL, DEFAULT, LARGE] {
