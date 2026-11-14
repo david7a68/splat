@@ -87,20 +87,20 @@ impl Column {
     }
 
     pub fn show<R>(self, ctx: &Context, add: impl FnOnce(&mut Ui) -> R) -> R {
-        let id = self.id;
+        let (id, side, margin) = (self.id, self.side, self.frame.inner_margin);
         let shown = self
             .panel_within(ctx, ctx.available_rect().width())
-            .show(ctx, |ui| fill_and_add(ui, add));
+            .show(ctx, |ui| fill_and_add(ui, side, margin, add));
         finish_handle(ctx, id, &shown.response);
         shown.inner
     }
 
     pub fn show_inside<R>(self, ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
-        let id = self.id;
+        let (id, side, margin) = (self.id, self.side, self.frame.inner_margin);
         let ctx = ui.ctx().clone();
         let shown = self
             .panel_within(&ctx, ui.available_width())
-            .show_inside(ui, |ui| fill_and_add(ui, add));
+            .show_inside(ui, |ui| fill_and_add(ui, side, margin, add));
         finish_handle(&ctx, id, &shown.response);
         shown.inner
     }
@@ -170,8 +170,26 @@ impl Column {
     }
 }
 
-/// A resizable panel is only as wide as what it holds, so what it holds takes all of it.
-fn fill_and_add<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
+/// A resizable panel is only as wide as what it holds, so what it holds takes all of it. Before
+/// the body draws, the splitter's grab band (egui's resize handle, which is placed after the
+/// body) is reserved, so no `line_start` hang beside it, in this body or in the page beside the
+/// column, reaches into it (P3a, `pane::reserve`).
+fn fill_and_add<R>(
+    ui: &mut Ui,
+    side: Side,
+    margin: egui::Margin,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> R {
+    let panel = ui.max_rect() + margin;
+    let x = match side {
+        Side::Left => panel.right(),
+        Side::Right => panel.left(),
+    };
+    let grab = ui.style().interaction.resize_grab_radius_side;
+    super::pane::reserve(
+        ui,
+        egui::Rect::from_x_y_ranges((x - grab)..=(x + grab), panel.y_range()),
+    );
     ui.set_min_width(ui.available_width());
     add(ui)
 }

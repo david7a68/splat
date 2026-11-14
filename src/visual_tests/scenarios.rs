@@ -6972,6 +6972,66 @@ pub mod run_long_names {
             format!("The notice starts with the changed-on-disk icon: {icon:?} before {words:?}"),
         );
         d.state("creature-changed-since", Sizes::All);
+        // P3a (lead, point 8), rows 66 and 67: the notice follows a short stat block `S` below
+        // it (1200, 1920); with a long block (960) the whole footer is in view in the first
+        // frame shown after the row opens; `Stop` is whole with the notice too.
+        // The run's panel is the rightmost pane with a footer.
+        let stat_pane = |d: &Driver<'_>| {
+            d.pane_records()
+                .into_iter()
+                .filter(|record| record.footer().is_some())
+                .max_by(|a, b| a.room().left().total_cmp(&b.room().left()))
+        };
+        for size in [DEFAULT, LARGE] {
+            let gap = d.at_size(size, |d| {
+                stat_pane(d).and_then(|record| {
+                    let end = record.viewport()?.top() + record.content_height()?;
+                    Some((record.footer()?.top() - end, record.fits()))
+                })
+            });
+            d.observe(
+                "iter-28-P3a",
+                gap.is_some_and(|(gap, fits)| {
+                    fits && gap > 0.0 && (gap - crate::design::S).abs() <= 1.0
+                }),
+                format!("At {size:?} the notice is S below the stat block: (gap, fits) {gap:?}"),
+            );
+        }
+        let long = d.act_at_size(SMALL, |d| {
+            d.click("Conditions");
+            d.click_first_frame("Stat block");
+            let first = stat_pane(d).and_then(|record| {
+                let footer = record.footer()?;
+                Some((footer, record.room(), record.viewport()?, record.fits()))
+            });
+            d.settle();
+            first
+        });
+        let (width, height) = SMALL;
+        d.observe(
+            "iter-28-P3a",
+            // Astra 5: below the visible body and at its pinned place (the room's bottom), not
+            // merely inside the room.
+            long.is_some_and(|(footer, room, viewport, fits)| {
+                !fits
+                    && room.contains_rect(footer)
+                    && footer.top() >= viewport.bottom() + crate::design::S - 1.0
+                    && (footer.bottom() - room.bottom()).abs() <= 1.0
+                    && footer.bottom() <= height
+                    && footer.right() <= width
+            }),
+            format!("At 960 the long block's footer is pinned at the room's bottom, below the visible body, in the first frame: (footer, room, viewport, fits) {long:?}"),
+        );
+        // At 960 the long block's tiles are below the fold: arm at 1200.
+        d.act_at_size(DEFAULT, |d| d.click_starting("Bite · +4"));
+        super::run_rolls::stop_takes_its_leftmost_pixel(
+            d,
+            "armed Bite with the changed-file notice",
+            DEFAULT,
+            &[ENEMY],
+            "Bite · +4",
+        );
+        d.press(Key::Escape);
         // Must stay true: the action still opens the new version.
         d.click("Read the new version");
         // The new line ends the entry. Stat block detail rows have the link pitch (iteration 20,
@@ -24716,6 +24776,58 @@ pub mod run_rolls {
         );
     }
 
+    /// P3a (lead, point 8): at 960×640 the armed tile's `Stop` in the real stat-block panel is
+    /// whole (its visible width is its full width, 45 px), a press on its leftmost visible
+    /// pixel stops only that roll (the rows' HP and the stat block's text edge stay), and the
+    /// tile arms again after it.
+    pub(super) fn stop_takes_its_leftmost_pixel(
+        d: &mut Driver<'_>,
+        case: &str,
+        size: (f32, f32),
+        rows: &[&str],
+        bite: &str,
+    ) {
+        d.act_at_size(size, |d| {
+            let stop = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name == "Stop" && node.role == Role::Button);
+            d.observe(
+                "iter-28-P3a",
+                stop.as_ref().is_some_and(|stop| {
+                    (stop.shown.width() - stop.rect.width()).abs() <= 0.5
+                        && (stop.rect.width() - 45.0).abs() <= 1.5
+                }),
+                format!("{case}: Stop is whole at {size:?}: {:?}", stop.as_ref().map(|s| (s.rect, s.shown))),
+            );
+            let Some(stop) = stop else {
+                return;
+            };
+            let edge = d.painted_left("Actions");
+            let hp: Vec<_> = rows.iter().map(|row| d.row_hp(row)).collect();
+            let pixel = egui::Rect::from_center_size(
+                pos2(stop.shown.left() + 0.5, stop.shown.center().y),
+                egui::vec2(1.0, 1.0),
+            );
+            d.click_rect(pixel, "Click: Stop at its leftmost pixel");
+            let after: Vec<_> = rows.iter().map(|row| d.row_hp(row)).collect();
+            d.observe(
+                "iter-28-P3a",
+                !d.has_containing("Click a target")
+                    && after == hp
+                    && edge.is_some()
+                    && d.painted_left("Actions") == edge,
+                format!("{case}: the press at {pixel:?} stops only the roll: HP {hp:?} then {after:?}, text edge {edge:?} then {:?}", d.painted_left("Actions")),
+            );
+            d.click_starting(bite);
+            d.observe(
+                "iter-28-P3a",
+                d.has_containing("Click a target"),
+                format!("{case}: Bite arms again"),
+            );
+        });
+    }
+
     pub fn run(d: &mut Driver<'_>) {
         resume_run_from_cold_start(d);
         d.click_row(ATTACKER);
@@ -24764,6 +24876,7 @@ pub mod run_rolls {
             format!("Rows keep their height and AC place when roll words show: {geometry:?} then {armed:?}"),
         );
         d.state("attack-armed", Sizes::All);
+        stop_takes_its_leftmost_pixel(d, "armed Bite", SMALL, &[ATTACKER, TARGET], BITE);
 
         d.begin_task();
         let before = d.row_hp(TARGET);
