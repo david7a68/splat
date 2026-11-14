@@ -499,13 +499,27 @@ pub fn file_flags_below(ui: &mut egui::Ui, book: &Book) -> egui::Rect {
     if book.flags.is_empty() && book.duplicate.is_none() {
         return room;
     }
+    // Their height first, in a pass that paints nothing, then the flags at the room's bottom.
+    let layout = egui::Layout::top_down(egui::Align::Min);
+    let mut measure = ui.new_child(
+        egui::UiBuilder::new()
+            .id_salt("file_flags_measure")
+            .max_rect(room)
+            .layout(layout)
+            .sizing_pass()
+            .invisible(),
+    );
+    file_flags(&mut measure, book);
+    let height = measure.min_rect().height().min(room.height());
+    let at = egui::Rect::from_min_max(egui::pos2(room.left(), room.bottom() - height), room.max);
     let mut below = ui.new_child(
         egui::UiBuilder::new()
-            .max_rect(room)
-            .layout(egui::Layout::bottom_up(egui::Align::Min)),
+            .id_salt("file_flags")
+            .max_rect(at)
+            .layout(layout),
     );
-    below.vertical(|ui| file_flags(ui, book));
-    room.with_max_y((below.min_rect().top() - design::S).max(room.top()))
+    file_flags(&mut below, book);
+    room.with_max_y((at.top() - design::S).max(room.top()))
 }
 
 fn file_flags(ui: &mut egui::Ui, book: &Book) {
