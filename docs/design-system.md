@@ -211,8 +211,7 @@ eye during long sessions.
 | Number | `number`, `number_width` | Right-aligned digits |
 | Count | `count` | `1 entry`, `2,108 entries`; zero gives no text; empty unit words give only the formatted number |
 
-All form labels use sentence-case muted `Small`, including `field`, `text_field`, `small_field` and
-`small_text_field`. Use `Label` capitals for group and column headings. A heading over one input is a field label, including `Group notes` and `Read-aloud and notes`. These two notes fields come from one builder (`notes_field`): an `S` inner margin, and the frame ends at the column's right edge. An empty section inside a list page
+All form labels use sentence-case muted `Small`, including `field`, `labelled_field` and `small_field`. Use `Label` capitals for group and column headings. A heading over one input is a field label, including `Group notes` and `Read-aloud and notes`. These two notes fields come from one builder (`notes_field`): an `S` inner margin, and the frame ends at the column's right edge. An empty section inside a list page
 has one muted line below its heading, with no zero count or full empty state. Tabs and page headers omit zero
 counts. Roster, Members and Recordings use an underlined tab with a muted, nonzero count. Overflow tabs use a quiet
 caret menu without a button border; it names and underlines the selected page when that page is inside. Fight and Packages
@@ -2185,7 +2184,11 @@ the scroll area. Title and label stay fixed below the header. An S gap and a hai
 top edge of the scrolling fields. Headers end at the fields' right edge. Opening Timeline, changing filters, selecting or adding resets fields to the top. Day
 headers use only the named calendar icon; days show Starts without Ends, and start time is Kind's help line.
 Field labels have `M` before them. Copy link uses a check and Copied for two seconds. Link text stays in a
-quiet section; Place after is the only ordering control. Adds to shares the filter line. Context shows visible
+quiet section; Place after is the only ordering control. Adds to shares the filter line. Kind, Session, Place
+after and Show one session are `Dropdown`s: the control shows the whole chosen label, cut at its end.
+A title that is empty or only says the event's kind (the plan names a new event by its kind) is no title
+(`Event::own_title`): the header, the row and the label say the kind once (`Day 1`, not `Day 1: Day`). The
+file and the event links keep the title exactly (`timeline::Stored`): `## Day 1: Day` stays in `Timeline.md`. Context shows visible
 out of total while filtering; the filter says Major events.
 
 Added, removed and link-update notices sit in the list column's message footer (`design::Footer`), below
@@ -2443,15 +2446,17 @@ action.
 
 Recording settings clip at the tab rule, with a fixed `L` margin below tabs outside the scrolling content and
 `L` above sections. Recording, Speech service and Transcript and summary use group_heading. Field labels use
-muted Small through small_field and small_text_field: Service, Address, Model, API key. Accessible names keep
-service context. Focused inputs scroll to the Recording heading. Speech setup first explains how to turn
+muted Small through small_field: Service, Address, Model, API key. Input and Service are `Dropdown`s. Accessible
+names keep service context. Focused inputs scroll to the Recording heading. Speech setup first explains how to turn
 recording into text. API compatibility help sits beside custom services; Codex limits appear only when
 selected. Combat sync help uses muted Small text. Help on this tab keeps READER_MEASURE, as Account help does,
 and says what a choice does, not how it works (`It cannot change your campaign files.`). The second service
 keeps one name: `Transcript and summary instructions`, `Transcript and summary API key`, and accessible names
-`Transcript and summary service`, `… address` and `… model`. A value that blocks processing says so below its
-own field (`Enter the address.`, `Enter the model’s name.`), `XS` below the field, with `M` before the next
-label; help under a field has `L` before the next label. The tab's notices (`You cannot process yet. …`, a
+`Transcript and summary service`, `… address` and `… model`. The custom service's help is the Service field's
+own help. A value that blocks processing says so below its own field (`Enter the address.`, `Enter the model’s
+name.`), `XS` below the field and before the field's own help; the field part then keeps `L` before the next
+label, as after any help. A key for another service says why it is not sent; the key's reason and the footer
+say what to do. The tab's notices (`You cannot process yet. …`, a
 settings file that cannot be read or saved) sit in its message footer, so the form never moves when one comes or
 goes. When the DM chooses a service that leaves such a field empty, that reason scrolls into view, once; a key
 problem keeps its reason at the key row, so the view stays. A saved key says `Saved on this computer.`;

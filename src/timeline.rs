@@ -305,19 +305,64 @@ impl Check {
     }
 }
 
+/// What a heading or a link stores for an event: its kind, its id and its title exactly as the
+/// DM or the plan wrote it. The file's writer and the link writer take this, never an
+/// [`Event`], so they cannot reach the shown [`Event::label`], which drops a title that only says
+/// the kind (a day titled `Day` must stay `## Day 1: Day` in the file, or the next save would
+/// read it back with no title).
+// Its fields are private: outside `timeline` the only way to get one is `Stored::of(&Event)`, so
+// no caller can build it from a shown label (a doc test cannot name it: `timeline` is private).
+#[derive(Clone, Copy)]
+pub struct Stored<'a> {
+    kind: Kind,
+    id: &'a str,
+    title: &'a str,
+}
+
+impl<'a> Stored<'a> {
+    pub fn of(event: &'a Event) -> Self {
+        Self {
+            kind: event.kind,
+            id: &event.id,
+            title: &event.title,
+        }
+    }
+
+    /// The stored name: a day's number, then the title exactly, when it has one.
+    pub fn name(self, day: u32) -> String {
+        match (self.kind, self.title.trim()) {
+            (Kind::Day, "") => format!("Day {day}"),
+            (Kind::Day, title) => format!("Day {day}: {title}"),
+            (kind, "") => kind.word().to_owned(),
+            (_, title) => title.to_owned(),
+        }
+    }
+}
+
 impl Event {
     /// Does this event belong to this session, or go on in it?
     pub fn is_in(&self, session: Option<Uuid>) -> bool {
         self.session == session || (session.is_some() && self.continued_in == session)
     }
 
-    /// The name people read. A day has its number, and it can also have a name.
+    /// The event's own name: its title, unless that is empty or only says its kind (the plan
+    /// gives a new event its kind as its title, `Day` or `Travel`). Every place that shows the
+    /// kind beside the name asks this one question, so no line says the kind twice (round 28
+    /// FL8, FN3, FH7).
+    pub fn own_title(&self) -> Option<&str> {
+        let title = self.title.trim();
+        (!title.is_empty() && !title.eq_ignore_ascii_case(self.kind.word())).then_some(title)
+    }
+
+    /// The name people read on screen. A day has its number, and it can also have a name. It
+    /// drops a title that only says the kind, so it is never written to a file or a link: the
+    /// writers take [`Stored`], which holds the title exactly and has no shown label.
     pub fn label(&self, day: u32) -> String {
-        match (self.kind, self.title.trim()) {
-            (Kind::Day, "") => format!("Day {day}"),
-            (Kind::Day, title) => format!("Day {day}: {title}"),
-            (kind, "") => kind.word().to_owned(),
-            (_, title) => title.to_owned(),
+        match (self.kind, self.own_title()) {
+            (Kind::Day, None) => format!("Day {day}"),
+            (Kind::Day, Some(title)) => format!("Day {day}: {title}"),
+            (kind, None) => kind.word().to_owned(),
+            (_, Some(title)) => title.to_owned(),
         }
     }
 
@@ -363,10 +408,7 @@ impl Event {
     fn parts(&self, session: Option<&str>, result: &str, warning: bool) -> String {
         let mut parts = Vec::new();
         // An untitled event already shows its kind as its name.
-        if self.kind != Kind::Day
-            && !self.title.trim().is_empty()
-            && self.title.trim() != self.kind.word()
-        {
+        if self.kind != Kind::Day && self.own_title().is_some() {
             parts.push(self.kind.word().to_owned());
         }
         for part in [self.duration.as_str(), self.place.as_str(), result] {
@@ -601,8 +643,10 @@ pub fn day_numbers(events: &[Event]) -> Vec<u32> {
 
 /// A link to one event. Obsidian follows it to the event's block in `Timeline.md`.
 pub fn reference_label(event: &Event, day: u32) -> String {
-    let label: String = event
-        .label(day)
+    // A link's words are written into notes and compared with the file's names, so they are
+    // the stored name.
+    let label: String = Stored::of(event)
+        .name(day)
         .chars()
         .filter(|c| !matches!(c, '[' | ']' | '|' | '#' | '^'))
         .collect();
