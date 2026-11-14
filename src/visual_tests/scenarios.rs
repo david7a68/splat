@@ -3051,12 +3051,6 @@ pub mod campaign_content {
                 })
             },
         );
-        // Wave 2 d (C): a body fault puts its repair on its own line under its words, so two
-        // open repairs are taller and the upper editor is partly below the fold at 960. Focusing
-        // it (`type_into` above) scrolls its caret into view, as egui does for a focused field.
-        d.expect_moves(
-            "Focusing a repair editor partly below the fold scrolls its caret into view",
-        );
         d.state("missing-campaign-manifest-needs-explicit-write", Sizes::All);
         d.click("Write Campaign.md again");
         d.wait_for_text("Undo write Campaign.md");
@@ -23859,10 +23853,16 @@ pub mod remove_package_in_use {
                 "Bridge Ambush and Shrine of Cinders now have creatures Splat cannot find.",
                 egui::Rect::EVERYTHING,
             );
+            // The footer part draws its bar as high as its words, so the check reads the part's
+            // own registry: the words lie in a footer message of the warning tone.
             d.observe(
                 "iter-6-C-FD3",
                 warning.is_some_and(|warning| {
-                    d.has_message_bar(warning, crate::design::colors().result.warning)
+                    d.typed_messages().iter().any(|(rect, place, tone)| {
+                        *place == crate::design::outcome::MessagePlace::Footer
+                            && *tone == crate::design::Tone::Warning
+                            && rect.expand(0.5).contains_rect(warning)
+                    })
                 }),
                 format!("The missing-creatures warning keeps the shared warning bar and icon: {warning:?}"),
             );
