@@ -14,7 +14,14 @@ pub(crate) mod repair;
 
 use crate::{
     content_workspace::{EntryRef, patch_fields},
-    design::{self, Action, Density, Tone, Type, colors, reader as style},
+    design::{
+        self, Action, Density, Tone, Type, colors,
+        outcome::{
+            Choice, Fault, FaultMessage, KeptOutcome, MessageChoice, Messages, Notice, Outcome,
+            PaneFrame, Said, Sentence, Severity, UndoStep, Verb,
+        },
+        reader as style,
+    },
     encounter_run::{GroupMember, RunGroup},
     library::{note_path, view, write_note},
     lookup::{ContentIndex, Item},
@@ -1558,23 +1565,28 @@ impl ChangeKind {
         }
     }
 
-    fn undo_label(self) -> &'static str {
+    /// Its Undo (ruling R16): when one field changed, its object is that field's name on
+    /// screen, the name the result's words use (`Part of set to …` has `Undo change to Part
+    /// of`); when the edit form saved several fields, the note's name (`Undo change to Ashfall
+    /// Faction`). A separate note: `Undo separate note`. `note` is the note's name.
+    fn undo_step(self, note: &str) -> UndoStep {
         match self {
-            Self::Place => "Undo place change",
-            Self::PartOf => "Undo group change",
-            Self::Status => "Undo status change",
-            Self::StatBlock => "Undo stat block change",
-            Self::Name => "Undo name change",
-            Self::Identity(noun) => noun.undo_label(),
-            Self::Edit => "Undo changes",
-            Self::Log => "Undo Log line",
+            Self::Place => UndoStep::of(Verb::Change, "Place"),
+            Self::PartOf => UndoStep::of(Verb::Change, "Part of"),
+            Self::Status => UndoStep::of(Verb::Change, "Status"),
+            Self::StatBlock => UndoStep::of(Verb::Change, "Stat block"),
+            Self::Name => UndoStep::of(Verb::Change, "Name"),
+            Self::Identity(noun) => UndoStep::of(Verb::Separate, noun.act()),
+            Self::Edit => UndoStep::of(Verb::Change, note),
+            Self::Log => UndoStep::of(Verb::Add, "Log line"),
         }
     }
 }
 
 impl Change {
-    pub(crate) fn identity_undo_label(&self) -> &'static str {
-        self.kind.undo_label()
+    /// Its Undo step: the kind's, with the name of the note it changed (`ChangeKind::undo_step`).
+    pub(crate) fn undo_step(&self, note: &str) -> UndoStep {
+        self.kind.undo_step(note)
     }
 
     pub(crate) fn message(&self) -> &str {
@@ -1792,10 +1804,11 @@ impl IdentityNoun {
         format!("{filename} is now a separate {}.", self.word())
     }
 
-    fn undo_label(self) -> &'static str {
+    /// What a separate note's Undo names after its verb: `Undo separate note`.
+    fn act(self) -> &'static str {
         match self {
-            Self::Note => "Undo separate note",
-            Self::Entry => SEPARATE_ENTRY_UNDO,
+            Self::Note => "note",
+            Self::Entry => "entry",
         }
     }
 }
@@ -2031,10 +2044,30 @@ pub(crate) fn next_order() -> u64 {
 }
 
 /// Lookup's and the World page's reader, and its controls for the item on show.
+/// What a reader holds for the DM that no reset of the reader may drop: the DM's typed words,
+/// and the results whose end events are their own (`Kept::ENDS`). Lookup's Clear and World's
+/// campaign reset replace the reader, and both carry this whole (`Reader::clear`,
+/// `Reader::keep_log_lines`), so a new field here is kept by both at once (review of PR 333).
+/// Each result shows only in its own campaign, so it can outlive a campaign change.
+#[derive(Default)]
+pub(crate) struct Held {
+    /// Each open `Add to Log` field, by its entry and the session it was opened in. Its words
+    /// wait while the reader shows another entry; a restart loses them, as every held form.
+    log_fields: HashMap<LogKey, LogField>,
+    /// The Log lines whose entry is gone, for the footer, until the DM copies or dismisses each.
+    gone_log_lines: Vec<GoneLog>,
+    /// Log lines the DM dismissed with their typed words, each with its Undo (ruling R3): the
+    /// only copy of those words.
+    dismissed: design::Results<GoneOwner, DismissedLog>,
+    /// The kept results with an Undo, one of each kind (`Slot`), each with its order. A
+    /// discarded draft's Undo holds the only copy of its words.
+    results: design::Results<Slot, ReaderResult>,
+}
+
 #[derive(Default)]
 pub struct Reader {
-    /// When each kept result was made, by the action its Undo takes.
-    orders: HashMap<FooterAct, design::ResultOrder>,
+    /// What the reader holds for the DM across every reset (`Held`).
+    held: Held,
     showing: Option<Uuid>,
     status: String,
     status_editing: bool,
@@ -2044,22 +2077,14 @@ pub struct Reader {
     status_drafts: HashMap<Uuid, String>,
     /// Edit forms by entry. A form with changes stays while the DM reads other entries.
     edits: HashMap<Uuid, edit::EditDraft>,
-    /// What Discard dropped, until the DM undoes it or edits again, with the order its Discard
-    /// issued: the `Undo discard` result's own place in the footer (round 27).
-    discarded: Option<(Uuid, edit::EditDraft, design::ResultOrder)>,
     /// A field of the form had the keyboard when it last drew.
     form_focused: bool,
     pub compact: bool,
     other_type: String,
     adding: Option<Adding>,
     picker: Option<Picker>,
-    undo: Option<Change>,
     /// The form closed with nothing to write: the note's path and its text, while it reads so.
     kept: Option<(String, String)>,
-    identity_undo: Option<(Uuid, Change)>,
-    name_undo: Option<Change>,
-    /// The last `Rename the file to …` on this page, until it is undone or another replaces it.
-    file_undo: Option<FileRename>,
     error: Option<String>,
     /// Source lookup is cached by note and index generation, including repairs and moves.
     group_fault: Option<GroupFault>,
@@ -2104,11 +2129,6 @@ pub struct Reader {
     pub played: Option<String>,
     /// The campaign's day on the Timeline's clock, when the clock has one.
     pub day: Option<u64>,
-    /// Each open `Add to Log` field, by its entry and the session it was opened in. Its words
-    /// wait while the reader shows another entry; a restart loses them, as every held form.
-    log_fields: HashMap<LogKey, LogField>,
-    /// The Log lines whose entry is gone, for the footer, until the DM copies or dismisses each.
-    gone_log_lines: Vec<GoneLog>,
     /// The entries whose edit form is open in the other reader (Lookup's, or the World
     /// page's). Their Log field waits too, so Splat never makes its own disk conflict.
     pub edited_elsewhere: Vec<Uuid>,
@@ -2132,24 +2152,23 @@ pub enum PageResult {
     Discarded(String),
 }
 
-/// The tone of a finished change to a note: a save, a value change, a name change, a repair or
-/// a separate note. Library's finished changes use it too. A result that wrote nothing (the note
-/// already held the changes, a discarded draft) keeps the info tone.
-pub(crate) const CHANGED: Tone = Tone::Success;
-
 impl PageResult {
-    /// The page's result as a footer line. Its Undo is the page's (`FooterAct::Page`).
-    pub(crate) fn line(&self) -> FooterLine {
+    /// The page's result as a footer outcome. Its Undo is the page's (`FooterAct::Page`).
+    pub(crate) fn outcome(&self) -> KeptOutcome<FooterAct> {
         match self {
-            Self::Repaired => FooterLine::new(
-                FooterRank::Notice,
-                CHANGED,
-                "Note repaired.",
-                FooterKind::Plain,
-            ),
-            Self::Discarded(name) => FooterLine::discarded(name, FooterAct::Page),
+            Self::Repaired => Said::new(crate::sentence!("Note repaired.")).into(),
+            Self::Discarded(name) => discarded_outcome(name, FooterAct::Page),
         }
     }
+}
+
+/// `<name> draft discarded.` with `Undo discard of <name>`, the name every discarded draft's
+/// Undo has in the app; its visible label gives way by whole words where the footer is narrow.
+pub(crate) fn discarded_outcome(name: &str, act: FooterAct) -> KeptOutcome<FooterAct> {
+    KeptOutcome::Notice(
+        Notice::new(crate::sentence!("{} draft discarded.", name)),
+        UndoStep::of(Verb::Discard, name).pressed_as(act),
+    )
 }
 
 /// Whose an `Add to Log` field is: the campaign and the entry's ID, nothing else. A copied note
@@ -2180,9 +2199,6 @@ struct LogField {
     /// The words came from a done scene, so typing replaces them and Enter keeps them.
     select: bool,
 }
-
-/// Why an open `Add to Log` field waits: an edit form of its entry is open.
-pub(crate) const LOG_WAITS: &str = "Save or discard your edit to add a Log line.";
 
 /// The least room that `Add to Log`'s field keeps for a sentence when its stamp shares its line.
 /// It also keeps the words it holds whole, with the field's margins.
@@ -2323,174 +2339,150 @@ pub(crate) fn in_rect(
     add(&mut child)
 }
 
-/// Where a footer line stands: a result with a live Undo, a reason, or another notice.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) enum FooterRank {
-    Undo,
-    Reason,
-    Notice,
-}
-
-/// What a footer line's action does. The pane takes it after the footer draws.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+/// What a reader pane's footer can press. A kept result's press comes with its ticket, and the
+/// store it came from acts by it.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum FooterAct {
-    /// Undo the value, edit-form or row change (`Reader::undo`).
-    Change,
-    FileRename,
-    Name,
-    Identity,
-    /// Bring back the edit draft that Discard let go.
-    Discarded,
-    /// The page result's Undo: the page owns it.
+    /// The Undo of a result of the reader's store (`Reader::results`).
+    Undo,
+    /// The page result's Undo: the World page's store.
     Page,
-    /// The DM copied or dismissed the words of a Log line whose entry is gone, by its notice.
-    GoneLog(u64),
+    /// `Undo remove` of a row of a tracker's history: the trackers own it.
+    Trackers,
+    /// `Copy text` of a Log line whose entry is gone, by its notice.
+    GoneCopy(u64),
+    /// The close icon of that notice: its typed words go, with an Undo (ruling R3).
+    GoneDismiss(u64),
+    /// The Undo of a dismissed Log line (`Reader::dismissed`).
+    UndoDismiss,
     /// `Copy text` of a draft whose note is gone, by the note's ID.
     LostCopy(Uuid),
     /// `Discard draft` of a draft whose note is gone, by the note's ID.
     LostDiscard(Uuid),
-    /// `Undo tick` of an open question, by its note and its line: the World page's.
-    Untick(Uuid, usize),
-    /// `Undo remove` of a row of a tracker's history: the trackers own it, and the pane takes it.
-    Trackers,
+    /// `Undo tick` of an open question: the World page's ticks.
+    Untick,
+    /// `Edit in Obsidian` of the file the error names.
+    OpenEditor(std::path::PathBuf),
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) enum FooterKind {
-    Plain,
-    Undo {
-        label: &'static str,
-        act: FooterAct,
-    },
-    /// `<name> draft discarded.` with `Undo discard`, named for its draft.
-    Discarded {
-        name: String,
-        act: FooterAct,
-    },
-    /// An action's error, with `Edit in Obsidian` for this file when an editor can open it.
-    Error {
-        editor: Option<std::path::PathBuf>,
-    },
-    /// A Log line whose entry is gone, with `Copy text` and `Dismiss`.
-    GoneLog(GoneLog),
-    /// A draft whose note is gone, with `Copy text` and `Discard draft`.
-    LostDraft {
-        id: Uuid,
-        name: String,
-    },
+/// The reader's kinds of kept result, one each: a later one of a kind replaces the earlier
+/// (`Results::record`). A reader is one pane (World's or Lookup's), so its results are its own.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Slot {
+    /// A value, edit-form, row or Log change.
+    Change,
+    FileRename,
+    Name,
+    Identity,
+    /// An edit draft that Discard let go.
+    Discarded,
+    /// An edit draft that a disk conflict's Reload replaced.
+    Reloaded,
 }
 
-/// One World or Lookup message for its pane's footer (round 26): a result, reason or notice
-/// that comes and goes. It sits below the pane's scroll area, so it never moves the note.
-#[derive(Clone)]
-pub(crate) struct FooterLine {
-    /// When its result was made: newer results come first within a rank.
-    pub order: design::ResultOrder,
-    pub rank: FooterRank,
-    pub tone: Tone,
-    pub words: String,
-    pub kind: FooterKind,
+impl design::results::Owner for Slot {
+    type Scope = ();
+    fn scope(&self) -> &() {
+        &()
+    }
 }
 
-impl FooterLine {
-    pub(crate) fn new(rank: FooterRank, tone: Tone, words: &str, kind: FooterKind) -> Self {
-        Self {
-            order: design::ResultOrder::default(),
-            rank,
-            tone,
-            words: words.to_owned(),
-            kind,
-        }
-    }
+/// A kept result of the reader, with what its Undo needs. Each shows only on its own campaign's
+/// note (`shows_on`). End events: its own Undo; a later result of its kind; the owner's ends
+/// that `Reader::end` names (another note opens, an Edit, a repair).
+enum ReaderResult {
+    Change(Change),
+    FileRename(FileRename),
+    Name(Change),
+    /// The campaign it was made in, and the change.
+    Identity(Uuid, Change),
+    /// The entry and the draft let go.
+    Discarded(Uuid, Box<edit::EditDraft>),
+    /// The entry whose open draft Reload replaced; the draft keeps what Undo brings back.
+    Reloaded(Uuid),
+}
 
-    /// The line, made at `order`.
-    pub(crate) fn at(mut self, order: design::ResultOrder) -> Self {
-        self.order = order;
-        self
-    }
-
-    pub(super) fn discarded(name: &str, act: FooterAct) -> Self {
-        Self::new(
-            FooterRank::Undo,
-            Tone::Info,
-            &format!("{name} draft discarded."),
-            FooterKind::Discarded {
-                name: name.to_owned(),
-                act,
-            },
-        )
-    }
-
-    fn draw(&self, ui: &mut egui::Ui) -> Option<FooterAct> {
-        match &self.kind {
-            FooterKind::Plain => {
-                design::message(ui, self.tone, &self.words);
-                None
-            }
-            FooterKind::Undo { label, act } => {
-                design::undo_message(ui, self.tone, &self.words, label).then_some(*act)
-            }
-            FooterKind::Discarded { name, act } => {
-                design::draft_discarded(ui, name).then_some(*act)
-            }
-            FooterKind::GoneLog(gone) => gone.draw(ui, &self.words, self.tone),
-            FooterKind::LostDraft { id, name } => {
-                edit::lost_draft(ui, &self.words, self.tone, *id, name)
-            }
-            FooterKind::Error { editor } => {
-                ui.horizontal_wrapped(|ui| {
-                    design::message(ui, self.tone, &self.words);
-                    if let Some(path) = editor
-                        && design::link(ui, "Edit in Obsidian").clicked()
-                    {
-                        ui.ctx()
-                            .open_url(egui::OpenUrl::new_tab(obsidian_url(path)));
-                    }
-                });
-                None
-            }
+impl design::results::Kept for ReaderResult {
+    type Owner = Slot;
+    const ENDS: design::results::Ends = design::results::Ends {
+        owner_changed: design::results::OwnerChanged::Ends,
+        disk_changed: design::results::DiskChanged::Stays,
+        press: design::results::Press::Undo,
+    };
+    fn owner(&self) -> Slot {
+        match self {
+            Self::Change(_) => Slot::Change,
+            Self::FileRename(_) => Slot::FileRename,
+            Self::Name(_) => Slot::Name,
+            Self::Identity(..) => Slot::Identity,
+            Self::Discarded(..) => Slot::Discarded,
+            Self::Reloaded(_) => Slot::Reloaded,
         }
     }
 }
 
-/// A pane's footer lines with more from another owner, in the footer's order: results with a
-/// live Undo newest first, then reasons, then notices.
-pub(crate) fn with_lines(mut lines: Vec<FooterLine>, more: Vec<FooterLine>) -> Vec<FooterLine> {
-    lines.extend(more);
-    lines.sort_by_key(|line| (line.rank, std::cmp::Reverse(line.order)));
-    lines
+/// A Log line the DM dismissed with its typed words: its Undo puts the notice back.
+pub(crate) struct DismissedLog(pub(crate) GoneLog);
+
+/// One dismissed Log line, by its notice's number, in its campaign.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct GoneOwner {
+    campaign: Uuid,
+    id: u64,
 }
 
-/// Draw a pane's footer lines in its message footer (`design::Footer`), pinned at the bottom of
-/// what is left of `ui`, in the footer's order: results with a live Undo, then reasons, then
-/// notices. `id` is the pane instance's own. Returns the action pressed and the y where the body
-/// drawn next ends.
+impl design::results::Owner for GoneOwner {
+    type Scope = Uuid;
+    fn scope(&self) -> &Uuid {
+        &self.campaign
+    }
+}
+
+impl design::results::Kept for DismissedLog {
+    type Owner = GoneOwner;
+    const ENDS: design::results::Ends = design::results::Ends {
+        owner_changed: design::results::OwnerChanged::Stays,
+        disk_changed: design::results::DiskChanged::Stays,
+        press: design::results::Press::Undo,
+    };
+    fn owner(&self) -> GoneOwner {
+        GoneOwner {
+            campaign: self.0.campaign,
+            id: self.0.id,
+        }
+    }
+}
+
+/// Words the app made from the DM's own (a name, a value, a file's error) as one sentence: the
+/// counted escape for words from outside.
 #[allow(
     clippy::disallowed_methods,
-    reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+    reason = "the words hold the DM’s names and values, or the system’s error"
 )]
-pub(crate) fn draw_footer(
-    ui: &mut egui::Ui,
-    id: impl std::hash::Hash,
-    lines: &[FooterLine],
-) -> (Option<FooterAct>, f32) {
-    let pressed = std::cell::Cell::new(None);
-    let mut footer = design::Footer::new(id, ui.available_width());
-    for line in lines {
-        let pressed = &pressed;
-        let draw = move |ui: &mut egui::Ui| {
-            if let Some(act) = line.draw(ui) {
-                pressed.set(Some(act));
-            }
-        };
-        match line.rank {
-            FooterRank::Undo => footer.result(line.order, line.words.as_str(), true, draw),
-            FooterRank::Reason => footer.reason(line.words.as_str(), draw),
-            FooterRank::Notice => footer.notice(line.words.as_str(), draw),
-        };
+pub(crate) fn said(words: &str) -> Sentence {
+    Sentence::outside(words).unwrap_or(crate::sentence!("Done."))
+}
+
+/// A reader's fault for its footer, by kind: it gives the tone.
+pub(crate) enum ReaderFault {
+    /// The last action did not write (a refused or failed write, a file that cannot be read).
+    Action(String),
+    /// Typed words that wait: a Log line whose entry is gone, a draft whose note is gone.
+    Waiting(String),
+}
+
+impl Fault for ReaderFault {
+    fn severity(&self) -> Severity {
+        match self {
+            Self::Action(_) => Severity::NotSaved,
+            Self::Waiting(_) => Severity::NeedsFixing,
+        }
     }
-    let bottom = footer.show_by_hand(ui);
-    (pressed.get(), bottom)
+    fn cause(&self) -> Sentence {
+        match self {
+            Self::Action(words) | Self::Waiting(words) => said(words),
+        }
+    }
 }
 
 impl Reader {
@@ -2552,7 +2544,7 @@ impl Reader {
     /// header's do. The field starts with `words`, selected, unless the DM already typed words
     /// there.
     pub fn open_log(&mut self, campaign: Uuid, id: Uuid, name: &str, words: &str) {
-        let open = self.log_fields.entry((campaign, id)).or_default();
+        let open = self.held.log_fields.entry((campaign, id)).or_default();
         open.field.focus = true;
         name.clone_into(&mut open.name);
         if open.field.words.trim().is_empty() {
@@ -2628,7 +2620,7 @@ impl Reader {
     /// error and pickers end here. Both the footer and the body call it first.
     fn prepare(&mut self, item: &Item) {
         if self.showing != Some(item.entry.id) {
-            self.undo = None;
+            self.end(Slot::Change);
             self.kept = None;
             if let Some(previous) = self.showing {
                 self.status_drafts.insert(previous, self.status.clone());
@@ -2663,8 +2655,10 @@ impl Reader {
         self.read_with(ui, item, index, campaign, None)
     }
 
-    /// `read`, with the trackers: a house rule note in play shows its problems and each
-    /// tracker's history after its text.
+    /// `read`, with the trackers, outside any pane (checks): a house rule note in play shows its
+    /// problems and each tracker's history after its text. The app reads in a pane
+    /// (`read_in_pane`).
+    #[cfg(test)]
     pub fn read_with(
         &mut self,
         ui: &mut egui::Ui,
@@ -2673,16 +2667,31 @@ impl Reader {
         campaign: Option<&Campaign>,
         trackers: Option<&mut crate::trackers::Trackers>,
     ) -> Option<Nav> {
+        self.read_in_pane(ui, item, index, campaign, trackers, None)
+    }
+
+    /// `read_with` in its pane's body: `region` is the pane's editor region (World's and
+    /// Lookup's reader panes are always the editor form); the edit form's text draws in it.
+    pub(crate) fn read_in_pane(
+        &mut self,
+        ui: &mut egui::Ui,
+        item: &Item,
+        index: &ContentIndex,
+        campaign: Option<&Campaign>,
+        trackers: Option<&mut crate::trackers::Trackers>,
+        region: Option<design::pane::EditorRegion<'_>>,
+    ) -> Option<Nav> {
         self.prepare(item);
-        if self.undo.as_ref().is_some_and(|change| {
-            campaign.is_none_or(|campaign| {
+        // A change's result ends when its file no longer holds what the change wrote.
+        if let Some(ReaderResult::Change(change)) = self.result(Slot::Change)
+            && campaign.is_none_or(|campaign| {
                 fs::read_to_string(campaign.path.join(&change.path))
                     .ok()
                     .as_deref()
                     != Some(&change.after)
             })
-        }) {
-            self.undo = None;
+        {
+            self.end(Slot::Change);
         }
         if self.kept.as_ref().is_some_and(|(path, text)| {
             campaign.is_none_or(|campaign| {
@@ -2698,7 +2707,7 @@ impl Reader {
             None
         };
         crate::markdown_view::want_heading(ui.ctx(), heading);
-        let go = self.draw(ui, item, index, campaign, trackers);
+        let go = self.draw(ui, item, index, campaign, trackers, region);
         // A request lasts one draw, so it cannot reach a heading on another page.
         crate::markdown_view::want_heading(ui.ctx(), None);
         go.and_then(|go| self.settle(go))
@@ -2715,6 +2724,7 @@ impl Reader {
         index: &ContentIndex,
         campaign: Option<&Campaign>,
         trackers: Option<&mut crate::trackers::Trackers>,
+        region: Option<design::pane::EditorRegion<'_>>,
     ) -> Option<Go> {
         let mut go = None;
         if self.place_choices_document != Some(item.entry.id) {
@@ -2887,7 +2897,7 @@ impl Reader {
         if let Some(campaign) = campaign
             && editing
         {
-            return self.edit_form(ui, item, index, campaign);
+            return self.edit_form(ui, item, index, campaign, region);
         }
 
         let file_line = !self.compact
@@ -3006,8 +3016,7 @@ impl Reader {
                             });
                         match result {
                             Ok(rename) => {
-                                self.file_undo = Some(rename);
-                                self.stamp(FooterAct::FileRename);
+                                self.held.results.record(ReaderResult::FileRename(rename));
                                 return Some(Go::Reload(item.entry.id));
                             }
                             Err(error) => self.error = Some(error),
@@ -3037,8 +3046,7 @@ impl Reader {
                         })();
                         match result {
                             Ok(change) => {
-                                self.name_undo = Some(change);
-                                self.stamp(FooterAct::Name);
+                                self.held.results.record(ReaderResult::Name(change));
                                 return Some(Go::Reload(item.entry.id));
                             }
                             Err(error) => self.error = Some(error),
@@ -3082,8 +3090,9 @@ impl Reader {
                 if let Some(path) = chosen {
                     match new_identity(campaign, path) {
                         Ok((undo, id)) => {
-                            self.identity_undo = Some((campaign.id, undo));
-                            self.stamp(FooterAct::Identity);
+                            self.held
+                                .results
+                                .record(ReaderResult::Identity(campaign.id, undo));
                             return Some(Go::Reload(id));
                         }
                         Err(error) => self.error = Some(error),
@@ -3466,7 +3475,10 @@ impl Reader {
     ) -> Option<Go> {
         // With no field open, or a field that waits for an edit form, no scope: an empty one
         // still takes an item gap, and would move the form (round 27 FC2).
-        if !self.log_fields.contains_key(&(campaign.id, item.entry.id))
+        if !self
+            .held
+            .log_fields
+            .contains_key(&(campaign.id, item.entry.id))
             || editing
             || self.edited_elsewhere.contains(&item.entry.id)
         {
@@ -3480,7 +3492,7 @@ impl Reader {
         let stamp = self
             .line_stamp()
             .map(|stamp| format!("{}:", sessions::plain_links(&stamp)));
-        let open = self.log_fields.get_mut(&key)?;
+        let open = self.held.log_fields.get_mut(&key)?;
         let select = std::mem::take(&mut open.select);
         let field = &mut open.field;
         let name = format!("Log line for {}", item.entry.name);
@@ -3566,11 +3578,11 @@ impl Reader {
         if ui.input(|input| input.key_pressed(egui::Key::Escape))
             && (response.has_focus() || response.lost_focus())
         {
-            self.log_fields.remove(&key);
+            self.held.log_fields.remove(&key);
         } else if enter {
             let words = field.words.trim().to_owned();
             if words.is_empty() {
-                self.log_fields.remove(&key);
+                self.held.log_fields.remove(&key);
             } else {
                 return self.add_log_line(campaign, item, &words);
             }
@@ -3602,7 +3614,7 @@ impl Reader {
         })();
         let go = self.written(result, item.entry.id);
         if go.is_some() {
-            self.log_fields.remove(&(campaign.id, item.entry.id));
+            self.held.log_fields.remove(&(campaign.id, item.entry.id));
         }
         go
     }
@@ -3615,8 +3627,7 @@ impl Reader {
                 self.error = None;
                 self.group_error = false;
                 self.group_error_unread_file = false;
-                self.undo = Some(change);
-                self.stamp(FooterAct::Change);
+                self.held.results.record(ReaderResult::Change(change));
                 self.kept = None;
                 Some(Go::Reload(id))
             }
@@ -4003,64 +4014,85 @@ impl Reader {
     /// A change result on this note. It is newer than the page's repair result, so it takes
     /// the one place for results.
     pub(crate) fn has_change_result(&self, campaign: &Campaign, path: &str) -> bool {
-        self.undo
-            .as_ref()
-            .is_some_and(|change| change.shows_on(campaign, path))
+        let on = |slot| match self.result(slot) {
+            Some(ReaderResult::Change(change) | ReaderResult::Name(change)) => {
+                change.shows_on(campaign, path)
+            }
+            _ => false,
+        };
+        on(Slot::Change)
+            || on(Slot::Name)
             || self.kept.as_ref().is_some_and(|(kept, _)| kept == path)
-            || self
-                .name_undo
-                .as_ref()
-                .is_some_and(|change| change.shows_on(campaign, path))
     }
 
     pub fn clear_notice(&mut self) {
-        self.undo = None;
+        self.end(Slot::Change);
         self.kept = None;
     }
 
-    /// This reader's messages for the open note, for its pane's footer (round 26): the error
-    /// of the last action, then every result with its Undo. Each keeps its owner and its end
-    /// event: a change, a kept form and an error belong to the open note and end when another
-    /// note opens (`prepare`), a later change replaces them, and Undo ends them; a rename,
-    /// a name change and a separate note end at their Undo or the next of their kind; the
-    /// page's result is the page's (`page`). Draw them with `draw_footer`, before the
-    /// body, and take its action with `footer_act`.
-    pub(crate) fn footer_lines(
+    /// The change whose result the reader keeps, for the checks.
+    #[cfg(test)]
+    pub(crate) fn last_change(&self) -> Option<Change> {
+        match self.result(Slot::Change)? {
+            ReaderResult::Change(change) => Some(change.clone()),
+            _ => None,
+        }
+    }
+
+    /// The reader's kept result of this kind.
+    fn result(&self, slot: Slot) -> Option<&ReaderResult> {
+        self.held.results.get(&slot).map(|shown| shown.value())
+    }
+
+    /// End the reader's result of this kind (its owner changed: another note, an Edit).
+    fn end(&mut self, slot: Slot) {
+        self.held.results.owner_changed(&slot);
+    }
+
+    /// A repair of the note at `path` ends a name change's result on it: it has nothing left
+    /// to undo.
+    pub(crate) fn end_name_change_on(&mut self, campaign: &Campaign, path: &str) {
+        if matches!(self.result(Slot::Name), Some(ReaderResult::Name(change)) if change.shows_on(campaign, path))
+        {
+            self.end(Slot::Name);
+        }
+    }
+
+    /// This reader's messages for the open note, for its pane's footer (round 26): every result
+    /// with its Undo from the reader's stores, then the reasons, then the notices. Each keeps
+    /// its owner and its end events: a change, a kept form and an error belong to the open note
+    /// and end when another note opens (`prepare`), a later change replaces them, and Undo ends
+    /// them; a rename, a name change and a separate note end at their Undo or the next of their
+    /// kind. The page adds its own result. Take the press with `footer_act`.
+    pub(crate) fn footer<'f>(
         &mut self,
+        frame: &'f PaneFrame,
+        messages: &mut Messages<'f, FooterAct>,
         item: &Item,
         index: &ContentIndex,
         campaign: Option<&Campaign>,
-        page: Option<(&PageResult, design::ResultOrder)>,
-    ) -> Vec<FooterLine> {
+    ) {
         self.prepare(item);
         let id = item.entry.id;
         let editing = campaign.is_some_and(|campaign| self.editing(id, campaign));
-        let mut lines = self.gone_log_notices(campaign.map(|campaign| campaign.id));
+        self.gone_log_messages(frame, messages, campaign.map(|campaign| campaign.id));
         // A draft whose note is gone, and its Undo, whatever note is open, also in an edit form.
-        lines.extend(self.lost_lines(index));
+        self.lost_messages(messages, index);
         // Why the open run refused this entry's `Add to fight`.
         if let Some(words) = self.refusal_for(id) {
-            lines.push(FooterLine::new(
-                FooterRank::Reason,
-                Tone::Error,
-                words,
-                FooterKind::Error { editor: None },
-            ));
+            messages.outcome(Outcome::Refused(said(words)));
         }
         // An open `Add to Log` field waits while an edit form of its entry is open, here or in
         // the other reader. It ends when the form closes (Save, Discard) or the reader shows
         // another entry.
         if let Some(campaign) = campaign
             && takes_log(item, index)
-            && self.log_fields.contains_key(&(campaign.id, id))
+            && self.held.log_fields.contains_key(&(campaign.id, id))
             && (self.editing(id, campaign) || self.edited_elsewhere.contains(&id))
         {
-            lines.push(FooterLine::new(
-                FooterRank::Reason,
-                Tone::Info,
-                LOG_WAITS,
-                FooterKind::Plain,
-            ));
+            messages.outcome(Notice::new(crate::sentence!(
+                "Save or discard your edit to add a Log line."
+            )));
         }
         let has_unread = self
             .group_fault
@@ -4071,193 +4103,171 @@ impl Reader {
         if let Some(error) = &self.error
             && !(self.group_error && has_unread)
         {
+            let mut fault = FaultMessage::new(&ReaderFault::Action(error.clone()));
             // A file that Splat cannot read, no editor can open either.
-            let editor = campaign
-                .filter(|_| self.group_error && !self.group_error_unread_file)
-                .map(|campaign| campaign.path.join(&item.entry.path));
-            lines.push(FooterLine::new(
-                FooterRank::Reason,
-                Tone::Error,
-                error,
-                FooterKind::Error { editor },
-            ));
+            if let Some(campaign) =
+                campaign.filter(|_| self.group_error && !self.group_error_unread_file)
+            {
+                let path = campaign.path.join(&item.entry.path);
+                fault = fault.choice(
+                    Choice::new(
+                        MessageChoice::Link {
+                            word: "Edit in Obsidian",
+                            hover: None,
+                        },
+                        FooterAct::OpenEditor(path.clone()),
+                    )
+                    .hover(path.display().to_string()),
+                );
+            }
+            messages.outcome(fault);
         }
         let Some(campaign) = campaign else {
-            return lines;
+            return;
         };
-        if self
-            .identity_undo
-            .as_ref()
-            .is_some_and(|(owner, _)| *owner != campaign.id)
+        if matches!(self.result(Slot::Identity), Some(ReaderResult::Identity(owner, _)) if *owner != campaign.id)
         {
-            self.identity_undo = None;
+            self.end(Slot::Identity);
         }
-        let page_order = page.map_or_else(design::ResultOrder::default, |(_, order)| order);
-        let page = page.map(|(page, _)| page);
-        if editing {
-            // A draft let go whose note is gone keeps its Undo while another entry is edited
-            // (the next Edit ends the Undo of its own entry).
-            lines.extend(self.discarded_line(campaign, id, index));
-            lines.extend(page.map(|page| page.line()));
-            return self.newest_first(lines, page_order);
-        }
-        let undo = |words: &str, label: &'static str, act| {
-            FooterLine::new(
-                FooterRank::Undo,
-                CHANGED,
-                words,
-                FooterKind::Undo { label, act },
-            )
-        };
-        if let Some(change) = self
-            .undo
-            .as_ref()
-            .filter(|change| change.shows_on(campaign, &item.entry.path))
-        {
-            lines.push(undo(
-                &change.word,
-                change.kind.undo_label(),
-                FooterAct::Change,
-            ));
-        }
-        lines.extend(self.discarded_line(campaign, id, index));
-        if item.entry.kind == "world" && !index.duplicate_world.contains_key(&item.entry.path) {
-            if let Some(rename) = self
-                .file_undo
-                .as_ref()
-                .filter(|rename| rename.shows_on(campaign, &item.entry.path))
-            {
-                lines.push(undo(
-                    &rename.message(),
-                    "Undo file rename",
-                    FooterAct::FileRename,
-                ));
+        let duplicate = index.duplicate_world.contains_key(&item.entry.path);
+        let path = item.entry.path.as_str();
+        for slot in [
+            Slot::Change,
+            Slot::Reloaded,
+            Slot::Discarded,
+            Slot::FileRename,
+            Slot::Name,
+            Slot::Identity,
+        ] {
+            let Some(shown) = self.held.results.get(&slot) else {
+                continue;
+            };
+            let shows = match shown.value() {
+                // A draft let go whose note is gone keeps its Undo while another entry is edited
+                // (the next Edit ends the Undo of its own entry).
+                ReaderResult::Discarded(..) => self.discarded_shows(campaign, id, index).is_some(),
+                // Its own entry's open form, while the draft still holds what Undo restores.
+                ReaderResult::Reloaded(at) => {
+                    *at == id
+                        && editing
+                        && self
+                            .edits
+                            .get(at)
+                            .is_some_and(edit::EditDraft::was_reloaded)
+                }
+                _ if editing => false,
+                ReaderResult::Change(change) => change.shows_on(campaign, path),
+                ReaderResult::FileRename(rename) => {
+                    item.entry.kind == "world" && !duplicate && rename.shows_on(campaign, path)
+                }
+                ReaderResult::Name(change) => {
+                    item.entry.kind == "world" && !duplicate && change.shows_on(campaign, path)
+                }
+                ReaderResult::Identity(..) => true,
+            };
+            if !shows {
+                continue;
             }
-            if let Some(change) = self
-                .name_undo
-                .as_ref()
-                .filter(|change| change.shows_on(campaign, &item.entry.path))
-            {
-                lines.push(undo(&change.word, "Undo name change", FooterAct::Name));
-            }
+            messages.kept(shown.outcome(frame, |result| {
+                match result {
+                    ReaderResult::Change(change) | ReaderResult::Name(change) => {
+                        Said::new(said(&change.word))
+                            .undo(change.undo_step(&item.entry.name).pressed_as(FooterAct::Undo))
+                            .into()
+                    }
+                    ReaderResult::Identity(_, change) => Said::new(said(change.message()))
+                        .undo(change.undo_step(&item.entry.name).pressed_as(FooterAct::Undo))
+                        .into(),
+                    ReaderResult::FileRename(rename) => Said::new(said(&rename.message()))
+                        .undo(UndoStep::of(Verb::Rename, "file").pressed_as(FooterAct::Undo))
+                        .into(),
+                    ReaderResult::Discarded(_, draft) => {
+                        discarded_outcome(&draft.name, FooterAct::Undo)
+                    }
+                    ReaderResult::Reloaded(_) => KeptOutcome::Notice(
+                        Notice::new(crate::sentence!(
+                            "Reloaded from disk. Your previous draft is kept until you edit or the file changes again."
+                        )),
+                        UndoStep::verb(Verb::Reload).pressed_as(FooterAct::Undo),
+                    ),
+                }
+            }));
         }
-        if let Some((_, change)) = &self.identity_undo {
-            lines.push(undo(
-                change.message(),
-                change.identity_undo_label(),
-                FooterAct::Identity,
-            ));
-        }
-        lines.extend(page.map(|page| page.line()));
         // The form closed because the note already held every change. Nothing to undo.
-        if edit::editable(item, index)
+        if !editing
+            && edit::editable(item, index)
             && self
                 .kept
                 .as_ref()
                 .is_some_and(|(path, _)| *path == item.entry.path)
         {
-            lines.push(FooterLine::new(
-                FooterRank::Notice,
-                Tone::Info,
-                edit::ALREADY_SAVED,
-                FooterKind::Plain,
-            ));
+            // `edit::ALREADY_SAVED`.
+            messages.outcome(Notice::new(crate::sentence!(
+                "Your changes are already in the note."
+            )));
         }
-        self.newest_first(lines, page_order)
     }
 
-    /// A kept result was made now: it goes first among the results with a live Undo.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
-    pub(super) fn stamp(&mut self, act: FooterAct) {
-        self.orders.insert(act, design::ResultOrder::issue());
-    }
-
-    /// Each line with the order its action was made at; then the footer's order: results with
-    /// a live Undo newest first, then reasons, then notices.
-    fn newest_first(&self, lines: Vec<FooterLine>, page: design::ResultOrder) -> Vec<FooterLine> {
-        let mut lines: Vec<_> = lines
-            .into_iter()
-            .map(|line| {
-                let order = match &line.kind {
-                    // `Undo discard` carries the order its Discard issued (`discarded`).
-                    FooterKind::Discarded {
-                        act: FooterAct::Discarded,
-                        ..
-                    } => line.order,
-                    FooterKind::Undo { act, .. } | FooterKind::Discarded { act, .. } => match act {
-                        FooterAct::Page => page,
-                        act => self.orders.get(act).copied().unwrap_or_default(),
-                    },
-                    _ if line.rank == FooterRank::Notice => page,
-                    _ => design::ResultOrder::default(),
-                };
-                line.at(order)
-            })
-            .collect();
-        lines.sort_by_key(|line| (line.rank, std::cmp::Reverse(line.order)));
-        lines
-    }
-
-    /// Take a footer line's action on the open note. `FooterAct::Page` is the page's.
+    /// Take a footer press on the open note. `Page`, `Trackers` and `Untick` are the page's or
+    /// the pane's; a kept result's press acts by its ticket, and a replaced or ended result
+    /// (`Gone`) does nothing.
     pub(crate) fn footer_act(
         &mut self,
         ctx: &egui::Context,
-        act: FooterAct,
-        item: &Item,
+        press: design::outcome::Press<FooterAct>,
+        open: Option<Uuid>,
         campaign: &Campaign,
     ) -> Option<Nav> {
-        let go = match act {
-            FooterAct::Change => self.undo_change(campaign, item.entry.id),
-            FooterAct::FileRename => match self.file_undo.as_ref()?.undo(campaign) {
-                Ok(()) => {
-                    self.file_undo = None;
-                    self.error = None;
-                    Some(Go::Reload(item.entry.id))
-                }
-                Err(error) => {
-                    self.error = Some(error);
-                    None
-                }
-            },
-            FooterAct::Name => match self.name_undo.as_ref()?.undo(campaign) {
-                Ok(()) => {
-                    self.name_undo = None;
-                    self.error = None;
-                    Some(Go::Reload(item.entry.id))
-                }
-                Err(error) => {
-                    self.error = Some(error);
-                    None
-                }
-            },
-            FooterAct::Identity => {
-                let (_, undo) = self.identity_undo.as_ref()?;
-                match undo.undo(campaign) {
-                    Ok(()) => {
-                        let id = note_id(&undo.path);
-                        self.identity_undo = None;
-                        self.error = None;
-                        Some(Go::Reload(id))
+        let go = match press.id {
+            FooterAct::Undo => {
+                let ticket = press.ticket?;
+                match self.held.results.undo_by(ticket, |result| match result {
+                    ReaderResult::Change(change) | ReaderResult::Name(change) => {
+                        change.undo(campaign)
                     }
-                    Err(error) => {
+                    ReaderResult::Identity(_, change) => change.undo(campaign),
+                    ReaderResult::FileRename(rename) => rename.undo(campaign),
+                    ReaderResult::Discarded(..) | ReaderResult::Reloaded(_) => Ok(()),
+                }) {
+                    Ok((ReaderResult::Discarded(id, draft), ())) => {
+                        self.edits.insert(id, *draft);
+                        None
+                    }
+                    Ok((ReaderResult::Reloaded(id), ())) => {
+                        if let Some(draft) = self.edits.get_mut(&id) {
+                            draft.undo_reload();
+                        }
+                        None
+                    }
+                    Ok((ReaderResult::Identity(_, change), ())) => {
+                        // A finished Undo ends the reason an earlier action left.
+                        self.error = None;
+                        Some(Go::Reload(note_id(&change.path)))
+                    }
+                    Ok(_) => {
+                        self.error = None;
+                        open.map(Go::Reload)
+                    }
+                    Err(design::results::ByTicket::Failed(error)) => {
                         self.error = Some(error);
                         None
                     }
+                    Err(design::results::ByTicket::Gone) => None,
                 }
             }
-            FooterAct::Discarded => {
-                if let Some((id, draft, _)) = self.discarded.take() {
-                    self.edits.insert(id, draft);
+            FooterAct::GoneCopy(id) => {
+                if let Some(gone) = self.held.gone_log_lines.iter().find(|gone| gone.id == id) {
+                    ctx.copy_text(gone.words.clone());
                 }
+                self.end_gone_log(id);
                 None
             }
-            // The page takes its own result's Undo, and the pane the trackers'.
-            FooterAct::Page | FooterAct::Trackers => None,
-            FooterAct::GoneLog(id) => {
-                self.end_gone_log(id);
+            FooterAct::GoneDismiss(id) => {
+                self.dismiss_gone_log(id);
+                None
+            }
+            FooterAct::UndoDismiss => {
+                self.undo_dismiss(press.ticket?);
                 None
             }
             FooterAct::LostCopy(id) => {
@@ -4268,25 +4278,14 @@ impl Reader {
                 self.discard_lost(id);
                 None
             }
-            // The World page takes a tick's Undo.
-            FooterAct::Untick(..) => None,
-        };
-        go.and_then(|go| self.settle(go))
-    }
-
-    fn undo_change(&mut self, campaign: &Campaign, id: Uuid) -> Option<Go> {
-        match self.undo.as_ref()?.undo(campaign) {
-            Ok(_) => {
-                self.undo = None;
-                // A finished Undo ends the reason an earlier action left.
-                self.error = None;
-                Some(Go::Reload(id))
-            }
-            Err(error) => {
-                self.error = Some(error);
+            FooterAct::OpenEditor(path) => {
+                ctx.open_url(egui::OpenUrl::new_tab(obsidian_url(&path)));
                 None
             }
-        }
+            // The page takes its own result's Undo and its ticks, and the pane the trackers'.
+            FooterAct::Page | FooterAct::Trackers | FooterAct::Untick => None,
+        };
+        go.and_then(|go| self.settle(go))
     }
 
     fn relationships(
@@ -4540,10 +4539,6 @@ impl Reader {
         chosen
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
-    )]
     fn entry_controls(
         &mut self,
         ui: &mut egui::Ui,
@@ -4811,10 +4806,7 @@ impl Reader {
                     ) {
                         Ok(mut change) => {
                             change.word = change_words("Stat block", None, Some(&stat_block.name));
-                            self.undo = Some(change);
-                            // A field of its own: `adding` still borrows the form.
-                            self.orders
-                                .insert(FooterAct::Change, design::ResultOrder::issue());
+                            self.held.results.record(ReaderResult::Change(change));
                             self.kept = None;
                         }
                         Err(error) => self.error = Some(error),
@@ -5481,32 +5473,14 @@ mod tests {
 
     #[test]
     fn i19_h1_world_notice_names_the_change_and_undo() {
-        let ctx = egui::Context::default();
-        crate::design::theme::install(&ctx);
-        ctx.enable_accesskit();
-        let output = ctx.run(Default::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                let line = FooterLine::new(
-                    FooterRank::Undo,
-                    CHANGED,
-                    "Place set to North Gate. It was Watch House.",
-                    FooterKind::Undo {
-                        label: ChangeKind::Place.undo_label(),
-                        act: FooterAct::Change,
-                    },
-                );
-                draw_footer(ui, "test_footer", &[line]);
-            });
-        });
-        let nodes = output.platform_output.accesskit_update.unwrap().nodes;
-        let labels: Vec<_> = nodes.iter().filter_map(|(_, node)| node.label()).collect();
+        // A place change's Undo names its verb and its object, as the result's words do.
         assert_eq!(
-            labels
-                .iter()
-                .filter(|s| s.starts_with("Undo"))
-                .copied()
-                .collect::<Vec<_>>(),
-            ["Undo place change"]
+            ChangeKind::Place.undo_step("Rook").label(),
+            "Undo change to Place"
+        );
+        assert_eq!(
+            ChangeKind::PartOf.undo_step("Rook").label(),
+            "Undo change to Part of"
         );
     }
 
@@ -5568,7 +5542,7 @@ mod tests {
             before
         );
         assert_eq!(undo.message(), "Rook copy.md is now a separate note.");
-        assert_eq!(undo.identity_undo_label(), "Undo separate note");
+        assert_eq!(undo.undo_step("Rook copy").label(), "Undo separate note");
         assert_eq!(Entry::parse("copy.md", &undo.after).unwrap().id, id);
         let repaired = Entry::parse("copy.md", &undo.after).unwrap();
         assert_eq!(repaired.name, "Rook copy");
@@ -5965,7 +5939,7 @@ mod tests {
             let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
             let item = &index.items[index.position(hob).unwrap()];
             assert!(reader.change(&campaign, item, &index, key, value).is_some());
-            reader.undo.clone().unwrap()
+            reader.last_change().unwrap()
         };
         let status = change("status", "dead".into());
         let place = change("in", serde_yaml_ng::to_value(EntryRef::id(arena)).unwrap());
@@ -6023,9 +5997,9 @@ mod tests {
             logged,
             format!("{before_log}- [[Session 1]], Day 2: Gave the gate key to Iselle.\n")
         );
-        let line = reader.undo.clone().unwrap();
+        let line = reader.last_change().unwrap();
         assert_eq!(line.word, "Added to Hob’s Log.");
-        assert_eq!(line.kind.undo_label(), "Undo Log line");
+        assert_eq!(line.undo_step("Hob").label(), "Undo add Log line");
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
         assert_eq!(
             index
@@ -6097,7 +6071,8 @@ mod tests {
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
         let item = &index.items[index.position(hob).unwrap()];
         lookup.open_log(campaign.id, hob, "Hob", "the ropes");
-        lookup.log_fields.get_mut(&key).unwrap().field.words = "Told who burned the ropes.".into();
+        lookup.held.log_fields.get_mut(&key).unwrap().field.words =
+            "Told who burned the ropes.".into();
 
         // An edit in Obsidian a moment before, while the field holds typed words: the line
         // goes after it, in the entry's new Log heading.
@@ -6114,7 +6089,7 @@ mod tests {
             format!("{edited}\n## Log\n\n- [[Session 1]]: Told who burned the ropes.\n")
         );
         assert!(
-            !lookup.log_fields.contains_key(&key),
+            !lookup.held.log_fields.contains_key(&key),
             "Enter closes the field"
         );
 
@@ -6130,7 +6105,7 @@ mod tests {
             .unwrap();
         let oren_after = fs::read_to_string(&oren_path).unwrap();
         assert_ne!(oren_before, oren_after);
-        assert!(lookup.undo_change(&campaign, hob).is_some());
+        assert!(lookup.last_change().unwrap().undo(&campaign).is_ok());
         assert_eq!(fs::read_to_string(&path).unwrap(), edited);
         assert_eq!(fs::read_to_string(&oren_path).unwrap(), oren_after);
 
@@ -6138,7 +6113,7 @@ mod tests {
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
         let item = &index.items[index.position(hob).unwrap()];
         lookup.open_log(campaign.id, hob, "Hob", "");
-        lookup.log_fields.get_mut(&key).unwrap().field.words = "Kept.".into();
+        lookup.held.log_fields.get_mut(&key).unwrap().field.words = "Kept.".into();
         let folder = dir.path().join("NPCs");
         fs::set_permissions(&folder, fs::Permissions::from_mode(0o555)).unwrap();
         let failed = lookup.add_log_line(&campaign, item, "Kept.");
@@ -6151,7 +6126,7 @@ mod tests {
                 .is_some_and(|error| error.contains("NPCs/Hob.md"))
         );
         assert_eq!(fs::read_to_string(&path).unwrap(), edited);
-        assert_eq!(lookup.log_fields[&key].field.words, "Kept.");
+        assert_eq!(lookup.held.log_fields[&key].field.words, "Kept.");
 
         // A note that cannot be read, and a note renamed or deleted under the open field: the
         // act names the file and writes nothing.
@@ -6173,20 +6148,20 @@ mod tests {
                 .is_some_and(|error| error.contains("NPCs/Hob.md"))
         );
         assert!(!path.exists());
-        assert_eq!(lookup.log_fields[&key].field.words, "Kept.");
+        assert_eq!(lookup.held.log_fields[&key].field.words, "Kept.");
 
         // A done scene's words fill only an empty field: words the DM typed stay, and nothing
         // selects them. Clearing Lookup's search keeps them too.
         lookup.open_log(campaign.id, hob, "Hob", "the ropes");
-        assert_eq!(lookup.log_fields[&key].field.words, "Kept.");
+        assert_eq!(lookup.held.log_fields[&key].field.words, "Kept.");
         lookup.clear();
-        assert_eq!(lookup.log_fields[&key].field.words, "Kept.");
+        assert_eq!(lookup.held.log_fields[&key].field.words, "Kept.");
         // The app gives the reader the session being played again on each frame.
         lookup.played = Some("[[Session 1]]".into());
         // Each field keeps its own request to select its words.
         lookup.open_log(campaign.id, oren, "Oren", "paid the toll");
-        assert!(!lookup.log_fields[&key].select);
-        assert!(lookup.log_fields[&(campaign.id, oren)].select);
+        assert!(!lookup.held.log_fields[&key].select);
+        assert!(lookup.held.log_fields[&(campaign.id, oren)].select);
 
         // Typed Log words are unsaved work: the campaign switch's guard and the close warning
         // count them, by the entry's name. An empty field holds nothing to lose.
@@ -6231,7 +6206,7 @@ mod tests {
             }),
             "another campaign's reader shows this campaign's typed words"
         );
-        assert!(!lookup.log_fields.contains_key(&(other.id, hob)));
+        assert!(!lookup.held.log_fields.contains_key(&(other.id, hob)));
 
         // Every draft that the guards count has a field in view. A renamed played session
         // does not hide typed words: the stamp is the session at Enter, not the field's key.
@@ -6262,10 +6237,10 @@ mod tests {
         lookup.forget_gone_log_lines(&index);
         assert!(lookup.unsaved_edits().iter().all(|(id, _)| *id != hob));
         let item = &index.items[index.position(oren).unwrap()];
+        let _ = item;
         let notices: Vec<_> = lookup
-            .footer_lines(item, &index, Some(&campaign), None)
-            .into_iter()
-            .map(|line| line.words)
+            .gone_logs(campaign.id)
+            .map(edit::gone_words)
             .collect();
         assert!(
             notices.contains(
@@ -6277,13 +6252,7 @@ mod tests {
         // X28 of app round 2: the notice stays until the DM copies or dismisses it. Lookup's
         // Clear, and another entry shown after it, keep it; its choice ends it.
         lookup.clear();
-        let notices = |lookup: &mut Reader| {
-            lookup
-                .footer_lines(item, &index, Some(&campaign), None)
-                .iter()
-                .filter(|line| matches!(line.kind, FooterKind::GoneLog(_)))
-                .count()
-        };
+        let notices = |lookup: &mut Reader| lookup.gone_logs(campaign.id).count();
         assert_eq!(notices(&mut lookup), 1);
         assert_eq!(notices(&mut lookup), 1);
         // The entry comes back with its ID, the DM types again, and it goes again: both lost
@@ -6294,38 +6263,34 @@ mod tests {
         lookup.open_log(campaign.id, hob, "Hob", "");
         // The words keep every byte the DM typed, for Copy text (review round 1 of PR 287).
         let again = "  \"Again.\"\nsecond line\n  ";
-        lookup.log_fields.get_mut(&key).unwrap().field.words = again.into();
+        lookup.held.log_fields.get_mut(&key).unwrap().field.words = again.into();
         fs::remove_file(&path).unwrap();
         lookup.forget_gone_log_lines(&ContentIndex::load(&[], Some(&campaign)).unwrap());
         assert_eq!(notices(&mut lookup), 2);
-        let gone: Vec<_> = lookup
-            .footer_lines(item, &index, Some(&campaign), None)
-            .into_iter()
-            .filter_map(|line| match line.kind {
-                FooterKind::GoneLog(gone) => Some(gone),
-                _ => None,
-            })
-            .collect();
+        let gone: Vec<_> = lookup.gone_logs(campaign.id).cloned().collect();
         assert!(gone.iter().any(|gone| gone.words == again), "{gone:?}");
         // A notice belongs to its campaign: another campaign's footer does not show it.
         let other = Campaign {
             id: Uuid::new_v4(),
             ..campaign.clone()
         };
-        assert!(
-            lookup
-                .footer_lines(item, &index, Some(&other), None)
-                .iter()
-                .all(|line| !matches!(line.kind, FooterKind::GoneLog(_)))
-        );
+        assert!(lookup.gone_logs(other.id).next().is_none());
         let first = gone.iter().find(|gone| gone.words == "Kept.").unwrap().id;
+        // Its close icon ends it, and keeps its words for `Undo dismiss` (ruling R3).
         lookup.footer_act(
             &egui::Context::default(),
-            FooterAct::GoneLog(first),
-            item,
+            design::outcome::Press {
+                id: FooterAct::GoneDismiss(first),
+                ticket: None,
+            },
+            None,
             &campaign,
         );
         assert_eq!(notices(&mut lookup), 1);
+        assert!(
+            !lookup.held.dismissed.is_empty(),
+            "R3: the dismissed words keep an Undo"
+        );
     }
 
     #[test]
