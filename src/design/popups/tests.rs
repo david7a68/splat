@@ -1191,4 +1191,48 @@ fn a_menu_of_long_choices_stays_beside_its_splitter() {
             "x2-room: reopened in a narrower pane, the menu {reopened:?} keeps inside it"
         );
     }
+    // X2 review: a menu of actions (no choices) reopened under the same id is measured again
+    // in a sizing pass: it stays as narrow as its actions, not as wide as its room.
+    {
+        let ctx = context();
+        let size = vec2(960.0, 640.0);
+        let opener = Cell::new(None::<Response>);
+        let draw = |events| {
+            frame(&ctx, size, events, |ui| {
+                let pane = Rect::from_min_size(Pos2::ZERO, vec2(COLUMN, 640.0));
+                ui.scope_builder(egui::UiBuilder::new().max_rect(pane), |ui| {
+                    ui.set_clip_rect(pane);
+                    ScrollColumn::new("test_menu_pane").show(ui, |ui| {
+                        let button = ui.button("More");
+                        crate::design::menu_popup(ui, &button).show(|ui| {
+                            let _ = Action::quiet("Remove").density(Density::Read).show(ui);
+                        });
+                        opener.set(Some(button));
+                    });
+                });
+            })
+        };
+        let width = |button: &Response| {
+            let id = egui::Popup::default_response_id(button);
+            assert!(egui::Popup::is_id_open(&ctx, id), "the menu is open");
+            ctx.memory(|memory| memory.area_rect(id))
+                .expect("the menu's rect")
+                .width()
+        };
+        for opening in 0..2 {
+            draw(Vec::new());
+            let button = opener.take().expect("the button");
+            draw(click(button.rect.center()));
+            for _ in 0..3 {
+                draw(Vec::new());
+            }
+            let menu = width(&button);
+            assert!(
+                menu < COLUMN / 2.0,
+                "x2-reopen: opening {opening}, a menu of one action is {menu} px wide"
+            );
+            draw(key(Key::Escape));
+            draw(Vec::new());
+        }
+    }
 }

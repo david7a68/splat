@@ -2297,7 +2297,13 @@ impl MenuPopup<'_> {
             let width = decided.unwrap_or(inner_room).min(inner_room);
             let top = ui.cursor().min;
             let area = Rect::from_min_size(top, vec2(width, ui.ctx().content_rect().height()));
-            let mut child = ui.new_child(UiBuilder::new().max_rect(area).layout(*ui.layout()));
+            // At an opening the part measures: a sizing pass, in which widgets take their own
+            // size (egui keeps a reopened menu's old size and gives it no sizing pass of its own).
+            let mut builder = UiBuilder::new().max_rect(area).layout(*ui.layout());
+            if decided.is_none() {
+                builder = builder.sizing_pass().invisible();
+            }
+            let mut child = ui.new_child(builder);
             child.set_clip_rect(child.clip_rect().intersect(area));
             let outer = ui.data_mut(|data| data.remove_temp::<MenuMeasure>(menu_measure_id()));
             ui.data_mut(|data| data.insert_temp(menu_measure_id(), MenuMeasure::default()));
