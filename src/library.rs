@@ -9239,10 +9239,12 @@ mod tests {
                 .accesskit_node()
                 .is_disabled()
         );
-        harness.get_by_label("Package folder").focus();
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::TextInput, "Package folder")
+            .focus();
         harness.key_press_modifiers(egui::Modifiers::CTRL, egui::Key::A);
         harness
-            .get_by_label("Package folder")
+            .get_by_role_and_label(egui::accesskit::Role::TextInput, "Package folder")
             .type_text(&other.path().display().to_string());
         harness.run_steps(2);
         assert!(
