@@ -819,7 +819,12 @@ impl Reader {
         self.edits
             .get(&key.1)
             .is_some_and(|draft| draft.campaign == key.0)
-            && (self.held.log_fields.contains_key(&key) || self.logs_elsewhere.contains(&key))
+            && self.log_waits(key)
+    }
+
+    /// Whether a Log field of the note is open in either reader.
+    fn log_waits(&self, key: super::LogKey) -> bool {
+        self.held.log_fields.contains_key(&key) || self.logs_elsewhere.contains(&key)
     }
 
     /// Whether this reader's footer names its own waiting Log field: the note's edit form is
@@ -1172,7 +1177,9 @@ impl Reader {
         .has_focus();
         // A Log field of this note waits for this form. The save row says so in its one
         // sentence, so one cause is said once (ruling Q-t, FC10); a clean form says Cancel.
-        let log_waits = super::takes_log(item, index) && self.save_row_names_log((campaign.id, id));
+        // The draft is out of `edits` while the form draws, so the form asks for the Log
+        // fields alone: it is the form (review of 1f560778).
+        let log_waits = super::takes_log(item, index) && self.log_waits((campaign.id, id));
         self.form_drawn = Some((id, ui.ctx().cumulative_pass_nr()));
         let switch = if log_waits {
             super::LOG_WAITS_FOR_SAVE

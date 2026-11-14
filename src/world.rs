@@ -6461,36 +6461,73 @@ mod tests {
         assert_eq!(lookup.held.log_fields[&key].field.words, "Kept.");
 
         // Round 29 FC10, ruling Q-t: a Log field of Hob open in BOTH readers, and an edit form
-        // of Hob in one of them. The one save row on screen says the cause; the other reader's
-        // footer does not repeat it. Then the same with the readers exchanged.
+        // of Hob in one of them, drawn for real as the app draws it: each pass the shell shares
+        // the readers' state, then each reader draws. The one save row says the cause; the
+        // other reader's footer does not repeat it. Then the same with the readers exchanged.
         world.open_log(campaign.id, hob, "Hob", "");
-        let pass = 7;
-        let check = |form: &mut Reader, other: &mut Reader| {
-            form.begin_edit(&campaign, item);
-            form.form_drawn = Some((hob, pass - 1));
-            form.share_with(other, pass);
-            other.share_with(form, pass);
-            assert!(form.save_row_names_log(key), "the form's save row says it");
+        lookup.compact = true;
+        let at = index.position(hob).unwrap();
+        use egui_kittest::kittest::Queryable;
+        let drawn = |world: Reader, lookup: Reader, form_in_world: bool| -> (Reader, Reader) {
+            let mut harness = egui_kittest::Harness::new_ui_state(
+                |ui, (world, lookup): &mut (Reader, Reader)| {
+                    let pass = ui.ctx().cumulative_pass_nr();
+                    lookup.share_with(world, pass);
+                    world.share_with(lookup, pass);
+                    let item = &index.items[at];
+                    ui.push_id("world", |ui| {
+                        world.read_with(ui, item, &index, Some(&campaign), None)
+                    });
+                    ui.push_id("lookup", |ui| {
+                        lookup.read_with(ui, item, &index, Some(&campaign), None)
+                    });
+                },
+                (world, lookup),
+            );
+            crate::design::theme::install(&harness.ctx);
+            {
+                let (world, lookup) = harness.state_mut();
+                let form = if form_in_world { world } else { lookup };
+                form.begin_edit(&campaign, &index.items[at]);
+            }
+            harness.run_steps(3);
+            let rows = harness.query_all_by_label(LOG_WAITS_FOR_CANCEL).count();
+            let (world, lookup) = harness.state();
+            let (form, other) = if form_in_world {
+                (world, lookup)
+            } else {
+                (lookup, world)
+            };
+            assert_eq!(
+                rows, 1,
+                "one save row says the cause (form in World: {form_in_world})"
+            );
+            assert!(form.save_row_names_log(key) && !form.footer_names_log(key));
             assert!(
                 !other.footer_names_log(key),
-                "the other reader's footer is quiet"
+                "the other reader's footer is quiet while the form's save row is on screen"
             );
-            assert!(!form.footer_names_log(key) && !other.save_row_names_log(key));
-            // The form's save row is not on screen (its page is hidden): the other reader's
+            let (mut world, mut lookup) = std::mem::take(harness.state_mut());
+            drop(harness);
+            // The form's save row is no longer drawn (its page is hidden): the other reader's
             // footer says it, once.
+            let (form, other) = if form_in_world {
+                (&mut world, &mut lookup)
+            } else {
+                (&mut lookup, &mut world)
+            };
             form.form_drawn = None;
-            form.share_with(other, pass);
+            form.share_with(other, u64::MAX);
             assert!(other.footer_names_log(key));
             form.edits.clear();
-            form.share_with(other, pass);
-            other.share_with(form, pass);
+            (world, lookup)
         };
-        check(&mut world, &mut lookup);
-        check(&mut lookup, &mut world);
+        let (world, lookup) = drawn(world, lookup, true);
+        let (mut world, mut lookup) = drawn(world, lookup, false);
         // A Log field in Lookup only, the form in World: World's save row says it too.
         world.held.log_fields.clear();
         world.begin_edit(&campaign, item);
-        lookup.share_with(&mut world, pass);
+        lookup.share_with(&mut world, 0);
         assert!(world.save_row_names_log(key));
         world.edits.clear();
 

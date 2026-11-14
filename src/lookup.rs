@@ -1736,6 +1736,8 @@ pub struct Lookup {
     /// What was on screen, by identity, because a rebuilt index can change positions and the
     /// found notes are read again each time the panel opens.
     trail: Trail<Shown>,
+    /// What is on screen is the best match of the words being typed (`show_typed`).
+    typed_shown: bool,
     /// Where the panel was drawn last, for Back and Forward beside the Library.
     panel_rect: Option<egui::Rect>,
     waiting_for: Option<Uuid>,
@@ -2138,6 +2140,7 @@ impl Lookup {
             Shown::Card => held.then_some(Landing::Card),
         });
         if let Some((_, landing)) = landed {
+            self.typed_shown = false;
             self.land(landing);
             self.results_open = false;
         }
@@ -2172,8 +2175,20 @@ impl Lookup {
         }
     }
 
+    /// The best match of the words being typed. The first one leaves what was on screen on
+    /// Back's trail; the next keys only change the match, so one search is one step.
+    fn show_typed(&mut self, landing: Landing) {
+        if self.typed_shown {
+            self.land(landing);
+        } else {
+            self.show_now(landing);
+        }
+        self.typed_shown = true;
+    }
+
     /// Show `landing` and leave what was on screen on Back's trail, unless it is the same.
     fn show_now(&mut self, landing: Landing) {
+        self.typed_shown = false;
         let here = self.shown();
         let next = match &landing {
             Landing::Entry(position) => self
@@ -2365,6 +2380,7 @@ impl Lookup {
             let search =
                 LOOKUP_SEARCH.search(ui, SEARCH_NAME, &mut self.query, search_hint(width), width);
             if search.cleared {
+                self.typed_shown = false;
                 self.current = None;
                 self.reader.clear();
                 self.reading_written = None;
@@ -2432,18 +2448,14 @@ impl Lookup {
         if before != self.query && !query.is_empty() {
             // Open the best match and keep the other answers in view.
             self.results_open = matches.len() != 1;
+            // Through the trail, as every other change of what is on screen (FL4).
             match matches.first() {
                 Some(Hit::Entry(top)) => {
                     let (position, heading) = index.target_of(*top);
-                    self.current = Some(position);
+                    self.show_typed(Landing::Entry(position));
                     self.reader.show_heading(heading);
-                    self.reading_written = None;
-                    self.generated_shown = false;
                 }
-                Some(Hit::Written(top)) => {
-                    self.reading_written = Some(*top);
-                    self.generated_shown = false;
-                }
+                Some(Hit::Written(top)) => self.show_typed(Landing::Written(*top)),
                 None => {}
             }
         }
@@ -3622,6 +3634,46 @@ mod tests {
             lookup.open_target(&index).is_none(),
             "the held NPC's card on screen offers no open button for the entry under it"
         );
+
+        // Review of 1f560778: the typed best match goes through the trail too. Open A, then B,
+        // then TYPE words whose best match is a found note: Back returns to B, Forward to the
+        // note. The panel draws as the app draws it, and the words go into its search field.
+        lookup.generated = None;
+        lookup.set_written(vec![Written {
+            title: "Qorvax Landing".into(),
+            detail: "Session".into(),
+            text: "The pier at Qorvax".into(),
+            place: WrittenIn::Session(Uuid::from_u128(9)),
+        }]);
+        lookup.navigate(6);
+        lookup.navigate(7);
+        use egui_kittest::kittest::Queryable;
+        let mut harness = egui_kittest::Harness::new_ui_state(
+            |ui, lookup: &mut Lookup| lookup.panel(ui, &mut Default::default()),
+            std::mem::take(&mut lookup),
+        );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        harness.get_by_label(SEARCH_NAME).focus();
+        harness.run_steps(1);
+        for typed in ["qorvax", " landing"] {
+            harness.get_by_label(SEARCH_NAME).type_text(typed);
+            harness.run_steps(2);
+        }
+        let lookup = harness.state_mut();
+        assert_eq!(
+            lookup.on_screen(),
+            OnScreen::Written(0),
+            "typing opened the note"
+        );
+        lookup.step(Step::Back);
+        assert_eq!(
+            lookup.on_screen(),
+            OnScreen::Entry(7),
+            "Back from the typed match returns to B, once for the whole search"
+        );
+        lookup.step(Step::Forward);
+        assert_eq!(lookup.on_screen(), OnScreen::Written(0));
     }
 
     /// Beside the Library, Lookup takes a side button only under the pointer, and leaves
