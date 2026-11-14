@@ -129,3 +129,25 @@ impl Kept for DeletedTemplate {
         self.page.clone()
     }
 }
+
+/// `Links now say “<title>”.` and `Undo link update`: the notes a link update wrote. The update's
+/// own state (what each note held) stays with the session page (`updated_links`); this entry is
+/// its result, and ends with it.
+pub(super) struct LinkUpdate {
+    pub page: Page,
+    pub title: String,
+}
+
+impl Kept for LinkUpdate {
+    type Owner = Page;
+    const ENDS: Ends = Ends {
+        // A new update, an edit of the notes or the Timeline since, or leaving the Timeline
+        // ends it (`expire_event_link_undo`, `update_event_link_notes`).
+        owner_changed: OwnerChanged::Ends,
+        disk_changed: DiskChanged::Stays,
+        press: Press::Undo,
+    };
+    fn owner(&self) -> Page {
+        self.page.clone()
+    }
+}

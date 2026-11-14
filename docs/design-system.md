@@ -845,8 +845,9 @@ subfolder on save. New packages default to the parent of the last registered pac
 beside Folder and the full destination below it. Creating a package opens its first entry form.
 
 A copied package folder names the original under Add folder and puts its ID in Technical details. Add folder
-is blocked; the warning is its reason, so the reason line under it stays empty, and `This folder is a copy.` is
-Add folder's hover and accessible description. Bordered `Register as a new package` sits on the warning's action
+is blocked. The warning says the fact once; the kept line under Add folder says the next step, `Register it as a
+new package to add it.`, and the same words are Add folder's hover and accessible description. `This folder is a
+copy.` shows nowhere. Bordered `Register as a new package` sits on the warning's action
 line, above Technical details. It asks for a name, writes independent package and entry identities, and has
 one Undo for all files. Registration names the copy and what the registration chose, not what the campaign
 uses later: `Ashen Reaches is registered, with no entries chosen for this campaign.` (or `with every entry
@@ -1904,7 +1905,7 @@ against your memory.`, which the embed replaces once What happened has prose), t
 with empty boxes and the open threads, each below what its heading holds and never twice, and the properties
 `carried_from` and `carried_parts`. The result is an `undo_message` in the Session page's message footer (as
 every result of that page, so the Last time line, the tabs and the plan never move), success tone, naming only
-what it added, with `Undo: Carry over`, which puts back the exact text and properties. The result belongs to
+what it added, with `Undo carry over`, which puts back the exact text and properties. The result belongs to
 the new note by its ID: another session or page leaves it, it shows also when the last session can no longer be
 found, and any other change of the note's text ends it. A refusal shows in the same footer, in a warning. Read draws an embed of a session note's heading as that heading's words under a
 `Type::Small` muted `From` and, one `S` after it in every layout, a small link to the session. Its target is resolved as every campaign link is
@@ -2251,7 +2252,7 @@ below the last flag starts at its words and holds `Timeline.md` with the shared 
 use error Timeline not saved. Run updates change only the Result line and never convert Timeline.
 
 Copied sessions say `<first file> and <second file> claim to be the same session.` They offer
-Make <file> a separate session with `Undo: Separate session`. The header names the clock (`Now: Day 1, 00:10`) only once a day sets it. Moved or deleted note drafts
+Make <file> a separate session with `Undo separate session`. The header names the clock (`Now: Day 1, 00:10`) only once a day sets it. Moved or deleted note drafts
 offer the new path, a new file and red `Discard`. Discard follows the moved file when it still holds the note:
 the editor shows that file's words and saves there. With no file left, the editor keeps the last saved words in
 the File gone state, says so, and offers `Save these words as a new file`; no edit or Save writes the old path.

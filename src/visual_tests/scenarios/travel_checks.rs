@@ -360,7 +360,7 @@ pub fn run(d: &mut Driver<'_>) {
         "T11.10",
         below.iter().all(Option::is_some)
             && after == below
-            && d.has("Undo plan line")
+            && d.has("Undo add plan line")
             && matches!((offer, in_plan), (Some(offer), Some(at)) if offer.y_range().contains(at.center().y))
             && matches!((offer, message), (Some(offer), Some(at)) if at.top() > offer.bottom()),
         format!("In the plan is on the check's line ({offer:?}, {in_plan:?}), the message {message:?} is in the footer, not there, and nothing moves ({below:?}, {after:?})"),
@@ -372,7 +372,7 @@ pub fn run(d: &mut Driver<'_>) {
             d.click(NAV_LOOKUP);
         }
         let at = d.place_of("Encounter checks").expect("the block").center();
-        d.scroll_until(at, "Undo plan line", 8);
+        d.scroll_until(at, "Undo add plan line", 8);
     });
     d.click("Close Lookup");
     let parts = [
@@ -395,13 +395,13 @@ pub fn run(d: &mut Driver<'_>) {
     show_plan(d);
     d.observe(
         "T11.10",
-        note_file(&dir) == planned_note && d.has("Undo plan line"),
+        note_file(&dir) == planned_note && d.has("Undo add plan line"),
         "Undo plan line stays through a visit to another page",
     );
     // Act B, unrelated: clear the first day's result. Then Undo of A takes only A's line.
     d.click("Clear the check for Day 1");
     d.expect("Check cleared.");
-    d.click("Undo plan line");
+    d.click("Undo add plan line");
     d.observe(
         "T11.10",
         !note_file(&dir).contains("- [[Bridge Ambush]]")
@@ -424,7 +424,7 @@ pub fn run(d: &mut Driver<'_>) {
     let after = below_checks(d);
     d.observe(
         "T11.10",
-        d.has_containing("In the plan") && !d.has("Undo plan line") && after == below,
+        d.has_containing("In the plan") && !d.has("Undo add plan line") && after == below,
         format!(
             "After a note edit, In the plan stands in the message's place ({below:?}, {after:?})"
         ),

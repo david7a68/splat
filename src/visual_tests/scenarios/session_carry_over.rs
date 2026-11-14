@@ -11,7 +11,7 @@ const SCENE: &str = "Talk to Hobb the miller about the ropes";
 const THREAD: &str = "Who cut the ferry ropes at the crossing below the shrine?";
 const RESULT: &str = "Carried over from Session 1: the recap, 2 plan lines and 1 open thread.";
 const CARRY: &str = "Carry over";
-const UNDO: &str = "Undo: Carry over";
+const UNDO: &str = "Undo carry over";
 
 /// A session's note on disk, by its title.
 fn note_path(d: &Driver<'_>, title: &str) -> std::path::PathBuf {
@@ -170,6 +170,9 @@ pub fn run(d: &mut Driver<'_>) {
         "Every part is done, so the line has no action, and the result has its Undo",
     );
     d.state("carried-over", Sizes::All);
+    // Round 28 (slice 4): the result is in the plan's own footer, which follows the short plan:
+    // its top at most `2 × L` below the plan's last row, as G6 measures, at 960 px.
+    footer_follows_plan(d, "round-28-S-carried-over-footer", SMALL);
     d.click(NAV_LOOKUP);
     d.state("carried-over-beside-lookup", Sizes::Small);
     d.click(NAV_LOOKUP);
@@ -179,6 +182,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("From");
     d.wait_for_text("Hobb the miller says the toll collectors");
     d.state("carried-recap-in-read", Sizes::Standard);
+    footer_follows_plan(d, "round-28-S-carried-recap-footer", DEFAULT);
     from_gap(d, "T18.3-from", &[SMALL, DEFAULT]);
     d.click(NAV_LOOKUP);
     from_gap(d, "T18.3-from-lookup", &[SMALL]);
@@ -213,5 +217,26 @@ pub fn run(d: &mut Driver<'_>) {
             && ticked.contains(&format!("- [x] {SCENE}"))
             && d.has(CARRY),
         format!("After acts on another page and another session, Undo carry over puts back {before:?}; the note holds {undone:?}"),
+    );
+}
+
+/// The page's footer, here the plan's, follows the plan's last row at `size`: from the row's
+/// bottom to the footer's top at most `2 × L` (G6's measure).
+fn footer_follows_plan(d: &mut Driver<'_>, id: &str, size: (f32, f32)) {
+    let (row, band) = d.at_size(size, |d| {
+        let row = d.place_of("More actions for Talk to Hobb the miller about the ropes");
+        let band = d
+            .footer_bands()
+            .into_iter()
+            .max_by(|a, b| a.top().total_cmp(&b.top()));
+        (row, band)
+    });
+    let gap = row
+        .zip(band)
+        .map(|(row, band)| band.top() + crate::design::S - row.bottom());
+    d.observe(
+        id,
+        gap.is_some_and(|gap| gap <= 2.0 * crate::design::L),
+        format!("At {size:?} the footer follows the short plan: row {row:?}, footer band {band:?}, gap {gap:?}"),
     );
 }
