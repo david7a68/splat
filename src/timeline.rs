@@ -2057,7 +2057,7 @@ pub(crate) fn press_footer_undo(book: &mut Book, which: TestUndo) -> Option<Stri
     let label = match which {
         TestUndo::Remove => "Undo remove",
         TestUndo::Reload => "Undo reload",
-        TestUndo::Ruling => "Undo change ruling",
+        TestUndo::Ruling => "Undo change to ruling",
     };
     let mut harness = egui_kittest::Harness::builder()
         .with_size(eframe::egui::vec2(800.0, 300.0))
