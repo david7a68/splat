@@ -4795,12 +4795,12 @@ impl Encounters {
         match separated {
             Some(Separated::Done { change, path, note }) => {
                 if let Some(root) = self.active.as_ref().map(|active| active.path.clone()) {
+                    self.end_separation_failure(&root, &path);
                     self.separations.record(Separation {
                         owner: SeparationOwner { root, note },
                         change: Arc::new(IdentityChange(change)),
                         path,
                     });
-                    self.separation_error = None;
                 }
             }
             Some(Separated::Failed { path, error }) => {
@@ -5048,6 +5048,18 @@ impl Encounters {
         self.separations.disk_changed(Separation::holds);
     }
 
+    /// A separation of this copy, or its Undo, worked: that copy's failure ends (another copy's
+    /// stays).
+    fn end_separation_failure(&mut self, root: &std::path::Path, path: &str) {
+        if self
+            .separation_error
+            .as_ref()
+            .is_some_and(|failure| failure.root == root && failure.path == path)
+        {
+            self.separation_error = None;
+        }
+    }
+
     /// Why the last separation, or its Undo, failed, when it was in the active campaign.
     fn separation_failure(&self) -> Option<String> {
         let root = &self.active.as_ref()?.path;
@@ -5070,10 +5082,11 @@ impl Encounters {
                 .change
                 .0
                 .undo(active)
+                .map(|()| separation.path.clone())
                 .map_err(|error| (separation.path.clone(), error))
         }) {
-            Ok(_) => {
-                self.separation_error = None;
+            Ok((_, path)) => {
+                self.end_separation_failure(&active.path, &path);
                 note_identity_changed(ctx);
             }
             Err(design::results::ByTicket::Failed((path, error))) => {
@@ -5104,10 +5117,11 @@ impl Encounters {
                 .change
                 .0
                 .undo(active)
+                .map(|()| separation.path.clone())
                 .map_err(|error| (separation.path.clone(), error))
         }) {
-            Some(Ok(_)) => {
-                self.separation_error = None;
+            Some(Ok((_, path))) => {
+                self.end_separation_failure(&active.path, &path);
                 note_identity_changed(ctx);
             }
             Some(Err((path, error))) => {
@@ -8121,7 +8135,6 @@ mod tests {
             active: Some(active.clone()),
             ..Default::default()
         };
-        let campaign_for_undo = active.clone();
         let mut harness = egui_kittest::Harness::builder().build_state(
             move |ctx, page: &mut Encounters| {
                 ctx.data_mut(|data| {
