@@ -1421,7 +1421,7 @@ pub(super) fn of_encounter(
         } else {
             groups[index].setup.encounter = None;
         }
-        *removed_group = Some((index, gone, delete, super::result_stamp()));
+        *removed_group = Some((index, gone, delete, true));
     }
     if Action::secondary("New group for this encounter")
         .icon(icons::ADD)
@@ -5070,6 +5070,8 @@ mod tests {
         assert!(draft.groups[0].file_gone());
         draft.groups_read = true;
         let editor = Encounters {
+            // The draft's results are the campaign's (`EditorOwner`).
+            active: Some(campaign.clone()),
             draft: Some(draft),
             snapshot: Some(Snapshot::load(&campaign, &[]).unwrap()),
             ..Default::default()
@@ -5078,17 +5080,27 @@ mod tests {
             |ctx, editor: &mut Encounters| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     if !editor.encounter_disk_view(ui, &campaign, &[]) {
+                        // The draft's results in a footer, from the page's store, as the editor
+                        // draws them; the Undo goes to the store.
+                        editor.record_editor_results();
+                        let lines = editor.editor_result_lines();
+                        let pressed = std::cell::Cell::new(None);
+                        let mut footer =
+                            design::Footer::new("group_test_footer", ui.available_width());
+                        Encounters::editor_results_into(
+                            &mut footer,
+                            &editor.editor_results,
+                            &lines,
+                            &pressed,
+                        );
+                        let bottom = footer.show_by_hand(ui);
+                        if let Some(owner) = pressed.take() {
+                            editor.undo_editor_of(&owner);
+                        }
                         let Encounters {
                             draft, snapshot, ..
                         } = editor;
                         if let (Some(draft), Some(snapshot)) = (draft.as_mut(), snapshot.as_ref()) {
-                            // The draft's results in a footer, as the editor draws them.
-                            let pressed = super::super::DraftUndo::default();
-                            let mut footer =
-                                design::Footer::new("group_test_footer", ui.available_width());
-                            draft.results_into(&mut footer, &pressed);
-                            let bottom = footer.show_by_hand(ui);
-                            draft.apply_undo(&pressed);
                             let mut body = super::super::body_above(ui, bottom);
                             of_encounter(&mut body, draft, snapshot, &mut false, &mut None);
                         }
