@@ -802,7 +802,7 @@ impl Campaigns {
         Self::folder_status(ui, &campaign);
         design::gap(ui, design::Gap::S);
         design::rule(ui);
-        design::gap(ui, design::Gap::S);
+        // The D&D Beyond heading owns the space above it.
         dndbeyond.show(ui, session, self, link_blocked);
         design::gap(ui, design::Gap::S);
         design::quiet_section(ui, "Technical details", |ui| {

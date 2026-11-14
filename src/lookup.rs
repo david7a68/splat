@@ -1840,6 +1840,20 @@ impl Lookup {
         self.generated.as_ref().map(|npc| npc.name.as_str())
     }
 
+    /// The rail's `Unsaved NPC` for the NPC this panel holds: Lookup opens, leaves Trackers and
+    /// shows the NPC's card. (Package C, review of PR 323, a named lead exception in D's file.)
+    pub(crate) fn show_generated(&mut self) {
+        if self.generated.is_none() {
+            return;
+        }
+        if !self.open {
+            self.written_stale = true;
+            self.open = true;
+        }
+        self.leave_trackers();
+        self.generated_shown = true;
+    }
+
     /// Take back a generated NPC that the World page did not take.
     pub fn keep_generated(&mut self, card: GeneratedCard) {
         self.generated = Some(card.npc);

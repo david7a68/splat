@@ -3376,6 +3376,22 @@ pub fn generator(d: &mut Driver<'_>) {
     d.click("Clear");
     d.click("Generate NPC");
     d.expect(crate::lookup::USE_OWN_NAMES);
+    // Review of PR 323: an NPC that Lookup holds belongs to this campaign (its Save writes into
+    // the active one). The switch waits for it as for World's, with the same reason, and opens
+    // after Discard.
+    let switch = "Save or discard your changes to change campaigns.";
+    d.click_starting("Active campaign: ");
+    let held = (d.app().blocked_switch(), d.in_view_containing(switch));
+    d.press(Key::Escape);
+    d.click("Discard");
+    let discarded = d.app().blocked_switch();
+    d.observe(
+        "iter-28-C-lookup-npc-lock",
+        held == (Some(switch), true) && discarded.is_none(),
+        format!("Held in Lookup: (lock, reason in view) {held:?}; after Discard: {discarded:?}"),
+    );
+    d.click("Generate NPC");
+    d.expect(crate::lookup::USE_OWN_NAMES);
     // One label per card. A text run repeats its label's name, so it is not counted.
     let saves = npc_saves;
     let rolled = saves(d);
@@ -4869,9 +4885,42 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     d.click(&in_rail);
     d.observe(
         "iter-28-C-FJ6",
-        d.has(&row) && d.has(&in_rail),
-        "The rail's status opens Lookup on the NPC's row",
+        d.in_view("Save NPC") && !d.has(&row) && d.has(&in_rail),
+        "The rail's status opens Lookup on the NPC's card",
     );
+    // Review of PR 323: from Trackers too, open or closed. The status leaves Trackers and shows
+    // the NPC's card.
+    d.press_ctrl(Key::T);
+    let on_trackers = d.app().lookup.on_trackers();
+    d.click(&in_rail);
+    let open_case = (
+        on_trackers,
+        d.app().lookup.on_trackers(),
+        d.in_view("Save NPC"),
+    );
+    d.press_ctrl(Key::T);
+    d.click(NAV_LOOKUP);
+    let closed = !d.app().lookup.open;
+    d.click(&in_rail);
+    let closed_case = (closed, d.app().lookup.on_trackers(), d.in_view("Save NPC"));
+    d.observe(
+        "iter-28-C-FJ6",
+        open_case == (true, false, true) && closed_case == (true, false, true),
+        format!(
+            "(on Trackers before, on Trackers after, the card in view): with Lookup on Trackers {open_case:?}; Lookup closed after Trackers {closed_case:?}"
+        ),
+    );
+    // Closing the app names the NPC that Lookup holds, as for World's.
+    let unsaved = format!("The generated NPC \u{201c}{npc}\u{201d} is not saved.");
+    d.request_close();
+    d.observe(
+        "iter-28-C-lookup-npc-close",
+        d.in_view_containing(&unsaved) && d.in_view("Keep editing"),
+        "The close dialog names the NPC that Lookup holds",
+    );
+    if d.has("Keep editing") {
+        d.click("Keep editing");
+    }
     // Section 7, recorded as it is: Lookup's place is not kept across a restart, and the held
     // NPC goes with it.
     d.restart();

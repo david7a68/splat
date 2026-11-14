@@ -545,6 +545,7 @@ impl Splat {
             Some("Resolve the unsaved session file to change campaigns.")
         } else if self.world_page.dirty()
             || self.world_page.has_generated()
+            || self.lookup.generated_name().is_some()
             || self.any_unsaved_edits()
             || self.campaign_content.dirty()
             || self.encounters.dirty()
@@ -590,6 +591,13 @@ impl Splat {
             items.push((
                 format!("The generated NPC \u{201c}{name}\u{201d} is not saved."),
                 Page::World,
+            ));
+        }
+        // An NPC that Lookup rolled and holds; Lookup opens beside any page.
+        if let Some(name) = self.lookup.generated_name() {
+            items.push((
+                format!("The generated NPC \u{201c}{name}\u{201d} is not saved."),
+                self.page,
             ));
         }
         for (reader, page) in [
@@ -1238,8 +1246,10 @@ impl Splat {
                 if self.world_page.has_generated() {
                     self.world_page.open_held();
                     self.page = Page::World;
-                } else if !self.lookup.open {
-                    self.toggle_lookup();
+                } else {
+                    // Lookup opens on the NPC's card, also from Trackers.
+                    self.notes_give_way();
+                    self.lookup.show_generated();
                 }
             }
             {
@@ -2709,6 +2719,7 @@ impl eframe::App for Splat {
             if (self.library.dirty()
                 || self.world_page.dirty()
                 || self.world_page.has_generated()
+                || self.lookup.generated_name().is_some()
                 || self.any_unsaved_edits()
                 || self.campaign_content.dirty()
                 || self.encounters.unsaved()
