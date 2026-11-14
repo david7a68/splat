@@ -853,7 +853,7 @@ pub fn broken(d: &mut Driver<'_>) {
     reload(d);
     d.click_starting("Lamp Keeper · ");
     let keeper_before = fs::read_to_string(&keeper).unwrap();
-    d.click("Change In");
+    d.click("Change Place");
     d.click("Clear value");
     d.expect("Undo change to Place");
     let keeper_after = fs::read_to_string(&keeper).unwrap();
@@ -1773,7 +1773,7 @@ pub fn facts(d: &mut Driver<'_>) {
         );
         let empty_fields = d.at_size(size, |d| {
             d.expect("Edit Horn Rings");
-            !d.has("Change In")
+            !d.has("Change Place")
                 && !d.has("Change Part of")
                 && !d.has("Change Status")
                 && !d.visible_text("not set")
@@ -1852,10 +1852,17 @@ pub fn facts(d: &mut Driver<'_>) {
     action_at_text_edge(
         d,
         "iter-17-D-type-choice",
-        "NPC",
+        "Make NPC",
         "Resize World notes column",
         &[SMALL, DEFAULT, LARGE],
         |d| d.painted_left(help),
+    );
+    // Round 29 FG4: the fixed choices say what they do, as `Make faction` does; a bare `NPC`
+    // read as a column heading.
+    d.observe(
+        "iter-29-D-FG4",
+        d.has("Make NPC") && d.has("Make location"),
+        "The type choices are Make NPC and Make location",
     );
     d.type_into("Another type", "faction");
     // Round 27 FF7: the field ends at the edit form's edge, `FORM_WIDTH` from the reader's text
@@ -1910,7 +1917,7 @@ pub fn facts(d: &mut Driver<'_>) {
     action_at_text_edge(
         d,
         "iter-19-D-SD2-choice-edge",
-        "NPC",
+        "Make NPC",
         "Resize World notes column",
         &[DEFAULT],
         |d| d.painted_left(help),
@@ -1978,16 +1985,16 @@ pub fn facts(d: &mut Driver<'_>) {
     d.state("lines-from-other-pages", Sizes::All);
     d.expect("Edit Horn Rings");
     d.click("Edit Horn Rings");
-    for name in ["Status", "Change In", "Change Part of", "Text"] {
+    for name in ["Status", "Change Place", "Change Part of", "Text"] {
         d.expect(name);
     }
     d.observe_both(
         "iter-9-D-SD3-AD3",
         "An empty optional place says not set in Edit",
         |d| {
-            d.expect("Change In");
-            let change = d.place_of("Change In").unwrap();
-            let label = d.place_of("In").unwrap();
+            d.expect("Change Place");
+            let change = d.place_of("Change Place").unwrap();
+            let label = d.place_of("Place").unwrap();
             d.painted_in(egui::Rect::from_min_max(
                 egui::pos2(label.left(), change.top()),
                 change.max,
@@ -2646,13 +2653,13 @@ pub fn places(d: &mut Driver<'_>) {
     d.click_containing("Rook Ambry · ");
     d.observe(
         "W3",
-        d.has("Ashfall Keep") && d.has("Change Stat block") && d.has("Change In"),
+        d.has("Ashfall Keep") && d.has("Change Stat block") && d.has("Change Place"),
         "An NPC can use a place's alias in its in link",
     );
     d.state("npc-place", Sizes::All);
     let original = fs::read(root(d).join("NPCs/Rook Ambry.md")).unwrap();
     // Round 26 SH1: the In row below the Stat block row keeps its place while the result shows.
-    let rows = tops_at_sizes(d, "Change In");
+    let rows = tops_at_sizes(d, "Change Place");
     let before = d.interaction_count();
     d.click("Change Stat block");
     d.type_text("Guard");
@@ -2670,14 +2677,14 @@ pub fn places(d: &mut Driver<'_>) {
     body_kept(
         d,
         "iter-26-D-SH1",
-        "Change In",
+        "Change Place",
         &rows,
         Some("Undo change to Stat block"),
     );
     d.expect_same("Adding the stat block keeps the note's content and offers Undo.");
     d.state("npc-stat-block-changed", Sizes::All);
     d.click("Undo change to Stat block");
-    body_kept(d, "iter-26-D-SH1-undo", "Change In", &rows, None);
+    body_kept(d, "iter-26-D-SH1-undo", "Change Place", &rows, None);
     d.observe(
         "W3",
         fs::read(root(d).join("NPCs/Rook Ambry.md")).unwrap() == original,
@@ -2696,7 +2703,7 @@ pub fn places(d: &mut Driver<'_>) {
     };
     let rows = tops_at_sizes(d, "Change Stat block");
     let prose = prose_at(d);
-    d.click("Change In");
+    d.click("Change Place");
     action_at_text_edge(
         d,
         "iter-17-D-clear-value",
@@ -2716,7 +2723,7 @@ pub fn places(d: &mut Driver<'_>) {
     );
     d.observe(
         "iter-7-D-FD6-cleared",
-        !d.has("Change In") && d.in_view("Undo change to Place"),
+        !d.has("Change Place") && d.in_view("Undo change to Place"),
         "A cleared place row disappears and its Undo stays visible",
     );
     // FD1, must stay true: a change that names a row value, with no row to sit beside, sits
@@ -2755,7 +2762,7 @@ pub fn places(d: &mut Driver<'_>) {
         fs::read(root(d).join("NPCs/Rook Ambry.md")).unwrap(),
         original
     );
-    d.click("Change In");
+    d.click("Change Place");
     d.click("New location…");
     d.type_into("Location name", "Watch House");
     d.click("Create location here");
@@ -2826,7 +2833,7 @@ pub fn places(d: &mut Driver<'_>) {
         .replace("A note for tonight.", "## Watch schedule\n\nObsidian added the watch schedule.\n\nRook takes the first watch at the east gate. At midnight, the relief patrol leaves Watch House and checks the bridge.\n\nThe captain keeps a spare key in the guard room. Visitors must give their names before they enter the keep.");
     fs::write(&path, &external).unwrap();
     // No focus event: Change must re-read the file before it patches this one key.
-    d.click("Change In");
+    d.click("Change Place");
     d.type_text("Watch House");
     d.click("Watch House");
     let after = fs::read_to_string(&path).unwrap();
@@ -2863,7 +2870,7 @@ pub fn places(d: &mut Driver<'_>) {
         crate::lookup::shown_name_counts(&folder)
     });
     reload(d);
-    d.click("Change In");
+    d.click("Change Place");
     d.type_text("Bell House");
     let shown = |d: &Driver<'_>| d.has("Bell House (Locations)") && d.has("Bell House (Ruins)");
     let warm = names.warm(d, shown(d), 1);
@@ -3064,7 +3071,7 @@ pub fn round_trip(d: &mut Driver<'_>) {
     );
     // One entry, two pickers: the group search must not take the location search's text
     // history, so each picker kind has its own field name.
-    d.click("Change In");
+    d.click("Change Place");
     d.expect("Find a location");
     d.type_into("Find a location", "Gate");
     d.click("Cancel");
@@ -3194,13 +3201,13 @@ pub fn round_trip(d: &mut Driver<'_>) {
         "iter-8-D2-unread-groups",
         "An unread Part of list blocks only its picker and explains the repair",
         |d| {
-            for name in ["Change Part of", "Status", "Text", "Change In"] {
+            for name in ["Change Part of", "Status", "Text", "Change Place"] {
                 d.expect(name);
             }
             d.is_disabled("Change Part of")
                 && !d.is_disabled("Status")
                 && !d.is_disabled("Text")
-                && !d.is_disabled("Change In")
+                && !d.is_disabled("Change Place")
         },
     );
     d.observe_both(
@@ -5091,7 +5098,7 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     let add = tops_at_sizes(d, "Add Rook Ambry to the fight");
     d.click("Edit Rook Ambry");
     d.wait_for_text("Save changes");
-    d.click("Change In");
+    d.click("Change Place");
     d.type_into("Find a location", "North");
     d.click("North Gate");
     d.type_into_editor("\nNever names the captain. Owes Nell a favour.\n");
@@ -5128,7 +5135,7 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     // widest value.
     for size in [SMALL, DEFAULT, LARGE] {
         let (column, detail) = d.at_size(size, |d| {
-            let changes: Vec<_> = ["Change Stat block", "Change In", "Change Part of"]
+            let changes: Vec<_> = ["Change Stat block", "Change Place", "Change Part of"]
                 .into_iter()
                 .map(|name| d.place_of(name))
                 .collect();
@@ -5206,7 +5213,7 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         "W2",
         d.has("North Gate")
             && d.visible_text("Never names the captain. Owes Nell a favour.")
-            && !d.has("Change In"),
+            && !d.has("Change Place"),
         "After Save, Lookup reads the NPC again with the new place and text",
     );
     body_kept(
@@ -5321,13 +5328,17 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         !d.has(&row) && d.has("Back"),
         "Show makes the NPC's card the view again",
     );
-    // Back is as before: it opens the entry that was open, under the NPC's row.
+    // Round 29 (FL4, Back's trail holds what was on screen): Back from the card opens Rook
+    // Ambry, the entry on screen before Show, under the NPC's row; Back again opens Watch House.
+    d.click("Back");
+    d.expect("Edit Rook Ambry");
+    let rook = d.has(&row) && !d.has("Save NPC");
     d.click("Back");
     d.wait_for_text("Location · Campaign");
     d.observe(
         "P1c-row-17",
-        d.has(&row) && !d.has("Save NPC"),
-        "Back opens the last entry under the NPC's row, and the NPC stays held",
+        rook && d.has(&row) && !d.has("Save NPC"),
+        "Back opens Rook Ambry, then Watch House, under the NPC's row, and the NPC stays held",
     );
     // Round 28 FJ6: the rail names the NPC that Lookup holds, also with Lookup closed, and its
     // status opens Lookup again, where the NPC's row is.
@@ -9290,13 +9301,13 @@ pub fn world_note_moved(d: &mut Driver<'_>) {
         "Change and each place choice's action share one column",
         |d| {
             for name in [
-                "Change In",
+                "Change Place",
                 "Always use Locations/Watch House.md",
                 "Always use Other/Watch House.md",
             ] {
                 d.expect(name);
             }
-            let change = d.place_of("Change In").unwrap();
+            let change = d.place_of("Change Place").unwrap();
             ["Locations/Watch House.md", "Other/Watch House.md"]
                 .iter()
                 .all(|path| {
@@ -9459,6 +9470,59 @@ pub fn world_note_moved(d: &mut Driver<'_>) {
     look_up(d, "Rook Ambry");
     d.click_containing("Watch House · 2 matches");
     d.expect("This link matches more than one note. Choose one.");
+    // Round 29 AI2, FI3: in Lookup, the chooser starts at the value column, where the value it
+    // resolves (`⚠ Watch House · 2 matches`) starts, not in the label column.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let edges = d.at_size(size, |d| {
+            let lookup = d.place_of(SEARCH_LOOKUP)?;
+            let value = d
+                .nodes()
+                .into_iter()
+                .find(|node| {
+                    node.name == format!("{} Watch House · 2 matches", design::icons::WARN)
+                        && node.rect.left() >= lookup.left() - 1.0
+                })?
+                .rect;
+            let words = d.painted_rect_in(
+                "This link matches more than one note. Choose one.",
+                egui::Rect::from_min_max(
+                    egui::pos2(lookup.left() - 1.0, value.bottom()),
+                    egui::pos2(f32::MAX, f32::MAX),
+                ),
+            )?;
+            Some((value.left(), words.left()))
+        });
+        d.observe(
+            "iter-29-D-AI2",
+            edges.is_some_and(|(value, words)| (value - words).abs() <= 1.0),
+            format!("At {size:?}, the value and the chooser's words start at {edges:?}"),
+        );
+    }
+    // Round 29 FI1 (ruling Q-l): World shows Watch House, one of the two notes the DM chooses
+    // between. Its file line keeps the folder, the part that tells them apart, at every size.
+    // The whole path is painted in World's reader (right of its list, left of Lookup), under
+    // the title and no lower than the file line's links, at every size.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let line = d.at_size(size, |d| {
+            let splitter = d.place_of("Resize World notes column")?;
+            let lookup = d.place_of(SEARCH_LOOKUP)?;
+            let reader = egui::Rect::from_min_max(
+                egui::pos2(splitter.right(), 0.0),
+                egui::pos2(lookup.left() - 1.0, f32::MAX),
+            );
+            let title = d.painted_word_rect("Watch House", reader)?;
+            let path = d.painted_word_rect("Locations/Watch House.md", reader)?;
+            let links = d.place_of("Show file")?;
+            Some((title, path, links))
+        });
+        d.observe(
+            "iter-29-D-FI1",
+            line.is_some_and(|(title, path, links)| {
+                path.top() >= title.bottom() - 0.5 && path.top() <= links.top() + 0.5
+            }),
+            format!("At {size:?}, World's file line of Watch House (title, path, links): {line:?}"),
+        );
+    }
     d.state("duplicate-place-chooser-in-lookup", Sizes::All);
     d.click("Locations/Watch House.md");
     d.press(Key::Escape);
@@ -9489,7 +9553,7 @@ pub fn world_note_moved(d: &mut Driver<'_>) {
         "{before_change}\n## Patrol after the move\n\nRook keeps the east gate key in the watch room. The relief patrol leaves at midnight and checks the bridge before it returns to the north gate.\n\nKeep this note from Obsidian when the place changes.\n"
     );
     fs::write(&moved_npc, &external).unwrap();
-    d.click("Change In");
+    d.click("Change Place");
     d.type_text("North Gate");
     d.click("North Gate");
     assert!(
@@ -9551,16 +9615,16 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
     look_up(d, "Watchkeeper");
     d.wait_for_text("Watch House · Not found");
     // Round 24 FD6: the compact reader's link fault reads as its other values: the muted label
-    // `In`, then the value in the warning tone. The label is not in the warning colour.
+    // `Place`, then the value in the warning tone. The label is not in the warning colour.
     let missing = format!("{} Watch House · Not found", design::icons::WARN);
     d.observe(
         "iter-24-D-FD6",
-        d.painted_color("In") == Some(design::colors().muted)
+        d.painted_color("Place") == Some(design::colors().muted)
             && d.painted_color(&missing) == Some(design::colors().result.warning)
-            && !d.has_containing("In Watch House"),
+            && !d.has_containing("Place Watch House"),
         format!(
-            "In is {:?} and its value is {:?}",
-            d.painted_color("In"),
+            "Place is {:?} and its value is {:?}",
+            d.painted_color("Place"),
             d.painted_color(&missing)
         ),
     );
@@ -9680,7 +9744,7 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
             let mut level = Vec::new();
             for (name, label) in [
                 ("Watchkeeper Guard", "Change Stat block"),
-                ("Watch House", "Change In"),
+                ("Watch House", "Change Place"),
             ] {
                 let line = painted(&format!("{} {name} · Not found", design::icons::WARN))
                     .into_iter()
@@ -10287,7 +10351,7 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     d.state("duplicate-world-files-in-lookup", Sizes::All);
     d.press(Key::Escape);
     d.click("Make Rook Ambry copy.md a separate note");
-    d.wait_for_text("Undo separate note");
+    d.wait_for_text("Undo separate Rook Ambry copy.md");
     d.expect("Rook Ambry copy.md is now a separate note.");
     assert_eq!(
         crate::content_workspace::note_id(&fs::read_to_string(&original).unwrap()),
@@ -10300,7 +10364,7 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     assert_eq!(fs::read_to_string(&original).unwrap(), before);
     d.expect("Rook Ambry copy");
     d.state("world-copy-repaired", Sizes::All);
-    d.click("Undo separate note");
+    d.click("Undo separate Rook Ambry copy.md");
     d.wait_for_text("Make Rook Ambry copy.md a separate note");
     assert_eq!(fs::read_to_string(&copy).unwrap(), before);
     d.expect_same("Undo restores the same copied files and identity warning.");
@@ -10318,7 +10382,7 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     d.click_starting("Rook Ambry.md ·");
     d.expect("Make Rook Ambry copy.md a separate note");
     d.click("Make Rook Ambry copy.md a separate note");
-    d.wait_for_text("Undo separate note");
+    d.wait_for_text("Undo separate Rook Ambry copy.md");
     d.expect("Rook Ambry copy.md is now a separate note.");
     let same_name = before.replace("splat_name: Rook Ambry", "splat_name: Rook Ambry copy");
     fs::write(&original, same_name).unwrap();
@@ -10347,6 +10411,14 @@ pub fn world_note_renamed(d: &mut Driver<'_>) {
     d.click_starting("Rook Ambry ·");
     d.expect("NPCs/Mara Vell.md");
     d.expect("The file is Mara Vell.md, but the name is Rook Ambry.");
+    // Round 29 FI2: as every other warning of a note, this one shows on the note's row and in
+    // the header's count, so the DM finds it without opening the note.
+    d.observe(
+        "iter-29-D-FI2",
+        d.has_containing("File: Mara Vell.md")
+            && d.has_containing("1 note needs fixing"),
+        "The renamed note's row says ⚠ File: Mara Vell.md and the header counts 1 note needs fixing",
+    );
     d.state("renamed-npc-keeps-old-name-in-world", Sizes::All);
     look_up(d, "Rook Ambry");
     d.expect("Rook Ambry");
@@ -11691,7 +11763,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         let (column, detail) = d.at_size(size, |d| {
             let changes: Vec<_> = [
                 "Change Stat block",
-                "Change In",
+                "Change Place",
                 "Change Part of",
                 "Change Status",
             ]
@@ -11716,7 +11788,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
             let mut widest = 0.0_f32;
             let mut lines = 0;
             d.each_painted_text(|text, clip| {
-                if ["Stat block", "In", "Part of", "Status"]
+                if ["Stat block", "Place", "Part of", "Status"]
                     .contains(&text.galley.job.text.as_str())
                 {
                     return;
@@ -11875,7 +11947,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
                 reason,
                 "Edit in Obsidian",
                 "Change Part of",
-                "Change In",
+                "Change Place",
                 "Text",
             ] {
                 d.expect(name);
@@ -11886,7 +11958,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
                 .filter(|node| node.name == "Edit in Obsidian" && node.role == Role::Link)
                 .collect();
             d.is_disabled("Change Part of")
-                && !d.is_disabled("Change In")
+                && !d.is_disabled("Change Place")
                 && !d.is_disabled("Text")
                 && links.len() == 1
                 && links.iter().all(|node| node.in_view())
@@ -12129,13 +12201,13 @@ pub fn empty_links(d: &mut Driver<'_>) {
             "An unset place stays hidden; an NPC keeps its empty Stat block row",
             |d| {
                 d.expect("Change Stat block");
-                !d.has("Change In") && !d.has_containing("Place not found")
+                !d.has("Change Place") && !d.has_containing("Place not found")
             },
         );
         d.click(&format!("Edit {name}"));
         for size in [SMALL, DEFAULT, LARGE] {
             let empty = d.at_size(size, |d| {
-                ["In", "Stat block"].iter().all(|label| {
+                ["Place", "Stat block"].iter().all(|label| {
                     let name = format!("Change {label}");
                     d.expect(&name);
                     let change = d.place_of(&name).unwrap();
@@ -12157,7 +12229,7 @@ pub fn empty_links(d: &mut Driver<'_>) {
         // stay true: Text still follows the fields.
         let order = [
             "Change Stat block",
-            "Change In",
+            "Change Place",
             "Change Part of",
             "Status",
             "Text",

@@ -903,32 +903,59 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     );
     // Round 28 FC8: Lookup names the session as the Session page beside it does, in the Log
     // line, in `From other notes` and in its row's link, never by its file.
-    for size in [SMALL, DEFAULT, LARGE] {
-        let (named, detail) = d.at_size(size, |d| {
-            let pane = d.place_of(SEARCH_LOOKUP).map(|search| {
-                egui::Rect::from_min_max(
-                    egui::pos2(search.left(), 0.0),
-                    egui::pos2(f32::INFINITY, f32::INFINITY),
-                )
-            });
-            let words = pane.map(|pane| d.painted_in(pane)).unwrap_or_default();
-            // `From other notes` links the session by its name; at 960 it is below the fold.
-            let link = d
-                .nodes()
-                .into_iter()
-                .any(|node| node.role == egui::accesskit::Role::Link && node.name == label);
-            (
-                pane.is_some() && !words.contains(&session) && words.contains(&label) && link,
-                format!("link {link}, painted {words:?}"),
+    let named = |d: &Driver<'_>, size: (f32, f32)| {
+        let pane = d.place_of(SEARCH_LOOKUP).map(|search| {
+            egui::Rect::from_min_max(
+                egui::pos2(search.left(), 0.0),
+                egui::pos2(f32::INFINITY, f32::INFINITY),
             )
         });
+        let words = pane.map(|pane| d.painted_in(pane)).unwrap_or_default();
+        // `From other notes` links the session by its name; at 960 it is below the fold.
+        let link = d
+            .nodes()
+            .into_iter()
+            .any(|node| node.role == egui::accesskit::Role::Link && node.name == label);
+        let line = pane.is_some_and(|pane| d.painted_line_with(&label, pane));
+        (
+            pane.is_some()
+                && !words.contains(&session)
+                && fc8_label_painted(size, words.contains(&label), line)
+                && link,
+            format!("link {link}, painted {words:?}"),
+        )
+    };
+    for size in [DEFAULT, LARGE] {
+        let (named, detail) = d.at_size(size, |d| named(d, size));
         d.observe(
             "iter-28-D-FC8",
             named,
             format!("At {size:?}, Lookup names the session `{label}`, not `{session}`: {detail}"),
         );
     }
-    d.state("status-changed-in-lookup", Sizes::Default);
+    // At 960 the check reads the capture's own settled frame (review of f29ef2c0: a look
+    // straight after a resize read the reader before it settled, with the Log line not yet
+    // painted).
+    // `Sizes::Default` captures 960, then 1200, in that order.
+    let mut at_capture = Vec::new();
+    d.state_prepared("status-changed-in-lookup", Sizes::Default, |d| {
+        d.settle();
+        let size = if at_capture.is_empty() {
+            SMALL
+        } else {
+            DEFAULT
+        };
+        at_capture.push(named(d, size));
+    });
+    let (fits, detail) = at_capture
+        .into_iter()
+        .next()
+        .unwrap_or((false, "no capture".into()));
+    d.observe(
+        "iter-28-D-FC8",
+        fits,
+        format!("At {SMALL:?}, Lookup names the session `{label}`, not `{session}`: {detail}"),
+    );
     d.click("Undo change to Status");
     d.observe(
         "T15.4",
@@ -1062,23 +1089,27 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     d.click("Close Lookup");
     d.click(&long_menu);
     d.click(&long);
+    let both = crate::world::LOG_WAITS_FOR_SAVE;
     d.observe(
         "T18.2",
-        d.visible_text("Save or discard your edit to add a Log line.") && !d.has(&field),
+        d.visible_text(both) && !d.has(&field),
         "While the entry has an edit form, the Log field waits",
     );
-    // Round 27 FC2: the reason is in Lookup's footer, so the form the DM types in keeps its
-    // place when the waiting field comes.
+    // Round 27 FC2: the form the DM types in keeps its place when the waiting field comes.
+    // Round 29 FC10 (ruling Q-t): the one cause is said once, at the save row, in one sentence
+    // with the campaign switch; the footer does not say it again.
     let waiting = d.place_of("Discard");
-    let footer = d.painted_rect_in(
-        "Save or discard your edit to add a Log line.",
-        egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(f32::MAX, f32::MAX)),
-    );
+    let reason = d.painted_rect_in(both, egui::Rect::EVERYTHING);
     d.observe(
         "iter-27-D-FC2",
         discard.zip(waiting).is_some_and(|(a, b)| (a.top() - b.top()).abs() <= 0.5)
-            && footer.zip(waiting).is_some_and(|(reason, discard)| reason.top() > discard.bottom()),
-        format!("Discard stays at {discard:?} → {waiting:?}; the reason {footer:?} sits below the form, in the footer"),
+            && reason.zip(waiting).is_some_and(|(reason, discard)| {
+                reason.center().y >= discard.top() - 0.5
+                    && reason.center().y <= discard.bottom() + 0.5 + crate::design::L * 2.0
+            })
+            && !d.visible_text("Save or discard your edit to add a Log line.")
+            && !d.visible_text("Save or discard to switch campaign."),
+        format!("Discard stays at {discard:?} → {waiting:?}; the one reason {reason:?} is at the save row"),
     );
     d.state("log-field-blocked-by-edit", Sizes::Default);
     d.click("Discard");
@@ -1347,4 +1378,45 @@ pub fn log_from_play(d: &mut Driver<'_>) {
             "A name that two entries share is not Not found: row {row:?}, Not found at {found:?}"
         ),
     );
+}
+
+/// FC8's one property, the session's name painted whole, per size. At 960 the new Stat block
+/// row (G43) leaves the Log entry's second line cut at the bottom of Lookup's scroll area, so
+/// there the label's own line is read (`Driver::painted_line_with`, the lead's option 1). At
+/// 1200 and 1920 the whole text block must be painted (`Driver::painted_in`), as before.
+fn fc8_label_painted(size: (f32, f32), whole_block: bool, label_line: bool) -> bool {
+    if size == SMALL {
+        label_line
+    } else {
+        whole_block
+    }
+}
+
+#[cfg(test)]
+mod fc8_tests {
+    use super::fc8_label_painted;
+    use crate::visual_tests::driver::{DEFAULT, LARGE, SMALL};
+
+    /// Review of 55a1f89e: a clipped block whose label line is whole passes only at 960.
+    #[test]
+    fn only_960_reads_the_label_line() {
+        for size in [DEFAULT, LARGE] {
+            assert!(
+                !fc8_label_painted(size, false, true),
+                "a clipped block at {size:?}"
+            );
+            assert!(
+                fc8_label_painted(size, true, true),
+                "a whole block at {size:?}"
+            );
+        }
+        assert!(
+            fc8_label_painted(SMALL, false, true),
+            "the label line at 960"
+        );
+        assert!(
+            !fc8_label_painted(SMALL, true, false),
+            "a cut label line at 960"
+        );
+    }
 }

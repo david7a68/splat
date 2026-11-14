@@ -1052,6 +1052,115 @@ pub(crate) fn link_problem_words(problems: &[LinkProblem]) -> String {
     }
 }
 
+/// The file's own name, when a World note's name is not its file's name (a rename in Obsidian
+/// or in the note's heading). The reader shows the warning with its two repairs; the list row
+/// and the header count show it too (FI2). A duplicate has its own repair first.
+pub(crate) fn renamed_file(item: &Item, index: &ContentIndex) -> Option<String> {
+    if item.entry.kind != "world" || index.duplicate_world.contains_key(&item.entry.path) {
+        return None;
+    }
+    let stem = Path::new(&item.entry.path)
+        .file_stem()
+        .unwrap_or_default()
+        .to_string_lossy();
+    (stem != item.entry.name).then(|| stem.into_owned())
+}
+
+/// A World note's fault, as its list row says it and the header counts it: the first that
+/// holds, in this order. Every kind is a warning (one fault, one tone); a note that cannot be
+/// read at all is the header's error count, not one of these.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum NoteFault {
+    /// Two files claim the note's identity.
+    Duplicate,
+    /// Values that could not be read, with their count.
+    Unread(usize),
+    /// Roll tables with faults, with their count.
+    Tables(usize),
+    /// Links that need fixing.
+    Links(Vec<LinkProblem>),
+    /// The note's name is not its file's name (FI2), with the file's name: it tells the note
+    /// apart from another of the same name, as a same-name row's file name does.
+    Renamed(String),
+}
+
+impl NoteFault {
+    fn of(item: &Item, index: &ContentIndex) -> Option<Self> {
+        let entry = &item.entry;
+        let problems = broken_links(item, index);
+        let tables = crate::roll_table::fault_count(&entry.body);
+        if index.duplicate_world.contains_key(&entry.path) {
+            Some(Self::Duplicate)
+        } else if !entry.flags.is_empty() {
+            Some(Self::Unread(entry.flags.len()))
+        } else if tables > 0 {
+            Some(Self::Tables(tables))
+        } else if !problems.is_empty() {
+            Some(Self::Links(problems))
+        } else {
+            renamed_file(item, index).map(|stem| Self::Renamed(format!("{stem}.md")))
+        }
+    }
+
+    /// The list row's words after its warning icon.
+    pub(crate) fn words(&self) -> String {
+        match self {
+            Self::Duplicate => "Same note in two files".into(),
+            Self::Unread(count) => design::count(*count, "value not read", "values not read"),
+            Self::Tables(count) => design::count(*count, "table fault", "table faults"),
+            Self::Links(problems) => link_problem_words(problems),
+            Self::Renamed(file) => format!("File: {file}"),
+        }
+    }
+}
+
+/// The faults of one index's World notes, worked out once per index
+/// (`ContentIndex::note_faults`): the list rows, the header's count and the count's menu read
+/// these records, so they never disagree and nothing that grows with the notes runs each frame.
+#[derive(Debug, Default)]
+pub(crate) struct NoteFaults {
+    by_position: HashMap<usize, NoteFault>,
+    /// The notes with a fault, in the World list's order: the count's menu.
+    listed: Vec<usize>,
+    /// Every World note in the list, for the header's note count.
+    notes: usize,
+}
+
+impl NoteFaults {
+    pub(crate) fn of(index: &ContentIndex) -> Self {
+        let mut faults = Self::default();
+        for &(at, _) in index.world_groups("").values().flatten() {
+            faults.notes += 1;
+            if let Some(fault) = NoteFault::of(&index.items[at], index) {
+                faults.by_position.insert(at, fault);
+                faults.listed.push(at);
+            }
+        }
+        faults
+    }
+
+    /// The fault of the note at `at` in the index.
+    pub(crate) fn of_note(&self, at: usize) -> Option<&NoteFault> {
+        self.by_position.get(&at)
+    }
+
+    /// The notes with a fault, in list order.
+    pub(crate) fn listed(&self) -> &[usize] {
+        &self.listed
+    }
+
+    /// How many World notes the list holds.
+    pub(crate) fn notes(&self) -> usize {
+        self.notes
+    }
+}
+
+/// The save row's one reason while a Log field of the note waits for a changed form: the
+/// campaign switch and the Log line have one cause (ruling Q-t).
+pub(crate) const LOG_WAITS_FOR_SAVE: &str = "Save or discard to add a Log line or switch campaign.";
+/// The same, for a form with no changes: Cancel closes it and opens the field.
+pub(crate) const LOG_WAITS_FOR_CANCEL: &str = "Cancel to add a Log line.";
+
 /// The links on this note that need fixing, in the order the reader shows them.
 pub(crate) fn broken_links(item: &Item, index: &ContentIndex) -> Vec<LinkProblem> {
     let mut problems = Vec::new();
@@ -1303,7 +1412,7 @@ fn set_world_field(
 /// also shows on their pages.
 fn log_words(index: &ContentIndex, key: &str, before: Option<&Value>, after: &Value) -> String {
     let label = match key {
-        "in" => "In",
+        "in" => "Place",
         "part_of" => "Part of",
         _ => "Status",
     };
@@ -1395,6 +1504,33 @@ pub(crate) fn file_actions(ui: &mut egui::Ui, campaign: &Campaign, relative: &st
 /// A file line under a title that is the entry's name: the file's path, then the links. Under a
 /// title that is the file's name, use `folder_file_line`.
 pub(crate) fn entry_file_actions(ui: &mut egui::Ui, root: &Path, relative: &str, obsidian: bool) {
+    entry_file_line(ui, root, relative, obsidian, false);
+}
+
+/// `entry_file_actions`, for a note whose name another note shares (`keep_folder`): its folder
+/// is the part that tells the two apart, so it is never cut. A path too wide for the line beside
+/// the links takes its own row and wraps whole (ruling Q-l: in a duplicate, the part that
+/// differs is cut last).
+fn entry_file_line(
+    ui: &mut egui::Ui,
+    root: &Path,
+    relative: &str,
+    obsidian: bool,
+    keep_folder: bool,
+) {
+    let font = Type::Small.font(ui);
+    if keep_folder
+        && design::number_width(ui, relative, &font)
+            > ui.available_width() - entry_file_links_width(ui, obsidian) - design::L
+    {
+        let path = root.join(relative);
+        let response =
+            ui.add(egui::Label::new(Type::Small.rich(ui, relative).color(colors().muted)).wrap());
+        design::named(ui, &response, &path.display().to_string());
+        response.on_hover_text(path.display().to_string());
+        ui.horizontal(|ui| entry_file_links(ui, &path, obsidian));
+        return;
+    }
     // When even `…/<file name>` does not fit beside the links, the path takes its own row and
     // the links the row below, as in Library: the file name is never cut (FA4).
     let budget = ui.available_width() - entry_file_links_width(ui, obsidian) - design::L;
@@ -1604,15 +1740,16 @@ impl ChangeKind {
     /// Its Undo (ruling R16): when one field changed, its object is that field's name on
     /// screen, the name the result's words use (`Part of set to …` has `Undo change to Part
     /// of`); when the edit form saved several fields, the note's name (`Undo change to Ashfall
-    /// Faction`). A separate note: `Undo separate note`. `note` is the note's name.
-    fn undo_step(self, note: &str) -> UndoStep {
+    /// Faction`). A separate note names the copy's file, as the encounter editor's does
+    /// (`Undo separate Rook copy.md`, FG5). `note` is the note's name, `file` its file's.
+    fn undo_step(self, note: &str, file: &str) -> UndoStep {
         match self {
             Self::Place => UndoStep::of(Verb::Change, "Place"),
             Self::PartOf => UndoStep::of(Verb::Change, "Part of"),
             Self::Status => UndoStep::of(Verb::Change, "Status"),
             Self::StatBlock => UndoStep::of(Verb::Change, "Stat block"),
             Self::Name => UndoStep::of(Verb::Change, "Name"),
-            Self::Identity(noun) => UndoStep::of(Verb::Separate, noun.act()),
+            Self::Identity(_) => UndoStep::of(Verb::Separate, file),
             Self::Edit => UndoStep::of(Verb::Change, note),
             Self::Log => UndoStep::of(Verb::Add, "Log line"),
         }
@@ -1622,7 +1759,8 @@ impl ChangeKind {
 impl Change {
     /// Its Undo step: the kind's, with the name of the note it changed (`ChangeKind::undo_step`).
     pub(crate) fn undo_step(&self, note: &str) -> UndoStep {
-        self.kind.undo_step(note)
+        self.kind
+            .undo_step(note, self.path.rsplit('/').next().unwrap_or(&self.path))
     }
 
     pub(crate) fn message(&self) -> &str {
@@ -1838,14 +1976,6 @@ impl IdentityNoun {
 
     fn result(self, filename: &str) -> String {
         format!("{filename} is now a separate {}.", self.word())
-    }
-
-    /// What a separate note's Undo names after its verb: `Undo separate note`.
-    fn act(self) -> &'static str {
-        match self {
-            Self::Note => "note",
-            Self::Entry => "entry",
-        }
     }
 }
 
@@ -2097,6 +2227,60 @@ pub(crate) fn next_order() -> u64 {
     ORDER.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1
 }
 
+/// A reader's open `Add to Log` fields, by campaign and note. A change of its keys (a field
+/// opens or closes) takes a new stamp, so the other reader rebuilds its copy of the keys only
+/// then (`Reader::share_with`), not on each pass. Typing in a field keeps the stamp.
+#[derive(Default)]
+struct LogFields {
+    fields: HashMap<LogKey, LogField>,
+    /// 0 for none ever opened; else a stamp from `next_order`, new at each change of the keys.
+    keys: u64,
+}
+
+impl LogFields {
+    /// The field of this note, opened empty when it is not open.
+    fn open(&mut self, key: LogKey) -> &mut LogField {
+        if !self.fields.contains_key(&key) {
+            self.keys = next_order();
+        }
+        self.fields.entry(key).or_default()
+    }
+
+    fn remove(&mut self, key: &LogKey) -> Option<LogField> {
+        let removed = self.fields.remove(key);
+        if removed.is_some() {
+            self.keys = next_order();
+        }
+        removed
+    }
+
+    /// The words and state of an open field; its keys stay.
+    fn get_mut(&mut self, key: &LogKey) -> Option<&mut LogField> {
+        self.fields.get_mut(key)
+    }
+
+    #[cfg(test)]
+    fn clear(&mut self) {
+        if !self.fields.is_empty() {
+            self.keys = next_order();
+        }
+        self.fields.clear();
+    }
+}
+
+impl std::ops::Deref for LogFields {
+    type Target = HashMap<LogKey, LogField>;
+    fn deref(&self) -> &Self::Target {
+        &self.fields
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Rebuilds of a reader's copy of the other reader's Log keys, on this thread.
+    pub(crate) static LOG_KEY_SHARES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Lookup's and the World page's reader, and its controls for the item on show.
 /// What a reader holds for the DM that no reset of the reader may drop: the DM's typed words,
 /// and the results whose end events are their own (`Kept::ENDS`). Lookup's Clear and World's
@@ -2107,7 +2291,7 @@ pub(crate) fn next_order() -> u64 {
 pub(crate) struct Held {
     /// Each open `Add to Log` field, by its entry and the session it was opened in. Its words
     /// wait while the reader shows another entry; a restart loses them, as every held form.
-    log_fields: HashMap<LogKey, LogField>,
+    log_fields: LogFields,
     /// The Log lines whose entry is gone, for the footer, until the DM copies or dismisses each.
     gone_log_lines: Vec<GoneLog>,
     /// Log lines the DM dismissed with their typed words, each with its Undo (ruling R3): the
@@ -2187,6 +2371,16 @@ pub struct Reader {
     /// The entries whose edit form is open in the other reader (Lookup's, or the World
     /// page's). Their Log field waits too, so Splat never makes its own disk conflict.
     pub edited_elsewhere: Vec<Uuid>,
+    /// The other reader's open Log fields, by campaign and note. An edit form here holds them
+    /// back too, so its save row says so (ruling Q-t): the waiting state is the two readers'.
+    pub logs_elsewhere: std::collections::HashSet<LogKey>,
+    /// The other reader's `LogFields` stamp that `logs_elsewhere` was copied from.
+    logs_elsewhere_from: u64,
+    /// The note whose edit form the other reader drew in its last pass. Its save row explains
+    /// a waiting Log field, so this reader's footer does not say it again.
+    pub form_shown_elsewhere: Option<Uuid>,
+    /// The note whose edit form this reader drew, and the pass it drew it in.
+    form_drawn: Option<(Uuid, u64)>,
 }
 
 /// A reader's `Add to fight`: what joins the open run, by the run's own add
@@ -2611,7 +2805,7 @@ impl Reader {
     /// header's do. The field starts with `words`, selected, unless the DM already typed words
     /// there.
     pub fn open_log(&mut self, campaign: Uuid, id: Uuid, name: &str, words: &str) {
-        let open = self.held.log_fields.entry((campaign, id)).or_default();
+        let open = self.held.log_fields.open((campaign, id));
         open.field.focus = true;
         name.clone_into(&mut open.name);
         if open.field.words.trim().is_empty() {
@@ -2994,7 +3188,10 @@ impl Reader {
         if file_line && let Some(campaign) = campaign {
             // A note that a Part of change found unreadable gets no editor link here either.
             let editor = !(self.group_error && self.group_error_unread_file);
-            entry_file_actions(ui, &campaign.path, &item.entry.path, editor);
+            let shared_name = index
+                .position(item.entry.id)
+                .is_some_and(|at| index.shares_name(at));
+            entry_file_line(ui, &campaign.path, &item.entry.path, editor, shared_name);
         }
         // Every warning sits below the file line, so the file line keeps its place. Each wraps
         // at the reader measure, the right edge of the rows below.
@@ -3027,118 +3224,111 @@ impl Reader {
             }
         });
         if let Some(campaign) = campaign {
-            if item.entry.kind == "world" && !index.duplicate_world.contains_key(&item.entry.path) {
-                let stem = Path::new(&item.entry.path)
-                    .file_stem()
-                    .unwrap_or_default()
-                    .to_string_lossy();
-                if stem != item.entry.name {
-                    let message = format!(
-                        "The file is {stem}.md, but the name is {}.",
-                        item.entry.name
-                    );
-                    // Two safe choices: the note takes the file's name, or the file takes the
-                    // note's name (FD5). An open edit form keeps its file, so the file keeps
-                    // its name while one is open.
-                    let file = renamed_path(&item.entry.path, &item.entry.name)
-                        .filter(|_| !self.editing(id, campaign));
-                    let (note, rename_file) =
-                        design::message_with_actions(ui, Tone::Warning, &message, |ui| {
-                            // A choice whose words do not fit the message's width says only
-                            // its verb; the warning above names the name, and the accessible
-                            // name keeps the whole choice.
-                            let room = ui.available_width();
-                            let choice = |full: String, short: &'static str| {
-                                let action = Action::secondary(&full).density(Density::Read);
-                                if action.natural_width(ui) <= room {
-                                    (full.clone(), full)
-                                } else {
-                                    (short.to_owned(), full)
-                                }
-                            };
-                            let (note_words, note_name) =
-                                choice(format!("Rename the note to {stem}"), "Rename the note");
-                            let file_words = file.as_ref().map(|to| {
-                                choice(
-                                    format!(
-                                        "Rename the file to {}",
-                                        to.rsplit('/').next().unwrap_or(to)
-                                    ),
-                                    "Rename the file",
-                                )
-                            });
-                            ui.horizontal_wrapped(|ui| {
-                                let note = Action::secondary(&note_words)
-                                    .name(&note_name)
+            if let Some(stem) = renamed_file(item, index) {
+                let message = format!(
+                    "The file is {stem}.md, but the name is {}.",
+                    item.entry.name
+                );
+                // Two safe choices: the note takes the file's name, or the file takes the
+                // note's name (FD5). An open edit form keeps its file, so the file keeps
+                // its name while one is open.
+                let file = renamed_path(&item.entry.path, &item.entry.name)
+                    .filter(|_| !self.editing(id, campaign));
+                let (note, rename_file) =
+                    design::message_with_actions(ui, Tone::Warning, &message, |ui| {
+                        // A choice whose words do not fit the message's width says only
+                        // its verb; the warning above names the name, and the accessible
+                        // name keeps the whole choice.
+                        let room = ui.available_width();
+                        let choice = |full: String, short: &'static str| {
+                            let action = Action::secondary(&full).density(Density::Read);
+                            if action.natural_width(ui) <= room {
+                                (full.clone(), full)
+                            } else {
+                                (short.to_owned(), full)
+                            }
+                        };
+                        let (note_words, note_name) =
+                            choice(format!("Rename the note to {stem}"), "Rename the note");
+                        let file_words = file.as_ref().map(|to| {
+                            choice(
+                                format!(
+                                    "Rename the file to {}",
+                                    to.rsplit('/').next().unwrap_or(to)
+                                ),
+                                "Rename the file",
+                            )
+                        });
+                        ui.horizontal_wrapped(|ui| {
+                            let note = Action::secondary(&note_words)
+                                .name(&note_name)
+                                .density(Density::Read)
+                                .show(ui)
+                                .clicked();
+                            let rename_file = file_words.as_ref().is_some_and(|(words, name)| {
+                                // The layout's own gap after a control, with this, is `L`.
+                                ui.add_space(design::L - ui.spacing().item_spacing.x);
+                                Action::secondary(words)
+                                    .name(name)
                                     .density(Density::Read)
                                     .show(ui)
-                                    .clicked();
-                                let rename_file =
-                                    file_words.as_ref().is_some_and(|(words, name)| {
-                                        // The layout's own gap after a control, with this, is `L`.
-                                        ui.add_space(design::L - ui.spacing().item_spacing.x);
-                                        Action::secondary(words)
-                                            .name(name)
-                                            .density(Density::Read)
-                                            .show(ui)
-                                            .clicked()
-                                    });
-                                (note, rename_file)
-                            })
-                            .inner
-                        });
-                    if rename_file && let Some(to) = &file {
-                        // The whole file must still be the whole file the index read, which
-                        // produced the reader: a changed comment, line end or byte order mark
-                        // counts as a change. The move checks the same text again.
-                        let result = file_fault::read_note(&campaign.path, &item.entry.path)
-                            .and_then(|text| {
-                                if item.source_text() == Some(crate::lookup::text_hash(&text)) {
-                                    FileRename::apply(campaign, &item.entry.path, to, &text)
-                                } else {
-                                    Err(format!(
-                                        "{} changed on disk. Nothing was renamed.",
-                                        item.entry.path
-                                    ))
-                                }
+                                    .clicked()
                             });
-                        match result {
-                            Ok(rename) => {
-                                self.held.results.record(ReaderResult::FileRename(rename));
-                                return Some(Go::Reload(item.entry.id));
+                            (note, rename_file)
+                        })
+                        .inner
+                    });
+                if rename_file && let Some(to) = &file {
+                    // The whole file must still be the whole file the index read, which
+                    // produced the reader: a changed comment, line end or byte order mark
+                    // counts as a change. The move checks the same text again.
+                    let result =
+                        file_fault::read_note(&campaign.path, &item.entry.path).and_then(|text| {
+                            if item.source_text() == Some(crate::lookup::text_hash(&text)) {
+                                FileRename::apply(campaign, &item.entry.path, to, &text)
+                            } else {
+                                Err(format!(
+                                    "{} changed on disk. Nothing was renamed.",
+                                    item.entry.path
+                                ))
                             }
-                            Err(error) => self.error = Some(error),
+                        });
+                    match result {
+                        Ok(rename) => {
+                            self.held.results.record(ReaderResult::FileRename(rename));
+                            return Some(Go::Reload(item.entry.id));
                         }
+                        Err(error) => self.error = Some(error),
                     }
-                    if note {
-                        let result = (|| {
-                            let before = file_fault::read_note(&campaign.path, &item.entry.path)?;
-                            let after = crate::content_workspace::patch_fields(
-                                &before,
-                                &[("splat_name", Some(stem.to_string().into()))],
-                            )?;
-                            let after = crate::content_workspace::rename_first_heading(
-                                after,
-                                &item.entry.name,
-                                &stem,
-                            );
-                            write_note(&campaign.path, &item.entry.path, Some(&before), &after)?;
-                            Ok::<_, String>(Change {
-                                campaign: campaign.id,
-                                path: item.entry.path.clone(),
-                                before,
-                                after,
-                                word: format!("Name changed to {stem}."),
-                                kind: ChangeKind::Name,
-                            })
-                        })();
-                        match result {
-                            Ok(change) => {
-                                self.held.results.record(ReaderResult::Name(change));
-                                return Some(Go::Reload(item.entry.id));
-                            }
-                            Err(error) => self.error = Some(error),
+                }
+                if note {
+                    let result = (|| {
+                        let before = file_fault::read_note(&campaign.path, &item.entry.path)?;
+                        let after = crate::content_workspace::patch_fields(
+                            &before,
+                            &[("splat_name", Some(stem.to_string().into()))],
+                        )?;
+                        let after = crate::content_workspace::rename_first_heading(
+                            after,
+                            &item.entry.name,
+                            &stem,
+                        );
+                        write_note(&campaign.path, &item.entry.path, Some(&before), &after)?;
+                        Ok::<_, String>(Change {
+                            campaign: campaign.id,
+                            path: item.entry.path.clone(),
+                            before,
+                            after,
+                            word: format!("Name changed to {stem}."),
+                            kind: ChangeKind::Name,
+                        })
+                    })();
+                    match result {
+                        Ok(change) => {
+                            self.held.results.record(ReaderResult::Name(change));
+                            return Some(Go::Reload(item.entry.id));
                         }
+                        Err(error) => self.error = Some(error),
                     }
                 }
             }
@@ -3322,7 +3512,8 @@ impl Reader {
             // Help under a section keeps the reader measure (round 25 FG1, AG1).
             design::help(ui, TYPE_HELP);
             ui.horizontal_wrapped(|ui| {
-                for (at, (label, kind)) in [("NPC", "npc"), ("Location", "location")]
+                // Each choice says what it does, as the typed one's `Make <type>` does (FG4).
+                for (at, (label, kind)) in [("Make NPC", "npc"), ("Make location", "location")]
                     .into_iter()
                     .enumerate()
                 {
@@ -3467,7 +3658,7 @@ impl Reader {
             value
         };
         let label = match key {
-            "in" => "In",
+            "in" => "Place",
             "part_of" => "Part of",
             "status" => "Status",
             _ => "Stat block",
@@ -3505,10 +3696,9 @@ impl Reader {
             self.place_choices_open = false;
             return None;
         }
-        // The result names the place as the Undo (`Undo place change`) and the list (`Place not
-        // found`) do; the field's label `In` is not a noun (round 27 FA5).
+        // The row, the result and the Undo say one name, `Place` (ruling Q-p, R16).
         let words = change_words(
-            if key == "in" { "Place" } else { label },
+            label,
             world_field(current_entry, key).and_then(name).as_deref(),
             name(&value).as_deref(),
         );
@@ -3772,7 +3962,7 @@ impl Reader {
         let mut values = Vec::new();
         // Missing links, measured as `missing_link` draws them.
         let mut missing = Vec::new();
-        for (key, label) in [("creature", "Stat block"), ("in", "In")] {
+        for (key, label) in [("creature", "Stat block"), ("in", "Place")] {
             if key == "creature" && !fights(&item.entry) {
                 continue;
             }
@@ -3891,11 +4081,9 @@ impl Reader {
     ) -> (Option<Go>, Option<usize>) {
         let mut go = None;
         let mut chosen = None;
-        let indent = if self.compact {
-            design::number_width(ui, "In", &Type::Small.font(ui)) + ui.spacing().item_spacing.x
-        } else {
-            Self::chooser_indent(ui)
-        };
+        // The value column's offset, in both readers: the choices start where the value they
+        // resolve starts (AI2, FI3).
+        let indent = Self::chooser_indent(ui);
         egui::Frame::new()
             .inner_margin(egui::Margin {
                 left: indent as i8,
@@ -3969,7 +4157,7 @@ impl Reader {
         let mut go = None;
         let rows: Vec<_> = [
             ("creature", "Stat block"),
-            ("in", "In"),
+            ("in", "Place"),
             ("status", "Status"),
         ]
         .into_iter()
@@ -4182,10 +4370,12 @@ impl Reader {
         // An open `Add to Log` field waits while an edit form of its entry is open, here or in
         // the other reader. It ends when the form closes (Save, Discard) or the reader shows
         // another entry.
+        // One save row says it (ruling Q-t): the form's, in this reader or the other. This
+        // footer says it only while the form is open in the other reader and its save row is
+        // not on screen there.
         if let Some(campaign) = campaign
             && takes_log(item, index)
-            && self.held.log_fields.contains_key(&(campaign.id, id))
-            && (self.editing(id, campaign) || self.edited_elsewhere.contains(&id))
+            && self.footer_names_log((campaign.id, id))
         {
             messages.outcome(Notice::new(crate::sentence!(
                 "Save or discard your edit to add a Log line."
@@ -4395,7 +4585,7 @@ impl Reader {
         let mut go = None;
         let value_width = self.relationship_value_width(ui, item, index);
         let stacked = Self::stacked(ui);
-        for (key, label) in [("creature", "Stat block"), ("in", "In")] {
+        for (key, label) in [("creature", "Stat block"), ("in", "Place")] {
             if key == "creature" && !fights(&item.entry) {
                 continue;
             }
@@ -4652,7 +4842,7 @@ impl Reader {
         if self.compact {
             let mut targets = vec![
                 ("Stat block", index.world_target(&item.entry, "creature")),
-                ("In", index.place_of(item.entry.id)),
+                ("Place", index.place_of(item.entry.id)),
             ];
             targets.extend(
                 index
@@ -4674,6 +4864,37 @@ impl Reader {
                 }
             }
             let width = self.relationship_value_width(ui, item, index);
+            // An NPC with no stat block says so here too, with its Change, as World's reader
+            // does (SF3): a reader never hides a missing value or the act that sets it.
+            // While the join form is open, its own Stat block row is the one way to set it
+            // (review of PR 355), so the reader's row waits.
+            if fights(&item.entry)
+                && reader_field(&item.entry, "creature").is_none()
+                && self.adding.is_none()
+            {
+                ui.push_id("creature", |ui| {
+                    if Self::relationship_row(
+                        ui,
+                        "Stat block",
+                        width,
+                        |ui| {
+                            ui.label(Type::Small.rich(ui, "not set").color(colors().muted));
+                        },
+                        None,
+                    ) {
+                        self.picker = Some(Picker {
+                            key: "creature",
+                            focus: true,
+                            ..Default::default()
+                        });
+                    }
+                });
+                if self.picker.as_ref().is_some_and(|p| p.key == "creature")
+                    && let Some(value) = self.pick(ui, item, index, campaign, None)
+                {
+                    return self.change(campaign, item, index, "creature", value);
+                }
+            }
             for (label, ats) in rows {
                 Self::value_row(
                     ui,
@@ -4716,7 +4937,7 @@ impl Reader {
                 let mut open = false;
                 Self::value_row(
                     ui,
-                    "In",
+                    "Place",
                     width,
                     |ui| {
                         open =
@@ -4748,7 +4969,7 @@ impl Reader {
             {
                 let name = place.trim_matches(['[', ']']);
                 let room = width.max(missing_width(ui, name, false));
-                Self::value_row(ui, "In", room, |ui| missing_link(ui, name, false), None);
+                Self::value_row(ui, "Place", room, |ui| missing_link(ui, name, false), None);
             }
             if go.is_some() {
                 return go;
@@ -5365,6 +5586,64 @@ mod tests {
             "Place has 2 matches",
             "FD1-words"
         );
+
+        // Round 29 FI2: one fault record per note, found once per index. The row's words, the
+        // header's count and the count's menu read the same records. Rook keeps `[[Nowhere]]`;
+        // a renamed note and a duplicate join it, and a plain note has none.
+        let mara = create_entry(&campaign, "Mara", "npc").unwrap();
+        fs::rename(
+            dir.path().join("NPCs/Mara.md"),
+            dir.path().join("NPCs/Vell.md"),
+        )
+        .unwrap();
+        let gate = create_entry(&campaign, "Gate", "location").unwrap();
+        let gate_path = {
+            let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+            dir.path()
+                .join(&index.items[index.position(gate).unwrap()].entry.path)
+        };
+        fs::copy(&gate_path, gate_path.with_file_name("Gate copy.md")).unwrap();
+        let plain = create_entry(&campaign, "Hob", "npc").unwrap();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let scans = crate::lookup::FAULT_SCANS.with(std::cell::Cell::get);
+        let faults = index.note_faults();
+        // By path: two files that claim one identity have no one position by id.
+        let at_path = |path: &std::path::Path| {
+            let relative = path.strip_prefix(dir.path()).unwrap().to_string_lossy();
+            index
+                .items
+                .iter()
+                .position(|item| item.entry.path == relative)
+                .unwrap()
+        };
+        let fault_of = |id| faults.of_note(index.position(id).unwrap()).cloned();
+        assert_eq!(
+            fault_of(id),
+            Some(NoteFault::Links(vec![LinkProblem::PlaceNotFound]))
+        );
+        assert_eq!(fault_of(mara), Some(NoteFault::Renamed("Vell.md".into())));
+        assert_eq!(
+            NoteFault::Renamed("Vell.md".into()).words(),
+            "File: Vell.md"
+        );
+        assert_eq!(
+            faults.of_note(at_path(&gate_path)).cloned(),
+            Some(NoteFault::Duplicate)
+        );
+        assert_eq!(fault_of(plain), None);
+        // The menu lists exactly the notes with a record, so the count is their number.
+        let listed: Vec<_> = faults.listed().to_vec();
+        assert!(listed.iter().all(|&at| faults.of_note(at).is_some()));
+        for at in index.world_groups("").values().flatten().map(|(at, _)| *at) {
+            assert_eq!(faults.of_note(at).is_some(), listed.contains(&at), "{at}");
+        }
+        // Asked again, as every frame asks: no second scan of the notes' bodies.
+        let _ = index.note_faults();
+        let _ = index.note_faults().listed().len();
+        assert_eq!(
+            crate::lookup::FAULT_SCANS.with(std::cell::Cell::get),
+            scans + 1
+        );
     }
 
     #[test]
@@ -5587,11 +5866,11 @@ mod tests {
     fn i19_h1_world_notice_names_the_change_and_undo() {
         // A place change's Undo names its verb and its object, as the result's words do.
         assert_eq!(
-            ChangeKind::Place.undo_step("Rook").label(),
+            ChangeKind::Place.undo_step("Rook", "Rook.md").label(),
             "Undo change to Place"
         );
         assert_eq!(
-            ChangeKind::PartOf.undo_step("Rook").label(),
+            ChangeKind::PartOf.undo_step("Rook", "Rook.md").label(),
             "Undo change to Part of"
         );
     }
@@ -5654,7 +5933,11 @@ mod tests {
             before
         );
         assert_eq!(undo.message(), "Rook copy.md is now a separate note.");
-        assert_eq!(undo.undo_step("Rook copy").label(), "Undo separate note");
+        // Round 29 FG5: the Undo names the copy, as the encounter editor's does.
+        assert_eq!(
+            undo.undo_step("Rook copy").label(),
+            "Undo separate Rook copy.md"
+        );
         assert_eq!(Entry::parse("copy.md", &undo.after).unwrap().id, id);
         let repaired = Entry::parse("copy.md", &undo.after).unwrap();
         assert_eq!(repaired.name, "Rook copy");
@@ -5928,7 +6211,7 @@ mod tests {
                                 .min(Reader::relationship_width(ui));
                             for (label, value) in [
                                 ("Stat block", "Goblin Warrior"),
-                                ("In", "North Gate"),
+                                ("Place", "North Gate"),
                                 ("Status", "not read"),
                             ] {
                                 Reader::relationship_row(
@@ -6059,7 +6342,7 @@ mod tests {
         let text = fs::read_to_string(&path).unwrap();
         assert!(
             text.ends_with(
-                "## Log\n\n- [[Session 1]], Day 2: Status alive → dead.\n- [[Session 1]], Day 2: In not set → [[The Arena]].\n- [[Session 1]], Day 2: Part of not set → [[Harvest Cart]].\n"
+                "## Log\n\n- [[Session 1]], Day 2: Status alive → dead.\n- [[Session 1]], Day 2: Place not set → [[The Arena]].\n- [[Session 1]], Day 2: Part of not set → [[Harvest Cart]].\n"
             ),
             "{text}"
         );
@@ -6079,7 +6362,7 @@ mod tests {
                 .all(|(source, _)| index.items[*source].entry.id == hob)
         );
         for (id, words) in [
-            (arena, "In not set → The Arena."),
+            (arena, "Place not set → The Arena."),
             (cart, "Part of not set → Harvest Cart."),
         ] {
             let about = index.lines_about(id);
@@ -6126,7 +6409,7 @@ mod tests {
         group.undo(&campaign).unwrap();
         let text = fs::read_to_string(&path).unwrap();
         assert!(!text.contains("splat_part_of") && !text.contains("Harvest Cart"));
-        assert!(text.ends_with("In not set → [[The Arena]].\n"));
+        assert!(text.ends_with("Place not set → [[The Arena]].\n"));
 
         // Choosing the value that is already there writes nothing.
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
@@ -6239,6 +6522,86 @@ mod tests {
         );
         assert_eq!(fs::read_to_string(&path).unwrap(), edited);
         assert_eq!(lookup.held.log_fields[&key].field.words, "Kept.");
+
+        // Round 29 FC10, ruling Q-t: a Log field of Hob open in BOTH readers, and an edit form
+        // of Hob in one of them, drawn for real as the app draws it: each pass the shell shares
+        // the readers' state, then each reader draws. The one save row says the cause; the
+        // other reader's footer does not repeat it. Then the same with the readers exchanged.
+        world.open_log(campaign.id, hob, "Hob", "");
+        lookup.compact = true;
+        let at = index.position(hob).unwrap();
+        use egui_kittest::kittest::Queryable;
+        let drawn = |world: Reader, lookup: Reader, form_in_world: bool| -> (Reader, Reader) {
+            let mut harness = egui_kittest::Harness::new_ui_state(
+                |ui, (world, lookup): &mut (Reader, Reader)| {
+                    let pass = ui.ctx().cumulative_pass_nr();
+                    lookup.share_with(world, pass);
+                    world.share_with(lookup, pass);
+                    let item = &index.items[at];
+                    ui.push_id("world", |ui| {
+                        world.read_with(ui, item, &index, Some(&campaign), None)
+                    });
+                    ui.push_id("lookup", |ui| {
+                        lookup.read_with(ui, item, &index, Some(&campaign), None)
+                    });
+                },
+                (world, lookup),
+            );
+            crate::design::theme::install(&harness.ctx);
+            {
+                let (world, lookup) = harness.state_mut();
+                let form = if form_in_world { world } else { lookup };
+                form.begin_edit(&campaign, &index.items[at]);
+            }
+            harness.run_steps(3);
+            // Review of f29ef2c0: unchanged passes copy no Log keys again; a field that opens
+            // or closes in one reader is the only thing that makes the other copy them.
+            let shares = LOG_KEY_SHARES.with(std::cell::Cell::get);
+            harness.run_steps(3);
+            assert_eq!(
+                LOG_KEY_SHARES.with(std::cell::Cell::get),
+                shares,
+                "no copy of the Log keys on an unchanged pass"
+            );
+            let rows = harness.query_all_by_label(LOG_WAITS_FOR_CANCEL).count();
+            let (world, lookup) = harness.state();
+            let (form, other) = if form_in_world {
+                (world, lookup)
+            } else {
+                (lookup, world)
+            };
+            assert_eq!(
+                rows, 1,
+                "one save row says the cause (form in World: {form_in_world})"
+            );
+            assert!(form.save_row_names_log(key) && !form.footer_names_log(key));
+            assert!(
+                !other.footer_names_log(key),
+                "the other reader's footer is quiet while the form's save row is on screen"
+            );
+            let (mut world, mut lookup) = std::mem::take(harness.state_mut());
+            drop(harness);
+            // The form's save row is no longer drawn (its page is hidden): the other reader's
+            // footer says it, once.
+            let (form, other) = if form_in_world {
+                (&mut world, &mut lookup)
+            } else {
+                (&mut lookup, &mut world)
+            };
+            form.form_drawn = None;
+            form.share_with(other, u64::MAX);
+            assert!(other.footer_names_log(key));
+            form.edits.clear();
+            (world, lookup)
+        };
+        let (world, lookup) = drawn(world, lookup, true);
+        let (mut world, mut lookup) = drawn(world, lookup, false);
+        // A Log field in Lookup only, the form in World: World's save row says it too.
+        world.held.log_fields.clear();
+        world.begin_edit(&campaign, item);
+        lookup.share_with(&mut world, 0);
+        assert!(world.save_row_names_log(key));
+        world.edits.clear();
 
         // A note that cannot be read, and a note renamed or deleted under the open field: the
         // act names the file and writes nothing.

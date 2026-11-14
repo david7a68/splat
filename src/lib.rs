@@ -1370,13 +1370,15 @@ impl Splat {
             self.world_page.reader.forget_gone_log_lines(&index);
             self.lookup.reader.forget_gone_log_lines(&index);
         }
-        // An edit form in one reader holds back the other's Log field for that entry.
+        // An edit form in one reader holds back the other's Log field for that entry, and the
+        // one save row on screen says so (ruling Q-t).
+        let pass = ctx.cumulative_pass_nr();
         self.lookup
             .reader
-            .edit_forms_into(&mut self.world_page.reader.edited_elsewhere);
+            .share_with(&mut self.world_page.reader, pass);
         self.world_page
             .reader
-            .edit_forms_into(&mut self.lookup.reader.edited_elsewhere);
+            .share_with(&mut self.lookup.reader, pass);
         let mut start_fight = None;
         // A reader's `Add to fight` (round 27 FJ5), with the reader that asked, for its reason.
         let mut add_to_fight = None;
