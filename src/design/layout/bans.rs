@@ -335,8 +335,10 @@ pub(crate) fn count(source: &str, group: Group) -> Result<usize, String> {
                             .is_some_and(|found| found >= *args)
                 }
                 Shape::Free(None, name) => {
+                    // `name(…)`, also `name::<T>(…)`.
                     ident(tokens.get(at)) == Some(name)
-                        && tokens.get(at + 1) == Some(&Token::Open(Delimiter::Parenthesis))
+                        && tokens.get(after_turbofish(&tokens, at + 1))
+                            == Some(&Token::Open(Delimiter::Parenthesis))
                         && at.checked_sub(1).and_then(|before| tokens.get(before))
                             != Some(&Token::Punct('.'))
                         && ident(at.checked_sub(1).and_then(|before| tokens.get(before)))

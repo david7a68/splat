@@ -3921,37 +3921,36 @@ impl Sessions {
         };
         let reveal = state.focus;
         design::gap(ui, design::Gap::S);
+        let id = crate::field_id!("plan_scene").once(crate::layout::Once::CreateForm);
         let result = design::add_field(
-            ui,
-            state,
+            id,
             "Plan a scene",
             "Plan a scene: words, a person or a place",
-            design::AddEnds::Actions,
-            0.0,
-            |_| None,
-            |words| {
-                let Some(index) = index else {
-                    return Vec::new();
-                };
-                let rows = index
-                    .search(&words.trim().to_lowercase())
-                    .into_iter()
-                    .filter(|at| is_world(index, *at))
-                    .take(4)
-                    .map(|at| {
-                        (
-                            index.items[at].entry.name.clone(),
-                            world_detail(index, at),
-                            index.link_to(at),
-                        )
-                    })
-                    .collect();
-                vec![design::Suggestions {
-                    label: "World",
-                    rows,
-                }]
-            },
-        );
+        )
+        .actions(crate::word!("Add"), crate::word!("Cancel"))
+        .suggest(|words| {
+            let Some(index) = index else {
+                return Vec::new();
+            };
+            let rows = index
+                .search(&words.trim().to_lowercase())
+                .into_iter()
+                .filter(|at| is_world(index, *at))
+                .take(4)
+                .map(|at| {
+                    (
+                        index.items[at].entry.name.clone(),
+                        world_detail(index, at),
+                        index.link_to(at),
+                    )
+                })
+                .collect();
+            vec![design::Suggestions {
+                label: "World",
+                rows,
+            }]
+        })
+        .show(ui, state);
         let typed = state.words.trim().to_owned();
         let emptied = state.words.is_empty();
         self.scenes.typing = result.field.has_focus();

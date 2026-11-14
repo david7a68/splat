@@ -955,16 +955,29 @@ pub fn labelled_field(
 ) -> Response {
     field(ui, label, help, error, |ui| {
         let width = ui.available_width().min(FORM_WIDTH) - 2.0 * S;
-        form_field(ui, id, label, text, width)
+        form_field(ui, id, label, text, None, width)
     })
 }
 
 /// The form field of `labelled_field` and `InlineCreate`, `width` wide without its margins.
-fn form_field(ui: &mut Ui, id: FieldId, label: &str, text: &mut String, width: f32) -> Response {
+fn form_field(
+    ui: &mut Ui,
+    id: FieldId,
+    label: &str,
+    text: &mut String,
+    hint: Option<&str>,
+    width: f32,
+) -> Response {
+    let hint = hint.map(|hint| placeholder(ui, hint));
     let response = id.named(label).single_line(ui, text, |edit| {
-        edit.desired_width(width)
+        let edit = edit
+            .desired_width(width)
             .min_size(vec2(0.0, Density::Read.control()))
-            .margin(vec2(S, 5.0))
+            .margin(vec2(S, 5.0));
+        match hint {
+            Some(hint) => edit.hint_text(hint),
+            None => edit,
+        }
     });
     named(ui, &response, label);
     response
@@ -1342,7 +1355,9 @@ pub fn status_slot<K: Copy>(
 /// Public only for those tests; the app uses them through `design`.
 #[doc(hidden)]
 pub mod doc_parts {
-    pub use crate::design::{Action, Density, FolderGroup, folder_group_heading, icons};
+    pub use crate::design::{
+        Action, AddField, Density, FolderGroup, add_field, folder_group_heading, icons,
+    };
 }
 
 /// Whether a [`KeySlot`]'s key letter shows this frame.
@@ -2075,6 +2090,7 @@ pub struct Create<R: CreateReasons> {
     word: Word,
     weight: CreateWeight,
     blocked: Option<R>,
+    key: Option<&'static str>,
 }
 
 impl<R: CreateReasons> Create<R> {
@@ -2083,6 +2099,7 @@ impl<R: CreateReasons> Create<R> {
             word,
             weight: CreateWeight::Primary,
             blocked: None,
+            key: None,
         }
     }
 
@@ -2099,6 +2116,13 @@ impl<R: CreateReasons> Create<R> {
         self
     }
 
+    /// Show Create's key beside its word (`Enter`), so the DM sees how to finish from the
+    /// keyboard.
+    pub fn key(mut self, key: &'static str) -> Self {
+        self.key = Some(key);
+        self
+    }
+
     fn action(&self) -> Action<'static> {
         match self.weight {
             CreateWeight::Primary => Action::primary(self.word.as_str()),
@@ -2106,6 +2130,7 @@ impl<R: CreateReasons> Create<R> {
         }
         .density(Density::Read)
         .blocked(self.blocked.map(R::words))
+        .key(self.key.unwrap_or_default())
     }
 }
 
@@ -2191,6 +2216,7 @@ pub struct CreateField<'a> {
     help: Option<&'a str>,
     side: Option<SideAction>,
     focus: bool,
+    placeholder: Option<&'a str>,
 }
 
 impl<'a> CreateField<'a> {
@@ -2202,7 +2228,16 @@ impl<'a> CreateField<'a> {
             help: None,
             side: None,
             focus: false,
+            placeholder: None,
         }
+    }
+
+    /// The field's hint inside it, in place of a caption above it: `label` is then only the
+    /// field's accessible name. For a field whose place says what it is (an add field at the
+    /// end of its list).
+    pub fn placeholder(mut self, hint: &'a str) -> Self {
+        self.placeholder = Some(hint);
+        self
     }
 
     pub fn help(mut self, help: &'a str) -> Self {
@@ -2380,6 +2415,7 @@ impl<'a> CreateDropdown<'a> {
 #[must_use]
 pub struct KeptLine<'a> {
     cancel: Option<(Word, bool)>,
+    cancel_key: Option<&'static str>,
     preview: Option<&'a str>,
 }
 
@@ -2392,6 +2428,12 @@ impl<'a> KeptLine<'a> {
     /// is given whether or not it shows, so the line keeps its room.
     pub fn cancel(mut self, word: Word, shown: bool) -> Self {
         self.cancel = Some((word, shown));
+        self
+    }
+
+    /// Show Cancel's key beside its word (`Esc`).
+    pub fn cancel_key(mut self, key: &'static str) -> Self {
+        self.cancel_key = Some(key);
         self
     }
 
@@ -2717,10 +2759,12 @@ fn small_height(ui: &Ui, words: &str, width: f32) -> f32 {
 fn kept_line_height<R: CreateReasons>(
     ui: &Ui,
     room: f32,
-    cancel: Option<Word>,
+    cancel: Option<(Word, Option<&'static str>)>,
     sides: &[&str],
 ) -> f32 {
-    let beside = cancel.map_or(0.0, |word| cancel_action(word).natural_width(ui) + L);
+    let beside = cancel.map_or(0.0, |(word, key)| {
+        cancel_action(word, key).natural_width(ui) + L
+    });
     let width = (room - beside).max(1.0);
     let create = R::ALL
         .iter()
@@ -2733,18 +2777,20 @@ fn kept_line_height<R: CreateReasons>(
     (create + sides).max(Density::Read.control())
 }
 
-fn cancel_action(word: Word) -> Action<'static> {
-    Action::quiet(word.as_str()).density(Density::Read)
+fn cancel_action(word: Word, key: Option<&'static str>) -> Action<'static> {
+    Action::quiet(word.as_str())
+        .density(Density::Read)
+        .key(key.unwrap_or_default())
 }
 
 /// Cancel where it starts a line at the form's text edge: its words at the edge, its padding
 /// hanging left of it only where the clip shows it (a reader nested in a pane clips at its own
 /// text edge), so its target is never cut. It allocates the same width either way.
-fn cancel_at_line_start(ui: &Ui, word: Word) -> Action<'static> {
+fn cancel_at_line_start(ui: &Ui, word: Word, key: Option<&'static str>) -> Action<'static> {
     if ui.cursor().left() - LINE_START_HANG >= ui.clip_rect().left() - 0.5 {
-        cancel_action(word).line_start()
+        cancel_action(word, key).line_start()
     } else {
-        cancel_action(word)
+        cancel_action(word, key)
     }
 }
 
@@ -2851,7 +2897,10 @@ fn field_line<R: CreateReasons>(
             line.create = clicked;
         }
     };
-    field(ui, part.label, help, None, |ui| {
+    // A field with its hint inside it has no caption: its label is its accessible name.
+    let captioned = part.placeholder.is_none();
+    let label = part.label;
+    let mut body = |ui: &mut Ui| {
         let row = |ui: &mut Ui, add: &mut dyn FnMut(&mut Ui)| {
             ui.allocate_ui_with_layout(
                 vec2(room, Density::Read.control()),
@@ -2869,7 +2918,8 @@ fn field_line<R: CreateReasons>(
                 room - 2.0 * S
             };
             row(ui, &mut |ui| {
-                line.response = form_field(ui, part.id, part.label, part.text, width);
+                line.response =
+                    form_field(ui, part.id, part.label, part.text, part.placeholder, width);
                 for at in 0..actions_in_order.len() {
                     draw_action(ui, &mut line, at);
                 }
@@ -2877,7 +2927,14 @@ fn field_line<R: CreateReasons>(
         } else {
             // The actions do not fit beside the field: they take whole rows under it, at the
             // field's left edge, so none is cut at the column's edge.
-            line.response = form_field(ui, part.id, part.label, part.text, room - 2.0 * S);
+            line.response = form_field(
+                ui,
+                part.id,
+                part.label,
+                part.text,
+                part.placeholder,
+                room - 2.0 * S,
+            );
             let widths: Vec<f32> = (0..actions_in_order.len())
                 .map(|at| action_at(at).map_or(0.0, |action| action.natural_width(ui)))
                 .collect();
@@ -2885,7 +2942,12 @@ fn field_line<R: CreateReasons>(
                 draw_action(ui, &mut line, at)
             });
         }
-    });
+    };
+    if captioned {
+        field(ui, label, help, None, body);
+    } else {
+        body(ui);
+    }
     if part.focus {
         line.response.request_focus();
     }
@@ -3031,7 +3093,7 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
             // Whole actions in rows: in a narrow column Cancel goes under Create.
             let mut widths = vec![create.action().natural_width(ui)];
             if let Some((word, true)) = self.kept.cancel {
-                widths.push(cancel_action(word).natural_width(ui));
+                widths.push(cancel_action(word, self.kept.cancel_key).natural_width(ui));
             }
             action_rows(ui, room, &widths, |ui, at, starts_row| {
                 if at == 0 {
@@ -3039,9 +3101,9 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
                 } else if let Some((word, true)) = self.kept.cancel {
                     // Cancel that wraps to a row of its own starts the line at the text edge.
                     let action = if starts_row {
-                        cancel_at_line_start(ui, word)
+                        cancel_at_line_start(ui, word, self.kept.cancel_key)
                     } else {
-                        cancel_action(word)
+                        cancel_action(word, self.kept.cancel_key)
                     };
                     out.cancel |= action.show(ui).clicked();
                 }
@@ -3082,7 +3144,12 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
             self.kept.cancel
         };
         let declared: Vec<&str> = sides.iter().map(|(reason, _)| reason.as_str()).collect();
-        let height = kept_line_height::<R>(ui, room, kept_cancel.map(|(word, _)| word), &declared);
+        let height = kept_line_height::<R>(
+            ui,
+            room,
+            kept_cancel.map(|(word, _)| (word, self.kept.cancel_key)),
+            &declared,
+        );
         let (line, _) = ui.allocate_exact_size(vec2(room, height), Sense::hover());
         // Its content goes in a child that does not allocate in `ui` again.
         let mut kept = ui.new_child(
@@ -3092,7 +3159,9 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
         );
         kept.spacing_mut().item_spacing.x = 0.0;
         if let Some((word, true)) = kept_cancel {
-            out.cancel |= cancel_at_line_start(&kept, word).show(&mut kept).clicked();
+            out.cancel |= cancel_at_line_start(&kept, word, self.kept.cancel_key)
+                .show(&mut kept)
+                .clicked();
             space(&mut kept, L);
         }
         let mut reasons: Vec<&str> = sides

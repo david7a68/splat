@@ -3593,6 +3593,8 @@ impl Reader {
         let select = std::mem::take(&mut open.select);
         let field = &mut open.field;
         let name = format!("Log line for {}", item.entry.name);
+        const LOG_LINE: crate::layout::FieldName = crate::field_id!("world_log_line");
+        let entry = item.entry.id;
         // The field ends at the reader's measure, also when the stamp shares its line: a row of
         // a wrapping layout does not hold a nested row to its parent's width (round 27 AF2, FF1).
         let edge = ui.max_rect().right();
@@ -3603,16 +3605,9 @@ impl Reader {
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| {
                     ui.set_max_width(width);
-                    design::add_field(
-                        ui,
-                        field,
-                        &name,
-                        "What happened?",
-                        design::AddEnds::Actions,
-                        0.0,
-                        |_| None::<()>,
-                        |_| Vec::new(),
-                    )
+                    design::add_field::<()>(LOG_LINE.of(entry), &name, "What happened?")
+                        .actions(crate::word!("Add"), crate::word!("Cancel"))
+                        .show(ui, field)
                 },
             )
             .inner
