@@ -761,19 +761,25 @@
   ],
   "travel-checks": [
     ["G1b/pressed-control-moved","06-travel-checks-timeline","960x640","Button \"Travel · 1 day · Session 1\"",1],
-    ["G1b/pressed-control-moved","10-travel-checks-road-fight","960x640","Button \"Shrine of Cinders · Fight · Round 1 · Session 1 · Day 2 of Travel\"",1],
+    ["G1b/pressed-control-moved","12-travel-checks-road-fight","960x640","Button \"Shrine of Cinders · Fight · Round 1 · Session 1 · Day 2 of Travel\"",1],
     ["G3/far-action","01-travel-checks-rolled","1920x1080","Button \"Add to notes: Travel\"",1],
-    ["G3/far-action","08-travel-checks-road-day","1920x1080","Button \"Add to notes: Journey B\"",1],
-    ["G3/far-action","08-travel-checks-road-day","1920x1080","Button \"Add to notes: Travel\"",1],
-    ["G3/far-action","08-travel-checks-road-day","1920x1080","Button \"Resume: Bridge Ambush\"",1],
+    ["G3/far-action","10-travel-checks-road-day","1920x1080","Button \"Add to notes: Journey B\"",1],
+    ["G3/far-action","10-travel-checks-road-day","1920x1080","Button \"Add to notes: Travel\"",1],
+    ["G3/far-action","10-travel-checks-road-day","1920x1080","Button \"Resume: Bridge Ambush\"",1],
     ["N4/quiet-action-line-start","01-travel-checks-rolled","1200x800","Button \"On the road\"",1],
     ["N4/quiet-action-line-start","01-travel-checks-rolled","1920x1080","Button \"On the road\"",1],
     ["N4/quiet-action-line-start","01-travel-checks-rolled","960x640","Button \"On the road\"",1],
     ["N4/quiet-action-line-start","02-travel-checks-rolled-lookup","960x640","Button \"On the road\"",1],
     ["N4/quiet-action-line-start","04-travel-checks-planned-lookup","960x640","Button \"On the road\"",1],
     ["N4/quiet-action-line-start","05-travel-checks-outside","960x640","Button \"On the road\"",1],
+    ["N4/quiet-action-line-start","06-travel-checks-timeline","1200x800","Button \"On the road\"",1],
+    ["N4/quiet-action-line-start","06-travel-checks-timeline","1920x1080","Button \"On the road\"",1],
     ["N4/quiet-action-line-start","06-travel-checks-timeline","960x640","Button \"On the road\"",1],
-    ["N4/quiet-action-line-start","07-travel-checks-timeline-lookup","960x640","Button \"On the road\"",1]
+    ["N4/quiet-action-line-start","07-travel-checks-timeline-lookup","960x640","Button \"On the road\"",1],
+    ["N4/quiet-action-line-start","08-travel-checks-timeline-planned","1200x800","Button \"On the road\"",1],
+    ["N4/quiet-action-line-start","08-travel-checks-timeline-planned","1920x1080","Button \"On the road\"",1],
+    ["N4/quiet-action-line-start","08-travel-checks-timeline-planned","960x640","Button \"On the road\"",1],
+    ["N4/quiet-action-line-start","09-travel-checks-timeline-undo-failed","960x640","Button \"On the road\"",1]
   ],
   "world": [
     ["G1b/pressed-control-moved","08-world-generated-npc-saved","960x640","Button \"Reroll\"",1]

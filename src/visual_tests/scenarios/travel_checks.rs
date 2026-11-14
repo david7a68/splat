@@ -565,7 +565,20 @@ pub fn run(d: &mut Driver<'_>) {
         before == after,
         format!("Unchanged frames copy no names and read no plan: {before:?}, {after:?}"),
     );
-    d.state("travel-checks-timeline", Sizes::Default);
+    // Final review 2, 4b: at each size the rolled result's plan line is in view.
+    let seen = [SMALL, DEFAULT, LARGE].map(|size| {
+        d.at_size(size, |d| {
+            d.nodes()
+                .iter()
+                .any(|node| node.name.contains("In the plan") && node.fully_in_view())
+        })
+    });
+    d.observe(
+        "iter-29-S1-G142-reveal",
+        seen.iter().all(|seen| *seen),
+        format!("Timeline: In the plan is in view at 960, 1200 and 1920: {seen:?}"),
+    );
+    d.state("travel-checks-timeline", Sizes::All);
     d.state_prepared("travel-checks-timeline-lookup", Sizes::Small, |d| {
         if !d.has("Close Lookup") {
             d.click(NAV_LOOKUP);
@@ -697,7 +710,39 @@ fn timeline_plans_a_result(d: &mut Driver<'_>) {
         d.has(PLAN_SHRINE) && !note_file(&dir).contains("[[Shrine of Cinders]]"),
         "Timeline: a result that links a fight not in the plan offers it",
     );
+    // Final review 2, 4c: no field or row moves when the result comes.
+    let places = |d: &Driver<'_>| {
+        (
+            d.place_of("Title"),
+            d.place_of(&d.name_starting("Travel ·")),
+            d.place_of("Clear the check for Day 1"),
+        )
+    };
+    let unmoved = places(d);
     d.click(PLAN_SHRINE);
+    let moved = places(d);
+    d.observe(
+        "iter-29-S1-G142-planned",
+        unmoved.0.is_some() && unmoved.1.is_some() && unmoved == moved,
+        format!("The result moves no field or row: {unmoved:?}, {moved:?}"),
+    );
+    let whole = [SMALL, DEFAULT, LARGE].map(|size| {
+        d.at_size(size, |d| {
+            let nodes = d.nodes();
+            let whole = |name: &str| {
+                nodes
+                    .iter()
+                    .any(|node| node.name == name && node.fully_in_view())
+            };
+            whole(PLANNED) && whole("Undo add plan line")
+        })
+    });
+    d.observe(
+        "iter-29-S1-G142-planned",
+        whole.iter().all(|whole| *whole),
+        format!("The footer's result and its Undo are whole at each size: {whole:?}"),
+    );
+    d.state("travel-checks-timeline-planned", Sizes::All);
     let note = note_file(&dir);
     d.observe(
         "iter-29-S1-G142",
@@ -742,6 +787,68 @@ fn timeline_plans_a_result(d: &mut Driver<'_>) {
         journey(d, "Travel").checks.is_empty(),
         "The journey has no check again",
     );
+    // Final review 2, point 1: Timeline's own footer press of an Undo that fails, for a
+    // journey that is not open. The line stays, the footer says why, and the fault ends with
+    // its journey. A journey made for this step only, so the later steps are as before. The
+    // suite runs in a namespace where a folder's permission bits do not stop a save, so the
+    // Undo fails the way a changed note makes it fail: the note changes outside Splat just
+    // before the press.
+    const FORD: &str = "Ford crossing";
+    const OUTSIDE: &str = "Written in Obsidian.";
+    let note_path = fs::read_dir(&dir)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|file| file.path())
+        .find(|path| {
+            fs::read_to_string(path).is_ok_and(|text| text.contains("## Plan for tonight"))
+        })
+        .expect("the session note");
+    d.click_add_event("Add Travel");
+    d.type_text(FORD);
+    d.click(&format!("More actions for {FORD}"));
+    d.click(ROLL_FOR_ENCOUNTERS);
+    d.expect("Encounter checks added to this journey.");
+    d.type_into("Enter a roll for This journey", "19");
+    d.press(Key::Enter);
+    d.click(PLAN_SHRINE);
+    d.expect(PLANNED);
+    let ford = journey(d, FORD).id;
+    d.click_starting("Travel ·");
+    d.app_mut().sessions.hold_disk_check();
+    let changed = format!("{}{OUTSIDE}\n", note_file(&dir));
+    fs::write(&note_path, &changed).unwrap();
+    d.click("Undo add plan line");
+    let refused = d
+        .nodes()
+        .iter()
+        .any(|node| node.name.starts_with("Plan line not removed.") && node.fully_in_view());
+    d.observe(
+        "iter-29-S1-G142-undo-fault",
+        refused && note_file(&dir).contains("[[Shrine of Cinders]]"),
+        format!(
+            "Timeline's footer says the line was not removed ({refused}), and the line stays: {:?}",
+            d.nodes()
+                .iter()
+                .filter(|node| node.name.contains("not removed"))
+                .map(|node| (node.name.clone(), node.fully_in_view()))
+                .collect::<Vec<_>>()
+        ),
+    );
+    d.state("travel-checks-timeline-undo-failed", Sizes::Default);
+    d.app_mut().timeline.remove(&ford);
+    d.settle();
+    d.observe(
+        "iter-29-S1-G142-undo-fault",
+        !d.has_containing("Plan line not removed."),
+        "The fault ends with its journey",
+    );
+    // The note as it was before this step, for the steps after it.
+    let before = changed
+        .lines()
+        .filter(|line| !line.contains("[[Shrine of Cinders]]") && *line != OUTSIDE)
+        .map(|line| format!("{line}\n"))
+        .collect::<String>();
+    fs::write(&note_path, before).unwrap();
 }
 
 fn field_history_belongs_to_its_event(d: &mut Driver<'_>) {

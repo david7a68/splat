@@ -3043,6 +3043,13 @@ impl Sessions {
                 .is_some_and(|planned| Some(planned.note) == session)
     }
 
+    /// Tests: the next disk check waits its full interval from now, so a scenario's outside
+    /// change meets the DM's next press before `poll` reads it.
+    #[cfg(test)]
+    pub fn hold_disk_check(&mut self) {
+        self.last_check = Some(Instant::now());
+    }
+
     /// Whether the plan line's result still holds. It only reads what `follow_plan_line` keeps.
     fn planned_live(&mut self) -> bool {
         self.follow_plan_line();
@@ -6062,8 +6069,15 @@ mod tests {
         assert_eq!(sessions.undo_plan_line(), None, "no Undo");
         b_file(1);
         // Review 3, point 1: another campaign ends the result, and its Undo reaches no note.
+        // A live result first (the edit cycle above ended the last one).
+        sessions.select(Some(a));
+        fs::write(&b_note.path, &text).unwrap();
+        sessions
+            .plan_from_timeline(&book, &road, &chosen("Shrine of Cinders"), &names)
+            .unwrap();
+        assert!(sessions.planned_live(), "a live result before the change");
         sessions.campaign = Some(campaign("Other"));
-        assert!(!sessions.planned_live());
+        assert!(!sessions.planned_live(), "another campaign ends it");
         assert_eq!(sessions.undo_plan_line(), None);
         b_file(1);
         // So does the session's note leaving the folder.
