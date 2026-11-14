@@ -169,39 +169,45 @@ mod tests {
                     ),
                 ] {
                     let word = text.split(" · ").nth(1).unwrap().to_owned();
-                    let galley = crate::design::status_in_text(
-                        ui,
-                        &text,
-                        Some((word.as_str(), look)),
-                        400.0,
-                    );
-                    ui.painter().galley(ui.cursor().min, galley, colors().muted);
+                    crate::design::status_in_text(ui, &text, Some((word.as_str(), look)), 400.0)
+                        .paint(ui, ui.cursor().min);
                 }
-                // Under a disabled parent (a list's lock) the words around a kind dim; the kind
-                // keeps its colours. The galley holds the dimming, so it is painted at full
-                // opacity (G116).
+                // Under a disabled parent (a list's lock, G116) and the typed paint: the words
+                // around a status and a one-colour status dim once; a kind keeps its colours.
                 ui.add_enabled_ui(false, |ui| {
-                    let text = format!("May 5 · {} Recording 0:01 · Playing", icons::RECORD);
-                    let word = format!("{} Recording 0:01", icons::RECORD);
-                    let galley = crate::design::status_in_text(
-                        ui,
-                        &text,
-                        Some((word.as_str(), StatusKind::Recording)),
-                        400.0,
-                    );
-                    let mut full = ui.painter().clone();
-                    full.set_opacity(1.0);
-                    full.galley(ui.cursor().min, galley, colors().muted);
+                    for (text, word, look) in [
+                        (
+                            format!("May 5 · {} Recording 0:01 · Playing", icons::RECORD),
+                            format!("{} Recording 0:01", icons::RECORD),
+                            crate::design::InTextLook::from(StatusKind::Recording),
+                        ),
+                        (
+                            format!("May 6 · {} Halted", icons::ERROR),
+                            format!("{} Halted", icons::ERROR),
+                            colors().result.error.into(),
+                        ),
+                    ] {
+                        crate::design::status_in_text(
+                            ui,
+                            &text,
+                            Some((word.as_str(), look)),
+                            400.0,
+                        )
+                        .paint(ui, ui.cursor().min);
+                    }
                 });
             });
         });
-        let dim = colors()
-            .muted
-            .gamma_multiply(ctx.style().visuals.disabled_alpha());
+        let alpha = ctx.style().visuals.disabled_alpha();
+        let dim = colors().muted.gamma_multiply(alpha);
         let c = colors();
         assert_eq!(colours(&output, icons::RECORD), [c.recording; 4]);
         assert_eq!(colours(&output, "Recording 0:01"), [c.text]);
         assert_eq!(colours(&output, "May 5 ·"), [dim]);
+        assert_eq!(
+            colours(&output, &format!("{} Halted", icons::ERROR)),
+            [c.result.error.gamma_multiply(alpha)]
+        );
         assert_ne!(dim, c.muted);
         assert_eq!(colours(&output, "Recording 12:03"), [c.text]);
         assert_eq!(colours(&output, "Recording 12:04"), [c.text]);
@@ -209,7 +215,7 @@ mod tests {
         assert_eq!(colours(&output, "Saved"), [c.muted]);
         assert_eq!(colours(&output, "May 3 ·"), [c.muted]);
         assert_eq!(colours(&output, "Recording"), [c.text]);
-        assert_eq!(colours(&output, "· Playing"), [c.muted]);
+        assert_eq!(colours(&output, "· Playing"), [c.muted, dim]);
         assert_eq!(
             colours(&output, &format!("{} Stopped", icons::ERROR)),
             [c.result.error]

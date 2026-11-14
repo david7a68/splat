@@ -13166,7 +13166,7 @@ pub mod session_notes {
             Some("Reload and lose my draft"),
             &[DEFAULT],
         );
-        d.state_prepared("note-conflict-recording", Sizes::Default, |d| {
+        d.state_prepared("note-conflict-recording", Sizes::All, |d| {
             // G116: the conflict lock still disables the session list's rows, but the live
             // status in a row keeps its R5 colours, as on the rail and the Record line.
             d.observe(

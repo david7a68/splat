@@ -1315,10 +1315,8 @@ fn session_row(
             let first = galley.size().y;
             ui.painter().galley(egui::pos2(x, top), galley, c.text);
             // The second line holds the list lock's dimming itself, and a live recording's
-            // status keeps its own colours under it (R5, `design::status_in_text`).
-            let mut full = ui.painter().clone();
-            full.set_opacity(1.0);
-            full.galley(egui::pos2(x, top + first), second, c.muted);
+            // status keeps its own colours under it (R5, `design::StatusText`).
+            second.paint(ui, egui::pos2(x, top + first));
         },
     )
 }
@@ -1329,7 +1327,7 @@ fn session_detail(
     detail: &str,
     state: Option<RecordingStatus>,
     width: f32,
-) -> std::sync::Arc<egui::Galley> {
+) -> design::StatusText {
     // Summary parts stay whole. A file name is words: it wraps at a space, and its next line
     // starts where the first did.
     let detail = file
@@ -8085,11 +8083,8 @@ mod tests {
                     let detail = format!("2026-01-01 · {status} · {} Playing", icons::RUN);
                     for width in [170.0, 200.0, 216.0, 330.0] {
                         let galley = session_detail(ui, None, &detail, None, width);
-                        let rows: Vec<String> = galley
-                            .rows
-                            .iter()
-                            .map(|row| row.glyphs.iter().map(|g| g.chr).collect())
-                            .collect();
+                        let rows: Vec<String> =
+                            galley.lines().into_iter().map(|(row, _)| row).collect();
                         for row in &rows {
                             assert!(!row.trim_end().ends_with('·'), "{width}: {rows:?}");
                         }
@@ -8105,16 +8100,7 @@ mod tests {
                 let file = "Session 1 - A long meeting name.md";
                 for width in [100.0, 140.0, 170.0] {
                     let galley = session_detail(ui, Some(file), "2026-01-01", None, width);
-                    let rows: Vec<(String, f32)> = galley
-                        .rows
-                        .iter()
-                        .map(|row| {
-                            (
-                                row.glyphs.iter().map(|g| g.chr).collect(),
-                                row.pos.x + row.glyphs.first().map_or(0.0, |g| g.pos.x),
-                            )
-                        })
-                        .collect();
+                    let rows = galley.lines();
                     assert!(rows.len() > 2, "{width}: the name wraps: {rows:?}");
                     for (words, x) in &rows {
                         assert!(
