@@ -1429,7 +1429,8 @@ pub mod library_author {
     const RELOAD_DISK: &str = "Reload and lose my draft";
     const SHOW_DISK: &str = "Next difference";
     const UNDO_DISCARD: &str = "Undo discard of Ash Exposure";
-    const CHANGED_ON_DISK: &str = "This entry changed on disk";
+    // R10 (G164, G165): the conflict names the entry the comparison replaces the title of.
+    const CHANGED_ON_DISK: &str = "Ash Exposure changed on disk";
     const PACKAGE_ACTIONS: &str = "Packages";
     const MANAGE_PACKAGES: &str = "Manage packages…";
     const MANAGE_TITLE: &str = "Manage packages";

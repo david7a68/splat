@@ -6935,6 +6935,28 @@ pub fn package_about(d: &mut Driver<'_>) {
     const WRITTEN: &str = "Module.md was written again.";
     const REASON: &str = "opens a list";
     let footer_refused = footer_in_order(d, &[WRITTEN, REASON]);
+    // Ruling Q-u (G145): the write's Undo waits for the draft, and its reason line shows at the
+    // message words, under the message, as every locked Undo's does.
+    let reason_line = {
+        let message = d.painted_rect_in(WRITTEN, egui::Rect::EVERYTHING);
+        let mut reasons = Vec::new();
+        d.each_painted_text(|text, _| {
+            if text.galley.job.text.contains("Save or discard to copy") {
+                reasons.push(egui::Rect::from_min_size(text.pos, text.galley.size()));
+            }
+        });
+        message.is_some_and(|message| {
+            reasons.iter().any(|reason| {
+                (reason.left() - message.left()).abs() <= 1.0
+                    && reason.top() >= message.bottom() - 1.0
+            })
+        })
+    };
+    d.observe(
+        "iter-29-L-G145-locked-undo-reason",
+        reason_line,
+        "The locked Undo write Module.md shows its reason line at the message words",
+    );
     d.state("manifest-footer-undo-then-reason", Sizes::All);
     d.click("Discard");
     assert_eq!(d.editor_text().as_deref(), Some(written.as_str()));
@@ -7627,13 +7649,13 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     fs::write(&path, changed.replace("Cinder Bite.", "Ash Bite.")).unwrap();
     d.focus_window(false);
     d.focus_window(true);
-    d.wait_for_text("This entry changed on disk. Your draft is safe until you choose.");
+    d.wait_for_text("Cinder Wolf changed on disk. Your draft is safe until you choose.");
     d.expect("Overwrite with my draft");
     d.state_prepared("package-draft-changed-on-disk", Sizes::All, |d| {
         choices_at_text(
             d,
             "iter-15-E-AD3-library-package",
-            "This entry changed on disk",
+            "Cinder Wolf changed on disk",
             "Overwrite with my draft",
             "Reload and lose my draft",
             None,
@@ -8046,7 +8068,7 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     fs::write(&path, &other_fault).unwrap();
     d.focus_window(false);
     d.focus_window(true);
-    d.wait_for_text("This entry changed on disk. Your draft is safe until you choose.");
+    d.wait_for_text(" changed on disk. Your draft is safe until you choose.");
     d.click("Reload and lose my draft");
     assert_eq!(d.editor_text().as_deref(), Some(other_fault.as_str()));
     sd1(
@@ -12377,7 +12399,7 @@ pub fn library_file_fault(d: &mut Driver<'_>) {
     d.settle();
     d.click("Try again");
     d.settle();
-    let changed = d.has_containing("This entry changed on disk");
+    let changed = d.has_containing(" changed on disk. Your draft is safe until you choose.");
     let read = changed || (!d.visible_text(HEADLINE) && d.visible_text("Bite"));
     let kept = d.app_mut().library.dirty();
     d.observe(

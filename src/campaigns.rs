@@ -1205,7 +1205,6 @@ impl Campaigns {
                     &added,
                     "Undo register campaign",
                     locked,
-                    true,
                 ) {
                     let mut this = me.borrow_mut();
                     if let Err(error) = this.undo_campaign_copy() {

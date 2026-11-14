@@ -1970,8 +1970,6 @@ struct RegistrationCheck {
     campaigns: Vec<Campaign>,
 }
 
-type RostersStore = design::Results<RegistrationOwner, RostersUse>;
-
 impl design::results::Reconcile for Registration {
     type With = RegistrationCheck;
     /// R11's one end event, at each write or refresh event and each reload (also after an
@@ -2648,7 +2646,6 @@ fn show_result(
                     line.words(),
                     "Undo package registration",
                     blocked.as_deref(),
-                    true,
                 ) {
                     pressed.page.registration = Some(*owner);
                 }
@@ -2675,7 +2672,6 @@ fn show_result(
                     line.words(),
                     "Undo source change",
                     *blocked,
-                    true,
                 )
             {
                 pressed.page.rosters = Some(*owner);
@@ -2701,7 +2697,7 @@ fn show_result(
         ResultKind::Manifest => {
             if let Some((words, action)) = &results.manifest {
                 pressed.manifest =
-                    kept_undo_message(ui, Tone::Success, words, action, results.locked, false);
+                    kept_undo_message(ui, Tone::Success, words, action, results.locked);
             }
         }
         ResultKind::Identities => {
@@ -2712,7 +2708,6 @@ fn show_result(
                     words,
                     "Undo separate entries",
                     results.locked,
-                    false,
                 );
             }
         }
@@ -2724,7 +2719,6 @@ fn show_result(
                     words,
                     crate::world::SEPARATE_ENTRY_UNDO,
                     results.locked,
-                    false,
                 );
             }
         }
@@ -2741,9 +2735,9 @@ pub(crate) const PACKAGE_USE_RESULT: &str =
     "Every entry in this package is now chosen for this campaign.";
 
 /// A kept result and its Undo, as `design::undo_message` draws them. When Undo is blocked, only
-/// Undo greys: the result's words keep the text colour, because the change still happened. With
-/// `say_why`, the reason follows in `Small` muted words at the message words. Without it, the
-/// reason is already on screen (a draft's reason in its save row) and on Undo's hover.
+/// Undo greys: the result's words keep the text colour, because the change still happened. The
+/// reason always follows in `Small` muted words at the message words, also when a draft's save
+/// row says it too (ruling Q-u: a locked Undo shows its reason line).
 #[allow(
     clippy::disallowed_methods,
     reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
@@ -2754,7 +2748,6 @@ pub(crate) fn kept_undo_message(
     text: &str,
     action: &str,
     blocked: Option<&str>,
-    say_why: bool,
 ) -> bool {
     let Some(reason) = blocked else {
         return design::undo_message(ui, tone, text, action);
@@ -2797,14 +2790,23 @@ pub(crate) fn kept_undo_message(
         });
     }
     // The reason starts at the message words, on its own line, in both layouts.
-    if say_why {
-        design::message_choice_row(ui, tone, |ui| design::blocked_reason(ui, Some(reason)));
-    }
+    design::message_choice_row(ui, tone, |ui| design::blocked_reason(ui, Some(reason)));
     false
 }
 
 /// Why a link update wrote nothing: the renamed entry changed on disk since the offer was made.
 pub(crate) const LINKS_NOT_CHANGED: &str = "No links were changed. This entry changed on disk since it was renamed. Reload from disk, then rename it again.";
+
+/// The warning for a draft whose file changed on disk (R10): the entry by its name, or `This
+/// entry` when it has none.
+pub(crate) fn changed_on_disk(name: &str) -> String {
+    let thing = if name.trim().is_empty() {
+        "This entry"
+    } else {
+        name.trim()
+    };
+    format!("{thing} changed on disk. Your draft is safe until you choose.")
+}
 
 /// The warning for a draft whose file moved on disk. Its two choices name what each one does.
 pub(crate) const MOVED_ON_DISK: &str =
@@ -3842,7 +3844,7 @@ pub struct Library {
     copy_not_used: bool,
     unregistered: Option<Module>,
     /// Each registration's `Use the copy in encounters` result, by the same owner.
-    rosters: RostersStore,
+    rosters: design::Results<RegistrationOwner, RostersUse>,
     /// Offers to change links after a rename, each owned by the renamed entry.
     renamed_links: design::Results<LinkOwner, LinkOffer>,
     /// Link updates and the names their links now say, each owned by the renamed entry.
@@ -4207,7 +4209,7 @@ impl Library {
     /// and the result keeps its Undo. Another registration's data is never touched.
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: a by-owner Undo of Library's page lines (design::results::STAGED_ALLOWS)"
+        reason = "staged: a by-owner Undo of the Library page lines (design::results::STAGED_ALLOWS)"
     )]
     fn undo_package_registration(
         &mut self,
@@ -6091,7 +6093,7 @@ impl Library {
         {
             self.error = Some(error);
         }
-        // The use changes here; the registration's clause ends at the reload this write makes
+        // The use changes here; the registration's clause ends at this write's event
         // (`reconcile_registrations`), as for every other use change.
         if let Some(owner) = pressed.use_copy
             && let Some(registered) = self.registrations.get(&owner)
@@ -6107,6 +6109,7 @@ impl Library {
                     });
                     self.content_changed = Some(campaign.path);
                     self.stale = true;
+                    self.reconcile_registrations(campaigns);
                 }
                 Err(error) => self.error = Some(error),
             }
@@ -6117,6 +6120,7 @@ impl Library {
                     self.content_changed =
                         campaigns.active_campaign().map(|campaign| campaign.path);
                     self.stale = true;
+                    self.reconcile_registrations(campaigns);
                 }
                 Some(Err(error)) => self.error = Some(error),
                 None => {}
@@ -8477,10 +8481,14 @@ impl Library {
             read_disk_again = again;
             reload_from_disk = reload;
         } else if let Some(change) = &mut self.disk_change {
+            // R10 (G16, G164, G165): a changed entry is named, as Encounters and World name
+            // theirs; `This entry` only for an entry with no name.
+            let changed;
             let text = if change.moved_to.is_some() {
                 MOVED_ON_DISK
             } else if change.text.is_some() {
-                "This entry changed on disk. Your draft is safe until you choose."
+                changed = changed_on_disk(note.entry.as_ref().map_or("", |entry| &entry.name));
+                changed.as_str()
             } else {
                 "This entry’s file was deleted on disk. Your draft is safe until you choose."
             };
@@ -9078,6 +9086,7 @@ impl Library {
                     );
                     self.selection_undo = Some(undo);
                     self.stale = true;
+                    self.reconcile_registrations(campaigns);
                     self.content_changed = Some(campaign.path);
                 }
                 Err(error) => self.error = Some(error),
@@ -12098,7 +12107,7 @@ mod tests {
         assert_eq!(
             words(&library, &a).as_deref(),
             Some("Reaches is registered, with every entry chosen for this campaign."),
-            "an edit that leaves the copy's choices keeps the clause"
+            "an edit that leaves the choices of the copy keeps the clause"
         );
 
         // R11 (row 127, G147): result A (this registration) and an unrelated result B (a link
@@ -12160,7 +12169,7 @@ mod tests {
         for (root, path, written, _) in &source_files {
             assert!(
                 crate::content_workspace::holds(root, path, written),
-                "point-1: {path} keeps A's source change"
+                "point-1: {path} keeps the source change of A"
             );
         }
         assert_eq!(library.shown_registration(&app.campaigns), Some(a));
@@ -12201,7 +12210,7 @@ mod tests {
             fs::read_to_string(&campaign_file)
                 .unwrap()
                 .contains("A later note."),
-            "Undo keeps the campaign file's other edit"
+            "Undo keeps the other edit of the campaign file"
         );
         assert!(!library.link_edits.is_empty(), "R11-undo-a-b-stays");
 
@@ -12297,7 +12306,7 @@ mod tests {
                         .iter()
                         .find(|manifest| manifest.id == module.id)
                         .and_then(|manifest| manifest.key.clone())
-                        .expect("fixture: the copy's manifest has a key");
+                        .expect("fixture: the manifest of the copy has a key");
                     assert_eq!(
                         chosen_package(
                             &crate::content_workspace::EntryRef {
