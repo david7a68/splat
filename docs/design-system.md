@@ -952,7 +952,9 @@ view is open, one row above that view says `Unsaved NPC: <name> · Show`, so the
 and Lookup's link open its card again; Reroll on the card replaces it. Discard says `<name> draft discarded.` with
 `Undo discard`, which brings back the same NPC until another view opens. Closing the app or changing the campaign
 asks about the NPC as it does for other drafts. The rail shows `Unsaved NPC` with the draft icon while the NPC is held;
-it is a link that opens the NPC's card on World from any page.
+it is a link that opens the NPC's card on World from any page. An NPC that Lookup holds (generated there, not saved) is
+named in the rail the same way, also while Lookup is closed; its link opens Lookup, which shows the NPC's card or its
+`Unsaved NPC: <name> · Show` row.
 
 Every World result with an Undo (a value, name, edit, identity or file change, and a discarded edit draft) and every
 edit form with its `Undo reload` belong to the campaign that made them: Lookup keeps its reader across a campaign change, and the result shows, and its Undo acts,
@@ -2424,7 +2426,9 @@ remembered on two lines with full hover and accessible text. Settings states rec
 The campaign list is as wide as its widest name and link block, an `L` gap and one action column that every row
 shares, and never narrower than `FORM_WIDTH`; the account column starts an `XL` gap after it.
 Campaign add forms close on success; messages follow campaign rows below their heading. The add form is an inline
-creation form: Add campaign on the Folder line after Browse…, quiet Cancel and the reason on the line below. The edit form is a save
+creation form: Add campaign on the Folder line after Browse…, quiet Cancel and the reason on the line below. In the narrow
+layout with no account, `To import from D&D Beyond, connect your account first.` follows the open add form; it depends on
+the form, the session and the layout, never on what is in view, so it never moves the form. The edit form is a save
 row, with Cancel or Discard at the left and the commit at the right. An unchanged form blocks Save details with No changes to save.
 Details hides Edit details, uses a plain Details heading, and puts state and Discard at the left, Save details
 at the right. Discard restores saved details with Undo discard; clean forms use Cancel. The tab's messages sit in

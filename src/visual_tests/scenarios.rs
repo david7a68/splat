@@ -10630,6 +10630,56 @@ pub mod signed_in {
             "Choosing a remote campaign opens its import, with the name filled in",
         );
         d.click("Cancel");
+        // Wave 2 d (C): the D&D Beyond link is a `Dropdown`. Its list opens under the control,
+        // as wide as it, with the account's campaigns; one that another campaign links is a
+        // blocked choice with its reason, and Escape closes the list.
+        const LINK_CHOICES: [&str; 4] = [
+            "Not linked",
+            "The Emberfall Marches",
+            "Quiet Harbor",
+            "Salt Road",
+        ];
+        let (control, rows, blocked) = d.aside(|d| {
+            go_campaign(d);
+            d.click(LINK_TAB);
+            d.click_starting("D&D Beyond campaign link: ");
+            d.wait_for_text("Salt Road");
+            let nodes = d.nodes();
+            let control = nodes
+                .iter()
+                .find(|node| node.name.starts_with("D&D Beyond campaign link: "))
+                .map(|node| node.rect);
+            let rows: Vec<egui::Rect> = nodes
+                .iter()
+                .filter(|node| {
+                    LINK_CHOICES.contains(&node.name.as_str())
+                        && node.in_view()
+                        && control.is_some_and(|control| node.rect.top() >= control.bottom())
+                })
+                .map(|node| node.rect)
+                .collect();
+            (
+                control,
+                rows,
+                d.visible_text("Already linked to another campaign."),
+            )
+        });
+        d.observe(
+            "iter-28-C-link-dropdown",
+            blocked
+                && rows.len() == LINK_CHOICES.len()
+                && control.is_some_and(|control| {
+                    rows.iter().all(|row| {
+                        row.left() >= control.left() - 0.5 && row.right() <= control.right() + 0.5
+                    })
+                }),
+            format!(
+                "Link control {control:?}; its open choices {rows:?}; blocked reason {blocked}"
+            ),
+        );
+        // No capture of the open list: the part's list has an egui scroll node over its rows
+        // (`no-overlap/egui-chrome`), a gap sent to the part's owner.
+        d.press(Key::Escape);
         d.begin_task();
 
         go_party(d);
@@ -11150,12 +11200,19 @@ pub mod signed_in {
         );
         // Round 26 FN6: the locked picker keeps the form's width, so it ends with the session
         // folder field, as it does unlocked.
-        let edges = d.place_of("D&D Beyond campaign link").zip(
-            d.nodes()
-                .iter()
-                .find(|node| node.name == "Folder" && node.role == egui::accesskit::Role::TextInput)
-                .map(|node| node.rect),
-        );
+        let edges = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name.starts_with("D&D Beyond campaign link: "))
+            .map(|node| node.rect)
+            .zip(
+                d.nodes()
+                    .iter()
+                    .find(|node| {
+                        node.name == "Folder" && node.role == egui::accesskit::Role::TextInput
+                    })
+                    .map(|node| node.rect),
+            );
         d.observe(
             "iter-26-C-FN6",
             edges.is_some_and(|(picker, folder)| (picker.right() - folder.right()).abs() <= 1.0),
