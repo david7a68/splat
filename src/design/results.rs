@@ -91,6 +91,19 @@
 //! }
 //! ```
 //!
+//! Nor change a kept value in place (round 28, M3); the action does, with `&mut`:
+//!
+//! ```compile_fail
+//! # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
+//! # #[derive(Clone, PartialEq, Eq)] struct Entry { id: u32, root: String }
+//! # impl Owner for Entry { type Scope = str; fn scope(&self) -> &str { &self.root } }
+//! # struct Done { entry: Entry, words: String }
+//! # impl Kept for Done { type Owner = Entry; const ENDS: Ends = Ends { owner_changed: OwnerChanged::Ends, disk_changed: DiskChanged::Checked, press: Press::Undo }; fn owner(&self) -> Entry { self.entry.clone() } }
+//! fn draw(results: &Results<Entry, Done>, a: &Entry) {
+//!     let _ = results.revise(a, |done| done.words.clear()); // <- changes a result while drawing
+//! }
+//! ```
+//!
 //! Orders kept by kind (the fault of PR 298): a caller cannot take a bare order out of the
 //! store, so it cannot keep one per kind and give A's result B's order:
 //!
@@ -304,6 +317,11 @@ pub enum ByTicket<E> {
     /// The entry is there, and its action failed: it stays.
     Failed(E),
 }
+
+/// A revision in place found no entry: the one it named was replaced or ended, and nothing
+/// changed.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Gone;
 
 /// One kept result's words and its order, bound together. It is not `Clone`, and its order is
 /// private: [`Footer::kept_line`] is the only way to give it to the footer.
@@ -530,6 +548,53 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
         };
         let at = self.position(owner)?;
         Some(self.entries.remove(at).value)
+    }
+
+    /// Change the value of the entry `ticket` names, in place: the same entry, so the same
+    /// ticket, the same order and place among the others, the same owner (the store keys by the
+    /// owner it read at `record`, which `change` cannot reach), and every end event of its kind.
+    /// Only the value changes. A press made on a line before the revision still reaches it, and
+    /// the press's action gets the revised value. An entry replaced or ended since is [`Gone`],
+    /// and `change` does not run. It issues no order: a revision is not a new action.
+    pub fn revise_by<R>(
+        &mut self,
+        ticket: &Ticket,
+        change: impl FnOnce(&mut T) -> R,
+    ) -> Result<R, Gone> {
+        let entry = self
+            .entries
+            .iter_mut()
+            .find(|entry| entry.order == ticket.order)
+            .ok_or(Gone)?;
+        Ok(change(&mut entry.value))
+    }
+
+    /// `revise_by` for the owner's entry (Sessions' carry-over: the session's result follows its
+    /// note's draft). [`Gone`] when the owner has none.
+    pub fn revise<R>(&mut self, owner: &O, change: impl FnOnce(&mut T) -> R) -> Result<R, Gone> {
+        let entry = self
+            .entries
+            .iter_mut()
+            .find(|entry| entry.is(owner))
+            .ok_or(Gone)?;
+        Ok(change(&mut entry.value))
+    }
+
+    /// `revise_by` for every entry whose value `holds` (a note file moved, and each Undo that
+    /// names it follows it), in every scope; how many were revised.
+    pub fn revise_where(
+        &mut self,
+        mut holds: impl FnMut(&T) -> bool,
+        mut change: impl FnMut(&mut T),
+    ) -> usize {
+        let mut revised = 0;
+        for entry in &mut self.entries {
+            if holds(&entry.value) {
+                change(&mut entry.value);
+                revised += 1;
+            }
+        }
+        revised
     }
 
     /// The owner changed by its own later action (a saved edit, a rename, a removal).
@@ -1077,6 +1142,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/design/outcome.rs",
             "one_fault_has_one_tone_in_every_place",
+            &[Ban::Body],
+        ),
+        (
+            "src/design/outcome.rs",
+            "a_body_fault_gives_its_repairs_back_by_id",
             &[Ban::Body],
         ),
         ("src/trackers.rs", "act_words", &[Ban::Words]),
@@ -1761,6 +1831,42 @@ mod tests {
                 .undo_by(b_ticket, |_| Ok::<_, ()>(()))
                 .map(|(done, ())| done.words),
             Ok("B")
+        );
+
+        // M3 gap 3: a kept entry changes in place. Revise A (by its ticket, then by its owner):
+        // the unrelated B stays, A keeps its order and its place, its old ticket still acts and
+        // the action gets the revised value; a revised entry keeps its kind's end events; an
+        // ended entry is `Gone`.
+        let mut results = Results::<Note, Done>::new();
+        results.record(done(A, "A"));
+        results.record(done(B, "B"));
+        let order = results.get(&a).unwrap().order();
+        let before = ticket(&results, &a);
+        assert_eq!(results.revise_by(&before, |v| v.words = "A moved"), Ok(()));
+        assert_eq!(results.revise(&a, |v| v.words), Ok("A moved"));
+        assert_eq!(words(&results, "Tidewater"), ["B", "A moved"]);
+        assert_eq!(results.get(&a).unwrap().order(), order);
+        assert_eq!(results.get(&b).map(|shown| shown.value().words), Some("B"));
+        assert_eq!(results.revise(&OTHER, |_| ()), Err(Gone), "another scope");
+        assert_eq!(
+            results.revise_where(|v| v.note == b, |v| v.words = "B moved"),
+            1
+        );
+        assert_eq!(words(&results, "Tidewater"), ["B moved", "A moved"]);
+        assert_eq!(
+            results
+                .undo_by(before, |v| Ok::<_, ()>(v.words))
+                .map(|(_, seen)| seen),
+            Ok("A moved"),
+            "the ticket made before the revision acts, on the revised value"
+        );
+        let b_ticket = ticket(&results, &b);
+        results.owner_changed(&b);
+        assert_eq!(results.revise_by(&b_ticket, |_| ()), Err(Gone));
+        assert_eq!(results.revise(&b, |_| ()), Err(Gone));
+        assert!(
+            results.is_empty(),
+            "the revised B ended at its owner's change"
         );
     }
 
