@@ -4977,18 +4977,19 @@ mod tests {
         // The reservation's room is measured for the messages and the width of this pass: a
         // change of either leaves the footer as a fresh footer in that state draws it, open and
         // locked.
-        let fresh = |app: App| {
+        let sized = |app: App, height: f32| {
             let mut fresh = harness_sized(app, 960.0);
-            fresh.set_size(egui::vec2(960.0, height as f32));
+            fresh.set_size(egui::vec2(960.0, height));
             fresh.run_steps(8);
             fresh
         };
+        let fresh = |app: App| sized(app, height as f32);
         let same = |h: &mut egui_kittest::Harness<'static, App>,
                     other: &mut egui_kittest::Harness<'static, App>,
                     what: &str| {
             let words: Vec<_> = ["Folder saved.", "Campaign link saved."]
                 .into_iter()
-                .filter(|words| h.query_by_label(words).is_some())
+                .filter(|words| h.query_all_by_label(words).next().is_some())
                 .collect();
             let state = |h: &egui_kittest::Harness<'_, App>| {
                 (
@@ -5007,25 +5008,64 @@ mod tests {
                 one.run_steps(6);
             }
         };
-        // Wider: the reasons need fewer lines.
-        h.state_mut().narrow = Some(560.0);
+        // Wider, just enough that a reason takes one line instead of two (found on a fresh
+        // footer, locked, so this one keeps the state it gave up its room in): the reservation
+        // now wants half the room, so the footer has room for it again.
+        let width = (330..=900)
+            .step_by(10)
+            .map(|width| width as f32)
+            .find(|width| {
+                let mut probe = two();
+                probe.narrow = Some(*width);
+                probe.run_live = true;
+                let probe = fresh(probe);
+                probe
+                    .query_all_by_role_and_label(egui::accesskit::Role::Label, LOCK.as_str())
+                    .all(|node| node.rect().height() < 1.5 * line)
+            })
+            .expect("a width where the reason takes one line");
+        h.state_mut().narrow = Some(width);
         h.run_steps(8);
         let mut wide = two();
-        wide.narrow = Some(560.0);
+        wide.narrow = Some(width);
         same(&mut h, &mut fresh(wide), "wider");
-        // Back to the cap, then one message goes.
+        // Back at 320 px, in a pane whose cap is a little taller than one message with its
+        // reservation (a fresh footer of that one message, with room, tells how tall): the
+        // footer holding both has given its reservations' room up. Then one message goes: the
+        // other's reservation has room again, as in a fresh footer of it.
+        let alone = || {
+            let mut one = App::default();
+            one.dndbeyond
+                .results
+                .record(Saved(Campaign("older"), "Campaign link saved"));
+            one.narrow = Some(320.0);
+            one
+        };
+        let needs = view(&sized(alone(), 800.0)).height();
         h.state_mut().narrow = Some(320.0);
-        h.run_steps(8);
+        let mut low = height;
+        while low > 200 {
+            h.set_size(egui::vec2(960.0, low as f32));
+            h.run_steps(8);
+            if view(&h).height() <= needs + 12.0 {
+                break;
+            }
+            low -= 2;
+        }
+        assert!(
+            view(&h).height() >= needs,
+            "a pane whose cap holds one message with its reservation: {} for {needs}",
+            view(&h).height()
+        );
         h.state_mut()
             .dndbeyond
             .results
             .owner_changed(&Campaign("newer"));
         h.run_steps(8);
-        let mut one = App::default();
-        one.dndbeyond
-            .results
-            .record(Saved(Campaign("older"), "Campaign link saved"));
-        one.narrow = Some(320.0);
-        same(&mut h, &mut fresh(one), "one message removed");
+        same(
+            &mut h,
+            &mut sized(alone(), low as f32),
+            "one message removed",
+        );
     }
 }
