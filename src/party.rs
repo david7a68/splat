@@ -2756,7 +2756,7 @@ mod sheet_now_tests {
         let during = controls(&harness);
         assert_eq!(
             before, during,
-            "the footer's controls stay while the read waits"
+            "the footer’s controls stay while the read waits"
         );
         click(&mut harness, first.center());
         harness
