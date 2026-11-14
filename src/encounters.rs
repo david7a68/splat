@@ -8315,7 +8315,7 @@ mod tests {
             .unwrap()
             .click();
         harness.event(egui::Event::Text("Unsent tactics.\n".repeat(60)));
-        harness.run_steps(2);
+        harness.run_steps(30);
         let focus = harness.ctx.memory(|memory| memory.focused()).unwrap();
         let text = draft.borrow().body.clone();
         assert!(text.contains("Unsent tactics."));
@@ -8327,10 +8327,19 @@ mod tests {
                 .shapes
                 .iter()
                 .find_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text) if text.galley.text().starts_with(words) => Some((
-                        egui::Rect::from_min_size(text.pos, text.galley.size()),
-                        shape.clip_rect,
-                    )),
+                    // A group heading paints its words in capitals.
+                    egui::Shape::Text(text)
+                        if text
+                            .galley
+                            .text()
+                            .to_lowercase()
+                            .starts_with(&words.to_lowercase()) =>
+                    {
+                        Some((
+                            egui::Rect::from_min_size(text.pos, text.galley.size()),
+                            shape.clip_rect,
+                        ))
+                    }
                     _ => None,
                 })
         };
@@ -8370,13 +8379,31 @@ mod tests {
         ] {
             let mut second = Draft::new();
             second.body = long.clone();
+            second.groups_read = true;
             *draft.borrow_mut() = second;
             harness.set_size(egui::vec2(width, height));
             harness.step();
             let shown = painted(&harness, "Second line 1.");
             let groups = painted(&harness, "Groups for this encounter");
-            let top = shown.is_some_and(|(notes, view)| {
-                view.height() >= 64.0 && (notes.top() - view.top()).abs() <= design::S + 1.0
+            // The region is the view the notes' frame is clipped to, less egui's clip margin.
+            let margin = harness.ctx.style().visuals.clip_rect_margin;
+            let region = shown.and_then(|(notes, _)| {
+                harness
+                    .output()
+                    .shapes
+                    .iter()
+                    .find_map(|shape| match &shape.shape {
+                        egui::Shape::Rect(frame)
+                            if frame.stroke.width > 0.0
+                                && (frame.rect.top() + design::S - notes.top()).abs() <= 1.0 =>
+                        {
+                            Some(shape.clip_rect.shrink(margin))
+                        }
+                        _ => None,
+                    })
+            });
+            let top = shown.zip(region).is_some_and(|((notes, view), region)| {
+                region.height() >= 64.0 - 0.5 && (notes.top() - view.top()).abs() <= design::S + 1.0
             });
             let after = height < 640.0
                 || groups
@@ -8388,7 +8415,7 @@ mod tests {
                     });
             assert!(
                 top && after,
-                "At {width}x{height}, first frame: the notes and their region {shown:?}, the groups heading {groups:?}"
+                "At {width}x{height}, first frame: the notes {shown:?}, their region {region:?}, the groups heading {groups:?}"
             );
         }
     }
@@ -8539,9 +8566,16 @@ mod tests {
                 .map(|node| node.rect().right())
                 .reduce(f32::max)
                 .unwrap();
+            // Round 28 P2: the notes are the pane's editor region, a scroll column that keeps
+            // its own bar's lane: the frame and that lane end at the roster's edge.
+            let lane = if name == "Read-aloud and notes" {
+                design::lane_width()
+            } else {
+                0.0
+            };
             assert!(
-                (right - rule).abs() <= 0.5,
-                "iter18-B-FD4: {name} ends at {right}, the roster rule at {rule}"
+                (right + lane - rule).abs() <= 0.5,
+                "iter18-B-FD4: {name} ends at {right} (and a lane of {lane}), the roster rule at {rule}"
             );
         }
         // Must stay true: the loot field keeps its gap before the menu.
@@ -9009,7 +9043,10 @@ mod tests {
                 page,
             );
         harness.run_steps(2);
-        assert!(harness.query_by_label(WORDS).is_some(), "the result shows");
+        assert!(
+            harness.query_all_by_label(WORDS).next().is_some(),
+            "the result shows"
+        );
         harness
             .state_mut()
             .draft
