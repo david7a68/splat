@@ -8245,6 +8245,10 @@ impl Library {
         } else {
             // The body's words, in Read (in the pane) and beside an open conflict (in its own
             // scroll area, as Edit Markdown's form keeps until the pane part P2).
+            let right = pane_right
+                .filter(|_| self.disk_change.is_none())
+                .unwrap_or(ui.max_rect().right())
+                .max(ui.max_rect().right());
             let mut content = |ui: &mut egui::Ui| {
                 if let Some(change) = &mut self.disk_change {
                     if let Some(text) = &change.text {
@@ -8334,10 +8338,6 @@ impl Library {
             };
             // The body takes the whole pane, so a wide table can use it; prose keeps its
             // measure. A draft's comparison keeps the pane it had.
-            let right = pane_right
-                .filter(|_| self.disk_change.is_none())
-                .unwrap_or(ui.max_rect().right())
-                .max(ui.max_rect().right());
             if !slot_row {
                 // Read: the pane draws the body, then its message footer `S` below a short body,
                 // or pinned when the body scrolls (round 28 rows 17, 50, 53, 54; G6).
@@ -8378,7 +8378,9 @@ impl Library {
                 });
             }
         }
-        // The Read footer's presses, after the pane drew it.
+        // The Read footer's presses, after the pane drew it. (With a save row, no Read footer was
+        // drawn; its borrows end here.)
+        drop(read_footer);
         if choices_in_reader && !slot_row {
             heading_pressed = reader_press.heading;
             // Presses come only from the footer that drew the results: this one in Read. With a
