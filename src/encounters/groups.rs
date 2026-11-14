@@ -48,8 +48,30 @@ fn one() -> u64 {
     1
 }
 
+/// A member's identity in the open draft. Its row, its fields and its open changes form key by
+/// it, so a move, a removal or an Undo never gives one member's form, cursor or typed words to
+/// another (K3: a key is an identity, not a place). It is not saved: a member read again gets a
+/// new one, and two members compare by their saved words alone.
+#[derive(Clone, Copy, Debug)]
+struct MemberId(Uuid);
+
+impl Default for MemberId {
+    fn default() -> Self {
+        Self(Uuid::new_v4())
+    }
+}
+
+impl PartialEq for MemberId {
+    /// Not part of what a member is: a draft and its saved form compare by their words.
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct MemberDraft {
+    #[serde(skip)]
+    id: MemberId,
     creature: EntryRef,
     #[serde(default = "one")]
     count: u64,
@@ -484,6 +506,7 @@ impl GroupDraft {
             return;
         }
         self.setup.members.push(MemberDraft {
+            id: MemberId::default(),
             extra: Mapping::new(),
             creature: EntryRef::id(id),
             count: 1,
@@ -510,6 +533,7 @@ impl GroupDraft {
         self.touch();
         self.members_saved = None;
         self.setup.members.push(MemberDraft {
+            id: MemberId::default(),
             extra: Mapping::new(),
             creature: EntryRef::id(id),
             count: 1,
@@ -688,7 +712,7 @@ impl GroupDraft {
             &campaign.path,
             &mut self.path,
             self.baseline.as_deref(),
-            "group",
+            ("group", &self.name),
         )
     }
     pub(super) fn file_gone(&self) -> bool {
@@ -703,9 +727,9 @@ impl GroupDraft {
         root: &std::path::Path,
         snapshot: &Snapshot,
     ) -> Result<Option<bool>, String> {
-        let choice = self
-            .recovery
-            .show(ui, &self.comparison_text(snapshot)?, "group");
+        let choice =
+            self.recovery
+                .show(ui, &self.comparison_text(snapshot)?, ("group", &self.name));
         if let Some(keep) = choice {
             if keep {
                 if let Some(change) = self.recovery.accept() {
@@ -1034,7 +1058,7 @@ fn list_row(
         None,
         |ui| {
             super::row_menu(ui, &group.name, |ui| {
-                if super::menu_action(ui, "Remove…", blocked) {
+                if super::menu_action(ui, "Remove", blocked) {
                     *action = Some(super::ListAction::RemoveGroup(group.path.clone()));
                 }
             });
@@ -1179,7 +1203,7 @@ impl Encounters {
         if let Some(keep) = draft.recovery.show(
             ui,
             &draft.comparison_text(snapshot).unwrap_or_default(),
-            "group",
+            ("group", &draft.name),
         ) {
             if keep {
                 if let Some(change) = draft.recovery.accept() {
@@ -1266,7 +1290,7 @@ pub(super) fn of_encounter(
         }
         let path = group.path.clone();
         let adding = add_to.as_deref() == Some(path.as_str());
-        // The editor's usable area: `Move to…` opens inside it, clear of the scroll bar and the
+        // The editor's usable area: `Move to` opens inside it, clear of the scroll bar and the
         // splitter beside it.
         let inside = ui.max_rect().intersect(ui.clip_rect());
         ui.push_id(&path, |ui| {
@@ -1286,7 +1310,7 @@ pub(super) fn of_encounter(
                     ui.horizontal(|ui| {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             super::row_menu(ui, &group.name.clone(), |ui| {
-                                design::menu_submenu(ui, "Move to…", inside, |ui| {
+                                design::menu_submenu(ui, "Move to", inside, |ui| {
                                     for (id, name) in
                                         snapshot.encounter_choices().filter(|(id, _)| *id != this.0)
                                     {
@@ -1298,7 +1322,7 @@ pub(super) fn of_encounter(
                                 if super::menu_action(ui, "Make available to any encounter", None) {
                                     discard = Some((index, false));
                                 }
-                                if super::menu_action(ui, "Delete group…", None) {
+                                if super::menu_action(ui, "Delete group", None) {
                                     discard = Some((index, true));
                                 }
                             });
@@ -1618,25 +1642,56 @@ pub(super) fn change_words(
     }
 }
 
-/// `fault` puts a cause into the member-fault form (name and line), so the editor says a
-/// member's fault as the Encounters list and Arrivals do (FJ6).
-pub(super) fn changes_link(
+/// A member's change words (`Changed`, `Loot`…) for the end of its detail line, when its
+/// changes read.
+pub(super) fn change_word(
+    ui: &egui::Ui,
+    block: &Mapping,
+    entry: &Entry,
+    side: &str,
+) -> Option<String> {
+    if block.is_empty() {
+        return None;
+    }
+    let overrides = Overrides::parse(block).ok()?;
+    let missing = crate::loot_editor::missing_in(ui.ctx(), overrides.loot.as_deref());
+    Some(change_words(&overrides, entry, side, &missing))
+}
+
+/// The muted pencil and the change words before it opens the form (FC9): `✎ Changed`, as the
+/// Encounters list, the run's setup and Arrivals show a change. The words are the link.
+pub(super) fn change_mark() -> String {
+    format!("{}\u{a0}", icons::CHANGED)
+}
+
+/// The change link at the end of a detail line: the muted pencil, then the words as a `Small`
+/// link. Returns true when the DM opens the form.
+pub(super) fn change_link(ui: &mut egui::Ui, word: &str) -> bool {
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        ui.label(Type::Small.rich(ui, change_mark()).color(colors().muted));
+        design::small_link(ui, word).clicked()
+    })
+    .inner
+}
+
+/// A member's change faults, below its row. `fault` puts a cause into the member-fault form
+/// (name and line), so the editor says a member's fault as the Encounters list and Arrivals do
+/// (FJ6). The change words themselves are on the detail line ([`change_link`]).
+pub(super) fn change_faults(
     ui: &mut egui::Ui,
     block: &Mapping,
     entry: &Entry,
     side: &str,
     form_open: bool,
     fault: &dyn Fn(&str) -> String,
-) -> bool {
+) {
     if block.is_empty() || form_open {
-        return false;
+        return;
     }
     match Overrides::parse(block) {
         Ok(overrides) => {
             let rows = overrides.rows(&Base::of(entry, side));
-            let missing = crate::loot_editor::missing_in(ui.ctx(), overrides.loot.as_deref());
-            let word = change_words(&overrides, entry, side, &missing);
-            let clicked = design::link(ui, &word).clicked();
             if let Err(error) = overrides.resolve_for(entry, side) {
                 design::message(
                     ui,
@@ -1646,7 +1701,6 @@ pub(super) fn changes_link(
                 // The failed change stays visible beside its fault.
                 change_rows(ui, &rows);
             }
-            clicked
         }
         Err(error) => {
             design::message(
@@ -1654,7 +1708,6 @@ pub(super) fn changes_link(
                 FaultKind::InvalidChange.tone(),
                 &fault(&override_error(&error)),
             );
-            false
         }
     }
 }
@@ -2071,6 +2124,9 @@ pub(super) fn overrides_form(
         }
     }
     if !linked || !overrides.conditions.is_empty() {
+        // FI8: the heading is drawn in the form's column, so the part puts its `L` above it (as
+        // the first thing in the width scope below, it had none).
+        design::heading(ui, design::Heading::Label("Starting conditions"));
         // The run's condition form width: the grid, the effects and Add stay within it.
         ui.scope(|ui| {
             ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
@@ -2113,7 +2169,6 @@ pub(super) fn overrides_form(
     reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
 )]
 fn conditions_row(ui: &mut egui::Ui, id: &str, conditions: &mut Vec<String>) {
-    design::heading(ui, design::Heading::Label("Starting conditions"));
     // The run's grid: fixed columns, `S` apart.
     if let Some(name) =
         crate::encounter_run::view::conditions_grid(ui, "starting_conditions", |name| {
@@ -2331,13 +2386,23 @@ impl Encounters {
             right.min(ui.max_rect().right())
         });
         let empty = draft.setup.members.is_empty();
-        // FB7: Save group is on the title line at the block's right edge, where Save encounter
-        // is in the encounter editor. The save row below keeps the state, Discard and reasons.
+        // FB7: Save group is on the title line at the editor's right edge, above the Add
+        // creatures column, where Save encounter is in the encounter editor (round 28: one place
+        // in both editors). The name and Belongs to keep the block's edge. The save row below
+        // keeps the state, Discard and reasons.
+        let title_right = ui.max_rect().right();
+        // Save keeps one width in both weights, so its left edge does not move when a press
+        // changes its weight (G1b): it ends at the editor's right edge.
+        let save_width = Action::primary("Save group")
+            .natural_width(ui)
+            .max(Action::secondary("Save group").natural_width(ui))
+            .ceil();
         let button = if dirty && !has_run && !empty && !refused {
             Action::primary("Save group")
         } else {
             Action::secondary("Save group")
         }
+        .min_width(save_width)
         .blocked(if empty {
             Some(EMPTY_REASON)
         } else if !dirty {
@@ -2353,9 +2418,9 @@ impl Encounters {
                 .show(ui)
                 .clicked();
             let gap = ui.spacing().item_spacing.x;
-            let room = (block_right - ui.cursor().left()).min(ui.available_width())
-                - button.natural_width(ui)
-                - gap;
+            let room = (block_right.min(title_right - button.natural_width(ui) - gap)
+                - ui.cursor().left())
+            .min(ui.available_width());
             let width = (room - 2.0 * design::S).max(Density::Scan.control());
             let column = column_right.map_or(f32::INFINITY, |right| {
                 right - ui.cursor().left() - 2.0 * design::S
@@ -2365,22 +2430,18 @@ impl Encounters {
             if response.changed() {
                 draft.touch();
             }
+            // Belongs to ends where the name field ends.
             name_right = response.rect.right();
             if focus_name {
                 design::focus_and_select(ui, response.id, &draft.name);
             }
             ui.allocate_ui_with_layout(
                 egui::vec2(
-                    (block_right - ui.cursor().left()).max(0.0),
+                    (title_right - ui.cursor().left()).max(0.0),
                     Density::Scan.control(),
                 ),
                 egui::Layout::right_to_left(egui::Align::Center),
-                |ui| {
-                    let response = button.show(ui);
-                    save = response.clicked();
-                    // The title line ends at Save; Belongs to ends there too.
-                    name_right = response.rect.right();
-                },
+                |ui| save = button.show(ui).clicked(),
             );
         });
         // The save row: the state and Discard at its start, Save group at the block's edge. A
@@ -2703,6 +2764,12 @@ fn name_width(column: f32) -> f32 {
     }
 }
 
+/// The key of a member's open changes form and of its fields: its group and its identity in the
+/// draft, never its place among the members.
+fn member_key(path: &str, member: &MemberDraft) -> String {
+    format!("{path}:member_{}", member.id.0)
+}
+
 /// Where a group editor's members column ended in the last pass, for the name field above it.
 fn column_right_id(path: &str) -> egui::Id {
     egui::Id::new(("group_column_right", path))
@@ -3017,7 +3084,8 @@ fn members(
                 .filter(|member| member.before <= index)
                 .count()
             + 1;
-        ui.push_id(index, |ui| {
+        // The row's widgets key by the member's identity, not its place.
+        ui.push_id(member.id.0, |ui| {
             let entry = snapshot
                 .catalogue
                 .resolve_ref(&member.creature)
@@ -3051,7 +3119,7 @@ fn members(
                     ))
                 })
                 .unwrap_or_default();
-            let key = format!("{path}:member_{index}");
+            let key = member_key(&path, member);
             let is_open = expanded.as_deref() == Some(key.as_str());
             let member_row = ui
                 .label(
@@ -3061,7 +3129,12 @@ fn members(
                 )
                 .on_hover_text(&name)
                 .rect;
-            if !detail.is_empty() {
+            // FC9: the change words end the detail line, after the muted pencil, as in the
+            // encounter editor; a closed form only.
+            let word = entry
+                .filter(|_| !is_open)
+                .and_then(|entry| change_word(ui, &member.overrides, entry, &side));
+            if word.is_none() && !detail.is_empty() {
                 let response = ui.add(
                     egui::Label::new(super::detail_text(
                         ui,
@@ -3071,6 +3144,33 @@ fn members(
                     .wrap(),
                 );
                 design::named(ui, &response, &detail);
+            } else if word.is_some() {
+                ui.horizontal_wrapped(|ui| {
+                    // One row as tall as the link's target, so the detail and the link share
+                    // their centre line.
+                    ui.set_row_height(design::XL);
+                    ui.spacing_mut().item_spacing.x = 0.0;
+                    if !detail.is_empty() {
+                        let response = ui.add(
+                            egui::Label::new(super::detail_text(
+                                ui,
+                                &super::stat_line(&detail),
+                                hp_missing,
+                            ))
+                            .wrap(),
+                        );
+                        design::named(ui, &response, &detail);
+                    }
+                    if let Some(word) = &word {
+                        if !detail.is_empty() {
+                            ui.label(Type::Small.rich(ui, " · ").color(colors().muted));
+                        }
+                        if change_link(ui, word) {
+                            show_form_when_it_opens(ui);
+                            *expanded = Some(key.clone());
+                        }
+                    }
+                });
             }
             ui.horizontal(|ui| {
                 ui.label(Type::Small.rich(ui, "Count").color(colors().muted));
@@ -3176,10 +3276,7 @@ fn members(
             }
             if let Some(entry) = entry {
                 let fault = |cause: &str| member_fault(&name, Some(&entry.name), line, cause);
-                if changes_link(ui, &member.overrides, entry, &side, is_open, &fault) {
-                    show_form_when_it_opens(ui);
-                    *expanded = Some(key.clone());
-                }
+                change_faults(ui, &member.overrides, entry, &side, is_open, &fault);
                 // The open form edits one member's changes: a change it writes is an edit. The form
                 // says so itself; nothing here copies the changes (review of PR 299).
                 if is_open {
@@ -3209,9 +3306,15 @@ fn members(
     if edited || remove.or(raise).or(lower).is_some() || replaced.is_some() {
         draft.touch();
     }
-    // An open form is keyed by place. Left open, it would now edit another member.
-    if remove.or(raise).or(lower).is_some() {
+    // An open form is keyed by its member's identity: a move keeps it on that member. Only the
+    // removed member's own form closes.
+    if let Some(index) = remove
+        && let Some(member) = draft.setup.members.get(index)
+        && expanded.as_deref() == Some(member_key(&path, member).as_str())
+    {
         *expanded = None;
+    }
+    if remove.or(raise).or(lower).is_some() {
         draft.replaced = None;
     }
     // One result line: the newest member result takes it.
@@ -3663,6 +3766,44 @@ mod tests {
         members(&mut body, &mut state.0, snapshot, &mut state.1);
     }
 
+    /// Round 28 (K3 review): a member's key is its identity in the draft. A move keeps each key
+    /// with its member, two members never share one, and the identity is not part of what a
+    /// member is: the draft still equals its saved form, and a member read again equals it.
+    #[test]
+    fn a_member_keys_its_form_by_its_identity_not_its_place() {
+        let mut draft = GroupDraft::new();
+        let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
+        draft.add(a);
+        draft.add(b);
+        let keys: Vec<String> = draft
+            .setup
+            .members
+            .iter()
+            .map(|member| member_key("g.md", member))
+            .collect();
+        assert_ne!(keys[0], keys[1], "two members, two keys");
+        draft.setup.members.swap(0, 1);
+        assert_eq!(
+            member_key("g.md", &draft.setup.members[1]),
+            keys[0],
+            "A keeps its key"
+        );
+        assert_eq!(
+            member_key("g.md", &draft.setup.members[0]),
+            keys[1],
+            "B keeps its key"
+        );
+        // Not a saved part of a member: the same words compare equal.
+        let read: GroupSetup =
+            serde_yaml_ng::from_value(serde_yaml_ng::to_value(&draft.setup).unwrap()).unwrap();
+        assert_eq!(read, draft.setup);
+        assert_ne!(
+            member_key("g.md", &read.members[0]),
+            keys[1],
+            "a member read again is new"
+        );
+    }
+
     /// iter-26-B, review 2: a control's change that lands after the comparison, in a frame with
     /// editing input, is seen in the next frame even when that frame has no input; after it, an
     /// unchanged frame compares nothing.
@@ -3671,6 +3812,7 @@ mod tests {
         let ctx = egui::Context::default();
         let mut draft = GroupDraft::new();
         let member = MemberDraft {
+            id: MemberId::default(),
             creature: EntryRef::id(Uuid::new_v4()),
             count: 1,
             overrides: Mapping::new(),
@@ -3890,7 +4032,7 @@ mod tests {
         group.save(&active, &[]).unwrap();
         let path = note_path(dir.path(), &group.path).unwrap();
         let text = fs::read_to_string(&path).unwrap();
-        // A group is not an encounter, so an encounter's Remove… leaves it.
+        // A group is not an encounter, so an encounter's Remove leaves it.
         assert!(RemovedNote::remove(&active, &group.path, "encounter").is_err());
         assert!(path.exists());
         let removed = RemovedNote::remove(&active, &group.path, "encounter_group").unwrap();
@@ -4827,7 +4969,14 @@ mod tests {
         draft.name = "Renamed".into();
         draft.groups[0].name = "Changed".into();
         let error = draft.save(&campaign, &[]).unwrap_err();
-        assert_eq!(error, super::super::disk::changed_on_disk("group"));
+        assert_eq!(
+            error,
+            super::super::disk::changed_on_disk("group", "Changed")
+        );
+        assert!(
+            error.starts_with("Changed changed on disk."),
+            "R10: {error}"
+        );
         assert!(draft.groups[0].recovery.change.is_some());
         assert_eq!(fs::read_to_string(&note).unwrap(), external);
         assert!(draft.dirty(), "the group's change is still here to save");

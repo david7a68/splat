@@ -810,7 +810,7 @@ impl Draft {
             &campaign.path,
             &mut self.path,
             self.baseline.as_deref(),
-            "encounter",
+            ("encounter", &self.name),
         )?;
         let snapshot = Snapshot::load(campaign, modules)?;
         self.validate(&snapshot)?;
@@ -1173,8 +1173,12 @@ impl CreatureEditor {
         }
     }
     fn save(&mut self, root: &std::path::Path) -> Result<(), String> {
-        self.recovery
-            .check(root, &mut self.path, Some(&self.baseline), "creature")?;
+        self.recovery.check(
+            root,
+            &mut self.path,
+            Some(&self.baseline),
+            ("creature", &self.fields.name),
+        )?;
         let text = self.text()?;
         Entry::parse(&self.path, &text)?;
         write_note(root, &self.path, Some(&self.baseline), &text)?;
@@ -1486,149 +1490,86 @@ fn slot_sheet<'a>(
     party.sheet(creature.character.as_deref()?)
 }
 /// `ROSTER 8 · XP 1,050 · Moderate (up to 1,125)`: the editor's roster heading, with the
-/// difficulty in its one form at its end (F1, FB6). With no room for the limit, the XP and the
-/// word stay. A fight with no word because an input is not known says whose (X2, FB4).
+/// difficulty in its one form at its end (F1, FB6). `difficulty::Line` decides what gives way
+/// (N7): the limit, then the XP number; a fight with no word says whose input is not known (X2,
+/// FB4). Hover and the accessible name keep what was cut.
 fn roster_heading(
     ui: &mut egui::Ui,
     count: usize,
     difficulty: Option<&crate::difficulty::Difficulty>,
 ) {
     let mut job = design::group_heading_text(ui, "Roster", count);
-    let Some(rating) = difficulty.and_then(|difficulty| difficulty.rating.as_ref()) else {
-        match difficulty.and_then(|difficulty| difficulty.missing.as_ref()) {
-            Some(missing) => heading_reason(ui, job, missing),
-            None => {
-                ui.label(job);
-            }
-        }
-        return;
+    let heading = job.text.clone();
+    let room = ui.available_width();
+    let lead = {
+        let mut lead = job.clone();
+        crate::difficulty::append(&mut lead, ui, Type::Label, " · ", colors().muted);
+        crate::difficulty::width(ui, &lead)
     };
-    crate::difficulty::append(&mut job, ui, Type::Label, " · ", colors().muted);
-    let whole = {
-        let mut whole = job.clone();
-        crate::difficulty::append_form(&mut whole, ui, Type::Label, &rating.parts(true));
-        whole
-    };
-    if crate::difficulty::width(ui, &whole) <= ui.available_width() {
-        job = whole;
-    } else {
-        crate::difficulty::append_form(&mut job, ui, Type::Label, &rating.parts(false));
-    }
-    let response = ui.label(job);
-    crate::difficulty::describe(ui, response, rating);
-}
-
-/// `XP 1,050 · Moderate (up to 1,125)` at the right of the narrow editor's tab row, in the one
-/// form (F1, FB6); with less room, `XP 1,050 · Moderate`. A fight with no word because an input
-/// is not known says whose (X2).
-fn narrow_difficulty(ui: &mut egui::Ui, difficulty: &crate::difficulty::Difficulty) {
-    let Some(rating) = &difficulty.rating else {
-        if let Some(missing) = &difficulty.missing {
-            narrow_reason(ui, missing);
-        }
-        return;
-    };
-    let form = |limit: bool| {
-        let mut job = egui::text::LayoutJob::default();
-        crate::difficulty::append_form(&mut job, ui, Type::Small, &rating.parts(limit));
-        job
-    };
-    let fits = |job: &egui::text::LayoutJob| {
-        crate::difficulty::width(ui, job) + design::L <= ui.available_width()
-    };
-    let job = [form(true), form(false)].into_iter().find(fits);
-    let Some(job) = job else {
-        return;
-    };
-    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        let response = ui.label(job);
-        crate::difficulty::describe(ui, response, rating);
+    let fitted = difficulty.and_then(|difficulty| {
+        crate::difficulty::Line::roster(difficulty, "")
+            .fit(|text| lead + design::number_width(ui, text, &Type::Label.font(ui)) <= room)
     });
-}
-
-/// X2: `ROSTER 6 · XP not known: Nameless Thing`, the heading of a fight with no word because
-/// an input is not known. The editor is where the DM can repair it.
-fn heading_reason(
-    ui: &mut egui::Ui,
-    mut job: egui::text::LayoutJob,
-    missing: &crate::difficulty::Missing,
-) {
-    let muted = colors().muted;
-    let mut lead = job.clone();
-    crate::difficulty::append(&mut lead, ui, Type::Label, " · ", muted);
-    let room = ui.available_width() - crate::difficulty::width(ui, &lead);
-    let Some((words, cut)) = reason_that_fits(ui, missing, Type::Label, room) else {
+    let Some(fitted) = fitted else {
         ui.label(job);
         return;
     };
-    let heading = job.text.clone();
-    job = lead;
-    crate::difficulty::append(&mut job, ui, Type::Label, &words, muted);
+    crate::difficulty::append(&mut job, ui, Type::Label, " · ", colors().muted);
+    crate::difficulty::append_form(&mut job, ui, Type::Label, &fitted.form);
     let response = ui.label(job);
-    if cut && let Some(whole) = missing.words() {
-        design::named(ui, &response, &format!("{heading} · {whole}"));
-        response.on_hover_text(whole);
+    describe_line(ui, response, difficulty, &fitted, &heading);
+}
+
+/// The hover and accessible description of a difficulty line: the party's budgets with a word;
+/// else, when the reason was cut, its whole words.
+fn describe_line(
+    ui: &egui::Ui,
+    response: egui::Response,
+    difficulty: Option<&crate::difficulty::Difficulty>,
+    fitted: &crate::difficulty::Fitted,
+    lead: &str,
+) {
+    match difficulty {
+        Some(crate::difficulty::Difficulty {
+            rating: Some(rating),
+            ..
+        }) => {
+            crate::difficulty::describe(ui, response, rating);
+        }
+        Some(crate::difficulty::Difficulty {
+            missing: Some(missing),
+            ..
+        }) if fitted.cut => {
+            if let Some(whole) = missing.words() {
+                let named = if lead.is_empty() {
+                    whole.clone()
+                } else {
+                    format!("{lead} · {whole}")
+                };
+                design::named(ui, &response, &named);
+                response.on_hover_text(whole);
+            }
+        }
+        _ => {}
     }
 }
 
-/// X2: `XP not known: Nameless Thing` at the right of the narrow editor's tab row, as the word
-/// would be.
-fn narrow_reason(ui: &mut egui::Ui, missing: &crate::difficulty::Missing) {
+/// `XP 1,050 · Moderate (up to 1,125)` at the right of the narrow editor's tab row, in the one
+/// form (F1, FB6), through `difficulty::Line` (N7): with less room, `XP 1,050 · Moderate`; a
+/// fight with no word says whose input is not known (X2).
+fn narrow_difficulty(ui: &mut egui::Ui, difficulty: &crate::difficulty::Difficulty) {
     let room = ui.available_width() - design::L;
-    let Some((words, cut)) = reason_that_fits(ui, missing, Type::Small, room) else {
+    let Some(fitted) = crate::difficulty::Line::roster(difficulty, "")
+        .fit(|text| design::number_width(ui, text, &Type::Small.font(ui)) <= room)
+    else {
         return;
     };
+    let mut job = egui::text::LayoutJob::default();
+    crate::difficulty::append_form(&mut job, ui, Type::Small, &fitted.form);
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        let response = ui.label(Type::Small.rich(ui, &words).color(colors().muted));
-        if cut && let Some(whole) = missing.words() {
-            design::named(ui, &response, &whole);
-            response.on_hover_text(whole);
-        }
+        let response = ui.label(job);
+        describe_line(ui, response, Some(difficulty), &fitted, "");
     });
-}
-
-/// Why a fight has no word, in `room`, and whether it was cut: `XP not known: Nameless Thing`.
-/// The names shorten from their end, to `XP not known: Nameless Th…`; with no room for one of
-/// their letters, or with no name known, they go, and `XP not known` stays while it fits.
-fn reason_that_fits(
-    ui: &egui::Ui,
-    missing: &crate::difficulty::Missing,
-    kind: Type,
-    room: f32,
-) -> Option<(String, bool)> {
-    let width = |words: &str| {
-        let mut job = egui::text::LayoutJob::default();
-        crate::difficulty::append(&mut job, ui, kind, words, colors().muted);
-        crate::difficulty::width(ui, &job)
-    };
-    let short = missing.short();
-    // With no name known, the reason still says what is not known.
-    let Some(whole) = missing.words() else {
-        return (width(short) <= room).then(|| (short.to_owned(), false));
-    };
-    if width(&whole) <= room {
-        return Some((whole, false));
-    }
-    let lead = format!("{}: ", missing.short());
-    let names: Vec<char> = whole.strip_prefix(&lead)?.chars().collect();
-    let cut = |count: usize| {
-        let kept: String = names[..count].iter().collect();
-        format!("{lead}{}…", kept.trim_end())
-    };
-    // The most letters that fit, by halves, so a long name costs a few layouts.
-    let (mut fits, mut over) = (0, names.len());
-    while over - fits > 1 {
-        let middle = (fits + over) / 2;
-        if width(&cut(middle)) <= room {
-            fits = middle;
-        } else {
-            over = middle;
-        }
-    }
-    if names[..fits].iter().any(|c| c.is_alphanumeric()) {
-        return Some((cut(fits), true));
-    }
-    (width(short) <= room).then(|| (short.to_owned(), true))
 }
 
 /// The campaign's party for F1, by the ID of each copy's note, with its level from the saved
@@ -1663,6 +1604,7 @@ fn campaign_party(
 fn roster_difficulty(
     setup: &Setup,
     catalogue: &Catalogue,
+    known: &BTreeMap<String, String>,
     scale: &crate::difficulty::Scale,
 ) -> crate::difficulty::Difficulty {
     let (mut party, mut party_names) = (Vec::new(), Vec::new());
@@ -1703,8 +1645,7 @@ fn roster_difficulty(
             }
         } else {
             foes.push(entry.and_then(crate::difficulty::creature_xp));
-            let name = entry.map_or_else(|| "Unknown creature".to_owned(), |e| e.name.clone());
-            foe_names.push(groups::shown_name(&slot.overrides, name));
+            foe_names.push(roster_name(slot, entry, known));
         }
     }
     let roster_party = !party.is_empty();
@@ -1727,7 +1668,11 @@ fn roster_difficulty(
     })
 }
 
-fn roster_summary(setup: &Setup, catalogue: &Catalogue) -> String {
+fn roster_summary(
+    setup: &Setup,
+    catalogue: &Catalogue,
+    known: &BTreeMap<String, String>,
+) -> String {
     let mut party = 0;
     let mut creatures = std::collections::BTreeMap::<String, usize>::new();
     for slot in &setup.roster {
@@ -1739,15 +1684,16 @@ fn roster_summary(setup: &Setup, catalogue: &Catalogue) -> String {
         if side.trim() == "party" {
             party += 1;
         } else {
-            let name = slot
-                .creature
-                .as_ref()
-                .and_then(|reference| catalogue.resolve_ref(reference).ok())
-                .and_then(|id| catalogue.entries.get(&id))
-                .map_or_else(
-                    || "Unknown creature".to_owned(),
-                    |entry| entry.entry.name.clone(),
-                );
+            // FC3: a creature whose entry is gone keeps the name its row shows.
+            let name = roster_base_name(
+                slot,
+                slot.creature
+                    .as_ref()
+                    .and_then(|reference| catalogue.resolve_ref(reference).ok())
+                    .and_then(|id| catalogue.entries.get(&id))
+                    .map(|entry| &entry.entry),
+                known,
+            );
             // FL2: a renamed creature names its base, as a group's member summary does.
             let shown = groups::shown_name(&slot.overrides, name.clone());
             let shown = if shown == name {
@@ -1941,12 +1887,24 @@ fn notes_field(text: &mut String, rows: usize) -> egui::TextEdit<'_> {
         .margin(egui::vec2(design::S, design::S))
 }
 
+/// A roster row's shown name: its creature's, the last name Splat knew for an entry that is
+/// gone, or `Missing creature`. The roster's rows, its summary and its difficulty reason (FC3)
+/// all name a row by this one function.
 fn roster_name(
     slot: &Slot,
     definition: Option<&Entry>,
     known: &BTreeMap<String, String>,
 ) -> String {
-    let name = definition
+    groups::shown_name(&slot.overrides, roster_base_name(slot, definition, known))
+}
+
+/// The creature's own name under a row's shown name (see `roster_name`).
+fn roster_base_name(
+    slot: &Slot,
+    definition: Option<&Entry>,
+    known: &BTreeMap<String, String>,
+) -> String {
+    definition
         .map(|entry| entry.name.clone())
         .or_else(|| {
             slot.creature
@@ -1954,8 +1912,7 @@ fn roster_name(
                 .and_then(|reference| known.get(&reference.label()))
                 .cloned()
         })
-        .unwrap_or_else(|| "Missing creature".into());
-    groups::shown_name(&slot.overrides, name)
+        .unwrap_or_else(|| "Missing creature".into())
 }
 
 /// A roster row as the DM sees it in a message: its place in the roster and its shown name, never
@@ -2529,6 +2486,17 @@ impl Snapshot {
             budgets: crate::encounter_settings::xp_budgets(campaign, &catalogue, &document),
             party: campaign_party(campaign, &catalogue, &creatures),
         };
+        let mut known_creature_names = BTreeMap::new();
+        for creature in &creatures {
+            known_creature_names.insert(creature.id.to_string(), creature.name.clone());
+            if let Some(key) = catalogue
+                .entries
+                .get(&creature.id)
+                .and_then(|e| e.entry.key.as_ref())
+            {
+                known_creature_names.insert(key.clone(), creature.name.clone());
+            }
+        }
         let mut templates: Vec<_> = catalogue
             .entries
             .values()
@@ -2545,10 +2513,12 @@ impl Snapshot {
                     name: e.entry.name.clone(),
                     summary: setup
                         .as_ref()
-                        .map(|setup| roster_summary(setup, &catalogue)),
+                        .map(|setup| roster_summary(setup, &catalogue, &known_creature_names)),
                     difficulty: setup
                         .as_ref()
-                        .map(|setup| roster_difficulty(setup, &catalogue, &scale))
+                        .map(|setup| {
+                            roster_difficulty(setup, &catalogue, &known_creature_names, &scale)
+                        })
                         .unwrap_or_default(),
                     repeatable: setup.is_some_and(|setup| setup.repeatable),
                 }
@@ -2593,17 +2563,6 @@ impl Snapshot {
                 })
                 .collect(),
         );
-        let mut known_creature_names = BTreeMap::new();
-        for creature in &creatures {
-            known_creature_names.insert(creature.id.to_string(), creature.name.clone());
-            if let Some(key) = catalogue
-                .entries
-                .get(&creature.id)
-                .and_then(|e| e.entry.key.as_ref())
-            {
-                known_creature_names.insert(key.clone(), creature.name.clone());
-            }
-        }
         let mut snapshot = Self {
             revision: Uuid::new_v4(),
             campaign_root: campaign.path.clone(),
@@ -2805,7 +2764,7 @@ pub struct Encounters {
     /// The saved run `Delete` last removed, for one step of undo.
     deleted_run: Option<crate::encounter_run::DeletedRun>,
     removed_saved_group: Option<groups::RemovedNote>,
-    /// The encounter `Remove…` last removed, for `Undo remove encounter`.
+    /// The encounter `Remove` last removed, for `Undo remove encounter`.
     removed_encounter: Option<groups::RemovedNote>,
     /// When each kept result's action was done (`stamp_kept`), for the footer's newest-first
     /// order. An entry outlives its result; the next action of that kind replaces it.
@@ -3148,7 +3107,12 @@ impl Encounters {
             {
                 self.difficulty_counts.1 += 1;
             }
-            let difficulty = roster_difficulty(&draft.setup, &snapshot.catalogue, &snapshot.scale);
+            let difficulty = roster_difficulty(
+                &draft.setup,
+                &snapshot.catalogue,
+                &snapshot.known_creature_names,
+                &snapshot.scale,
+            );
             self.difficulty = Some((key, Arc::new(difficulty)));
         }
         self.difficulty
@@ -3222,27 +3186,41 @@ impl Encounters {
             .is_some()
             .then_some("Still reading this campaign."))
     }
-    /// X36, X37: when a run opens in History, the list scrolls once so that the run's row is at
-    /// its top, at a clean edge. `list.inner` is the top of the row's gap on screen. The list
-    /// keeps room below its end while the run is open, so the row stays at the top when the
-    /// list's visible height changes, until the DM scrolls it.
+    /// R2 (FJ2): when a run opens in History, the list scrolls once, by the least distance that
+    /// brings the run's row, its Read-only line and its whole Final state into view. `list.inner`
+    /// is that span on screen, from the top of the row's gap. A run already whole in view does
+    /// not move the list. Only a run taller than the list's view goes to its top, at a clean
+    /// edge (X37). The list keeps no room below its end, and after this one scroll the DM's
+    /// scroll wins.
     fn reveal_history_run(
         &mut self,
         ui: &egui::Ui,
-        list: &egui::scroll_area::ScrollAreaOutput<Option<f32>>,
+        list: &egui::scroll_area::ScrollAreaOutput<Option<egui::Rangef>>,
     ) {
         if !std::mem::take(&mut self.history_reveal) {
             return;
         }
-        let Some(top) = list.inner else {
+        let Some(span) = list.inner else {
             return;
         };
         // The list paints `clip_rect_margin` above its top; the row's gap starts there, so no
         // letter of the line above shows cut (X37).
         let margin = ui.visuals().clip_rect_margin;
+        let view = list.inner_rect.y_range();
+        let top = span.min + margin;
+        let delta = if span.max - top > view.span() || top < view.min {
+            top - view.min
+        } else if span.max > view.max {
+            span.max - view.max
+        } else {
+            0.0
+        };
+        if delta == 0.0 {
+            return;
+        }
         let most = (list.content_size.y - list.inner_rect.height()).max(0.0);
         let mut state = list.state;
-        state.offset.y = (top + margin - list.inner_rect.top() + state.offset.y).clamp(0.0, most);
+        state.offset.y = (state.offset.y + delta).clamp(0.0, most);
         state.store(ui.ctx(), list.id);
         ui.ctx().request_repaint();
     }
@@ -3891,8 +3869,17 @@ impl Encounters {
                         path: draft.path.clone(),
                         id: entry.id,
                         name: draft.name.clone(),
-                        summary: Some(roster_summary(&draft.setup, &s.catalogue)),
-                        difficulty: roster_difficulty(&draft.setup, &s.catalogue, &s.scale),
+                        summary: Some(roster_summary(
+                            &draft.setup,
+                            &s.catalogue,
+                            &s.known_creature_names,
+                        )),
+                        difficulty: roster_difficulty(
+                            &draft.setup,
+                            &s.catalogue,
+                            &s.known_creature_names,
+                            &s.scale,
+                        ),
                         repeatable: draft.setup.repeatable,
                     });
                     s.templates
@@ -4031,11 +4018,11 @@ impl Encounters {
     )]
     fn creature_pane(ui: &mut egui::Ui, editor: &mut CreatureEditor) -> Option<CreatureStep> {
         if editor.recovery.change.is_some() {
-            if let Some(keep) =
-                editor
-                    .recovery
-                    .show(ui, &editor.text().unwrap_or_default(), "creature")
-            {
+            if let Some(keep) = editor.recovery.show(
+                ui,
+                &editor.text().unwrap_or_default(),
+                ("creature", &editor.fields.name),
+            ) {
                 if keep {
                     if let Some(change) = editor.recovery.accept() {
                         editor.path = change.path;
@@ -5260,16 +5247,6 @@ impl Encounters {
             } else {
                 "Back to encounters"
             };
-            back = Action::quiet(icons::BACK)
-                .name(back_name)
-                .hint(back_name)
-                .blocked(
-                    dirty
-                        .then_some("Save or discard this encounter first.")
-                        .or(creature_dirty.then_some(BLOCKED_BY_CREATURE)),
-                )
-                .show(ui)
-                .clicked();
             // X51, SB1: Save and Start keep their width on line one, and the name field takes
             // the rest. The actions are measured, as they are drawn. They take a line of their
             // own only when the saved name does not fit beside them: the saved name, not the
@@ -5308,10 +5285,20 @@ impl Encounters {
                 } else {
                     0.0
                 };
-            // The field's margins are outside its desired width.
-            let rest = ui.available_rect_before_wrap().width() - actions - 2.0 * design::S - gap;
             let saved_name =
                 design::number_width(ui, &draft_ref.saved_name, &Type::Heading.font(ui));
+            back = Action::quiet(icons::BACK)
+                .name(back_name)
+                .hint(back_name)
+                .blocked(
+                    dirty
+                        .then_some("Save or discard this encounter first.")
+                        .or(creature_dirty.then_some(BLOCKED_BY_CREATURE)),
+                )
+                .show(ui)
+                .clicked();
+            // The field's margins are outside its desired width.
+            let rest = ui.available_rect_before_wrap().width() - actions - 2.0 * design::S - gap;
             let stack_actions = rest < saved_name.max(Density::Scan.control());
             let width = if stack_actions {
                 (ui.available_rect_before_wrap().width() - 2.0 * design::S)
@@ -6428,12 +6415,18 @@ impl Encounters {
                                                 )
                                             })
                                             .unwrap_or_else(|| "Changed".into());
-                                        let change_width =
-                                            design::number_width(ui, &word, &Type::Small.font(ui));
+                                        // FC9: the muted pencil before the words, as in
+                                        // the list.
+                                        let marked = format!("{}{word}", groups::change_mark());
+                                        let change_width = design::number_width(
+                                            ui,
+                                            &marked,
+                                            &Type::Small.font(ui),
+                                        );
                                         let (fitted, fault_kept) = changed_detail_parts(
                                             ui,
                                             &detail,
-                                            &word,
+                                            &marked,
                                             ui.available_width(),
                                             hp_missing,
                                         );
@@ -6459,7 +6452,7 @@ impl Encounters {
                                                 ))
                                                 .layout(egui::Layout::top_down(egui::Align::Min)),
                                         );
-                                        if design::small_link(&mut inline, &word).clicked() {
+                                        if groups::change_link(&mut inline, &word) {
                                             groups::show_form_when_it_opens(ui);
                                             *expanded = Some(slot.key.clone());
                                         }
@@ -8632,9 +8625,15 @@ mod tests {
                     at: vec![0],
                     names: Vec::new(),
                 };
-                let shown = reason_that_fits(ui, &missing, Type::Label, 400.0);
+                let difficulty = crate::difficulty::Difficulty {
+                    missing: Some(missing),
+                    ..Default::default()
+                };
+                let shown = crate::difficulty::Line::roster(&difficulty, "")
+                    .fit(|text| design::number_width(ui, text, &Type::Label.font(ui)) <= 400.0)
+                    .map(|fitted| fitted.text());
                 assert_eq!(
-                    shown.as_ref().map(|(words, _)| words.as_str()),
+                    shown.as_deref(),
                     Some("Level not known"),
                     "A typed missing-level result must not disappear when its name is unavailable"
                 );
@@ -9785,15 +9784,17 @@ mod tests {
         d.add(id, false);
         slot_override(&mut d, 0, "{side: party}");
         d.save(&campaign, &[]).unwrap();
-        assert_eq!(
-            roster_summary(&d.setup, &Snapshot::load(&campaign, &[]).unwrap().catalogue),
-            "1 party · Changed"
-        );
+        let summary = |d: &Draft| {
+            let snapshot = Snapshot::load(&campaign, &[]).unwrap();
+            roster_summary(
+                &d.setup,
+                &snapshot.catalogue,
+                &snapshot.known_creature_names,
+            )
+        };
+        assert_eq!(summary(&d), "1 party · Changed");
         slot_override(&mut d, 0, "{side: ' party '}");
-        assert_eq!(
-            roster_summary(&d.setup, &Snapshot::load(&campaign, &[]).unwrap().catalogue),
-            "1 party · Changed"
-        );
+        assert_eq!(summary(&d), "1 party · Changed");
         // iter-26-B FL2: the members in a group's form: each with its count, also one, joined
         // by commas, so ` · ` separates facts only; a renamed member names its base.
         let wolf = stat_creature(dir.path(), "Wolf", 11);
@@ -9803,7 +9804,7 @@ mod tests {
         d.add(wolf, false);
         slot_override(&mut d, 4, "{name: Alpha}");
         assert_eq!(
-            roster_summary(&d.setup, &Snapshot::load(&campaign, &[]).unwrap().catalogue),
+            summary(&d),
             "1 party · 1 × Alpha (as Wolf), 1 × Rival, 2 × Wolf · Changed"
         );
         d.setup.roster.truncate(1);
