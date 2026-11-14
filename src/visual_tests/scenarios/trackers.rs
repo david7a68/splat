@@ -5,6 +5,7 @@
 //! beside the view.
 use super::*;
 use crate::trackers::view::RULES_ROUTE;
+use egui::accesskit::Role;
 use std::fs;
 
 const EXAMPLE: &str = include_str!("../../../docs/design/world-examples/heralds-tournament.md");
@@ -378,13 +379,18 @@ const PURSES: &str = "> trackers:\n>   purses:\n>     name: Purses\n>     pin: t
 /// first, as the panel's footer covers its lower rows. Are Ann's `Pay` and Bo's `Tip` wholly in
 /// view?
 fn purses_in_view(d: &mut Driver<'_>) -> bool {
+    in_view_after_scroll(d, &["Pay: Ann", "Tip: Bo"])
+}
+
+/// Scroll the panel until each named control of Purses is wholly in view.
+fn in_view_after_scroll(d: &mut Driver<'_>, names: &[&str]) -> bool {
     let wheel = d
         .place_of(SEARCH_LOOKUP)
         .map_or(egui::pos2(780.0, 300.0), |field| {
             egui::pos2(field.center().x, field.bottom() + 200.0)
         });
     let whole = |d: &Driver<'_>| {
-        ["Pay: Ann", "Tip: Bo"].iter().all(|name| {
+        names.iter().all(|name| {
             d.nodes()
                 .iter()
                 .any(|node| node.name == *name && node.fully_in_view())
@@ -957,6 +963,19 @@ pub fn run(d: &mut Driver<'_>) {
     // FE9: every row has its menu, so two rows look alike; on a row of the session being
     // played, Remove is off and says that Undo in Trackers takes it back.
     let played = "More actions for Take seal: Old Guard +1";
+    // Opened by keyboard, the off Remove takes no focus and shows no tooltip: its reason is
+    // painted in the menu.
+    let reached = d.tab_to(played);
+    d.press(Key::Enter);
+    let painted = d
+        .painted_in(egui::Rect::EVERYTHING)
+        .contains(crate::trackers::history::REMOVE_PLAYED);
+    d.observe(
+        "T19.6",
+        reached && painted && d.is_disabled("Remove"),
+        format!("Opened by keyboard, the played row's menu paints why Remove is off: Tab reached it {reached}, reason painted {painted}"),
+    );
+    d.press(Key::Escape);
     d.click(played);
     let off = d.is_disabled("Remove");
     let why = d.tooltip_contains("Remove", crate::trackers::history::REMOVE_PLAYED);
@@ -1071,38 +1090,91 @@ pub fn run(d: &mut Driver<'_>) {
 
     // An amount field takes exactly its action's column at a target's height, so no action
     // moves; Enter is the press, and the action keeps its place when that raises a Due row.
-    // Two lines with one name, or two actions with one label, would give two amount fields one
-    // id and one draft: the definition cannot be used, and its problem names the word.
+    // Two amount fields with one owner (tracker, line, label) would share one id and one draft:
+    // Purses still shows, the first keeps its field, a later one is left out, and the problem
+    // stands under the line that leaves it out. Two actions with one label and fixed amounts
+    // have no field: they load as before, and each press makes its own change.
     let note = root(d).join("Tournament.md");
     let text = fs::read_to_string(&note).unwrap();
-    let mut refused = Vec::new();
-    for (purses, why) in [
-        (
-            PURSES.replace("[Ann, Bo]", "[Ann, Ann]"),
-            "per names “Ann” twice. Give each line its own name.",
-        ),
-        (
-            PURSES.replace("{label: Tip, add: 1}", "{label: Pay, add: 1}"),
-            "quick has two actions named “Pay”. Give each action its own label.",
-        ),
-    ] {
-        fs::write(&note, text.replacen("> trackers:\n", &purses, 1)).unwrap();
+    let show = |d: &mut Driver<'_>, purses: &str| {
+        fs::write(&note, text.replacen("> trackers:\n", purses, 1)).unwrap();
         d.app_mut().lookup.refresh();
         d.app_mut().lookup.files_changed = true;
         d.settle();
         if !d.has_containing("Elapsed race time") {
             d.press_ctrl(Key::T);
         }
-        refused.push((
+    };
+    let count = |d: &Driver<'_>, name: &str| {
+        d.nodes()
+            .iter()
+            .filter(|node| node.name == name && node.role != Role::Label)
+            .count()
+    };
+    let mut repeats = Vec::new();
+    for (purses, why, field, kept) in [
+        (
+            PURSES.replace("[Ann, Bo]", "[Ann, Ann]"),
+            "Two lines are named “Ann”, and an action asks for an amount. Give each line its own name.",
+            "Pay: Ann",
+            "Tip: Ann",
+        ),
+        (
+            PURSES.replace("{label: Tip, add: 1}", "{label: Pay, add: 1}"),
+            "Two actions are named “Pay”, and one asks for an amount. Give each action its own name.",
+            "Pay: Bo",
+            "Pay: Ann",
+        ),
+    ] {
+        show(d, &purses);
+        in_view_after_scroll(d, &[field]);
+        repeats.push((
             d.has_containing(why),
-            d.has_containing("Elapsed race time") && !d.has("Pay: Ann"),
+            count(d, field),
+            count(d, kept),
+            d.has_containing("Purses"),
         ));
     }
+    // Ann twice: one Pay (the first Ann's), Tip on both lines. Pay twice: one Pay on each line.
     d.observe(
         "T19.2",
-        refused == [(true, true), (true, true)],
-        format!("A repeated per name or quick label is a problem that names it, and no line of Purses shows: {refused:?}"),
+        repeats == [(true, 1, 2, true), (true, 1, 1, true)],
+        format!("A repeated amount field is left out after the first, and its problem shows with the tracker: {repeats:?}"),
     );
+    show(
+        d,
+        &PURSES.replace("{label: Pay, add: ask}", "{label: Tip, add: 2}"),
+    );
+    let tips = in_view_after_scroll(d, &["Tip: Ann"]);
+    let mut buttons: Vec<egui::Rect> = d
+        .nodes()
+        .iter()
+        .filter(|node| node.name == "Tip: Ann" && node.role != Role::Label)
+        .map(|node| node.shown)
+        .collect();
+    buttons.sort_by(|a, b| {
+        (a.top(), a.left())
+            .partial_cmp(&(b.top(), b.left()))
+            .unwrap()
+    });
+    let problem = d.has_containing("Give each action its own name.");
+    let mut said = Vec::new();
+    for rect in buttons.iter().take(2) {
+        d.click_rect(*rect, "Click: Tip: Ann");
+        said.push((
+            d.has_containing("Purses for Ann changed to 2."),
+            d.has_containing("Purses for Ann changed to 3."),
+        ));
+    }
+    let each_its_own = said.len() == 2 && said[0] == (true, false) && said[1].1;
+    d.observe(
+        "T19.2",
+        tips && buttons.len() == 2 && !problem && each_its_own,
+        format!("Two Tip actions with fixed amounts load with no problem, and each press makes its own change (+2, then +1): {} buttons, problem {problem}, results {said:?}", buttons.len()),
+    );
+    for _ in 0..said.len() {
+        d.click("Undo: Tip");
+    }
     fs::write(&note, text.replacen("> trackers:\n", PURSES, 1)).unwrap();
     d.app_mut().lookup.refresh();
     d.app_mut().lookup.files_changed = true;

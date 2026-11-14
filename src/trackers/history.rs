@@ -512,8 +512,8 @@ fn rows_in_view(
 /// Why `Remove` is off on a row of the session being played: its own Undo takes it back.
 pub(crate) const REMOVE_PLAYED: &str = "Use Undo in Trackers for a change of this session.";
 
-/// A row, laid out from its right end: its menu with `Remove` (off, with its reason, on a row of
-/// the session being played), so every row looks alike and the values stand in one column; the
+/// A row, laid out from its right end: its menu with `Remove` (off, with its reason painted under
+/// it, on a row of the session being played), so every row looks alike and the values stand in one column; the
 /// value it left; then its words, cut with `…` when they do not fit, whole on hover.
 fn history_row(ui: &mut egui::Ui, row: &Row, removable: bool, pressed: &mut Option<Entry>) {
     let menu = Density::Read.control();
@@ -527,6 +527,9 @@ fn history_row(ui: &mut egui::Ui, row: &Row, removable: bool, pressed: &mut Opti
             *pressed = Some(row.entry.clone());
             ui.close();
         }
+        // Opened by keyboard, the off `Remove` takes no focus and shows no tooltip: the reason
+        // stands under it.
+        design::blocked_reason(ui, (!removable).then_some(REMOVE_PLAYED));
     });
     if let Some(value) = row.value {
         let value = value.to_string();
