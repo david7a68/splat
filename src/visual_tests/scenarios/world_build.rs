@@ -7530,6 +7530,35 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         dirty,
         "Choosing a replacement edits the draft; it does not save it",
     );
+    // iter-28-B FB9, FC13: the unfinished run's state ends the save row; it no longer stands
+    // between Discard and the reason that follows Discard.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let placed = d.at_size(size, |d| {
+            let mut reason = None;
+            let mut run = None;
+            d.each_painted_text(|text, clip| {
+                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                if !clip.intersects(rect) {
+                    return;
+                }
+                let words = text.galley.job.text.replace('\u{a0}', " ");
+                if words == "Save or discard to switch campaign." {
+                    reason = Some(rect);
+                }
+                if words.ends_with("Round 2 · Paused") {
+                    run = Some(rect);
+                }
+            });
+            Some((reason?, run?))
+        });
+        d.observe(
+            "iter-28-B-FB9",
+            placed.is_some_and(|(reason, run)| {
+                run.left() > reason.right() && (run.center().y - reason.center().y).abs() < 4.0
+            }),
+            format!("At {size:?}, the switch reason and the run state on the save row: {placed:?}"),
+        );
+    }
     d.state("deleted-package-entry-replaced", Sizes::All);
     // iter-23 FD10: on a replaced row, the separator before the change link has the same gap on
     // each side as the separators between the stats.
@@ -9237,7 +9266,7 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     };
     let search_before = tops(d);
     d.click("Make Rook Ambry copy.md a separate note");
-    d.wait_for_text("Undo separate note");
+    d.wait_for_text("Undo separate Rook Ambry copy.md");
     d.expect("Rook Ambry copy.md is now a separate note.");
     // iter-27-B FF8, AF1, SF1: the result and its Undo are in the editor's footer, below the
     // search's results, and the search and its filter do not move.
@@ -9268,15 +9297,15 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     d.replace_text_in(FIND_CREATURE, "Guard");
     d.click_beside_exact("Guard", "Add");
     d.expect("7. Guard");
-    let kept = d.has("Undo separate note");
-    d.click("Undo separate note");
+    let kept = d.has("Undo separate Rook Ambry copy.md");
+    d.click("Undo separate Rook Ambry copy.md");
     d.replace_text_in(FIND_CREATURE, "Rook Ambry");
     d.wait_for_text("Make Rook Ambry copy.md a separate note");
     d.observe(
         "iter-27-B-FF8-undo",
         kept && d.has("7. Guard") && !d.has("Rook Ambry copy.md is now a separate note."),
         format!(
-            "Undo separate note ends its result and keeps the Guard added after it (kept through the search: {kept})"
+            "Undo separate Rook Ambry copy.md ends its result and keeps the Guard added after it (kept through the search: {kept})"
         ),
     );
     // The rest of the scenario starts from the saved encounter.

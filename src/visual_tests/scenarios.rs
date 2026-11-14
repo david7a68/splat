@@ -17414,7 +17414,7 @@ pub mod encounter_groups {
         const REPLACED: &str = "Replaced Unknown creature with Ember Cultist.";
         d.observe(
             "iter-23-B-FI1",
-            d.visible_text(REPLACED) && d.has("Undo replacement"),
+            d.visible_text(REPLACED) && d.has("Undo replace member"),
             "Use names the replacement and offers Undo replacement",
         );
         // FH5, SH1: a finished change is a success message, with the success bar.
@@ -17443,7 +17443,7 @@ pub mod encounter_groups {
         // go with it.
         d.type_into(&format!("Group notes for {GROUP_LOST}"), " Arrive at dusk.");
         let typed = d.visible_text("Arrive at dusk.");
-        d.click("Undo replacement");
+        d.click("Undo replace member");
         d.expect("Replace Unknown creature");
         d.observe(
             "iter-23-B-FI1-undo",
@@ -17451,7 +17451,7 @@ pub mod encounter_groups {
                 && d.visible_text("Arrive at dusk.")
                 && !d.has("Changes for Ember Cultist")
                 && !d.visible_text(REPLACED)
-                && !d.has("Undo replacement"),
+                && !d.has("Undo replace member"),
             "Undo replacement keeps the notes typed after it and clears its own result",
         );
         d.click("Discard");

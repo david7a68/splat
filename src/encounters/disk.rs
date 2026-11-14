@@ -426,8 +426,7 @@ impl super::Encounters {
                             if draft.add_to.as_deref() == Some(group.path()) {
                                 draft.add_to = None;
                             }
-                            draft.removed_group =
-                                Some((index, group, false, super::result_stamp()));
+                            draft.removed_group = Some((index, group, false, true));
                         }
                         self.error = None;
                     }

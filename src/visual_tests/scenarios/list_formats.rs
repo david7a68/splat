@@ -311,7 +311,8 @@ pub fn run(d: &mut Driver<'_>) {
     d.click(NAV_CAMPAIGN);
     d.click("Rules and runs");
     d.expect(REPAIR_STATE);
-    d.click("Roll NPC initiative");
+    // The drop-down's name says its value too (`Roll NPC initiative: …`).
+    d.click_starting("Roll NPC initiative: ");
     d.click("Individually");
     d.click("Save run settings");
     d.expect("No changes");
