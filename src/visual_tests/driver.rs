@@ -2321,7 +2321,7 @@ impl<'a> Driver<'a> {
         self.clear_focus();
         for stop in 1..=TAB_LIMIT {
             self.harness
-                .key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::Tab);
+                .key_press_modifiers(egui::Modifiers::NONE, egui::Key::Tab);
             self.harness.run_steps(4);
             self.interactions += 1;
             let focused = self

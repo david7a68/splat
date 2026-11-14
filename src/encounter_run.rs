@@ -1572,19 +1572,14 @@ impl Run {
         self.next_step += 1;
         self.history_steps.push(step);
         self.step_results.record(StepResult {
-            owner: StepOwner {
-                run: self.results_scope,
-                step,
-            },
+            owner: StepOwner { run: self.id, step },
         });
     }
     /// A step left the Undo stack (undone, dropped as the oldest, or taken out by a sheet's
     /// update): its result ends.
     fn end_step_result(&mut self, step: u64) {
-        self.step_results.owner_changed(&StepOwner {
-            run: self.results_scope,
-            step,
-        });
+        self.step_results
+            .owner_changed(&StepOwner { run: self.id, step });
     }
     /// The newest Undo step's footer result, the one a footer result of the newest step shows.
     pub(crate) fn newest_step_result(
@@ -1592,12 +1587,7 @@ impl Run {
     ) -> Option<crate::design::results::Shown<'_, StepResult>> {
         let step = *self.history_steps.last()?;
         (self.history_steps.len() == self.history.len())
-            .then(|| {
-                self.step_results.get(&StepOwner {
-                    run: self.results_scope,
-                    step,
-                })
-            })
+            .then(|| self.step_results.get(&StepOwner { run: self.id, step }))
             .flatten()
     }
     /// The newest Undo step's name, if there is one.
@@ -3910,7 +3900,7 @@ impl Run {
         for step in &self.history_steps {
             if !steps.contains(step) {
                 self.step_results.owner_changed(&StepOwner {
-                    run: self.results_scope,
+                    run: self.id,
                     step: *step,
                 });
             }

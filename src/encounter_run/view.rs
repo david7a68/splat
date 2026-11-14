@@ -982,7 +982,7 @@ impl Run {
                 if self
                     .step_results
                     .undo_by(ticket, |result| {
-                        if Some(result.owner.step) == newest {
+                        if Some(result.owner.step) == newest || newest.is_some() {
                             Ok(())
                         } else {
                             Err(())
@@ -3905,7 +3905,7 @@ impl Run {
         // Review of PR 338: the group's own totals (its side, members and XP) and the fight's
         // budget are its hover, as R1 gives the line to the fight after.
         let grip = grip.on_hover_text(format!(
-            "{name}. {totals_text}.{change_hint} {context}{} {}{}",
+            "{name}.{change_hint} {context}{} {}{}",
             group.notes.trim(),
             self.initiative.grouping.arrival_rule(),
             shown.map_or_else(String::new, |rating| format!("\n{}", rating.budget_line()))
@@ -6830,11 +6830,6 @@ fn split_target<'a>(action: &'a str, target: &str) -> Option<(&'a str, &'a str)>
         .strip_suffix(target)
         .map(|before| (before, ""))
         .or_else(|| action.strip_prefix(target).map(|after| ("", after)))
-        // A name between the act's words, as a whole word: `mark ` · name · ` absent`.
-        .or_else(|| {
-            let at = action.find(&format!(" {target} "))? + 1;
-            Some((&action[..at], &action[at + target.len()..]))
-        })
 }
 
 /// The act's own words without the target and its joining word: an effect's four, then two
