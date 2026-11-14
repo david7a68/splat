@@ -2280,7 +2280,7 @@ impl Encounters {
                 self.saved = true;
                 self.error = None;
                 self.message = Some("Group saved.".into());
-                self.message_order = Some(design::ResultOrder::issue());
+                self.stamp_kept(super::KeptResult::Saved);
 
                 // The list and an open run read groups from the snapshot.
                 self.refreshing = true;
@@ -2559,6 +2559,7 @@ impl Encounters {
         // result), then Save's reason, then the file's warnings sit in one footer pinned below
         // the members and the search, so none of them moves a member or a field.
         let kinds = self.kept_results(false);
+        let kept_lines = self.kept_footer_lines(&kinds);
         let pressed = std::cell::Cell::new(None);
         let member_undo = std::cell::Cell::new(false);
         let (pressed_ref, member_ref) = (&pressed, &member_undo);
@@ -2572,7 +2573,7 @@ impl Encounters {
         if let Some(draft) = self.group_draft.as_mut() {
             member_result_into(draft, &mut footer, member_ref, separated, &identity);
         }
-        self.kept_into_footer(&mut footer, &kinds, pressed_ref);
+        Self::kept_into_footer(&mut footer, &kept_lines, pressed_ref);
         super::identity_failure_into(ui.ctx(), &mut footer);
         // Save's reason: the last refusal, or the check's fault when the editor shows it at no
         // other place (a member row or the reason beside Save already says theirs).

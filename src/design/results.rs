@@ -675,12 +675,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "i20_w1_search_finds_a_hidden_duplicate_and_repairs_it_with_undo",
             &[Ban::Results, Ban::Pane(1)],
         ),
-        ("src/encounters.rs", "kept_into_footer", &[Ban::Results]),
-        (
-            "src/encounters.rs",
-            "ledger_view",
-            &[Ban::Results, Ban::Layout(1), Ban::Pane(1)],
-        ),
         ("src/encounters.rs", "results_into", &[Ban::Results]),
         ("src/encounters.rs", "result_stamp", &[Ban::Results]),
         (
@@ -689,7 +683,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Results, Ban::Layout(2), Ban::Pane(1)],
         ),
         ("src/encounters.rs", "save_draft", &[Ban::Results]),
-        ("src/encounters.rs", "stamp_kept", &[Ban::Results]),
         ("src/library.rs", "add_reader_result", &[Ban::Results]),
         // A by-owner Undo and `use_press` of Library's page lines (Wave 2 moves them to tickets).
         (
@@ -1087,6 +1080,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "one_fault_has_one_tone_in_every_place",
             &[Ban::Body],
         ),
+        ("src/encounters.rs", "cause", &[Ban::Words]),
+        ("src/encounters.rs", "kept_outcome", &[Ban::Words]),
         ("src/trackers.rs", "act_words", &[Ban::Words]),
         ("src/trackers.rs", "cause", &[Ban::Words]),
         ("src/trackers/history.rs", "show", &[Ban::Body]),
@@ -1432,8 +1427,8 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/design/components.rs", 16),
             ("src/dndbeyond.rs", 1),
             ("src/encounter_run.rs", 2),
-            ("src/encounters.rs", 4),
-            ("src/encounters/groups.rs", 2),
+            ("src/encounters.rs", 2),
+            ("src/encounters/groups.rs", 1),
             ("src/library.rs", 16),
             ("src/party_sync.rs", 1),
             ("src/sessions/carry.rs", 1),
