@@ -1021,6 +1021,21 @@ pub fn broken(d: &mut Driver<'_>) {
         fits,
         "At 960, the longest path's message wraps whole and its choices stay in view",
     );
+    // Round 28 FH9: the title is the file's name, so the file line shows the folder, not the
+    // file name again.
+    let line = d.at_size(SMALL, |d| {
+        d.nodes()
+            .into_iter()
+            .find(|node| node.name.ends_with(long_path))
+            .map(|node| d.painted_in(node.rect))
+    });
+    d.observe(
+        "iter-28-D-FH9",
+        line.as_deref().is_some_and(|words| {
+            words.trim_end().ends_with('/') && !words.contains("Harbour Council.md")
+        }),
+        format!("The file line under the file-name title says {line:?}"),
+    );
     d.state("repair-cannot-open-long", Sizes::Small);
     // A file deleted outside Splat while its pane is open ends the pane on the next load.
     fs::remove_file(&long).unwrap();
@@ -1495,7 +1510,7 @@ pub fn broken(d: &mut Driver<'_>) {
     let outside = format!("{fixed}\nAn outside line.\n");
     fs::write(&path, &outside).unwrap();
     d.click("Save changes");
-    d.expect("This note changed on disk. Your draft is safe until you choose.");
+    d.expect("Repaired watchkeeper changed on disk. Your draft is safe until you choose.");
     d.settle();
     d.click("Reload and lose my draft");
     d.settle();
@@ -1980,7 +1995,7 @@ pub fn facts(d: &mut Driver<'_>) {
     let external = format!("{unchanged}\nWritten in Obsidian while the group draft was open.\n");
     fs::write(&lore_path, &external).unwrap();
     d.click("Save changes");
-    d.expect("This note changed on disk");
+    d.expect("Horn Rings changed on disk");
     assert_eq!(fs::read_to_string(&lore_path).unwrap(), external);
     d.click("Overwrite with my draft");
     d.wait_for_text("Changes saved.");
@@ -2208,6 +2223,25 @@ pub fn facts(d: &mut Driver<'_>) {
             format!("At {size:?} the stamp {stamp:?} and the field {field:?} end at the measure"),
         );
     }
+    // Round 28 AC3, FA6, AA4: beside the field, the stamp is centred on the field's line.
+    for size in [DEFAULT, LARGE] {
+        let (stamp, field) = d.at_size(size, |d| {
+            (
+                d.place_of("Session 1:"),
+                d.nodes()
+                    .into_iter()
+                    .find(|node| node.name == "Log line for Zarel" && node.role == Role::TextInput)
+                    .map(|node| node.rect),
+            )
+        });
+        d.observe(
+            "iter-28-D-FA6",
+            stamp.zip(field).is_some_and(|(stamp, field)| {
+                stamp.right() < field.left() && (stamp.center().y - field.center().y).abs() <= 1.0
+            }),
+            format!("At {size:?} the stamp {stamp:?} beside the field {field:?}"),
+        );
+    }
     d.state("log-field-open", Sizes::All);
     d.type_text("Gave the gate key to Iselle.");
     d.press(Key::Enter);
@@ -2343,8 +2377,38 @@ pub fn facts(d: &mut Driver<'_>) {
     let horn = root(d).join("Lore/Horn Rings.md");
     let open = fs::read_to_string(&horn).unwrap();
     let question = "Open: Can a horn ring be sold?";
+    // The list row just below the Open questions row.
+    let row_below = |d: &Driver<'_>| {
+        let nodes = d.nodes();
+        let open = nodes
+            .iter()
+            .find(|node| node.name.starts_with("Open questions · "))?
+            .rect;
+        nodes
+            .iter()
+            .filter(|node| {
+                node.name.contains(" · ")
+                    && node.rect.top() >= open.bottom() - 0.5
+                    && node.rect.left() < open.right()
+                    && node.rect.right() > open.left()
+            })
+            .map(|node| node.rect)
+            .min_by(|a, b| a.top().total_cmp(&b.top()))
+    };
+    let below_before = row_below(d);
     d.click(question);
     d.expect("Undo tick");
+    // Round 28 FE4: the last question ticked, the row stays while its page is open, says that
+    // none is open, and the row below keeps its place; the page says so too.
+    let below_after = row_below(d);
+    d.observe(
+        "iter-28-D-FE4",
+        d.has("Open questions · No open questions")
+            && d.visible_text("No open questions.")
+            && below_before.is_some()
+            && below_before == below_after,
+        format!("The row below: {below_before:?} → {below_after:?}"),
+    );
     d.observe(
         "T15.5",
         fs::read_to_string(&horn).unwrap()
@@ -3376,6 +3440,22 @@ pub fn generator(d: &mut Driver<'_>) {
     d.click("Clear");
     d.click("Generate NPC");
     d.expect(crate::lookup::USE_OWN_NAMES);
+    // Review of PR 323: an NPC that Lookup holds belongs to this campaign (its Save writes into
+    // the active one). The switch waits for it as for World's, with the same reason, and opens
+    // after Discard.
+    let switch = "Save or discard your changes to change campaigns.";
+    d.click_starting("Active campaign: ");
+    let held = (d.app().blocked_switch(), d.in_view_containing(switch));
+    d.press(Key::Escape);
+    d.click("Discard");
+    let discarded = d.app().blocked_switch();
+    d.observe(
+        "iter-28-C-lookup-npc-lock",
+        held == (Some(switch), true) && discarded.is_none(),
+        format!("Held in Lookup: (lock, reason in view) {held:?}; after Discard: {discarded:?}"),
+    );
+    d.click("Generate NPC");
+    d.expect(crate::lookup::USE_OWN_NAMES);
     // One label per card. A text run repeats its label's name, so it is not counted.
     let saves = npc_saves;
     let rolled = saves(d);
@@ -4405,6 +4485,8 @@ pub(super) fn lookup_prose_gap(d: &Driver<'_>, title: &str, kind: &str) -> Optio
                 && node.rect.top() <= kind.bottom() + design::XL
                 && (node.name.starts_with("Edit ")
                     || node.name == "Add to Log"
+                    || node.name == "Open this session"
+                    || node.name == "Open on the timeline"
                     || node.name.starts_with("Start a fight with "))
         })
         .map(|node| node.rect.bottom())
@@ -4849,6 +4931,62 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         d.has(&row) && !d.has("Save NPC"),
         "Back opens the last entry under the NPC's row, and the NPC stays held",
     );
+    // Round 28 FJ6: the rail names the NPC that Lookup holds, also with Lookup closed, and its
+    // status opens Lookup again, where the NPC's row is.
+    let in_rail = format!(
+        "{}: {npc}. Show it in Lookup.",
+        crate::world::page::UNSAVED_NPC
+    );
+    d.observe(
+        "iter-28-C-FJ6",
+        d.has(&in_rail),
+        "With Lookup open, the rail names the NPC it holds",
+    );
+    d.click(NAV_LOOKUP);
+    d.observe(
+        "iter-28-C-FJ6",
+        !d.has(&row) && d.has(&in_rail),
+        "With Lookup closed, the rail still names the NPC that waits to be saved",
+    );
+    d.click(&in_rail);
+    d.observe(
+        "iter-28-C-FJ6",
+        d.in_view("Save NPC") && !d.has(&row) && d.has(&in_rail),
+        "The rail's status opens Lookup on the NPC's card",
+    );
+    // Review of PR 323: from Trackers too, open or closed. The status leaves Trackers and shows
+    // the NPC's card.
+    d.press_ctrl(Key::T);
+    let on_trackers = d.app().lookup.on_trackers();
+    d.click(&in_rail);
+    let open_case = (
+        on_trackers,
+        d.app().lookup.on_trackers(),
+        d.in_view("Save NPC"),
+    );
+    d.press_ctrl(Key::T);
+    d.click(NAV_LOOKUP);
+    let closed = !d.app().lookup.open;
+    d.click(&in_rail);
+    let closed_case = (closed, d.app().lookup.on_trackers(), d.in_view("Save NPC"));
+    d.observe(
+        "iter-28-C-FJ6",
+        open_case == (true, false, true) && closed_case == (true, false, true),
+        format!(
+            "(on Trackers before, on Trackers after, the card in view): with Lookup on Trackers {open_case:?}; Lookup closed after Trackers {closed_case:?}"
+        ),
+    );
+    // Closing the app names the NPC that Lookup holds, as for World's.
+    let unsaved = format!("The generated NPC \u{201c}{npc}\u{201d} is not saved.");
+    d.request_close();
+    d.observe(
+        "iter-28-C-lookup-npc-close",
+        d.in_view_containing(&unsaved) && d.in_view("Keep editing"),
+        "The close dialog names the NPC that Lookup holds",
+    );
+    if d.has("Keep editing") {
+        d.click("Keep editing");
+    }
     // Section 7, recorded as it is: Lookup's place is not kept across a restart, and the held
     // NPC goes with it.
     d.restart();
@@ -10630,7 +10768,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     );
 
     // A readable list: the draft adds a group while Obsidian adds another.
-    let conflict = "This note changed on disk. Your draft is safe until you choose.";
+    let conflict = "Safe Rook changed on disk. Your draft is safe until you choose.";
     let zarel = "- \"[[Zarel|the Archdevil]]\" # Keep the alias.\n";
     let outside_line = "- '[[Outside Guild]]' # Added in Obsidian.\n";
     let outside = readable.replace(zarel, &format!("{zarel}{outside_line}"));
@@ -10928,7 +11066,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     );
     fs::write(&path, &unread).unwrap();
     d.click("Save changes");
-    d.expect("This note changed on disk. Your draft is safe until you choose.");
+    d.expect("Safe Rook changed on disk. Your draft is safe until you choose.");
     // The save reads the note again, as a refused Part of write does.
     d.settle();
     d.observe_both(
@@ -10951,7 +11089,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         choices_at_text(
             d,
             "iter-15-E-AD3-world-edit",
-            "This note changed on disk",
+            "Safe Rook changed on disk",
             "Overwrite with my draft",
             "Reload and lose my draft",
             None,
@@ -11240,7 +11378,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     d.expect("Added Guild");
     d.click("Added Guild");
     d.click("Save changes");
-    d.expect("This note changed on disk. Your draft is safe until you choose.");
+    d.expect("Safe Rook changed on disk. Your draft is safe until you choose.");
     d.click("Overwrite with my draft");
     d.settle();
     assert_eq!(
@@ -11700,11 +11838,43 @@ pub fn campaign_copy_registered(d: &mut Driver<'_>) {
     }
     d.type_into("Campaign name", NAME);
     d.type_into("Folder", &copy.display().to_string());
+    // Wave 2 d (C), from the review of PR 320: with no account at 960, the import hint follows
+    // the open form. It was drawn above the form once the account heading left the view (here
+    // the footer's result takes the room), and moved the form and its pressed Add campaign by
+    // its height. (The new campaign's row moves the form down by one row on purpose.)
+    const IMPORT_HINT: &str = "To import from D&D Beyond,";
+    let account_in_view = |d: &Driver<'_>| {
+        d.nodes()
+            .into_iter()
+            .find(|node| node.name.eq_ignore_ascii_case("D&D Beyond account"))
+            .map(|node| node.fully_in_view())
+    };
+    let header = |d: &Driver<'_>| d.place_of("Add campaign");
+    let pressed = (header(d), account_in_view(d));
     d.click_below("Folder", "Add campaign");
     d.expect("Register as a new campaign");
     d.click("Register as a new campaign");
     let result = crate::campaigns::copy_registered(NAME);
     d.wait_for_text(&result);
+    let create = d
+        .nodes()
+        .into_iter()
+        .filter(|node| node.name == "Add campaign")
+        .map(|node| node.rect)
+        .nth(1);
+    let hint = d.place_of(IMPORT_HINT);
+    let shown = (header(d), account_in_view(d));
+    d.observe(
+        "iter-28-C-import-hint",
+        pressed.1 == Some(true)
+            && shown.1 == Some(false)
+            && hint
+                .zip(create)
+                .is_some_and(|(hint, create)| hint.top() >= create.bottom()),
+        format!(
+            "Before Add campaign (its header, the account heading whole in view): {pressed:?}; after the result: {shown:?}; the hint {hint:?} under the form's Add campaign {create:?}"
+        ),
+    );
     undo_follows_message(d, "iter20-E-SD2-undo", &result, "Undo register campaign");
     for size in [SMALL, DEFAULT, LARGE] {
         let (message, build, words, clear) = d.at_size(size, |d| {

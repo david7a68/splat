@@ -204,6 +204,10 @@ pub struct WorldPage {
     view: View,
     /// The checks for one load of the index.
     checks: Option<(u64, super::checks::Checks)>,
+    /// Check rows with nothing left that stay in the list (FE4): a row whose page was open when
+    /// its last item went. Leaving the page keeps it, so no press moves the list; the next check
+    /// of the notes (a new index) ends it.
+    kept_empty: Vec<View>,
     /// Repair causes are read and parsed only when the index generation changes.
     broken_details: std::collections::BTreeMap<String, BrokenDetail>,
     /// Ticked questions with a live `Undo tick`, oldest first.
@@ -256,6 +260,7 @@ impl WorldPage {
             return;
         }
         self.checks = Some((index.generation(), super::checks::run(index)));
+        self.kept_empty.clear();
         // A tick's Undo lives while its note holds the ticked line where the tick wrote it.
         self.ticks.retain(|tick| {
             index
@@ -502,7 +507,7 @@ impl WorldPage {
                             color: colors().result.warning,
                         },
                     );
-                    egui::Popup::menu(&response).show(|ui| {
+                    design::layout::menu_popup(&response).show(|ui| {
                         if let Some(index) = index {
                             for &(at, _) in index.world_groups("").values().flatten() {
                                 let item = &index.items[at];
@@ -946,7 +951,7 @@ impl WorldPage {
         let fault = unread.fault.clone();
         design::reader::title(ui, fault.path.rsplit('/').next().unwrap_or(&fault.path));
         // No editor link: an editor cannot open a file that Splat cannot read either.
-        super::entry_file_actions(ui, &campaign.path, &fault.path, false);
+        super::folder_file_line(ui, &campaign.path, &fault.path, false);
         // The title and file line name the file, so the error says `this note` (FG6).
         let (again, cancel) =
             design::message_with_actions(ui, design::Tone::Error, &fault.pane_headline(), |ui| {
@@ -1264,9 +1269,21 @@ impl WorldPage {
                 checks.problems(),
             ),
         ];
+        // A row with nothing left stays while its page is open (FE4), and after the DM leaves
+        // that page until the notes are checked again: the list does not move under the DM, and
+        // the row still shows which page is open.
         for (view, title, detail, count) in rows {
-            if count > 0
-                && design::two_line_row(ui, ROW, self.view == view, title, &detail).clicked()
+            let open = self.view == view;
+            if count == 0 && open && !self.kept_empty.contains(&view) {
+                self.kept_empty.push(view);
+            }
+            let kept = self.kept_empty.contains(&view);
+            let detail = match (count, view) {
+                (0, View::Questions) => "No open questions".to_owned(),
+                (0, _) => "No suggestions".to_owned(),
+                _ => detail,
+            };
+            if (count > 0 || kept) && design::two_line_row(ui, ROW, open, title, &detail).clicked()
             {
                 self.view = view;
                 self.keep_repair();
@@ -1337,6 +1354,9 @@ impl WorldPage {
                 "Each unticked task line in the world’s notes. Tick a question when you decide.",
             );
             design::gap(ui, design::Gap::S);
+            if checks.questions.is_empty() {
+                note(ui, "No open questions.");
+            }
             by_page(ui, &checks.questions);
             return tick.map(CheckAct::Tick).or(open);
         }
@@ -1689,10 +1709,6 @@ impl WorldPage {
 }
 
 /// The same next step in the header and in an empty reader.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn new_menu(ui: &mut egui::Ui) -> Option<&'static str> {
     let mut choice = None;
     let label = format!("New {}", icons::DOWN);
@@ -1700,7 +1716,7 @@ fn new_menu(ui: &mut egui::Ui) -> Option<&'static str> {
         .name("New ▾")
         .icon(icons::ADD)
         .show(ui);
-    egui::Popup::menu(&response).show(|ui| {
+    design::layout::menu_popup(&response).show(|ui| {
         for (word, kind) in [
             // `…` marks a choice that asks for a name first. Generate NPC makes its card at once.
             ("Note…", "note"),
