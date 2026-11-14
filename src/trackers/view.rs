@@ -175,6 +175,8 @@ pub(crate) enum Act {
         key: String,
         instance: Option<String>,
         label: String,
+        /// The action's place in `quick`: two actions can share a label.
+        at: usize,
         asked: Option<i64>,
     },
     Roll(super::Notice, String),
@@ -266,8 +268,15 @@ fn apply(trackers: &mut Trackers, act: Act) {
             key,
             instance,
             label,
+            at,
             asked,
-        } => trackers.press(&key, instance.as_deref(), &label, asked),
+        } => {
+            let action = super::QuickRef {
+                label: &label,
+                at: Some(at),
+            };
+            trackers.press_at(&key, instance.as_deref(), action, asked);
+        }
         Act::Roll(notice, table) => trackers.roll_notice(&notice, &table),
         Act::Done(notice, ticked) => {
             trackers.done(&notice, &ticked);
@@ -655,8 +664,13 @@ fn register_block(ui: &egui::Ui, top: f32) {
 }
 
 /// A tracker's lines: one line, or a heading and one line for each instance. Every line stands
-/// in the panel's columns.
+/// in the panel's columns. Of two amount fields with one owner (`Repeat`), the line that leaves
+/// one out says why under it, once for the tracker.
 #[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "a repeated amount field’s problem: a row fault at the line that leaves the field out"
+)]
 fn tracker_lines(
     ui: &mut egui::Ui,
     rules: &Rules,
@@ -685,8 +699,32 @@ fn tracker_lines(
     // first actions start at one edge. A long name is cut at a whole word, and its hover keeps it.
     let name_width = (columns.name - indent).max(0.0);
     let top = egui::Layout::left_to_right(egui::Align::Min);
+    // The rows of one line stand `XS` apart, closer than two lines (the panel's spacing), so a
+    // wrapped action reads with its own line (FA2).
+    let one_line = |ui: &mut egui::Ui| ui.spacing_mut().item_spacing.y = design::XS;
+    let repeat = def.repeat.as_ref();
+    let (mut word_seen, mut said) = (false, false);
     for instance in def.instances() {
         let line_top = ui.cursor().top();
+        // The first line of a repeated name keeps its fields; a later one leaves them out.
+        let repeated_line = match repeat {
+            Some(super::Repeat::Line { word, .. }) if instance == Some(word.as_str()) => {
+                std::mem::replace(&mut word_seen, true)
+            }
+            _ => false,
+        };
+        let left_out = |at: usize| match repeat {
+            Some(super::Repeat::Line { asking, .. }) => repeated_line && asking.contains(&at),
+            Some(super::Repeat::Label { label, keep }) => {
+                at != *keep && def.quick[at].label == *label
+            }
+            None => false,
+        };
+        let leaves_out = match repeat {
+            Some(super::Repeat::Line { .. }) => repeated_line,
+            Some(super::Repeat::Label { .. }) => true,
+            None => false,
+        };
         let head = |ui: &mut egui::Ui, view: &mut ViewState| {
             if indented {
                 design::gap(ui, Gap::L);
@@ -707,42 +745,60 @@ fn tracker_lines(
             );
         };
         if columns.beside {
-            // The actions follow the value, and the ones that do not fit wrap to the line's
-            // start, so a wrapped row holds as many as the panel's width allows.
-            ui.horizontal_wrapped(|ui| {
+            // The actions follow the value, and the ones that do not fit wrap to the first
+            // action's edge, never left of the line's name.
+            ui.with_layout(top, |ui| {
                 head(ui, view);
                 design::gap(ui, Gap::S);
-                quick_actions(ui, view, key, def, instance, act);
+                ui.horizontal_wrapped(|ui| {
+                    one_line(ui);
+                    quick_actions(ui, view, key, def, instance, &left_out, act);
+                });
             });
         } else {
             // A first action does not fit after the values: every line has its actions on the
             // rows under it, from its name's edge.
-            ui.with_layout(top, |ui| head(ui, view));
-            if !def.quick.is_empty() {
-                ui.with_layout(top, |ui| {
-                    if indented {
-                        design::gap(ui, Gap::L);
-                    }
-                    ui.horizontal_wrapped(|ui| quick_actions(ui, view, key, def, instance, act));
-                });
-            }
+            ui.vertical(|ui| {
+                one_line(ui);
+                ui.with_layout(top, |ui| head(ui, view));
+                if !def.quick.is_empty() {
+                    ui.with_layout(top, |ui| {
+                        if indented {
+                            design::gap(ui, Gap::L);
+                        }
+                        ui.horizontal_wrapped(|ui| {
+                            one_line(ui);
+                            quick_actions(ui, view, key, def, instance, &left_out, act);
+                        });
+                    });
+                }
+            });
+        }
+        if let Some(repeat) = repeat.filter(|_| leaves_out && !said) {
+            said = true;
+            design::outcome::row_fault(ui, &TrackerFault::Problem(repeat.words()));
         }
         register_block(ui, line_top);
     }
     design::gap(ui, Gap::XS);
 }
 
-/// A line's quick actions, or the amount field in the place of the one that asks.
+/// A line's quick actions, or the amount field in the place of the one that asks. An action
+/// `left_out` (a repeated amount field, by its place in `quick`) is not drawn.
 fn quick_actions(
     ui: &mut egui::Ui,
     view: &mut ViewState,
     key: &str,
     def: &super::Definition,
     instance: Option<&str>,
+    left_out: &dyn Fn(usize) -> bool,
     act: &mut Option<Act>,
 ) {
     let place = (key.to_owned(), instance.map(str::to_owned));
-    for quick in &def.quick {
+    for (at, quick) in def.quick.iter().enumerate() {
+        if left_out(at) {
+            continue;
+        }
         let here = view
             .asking
             .as_ref()
@@ -752,7 +808,7 @@ fn quick_actions(
             let width = Action::secondary(&quick.label)
                 .density(Density::Read)
                 .natural_width(ui);
-            amount_field(ui, view, &quick.label, width, act);
+            amount_field(ui, view, &quick.label, at, width, act);
             continue;
         }
         let response = Action::secondary(&quick.label)
@@ -762,7 +818,7 @@ fn quick_actions(
                 None => quick.label.clone(),
             })
             .show(ui);
-        let control = (&place.0, &place.1, &quick.label);
+        let control = (&place.0, &place.1, &quick.label, at);
         held_seen(ui, control, response.rect.top());
         if response.clicked() {
             hold_press(ui, control, &response);
@@ -780,6 +836,7 @@ fn quick_actions(
                     key: key.to_owned(),
                     instance: place.1.clone(),
                     label: quick.label.clone(),
+                    at,
                     asked: None,
                 });
             }
@@ -839,6 +896,7 @@ fn amount_field(
     ui: &mut egui::Ui,
     view: &mut ViewState,
     label: &str,
+    at: usize,
     width: f32,
     act: &mut Option<Act>,
 ) {
@@ -870,11 +928,12 @@ fn amount_field(
         if enter && let Ok(amount) = typed.trim().parse::<i64>() {
             let (key, instance) = (key.clone(), instance.clone());
             // Enter is the press: the action keeps its place as a click's does.
-            hold_press(ui, (&key, &instance, label), &response);
+            hold_press(ui, (&key, &instance, label, at), &response);
             *act = Some(Act::Press {
                 key,
                 instance,
                 label: label.to_owned(),
+                at,
                 asked: Some(amount),
             });
         }

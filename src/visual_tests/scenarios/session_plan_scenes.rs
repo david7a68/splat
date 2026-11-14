@@ -225,7 +225,7 @@ pub fn run(d: &mut Driver<'_>) {
     show_plan(d);
 
     // T12.10: a task line is a scene, in the note's order, with its box where a fight has its
-    // caret. A done scene does not count among the rows to come.
+    // caret. Round 28 FD3: Tonight counts the four rows under it, the done scene too.
     d.expect(&format!("Open: {VARRA}"));
     d.expect(&format!("Done: {MILLER}"));
     d.expect("NPC · alive · Ashfall Keep");
@@ -245,7 +245,7 @@ pub fn run(d: &mut Driver<'_>) {
                 .filter_map(|name| d.place_of(name))
                 .collect();
             (
-                d.has_label("TONIGHT 3")
+                d.has_label("TONIGHT 4")
                     && tops.iter().all(Option::is_some)
                     && tops
                         .windows(2)
@@ -508,8 +508,8 @@ pub fn run(d: &mut Driver<'_>) {
                 .filter(|(a, b)| a != b)
                 .count()
                 == 1
-            && d.has_label("TONIGHT 2"),
-        "A tick changes one character of the note, and the scene no longer counts",
+            && d.has_label("TONIGHT 4"),
+        "A tick changes one character of the note, and the count of rows stays",
     );
     d.click(&format!("More actions for {MILLER}"));
     d.click("Remove from tonight");
@@ -997,14 +997,14 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     d.click(&long);
     d.observe(
         "T18.2",
-        d.visible_text("Save or discard your edit first.") && !d.has(&field),
+        d.visible_text("Save or discard your edit to add a Log line.") && !d.has(&field),
         "While the entry has an edit form, the Log field waits",
     );
     // Round 27 FC2: the reason is in Lookup's footer, so the form the DM types in keeps its
     // place when the waiting field comes.
     let waiting = d.place_of("Discard");
     let footer = d.painted_rect_in(
-        "Save or discard your edit first.",
+        "Save or discard your edit to add a Log line.",
         egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(f32::MAX, f32::MAX)),
     );
     d.observe(
@@ -1036,7 +1036,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     d.click(&long);
     d.observe(
         "T18.2",
-        d.visible_text("Save or discard your edit first.")
+        d.visible_text("Save or discard your edit to add a Log line.")
             && !d.has(&field)
             && fs::read_to_string(&path).unwrap() == before,
         "An edit form on the World page holds back the Log field in Lookup",

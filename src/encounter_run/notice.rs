@@ -99,16 +99,29 @@ impl Run {
         let height = header_height(scale);
         // A narrow roster keeps its room for the turn's name.
         let words = ui.available_width() >= DOCK_ALL_WORDS_FROM;
-        let next_key = !self.lookup_open && self.turn_name_keeps_room(ui, scale, name, words);
+        let keeps_room = self.turn_name_keeps_room(ui, scale, name, words);
+        let next_key = !self.lookup_open && keeps_room;
         ui.allocate_ui_with_layout(
             vec2(ui.available_width(), height),
             Layout::right_to_left(Align::Center),
             |ui| {
                 ui.set_min_height(height);
-                next_turn = Action::primary("Next turn")
-                    .icon(icons::NEXT)
-                    .density(Density::Glance)
-                    .key(if next_key { "N" } else { "" })
+                let next = || {
+                    Action::primary("Next turn")
+                        .icon(icons::NEXT)
+                        .density(Density::Glance)
+                };
+                // FK8: with Lookup open the key letter hides (the keys do not work then), but its
+                // room stays, so `Add to fight` keeps its x when Lookup opens and closes.
+                // Only on a roster wide enough for every word, so the room does not come and go
+                // with the turn's name (a pressed Next turn would move).
+                let kept = (self.lookup_open && words).then(|| next().key("N").natural_width(ui));
+                let action = next().key(if next_key { "N" } else { "" });
+                let action = match kept {
+                    Some(width) => action.min_width(width),
+                    None => action,
+                };
+                next_turn = action
                     .blocked(nobody_present.then_some(NOBODY_PRESENT))
                     .show(ui)
                     .clicked();

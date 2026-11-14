@@ -613,8 +613,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Results],
         ),
         ("src/campaigns.rs", "save_form", &[Ban::Results]),
-        ("src/combat_sync.rs", "footer_messages", &[Ban::Results]),
-        ("src/combat_sync.rs", "noticed", &[Ban::Results]),
         (
             "src/design/components.rs",
             "iter26_a_the_footer_keeps_the_body_top_and_reaches_its_last_message",
@@ -637,7 +635,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/design/results.rs", "record", &[Ban::Results]),
         ("src/dndbeyond.rs", "footer_messages", &[Ban::Results]),
-        ("src/dndbeyond.rs", "show", &[Ban::Results, Ban::Layout(1)]),
+        ("src/dndbeyond.rs", "show", &[Ban::Results]),
         ("src/encounter_run.rs", "keep_step", &[Ban::Results]),
         ("src/encounter_run.rs", "open", &[Ban::Results]),
         (
@@ -739,9 +737,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/library.rs", "register_copy", &[Ban::Results]),
         ("src/library.rs", "reload_note_from_disk", &[Ban::Results]),
         ("src/library.rs", "unregister_dialog", &[Ban::Results]),
-        ("src/party.rs", "page_footer", &[Ban::Results]),
-        ("src/party.rs", "sheet_view", &[Ban::Extras(1)]),
-        ("src/party_sync.rs", "campaign_copy_saved", &[Ban::Results]),
+        ("src/party.rs", "sheet_view", &[Ban::Extras(1), Ban::Body]),
         ("src/sessions/carry.rs", "carry_in_footer", &[Ban::Results]),
         ("src/sessions/carry.rs", "record", &[Ban::Results]),
         (
@@ -766,7 +762,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/sessions/page.rs",
             "reading_view",
-            &[Ban::Results, Ban::Layout(3)],
+            &[Ban::Results, Ban::Layout(1)],
         ),
         (
             "src/sessions/page.rs",
@@ -776,13 +772,13 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/sessions/page.rs",
             "template_editor",
-            &[Ban::Results, Ban::Layout(4)],
+            &[Ban::Results, Ban::Layout(3)],
         ),
         (
             "src/sessions/plan.rs",
             "plan_pane",
             // `ByOwner`: `checks::Results::undo(id, book)`, not the footer store's; counted by name.
-            &[Ban::Results, Ban::Layout(2), Ban::Pane(1), Ban::ByOwner(1)],
+            &[Ban::Results, Ban::Layout(1), Ban::Pane(1), Ban::ByOwner(1)],
         ),
         (
             "src/sessions/plan.rs",
@@ -828,7 +824,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "creation_form",
             &[Ban::Results, Ban::Layout(1), Ban::Pane(1)],
         ),
-        ("src/world/page.rs", "show", &[Ban::Results, Ban::Layout(4)]),
+        ("src/world/page.rs", "show", &[Ban::Results, Ban::Layout(3)]),
         ("src/world/repair.rs", "choose", &[Ban::Results]),
         ("src/world/repair.rs", "edit", &[Ban::Results]),
         (
@@ -840,7 +836,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/world.rs", "entry_controls", &[Ban::Results]),
         ("src/world.rs", "stamp", &[Ban::Results]),
         // Package K: raw egui calls that a layout part replaces.
-        ("src/art.rs", "show_viewer", &[Ban::Layout(2)]),
         (
             "src/campaigns.rs",
             "selector",
@@ -852,12 +847,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/ad_hoc.rs",
             "add_creature_form",
-            &[Ban::Layout(2), Ban::Extras(1)],
-        ),
-        (
-            "src/encounter_run/rolling.rs",
-            "row_menu",
-            &[Ban::Layout(2)],
+            &[Ban::Layout(1), Ban::Extras(1)],
         ),
         (
             "src/encounter_run/view.rs",
@@ -869,16 +859,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "ended_view",
             &[Ban::Layout(2), Ban::Extras(1)],
         ),
-        (
-            "src/encounter_run/view.rs",
-            "group_row",
-            &[Ban::Layout(3), Ban::Extras(2)],
-        ),
-        (
-            "src/encounter_run/view.rs",
-            "live_footer",
-            &[Ban::Layout(1)],
-        ),
+        ("src/encounter_run/view.rs", "group_row", &[Ban::Extras(2)]),
         ("src/encounter_run/view.rs", "log_tab", &[Ban::Layout(1)]),
         ("src/encounter_run/view.rs", "notes_tab", &[Ban::Layout(1)]),
         (
@@ -886,7 +867,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "optional_number",
             &[Ban::Layout(1)],
         ),
-        ("src/encounter_run/view.rs", "panel_tabs", &[Ban::Layout(1)]),
         (
             "src/encounter_run/view.rs",
             "record_tab",
@@ -962,9 +942,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/loot_editor.rs",
             "line_row",
-            &[Ban::Layout(1), Ban::Extras(1)],
+            &[Ban::Extras(1), Ban::RowKey(1)],
         ),
-        ("src/loot_editor.rs", "table_menu", &[Ban::Layout(1)]),
         (
             "src/markdown_source.rs",
             "press_in_editor",
@@ -985,32 +964,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "wide_tables_keep_whole_words_and_can_scroll_to_the_last_column",
             &[Ban::Layout(1)],
         ),
-        ("src/party_bar.rs", "more_players", &[Ban::Layout(2)]),
-        ("src/party_bar.rs", "paint", &[Ban::Layout(1)]),
-        (
-            "src/processing/settings.rs",
-            "input_section",
-            &[Ban::Layout(1)],
-        ),
-        ("src/processing/settings.rs", "key_row", &[Ban::Extras(1)]),
-        (
-            "src/processing/settings.rs",
-            "llm_section",
-            &[Ban::Layout(3), Ban::Extras(1)],
-        ),
-        (
-            "src/processing/settings.rs",
-            "speech_section",
-            &[Ban::Layout(3), Ban::Extras(1)],
-        ),
-        ("src/rolls.rs", "mode_menu", &[Ban::Layout(1)]),
-        ("src/rolls.rs", "more_actions", &[Ban::Layout(1)]),
-        ("src/rolls.rs", "outcome_line", &[Ban::Layout(1)]),
-        (
-            "src/rolls.rs",
-            "rules_on_hover_and_focus",
-            &[Ban::Layout(2)],
-        ),
         (
             "src/sessions/page.rs",
             "banner",
@@ -1026,33 +979,21 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/page.rs", "notes_view", &[Ban::Layout(3)]),
         ("src/sessions/page.rs", "read_tab", &[Ban::Layout(1)]),
         ("src/sessions/page.rs", "recordings_tab", &[Ban::Layout(1)]),
-        ("src/sessions/page.rs", "show_form", &[Ban::Layout(1)]),
         ("src/sessions/page.rs", "template_list", &[Ban::Layout(1)]),
-        ("src/sessions/plan.rs", "event_fields", &[Ban::Layout(2)]),
         ("src/sessions/plan.rs", "fight_block", &[Ban::Layout(1)]),
-        ("src/sessions/plan.rs", "place_field", &[Ban::Layout(1)]),
-        ("src/sessions/plan.rs", "plan_menu", &[Ban::Layout(2)]),
+        ("src/sessions/plan.rs", "plan_menu", &[Ban::Layout(1)]),
         ("src/sessions/slash.rs", "note", &[Ban::Layout(1)]),
         ("src/sessions/slash.rs", "popup_at", &[Ban::Layout(1)]),
-        ("src/timeline/checks.rs", "table_line", &[Ban::Layout(1)]),
         (
             "src/timeline/page.rs",
             "detail",
             // `ByOwner`: `checks::Results::undo(id, book)`, not the footer store's; counted by name.
-            &[Ban::Layout(7), Ban::ByOwner(1)],
+            &[Ban::Layout(1), Ban::ByOwner(1)],
         ),
-        ("src/timeline/page.rs", "filters", &[Ban::Layout(1)]),
         ("src/timeline/page.rs", "list", &[Ban::Layout(1)]),
         ("src/timeline/page.rs", "new_events_line", &[Ban::Layout(1)]),
-        (
-            "src/trackers.rs",
-            "an_open_history_prepares_its_rows_once_and_draws_only_those_in_view",
-            &[Ban::Layout(1)],
-        ),
         ("src/trackers/view.rs", "amount_field", &[Ban::RowKey(3)]),
-        ("src/world.rs", "add_form", &[Ban::Layout(1)]),
-        ("src/world/page.rs", "new_menu", &[Ban::Layout(1)]),
-        ("src/world/repair.rs", "editor_events", &[Ban::Layout(2)]),
+        ("src/world/repair.rs", "editor_events", &[Ban::RowKey(1)]),
         // Package M (round 28): the escapes of `design::outcome`, and its own helpers.
         ("src/design/outcome.rs", "__literal", &[Ban::Sentence]),
         ("src/design/outcome.rs", "check_literal", &[Ban::Sentence]),
@@ -1088,12 +1029,14 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Body],
         ),
         ("src/trackers.rs", "act_words", &[Ban::Words]),
+        ("src/combat_sync.rs", "cause", &[Ban::Words]),
+        ("src/party.rs", "cause", &[Ban::Words]),
         ("src/trackers.rs", "cause", &[Ban::Words]),
         ("src/trackers/history.rs", "show", &[Ban::Body]),
         ("src/trackers/view.rs", "body", &[Ban::Body]),
+        // Package T (PR 328 review): a repeated amount field's problem stands at its line.
+        ("src/trackers/view.rs", "tracker_lines", &[Ban::Body]),
         ("src/trackers/view.rs", "messages", &[Ban::Words]),
-        ("src/combat_sync.rs", "labelled_stepper", &[Ban::Extras(1)]),
-        ("src/dndbeyond.rs", "show_import", &[Ban::Extras(1)]),
         (
             "src/encounter_run/loot.rs",
             "loot_section",
@@ -1122,11 +1065,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Extras(1)],
         ),
         ("src/encounter_run/view.rs", "log_link", &[Ban::Extras(1)]),
-        (
-            "src/party.rs",
-            "wrapped_sheet_cells_keep_the_next_pair_on_one_row",
-            &[Ban::Extras(1)],
-        ),
         ("src/sessions/plan.rs", "word_link", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "plan_row_with", &[Ban::Extras(1)]),
         (
@@ -1177,17 +1115,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/library/creature.rs", "show", &[Ban::Extras(1)]),
         ("src/library/reader.rs", "show", &[Ban::Extras(1)]),
         ("src/markdown_view.rs", "flush", &[Ban::Extras(1)]),
-        ("src/party.rs", "storage_notice", &[Ban::Extras(2)]),
-        (
-            "src/processing/settings.rs",
-            "field_reason",
-            &[Ban::Extras(2)],
-        ),
         ("src/rolls.rs", "armed_hint", &[Ban::Extras(2)]),
         ("src/sessions/carry.rs", "last_time_line", &[Ban::Extras(1)]),
         ("src/sessions/page.rs", "draft_warning", &[Ban::Extras(2)]),
         ("src/sessions/page.rs", "record_line", &[Ban::Extras(1)]),
-        ("src/sessions/page.rs", "recording_row", &[Ban::Extras(3)]),
+        ("src/sessions/page.rs", "recording_row", &[Ban::Extras(2)]),
         (
             "src/sessions/plan.rs",
             "gone_scene_words",
@@ -1196,12 +1128,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/plan.rs", "plan_details", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "scene_words", &[Ban::Extras(1)]),
         ("src/timeline/checks.rs", "result", &[Ban::Extras(1)]),
-        ("src/timeline/page.rs", "problems", &[Ban::Extras(1)]),
-        (
-            "src/timeline/page.rs",
-            "rest_ruling_line",
-            &[Ban::Extras(1)],
-        ),
         ("src/world.rs", "draw", &[Ban::Extras(4)]),
         ("src/world.rs", "missing_link", &[Ban::Extras(1)]),
         ("src/world.rs", "unread_groups_message", &[Ban::Extras(1)]),
@@ -1428,14 +1354,12 @@ pub(crate) const STAGED: &[Staged] = &[
         &[
             ("src/campaign_content.rs", 1),
             ("src/campaigns.rs", 9),
-            ("src/combat_sync.rs", 1),
             ("src/design/components.rs", 16),
             ("src/dndbeyond.rs", 1),
             ("src/encounter_run.rs", 2),
             ("src/encounters.rs", 4),
             ("src/encounters/groups.rs", 2),
             ("src/library.rs", 16),
-            ("src/party_sync.rs", 1),
             ("src/sessions/carry.rs", 1),
             ("src/sessions/page.rs", 8),
             ("src/sessions/plan.rs", 8),

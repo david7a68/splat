@@ -191,61 +191,15 @@ pub fn viewer_open(ctx: &egui::Context) -> bool {
     viewing(ctx).is_some()
 }
 
-/// The full-window view of the image the DM clicked, if any.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
+/// The full-window view of the image the DM clicked, if any. Its size comes from the file's
+/// header, so the viewer does not grow when the texture arrives.
 pub fn show_viewer(ctx: &egui::Context) {
     if let Some((path, name)) = viewing(ctx) {
         let uri = uri(&path);
         remember(ctx, &uri);
-        let viewport = ctx.content_rect();
-        let max = viewport.size()
-            - vec2(
-                design::XXL * 2.0,
-                design::XXL * 2.0
-                    + design::Density::Scan.control()
-                    + Type::Small.line()
-                    + design::S,
-            );
-        let Some(size) = dimensions(ctx, &path) else {
-            if design::image_viewer(ctx, &name, &uri) {
-                ctx.data_mut(|data| data.remove::<Option<(PathBuf, String)>>(viewing_id()));
-            }
-            return;
-        };
-        let size = fitted(size, max);
-        let response = egui::Modal::new(Id::new("image_viewer"))
-            .backdrop_color(colors().rail)
-            .frame(egui::Frame::new())
-            .show(ctx, |ui| {
-                ui.set_width(size.x);
-                let mut close = false;
-                ui.horizontal(|ui| {
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        close = design::Action::quiet("Close")
-                            .icon(design::icons::CLOSE)
-                            .key("Esc")
-                            .show(ui)
-                            .clicked();
-                    });
-                });
-                let image = ui
-                    .add(
-                        egui::Image::from_uri(&uri)
-                            .fit_to_exact_size(size)
-                            .sense(egui::Sense::click()),
-                    )
-                    .on_hover_text(&name);
-                image.widget_info(|| {
-                    egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name)
-                });
-                ui.label(Type::Small.rich(ui, &name).color(colors().text));
-                close || image.clicked()
-            });
-        let closed = response.should_close() || response.inner;
-        if closed {
+        let size =
+            dimensions(ctx, &path).map_or(design::ImageSize::Unknown, design::ImageSize::Known);
+        if design::popups::image_viewer(ctx, &name, &uri, size) {
             ctx.data_mut(|data| data.remove::<Option<(PathBuf, String)>>(viewing_id()));
         }
     }
