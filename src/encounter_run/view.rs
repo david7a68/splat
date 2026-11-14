@@ -850,7 +850,7 @@ impl Run {
     /// error is one of them: its whole fault wraps there, with its repair place as a choice.
     /// Owners: the step's result is its step's (`step_results`); the reasons and notices are
     /// worked out again each frame from the run's own state, which owns them.
-    fn run_messages<'f>(
+    pub(super) fn run_messages<'f>(
         &self,
         frame: &'f design::outcome::PaneFrame,
         setup: bool,
@@ -962,7 +962,7 @@ impl Run {
 
     /// What a press in the run's footer does, in its frame. The step's Undo goes by its ticket:
     /// a step that is gone (undone, or no longer the newest) does nothing.
-    fn run_press(
+    pub(super) fn run_press(
         &mut self,
         press: Option<design::outcome::Press<RunPress>>,
         command: &mut Option<Command>,
@@ -975,9 +975,19 @@ impl Run {
                 let Some(ticket) = press.ticket else {
                     return;
                 };
+                // Review of PR 338: the stack's Undo takes back the newest step only, so the
+                // press of an older step's line (the body added a step in the same frame) is
+                // refused, and its line stays. Only the newest step's line is undone.
+                let newest = self.history_steps.last().copied();
                 if self
                     .step_results
-                    .undo_by(ticket, |_| Ok::<(), ()>(()))
+                    .undo_by(ticket, |result| {
+                        if Some(result.owner.step) == newest {
+                            Ok(())
+                        } else {
+                            Err(())
+                        }
+                    })
                     .is_ok()
                 {
                     self.undo();
@@ -3892,8 +3902,10 @@ impl Run {
             .as_ref()
             .filter(|_| group.encounter != self.source)
             .map_or_else(String::new, |name| format!("For {name}. "));
+        // Review of PR 338: the group's own totals (its side, members and XP) and the fight's
+        // budget are its hover, as R1 gives the line to the fight after.
         let grip = grip.on_hover_text(format!(
-            "{name}.{change_hint} {context}{} {}{}",
+            "{name}. {totals_text}.{change_hint} {context}{} {}{}",
             group.notes.trim(),
             self.initiative.grouping.arrival_rule(),
             shown.map_or_else(String::new, |rating| format!("\n{}", rating.budget_line()))
@@ -6320,7 +6332,7 @@ fn outside_words(words: String) -> Option<design::outcome::Sentence> {
 
 /// What the run's message footer can press.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum RunPress {
+pub(super) enum RunPress {
     /// The Undo of the newest step's result (the saved HP's use).
     UndoStep,
     SaveAsNew,
@@ -6818,6 +6830,11 @@ fn split_target<'a>(action: &'a str, target: &str) -> Option<(&'a str, &'a str)>
         .strip_suffix(target)
         .map(|before| (before, ""))
         .or_else(|| action.strip_prefix(target).map(|after| ("", after)))
+        // A name between the act's words, as a whole word: `mark ` · name · ` absent`.
+        .or_else(|| {
+            let at = action.find(&format!(" {target} "))? + 1;
+            Some((&action[..at], &action[at + target.len()..]))
+        })
 }
 
 /// The act's own words without the target and its joining word: an effect's four, then two
@@ -11800,6 +11817,12 @@ mod tests {
                     ("remove Frightened from ", ""),
                     ("", " present"),
                     ("", " absent"),
+                    // Review of PR 338: the name between the act's words keeps its place, cut
+                    // to its first word and copy number.
+                    ("mark ", " absent"),
+                    ("mark ", " present"),
+                    ("move ", " up"),
+                    ("move ", " down"),
                     ("initiative for ", ""),
                     ("start concentration for ", ""),
                     ("stop concentration for ", ""),

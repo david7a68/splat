@@ -10276,11 +10276,17 @@ pub mod run_roster_conflict {
         }
         // Astra 3: at 960 the whole fault is read in view, reached by the keyboard alone.
         let full_fault = "Ember Cultist's stat block could not be read. Its row still works.";
-        let reached = d.tab_to("Campaign → Packages");
+        // The footer is last in the reading order, so the keyboard's fast way to it is Shift+Tab
+        // (review of PR 338: within 10 reverse stops of the top).
+        let stops = d.shift_tab_to("Campaign → Packages");
         d.observe(
             "iter-26-R-AI1-whole",
-            d.window_size() == SMALL && reached && d.visible_text(full_fault),
-            format!("At 960, Tab reaches the repair and the whole fault shows: reached {reached}"),
+            d.window_size() == SMALL
+                && stops.is_some_and(|stops| stops <= 10)
+                && d.visible_text(full_fault),
+            format!(
+                "At 960, Shift+Tab reaches the repair and the whole fault shows: stops {stops:?}"
+            ),
         );
         // Astra 3 changes this check on purpose: the error's whole fault wraps in the run's message
         // footer (the lead's footer ruling: the list keeps its top and only its visible height

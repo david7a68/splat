@@ -26,9 +26,7 @@ const ASYNC_TIMEOUT: Duration = Duration::from_secs(180);
 // Diagnostic feedback may stop early, but must still fail on missing text.
 // The full gate retains the original allowance for slow background work.
 const DIAGNOSTIC_TEXT_TIMEOUT: Duration = Duration::from_secs(5);
-// The typed footer (M2) comes after its pane's body in the reading order: a run with a full
-// roster and a sheet beside it reaches its footer after more than 80 stops.
-const TAB_LIMIT: usize = 160;
+const TAB_LIMIT: usize = 80;
 
 pub(super) fn check_settle_deadline(scenario: &str, started: Instant, timeout: Duration) {
     if started.elapsed() < timeout {
@@ -2315,6 +2313,32 @@ impl<'a> Driver<'a> {
 
     /// Press Tab until a control has focus. A person working by keyboard alone does
     /// the same. Returns false if Tab never reached it.
+    /// Shift+Tab from no focus until `name` has the focus: the reverse order, in which a pane's
+    /// footer (last in the reading order) comes first. The number of stops, or None.
+    pub fn shift_tab_to(&mut self, name: &str) -> Option<usize> {
+        let caption = format!("Keyboard: Shift+Tab to {name}");
+        self.film_caption(&caption);
+        self.clear_focus();
+        for stop in 1..=TAB_LIMIT {
+            self.harness
+                .key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::Tab);
+            self.harness.run_steps(4);
+            self.interactions += 1;
+            let focused = self
+                .harness
+                .root()
+                .children_recursive()
+                .find(|node| node.accesskit_node().is_focused())
+                .map(|node| node_name(&node));
+            if focused.as_deref() == Some(name) {
+                self.film_result(&caption);
+                return Some(stop);
+            }
+        }
+        self.clear_focus();
+        None
+    }
+
     pub fn tab_to(&mut self, name: &str) -> bool {
         let caption = format!("Keyboard: Tab to {name}");
         self.film_caption(&caption);
@@ -3278,6 +3302,25 @@ impl<'a> Driver<'a> {
     }
 
     /// Capture the current state with the pointer resting on a control.
+    /// The words on screen while the pointer rests on `target` until its tooltip shows; the
+    /// pointer then leaves. Not an act of the DM's task.
+    pub fn hover_words(&mut self, target: &str) -> String {
+        let Some(rect) = self
+            .nodes()
+            .into_iter()
+            .find(|node| node.name == target && node.in_view())
+            .map(|node| node.rect)
+        else {
+            return String::new();
+        };
+        self.harness.hover_at(rect.center());
+        self.harness.run_steps(6);
+        let words = self.painted_in(self.harness.ctx.content_rect());
+        self.harness.remove_cursor();
+        self.harness.run_steps(2);
+        words
+    }
+
     pub fn state_hovering(&mut self, name: &str, target: &str) {
         self.capture_hovering(name, target, 2);
     }

@@ -816,6 +816,9 @@ pub(crate) struct Run {
     /// the step's Undo or its drop from the Undo stack (`owner_changed`), the run's close (the
     /// run goes). Only the newest step's result shows.
     step_results: crate::design::Results<StepOwner, StepResult>,
+    /// The scope of `step_results`: made when this run opens, and kept when its saved file
+    /// gets a new id (Save as a new run), so its results stay with the run on screen.
+    results_scope: Uuid,
     /// How many of the oldest steps came from the run file. Undo of an ending among them makes
     /// the fight live again by `continue_blocked`, as Continue fight does. Never saved.
     saved_steps: usize,
@@ -1355,6 +1358,7 @@ impl Run {
             history_steps: Vec::new(),
             next_step: 0,
             step_results: crate::design::Results::new(),
+            results_scope: Uuid::new_v4(),
             saved_steps: 0,
             selected: 0,
             also: BTreeSet::new(),
@@ -1568,14 +1572,19 @@ impl Run {
         self.next_step += 1;
         self.history_steps.push(step);
         self.step_results.record(StepResult {
-            owner: StepOwner { run: self.id, step },
+            owner: StepOwner {
+                run: self.results_scope,
+                step,
+            },
         });
     }
     /// A step left the Undo stack (undone, dropped as the oldest, or taken out by a sheet's
     /// update): its result ends.
     fn end_step_result(&mut self, step: u64) {
-        self.step_results
-            .owner_changed(&StepOwner { run: self.id, step });
+        self.step_results.owner_changed(&StepOwner {
+            run: self.results_scope,
+            step,
+        });
     }
     /// The newest Undo step's footer result, the one a footer result of the newest step shows.
     pub(crate) fn newest_step_result(
@@ -1583,7 +1592,12 @@ impl Run {
     ) -> Option<crate::design::results::Shown<'_, StepResult>> {
         let step = *self.history_steps.last()?;
         (self.history_steps.len() == self.history.len())
-            .then(|| self.step_results.get(&StepOwner { run: self.id, step }))
+            .then(|| {
+                self.step_results.get(&StepOwner {
+                    run: self.results_scope,
+                    step,
+                })
+            })
             .flatten()
     }
     /// The newest Undo step's name, if there is one.
@@ -2943,7 +2957,13 @@ impl Run {
             Command::Loot(rolls) if rolls.len() == 1 => Some(rolls[0].roll.key.clone()),
             _ => named.into_inner(),
         }
-        .filter(|name| label.ends_with(name.as_str()) || label.starts_with(name.as_str()));
+        // Review of PR 338: a name between the act's words (`mark Ember Cultist absent`,
+        // `move Oren Thistlewick up`) is a target too, shortened in its place.
+        .filter(|name| {
+            label.ends_with(name.as_str())
+                || label.starts_with(name.as_str())
+                || label.contains(&format!(" {name} "))
+        });
         (label, target)
     }
     fn describe_with<'a>(&'a self, command: &Command, name: &dyn Fn(&usize) -> &'a str) -> String {
@@ -3890,7 +3910,7 @@ impl Run {
         for step in &self.history_steps {
             if !steps.contains(step) {
                 self.step_results.owner_changed(&StepOwner {
-                    run: self.id,
+                    run: self.results_scope,
                     step: *step,
                 });
             }
@@ -4658,6 +4678,7 @@ impl Run {
             history_steps: Vec::new(),
             next_step: 0,
             step_results: crate::design::Results::new(),
+            results_scope: Uuid::new_v4(),
             saved_steps: 0,
             also: BTreeSet::new(),
             halved: BTreeSet::new(),
@@ -6934,7 +6955,22 @@ mod tests {
         let before = run.timeline_fact();
         let mut story = crate::timeline::Book::default();
         story.record_change(None, &before, None, None);
+        // Review of PR 338 (P2): the newest step's result stays with the run through Save as
+        // a new run (its file gets a new id; the results keep their scope).
+        let shown = |run: &Run| run.newest_step_result().map(|shown| shown.order());
+        let result = shown(&run);
+        assert!(result.is_some(), "iter-28-R-P2: a result before");
         run.save_as_new_run().unwrap();
+        assert_eq!(shown(&run), result, "iter-28-R-P2: the same result after");
+        // A later step's Undo still works, and gives back that result.
+        run.apply(Command::Damage(1, 1)).unwrap();
+        assert_ne!(shown(&run), result);
+        run.undo();
+        assert_eq!(
+            shown(&run),
+            result,
+            "iter-28-R-P2: Undo of a later step gives it back"
+        );
         story.record_change(Some(&before), &run.timeline_fact(), None, None);
         assert_eq!(story.events.len(), 1);
         assert_eq!(story.events[0].run, Some(run.id));
@@ -9007,6 +9043,58 @@ mod tests {
         assert!(run.saved_hp_used() && !run.rest_filled_saved_hp());
         assert!(run.back_to_sheets().is_none());
         assert!(run.use_saved_hp().is_err(), "the press cannot repeat");
+
+        // Review of PR 338 (P1): A's footer Undo is pressed in the frame in which the body adds
+        // step B. The stack's Undo would take back B, so the press is refused: B's change
+        // stays, A's HP stays, and A's line stays in its store.
+        let a_step = *run.history_steps.last().unwrap();
+        let b_max = run.state.participants[2].max_hp;
+        let shared = std::rc::Rc::new(std::cell::RefCell::new((run, false)));
+        let inner = shared.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(600.0, 400.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let (run, add_b) = &mut *inner.borrow_mut();
+                    let frame = crate::design::outcome::PaneFrame::new(ui);
+                    let messages = run.run_messages(&frame, true, ui.available_width());
+                    let paned = messages.pane(ui, crate::design::pane::Body::Content, |_| {
+                        if std::mem::take(add_b) {
+                            run.apply(Command::Health(2, Some(2), b_max)).unwrap();
+                        }
+                    });
+                    run.run_press(paned.pressed, &mut None);
+                });
+            });
+        crate::design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        shared.borrow_mut().1 = true;
+        {
+            use egui_kittest::kittest::Queryable;
+            harness.get_by_label("Undo: use saved HP").click();
+        }
+        harness.run_steps(2);
+        drop(harness);
+        let (mut run, _) = std::rc::Rc::try_unwrap(shared)
+            .ok()
+            .expect("the harness is gone")
+            .into_inner();
+        assert_eq!(
+            run.state.participants[2].hp,
+            Some(2),
+            "iter-28-R-P1: B's change stays"
+        );
+        assert_eq!(hp(&run)[..2], saved[..2], "iter-28-R-P1: A's HP stays");
+        assert!(
+            run.step_results
+                .get(&StepOwner {
+                    run: run.results_scope,
+                    step: a_step,
+                })
+                .is_some(),
+            "iter-28-R-P1: A's line stays"
+        );
+        run.undo();
 
         run.undo();
         assert_eq!(hp(&run), full, "Undo gives back the full HP");
