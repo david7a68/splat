@@ -5738,6 +5738,13 @@ impl Sessions {
         let block = ui
             .available_width()
             .min(design::READER_MEASURE.max(segments_width + design::XS));
+        // The back link's word lines up with the view choices below it: their words, or the
+        // drop-down's edge (the same choice as below).
+        let back_edge = if segments_width + design::XS <= ui.available_width() {
+            design::BackEdge::Segments
+        } else {
+            design::BackEdge::Text
+        };
         ui.horizontal(|ui| {
             ui.set_max_width(block);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -5761,13 +5768,10 @@ impl Sessions {
                     }
                 }
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                    back = Action::quiet("Recordings")
-                        .icon(icons::BACK)
-                        .name("Back to recordings")
-                        .density(Density::Read)
+                    back = design::TitleLine::back(crate::word!("Back to recordings"), back_edge)
+                        .context(&reading.name)
                         .show(ui)
                         .clicked();
-                    ui.label(Type::Small.rich(ui, &reading.name).color(c.muted));
                 });
             });
         });
@@ -6720,7 +6724,7 @@ impl Sessions {
             } else {
                 if self.form.is_none()
                     && Action::quiet("All sessions")
-                        .icon(icons::BACK)
+                        .icon(icons::LEGACY_BACK)
                         .density(Density::Read)
                         .show(ui)
                         .clicked()
@@ -6802,7 +6806,7 @@ impl Sessions {
             }
         } else if narrow {
             if Action::quiet("All templates")
-                .icon(icons::BACK)
+                .icon(icons::LEGACY_BACK)
                 .density(Density::Read)
                 .show(ui)
                 .clicked()
@@ -6891,7 +6895,7 @@ impl Sessions {
     /// The template list's head: the way back to the sessions. It never scrolls.
     fn template_list_head(&mut self, ui: &mut egui::Ui) {
         if Action::quiet("Sessions")
-            .icon(icons::BACK)
+            .icon(icons::LEGACY_BACK)
             .show(ui)
             .clicked()
         {

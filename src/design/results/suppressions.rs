@@ -58,6 +58,8 @@ impl Ban {
                 "check_literal",
                 "check_choice",
                 "__template",
+                // `lead!`'s check (`Lead::__checked`).
+                "__checked",
             ],
             Self::Order => &["outcome_at"],
             Self::Body => &["banner", "row_fault", ".show("],

@@ -825,18 +825,46 @@ fn submenu_clear_of_chrome(
     Ok(submenu + margin)
 }
 
-/// A warning's file line starts at the message words: the path, whole, then `Edit in Obsidian`
-/// and `Show file`. A link that wraps starts its row at the message words too.
+/// A typed footer file line (`design::outcome::FileLine`, the Timeline's flags) starts at the
+/// message words: the path, whole, then `Edit in Obsidian: <relative>` and `Show file:
+/// <relative>`, named with the file. A link that wraps starts its row at the message words too.
 fn file_links_at_message_words(
     d: &Driver<'_>,
     message: &str,
     path: &std::path::Path,
     relative: &str,
 ) -> Result<(), String> {
+    file_links_at_words(d, message, path, relative, true)
+}
+
+/// The same for a file line still drawn by hand (`encounters::file_line` in
+/// `message_with_actions`: Encounters' unread rows, Campaign's and Rules and runs' flags, run
+/// setup), whose links are named only `Edit in Obsidian` and `Show file`.
+fn file_links_at_message_words_by_hand(
+    d: &Driver<'_>,
+    message: &str,
+    path: &std::path::Path,
+    relative: &str,
+) -> Result<(), String> {
+    file_links_at_words(d, message, path, relative, false)
+}
+
+fn file_links_at_words(
+    d: &Driver<'_>,
+    message: &str,
+    path: &std::path::Path,
+    relative: &str,
+    typed: bool,
+) -> Result<(), String> {
     let nodes = d.nodes();
     let words = nodes
         .iter()
-        .find(|node| node.name.starts_with(message) && node.in_view())
+        // The words' own label, not the footer group that is named with every message.
+        .find(|node| {
+            node.role == egui::accesskit::Role::Label
+                && node.name.starts_with(message)
+                && node.in_view()
+        })
         .ok_or(format!("{message}… is not in view"))?
         .rect;
     let shown = nodes
@@ -856,10 +884,15 @@ fn file_links_at_message_words(
         ));
     }
     for link in ["Edit in Obsidian", "Show file"] {
+        let named = if typed {
+            format!("{link}: {relative}")
+        } else {
+            link.to_owned()
+        };
         let target = nodes
             .iter()
             .filter(|node| {
-                node.name == link && node.in_view() && node.rect.center().y >= shown.top()
+                node.name == named && node.in_view() && node.rect.center().y >= shown.top()
             })
             .min_by(|a, b| a.rect.top().total_cmp(&b.rect.top()))
             .ok_or(format!("{link} is not in view below the message"))?

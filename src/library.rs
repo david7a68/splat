@@ -7251,7 +7251,7 @@ impl Library {
         let mut make_clicked = false;
         let mut choose_clicked = false;
         let back = Action::quiet("Back")
-            .icon(icons::BACK)
+            .icon(icons::LEGACY_BACK)
             .density(Density::Read);
         let edit_label = if editable {
             "Edit Markdown"
