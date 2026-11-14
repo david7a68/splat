@@ -47,7 +47,7 @@ impl Fault for SettingsFault<'_> {
 
     #[allow(
         clippy::disallowed_methods,
-        reason = "the faults carry the settings reader's, the system's and the keyring's words"
+        reason = "the faults carry the settings reader’s, the system’s and the keyring’s words"
     )]
     fn cause(&self) -> Sentence {
         use crate::sentence;
@@ -968,7 +968,7 @@ impl ProcessingSettings {
 /// A key's fault, where its key row is: the row's own place, so the DM reads it beside the key.
 #[allow(
     clippy::disallowed_methods,
-    reason = "a key's fault belongs to its key row (`Ban::Body`)"
+    reason = "a key’s fault belongs to its key row (`Ban::Body`)"
 )]
 fn key_fault(ui: &mut egui::Ui, fault: &SettingsFault<'_>) {
     crate::design::outcome::row_fault(ui, fault);

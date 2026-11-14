@@ -979,7 +979,7 @@ impl Fault for CheckFault<'_> {
 
     #[allow(
         clippy::disallowed_methods,
-        reason = "a table's and an act's words come from the DM's table and the Timeline's write"
+        reason = "a table’s and an act’s words come from the DM’s table and the Timeline’s write"
     )]
     fn cause(&self) -> Sentence {
         let words = match self {
@@ -993,7 +993,7 @@ impl Fault for CheckFault<'_> {
 /// Timeline, inside their forms, so it is the row's place, not a pane's footer.
 #[allow(
     clippy::disallowed_methods,
-    reason = "a check's fault belongs to its line in the block (`Ban::Body`)"
+    reason = "a check’s fault belongs to its line in the block (`Ban::Body`)"
 )]
 fn check_fault(ui: &mut egui::Ui, fault: &CheckFault<'_>) {
     design::outcome::row_fault(ui, fault);
