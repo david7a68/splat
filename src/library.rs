@@ -2018,18 +2018,11 @@ impl Registration {
 /// (`list_formats::package_section_lines`: the `## Packages` section, code blocks left out), so
 /// Undo changes no line that the reader does not read as a choice.
 fn without_package_lines(text: &str, package: Uuid, links: &[&str]) -> String {
-    let mark = format!(" ^{package}");
     let mut drop = Vec::new();
     let mut under = false;
     for cell in content::list_formats::package_section_lines(text) {
         let words = cell.value.as_str();
-        let task = ["- [", "* [", "+ ["]
-            .iter()
-            .any(|start| words.starts_with(start));
-        let named = words
-            .get(6..)
-            .is_some_and(|name| links.contains(&name.trim()));
-        if task && (words.ends_with(&mark) || named) {
+        if task_names_package(words, package, links) {
             under = true;
             drop.push(cell.range);
         } else if under && words.starts_with([' ', '\t']) && !words.trim().is_empty() {
@@ -2046,6 +2039,23 @@ fn without_package_lines(text: &str, package: Uuid, links: &[&str]) -> String {
     }
     out.push_str(&text[at..]);
     out
+}
+
+/// True when a line of the package list is a task line that names `package`: by its id after
+/// ` ^` (as the reader splits the line; spaces around the id do not hide it) or, with no id, by
+/// one of `links`, the names that named it.
+fn task_names_package(words: &str, package: Uuid, links: &[&str]) -> bool {
+    let task = ["- [", "* [", "+ ["]
+        .iter()
+        .any(|start| words.starts_with(start))
+        && matches!(words.get(2..5), Some("[x]" | "[X]" | "[ ]"));
+    let Some(item) = words.get(6..).filter(|_| task) else {
+        return false;
+    };
+    match item.rsplit_once(" ^") {
+        Some((_, id)) => Uuid::parse_str(id.trim()).is_ok_and(|id| id == package),
+        None => links.contains(&item.trim()),
+    }
 }
 
 /// Why a registration's Undo waits while another campaign chose the copy.
@@ -12255,7 +12265,11 @@ mod tests {
             "campaign page",
             "outside edit",
             "outside name link",
+            "outside id, trailing spaces",
         ] {
+            // The reader does not read a task line whose id has spaces after it (a fault on
+            // that line), but Undo still takes that line out: it names the copy's identity.
+            let read_as_choice = path != "outside id, trailing spaces";
             let d = register(&mut library, &mut app.campaigns, &copied, false);
             assert_eq!(
                 words(&library, &d).as_deref(),
@@ -12336,6 +12350,17 @@ mod tests {
                 "outside edit" => {
                     choose_by_hand(crate::content_workspace::EntryRef::id(module.id));
                 }
+                "outside id, trailing spaces" => {
+                    choose_by_hand(crate::content_workspace::EntryRef::id(module.id));
+                    let mark = format!(" ^{}\n", module.id);
+                    let text = fs::read_to_string(&campaign_file).unwrap();
+                    assert!(text.contains(&mark), "fixture: the id-bearing line\n{text}");
+                    fs::write(
+                        &campaign_file,
+                        text.replacen(&mark, &format!(" ^{}  \n", module.id), 1),
+                    )
+                    .unwrap();
+                }
                 _ => {
                     // A campaign file's package list names a package by its id or, written by
                     // hand, by its name alone (a link). The key form is not in the file's list;
@@ -12384,19 +12409,21 @@ mod tests {
             if path != "encounter search with a draft" {
                 reload(&mut library, &app.campaigns);
             }
-            assert_eq!(
-                words(&library, &d).as_deref(),
-                Some("Reaches is registered."),
-                "point-2-{path}"
-            );
-            // Undo of the registration takes the later choice out with it, in whatever form it
-            // names the copy; the other packages' choices stay, and the choice's own result
-            // ends with its data.
-            library.selection_undo = Some(SelectionUndo {
-                campaign: campaign.clone(),
-                before: choices_before.clone(),
-                after: CampaignDocument::load(&campaign).unwrap().selections,
-            });
+            if read_as_choice {
+                assert_eq!(
+                    words(&library, &d).as_deref(),
+                    Some("Reaches is registered."),
+                    "point-2-{path}"
+                );
+                // Undo of the registration takes the later choice out with it, in whatever
+                // form it names the copy; the other packages' choices stay, and the choice's
+                // own result ends with its data.
+                library.selection_undo = Some(SelectionUndo {
+                    campaign: campaign.clone(),
+                    before: choices_before.clone(),
+                    after: CampaignDocument::load(&campaign).unwrap().selections,
+                });
+            }
             library
                 .undo_package_registration(&d, &mut app.campaigns)
                 .unwrap();
