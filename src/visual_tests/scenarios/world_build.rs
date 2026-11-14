@@ -11723,11 +11723,45 @@ pub fn campaign_copy_registered(d: &mut Driver<'_>) {
     }
     d.type_into("Campaign name", NAME);
     d.type_into("Folder", &copy.display().to_string());
+    // Wave 2 d (C), from the review of PR 320: with no account at 960, the import hint follows
+    // the open form. It was drawn above the form once the account heading left the view (here
+    // the footer's result takes the room), and moved the form and its pressed Add campaign by
+    // its height.
+    const IMPORT_HINT: &str = "To import from D&D Beyond,";
+    let account_in_view = |d: &Driver<'_>| {
+        d.nodes()
+            .into_iter()
+            .find(|node| node.name.eq_ignore_ascii_case("D&D Beyond account"))
+            .map(|node| node.fully_in_view())
+    };
+    let header = |d: &Driver<'_>| d.place_of("Add campaign");
+    let pressed = (header(d), account_in_view(d));
     d.click_below("Folder", "Add campaign");
     d.expect("Register as a new campaign");
     d.click("Register as a new campaign");
     let result = crate::campaigns::copy_registered(NAME);
     d.wait_for_text(&result);
+    let create = d
+        .nodes()
+        .into_iter()
+        .filter(|node| node.name == "Add campaign")
+        .map(|node| node.rect)
+        .nth(1);
+    let hint = d.place_of(IMPORT_HINT);
+    let shown = (header(d), account_in_view(d));
+    d.observe(
+        "iter-28-C-import-hint",
+        pressed.1 == Some(true)
+            && shown.1 == Some(false)
+            && pressed.0.is_some()
+            && shown.0 == pressed.0
+            && hint
+                .zip(create)
+                .is_some_and(|(hint, create)| hint.top() >= create.bottom()),
+        format!(
+            "Before (Add campaign header, account heading whole in view): {pressed:?}; after the result: {shown:?}; hint {hint:?} under the form's Add campaign {create:?}"
+        ),
+    );
     undo_follows_message(d, "iter20-E-SD2-undo", &result, "Undo register campaign");
     for size in [SMALL, DEFAULT, LARGE] {
         let (message, build, words, clear) = d.at_size(size, |d| {

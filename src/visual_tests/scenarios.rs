@@ -5691,42 +5691,6 @@ pub mod settings {
         d.click(CANCEL);
         d.app_mut().settings.simulate(Account::NotConnected);
         d.settle();
-        // Wave 2 d (C), from the review of PR 320: at 960 with no account, Add campaign opens
-        // its form in place. Opening it pushes the account heading out of view; the import hint
-        // follows the open form (it was drawn above the form once the heading left the view,
-        // and moved the pressed header by its height).
-        const IMPORT_HINT: &str = "To import from D&D Beyond,";
-        let closed = (
-            d.place_of("Add campaign"),
-            d.has_containing(IMPORT_HINT),
-            d.in_view("D&D Beyond account"),
-        );
-        d.click("Add campaign");
-        d.wait_for_text("Campaign name");
-        let header = d.place_of("Add campaign");
-        let hint = d.painted_rect_in(IMPORT_HINT, egui::Rect::EVERYTHING);
-        let create = d
-            .nodes()
-            .into_iter()
-            .filter(|node| node.name == "Add campaign")
-            .map(|node| node.rect)
-            .nth(1);
-        d.observe(
-            "iter-28-C-import-hint",
-            closed.0.is_some()
-                && !closed.1
-                && closed.2
-                && !d.in_view("D&D Beyond account")
-                && header == closed.0
-                && hint
-                    .zip(create)
-                    .is_some_and(|(hint, create)| hint.top() >= create.bottom()),
-            format!(
-                "Closed (header, hint, account heading in view): {closed:?}; open: header {header:?}, hint {hint:?}, Add campaign {create:?}"
-            ),
-        );
-        d.state("add-campaign-no-account", Sizes::Default);
-        d.click("Add campaign");
 
         d.state_prepared("campaign-row-menu", Sizes::Default, |d| {
             if !d.in_view("Remove…") {
@@ -10666,6 +10630,55 @@ pub mod signed_in {
             "Choosing a remote campaign opens its import, with the name filled in",
         );
         d.click("Cancel");
+        // Wave 2 d (C): the D&D Beyond link is a `Dropdown`. Its list opens under the control,
+        // as wide as it, with the account's campaigns; one that another campaign links is a
+        // blocked choice with its reason, and Escape closes the list.
+        const LINK_CHOICES: [&str; 4] = [
+            "Not linked",
+            "The Emberfall Marches",
+            "Quiet Harbor",
+            "Salt Road",
+        ];
+        let (control, rows, blocked) = d.aside(|d| {
+            go_campaign(d);
+            d.click(LINK_TAB);
+            d.click_starting("D&D Beyond campaign link: ");
+            d.wait_for_text("Salt Road");
+            let nodes = d.nodes();
+            let control = nodes
+                .iter()
+                .find(|node| node.name.starts_with("D&D Beyond campaign link: "))
+                .map(|node| node.rect);
+            let rows: Vec<egui::Rect> = nodes
+                .iter()
+                .filter(|node| {
+                    LINK_CHOICES.contains(&node.name.as_str())
+                        && node.in_view()
+                        && control.is_some_and(|control| node.rect.top() >= control.bottom())
+                })
+                .map(|node| node.rect)
+                .collect();
+            (
+                control,
+                rows,
+                d.visible_text("Already linked to another campaign."),
+            )
+        });
+        d.observe(
+            "iter-28-C-link-dropdown",
+            blocked
+                && rows.len() == LINK_CHOICES.len()
+                && control.is_some_and(|control| {
+                    rows.iter().all(|row| {
+                        row.left() >= control.left() - 0.5 && row.right() <= control.right() + 0.5
+                    })
+                }),
+            format!(
+                "Link control {control:?}; its open choices {rows:?}; blocked reason {blocked}"
+            ),
+        );
+        d.state("link-dropdown-open", Sizes::Standard);
+        d.press(Key::Escape);
         d.begin_task();
 
         go_party(d);
