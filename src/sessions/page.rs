@@ -4439,10 +4439,10 @@ impl Sessions {
                     }
                 });
             } else {
-                self.show_prepared(ui, &prepared, false);
+                self.show_prepared(ui, prepared, false);
                 if let Some(summary) = &prepared.summary {
                     ui.label(Type::Small.rich(ui, summary).color(colors().muted));
-                    self.show_prepared(ui, &prepared, true);
+                    self.show_prepared(ui, prepared, true);
                 }
             }
             self.world_changes(ui);
