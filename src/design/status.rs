@@ -156,13 +156,40 @@ mod tests {
                         color: colors().muted,
                     },
                 );
+                // A painted row's status: the kind's two colours; one colour stays one.
+                for (text, look) in [
+                    (
+                        format!("May 3 · {} Recording · Playing", icons::RECORD),
+                        crate::design::InTextLook::from(StatusKind::Recording),
+                    ),
+                    (
+                        format!("May 4 · {} Stopped", icons::ERROR),
+                        colors().result.error.into(),
+                    ),
+                ] {
+                    let word = text.split(" · ").nth(1).unwrap().to_owned();
+                    let galley = crate::design::status_in_text(
+                        ui,
+                        &text,
+                        Some((word.as_str(), look)),
+                        400.0,
+                    );
+                    ui.painter().galley(ui.cursor().min, galley, colors().muted);
+                }
             });
         });
         let c = colors();
-        assert_eq!(colours(&output, icons::RECORD), [c.recording, c.recording]);
+        assert_eq!(colours(&output, icons::RECORD), [c.recording; 3]);
         assert_eq!(colours(&output, "Recording 12:03"), [c.text]);
         assert_eq!(colours(&output, "Recording 12:04"), [c.text]);
         assert_eq!(colours(&output, icons::OK), [c.muted]);
         assert_eq!(colours(&output, "Saved"), [c.muted]);
+        assert_eq!(colours(&output, "May 3 ·"), [c.muted]);
+        assert_eq!(colours(&output, "Recording"), [c.text]);
+        assert_eq!(colours(&output, "· Playing"), [c.muted]);
+        assert_eq!(
+            colours(&output, &format!("{} Stopped", icons::ERROR)),
+            [c.result.error]
+        );
     }
 }

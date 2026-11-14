@@ -1702,25 +1702,62 @@ pub fn status<'a>(ui: &mut Ui, state: impl Into<Tinted<'a>>) -> Response {
     status_label(ui, state.into())
 }
 
-/// A painted row keeps its status word in the shared status colour.
-pub fn status_in_text(
+/// The look of a status in a painted row: one colour for its icon and word, or a
+/// [`super::StatusKind`]'s, which decides both apart (R5: a live recording's icon alone is red).
+#[derive(Clone, Copy, Debug)]
+pub enum InTextLook {
+    One(Color32),
+    Kind(super::StatusKind),
+}
+
+impl From<Color32> for InTextLook {
+    fn from(color: Color32) -> Self {
+        Self::One(color)
+    }
+}
+
+impl From<super::StatusKind> for InTextLook {
+    fn from(kind: super::StatusKind) -> Self {
+        Self::Kind(kind)
+    }
+}
+
+/// A painted row keeps its status word in the shared status colour. With a kind, the part of
+/// the status up to its kind's icon takes the icon's colour, and the rest the word's.
+pub fn status_in_text<L: Into<InTextLook>>(
     ui: &Ui,
     text: &str,
-    status: Option<(&str, Color32)>,
+    status: Option<(&str, L)>,
     width: f32,
 ) -> Arc<egui::Galley> {
     let mut job = LayoutJob::default();
     job.wrap.max_width = width;
-    let (before, word, after, color) = status
-        .and_then(|(word, color)| {
+    let muted = colors().muted;
+    let (before, word, after, look) = status
+        .and_then(|(word, look)| {
             text.split_once(word)
-                .map(|(before, after)| (before, word, after, color))
+                .map(|(before, after)| (before, word, after, look.into()))
         })
-        .unwrap_or((text, "", "", colors().muted));
+        .unwrap_or((text, "", "", InTextLook::One(muted)));
+    let (icon, word, icon_color, word_color) = match look {
+        InTextLook::One(color) => ("", word, color, color),
+        InTextLook::Kind(kind) => {
+            let at = word
+                .find(kind.icon())
+                .map_or(0, |at| at + kind.icon().len());
+            (
+                &word[..at],
+                &word[at..],
+                kind.icon_color(),
+                kind.word_color(),
+            )
+        }
+    };
     for (text, color) in [
-        (before, colors().muted),
-        (word, color),
-        (after, colors().muted),
+        (before, muted),
+        (icon, icon_color),
+        (word, word_color),
+        (after, muted),
     ] {
         job.append(
             text,

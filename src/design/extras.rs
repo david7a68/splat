@@ -109,7 +109,9 @@ impl Heading<'_> {
 }
 
 /// A heading, with its own space above it: `Heading::above` from the item before it, none when it
-/// is the first thing in its column. The space under it is `Heading::below`. A caller adds no
+/// is the first thing in its column. The space under it is `Heading::below`. In a row (a
+/// horizontal layout) it adds no space at all: a column's space would become space at its side
+/// there; the row's owner gives the space above the row. A caller adds no
 /// space before or after a heading (Clippy refuses a raw `add_space`; a `gap` there is a fault a
 /// review sees).
 ///
@@ -128,9 +130,10 @@ impl Heading<'_> {
 /// ```
 pub fn heading(ui: &mut Ui, heading: Heading<'_>) -> Response {
     let first = ui.cursor().top() <= ui.max_rect().top() + 0.5;
+    let in_row = ui.layout().main_dir().is_horizontal();
     // egui puts the item gap after every item; the heading's own space replaces it.
     let spacing = ui.spacing().item_spacing.y;
-    if !first {
+    if !first && !in_row {
         space(ui, heading.above() - spacing);
     }
     let response = match heading {
@@ -151,7 +154,9 @@ pub fn heading(ui: &mut Ui, heading: Heading<'_>) -> Response {
             response
         }
     };
-    space(ui, heading.below() - spacing);
+    if !in_row {
+        space(ui, heading.below() - spacing);
+    }
     response
 }
 
@@ -464,6 +469,28 @@ mod tests {
                 );
                 let below = after.rect.top() - next.rect.bottom();
                 assert!(above > below, "{kind:?}: {above} above, {below} below");
+                // In a row the heading adds no space at its sides (row 93): it starts where
+                // the row starts, and the next item is one item gap after it. (A serif
+                // `Section` heading has its own rule and is never drawn in a row.)
+                if matches!(kind, Heading::Section(_)) {
+                    return;
+                }
+                let gap = ui.spacing().item_spacing.x;
+                ui.label("A row");
+                let row = ui.horizontal(|ui| {
+                    let start = ui.cursor().left();
+                    let heading = heading(ui, kind).rect;
+                    let status = ui.label("Connected").rect;
+                    (start, heading, status)
+                });
+                let (start, heading, status) = row.inner;
+                assert!(
+                    (heading.left() - start).abs() < 0.5
+                        && (status.left() - heading.right() - gap).abs() < 0.5,
+                    "{kind:?}: in a row, starts at {} (row {start}), next item {} after it",
+                    heading.left(),
+                    status.left() - heading.right()
+                );
             });
         }
     }

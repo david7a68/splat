@@ -628,8 +628,10 @@ pub struct Sessions {
     move_run_here: Option<(Uuid, String)>,
     /// The open run moved to another session, with `Undo move`.
     moves: design::Results<kept::Page, kept::Moved>,
-    /// When a recording last stopped, so the rail can say it was kept.
-    saved_at: Option<Instant>,
+    /// When a recording last stopped, and the campaign it was recorded in: the owner, so the
+    /// rail says it was kept only while that campaign is open (another campaign's rail never
+    /// says it). It ends after `SAVED_WORD_FOR`.
+    saved_at: Option<(Option<Uuid>, Instant)>,
     note_had_focus: bool,
     /// The caret to bring into view, on the frame after the editor has laid out.
     caret_to_show: Option<usize>,
@@ -1294,19 +1296,22 @@ fn session_detail(
         .chain(detail.lines().map(plan_summary))
         .collect::<Vec<_>>()
         .join("\n");
-    // The status's own colour: on its icon and word, or, for a live recording, on its icon only;
-    // its word keeps the row's detail colour (R5: red is a fault).
-    let word = state.map(|state| match state.look {
-        RecordingLook::One(color) => (
+    // The status's own look: one colour, or a kind's (R5: a live recording's icon alone is red,
+    // its word in the text colour).
+    let word = state.map(|state| {
+        let look = match state.look {
+            RecordingLook::One(color) => design::InTextLook::One(color),
+            RecordingLook::Kind(kind) => design::InTextLook::Kind(kind),
+        };
+        (
             plan_summary(&format!("{} {}", state.icon, state.word)),
-            color,
-        ),
-        RecordingLook::Kind(kind) => (state.icon.to_owned(), kind.icon_color()),
+            look,
+        )
     });
     design::status_in_text(
         ui,
         &detail,
-        word.as_ref().map(|(word, color)| (word.as_str(), *color)),
+        word.as_ref().map(|(word, look)| (word.as_str(), *look)),
         width,
     )
 }
@@ -1712,7 +1717,6 @@ impl Sessions {
     )]
     fn banner_notices(&mut self, ui: &mut egui::Ui) {
         let notes = self.on_page && self.view == View::Notes && self.form.is_none();
-        let width = ui.available_width().min(design::LIST_MEASURE);
         if notes && self.other_recording_shown() {
             self.other_recording_line(ui);
         }
@@ -1722,18 +1726,14 @@ impl Sessions {
             && (self.notice_session.is_none() || self.notice_session == self.selected)
             && let Some((tone, words)) = self.notice.clone()
         {
-            ui.horizontal_top(|ui| {
-                let room = width - Density::Read.control() - design::S;
-                ui.allocate_ui_with_layout(
-                    egui::vec2(room, 0.0),
-                    egui::Layout::top_down(egui::Align::Min),
-                    |ui| design::message(ui, tone, &words),
-                );
-                if design::icon_button(ui, icons::CLOSE, "Dismiss").clicked() {
-                    self.notice = None;
-                    self.notice_session = None;
-                }
+            // N6: the close icon on the words' first line, placed by the message part.
+            let close = design::outcome::dismiss_on_first_line(ui, |ui| {
+                design::message(ui, tone, &words);
             });
+            if close.clicked() {
+                self.notice = None;
+                self.notice_session = None;
+            }
         }
         if notes
             && let Some(note) = self
@@ -1922,98 +1922,85 @@ impl Sessions {
                             let has_choices =
                                 missing_input || alert.retry.is_some() || can_record || !here;
                             let message_width = ui.available_width().min(design::LIST_MEASURE);
-                            ui.horizontal_top(|ui| {
-                                let room = message_width - Density::Read.control() - design::S;
-                                ui.allocate_ui_with_layout(
-                                    egui::vec2(room, 0.0),
-                                    egui::Layout::top_down(egui::Align::Min),
-                                    |ui| {
-                                        if !has_choices {
-                                            design::message(ui, Tone::Error, &words);
-                                            words_end = ui.min_rect().bottom();
-                                            return;
-                                        }
-                                        design::message_with_actions(
-                                            ui,
-                                            Tone::Error,
-                                            &words,
-                                            |ui| {
-                                                words_end = ui.min_rect().top()
-                                                    - ui.spacing().item_spacing.y;
-                                                ui.horizontal_wrapped(|ui| {
-                                                    if missing_input
-                                                        && (if banner_primary {
-                                                            Action::primary("Choose an input")
-                                                        } else {
-                                                            Action::secondary("Choose an input")
-                                                        })
-                                                        .show(ui)
-                                                        .clicked()
-                                                    {
-                                                        self.wants_recording_input = true;
-                                                    }
-                                                    if let Some(path) = &alert.retry
-                                                        && (if banner_primary {
-                                                            Action::primary("Continue processing")
-                                                        } else {
-                                                            Action::secondary("Continue processing")
-                                                        })
-                                                        .blocked(retry_blocked)
-                                                        .show(ui)
-                                                        .clicked()
-                                                    {
-                                                        retry = Some((alert.session, path.clone()));
-                                                    }
-                                                    // One blocked control says why beside it, then `L` to the next.
-                                                    let mut gap = false;
-                                                    if alert.retry.is_some()
-                                                        && retry_blocked.is_some()
-                                                    {
-                                                        design::blocked_reason(ui, retry_blocked);
-                                                        gap = true;
-                                                    }
-                                                    let mut gap_before = |ui: &mut egui::Ui| {
-                                                        if std::mem::take(&mut gap) {
-                                                            ui.add_space(
-                                                                design::L
-                                                                    - ui.spacing().item_spacing.x,
-                                                            );
-                                                        }
-                                                    };
-                                                    if can_record {
-                                                        gap_before(ui);
-                                                        // With no input, Choose an input is the one primary.
-                                                        if (if banner_primary && !missing_input {
-                                                            Action::primary("Record again")
-                                                        } else {
-                                                            Action::secondary("Record again")
-                                                        })
-                                                        .show(ui)
-                                                        .clicked()
-                                                        {
-                                                            record_again = Some(alert.session);
-                                                        }
-                                                    }
-                                                    if !here {
-                                                        gap_before(ui);
-                                                        if Action::secondary("Open the session")
-                                                            .show(ui)
-                                                            .clicked()
-                                                        {
-                                                            open = Some(alert.session);
-                                                        }
-                                                    }
-                                                });
-                                            },
-                                        );
-                                    },
-                                );
-                                if design::icon_button(ui, icons::CLOSE, "Dismiss this error")
-                                    .clicked()
-                                {
-                                    dismiss = Some(index);
-                                }
+                            // N6: the close icon on the words' first line, placed by the message
+                            // part, as a footer's `Dismiss` is.
+                            let close = design::outcome::dismiss_on_first_line(ui, |ui| {
+                                ui.vertical(|ui| {
+                                    if !has_choices {
+                                        design::message(ui, Tone::Error, &words);
+                                        words_end = ui.min_rect().bottom();
+                                        return;
+                                    }
+                                    design::message_with_actions(ui, Tone::Error, &words, |ui| {
+                                        words_end =
+                                            ui.min_rect().top() - ui.spacing().item_spacing.y;
+                                        ui.horizontal_wrapped(|ui| {
+                                            if missing_input
+                                                && (if banner_primary {
+                                                    Action::primary("Choose an input")
+                                                } else {
+                                                    Action::secondary("Choose an input")
+                                                })
+                                                .show(ui)
+                                                .clicked()
+                                            {
+                                                self.wants_recording_input = true;
+                                            }
+                                            if let Some(path) = &alert.retry
+                                                && (if banner_primary {
+                                                    Action::primary("Continue processing")
+                                                } else {
+                                                    Action::secondary("Continue processing")
+                                                })
+                                                .blocked(retry_blocked)
+                                                .show(ui)
+                                                .clicked()
+                                            {
+                                                retry = Some((alert.session, path.clone()));
+                                            }
+                                            // One blocked control says why beside it, then `L` to the next.
+                                            let mut gap = false;
+                                            if alert.retry.is_some() && retry_blocked.is_some() {
+                                                design::blocked_reason(ui, retry_blocked);
+                                                gap = true;
+                                            }
+                                            let mut gap_before = |ui: &mut egui::Ui| {
+                                                if std::mem::take(&mut gap) {
+                                                    ui.add_space(
+                                                        design::L - ui.spacing().item_spacing.x,
+                                                    );
+                                                }
+                                            };
+                                            if can_record {
+                                                gap_before(ui);
+                                                // With no input, Choose an input is the one primary.
+                                                if (if banner_primary && !missing_input {
+                                                    Action::primary("Record again")
+                                                } else {
+                                                    Action::secondary("Record again")
+                                                })
+                                                .show(ui)
+                                                .clicked()
+                                                {
+                                                    record_again = Some(alert.session);
+                                                }
+                                            }
+                                            if !here {
+                                                gap_before(ui);
+                                                if Action::secondary("Open the session")
+                                                    .show(ui)
+                                                    .clicked()
+                                                {
+                                                    open = Some(alert.session);
+                                                }
+                                            }
+                                        });
+                                    });
+                                });
                             });
+                            if close.clicked() {
+                                dismiss = Some(index);
+                            }
                             if let Some(said) = &alert.said {
                                 let width = message_width - Density::Read.control() - design::S;
                                 let words_rect = egui::Rect::from_min_max(
@@ -3054,8 +3041,10 @@ impl Sessions {
 
     /// A recording stopped a moment ago, and its file is kept.
     pub fn just_saved(&self) -> bool {
-        self.saved_at
-            .is_some_and(|at| at.elapsed() < SAVED_WORD_FOR)
+        self.saved_at.is_some_and(|(campaign, at)| {
+            campaign == self.campaign.as_ref().map(|campaign| campaign.id)
+                && at.elapsed() < SAVED_WORD_FOR
+        })
     }
 
     /// A job finished, and the DM has not looked at it yet.
@@ -3159,7 +3148,10 @@ impl Sessions {
             self.notice = new_notice(
                 &mut self.notice_order,
                 if has_audio {
-                    self.saved_at = Some(Instant::now());
+                    self.saved_at = Some((
+                        self.campaign.as_ref().map(|campaign| campaign.id),
+                        Instant::now(),
+                    ));
                     (
                         Tone::Success,
                         format!("Recording saved: {}.", recording_title(&path)),
@@ -3440,7 +3432,9 @@ impl Sessions {
             return;
         };
         let word = status.word;
-        let detail = format!(" {} in {}", clock(live.recorder.seconds()), live.label);
+        // The time is the state's (R5: in the word's colour); the session it is in is detail.
+        let time = format!(" {}", clock(live.recorder.seconds()));
+        let detail = format!(" in {}", live.label);
         let format = |color| egui::TextFormat {
             font_id: Type::Small.font(ui),
             color,
@@ -3450,9 +3444,10 @@ impl Sessions {
         job.append(status.icon, 0.0, format(status.icon_color()));
         job.append(" ", 0.0, format(status.word_color()));
         job.append(word, 0.0, format(status.word_color()));
+        job.append(&time, 0.0, format(status.word_color()));
         job.append(&detail, 0.0, format(colors().muted));
         ui.add(egui::Label::new(job).wrap())
-            .on_hover_text(format!("{word}{detail}"));
+            .on_hover_text(format!("{word}{time}{detail}"));
     }
 
     fn record_line_body(&mut self, ui: &mut egui::Ui, settings: &ProcessingSettings) {
@@ -5107,7 +5102,8 @@ impl Sessions {
                 .is_some_and(|words| words.to_lowercase().contains(MISSING_INPUT_ERROR));
         let one = |icon, word, color| RecordingStatus::one(Status { icon, word, color });
         let status = if live {
-            self.recording_status().unwrap_or_else(RecordingStatus::live)
+            self.recording_status()
+                .unwrap_or_else(RecordingStatus::live)
         } else if processing {
             one(icons::BUSY, "Processing", c.connection.busy)
         } else if let Some(words) = stored.as_deref() {
@@ -9022,6 +9018,38 @@ mod tests {
         const A_MOVED: &str = "Moved 1 note and 1 template to Moved A.";
         const B_MOVED: &str = "Moved 1 note to Moved B.";
         const MISSING: &str = "Splat cannot find the session folder ";
+        // The rail's `Recording saved` is its campaign's (row 100 review, point 5): a recording
+        // stopped in A says so in A; B's rail says nothing of it; back in A it says so again,
+        // until `SAVED_WORD_FOR` ends it.
+        let saved = |harness: &egui_kittest::Harness<'_, State>| {
+            harness
+                .state()
+                .0
+                .rail_recording_status()
+                .map(|status| status.word)
+        };
+        let audio = tempfile::tempdir().unwrap();
+        harness.state_mut().0.live = Some(Live {
+            session: Uuid::nil(),
+            label: "Session 1".to_owned(),
+            recorder: crate::recording::Recorder::start(
+                crate::recording::Tool::Simulated,
+                None,
+                audio.path().join("live.wav"),
+            )
+            .unwrap(),
+        });
+        harness.state_mut().0.finish_recording();
+        harness.run_steps(2);
+        assert_eq!(saved(&harness), Some("Recording saved"), "A's own rail");
+        switch(&mut harness, &b);
+        assert_eq!(
+            saved(&harness),
+            None,
+            "B's rail says nothing of A's recording"
+        );
+        switch(&mut harness, &a);
+        assert_eq!(saved(&harness), Some("Recording saved"), "back in A");
         // Review of PR 346, item 1: the form shows two templates; one is deleted outside Splat
         // before the next scan, and the move's result says what it moved, not what was drawn.
         harness.state_mut().0.folder_text = "Moved A".to_owned();
