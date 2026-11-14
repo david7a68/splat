@@ -220,7 +220,9 @@ pub(crate) fn history_edges(d: &mut Driver<'_>) {
             }),
             format!("At {size:?}, (row at the list's top, the texts cut there): {measured:?}"),
         );
-        let gap = measured.and_then(|(_, edges)| edges).and_then(|(_, gap)| gap);
+        let gap = measured
+            .and_then(|(_, edges)| edges)
+            .and_then(|(_, gap)| gap);
         d.observe(
             "X66-combat-log-gap",
             gap.as_ref().map_or(size == SMALL, |(gap, _)| {

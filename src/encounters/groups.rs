@@ -2707,7 +2707,16 @@ impl Encounters {
                     if ui.data_mut(|data| data.remove_temp::<f32>(id)).is_some() {
                         ui.ctx().request_discard("The members column is not shown");
                     }
-                    add_pane(ui, draft, snapshot, search, focus_search, peek, separated, true)
+                    add_pane(
+                        ui,
+                        draft,
+                        snapshot,
+                        search,
+                        focus_search,
+                        peek,
+                        separated,
+                        true,
+                    )
                 }
             }
             return;
@@ -2725,7 +2734,16 @@ impl Encounters {
                 bottom: 0,
             }))
             .show_inside(ui, |ui| {
-                add_pane(ui, draft, snapshot, search, focus_search, peek, separated, false);
+                add_pane(
+                    ui,
+                    draft,
+                    snapshot,
+                    search,
+                    focus_search,
+                    peek,
+                    separated,
+                    false,
+                );
             });
         egui::CentralPanel::default()
             .frame(egui::Frame::new().inner_margin(egui::Margin {
@@ -2834,15 +2852,6 @@ fn member_key(path: &str, member: &MemberDraft) -> String {
 fn column_right_id(path: &str) -> egui::Id {
     egui::Id::new(("group_column_right", path))
 }
-
-/// The newest member result, with its Undo, in the editor's footer. A pressed Undo is recorded
-/// in `pressed` and applied with `undo_member_result` after the footer is drawn.
-/// FF8: the creature search's separation result takes its place beside it, newest first;
-/// its pressed Undo is recorded in `identity`.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-)]
 
 #[allow(
     clippy::disallowed_methods,

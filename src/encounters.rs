@@ -564,11 +564,7 @@ impl Draft {
         clippy::disallowed_methods,
         reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
     )]
-    fn results_into<'a>(
-        &mut self,
-        footer: &mut design::Footer<'a>,
-        pressed: &'a DraftUndo,
-    ) {
+    fn results_into<'a>(&mut self, footer: &mut design::Footer<'a>, pressed: &'a DraftUndo) {
         if self
             .replacement
             .as_ref()
@@ -4793,10 +4789,11 @@ impl Encounters {
         let Some(root) = self.active.as_ref().map(|active| active.path.clone()) else {
             return;
         };
-        let drafts = self
-            .group_draft
-            .iter_mut()
-            .chain(self.draft.iter_mut().flat_map(|draft| draft.groups.iter_mut()));
+        let drafts = self.group_draft.iter_mut().chain(
+            self.draft
+                .iter_mut()
+                .flat_map(|draft| draft.groups.iter_mut()),
+        );
         for draft in drafts {
             let owner = MemberOwner {
                 root: root.clone(),
@@ -4847,7 +4844,11 @@ impl Encounters {
             let draft = self
                 .group_draft
                 .iter_mut()
-                .chain(self.draft.iter_mut().flat_map(|draft| draft.groups.iter_mut()))
+                .chain(
+                    self.draft
+                        .iter_mut()
+                        .flat_map(|draft| draft.groups.iter_mut()),
+                )
                 .find(|draft| draft.id() == mark.0.draft);
             match draft {
                 Some(draft) => {
@@ -4915,7 +4916,6 @@ impl Encounters {
     /// The encounter editor's old footer (its pane keeps main's form until part P2): each
     /// separation of this campaign through the store's view, newest first, with its Undo, and why
     /// the last one failed. A pressed Undo names its separation's owner in `pressed`.
-    #[allow(deprecated)]
     fn separations_into<'a>(
         footer: &mut design::Footer<'a>,
         separations: &'a design::Results<SeparationOwner, Separation>,
@@ -4949,7 +4949,6 @@ impl Encounters {
 
     /// The encounter editor's old footer: each of its groups' member results through the store's
     /// view, with its Undo. A pressed Undo names the result's owner in `pressed`.
-    #[allow(deprecated)]
     fn members_into<'a>(
         footer: &mut design::Footer<'a>,
         results: &'a design::Results<MemberOwner, MemberMark>,
@@ -6062,7 +6061,12 @@ impl Encounters {
             self.separation_error.as_deref(),
             &separation_pressed,
         );
-        Self::members_into(&mut footer, &self.member_results, &member_lines, &member_pressed);
+        Self::members_into(
+            &mut footer,
+            &self.member_results,
+            &member_lines,
+            &member_pressed,
+        );
         if let Some(e) = self.error.clone() {
             // A deleted entry and an unreadable file are stated in the rows' tone too.
             let tone = self.error_tone();
@@ -6162,18 +6166,16 @@ impl Encounters {
                 EditorPane::Add => {
                     match &mut self.creature {
                         Some(editor) => creature_step = Self::creature_pane(ui, editor),
-                        None => {
-                            Self::add_pane(
-                                ui,
-                                draft,
-                                snapshot,
-                                search,
-                                focus_search,
-                                peek,
-                                &separated,
-                                compact,
-                            )
-                        }
+                        None => Self::add_pane(
+                            ui,
+                            draft,
+                            snapshot,
+                            search,
+                            focus_search,
+                            peek,
+                            &separated,
+                            compact,
+                        ),
                     }
                     false
                 }
@@ -6219,18 +6221,16 @@ impl Encounters {
                     });
                     match creature {
                         Some(editor) => creature_step = Self::creature_pane(ui, editor),
-                        None => {
-                            Self::add_pane(
-                                ui,
-                                draft,
-                                snapshot,
-                                search,
-                                focus_search,
-                                peek,
-                                &separated,
-                                compact,
-                            )
-                        }
+                        None => Self::add_pane(
+                            ui,
+                            draft,
+                            snapshot,
+                            search,
+                            focus_search,
+                            peek,
+                            &separated,
+                            compact,
+                        ),
                     }
                 });
                 // A panel clips to its own rect. It starts `S` before the roster's text edge, so

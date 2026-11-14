@@ -657,8 +657,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         (
             "src/encounters/groups.rs",
-            "member_result_into",
-            &[Ban::Results],
+            "group_editor_body",
+            &[Ban::Layout(1)],
         ),
         (
             "src/encounters/groups.rs",
@@ -670,10 +670,13 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "creature_pane",
             &[Ban::Results, Ban::Layout(2), Ban::Pane(1), Ban::RowKey(1)],
         ),
+        // The encounter editor's old footer (its pane keeps main's form until part P2) has no
+        // ticket: the separation's and the member result's Undo go by owner.
+        ("src/encounters.rs", "undo_member_of", &[Ban::ByOwner(1)]),
         (
             "src/encounters.rs",
-            "i20_w1_search_finds_a_hidden_duplicate_and_repairs_it_with_undo",
-            &[Ban::Results, Ban::Pane(1)],
+            "undo_separation_of",
+            &[Ban::ByOwner(1)],
         ),
         ("src/encounters.rs", "results_into", &[Ban::Results]),
         ("src/encounters.rs", "result_stamp", &[Ban::Results]),
@@ -1082,6 +1085,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/encounters.rs", "cause", &[Ban::Words]),
         ("src/encounters.rs", "kept_outcome", &[Ban::Words]),
+        ("src/encounters.rs", "outcome_words", &[Ban::Words]),
         ("src/trackers.rs", "act_words", &[Ban::Words]),
         ("src/trackers.rs", "cause", &[Ban::Words]),
         ("src/trackers/history.rs", "show", &[Ban::Body]),
@@ -1205,11 +1209,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/world/page.rs", "list", &[Ban::Extras(1)]),
         ("src/world/page.rs", "unread_pane", &[Ban::Extras(1)]),
         ("src/world/related.rs", "history_rows", &[Ban::Extras(1)]),
-        (
-            "src/encounters/groups.rs",
-            "editor_members",
-            &[Ban::Pane(1)],
-        ),
         (
             "src/encounters/groups.rs",
             "a_group_changed_on_disk_blocks_the_whole_save_and_keeps_the_draft",
