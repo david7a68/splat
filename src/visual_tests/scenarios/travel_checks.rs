@@ -600,6 +600,20 @@ pub fn run(d: &mut Driver<'_>) {
             d.click(NAV_LOOKUP);
         }
         d.expect("Encounter checks");
+        // Final review 2, 4d: beside Lookup the form is narrower; the scenario scrolls to the
+        // plan line so the capture shows it whole.
+        if let Some(block) = d.place_of("Encounter checks") {
+            d.scroll_until(block.center(), "In the plan", 6);
+        }
+        let seen = d
+            .nodes()
+            .iter()
+            .any(|node| node.name.contains("In the plan") && node.fully_in_view());
+        d.observe(
+            "iter-29-S1-G142-reveal",
+            seen,
+            "Beside Lookup, the capture shows In the plan whole",
+        );
     });
     if d.has("Close Lookup") {
         d.click("Close Lookup");
@@ -1089,17 +1103,25 @@ pub fn plan_act(d: &mut Driver<'_>) {
         format!("The footer's result, its Undo and In the plan are whole at each size: {whole:?}"),
     );
     d.state_prepared("plan-on-timeline", Sizes::All, |d| {
+        // The capture's resize puts the form back at its top; the scenario scrolls to the line.
+        if let Some(block) = d.place_of("Encounter checks") {
+            d.scroll_until(block.center(), "In the plan", 6);
+        }
         let nodes = d.nodes();
         let whole = |name: &str| {
             nodes
                 .iter()
                 .any(|node| node.name == name && node.fully_in_view())
         };
-        let shown = whole(PLANNED) && whole("Undo add plan line");
+        let shown = whole(PLANNED)
+            && whole("Undo add plan line")
+            && nodes
+                .iter()
+                .any(|node| node.name.contains("In the plan") && node.fully_in_view());
         d.observe(
             "iter-29-S1-G142-planned",
             shown,
-            "The capture after the press shows the result and its Undo whole",
+            "The capture after the press shows the result, its Undo and In the plan whole",
         );
     });
     let note_path = fs::read_dir(&dir)
