@@ -613,11 +613,6 @@ impl Draft {
                 }
             }
             Some(DraftResult::RemovedGroup) => self.undo_removed_group(),
-            Some(DraftResult::Member(index)) => {
-                if let Some(group) = self.groups.get_mut(index) {
-                    group.undo_member_result();
-                }
-            }
             None => return false,
         }
         true
@@ -2604,8 +2599,6 @@ impl Snapshot {
 enum DraftResult {
     RemovedGroup,
     Replacement,
-    /// The newest member result of the group at this index in `Draft::groups`.
-    Member(usize),
 }
 
 /// Which of a draft's own results had its Undo pressed in the editor's footer this frame.
@@ -2714,7 +2707,7 @@ impl design::outcome::Fault for EncounterFault {
             Self::SeparationFailed(words) => design::outcome::Sentence::outside(words.as_str())
                 .unwrap_or(crate::sentence!("The note was not changed.")),
             Self::FileWarning(words) => design::outcome::Sentence::outside(words.as_str())
-                .unwrap_or(crate::sentence!("The group's file has a problem.")),
+                .unwrap_or(crate::sentence!("The group’s file has a problem.")),
         }
     }
 }
@@ -5510,6 +5503,8 @@ impl Encounters {
                     }
                 }
                 FooterPress::ChooseFolder => self.wants_run_folder = true,
+                // The list shows no member result and no separation.
+                FooterPress::UndoMember | FooterPress::UndoSeparation => {}
             }
         }
         let Some(action) = paned.body else {
@@ -7625,6 +7620,7 @@ mod tests {
                     &mut None,
                     SearchRoster {
                         already: &|_| false,
+                        separated: &std::cell::Cell::new(None),
                     },
                 );
                 assert!(chosen.is_none());
@@ -7899,10 +7895,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     fn i20_w1_search_finds_a_hidden_duplicate_and_repairs_it_with_undo() {
         use egui_kittest::kittest::Queryable;
         let dir = tempfile::tempdir().unwrap();
@@ -7914,44 +7906,58 @@ mod tests {
         // The search can be hidden (a compact editor's roster tab); the footer stays.
         let search_shown = Arc::new(std::sync::atomic::AtomicBool::new(true));
         let shown = Arc::clone(&search_shown);
-        let mut harness = egui_kittest::Harness::new(move |ctx| {
-            ctx.data_mut(|data| {
-                data.insert_temp(egui::Id::new("reader_link_index"), index.clone())
-            });
-            egui::CentralPanel::default().show(ctx, |ui| {
-                // FF8: the result and its Undo are in the editor's footer, as the editor
-                // draws them.
-                let pressed = std::cell::Cell::new(false);
-                let mut footer = design::Footer::new("identity_test_footer", ui.available_width());
-                if let Some((order, words, undo)) = identity_line(ui.ctx()) {
-                    let pressed = &pressed;
-                    footer.result(order, words.clone(), true, move |ui| {
-                        if design::undo_message(ui, Tone::Success, &words, undo) {
-                            pressed.set(true);
+        let page = Encounters {
+            active: Some(active.clone()),
+            ..Default::default()
+        };
+        let campaign_for_undo = active.clone();
+        let mut harness = egui_kittest::Harness::builder().build_state(
+            move |ctx, page: &mut Encounters| {
+                ctx.data_mut(|data| {
+                    data.insert_temp(egui::Id::new("reader_link_index"), index.clone())
+                });
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    // FF8: the result and its Undo are in the footer, from the page's store,
+                    // as the group editor draws them; the Undo is used by its ticket.
+                    let frame = design::outcome::PaneFrame::new(ui);
+                    let mut messages = design::outcome::Messages::new(
+                        &frame,
+                        "identity_test_footer",
+                        ui.available_width(),
+                    );
+                    for line in page.separation_lines(&frame, &campaign_for_undo.path) {
+                        messages.kept(line);
+                    }
+                    if let Some(error) = page.separation_error.clone() {
+                        messages.outcome(design::outcome::FaultMessage::new(
+                            &EncounterFault::SeparationFailed(error),
+                        ));
+                    }
+                    let separated = std::cell::Cell::new(None);
+                    let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
+                        if !shown.load(std::sync::atomic::Ordering::Relaxed) {
+                            return;
                         }
+                        Encounters::creature_search(
+                            ui,
+                            std::iter::empty(),
+                            &mut "Rook".to_owned(),
+                            &mut false,
+                            &mut None,
+                            SearchRoster {
+                                already: &|_| false,
+                                separated: &separated,
+                            },
+                        );
                     });
-                }
-                identity_failure_into(ui.ctx(), &mut footer);
-                let bottom = footer.show_by_hand(ui);
-                if pressed.get() {
-                    undo_identity(ui.ctx());
-                }
-                let mut body = body_above(ui, bottom);
-                if !shown.load(std::sync::atomic::Ordering::Relaxed) {
-                    return;
-                }
-                Encounters::creature_search(
-                    &mut body,
-                    std::iter::empty(),
-                    &mut "Rook".to_owned(),
-                    &mut false,
-                    &mut None,
-                    SearchRoster {
-                        already: &|_| false,
-                    },
-                );
-            });
-        });
+                    page.record_separation(separated.into_inner());
+                    if let Some(ticket) = paned.pressed.and_then(|press| press.ticket) {
+                        page.undo_separation(ui.ctx(), ticket, &campaign_for_undo);
+                    }
+                });
+            },
+            page,
+        );
         design::theme::install(&harness.ctx);
         harness.run_steps(2);
         assert!(harness.query_by_label("No creatures match").is_none());
@@ -7981,7 +7987,7 @@ mod tests {
         harness.run_steps(4);
         search_shown.store(false, std::sync::atomic::Ordering::Relaxed);
         harness.run_steps(4);
-        assert!(harness.query_by_label("Undo separate entry").is_some());
+        assert!(harness.query_by_label("Undo: separate entry").is_some());
         search_shown.store(true, std::sync::atomic::Ordering::Relaxed);
         harness.run_steps(2);
         assert_eq!(identity_copies(), copies, "redraws copied the change");
@@ -7993,11 +7999,11 @@ mod tests {
             dir.path().join("Rook copy.away"),
         )
         .unwrap();
-        harness.get_by_label("Undo separate entry").click();
+        harness.get_by_label("Undo: separate entry").click();
         harness.run_steps(2);
         assert!(!dir.path().join("Rook copy.md").exists());
         assert!(
-            harness.query_by_label("Undo separate entry").is_some(),
+            harness.query_by_label("Undo: separate entry").is_some(),
             "a failed Undo keeps its Undo"
         );
         assert!(
@@ -8015,7 +8021,7 @@ mod tests {
             fs::read_to_string(dir.path().join("Rook copy.md")).unwrap(),
             separated
         );
-        harness.get_by_label("Undo separate entry").click();
+        harness.get_by_label("Undo: separate entry").click();
         harness.run_steps(2);
         assert_eq!(
             fs::read_to_string(dir.path().join("Rook copy.md")).unwrap(),
@@ -8060,6 +8066,7 @@ mod tests {
                     &mut None,
                     SearchRoster {
                         already: &|_| false,
+                        separated: &std::cell::Cell::new(None),
                     },
                 );
             });

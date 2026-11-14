@@ -3783,24 +3783,50 @@ mod tests {
         id
     }
 
-    /// The members with the editor's footer, as the group editor draws them.
-    #[allow(clippy::disallowed_methods)]
-    fn editor_members(
-        ui: &mut egui::Ui,
-        state: &mut (GroupDraft, Option<String>),
-        snapshot: &Snapshot,
-    ) {
-        let pressed = std::cell::Cell::new(false);
-        let mut footer = design::Footer::new("members_test_footer", ui.available_width());
-        let identity = std::cell::Cell::new(false);
-        member_result_into(&mut state.0, &mut footer, &pressed, None, &identity);
-        let bottom = footer.show_by_hand(ui);
-        if pressed.get() {
-            state.0.undo_member_result();
-            state.1 = None;
+    /// The draft, its open form, and the member result store, as the page holds them.
+    type MembersState = (
+        GroupDraft,
+        Option<String>,
+        design::Results<super::super::MemberOwner, super::super::MemberMark>,
+    );
+
+    /// The members with the editor's typed footer, as the group editor draws them: the member
+    /// result is recorded in its store in the frame of the act, and its Undo is pressed through
+    /// the footer and used by the press's ticket.
+    fn editor_members(ui: &mut egui::Ui, state: &mut MembersState, snapshot: &Snapshot) {
+        let owner = super::super::MemberOwner {
+            root: std::path::PathBuf::from("campaign"),
+            draft: state.0.id(),
+        };
+        if state.0.take_member_new() {
+            state.2.record(super::super::MemberMark(owner.clone()));
         }
-        let mut body = super::super::body_above(ui, bottom);
-        members(&mut body, &mut state.0, snapshot, &mut state.1);
+        if state.0.member_result().is_none() {
+            state.2.owner_changed(&owner);
+        }
+        let frame = design::outcome::PaneFrame::new(ui);
+        let mut messages =
+            design::outcome::Messages::new(&frame, "members_test_footer", ui.available_width());
+        if let Some((words, undo)) = state.0.member_result()
+            && let Some(shown) = state.2.get(&owner)
+        {
+            messages.kept(shown.outcome(&frame, |_| {
+                design::outcome::Said::new(super::super::outcome_words(&words))
+                    .undo(undo.pressed_as(super::super::FooterPress::UndoMember))
+                    .into()
+            }));
+        }
+        let (draft, expanded, results) = state;
+        let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
+            members(ui, draft, snapshot, expanded);
+        });
+        if let Some(ticket) = paned.pressed.and_then(|press| press.ticket) {
+            let _ = results.undo_by(ticket, |_| {
+                draft.undo_member_result();
+                Ok::<(), ()>(())
+            });
+            *expanded = None;
+        }
     }
 
     /// Round 28 (K3 review): a member's key is its identity in the draft. A move keeps each key
@@ -3914,11 +3940,11 @@ mod tests {
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(880.0, 1000.0))
             .build_state(
-                move |ctx, state: &mut (GroupDraft, Option<String>)| {
+                move |ctx, state: &mut MembersState| {
                     egui::CentralPanel::default()
                         .show(ctx, |ui| editor_members(ui, state, &snapshot));
                 },
-                (draft, None),
+                (draft, None, design::Results::default()),
             );
         design::theme::install(&harness.ctx);
         harness.run_steps(2);
@@ -3985,11 +4011,11 @@ mod tests {
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(880.0, 1000.0))
             .build_state(
-                move |ctx, state: &mut (GroupDraft, Option<String>)| {
+                move |ctx, state: &mut MembersState| {
                     egui::CentralPanel::default()
                         .show(ctx, |ui| editor_members(ui, state, &snapshot));
                 },
-                (draft, None),
+                (draft, None, design::Results::default()),
             );
         design::theme::install(&harness.ctx);
         harness.run_steps(2);
@@ -5048,7 +5074,7 @@ mod tests {
                             let pressed = super::super::DraftUndo::default();
                             let mut footer =
                                 design::Footer::new("group_test_footer", ui.available_width());
-                            draft.results_into(&mut footer, &pressed, None);
+                            draft.results_into(&mut footer, &pressed);
                             let bottom = footer.show_by_hand(ui);
                             draft.apply_undo(&pressed);
                             let mut body = super::super::body_above(ui, bottom);
