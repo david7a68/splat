@@ -2046,6 +2046,10 @@ fn task_names_package(
     }
 }
 
+/// Why a registration's Undo is refused when taking the copy out of the campaign's package
+/// list would change another package's choice.
+pub(crate) const PACKAGE_LIST_UNSAFE: &str = "The campaign’s package list has a form Splat cannot change safely, so Undo changed nothing. Remove this package from the list by hand, then undo.";
+
 /// Why a registration's Undo waits while another campaign chose the copy.
 fn used_reason(campaign: &str) -> String {
     format!("{campaign} uses this package. Remove it from {campaign} first, then undo.")
@@ -2179,6 +2183,21 @@ impl Registration {
             .filter_map(|selection| selection.package.link.as_deref())
             .collect();
         let text = without_package_lines(&document.text_with(&keep)?, self.copy.module.id, &links);
+        // The guard after the removal, before the write: the file read back must hold exactly
+        // the choices that stay. A form of the list that the change would alter otherwise (an
+        // item that turns into a code block, say) refuses the Undo, and nothing is written.
+        let read_back = Entry::parse(&document.path, &text).ok().and_then(|entry| {
+            match entry.fields.get("splat_packages") {
+                Some(value) => serde_yaml_ng::from_value::<
+                    Vec<crate::content_workspace::PackageSelection>,
+                >(value.clone())
+                .ok(),
+                None => Some(Vec::new()),
+            }
+        });
+        if read_back.as_ref() != Some(&keep) {
+            return Err(PACKAGE_LIST_UNSAFE.into());
+        }
         Ok(Some((
             campaign.path.clone(),
             document.path.clone(),
@@ -12253,6 +12272,11 @@ mod tests {
         // Another package's choice and indented prose, written under the copy's task.
         let b_id = Uuid::new_v4();
         let nested = format!("  - [x] Package B ^{b_id}\n  Indented prose stays.\n");
+        // An unclosed fence inside the copy's list item: B's task ends the item, so the reader
+        // reads B. Without the copy's line, the fence would open at the top level and hold B.
+        let fenced_item = |name: &str, id: Uuid| {
+            format!("\n- [x] {name} ^{id}\n  ```\n- [x] Package B ^{b_id}\n")
+        };
         let errands = |name: &str| {
             format!(
                 "\n## Errands\n\n- [ ] {name}\n  Buy rope.\n\n```markdown\n## Packages\n- [ ] {name}\n  Buy rope.\n```\n"
@@ -12265,6 +12289,8 @@ mod tests {
             "outside name link",
             "outside id, trailing spaces",
             "outside nested choice",
+            "outside nested four spaces",
+            "outside fence in the copy's item",
             "outside indented task",
         ] {
             // The reader does not read a task line whose id has spaces after it (a fault on
@@ -12350,9 +12376,19 @@ mod tests {
                 "outside edit" => {
                     choose_by_hand(crate::content_workspace::EntryRef::id(module.id));
                 }
-                "outside nested choice" | "outside indented task" => {
+                "outside nested choice"
+                | "outside nested four spaces"
+                | "outside fence in the copy's item"
+                | "outside indented task" => {
                     let task = if path == "outside nested choice" {
                         format!("- [x] {} ^{}\n{nested}", module.name, module.id)
+                    } else if path == "outside fence in the copy's item" {
+                        fenced_item(&module.name, module.id)
+                    } else if path == "outside nested four spaces" {
+                        format!(
+                            "\n- [x] {} ^{}\n    - [x] Package B ^{b_id}\n",
+                            module.name, module.id
+                        )
                     } else {
                         format!("  - [x] {} ^{}\n", module.name, module.id)
                     };
@@ -12365,7 +12401,7 @@ mod tests {
                     let chosen = CampaignDocument::load(&campaign).unwrap().selections;
                     assert!(
                         chosen.iter().any(|s| s.package.id == Some(module.id))
-                            && (path != "outside nested choice"
+                            && (path == "outside indented task"
                                 || chosen.iter().any(|s| s.package.id == Some(b_id))),
                         "fixture: the reader reads the choices ({path})"
                     );
@@ -12429,6 +12465,59 @@ mod tests {
             if path != "encounter search with a draft" {
                 reload(&mut library, &app.campaigns);
             }
+            if path == "outside fence in the copy's item" {
+                // Taking the copy's line out would put B (and every later line) inside a code
+                // block, so B's choice would be lost: the read-back guard refuses the Undo, and
+                // nothing is written. The registration and its result stay; the reason shows.
+                let before_undo = fs::read(&campaign_file).unwrap();
+                library.apply_page_press(
+                    PagePress {
+                        registration: Some(d),
+                        ..Default::default()
+                    },
+                    &mut app.campaigns,
+                );
+                assert_eq!(
+                    library.error.as_deref(),
+                    Some(PACKAGE_LIST_UNSAFE),
+                    "guard-refused\nbefore:\n{}\nafter:\n{}\nselections {:?}",
+                    String::from_utf8_lossy(&before_undo),
+                    fs::read_to_string(&campaign_file).unwrap(),
+                    CampaignDocument::load(&campaign).map(|d| d.selections)
+                );
+                assert_eq!(
+                    fs::read(&campaign_file).unwrap(),
+                    before_undo,
+                    "guard-nothing-written"
+                );
+                assert!(
+                    CampaignDocument::load(&campaign)
+                        .unwrap()
+                        .selections
+                        .iter()
+                        .any(|s| s.package.id == Some(b_id)),
+                    "guard-b-stays"
+                );
+                assert!(words(&library, &d).is_some(), "guard-result-stays");
+                assert!(
+                    app.campaigns.modules().iter().any(|m| m.id == d.package),
+                    "guard-registration-stays"
+                );
+                // The DM takes the copy out by hand; then Undo works.
+                library.error = None;
+                let text = String::from_utf8(before_undo).unwrap();
+                fs::write(
+                    &campaign_file,
+                    text.replacen(&fenced_item(&module.name, module.id), "", 1),
+                )
+                .unwrap();
+                reload(&mut library, &app.campaigns);
+                library
+                    .undo_package_registration(&d, &mut app.campaigns)
+                    .unwrap();
+                reload(&mut library, &app.campaigns);
+                continue;
+            }
             if read_as_choice {
                 assert_eq!(
                     words(&library, &d).as_deref(),
@@ -12454,6 +12543,22 @@ mod tests {
                 .filter(|s| s.package.id != Some(b_id))
                 .collect();
             assert_eq!(after, choices_before, "point-3-{path}");
+            if path == "outside nested four spaces" {
+                // With this reader B stays a choice after the copy's line goes (the guard
+                // checks it): B's line stays byte for byte.
+                let text = fs::read_to_string(&campaign_file).unwrap();
+                let b_line = format!("    - [x] Package B ^{b_id}\n");
+                assert!(
+                    text.contains(&b_line)
+                        && CampaignDocument::load(&campaign)
+                            .unwrap()
+                            .selections
+                            .iter()
+                            .any(|s| s.package.id == Some(b_id)),
+                    "point-3-four-spaces-b-stays\n{text}"
+                );
+                fs::write(&campaign_file, text.replacen(&b_line, "", 1)).unwrap();
+            }
             if path == "outside nested choice" {
                 // B's choice and the indented prose stay, byte for byte; only the copy's task
                 // line went.
