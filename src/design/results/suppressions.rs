@@ -431,6 +431,20 @@ mod tests {
         );
         // By its path, and `use_press`: two calls, a row of one fails.
         let both = "#[allow(clippy::disallowed_methods)]\nfn press() {\n    Results::undo(&mut store, owner, run);\n    store.use_press(owner);\n}\n";
+        // Review 4: generic arguments before the call's arguments count too, on a method and on
+        // a path: two calls.
+        let generic = "#[allow(clippy::disallowed_methods)]\nfn press() {\n    store.undo::<(), ()>(owner, |_| Ok(()));\n    Results::<O, T>::undo(&mut store, owner, run);\n}\n";
+        let faults = check(
+            &file(generic),
+            &[("src/new.rs", "press", &[Ban::ByOwner(1)])],
+        );
+        assert!(
+            faults.len() == 1 && faults[0].contains("holds 2 ByOwner calls; its row lists 1"),
+            "{faults:?}"
+        );
+        // The same reader serves the other counted bans: a raw egui call by a generic path.
+        let raw = "#[allow(clippy::disallowed_methods)]\nfn draw() {\n    let _ = egui::ScrollArea::<>::vertical();\n}\n";
+        assert!(check(&file(raw), &[("src/new.rs", "draw", &[Ban::Layout(1)])]).is_empty());
         let faults = check(&file(both), &[("src/new.rs", "press", &[Ban::ByOwner(1)])]);
         assert!(
             faults.len() == 1 && faults[0].contains("holds 2 ByOwner calls; its row lists 1"),

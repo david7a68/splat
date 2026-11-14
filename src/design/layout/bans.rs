@@ -243,6 +243,28 @@ fn chain_hits(tokens: &[Token], at: usize, owner: &str, name: &str) -> bool {
     false
 }
 
+/// The index after a turbofish (`::<…>`) that starts at `at`, or `at` when there is none. The
+/// brackets are counted, so `::<Vec<u8>, ()>` is skipped whole; the `>` of an `->` is not one.
+fn after_turbofish(tokens: &[Token], at: usize) -> usize {
+    if !path_sep(tokens, at) || tokens.get(at + 2) != Some(&Token::Punct('<')) {
+        return at;
+    }
+    let mut depth = 0usize;
+    for index in at + 2..tokens.len() {
+        match &tokens[index] {
+            Token::Punct('<') => depth += 1,
+            Token::Punct('>') if tokens.get(index - 1) != Some(&Token::Punct('-')) => {
+                depth -= 1;
+                if depth == 0 {
+                    return index + 1;
+                }
+            }
+            _ => {}
+        }
+    }
+    at
+}
+
 /// The number of arguments of the call whose parentheses open at `at`: its commas at the top
 /// level, outside a closure's `|…|`, and one more unless it is empty or ends in a comma.
 fn arguments(tokens: &[Token], at: usize) -> Option<usize> {
@@ -283,9 +305,11 @@ pub(crate) fn count(source: &str, group: Group) -> Result<usize, String> {
         for shape in &patterns {
             let hit = match shape {
                 Shape::Assoc(owner, name) => {
+                    // `Owner::name`, also `Owner::<T>::name`.
+                    let after = after_turbofish(&tokens, at + 1);
                     ident(tokens.get(at)) == Some(owner)
-                        && path_sep(&tokens, at + 1)
-                        && ident(tokens.get(at + 3)) == Some(name)
+                        && path_sep(&tokens, after)
+                        && ident(tokens.get(after + 2)) == Some(name)
                 }
                 Shape::Method(name) => {
                     tokens.get(at) == Some(&Token::Punct('.'))
@@ -302,7 +326,8 @@ pub(crate) fn count(source: &str, group: Group) -> Result<usize, String> {
                 Shape::Arity(name, args) => {
                     tokens.get(at) == Some(&Token::Punct('.'))
                         && ident(tokens.get(at + 1)) == Some(name)
-                        && arguments(&tokens, at + 2).is_some_and(|found| found >= *args)
+                        && arguments(&tokens, after_turbofish(&tokens, at + 2))
+                            .is_some_and(|found| found >= *args)
                 }
                 Shape::Free(None, name) => {
                     ident(tokens.get(at)) == Some(name)
