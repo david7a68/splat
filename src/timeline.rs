@@ -305,6 +305,38 @@ impl Check {
     }
 }
 
+/// What a heading or a link stores for an event: its kind, its id and its title exactly as the
+/// DM or the plan wrote it. The file's writer and the link writer take this, never an
+/// [`Event`], so they cannot reach the shown [`Event::label`], which drops a title that only says
+/// the kind (a day titled `Day` must stay `## Day 1: Day` in the file, or the next save would
+/// read it back with no title).
+#[derive(Clone, Copy)]
+pub struct Stored<'a> {
+    pub kind: Kind,
+    pub id: &'a str,
+    pub title: &'a str,
+}
+
+impl<'a> Stored<'a> {
+    pub fn of(event: &'a Event) -> Self {
+        Self {
+            kind: event.kind,
+            id: &event.id,
+            title: &event.title,
+        }
+    }
+
+    /// The stored name: a day's number, then the title exactly, when it has one.
+    pub fn name(self, day: u32) -> String {
+        match (self.kind, self.title.trim()) {
+            (Kind::Day, "") => format!("Day {day}"),
+            (Kind::Day, title) => format!("Day {day}: {title}"),
+            (kind, "") => kind.word().to_owned(),
+            (_, title) => title.to_owned(),
+        }
+    }
+}
+
 impl Event {
     /// Does this event belong to this session, or go on in it?
     pub fn is_in(&self, session: Option<Uuid>) -> bool {
@@ -320,7 +352,9 @@ impl Event {
         (!title.is_empty() && !title.eq_ignore_ascii_case(self.kind.word())).then_some(title)
     }
 
-    /// The name people read. A day has its number, and it can also have a name.
+    /// The name people read on screen. A day has its number, and it can also have a name. It
+    /// drops a title that only says the kind, so it is never written to a file or a link: the
+    /// writers take [`Stored`], which holds the title exactly and has no shown label.
     pub fn label(&self, day: u32) -> String {
         match (self.kind, self.own_title()) {
             (Kind::Day, None) => format!("Day {day}"),
@@ -607,8 +641,10 @@ pub fn day_numbers(events: &[Event]) -> Vec<u32> {
 
 /// A link to one event. Obsidian follows it to the event's block in `Timeline.md`.
 pub fn reference_label(event: &Event, day: u32) -> String {
-    let label: String = event
-        .label(day)
+    // A link's words are written into notes and compared with the file's names, so they are
+    // the stored name.
+    let label: String = Stored::of(event)
+        .name(day)
         .chars()
         .filter(|c| !matches!(c, '[' | ']' | '|' | '#' | '^'))
         .collect();

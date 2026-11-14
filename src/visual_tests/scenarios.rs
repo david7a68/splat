@@ -15094,8 +15094,26 @@ pub mod session_recording {
                 format!("Save key {saves:?} ends at {edge:?}; reasons {reasons:?} sit below"),
             );
         });
+        // At 960 px the Service control is cut by the tab's footer after the choice
+        // (`processing-settings-anthropic` at 960), so the DM scrolls once to reach it. The
+        // state's window resizes can leave the page at another place (the drop-down keeps focus
+        // on its control), so the step scrolls whatever that place is: the task's cost does not
+        // depend on the capture's resizes. Then the page goes back to where it was, so the later
+        // states start where they did before (a return to the same place, not the DM's act).
+        let service = |d: &Driver<'_>| {
+            d.place_of(&d.name_starting("Transcript and summary service: "))
+                .map(|rect| rect.top())
+        };
+        let before = service(d);
+        d.scroll_at(pos2(600.0, 400.0), 1);
+        let scrolled = service(d);
         d.click_starting("Transcript and summary service: ");
         d.click("Codex CLI, GPT-6.1 Sol");
+        d.aside(|d| {
+            if let (Some(before), Some(scrolled)) = (before, scrolled) {
+                d.scroll_points_at(pos2(600.0, 400.0), scrolled - before);
+            }
+        });
         d.click("Account and campaigns");
 
         d.app_mut().processing.config.provider = crate::processing::Provider::OpenAiCompatible;
@@ -16099,28 +16117,52 @@ pub mod session_recording {
             "Enter the model’s name.",
             "Paste a key first.",
         ];
-        // At 1200 px all three reasons are in view at once. At 960 the key row's reason is under
-        // the footer since round 28 (the field part keeps `L` after each help, where this form
-        // kept `M`); the reasons' form does not depend on the window's size.
-        let (forms, model, model_reason, model_help) = d.at_size(DEFAULT, |d| {
-            let forms: Vec<_> = reasons
-                .iter()
-                .map(|words| {
-                    let place = d.place_of(words);
-                    (
-                        *words,
-                        place.is_some(),
-                        d.painted_color(words),
-                        place.and_then(|place| d.painted_size(place, words)),
-                    )
-                })
-                .collect();
-            (
-                forms,
-                d.place_of("Speech model"),
-                d.place_of("Enter the model’s name."),
-                d.place_of("The name your service gives it. For OpenAI, gpt-transcribe."),
-            )
+        // At 960 px the key row's reason is below the visible body (the field part keeps `L`
+        // after each help): scroll each reason into view in turn, read its form there, and come
+        // back to the same scroll place for the checks below. Proof steps, not the DM's task.
+        let (forms, model, model_reason, model_help) = d.aside(|d| {
+            let at = pos2(600.0, 400.0);
+            let anchor = |d: &Driver<'_>| d.place_of("Speech address").map(|rect| rect.top());
+            let start = anchor(d);
+            let mut forms = Vec::new();
+            let mut order = (None, None, None);
+            for words in reasons {
+                for _ in 0..12 {
+                    if d.painted_color(words).is_some() {
+                        break;
+                    }
+                    d.scroll_at(at, 1);
+                }
+                let place = d.place_of(words);
+                forms.push((
+                    words,
+                    place.is_some(),
+                    d.painted_color(words),
+                    place.and_then(|place| d.painted_size(place, words)),
+                ));
+                if words == "Enter the model’s name." {
+                    order = (
+                        d.place_of("Speech model"),
+                        place,
+                        d.place_of("The name your service gives it. For OpenAI, gpt-transcribe."),
+                    );
+                }
+            }
+            // A wheel step can end a few points short; step again until the form is back.
+            for _ in 0..4 {
+                match (start, anchor(d)) {
+                    (Some(start), Some(now)) if (now - start).abs() > 0.5 => {
+                        d.scroll_points_at(at, now - start);
+                    }
+                    _ => break,
+                }
+            }
+            assert_eq!(
+                anchor(d).map(f32::round),
+                start.map(f32::round),
+                "the FM6 proof leaves the form where it found it"
+            );
+            (forms, order.0, order.1, order.2)
         });
         d.observe(
             "iter-26-S-FM6",
