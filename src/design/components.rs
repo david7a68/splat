@@ -548,9 +548,12 @@ pub struct Action<'a> {
     min_width: Option<f32>,
 }
 
-/// How far a quiet `line_start` action hangs left of the text edge: its padding. A pane's body
-/// clip keeps this gutter (`pane::body_clip`), so the target is never cut.
+/// How far a quiet `line_start` action hangs left of the text edge: its padding.
 pub const LINE_START_HANG: f32 = S;
+
+/// The most a `line_start` action hangs left of the text edge: its padding and its icon. A pane
+/// keeps this gutter inside its own rect, left of its content (`pane::Footer::pane`).
+pub const LINE_START_REACH: f32 = LINE_START_HANG + super::tokens::ICON_SLOT;
 
 impl<'a> Action<'a> {
     fn new(kind: Kind, label: &'a str) -> Self {
