@@ -1500,6 +1500,15 @@ impl Book {
             #[cfg(test)]
             let _ = SAVE_AFTER;
             ctx.request_repaint_after(SAVE_AFTER);
+            // A dirty or conflicted book still follows the folder's other timeline file, so its
+            // warning never names a file that moved or went (M4 review).
+            if self
+                .last_check
+                .is_none_or(|at| now.duration_since(at) >= CHECK_DISK_EVERY)
+            {
+                self.last_check = Some(now);
+                self.check_copies();
+            }
         } else if self
             .last_check
             .is_none_or(|at| now.duration_since(at) >= CHECK_DISK_EVERY)
@@ -2445,6 +2454,20 @@ mod tests {
         book.poll(&eframe::egui::Context::default());
         assert!(book.duplicate.as_deref() == Some(copy.as_path()));
         assert!(copy.exists());
+        // M4 review: the copy is renamed outside, then removed, while the book is dirty (an
+        // edit waits): the warning follows it, then ends, so its file line never opens an old
+        // path.
+        book.add(Kind::Travel, None);
+        assert!(book.dirty);
+        let renamed = dir.path().join("Timeline (old).md");
+        fs::rename(&copy, &renamed).unwrap();
+        book.last_check = None;
+        book.poll(&eframe::egui::Context::default());
+        assert_eq!(book.duplicate.as_deref(), Some(renamed.as_path()));
+        fs::remove_file(&renamed).unwrap();
+        book.last_check = None;
+        book.poll(&eframe::egui::Context::default());
+        assert_eq!(book.duplicate, None);
     }
 
     #[test]

@@ -145,6 +145,8 @@ disallowed-methods = [
     # reviewer agreed to it: one suppression on the innermost function, one row in
     # `design::results::STAGED_ALLOWS` (`Ban::Words`, `Ban::Order`, `Ban::Body`).
     { path = "splat::design::outcome::Sentence::outside", reason = "write the words with `sentence!`; words from outside the app (disk, the system, the DM) are a named escape: `Ban::Words`" },
+    { path = "splat::design::outcome::Sentence::outside_after", reason = "write the words with `sentence!`; outside words after checked lead words are a named escape: `Ban::Words`" },
+    { path = "splat::design::outcome::Lead::__checked", reason = "make lead words with `lead!`" },
     { path = "splat::design::outcome::Sentence::__formatted", reason = "make sentences with `sentence!`" },
     { path = "splat::design::outcome::Sentence::__literal", reason = "make sentences with `sentence!`" },
     { path = "splat::design::outcome::check_template", reason = "make sentences with `sentence!`" },

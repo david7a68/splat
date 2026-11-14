@@ -33,6 +33,8 @@ egui-phosphor = "0.11"
 libc = "0.2"
 egui_extras = { version = "0.33", default-features = false, features = ["file", "image"] }
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+# `file:` URLs by the platform's rules (`design::outcome::file_url`).
+url = "2.5"
 
 [dev-dependencies]
 rayon = "1.11"

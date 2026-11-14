@@ -995,6 +995,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "choice! statement",
             &[Ban::Sentence],
         ),
+        // M4: the macro's own check of its lead words.
+        ("src/design/outcome.rs", "lead! statement", &[Ban::Sentence]),
         ("src/design/outcome.rs", "rejected", &[Ban::Sentence]),
         (
             "src/design/outcome.rs",

@@ -111,6 +111,12 @@ pub const fn check_template(template: &str) -> Checked {
         end > 0 && matches!(b[end - 1], b'.' | b'?' | b'!'),
         "A sentence ends with a full stop, a question mark or an exclamation mark, also after a value."
     );
+    check_words(b);
+    Checked(())
+}
+
+/// Curly apostrophes and no code word: the rules a sentence template and lead words share.
+const fn check_words(b: &[u8]) {
     let mut i = 1;
     while i + 1 < b.len() {
         if b[i] == b'\''
@@ -129,7 +135,6 @@ pub const fn check_template(template: &str) -> Checked {
         );
         w += 1;
     }
-    Checked(())
 }
 
 /// A template with no value: `sentence!` makes a constant of it.
@@ -221,10 +226,12 @@ impl Sentence {
 
     /// Words that come from outside the app: an error of the system, a parser's message, a row
     /// of the DM's own table. They end with an end mark, whatever came, and start with a capital,
-    /// unless their first word is data (`is_data`: a path or a file name, such as
-    /// `wrong-package/ holds …` or `package.md changed on disk`), which keeps its letters as they
-    /// are on disk. Blank words are no sentence: `None`, and the caller says what it knows in its
-    /// own checked words. The source lint counts the uses of this escape per file.
+    /// except that the first letter is left alone when the first white-space-separated word holds
+    /// `/` or `\` or ends in a dot-extension (`.` then one or more letters or digits, after a
+    /// letter or digit; Unicode letters count). Blank words are no sentence: `None`, and the
+    /// caller says what it knows in its own checked words. Words that name a file or a path
+    /// anywhere else use [`Sentence::outside_after`], which never changes them. Clippy counts the
+    /// uses of this escape (`Ban::Words`).
     pub fn outside(words: impl Into<String>) -> Option<Self> {
         let words: String = words.into();
         let mut words = words.trim().to_owned();
@@ -237,6 +244,25 @@ impl Sentence {
             words.push('.');
         }
         Some(Self(Cow::Owned(words)))
+    }
+
+    /// Checked words, then words from outside the app exactly as they came, then an end mark if
+    /// they have none: `Sentence::outside_after(lead!("Changed on disk:"), "lost notes/session.md")`
+    /// is `Changed on disk: lost notes/session.md.`. This is the form of a message that names a
+    /// file or a path: the checked words come first, so nothing in the outside words is re-cased.
+    /// Blank outside words are no sentence: `None`. Clippy counts its uses (`Ban::Words`), as
+    /// `outside`'s.
+    pub fn outside_after(lead: Lead, words: impl Into<String>) -> Option<Self> {
+        let words: String = words.into();
+        let words = words.trim();
+        if words.is_empty() {
+            return None;
+        }
+        let mut sentence = format!("{} {words}", lead.0);
+        if !ends_with_mark(&sentence) {
+            sentence.push('.');
+        }
+        Some(Self(Cow::Owned(sentence)))
     }
 
     /// This sentence, then `next`, with one space.
@@ -273,16 +299,64 @@ impl std::fmt::Display for Sentence {
     }
 }
 
-/// Is this word data that keeps its letters (M4 gap 3)? A word with a path separator (`/`, `\`)
-/// or a file extension: a `.` with a letter or digit on both sides (`package.md`, `v2.json`).
-/// Not a word that only ends with a mark (`removed.`, `wolf:`).
+/// Is this first word data that keeps its first letter (M4 gap 3)? It holds `/` or `\`, or,
+/// without a trailing `,`, `:` or `;`, it ends in a dot-extension: a `.` after a letter or digit,
+/// then one or more letters or digits to its end (`package.md`, `café.md`, `v2.json:`). Not
+/// `e.g.` or `removed.`, whose last `.` ends them.
 fn is_data(word: &str) -> bool {
-    let word = word.trim_end_matches([',', ':', ';', '.', '?', '!', '”', '’', ')']);
-    let bytes = word.as_bytes();
-    word.contains(['/', '\\'])
-        || bytes
-            .windows(3)
-            .any(|w| w[0].is_ascii_alphanumeric() && w[1] == b'.' && w[2].is_ascii_alphanumeric())
+    if word.contains(['/', '\\']) {
+        return true;
+    }
+    let word = word.trim_end_matches([',', ':', ';']);
+    word.rsplit_once('.').is_some_and(|(stem, extension)| {
+        !extension.is_empty()
+            && extension.chars().all(char::is_alphanumeric)
+            && stem.chars().last().is_some_and(char::is_alphanumeric)
+    })
+}
+
+/// The checked words that lead outside words ([`Sentence::outside_after`]): `lead!("Changed on
+/// disk:")`. Checked at compile time: a capital or a number first, a `:` last, curly
+/// apostrophes, no code word.
+///
+/// ```
+/// let _ = splat::lead!("Changed on disk:");
+/// ```
+/// ```compile_fail
+/// let _ = splat::lead!("changed on disk:");
+/// ```
+/// ```compile_fail
+/// let _ = splat::lead!("Changed on disk.");
+/// ```
+#[derive(Clone, Copy, Debug)]
+pub struct Lead(&'static str);
+
+impl Lead {
+    /// `lead!`'s check, in a `const`.
+    #[doc(hidden)]
+    pub const fn __checked(words: &'static str) -> Self {
+        let b = words.as_bytes();
+        assert!(
+            !b.is_empty() && (b[0].is_ascii_uppercase() || b[0].is_ascii_digit() || b[0] >= 0x80),
+            "Lead words start with a capital letter or a number."
+        );
+        assert!(b[b.len() - 1] == b':', "Lead words end with a colon.");
+        check_words(b);
+        Self(words)
+    }
+}
+
+/// Checked lead words for [`Sentence::outside_after`]. See [`Lead`].
+#[macro_export]
+macro_rules! lead {
+    ($words:literal) => {{
+        #[allow(
+            clippy::disallowed_methods,
+            reason = "the macro's own check of its words"
+        )]
+        const LEAD: $crate::outcome::Lead = $crate::outcome::Lead::__checked($words);
+        LEAD
+    }};
 }
 
 fn ends_with_mark(words: &str) -> bool {
@@ -1443,12 +1517,20 @@ pub const SHOW_FILE: &str = "Show file";
 /// then the links, on one line when they fit; else the path on its own line and the links on
 /// the line under it, wrapped between whole links. The path is never changed: not by
 /// `Sentence::outside`, never given a capital, never wrapped inside; a path wider than its line
-/// is cut in the middle (`Campaign/Ses…/Timeline.md`), with the whole path in its hover and as
-/// its accessible name. Each link is a target at least `XL` (24 px) square, and its accessible
-/// name names the file (`Show file: Timeline.md`). A press opens the file: no id comes back,
-/// and the pane's one press is not used.
+/// is cut in the middle (`Sessions/Ses…/Timeline.md`), with the whole path in its hover and as
+/// its accessible name. Each link is a target at least `XL` (24 px) square; its accessible name
+/// holds the relative path (`Show file: Sessions/Timeline.md`), so two files of one name are
+/// told apart, and its tip shows the whole path on hover and on keyboard focus. A press opens the
+/// file: no id comes back, and the pane's one press is not used. A file that is gone when the
+/// link is pressed opens nothing: the link is locked and says `This file is no longer there.`
+/// until the file is back.
 ///
-/// The path is data: it is no sentence, so no sentence form reaches it.
+/// `new` checks its paths at run time (rung 5, part test): the root must be absolute and the
+/// relative path plain (no root, no `..`). A line that fails shows its path as given and draws no
+/// link, so a link never opens a place other than the folder's own file.
+///
+/// The path is data: it is no sentence, so no sentence form reaches it. Its fields and its draw
+/// are private (these examples prove only that, not the checks of `new`):
 ///
 /// ```
 /// use splat::outcome::{FileLine, Notice, NoPress};
@@ -1457,7 +1539,7 @@ pub const SHOW_FILE: &str = "Show file";
 /// ```
 /// ```compile_fail,E0451
 /// use splat::outcome::FileLine;
-/// let _ = FileLine { root: "/vault".into(), relative: "Timeline.md".into(), edit: true, show: true };
+/// let _ = FileLine { root: "/vault".into(), relative: "Timeline.md".into(), openable: true, edit: true, show: true };
 /// ```
 /// ```compile_fail,E0624
 /// use splat::outcome::FileLine;
@@ -1469,17 +1551,31 @@ pub const SHOW_FILE: &str = "Show file";
 #[must_use = "give it to a footer message's `file`"]
 pub struct FileLine {
     root: std::path::PathBuf,
-    relative: String,
+    relative: std::path::PathBuf,
+    /// The root is absolute and the relative path plain: its links may open it.
+    openable: bool,
     edit: bool,
     show: bool,
 }
 
+/// What a locked file link says: the file was gone when it was pressed.
+const FILE_GONE: Sentence = crate::sentence!("This file is no longer there.");
+
 impl FileLine {
     /// The file at `relative` (as the DM knows it, shown as it is) inside the folder `root`.
-    pub fn new(root: impl Into<std::path::PathBuf>, relative: impl Into<String>) -> Self {
+    /// `root` must be absolute and `relative` plain (no root, no `..`); else the line shows
+    /// `relative` and draws no link.
+    pub fn new(root: impl AsRef<std::path::Path>, relative: impl AsRef<std::path::Path>) -> Self {
+        use std::path::Component;
+        let (root, relative) = (root.as_ref(), relative.as_ref());
+        let plain = relative.components().next().is_some()
+            && relative
+                .components()
+                .all(|part| matches!(part, Component::Normal(_) | Component::CurDir));
         Self {
-            root: root.into(),
-            relative: relative.into(),
+            root: root.to_path_buf(),
+            relative: relative.to_path_buf(),
+            openable: root.is_absolute() && plain,
             edit: false,
             show: false,
         }
@@ -1497,33 +1593,34 @@ impl FileLine {
         self
     }
 
-    fn path(&self) -> std::path::PathBuf {
-        self.root.join(&self.relative)
+    /// The file's whole path, when its links may open it.
+    fn path(&self) -> Option<std::path::PathBuf> {
+        self.openable.then(|| self.root.join(&self.relative))
     }
 
-    /// The file's own name, the last part of its path.
-    fn name(&self) -> &str {
-        self.relative
-            .rsplit(['/', '\\'])
-            .find(|part| !part.is_empty())
-            .unwrap_or(&self.relative)
+    /// The relative path as the DM reads it, `/` between its parts.
+    fn shown(&self) -> String {
+        let parts: Vec<_> = self
+            .relative
+            .components()
+            .map(|part| part.as_os_str().to_string_lossy())
+            .collect();
+        parts.join("/")
     }
 
     fn links(&self) -> impl Iterator<Item = &'static str> {
         [(self.edit, EDIT_IN_OBSIDIAN), (self.show, SHOW_FILE)]
             .into_iter()
-            .filter_map(|(on, word)| on.then_some(word))
-    }
-
-    /// The accessible name of one of its links: the link's words, then the file.
-    fn link_name(&self, word: &str) -> String {
-        format!("{word}: {}", self.name())
+            .filter_map(|(on, word)| (on && self.openable).then_some(word))
     }
 
     /// The line, at the cursor, as wide as `ui` allows.
     fn draw(&self, ui: &mut Ui) {
         let path = self.path();
-        let whole = path.display().to_string();
+        let relative = self.shown();
+        let whole = path
+            .as_ref()
+            .map_or_else(|| relative.clone(), |path| path.display().to_string());
         let font = Type::Small.font(ui);
         let gap = ui.spacing().item_spacing.x;
         let links: f32 = self
@@ -1532,10 +1629,10 @@ impl FileLine {
             .sum();
         let room = ui.available_width();
         let beside = room - links - L;
-        let one_line = links == 0.0 || number_width(ui, &self.relative, &font) <= beside;
+        let one_line = links == 0.0 || number_width(ui, &relative, &font) <= beside;
         let shown = cut_middle(
             ui,
-            &self.relative,
+            &relative,
             &font,
             if one_line && links > 0.0 {
                 beside
@@ -1549,16 +1646,38 @@ impl FileLine {
             response.on_hover_text(&whole);
         };
         let draw_links = |ui: &mut Ui| {
+            let Some(path) = &path else { return };
+            // A press on a file that is gone opens nothing; the link stays locked, saying so,
+            // until the file is back (looked for only while it is locked).
+            let gone_key = egui::Id::new(("design_file_gone", path));
+            let gone = ui.ctx().data(|data| data.get_temp::<bool>(gone_key)) == Some(true)
+                && !path.exists();
+            if !gone {
+                ui.ctx().data_mut(|data| data.remove::<bool>(gone_key));
+            }
             for word in self.links() {
-                let response = link(ui, word);
-                super::components::named(ui, &response, &self.link_name(word));
+                let name = format!("{word}: {relative}");
+                let tip = [super::popups::TipLine::Detail(Cow::Owned(whole.clone()))];
+                let response = if gone {
+                    ui.add_enabled_ui(false, |ui| link(ui, word)).inner
+                } else {
+                    link(ui, word)
+                };
+                super::components::named(ui, &response, &name);
+                let response = super::popups::rich_tip(response, &tip);
                 if response.clicked() {
+                    if !path.exists() {
+                        ui.ctx().data_mut(|data| data.insert_temp(gone_key, true));
+                        continue;
+                    }
                     let url = if word == EDIT_IN_OBSIDIAN {
-                        obsidian_url(&path)
+                        Some(obsidian_url(path))
                     } else {
-                        file_url(&path)
+                        file_url(path)
                     };
-                    ui.ctx().open_url(egui::OpenUrl::new_tab(url));
+                    if let Some(url) = url {
+                        ui.ctx().open_url(egui::OpenUrl::new_tab(url));
+                    }
                 }
             }
         };
@@ -1571,6 +1690,14 @@ impl FileLine {
         } else {
             ui.with_layout(row, path_label);
             ui.with_layout(row.with_main_wrap(true), draw_links);
+        }
+        if let Some(path) = &path
+            && ui
+                .ctx()
+                .data(|data| data.get_temp::<bool>(egui::Id::new(("design_file_gone", path))))
+                == Some(true)
+        {
+            blocked_reason(ui, Some(FILE_GONE.as_str()));
         }
     }
 }
@@ -1604,18 +1731,12 @@ fn cut_middle(ui: &Ui, text: &str, font: &egui::FontId, room: f32) -> String {
     shown(fits)
 }
 
-/// The link that opens a file in Obsidian.
+/// The link that opens a file in Obsidian: `obsidian://open?path=` and the path, each byte
+/// outside `A–Z a–z 0–9 - . _ ~ /` written as `%XX` (a space, `&`, `#`, `%`, `?` and every
+/// non-ASCII byte). The one copy of this rule; `world.rs` still has its own (package D).
 pub fn obsidian_url(path: &std::path::Path) -> String {
-    format!("obsidian://open?path={}", encode_path(path))
-}
-
-/// The link that shows a file with the system's file handler.
-pub fn file_url(path: &std::path::Path) -> String {
-    format!("file://{}", encode_path(path))
-}
-
-fn encode_path(path: &std::path::Path) -> String {
-    path.to_string_lossy()
+    let encoded: String = path
+        .to_string_lossy()
         .bytes()
         .map(|byte| {
             if byte.is_ascii_alphanumeric() || b"-._~/".contains(&byte) {
@@ -1624,7 +1745,14 @@ fn encode_path(path: &std::path::Path) -> String {
                 format!("%{byte:02X}")
             }
         })
-        .collect()
+        .collect();
+    format!("obsidian://open?path={encoded}")
+}
+
+/// The `file:` URL of an absolute path, by the platform's rules (`url::Url::from_file_path`: a
+/// Windows drive is a path, never a host). `None` for a path that is not absolute.
+pub fn file_url(path: &std::path::Path) -> Option<String> {
+    url::Url::from_file_path(path).ok().map(String::from)
 }
 
 /// A footer message that is not a result: it has no order, and keeps the caller's order among
@@ -2880,26 +3008,55 @@ mod tests {
         );
         assert_eq!(outside(" Done. ").as_deref(), Some("Done."));
         assert_eq!(outside("Go “now”").as_deref(), Some("Go “now”."));
-        // M4 gap 3: a first word that is a path or a file name keeps its letters (Campaign
-        // content's `wrong-package/ holds …`, `package.md changed on disk`); words that only
-        // end with a mark still get their capital.
+        // M4 gap 3. Plain `outside` leaves the first letter alone only when the first
+        // white-space-separated word holds `/` or `\\`, or ends in a dot-extension (Unicode).
+        // Each case, with what is shown:
         for data in [
-            "wrong-package/ holds a different package.",
-            "package.md changed on disk.",
-            "notes\\npc.md: no such file.",
-            "v2.json, line 3: a list opens here.",
+            "wrong-package/ holds a different package.", // kept: holds `/`
+            "package.md changed on disk.",               // kept: ends in `.md`
+            "café.md changed.",                          // kept: `é` is a letter before `.md`
+            "notes\\npc.md: no such file.",              // kept: holds `\\`
+            "v2.json, line 3: a list opens here.",       // kept: `.json` before the `,`
+            "https://example.org is down.",              // kept: a URL holds `/`
         ] {
             assert_eq!(outside(data).as_deref(), Some(data));
         }
+        for (came, shown) in [
+            // The first word is `lost`: re-cased. A message that names a path uses
+            // `outside_after`, below.
+            (
+                "lost notes/session.md changed.",
+                "Lost notes/session.md changed.",
+            ),
+            // `e.g.` ends with its `.`: no extension, so the capital, as on main.
+            (
+                "e.g.: the package is missing.",
+                "E.g.: the package is missing.",
+            ),
+            ("removed: the wolf", "Removed: the wolf."),
+            ("ends. here", "Ends. here."),
+            // Leading white space goes; the rule reads the first word after it.
+            (
+                "  package.md changed on disk",
+                "package.md changed on disk.",
+            ),
+        ] {
+            assert_eq!(outside(came).as_deref(), Some(shown), "{came:?}");
+        }
+        // `outside_after`: checked lead words first, then the outside words exactly as they came.
+        let after = |words: &str| {
+            Sentence::outside_after(crate::lead!("Changed on disk:"), words).map(|s| s.to_string())
+        };
         assert_eq!(
-            outside("package.md changed on disk").as_deref(),
-            Some("package.md changed on disk.")
+            after("lost notes/session.md").as_deref(),
+            Some("Changed on disk: lost notes/session.md.")
         );
         assert_eq!(
-            outside("removed: the wolf").as_deref(),
-            Some("Removed: the wolf.")
+            after(" café.md changed. ").as_deref(),
+            Some("Changed on disk: café.md changed.")
         );
-        assert_eq!(outside("ends. here").as_deref(), Some("Ends. here."));
+        assert_eq!(after("e.g.").as_deref(), Some("Changed on disk: e.g."));
+        assert_eq!(after("  "), None);
         // Blank words are no sentence.
         assert_eq!(outside(""), None);
         assert_eq!(outside(" \n\t "), None);
@@ -3074,58 +3231,73 @@ mod tests {
     }
 
     /// M4 gap 1: a footer message's file line. The path is data, drawn as it is, from the words'
-    /// first letter; its links are targets of at least `XL` whose names name the file, and a
-    /// press opens the file without a press of the pane. A path wider than its line is cut in
-    /// the middle and keeps its file name, with the whole path as its name and in its hover. 30
-    /// such messages at 960 × 640 keep the footer within a third of the pane, and the body in
-    /// view above it (the footer's region scrolls: `Footer`'s own proof).
+    /// first letter; its links are targets of at least `XL` whose names hold the relative path,
+    /// and a press opens the file without a press of the pane. A path wider than its line is cut
+    /// in the middle and keeps its file name, with the whole path as its name, in its hover, and
+    /// in each link's tip on keyboard focus. A file gone at the press opens nothing and locks its
+    /// links with a reason. A root that is not absolute, or a relative path with a root or `..`,
+    /// draws no link. 30 such messages at 960 × 640 keep the footer within a third of the pane,
+    /// and the body in view above it (the footer's region scrolls: `Footer`'s own proof).
     #[test]
     fn a_footer_file_line_keeps_its_path_and_opens_its_file() {
         use egui::accesskit::Role;
+        use egui_kittest::kittest::NodeT;
+        use std::path::Path;
         const BODY: &str = "The body starts here.";
-        const ROOT: &str = "/vault/Ashen Marches";
         const SHORT: &str = "wrong-package/package.md";
-        const LONG: &str = "Sessions/Session 12 at the Northern Bridge Crossing of Ravenholm/Notes of the wardens/Timeline.md";
+        const LONG_A: &str =
+            "packages/a/Session 12 at the Northern Bridge Crossing of Ravenholm/package.md";
+        const LONG_B: &str =
+            "packages/b/Session 12 at the Northern Bridge Crossing of Ravenholm/package.md";
         struct Fixture {
             width: f32,
             count: usize,
-            relative: &'static str,
+            lines: Vec<FileLine>,
             pressed: usize,
         }
+        let vault = tempfile::tempdir().unwrap();
+        let root = vault.path().join("Ashen Marches");
+        for relative in [SHORT, LONG_A, LONG_B] {
+            let file = root.join(relative);
+            std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+            std::fs::write(&file, "x").unwrap();
+        }
         let fault = Hp(Severity::NeedsFixing, Some(9));
-        let harness = |size: egui::Vec2, width: f32, count: usize, relative: &'static str| {
-            let mut h = Harness::builder().with_size(size).build_ui_state(
-                move |ui, fixture: &mut Fixture| {
-                    let fault = Hp(Severity::NeedsFixing, Some(9));
-                    ui.set_max_width(fixture.width);
-                    let frame = PaneFrame::new(ui);
-                    let mut messages =
-                        Messages::<u8>::new(&frame, "file_line_footer", ui.available_width());
-                    for at in 0..fixture.count {
-                        let message = FaultMessage::new(&fault)
-                            .choice(Choice::new(MessageChoice::Choice("Try again"), at as u8));
-                        messages.outcome(
-                            message.file(FileLine::new(ROOT, fixture.relative).edit().show()),
-                        );
-                    }
-                    let paned = messages.pane(ui, crate::design::Body::Content, |ui| {
-                        ui.label(BODY);
-                    });
-                    if paned.pressed.is_some() {
-                        fixture.pressed += 1;
-                    }
-                },
-                Fixture {
-                    width,
-                    count,
-                    relative,
-                    pressed: 0,
-                },
-            );
+        let harness = |width: f32, count: usize, lines: Vec<FileLine>| {
+            let mut h = Harness::builder()
+                .with_size(egui::vec2(960.0, 640.0))
+                .build_ui_state(
+                    move |ui, fixture: &mut Fixture| {
+                        let fault = Hp(Severity::NeedsFixing, Some(9));
+                        ui.set_max_width(fixture.width);
+                        let frame = PaneFrame::new(ui);
+                        let mut messages =
+                            Messages::<u8>::new(&frame, "file_line_footer", ui.available_width());
+                        for at in 0..fixture.count {
+                            let line = fixture.lines[at % fixture.lines.len()].clone();
+                            let message = FaultMessage::new(&fault)
+                                .choice(Choice::new(MessageChoice::Choice("Try again"), at as u8));
+                            messages.outcome(message.file(line));
+                        }
+                        let paned = messages.pane(ui, crate::design::Body::Content, |ui| {
+                            ui.label(BODY);
+                        });
+                        if paned.pressed.is_some() {
+                            fixture.pressed += 1;
+                        }
+                    },
+                    Fixture {
+                        width,
+                        count,
+                        lines,
+                        pressed: 0,
+                    },
+                );
             crate::design::theme::install(&h.ctx);
             h.run_steps(4);
             h
         };
+        let line = |relative: &str| FileLine::new(&root, relative).edit().show();
         let painted = |h: &Harness<'_, Fixture>, rect: Rect| -> Vec<String> {
             h.output()
                 .shapes
@@ -3140,7 +3312,26 @@ mod tests {
                 })
                 .collect()
         };
-        let whole = |relative: &str| format!("{ROOT}/{relative}");
+        let shows = |h: &Harness<'_, Fixture>, words: &str| {
+            h.output().shapes.iter().any(|clipped| {
+                matches!(&clipped.shape, egui::Shape::Text(text) if text.galley.job.text == words)
+            })
+        };
+        let opened =
+            |h: &mut Harness<'_, Fixture>| {
+                let mut opened: Vec<String> = Vec::new();
+                for _ in 0..3 {
+                    h.step();
+                    opened.extend(h.output().platform_output.commands.iter().filter_map(
+                        |command| match command {
+                            egui::OutputCommand::OpenUrl(open) => Some(open.url.clone()),
+                            _ => None,
+                        },
+                    ));
+                }
+                opened
+            };
+        let whole = |relative: &str| root.join(relative).display().to_string();
         // A node by the name the part gave it (`named`), not the words of its text run.
         let named = |name: String| {
             egui_kittest::kittest::By::new()
@@ -3149,8 +3340,8 @@ mod tests {
         let words = fault_words(&fault);
 
         // Wide: the path whole, as it is on disk (no capital), at the words' first letter,
-        // then its two links on the same line.
-        let mut h = harness(egui::vec2(960.0, 640.0), 960.0, 1, SHORT);
+        // then its two links on the same line, named with the relative path.
+        let mut h = harness(960.0, 1, vec![line(SHORT)]);
         let said = h.get_by_role_and_label(Role::Label, words.as_str()).rect();
         let path = h
             .query_all(named(whole(SHORT)))
@@ -3163,7 +3354,7 @@ mod tests {
             "the path {path:?} starts under the words {said:?}, at their first letter"
         );
         for word in [EDIT_IN_OBSIDIAN, SHOW_FILE] {
-            let name = format!("{word}: package.md");
+            let name = format!("{word}: {SHORT}");
             let target = h.get_by_label(&name).rect();
             assert!(
                 target.width() >= XL && target.height() >= XL,
@@ -3178,24 +3369,10 @@ mod tests {
             h.query_by_label(SHOW_FILE).is_none(),
             "a link's name names the file, not only its words"
         );
-        h.get_by_label("Show file: package.md").click();
-        let mut opened: Vec<String> = Vec::new();
-        for _ in 0..3 {
-            h.step();
-            opened.extend(
-                h.output()
-                    .platform_output
-                    .commands
-                    .iter()
-                    .filter_map(|command| match command {
-                        egui::OutputCommand::OpenUrl(open) => Some(open.url.clone()),
-                        _ => None,
-                    }),
-            );
-        }
+        h.get_by_label(&format!("{SHOW_FILE}: {SHORT}")).click();
         assert_eq!(
-            opened,
-            ["file:///vault/Ashen%20Marches/wrong-package/package.md"],
+            opened(&mut h),
+            [file_url(&root.join(SHORT)).unwrap()],
             "Show file opens the file"
         );
         assert_eq!(
@@ -3203,18 +3380,47 @@ mod tests {
             0,
             "a link opens its file, not a press of the pane"
         );
+        // The file goes before the next press: nothing opens, its links lock and say why, and
+        // they open again once it is back.
+        std::fs::rename(root.join(SHORT), root.join("moved.md")).unwrap();
+        h.get_by_label(&format!("{SHOW_FILE}: {SHORT}")).click();
+        assert_eq!(
+            opened(&mut h),
+            Vec::<String>::new(),
+            "a gone file opens nothing"
+        );
+        assert!(
+            h.get_by_label(&format!("{SHOW_FILE}: {SHORT}"))
+                .accesskit_node()
+                .is_disabled()
+                && shows(&h, FILE_GONE.as_str()),
+            "its links lock, and say why"
+        );
+        std::fs::rename(root.join("moved.md"), root.join(SHORT)).unwrap();
+        h.run_steps(2);
+        assert!(
+            !h.get_by_label(&format!("{SHOW_FILE}: {SHORT}"))
+                .accesskit_node()
+                .is_disabled()
+                && !shows(&h, FILE_GONE.as_str()),
+            "back: the links open again"
+        );
 
-        // Narrow, with a long path: the path takes its own line, cut in the middle, and keeps
-        // its file name; its name and hover keep it whole; the links wrap under it.
-        let mut h = harness(egui::vec2(960.0, 640.0), 320.0, 1, LONG);
-        let said = h.get_by_role_and_label(Role::Label, words.as_str()).rect();
-        let node = h.query_all(named(whole(LONG))).next().expect("the path");
+        // Narrow, two long paths that end in one name: each path takes its own line, cut in the
+        // middle, and keeps its file name; its name and hover keep it whole; the links wrap under
+        // it. The two lines' links have two names, and keyboard focus on a link shows the whole
+        // path.
+        let mut h = harness(320.0, 2, vec![line(LONG_A), line(LONG_B)]);
+        let said = h
+            .query_all_by_role_and_label(Role::Label, words.as_str())
+            .next()
+            .unwrap()
+            .rect();
+        let node = h.query_all(named(whole(LONG_A))).next().expect("the path");
         let path = node.rect();
         let shown = painted(&h, path).concat();
         assert!(
-            shown.contains('…')
-                && shown.starts_with("Sessions/")
-                && shown.ends_with("/Timeline.md"),
+            shown.contains('…') && shown.starts_with("packages/") && shown.ends_with("/package.md"),
             "cut in the middle, the file name kept: {shown:?}"
         );
         assert!(path.right() <= 321.0, "inside its line: {path:?}");
@@ -3222,25 +3428,52 @@ mod tests {
             (path.left() - said.left()).abs() <= 1.0,
             "the path {path:?} at the words {said:?}"
         );
-        let show = h.get_by_label("Edit in Obsidian: Timeline.md").rect();
+        let edit = h
+            .get_by_label(&format!("{EDIT_IN_OBSIDIAN}: {LONG_A}"))
+            .rect();
         assert!(
-            show.top() >= path.bottom() - 1.0 && (show.left() - said.left()).abs() <= 1.0,
-            "the links wrap under the path, at the words: {show:?}"
+            edit.top() >= path.bottom() - 1.0 && (edit.left() - said.left()).abs() <= 1.0,
+            "the links wrap under the path, at the words: {edit:?}"
+        );
+        assert!(
+            h.query_by_label(&format!("{EDIT_IN_OBSIDIAN}: {LONG_B}"))
+                .is_some(),
+            "two files of one name: two link names"
         );
         node.hover();
         h.run_steps(3);
+        assert!(shows(&h, &whole(LONG_A)), "the hover shows the whole path");
+        // The pointer leaves; only keyboard focus remains.
+        h.get_by_label(BODY).hover();
+        h.run_steps(3);
+        assert!(!shows(&h, &whole(LONG_B)), "no tip before the focus");
+        h.get_by_label(&format!("{SHOW_FILE}: {LONG_B}")).focus();
+        h.run_steps(3);
         assert!(
-            h.output()
-                .shapes
-                .iter()
-                .any(|clipped| matches!(&clipped.shape,
-                    egui::Shape::Text(text) if text.galley.job.text == whole(LONG))),
-            "the hover shows the whole path"
+            shows(&h, &whole(LONG_B)) && !shows(&h, &whole(LONG_A)),
+            "keyboard focus on a link shows its whole path"
         );
+
+        // A root that is not absolute, or a relative path with a root or `..`, draws no link and
+        // shows the path as given.
+        for refused in [
+            FileLine::new("vault", "a.md").edit().show(),
+            FileLine::new(&root, "../other/a.md").edit().show(),
+            FileLine::new(&root, Path::new("/other/a.md")).edit().show(),
+        ] {
+            let shown = refused.shown();
+            let h = harness(960.0, 1, vec![refused]);
+            assert!(
+                h.query_by_label_contains(EDIT_IN_OBSIDIAN).is_none()
+                    && h.query_by_label_contains(SHOW_FILE).is_none()
+                    && h.query_all(named(shown.clone())).next().is_some(),
+                "{shown}: no link, the path as given"
+            );
+        }
 
         // 30 messages with file lines at 960 × 640: the footer takes at most a third of the
         // pane, and the body stays in view above it.
-        let h = harness(egui::vec2(960.0, 640.0), 960.0, 30, SHORT);
+        let h = harness(960.0, 30, vec![line(SHORT)]);
         let footer = crate::design::pane::footer_rect(&h.ctx, egui::Id::new("file_line_footer"))
             .expect("the footer is drawn");
         let body = h.get_by_label(BODY).rect();
@@ -3258,6 +3491,23 @@ mod tests {
             lowest > footer.bottom(),
             "the footer's region scrolls: the last path {lowest} is below its view {footer:?}"
         );
+    }
+
+    /// The URLs a file line opens: `file:` by the platform's rules from an absolute path (none
+    /// from a relative one), and Obsidian's query with each unsafe byte written as `%XX`.
+    #[test]
+    fn a_file_line_opens_the_right_place() {
+        use std::path::Path;
+        let odd = Path::new("/vault/A & B/#é%?.md");
+        assert_eq!(
+            obsidian_url(odd),
+            "obsidian://open?path=/vault/A%20%26%20B/%23%C3%A9%25%3F.md"
+        );
+        assert_eq!(
+            file_url(odd).as_deref(),
+            Some("file:///vault/A%20&%20B/%23%C3%A9%25%3F.md")
+        );
+        assert_eq!(file_url(Path::new("vault/a.md")), None, "never a host");
     }
 
     /// A result and its Undo say one verb; a fit keeps the verb and the part that tells two
