@@ -745,15 +745,18 @@ fn tones_where(d: &Driver<'_>, wanted: impl Fn(&str) -> bool) -> Vec<&'static st
 /// every choice keep `S` clear of each scroll bar and column splitter beside them; the parent
 /// menu's frame does not overlap one.
 /// Requires every choice of both menus. Returns the submenu's frame.
+/// `menu` is the parent menu's words, its opener first: Encounters' `Move to` (R12: it acts at
+/// once, so no `…`), or the gallery's own words.
 fn submenu_clear_of_chrome(
     d: &Driver<'_>,
+    menu: [&str; 3],
     choices: &[&str],
     beside_a_lane: bool,
 ) -> Result<egui::Rect, String> {
     let nodes = d.nodes();
     let opener = d
-        .place_of("Move to")
-        .ok_or("Move to is not in view".to_owned())?;
+        .place_of(menu[0])
+        .ok_or(format!("{} is not in view", menu[0]))?;
     let margin = egui::Frame::menu(&d.app_style()).total_margin();
     // A page can show the same words elsewhere: each choice is the one level with the opener's
     // row or below it, nearest to it.
@@ -771,14 +774,14 @@ fn submenu_clear_of_chrome(
                     .min_by(|a, b| {
                         (a.rect.top() - opener.top()).total_cmp(&(b.rect.top() - opener.top()))
                     })
-                    .ok_or(format!("{name} is not in view beside Move to"))?
+                    .ok_or(format!("{name} is not in view beside {}", menu[0]))?
                     .rect,
             );
         }
         Ok(frame)
     };
     let submenu = targets_of(choices)?;
-    let menu = targets_of(&["Move to", "Make available to any encounter", "Delete group"])?;
+    let menu = targets_of(&menu)?;
     let window = d.window_size();
     let lanes = d.chrome_lanes();
     for (what, targets) in [("submenu", submenu), ("menu", menu)] {
@@ -8766,7 +8769,12 @@ pub mod gallery {
         for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
             let placed = d.at_size(size, |d| {
                 let parent = d.place_of("Make available to any encounter");
-                super::submenu_clear_of_chrome(d, &["Bridge Ambush"], false).and_then(|frame| {
+                super::submenu_clear_of_chrome(
+                    d,
+                    ["Move to…", "Make available to any encounter", "Delete group…"],
+                    &["Bridge Ambush"],
+                    false,
+                ).and_then(|frame| {
                     // Right beside its menu, where egui puts it: only the menus' frames
                     // and egui's small gap lie between them.
                     parent
@@ -18307,7 +18315,12 @@ pub mod encounter_owned_groups {
         // splitter before Add participants.
         let clear = |d: &mut Driver<'_>| {
             let size = d.window_size();
-            let clear = super::submenu_clear_of_chrome(d, &[RUN_ARENA, RUN], true)
+            let clear = super::submenu_clear_of_chrome(
+                d,
+                ["Move to", "Make available to any encounter", "Delete group"],
+                &[RUN_ARENA, RUN],
+                true,
+            )
                 .map(|frame| (frame, d.place_of("Move to")));
             d.observe(
                 "iter-22-B-SD2",
