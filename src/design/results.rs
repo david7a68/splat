@@ -609,6 +609,12 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
         }
     }
 
+    /// Each result whose owner can never come back (a dropped draft that no Undo can restore)
+    /// ends, in every scope. `reachable` is asked once per result, with its value.
+    pub fn end_unreachable(&mut self, mut reachable: impl FnMut(&T) -> bool) {
+        self.entries.retain(|entry| reachable(&entry.value));
+    }
+
     /// The files changed on disk (a reload, a file event). `holds` says whether a result still
     /// holds; it is asked only for a kind whose `disk_changed` is `Checked`.
     pub fn disk_changed(&mut self, mut holds: impl FnMut(&T) -> bool) {
@@ -724,16 +730,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "src/encounters.rs",
             "creature_pane",
             &[Ban::Results, Ban::Layout(2), Ban::Pane(1), Ban::RowKey(1)],
-        ),
-        // The encounter editor's old footer (its pane keeps main's form until part P2) has no
-        // ticket: the separation's and the member result's Undo go by owner.
-        ("src/encounters.rs", "undo_editor_of", &[Ban::ByOwner(1)]),
-        ("src/encounters.rs", "undo_kept_of", &[Ban::ByOwner(1)]),
-        ("src/encounters.rs", "undo_member_of", &[Ban::ByOwner(1)]),
-        (
-            "src/encounters.rs",
-            "undo_separation_of",
-            &[Ban::ByOwner(1)],
         ),
         (
             "src/encounters.rs",
@@ -891,8 +887,9 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "creature_search_with_summary",
             &[Ban::Layout(1)],
         ),
-        ("src/encounters.rs", "editor_view", &[Ban::Pane(1)]),
-        ("src/encounters.rs", "notes_field", &[Ban::Layout(1)]),
+        // The editor's columns (`Fills::because`) and the unread rows' warning in main's footer
+        // (`show_by_hand`): the typed footer holds no file line with its links.
+        ("src/encounters.rs", "editor_view", &[Ban::Pane(2)]),
         (
             "src/encounters.rs",
             "roster",
@@ -910,7 +907,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "members_pane",
             &[Ban::Layout(1)],
         ),
-        ("src/encounters/list.rs", "row_menu", &[Ban::Layout(1)]),
         ("src/encounters/list.rs", "side_control", &[Ban::Layout(2)]),
         (
             "src/library.rs",
@@ -1122,17 +1118,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/world/page.rs", "list", &[Ban::Extras(1)]),
         ("src/world/page.rs", "unread_pane", &[Ban::Extras(1)]),
         ("src/world/related.rs", "history_rows", &[Ban::Extras(1)]),
-        (
-            "src/encounters/groups.rs",
-            "a_group_changed_on_disk_blocks_the_whole_save_and_keeps_the_draft",
-            &[Ban::Pane(1)],
-        ),
         ("src/sessions/page.rs", "fills", &[Ban::Pane(1)]),
-        (
-            "src/encounters.rs",
-            "integrity_d8_a_changed_encounter_compares_and_keeps_unknown_fields",
-            &[Ban::Pane(1)],
-        ),
         ("src/campaign_content.rs", "show", &[Ban::Pane(1)]),
         ("src/party.rs", "show", &[Ban::Pane(1)]),
     ]
