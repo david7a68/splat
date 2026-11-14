@@ -2243,6 +2243,9 @@ struct LogReveal {
     read: String,
     /// The pass in which the reader last drew while this waited; `None` before the first.
     drawn: Option<u64>,
+    /// Passes in which it was shown but not yet whole: the pass that first draws the line
+    /// cannot scroll past the last pass's content, so it tries again, at most `TRIES` times.
+    shown: u8,
 }
 
 /// What a pending reveal does in one draw of its reader.
@@ -2257,6 +2260,8 @@ enum RevealStep {
 }
 
 impl LogReveal {
+    const TRIES: u8 = 3;
+
     fn new(campaign: Uuid, id: Uuid, line: &str) -> Self {
         Self {
             campaign,
@@ -2268,6 +2273,7 @@ impl LogReveal {
                     .map_or(read.clone(), |at| read[at..].to_owned())
             },
             drawn: None,
+            shown: 0,
         }
     }
 
@@ -2335,6 +2341,24 @@ fn painted_since(
         }
     });
     out
+}
+
+/// Scroll the enclosing column the least so that `rect` is whole inside `view` (the pane's
+/// clip), at once. A rect taller than the view is not scrolled to: egui would show neither end.
+/// Whether it asked for a scroll.
+fn scroll_least(ui: &egui::Ui, view: egui::Rect, rect: egui::Rect) -> bool {
+    if rect.height() > view.height() {
+        return false;
+    }
+    let delta = if rect.bottom() > view.bottom() {
+        view.bottom() - rect.bottom()
+    } else if rect.top() < view.top() {
+        view.top() - rect.top()
+    } else {
+        return false;
+    };
+    ui.scroll_with_delta_animation(egui::vec2(0.0, delta), egui::style::ScrollAnimation::none());
+    true
 }
 
 fn painted_count(ctx: &egui::Context, layer: egui::LayerId) -> usize {
@@ -3162,7 +3186,8 @@ impl Reader {
         reserve: bool,
     ) {
         let painted = painted_since(ui.ctx(), ui.layer_id(), from);
-        let view = ui.clip_rect().height();
+        // The pane's view is its clip: the part of the content a person sees.
+        let view = ui.clip_rect();
         let last = |tail: &str| {
             painted
                 .iter()
@@ -3170,30 +3195,49 @@ impl Reader {
                 .find(|(text, _)| !tail.is_empty() && text.trim_end().ends_with(tail))
                 .map(|(_, rect)| *rect)
         };
-        if show {
-            let tail = self.reveal.as_ref().map(LogReveal::painted_tail);
-            if let Some(rect) = tail.as_deref().and_then(last)
-                && rect.height() <= view
-            {
-                ui.scroll_to_rect(rect, None);
+        if show && let Some(reveal) = self.reveal.as_mut() {
+            let whole = last(&reveal.painted_tail()).is_none_or(|rect| {
+                view.expand(0.5).contains_rect(rect) || !scroll_least(ui, view, rect)
+            });
+            reveal.shown += 1;
+            if whole || reveal.shown >= LogReveal::TRIES {
+                self.reveal = None;
+            } else {
+                // The next pass scrolls past this pass's new content.
+                ui.ctx().request_repaint();
             }
-            self.reveal = None;
         }
         if reserve {
             self.reserve_log = None;
-            // The room: the Log's last entry again, below itself, as tall as it.
-            let entry = last_log_line(&item.entry.body)
-                .map(|line| LogReveal::new(Uuid::nil(), item.entry.id, line).painted_tail())
-                .as_deref()
-                .and_then(last);
-            if let (Some(field), Some(entry)) = (self.status_field, entry) {
-                let room = egui::Rect::from_min_max(
-                    field.min,
-                    egui::pos2(field.right(), entry.bottom() + entry.height()),
+            // Where the next Log entry goes: under the Log's last entry, as tall as it; or,
+            // with no Log yet, under the body's last words, a Log heading and an entry
+            // (five prose lines). The act also puts its result and Undo in the pane's footer,
+            // which takes about three lines from the view: that room is kept too.
+            let row = ui.fonts_mut(|fonts| {
+                fonts.row_height(&crate::design::reader::prose_type(ui).font(ui))
+            });
+            let tail = |line: &str| LogReveal::new(Uuid::nil(), item.entry.id, line).painted_tail();
+            let room_bottom = match last_log_line(&item.entry.body) {
+                Some(line) => last(&tail(line)).map(|entry| entry.bottom() + entry.height()),
+                None => item
+                    .entry
+                    .body
+                    .lines()
+                    .rev()
+                    .map(str::trim)
+                    .find(|line| !line.is_empty() && !line.starts_with('#'))
+                    .and_then(|line| last(&tail(line)))
+                    .map(|words| words.bottom() + 5.0 * row),
+            };
+            if let (Some(field), Some(bottom)) = (self.status_field, room_bottom) {
+                let _ = scroll_least(
+                    ui,
+                    view,
+                    egui::Rect::from_min_max(
+                        field.min,
+                        egui::pos2(field.right(), bottom + 3.0 * row),
+                    ),
                 );
-                if room.height() <= view {
-                    ui.scroll_to_rect(room, None);
-                }
             }
         }
     }
