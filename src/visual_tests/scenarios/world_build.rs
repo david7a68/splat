@@ -2358,8 +2358,38 @@ pub fn facts(d: &mut Driver<'_>) {
     let horn = root(d).join("Lore/Horn Rings.md");
     let open = fs::read_to_string(&horn).unwrap();
     let question = "Open: Can a horn ring be sold?";
+    // The list row just below the Open questions row.
+    let row_below = |d: &Driver<'_>| {
+        let nodes = d.nodes();
+        let open = nodes
+            .iter()
+            .find(|node| node.name.starts_with("Open questions · "))?
+            .rect;
+        nodes
+            .iter()
+            .filter(|node| {
+                node.name.contains(" · ")
+                    && node.rect.top() >= open.bottom() - 0.5
+                    && node.rect.left() < open.right()
+                    && node.rect.right() > open.left()
+            })
+            .map(|node| node.rect)
+            .min_by(|a, b| a.top().total_cmp(&b.top()))
+    };
+    let below_before = row_below(d);
     d.click(question);
     d.expect("Undo tick");
+    // Round 28 FE4: the last question ticked, the row stays while its page is open, says that
+    // none is open, and the row below keeps its place; the page says so too.
+    let below_after = row_below(d);
+    d.observe(
+        "iter-28-D-FE4",
+        d.has("Open questions · No open questions")
+            && d.visible_text("No open questions.")
+            && below_before.is_some()
+            && below_before == below_after,
+        format!("The row below: {below_before:?} → {below_after:?}"),
+    );
     d.observe(
         "T15.5",
         fs::read_to_string(&horn).unwrap()

@@ -1264,9 +1264,17 @@ impl WorldPage {
                 checks.problems(),
             ),
         ];
+        // A row with nothing left stays while its page is open (FE4): the list does not move
+        // under the DM, and the row still shows which page is open.
         for (view, title, detail, count) in rows {
-            if count > 0
-                && design::two_line_row(ui, ROW, self.view == view, title, &detail).clicked()
+            let open = self.view == view;
+            let detail = match (count, view) {
+                (0, View::Questions) => "No open questions".to_owned(),
+                (0, _) => "No suggestions".to_owned(),
+                _ => detail,
+            };
+            if (count > 0 || open)
+                && design::two_line_row(ui, ROW, open, title, &detail).clicked()
             {
                 self.view = view;
                 self.keep_repair();
@@ -1337,6 +1345,9 @@ impl WorldPage {
                 "Each unticked task line in the world’s notes. Tick a question when you decide.",
             );
             design::gap(ui, design::Gap::S);
+            if checks.questions.is_empty() {
+                note(ui, "No open questions.");
+            }
             by_page(ui, &checks.questions);
             return tick.map(CheckAct::Tick).or(open);
         }
