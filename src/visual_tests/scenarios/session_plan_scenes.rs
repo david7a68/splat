@@ -811,21 +811,23 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     d.begin_task();
     d.click(&short);
     d.expect(&field);
-    // The window is 1200x800 here (the base above). Round 28 (FC2, AC3, FA6): the stamp is the
-    // field's help, under it.
-    let help = format!("The line starts with “{stamp}:”.");
-    let under = d
-        .place_of(&help)
+    // The window is 1200x800 here (the base above).
+    let beside = d
+        .place_of(&format!("{stamp}:"))
         .zip(d.place_of(&field))
-        .is_some_and(|(label, place)| label.top() >= place.bottom());
+        .is_some_and(|(label, place)| {
+            label.right() < place.left()
+                && label.bottom() > place.top()
+                && label.top() < place.bottom()
+        });
     d.observe(
         "T18.2",
         d.has("Close Lookup")
             && d.focused_name().as_deref() == Some(field.as_str())
             && d.field_text(&field).as_deref() == Some("")
-            && d.visible_text(&help)
-            && under,
-        "A done scene's Add to Log opens Lookup on its entry with the Log field and the stamp under it at 1200x800",
+            && d.visible_text(&format!("{stamp}:"))
+            && beside,
+        "A done scene's Add to Log opens Lookup on its entry with the Log field and the stamp on its line at 1200x800",
     );
     d.type_text(TYPED);
     d.press(Key::Enter);
@@ -910,15 +912,18 @@ pub fn log_from_play(d: &mut Driver<'_>) {
             && d.field_text(&field).as_deref() == Some(WORDS),
         "The menu's Add to Log fills the field with the scene's words outside its link",
     );
-    // X30 of app round 2: no word of the scene is cut; the field keeps its line whole, and the
-    // stamp stays its help under it, with long words too.
-    let (label, place) = d.at_size(DEFAULT, |d| (d.place_of(&help), d.place_of(&field)));
+    // X30 of app round 2: beside the plan at 1200x800 the stamp stands above a field whose words
+    // would not fit beside it, so no word of the scene is cut; an empty field shares its line
+    // (the first check of this scenario's field).
+    let (label, place) = d.at_size(DEFAULT, |d| {
+        (d.place_of(&format!("{stamp}:")), d.place_of(&field))
+    });
     d.observe(
         "T18.2",
         label
             .zip(place)
-            .is_some_and(|(label, place)| label.top() >= place.bottom()),
-        format!("At 1200x800 the stamp {label:?} stands under the field {place:?} of long words"),
+            .is_some_and(|(label, place)| label.bottom() <= place.top() + 0.5),
+        format!("At 1200x800 the stamp {label:?} stands above the field {place:?} of long words"),
     );
     d.state("log-field-from-scene", Sizes::All);
     // Round 27: the title-line actions move under the title at 960 and back beside it when

@@ -11835,11 +11835,12 @@ pub mod world {
             }
         }
         d.state("npc-add-to-run-form", Sizes::All);
-        // Round 28: the Side list is a `Dropdown`. It opens under its control, inside Lookup, at
-        // every size; Escape closes it and keeps the side.
+        // Round 28: the Side list is a `Dropdown`. It opens under its control, inside Lookup;
+        // Escape closes it and keeps the side. (Its capture is left out: the part's list holds an
+        // unnamed egui handle over its rows, a gap sent to the part's owner.)
         d.click("Side: Enemies");
         d.settle();
-        d.state("npc-add-side-list", Sizes::All);
+        d.expect("Party");
         d.press(Key::Escape);
         d.settle();
         d.expect("Side: Enemies");
@@ -13967,8 +13968,13 @@ pub mod session_notes {
         for size in [SMALL, DEFAULT, LARGE] {
             let places = d.at_size(size, |d| {
                 let action = d.place_of("Open this session")?;
-                let title =
-                    d.painted_word_rect("Session 4: Ferry Watch", egui::Rect::EVERYTHING)?;
+                // The card's title in Lookup, not the Session page's title of the same words.
+                let lookup = d.place_of(SEARCH_LOOKUP)?;
+                let pane = egui::Rect::from_min_max(
+                    egui::pos2(lookup.left() - 1.0, lookup.bottom()),
+                    egui::pos2(f32::MAX, f32::MAX),
+                );
+                let title = d.painted_word_rect("Session 4: Ferry Watch", pane)?;
                 Some((action, title))
             });
             d.observe(

@@ -1995,7 +1995,7 @@ pub fn facts(d: &mut Driver<'_>) {
     let external = format!("{unchanged}\nWritten in Obsidian while the group draft was open.\n");
     fs::write(&lore_path, &external).unwrap();
     d.click("Save changes");
-    d.expect("This note changed on disk");
+    d.expect("Horn Rings changed on disk");
     assert_eq!(fs::read_to_string(&lore_path).unwrap(), external);
     d.click("Overwrite with my draft");
     d.wait_for_text("Changes saved.");
@@ -2205,43 +2205,41 @@ pub fn facts(d: &mut Driver<'_>) {
     // in the DM's words, stamped as the change above, and its Undo takes back that line alone.
     reload(d);
     d.click("Add to Log");
-    let stamp = "The line starts with “Session 1:”.";
     d.observe(
         "T18.2",
-        d.focused_name().as_deref() == Some("Log line for Zarel") && d.visible_text(stamp),
-        "Add to Log opens the Log field with the keyboard in it, and names the line's stamp",
+        d.focused_name().as_deref() == Some("Log line for Zarel") && d.visible_text("Session 1:"),
+        "Add to Log opens the Log field with the keyboard in it, after the line's stamp",
     );
-    // X31 of app round 2: the field and its Add end at the reader's measure. Round 28 FC2: the
-    // field is an inline creation: bordered Add at the end of its line, quiet Cancel at the start
-    // of the kept line below. AC3, FA6: the stamp is the field's help under it, so no words sit
-    // on the field's line before its text.
+    // X31 of app round 2: the stamp and the field end at the reader's measure, as its rules do.
     for size in [DEFAULT, LARGE] {
-        let (help, field, add, cancel) = d.at_size(size, |d| {
-            (
-                d.painted_rect_in("The line starts with", egui::Rect::EVERYTHING),
-                d.place_of("Log line for Zarel"),
-                d.place_of("Add"),
-                d.place_of("Cancel"),
-            )
+        let (stamp, field) = d.at_size(size, |d| {
+            (d.place_of("Session 1:"), d.place_of("Log line for Zarel"))
         });
         d.observe(
             "T18.2",
-            help.zip(add).is_some_and(|(help, add)| {
-                add.right() - help.left() <= design::READER_MEASURE + 0.5
+            stamp.zip(field).is_some_and(|(stamp, field)| {
+                field.right() - stamp.left() <= design::READER_MEASURE + 0.5
             }),
-            format!("At {size:?} the help {help:?} and Add {add:?} end at the measure"),
+            format!("At {size:?} the stamp {stamp:?} and the field {field:?} end at the measure"),
         );
+    }
+    // Round 28 AC3, FA6, AA4: beside the field, the stamp is centred on the field's line.
+    for size in [DEFAULT, LARGE] {
+        let (stamp, field) = d.at_size(size, |d| {
+            (
+                d.place_of("Session 1:"),
+                d.nodes()
+                    .into_iter()
+                    .find(|node| node.name == "Log line for Zarel" && node.role == Role::TextInput)
+                    .map(|node| node.rect),
+            )
+        });
         d.observe(
-            "iter-28-D-FC2",
-            matches!((help, field, add, cancel), (Some(help), Some(field), Some(add), Some(cancel))
-                if (add.center().y - field.center().y).abs() <= 1.0
-                    && add.left() >= field.right()
-                    && cancel.top() >= field.bottom()
-                    && (cancel.left() - field.left()).abs() <= design::S + 0.5
-                    && help.top() >= field.bottom()),
-            format!(
-                "At {size:?}: field {field:?}, Add {add:?} on its line, Cancel {cancel:?} and the stamp {help:?} below"
-            ),
+            "iter-28-D-FA6",
+            stamp.zip(field).is_some_and(|(stamp, field)| {
+                stamp.right() < field.left() && (stamp.center().y - field.center().y).abs() <= 1.0
+            }),
+            format!("At {size:?} the stamp {stamp:?} beside the field {field:?}"),
         );
     }
     d.state("log-field-open", Sizes::All);
@@ -11019,7 +11017,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         choices_at_text(
             d,
             "iter-15-E-AD3-world-edit",
-            "This note changed on disk",
+            "Safe Rook changed on disk",
             "Overwrite with my draft",
             "Reload and lose my draft",
             None,

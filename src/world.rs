@@ -2185,19 +2185,9 @@ struct LogField {
 /// Why an open `Add to Log` field waits: an edit form of its entry is open.
 pub(crate) const LOG_WAITS: &str = "Save or discard your edit to add a Log line.";
 
-/// `Add to Log`'s field: one for each entry, apart in World's reader and in Lookup's.
-const LOG_LINE: ReaderField = ReaderField {
-    page: crate::field_id!("world_log_line"),
-    compact: crate::field_id!("lookup_log_line"),
-};
-const LOG_ADD: design::Word = crate::word!("Add");
-const LOG_CANCEL: design::Word = crate::word!("Cancel");
-crate::create_reasons! {
-    /// Why `Add to Log`'s `Add` cannot add yet.
-    enum LogReason {
-        NoWords => "Write what happened first.",
-    }
-}
+/// The least room that `Add to Log`'s field keeps for a sentence when its stamp shares its line.
+/// It also keeps the words it holds whole, with the field's margins.
+const LOG_FIELD_BESIDE: f32 = design::XXL * 7.0;
 
 /// Where a reader's title-line actions go (round 27, one rule for World, Lookup and the
 /// encounter editor's header): `None` when the measured title, the `L` gap and every action
@@ -3490,52 +3480,102 @@ impl Reader {
 
     fn log_field_in(&mut self, ui: &mut egui::Ui, item: &Item, campaign: &Campaign) -> Option<Go> {
         let key = (campaign.id, item.entry.id);
-        let help = self
+        let stamp = self
             .line_stamp()
-            .map(|stamp| format!("The line starts with “{}:”.", sessions::plain_links(&stamp)));
-        let compact = self.compact;
+            .map(|stamp| format!("{}:", sessions::plain_links(&stamp)));
         let open = self.log_fields.get_mut(&key)?;
         let select = std::mem::take(&mut open.select);
-        let focus = std::mem::take(&mut open.field.focus);
+        let field = &mut open.field;
         let name = format!("Log line for {}", item.entry.name);
-        // The one inline creation layout (FC2): the field under its label, bordered `Add` at
-        // the end of its line, the stamp as its help, and quiet `Cancel` at the start of the kept
-        // line. The stamp no longer shares the field's line, so it cannot sit above the field's
-        // words (AC3, FA6, AA4).
-        let words = &mut open.field.words;
-        let reason = words.trim().is_empty().then_some(LogReason::NoWords);
-        let mut field = design::CreateField::new(LOG_LINE.id(compact, item.entry.id), &name, words)
-            .focus(focus);
-        if let Some(help) = &help {
-            field = field.help(help);
-        }
-        let form = design::InlineCreate::new()
-            .field(field)
-            .create(design::Create::secondary(LOG_ADD).blocked(reason))
-            .kept_line(design::KeptLine::new().cancel(LOG_CANCEL, true))
-            .show(ui);
-        let response = form.fields.first()?.clone();
+        // The field ends at the reader's measure, also when the stamp shares its line: a row of
+        // a wrapping layout does not hold a nested row to its parent's width (round 27 AF2, FF1).
+        let edge = ui.max_rect().right();
+        let draw = |ui: &mut egui::Ui, field: &mut design::AddField| {
+            let width = (edge - ui.cursor().left()).max(design::XXL);
+            ui.allocate_ui_with_layout(
+                egui::vec2(width, 0.0),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    ui.set_max_width(width);
+                    design::add_field(
+                        ui,
+                        field,
+                        &name,
+                        "What happened?",
+                        0.0,
+                        |_| None::<()>,
+                        |_| Vec::new(),
+                    )
+                    .field
+                },
+            )
+            .inner
+        };
+        let response = match &stamp {
+            None => draw(ui, field),
+            Some(stamp) => {
+                let size = ui
+                    .painter()
+                    .layout_no_wrap(stamp.clone(), Type::Small.font(ui), colors().muted)
+                    .size();
+                let width = size.x;
+                let words = Type::Small.rich(ui, stamp).color(colors().muted);
+                // The stamp shares the field's line while the field keeps room for a sentence.
+                // One layout for both, so the field keeps its ID, and the keyboard, when the
+                // window changes size.
+                let room = ui.available_width() - width - design::S;
+                let typed = ui
+                    .painter()
+                    .layout_no_wrap(
+                        field.words.clone(),
+                        egui::TextStyle::Body.resolve(ui.style()),
+                        colors().text,
+                    )
+                    .size()
+                    .x;
+                let beside = room >= LOG_FIELD_BESIDE.max(typed + 3.0 * design::S);
+                ui.horizontal_wrapped(|ui| {
+                    if !beside {
+                        ui.label(words);
+                        ui.end_row();
+                        return draw(ui, field);
+                    }
+                    // Beside the field, the stamp keeps its room before it and is put centred on
+                    // the field's line, so it reads as the start of the line it dates (AC3, FA6,
+                    // AA4), not 12 px above it.
+                    let (slot, _) =
+                        ui.allocate_exact_size(egui::vec2(width, 0.0), egui::Sense::hover());
+                    let response = draw(ui, field);
+                    ui.put(
+                        egui::Rect::from_center_size(
+                            egui::pos2(slot.center().x, response.rect.center().y),
+                            size,
+                        ),
+                        egui::Label::new(words).extend(),
+                    );
+                    response
+                })
+                .inner
+            }
+        };
         if select {
-            design::focus_and_select(ui, response.id, &open.field.words);
+            design::focus_and_select(ui, response.id, &field.words);
         }
-        let typed = open.field.words.trim().to_owned();
         // While the field has the keyboard, Escape is the field's, not Lookup's.
         if response.has_focus() || response.lost_focus() {
             self.form_focused = true;
         }
         let enter = response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
-        let escape = ui.input(|input| input.key_pressed(egui::Key::Escape))
-            && (response.has_focus() || response.lost_focus());
-        if escape || form.cancel {
+        if ui.input(|input| input.key_pressed(egui::Key::Escape))
+            && (response.has_focus() || response.lost_focus())
+        {
             self.log_fields.remove(&key);
-        } else if enter || form.create {
-            if typed.is_empty() {
-                // Enter on no words closes the field, as before; `Add` is blocked then.
-                if enter {
-                    self.log_fields.remove(&key);
-                }
+        } else if enter {
+            let words = field.words.trim().to_owned();
+            if words.is_empty() {
+                self.log_fields.remove(&key);
             } else {
-                return self.add_log_line(campaign, item, &typed);
+                return self.add_log_line(campaign, item, &words);
             }
         }
         None
