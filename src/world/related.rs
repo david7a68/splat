@@ -43,7 +43,7 @@ fn page_row(ui: &mut egui::Ui, index: &ContentIndex, position: usize) -> bool {
     };
     let c = colors();
     let width = ui.available_width().max(1.0);
-    let name = &item.entry.name;
+    let name = index.name_of(item);
     let name_galley = design::one_line(ui, name, Type::Body.font(ui), c.accent, width);
     let name_width = name_galley.size().x;
     let target_width = name_width.max(design::XL);
@@ -167,8 +167,9 @@ fn fact(ui: &mut egui::Ui, line: &Line, names: &[String]) -> bool {
     design::line_link(ui, label, text).clicked()
 }
 
-/// A source note's name. A copy of this note, or any file with its name, is named by its path,
-/// as search rows name duplicates.
+/// A source note's name: a session's as the Sessions page gives it (`ContentIndex::shown_name`).
+/// A copy of this note, or any file with its name, is named by its path, as search rows name
+/// duplicates.
 fn source_name(index: &ContentIndex, item: &Item, source: usize) -> String {
     let entry = &index.items[source].entry;
     if entry.name.eq_ignore_ascii_case(&item.entry.name)
@@ -176,7 +177,7 @@ fn source_name(index: &ContentIndex, item: &Item, source: usize) -> String {
     {
         entry.path.clone()
     } else {
-        entry.name.clone()
+        index.name_of(&index.items[source]).to_owned()
     }
 }
 

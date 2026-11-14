@@ -245,6 +245,10 @@ pub struct ContentIndex {
     /// World notes whose name another World note also has, found once when the index loads, so
     /// a result or a chooser names their folder without a search on each frame.
     shared_world_names: HashSet<usize>,
+    /// Each session note's name as the Sessions page shows it (`sessions::Note::label`:
+    /// `Session 1: The Crossing`), by the lower-case file stem a link uses. Read when the index
+    /// loads; any file change makes a new index (round 28 FC8).
+    session_names: HashMap<String, String>,
 }
 
 #[cfg(test)]
@@ -389,13 +393,14 @@ fn note_items(
     note: world::PlainNote,
     owner: &str,
     images: &HashMap<String, std::path::PathBuf>,
+    session_names: &HashMap<String, String>,
 ) -> Vec<Item> {
     let subtitle = match note.role {
         Role::World => "World note",
         Role::Session => "Session note",
         Role::Transcript => "Transcript",
     };
-    let lines = world::lines::lines(&note.body, &note.name);
+    let lines = world::lines::lines(&note.body, &note.name, session_names);
     let item = |entry: Entry, subtitle: String, lower_body: String, source: Source| Item {
         lower: entry.name.to_lowercase(),
         subtitle,
@@ -419,7 +424,7 @@ fn note_items(
         .trim_start()
         .strip_prefix(&format!("# {}\n", note.name))
         .unwrap_or(&note.body);
-    let body = world::with_links(shown, images);
+    let body = world::with_named_links(shown, images, session_names);
     let headings = world::headings(&body);
     let mut main = item(
         world::note_entry(&note.path, &note.name, body),
@@ -485,6 +490,19 @@ impl ContentIndex {
             }
         };
         let builtin = catalogue.modules.first().map(|module| module.id);
+        // Each session note's name as the Sessions page shows it, by the file stem a link uses
+        // (round 28 FC8): a link to a session reads as the session, wherever it shows.
+        let sessions_folder = campaign.map(|campaign| {
+            crate::sessions::folder(campaign)
+                .unwrap_or_else(|_| campaign.path.join(crate::sessions::DEFAULT_FOLDER))
+        });
+        let session_names: HashMap<String, String> = sessions_folder
+            .as_deref()
+            .map(crate::sessions::list_notes)
+            .unwrap_or_default()
+            .iter()
+            .map(|note| (note.link().to_lowercase(), note.label()))
+            .collect();
         const FROM_SHEET: &str = "From a character sheet";
         // A spell copied from a character sheet is not the book's text. It sorts after.
         let from_sheet = |entry: &Entry| {
@@ -539,7 +557,7 @@ impl ContentIndex {
                         String::new()
                     },
                     lines: if e.entry.kind == "world" {
-                        world::lines::lines(&e.entry.body, &e.entry.name)
+                        world::lines::lines(&e.entry.body, &e.entry.name, &session_names)
                     } else {
                         Vec::new()
                     },
@@ -564,8 +582,7 @@ impl ContentIndex {
             .collect();
         let files_seen = content_fingerprint(modules, campaign);
         if let Some(campaign) = campaign {
-            let sessions = crate::sessions::folder(campaign)
-                .unwrap_or_else(|_| campaign.path.join(crate::sessions::DEFAULT_FOLDER));
+            let sessions = sessions_folder.clone().unwrap_or_default();
             let scan = world::scan(&campaign.path, &sessions);
             // Each World entry's whole file text, as the folder reading saw it (byte order mark
             // and line ends included), kept as a hash. It is kept only when that reading's entry
@@ -590,12 +607,13 @@ impl ContentIndex {
                         })
                         .and(folder.text(&item.entry.path))
                         .map(text_hash);
-                    item.entry.body = world::with_links(&item.entry.body, &scan.images);
+                    item.entry.body =
+                        world::with_named_links(&item.entry.body, &scan.images, &session_names);
                 }
             }
             let owner = owner_name(campaign.id, true);
             for note in scan.notes {
-                items.extend(note_items(note, &owner, &scan.images));
+                items.extend(note_items(note, &owner, &scan.images, &session_names));
             }
         }
         for item in &mut items {
@@ -685,6 +703,7 @@ impl ContentIndex {
         }
         index.items = items;
         index.shared_world_names = index.find_shared_world_names();
+        index.session_names = session_names;
         index.mentions = index.find_mentions();
         // Relations and history are read once, so a reader does no search on each frame.
         for at in index.world.clone() {
@@ -1054,7 +1073,7 @@ impl ContentIndex {
         SHOWN_NAMES.with(|count| count.set(count.get() + 1));
         let entry = &self.items[at].entry;
         if !self.shared_world_names.contains(&at) {
-            return entry.name.clone();
+            return self.name_of(&self.items[at]).to_owned();
         }
         match entry.path.rsplit_once('/') {
             Some((folder, _)) => format!("{} ({folder})", entry.name),
@@ -1250,13 +1269,30 @@ impl ContentIndex {
         self.files.contains_key(&stem.to_lowercase())
     }
 
+    /// Session notes' names by lower-case file stem (see the field).
+    pub(crate) fn session_names(&self) -> &HashMap<String, String> {
+        &self.session_names
+    }
+
+    /// The name the app shows for an item: a session note's is its session's name, as the
+    /// Sessions page shows it (`Session 1: The Crossing`), not its file's; any other item's is
+    /// its own.
+    pub(crate) fn name_of<'a>(&'a self, item: &'a Item) -> &'a str {
+        if item.note_role() == Some(Role::Session)
+            && let Some(name) = self.session_names.get(&item.file_keys()[0])
+        {
+            return name;
+        }
+        &item.entry.name
+    }
+
     /// Which load of the index this is. See `generation` on the struct.
     pub(crate) fn generation(&self) -> u64 {
         self.generation
     }
 
     pub fn reader_markdown(&self, body: &str, from: Option<Uuid>) -> String {
-        let source = world::with_links(body, &HashMap::new());
+        let source = world::with_named_links(body, &HashMap::new(), &self.session_names);
         let prefix = "splat-note:";
         let mut output = String::new();
         let mut rest = source.as_str();
@@ -2290,7 +2326,7 @@ impl Lookup {
                     Hit::Entry(position) => {
                         let item = &index.items[position];
                         (
-                            item.entry.name.clone(),
+                            index.name_of(item).to_owned(),
                             index.result_detail(position),
                             self.reading_written.is_none() && row == self.highlight,
                         )

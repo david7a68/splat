@@ -4675,6 +4675,38 @@ pub(super) fn lookup_prose_gap(d: &Driver<'_>, title: &str, kind: &str) -> Optio
 /// The run's words when an ended fight refuses `Add to fight` (`Run::add_to_fight_reason`).
 const ADD_REFUSED: &str = "This encounter has ended. Undo the ending to continue.";
 
+/// Round 28 FJ7, FF1: an NPC's `Add to fight` is a title-line action, as a creature's is: on
+/// the row of `Edit <name>`, after it, quiet, with its icon and its word, whole in the window, and
+/// the reader has no bordered `Add to fight` of its own.
+pub(super) fn npc_add_on_title_line(d: &Driver<'_>, name: &str) -> (bool, String) {
+    let add_name = format!("Add {name} to the fight");
+    let add = d.place_of(&add_name);
+    let edit = d.place_of(&format!("Edit {name}"));
+    let (width, _) = d.window_size();
+    let words = add.map(|add| d.painted_in(add)).unwrap_or_default();
+    let stroke = d.control_frame(&add_name).map(|frame| frame.stroke.width);
+    let other = edit.and_then(|edit| {
+        d.nodes()
+            .into_iter()
+            .find(|node| node.name == "Add to fight" && node.rect.left() >= edit.left() - 0.5)
+            .map(|node| node.rect)
+    });
+    let placed = add.zip(edit).is_some_and(|(add, edit)| {
+        (add.top() - edit.top()).abs() <= 0.5 && add.left() >= edit.right() && add.right() <= width
+    });
+    (
+        placed
+            && d.in_view(&add_name)
+            && words.contains("Add to fight")
+            && words.contains(design::icons::ADD)
+            && stroke.is_none_or(|stroke| stroke == 0.0)
+            && other.is_none(),
+        format!(
+            "Add {add:?}, Edit {edit:?}, painted {words:?}, border {stroke:?}, another Add to fight {other:?}"
+        ),
+    )
+}
+
 /// End the open fight from the run's footer, with no outcome.
 fn end_fight(d: &mut Driver<'_>) {
     if !d.has("End encounter…") && d.has("Close menu") {
@@ -4704,6 +4736,15 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         "Rook Ambry",
         "npc",
         &format!("  creature: {{id: {guard}}}\n  in: {{id: {place}}}\n"),
+    );
+    // Round 28 FJ7: a long name beside its title-line actions at 960.
+    const LONG: &str = "Aldreth Vane of the Northern Watch";
+    entry(
+        d,
+        &format!("NPCs/{LONG}.md"),
+        LONG,
+        "npc",
+        &format!("  creature: {{id: {guard}}}\n"),
     );
     reload(d);
     resume_run_from_cold_start(d);
@@ -4735,6 +4776,83 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         .into();
     let back_before = d.has("Back");
     d.state("npc-with-stat-block-and-place", Sizes::All);
+    // Round 28 FJ7, FF1: an NPC's `Add to fight` has a creature's form, on the title line, and
+    // the run's own add: one press, and Rook joins under his own name with his stat block. In
+    // the fight, his status links to his row and the action goes; the run's Undo takes him back.
+    let rook_add = "Add Rook Ambry to the fight";
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (placed, detail) = d.at_size(size, |d| npc_add_on_title_line(d, "Rook Ambry"));
+        d.observe(
+            "iter-28-D-FJ7",
+            placed,
+            format!("At {size:?}, Rook's Add to fight is on his title line: {detail}"),
+        );
+    }
+    let rooks = |d: &Driver<'_>| {
+        roster_places(d)
+            .iter()
+            .filter(|(name, _)| name == "Rook Ambry")
+            .count()
+    };
+    d.click(rook_add);
+    let joined = (
+        rooks(d),
+        d.has_containing("In the run · initiative"),
+        d.has(rook_add),
+    );
+    d.click_containing("Undo: add Rook Ambry");
+    d.observe(
+        "iter-28-D-FJ7-join",
+        joined == (1, true, false) && rooks(d) == 0 && d.in_view(rook_add),
+        format!(
+            "Rook rows, status link, action after the press: {joined:?}; Rook rows after Undo {}",
+            rooks(d)
+        ),
+    );
+    // An ended run refuses him, in Lookup's footer; after `Undo: end encounter` the same press
+    // adds him, and the refusal goes.
+    end_fight(d);
+    d.click(rook_add);
+    let refused = d.visible_text(ADD_REFUSED) && rooks(d) == 0;
+    d.click_containing("Undo: end encounter");
+    d.click(rook_add);
+    d.observe(
+        "iter-28-D-FJ7-refusal",
+        refused && rooks(d) == 1 && !d.visible_text(ADD_REFUSED),
+        format!(
+            "Refused while ended {refused}; then {} Rook rows, refusal shown {}",
+            rooks(d),
+            d.visible_text(ADD_REFUSED)
+        ),
+    );
+    d.click_containing("Undo: add Rook Ambry");
+    // A long name at 960 wraps by whole words on at most two lines (ruling R15), and its
+    // actions stay whole in view, on their own row under it.
+    look_up_again(d, LONG);
+    d.wait_for_text("Stat block");
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (placed, detail) = d.at_size(size, |d| {
+            let mut rows = 0;
+            d.each_painted_text(|text, _| {
+                if text.galley.job.text == LONG {
+                    rows = rows.max(text.galley.rows.len());
+                }
+            });
+            let (placed, detail) = npc_add_on_title_line(d, LONG);
+            (
+                placed && (1..=2).contains(&rows),
+                format!("title rows {rows}; {detail}"),
+            )
+        });
+        d.observe(
+            "iter-28-D-FJ7-long",
+            placed,
+            format!("At {size:?}, the long name and its Add to fight: {detail}"),
+        );
+    }
+    d.state("npc-long-name-add-to-fight", Sizes::All);
+    look_up_again(d, "Rook Ambry");
+    d.wait_for_text("Watch House");
     d.begin_task();
     d.click("Guard");
     d.wait_for_text("ARMOR CLASS");
@@ -4877,7 +4995,7 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     d.expect("Edit Rook Ambry");
     // Round 26 FJ3: `Add to fight` keeps its place in Lookup while the save result shows and
     // after it goes; the result sits in Lookup's footer.
-    let add = tops_at_sizes(d, "Add to fight");
+    let add = tops_at_sizes(d, "Add Rook Ambry to the fight");
     d.click("Edit Rook Ambry");
     d.wait_for_text("Save changes");
     d.click("Change In");
@@ -5001,7 +5119,7 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     body_kept(
         d,
         "iter-26-D-FJ3",
-        "Add to fight",
+        "Add Rook Ambry to the fight",
         &add,
         Some("Undo change to Rook Ambry"),
     );
@@ -5009,7 +5127,13 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     d.click("Undo change to Rook Ambry");
     d.wait_for_text("Watch House");
     assert_eq!(fs::read_to_string(&path).unwrap(), before);
-    body_kept(d, "iter-26-D-FJ3-undo", "Add to fight", &add, None);
+    body_kept(
+        d,
+        "iter-26-D-FJ3-undo",
+        "Add Rook Ambry to the fight",
+        &add,
+        None,
+    );
 
     // FT2, the other half: Bless has no value block. Its prose sets the gap that Watch House
     // must match.

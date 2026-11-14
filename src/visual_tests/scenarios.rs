@@ -12033,7 +12033,8 @@ pub mod world {
             "Lookup's reader shows the NPC's status in its Status row only, not on the kind line",
         );
         // Round 28 FF4: `Nothing written yet.` stands where prose starts, `L` below the control
-        // above it (here the NPC's `Add to fight`), so it does not read as that control's reason.
+        // above it (here the Status row's `Change`), so it does not read as that control's
+        // reason.
         let gap = d
             .painted_rect_in("Nothing written yet.", egui::Rect::EVERYTHING)
             .and_then(|words| {
@@ -12055,8 +12056,33 @@ pub mod world {
                 .is_some_and(|(_, gap)| *gap >= crate::design::L - 1.0),
             format!("The control above the words, and the gap: {gap:?}"),
         );
+        // Round 28 FF1: the NPC's `Add to fight` is on its title line, as a creature's is, not
+        // a bordered button under Status. With no stat block, it opens the form that asks for
+        // one, and while the form is open it says that the form adds them.
+        let add = format!("Add {NPC} to the fight");
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (placed, detail) =
+                d.at_size(size, |d| world_build::npc_add_on_title_line(d, NPC));
+            d.observe(
+                "iter-28-D-FF1",
+                placed,
+                format!("At {size:?}, the new NPC's Add to fight is on its title line: {detail}"),
+            );
+        }
         d.state("world-new-npc", Sizes::Default);
-        d.click("Add to fight");
+        let title_place = d.place_of(&add);
+        d.click(&add);
+        d.expect("Stat block");
+        let blocked = d.is_disabled(&add)
+            && d.place_of(&add) == title_place
+            && d.tooltip_contains(&add, crate::world::NPC_FORM_ADDS);
+        d.observe(
+            "iter-28-D-FF1-form",
+            blocked,
+            format!(
+                "With the form open, the title line's Add to fight keeps its place {title_place:?} and says the form adds them"
+            ),
+        );
         d.type_into("Stat block", "Guard");
         d.click("Guard");
         d.type_into("Initiative", "11");
