@@ -2650,7 +2650,7 @@ impl Encounters {
                     if ui.data_mut(|data| data.remove_temp::<f32>(id)).is_some() {
                         ui.ctx().request_discard("The members column is not shown");
                     }
-                    add_pane(ui, draft, snapshot, search, focus_search, peek, true)
+                    add_pane(ui, draft, snapshot, search, focus_search, peek, &separated, true)
                 }
             }
             return;
@@ -2668,7 +2668,7 @@ impl Encounters {
                 bottom: 0,
             }))
             .show_inside(ui, |ui| {
-                add_pane(ui, draft, snapshot, search, focus_search, peek, false);
+                add_pane(ui, draft, snapshot, search, focus_search, peek, &separated, false);
             });
         egui::CentralPanel::default()
             .frame(egui::Frame::new().inner_margin(egui::Margin {
@@ -2714,6 +2714,7 @@ fn add_pane(
     search: &mut String,
     focus_search: &mut bool,
     peek: &mut Option<Uuid>,
+    separated: &std::cell::Cell<Option<super::Separated>>,
     compact: bool,
 ) {
     if !compact {
@@ -2742,6 +2743,7 @@ fn add_pane(
         peek,
         super::SearchRoster {
             already: &|_| false,
+            separated,
         },
         &summary,
     );

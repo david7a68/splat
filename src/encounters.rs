@@ -2007,15 +2007,65 @@ fn creature_result_row(
 }
 
 /// FF8: the creature search's separation of a copied note (`Rook Ambry copy.md is now a
-/// separate note.`) with its Undo, and why the last separation or Undo failed. Its owner is the
-/// campaign it changed (kept by campaign id, so a switch and back keeps it); it shows in the
-/// footer of the editor whose search made it. The change stays until its Undo succeeds or a new
-/// separation replaces it, so a failed Undo can be tried again (review of PR 299). The change's
-/// note text is behind an `Arc`: a draw copies none of it.
-#[derive(Clone, Default)]
-struct IdentityResult {
-    done: Option<(Arc<IdentityChange>, design::ResultOrder)>,
-    error: Option<String>,
+/// separate note.`), kept with its Undo in the page's `separations` store. Its owner is the
+/// campaign and the note's new identity, and its order is issued by the store at the
+/// separation. Both editors show it through the store's view. It ends when its Undo works, when
+/// the note no longer holds that identity on disk (deleted, or changed by another program), and
+/// a campaign switch hides it. The change's note text is behind an `Arc`: a draw copies none of
+/// it.
+struct Separation {
+    owner: SeparationOwner,
+    change: Arc<IdentityChange>,
+    /// The note's path in its campaign, read again by the disk check.
+    path: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct SeparationOwner {
+    root: std::path::PathBuf,
+    note: Uuid,
+}
+
+impl design::results::Owner for SeparationOwner {
+    type Scope = std::path::Path;
+    fn scope(&self) -> &std::path::Path {
+        &self.root
+    }
+}
+
+impl design::results::Kept for Separation {
+    type Owner = SeparationOwner;
+    const ENDS: design::results::Ends = design::results::Ends {
+        // The note was separated again: the newer separation replaces it (`record`).
+        owner_changed: design::results::OwnerChanged::Ends,
+        // It holds while the note at its path still has the identity the separation gave it.
+        disk_changed: design::results::DiskChanged::Checked,
+        // Its Undo writes the note back; it leaves only when that worked.
+        press: design::results::Press::Undo,
+    };
+    fn owner(&self) -> SeparationOwner {
+        self.owner.clone()
+    }
+}
+
+impl Separation {
+    /// Whether the note on disk still has the identity this separation gave it.
+    fn holds(&self) -> bool {
+        fs::read_to_string(self.owner.root.join(&self.path))
+            .ok()
+            .and_then(|text| crate::content_workspace::note_id(&text))
+            == Some(self.owner.note)
+    }
+}
+
+/// What a press of a copied note's repair in the creature search did, for the page to record.
+enum Separated {
+    Done {
+        change: crate::world::Change,
+        path: String,
+        note: Uuid,
+    },
+    Failed(String),
 }
 
 /// A separation's change, with the note's text before and after it.
@@ -2035,71 +2085,6 @@ thread_local! {
     static IDENTITY_COPIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-fn identity_key(campaign: Uuid) -> egui::Id {
-    egui::Id::new(("encounter_identity_undo", campaign))
-}
-
-/// The creature search's campaign, by id, from its index.
-fn identity_campaign(ctx: &egui::Context) -> Option<Arc<crate::lookup::ContentIndex>> {
-    ctx.data(|data| {
-        data.get_temp::<Arc<crate::lookup::ContentIndex>>(egui::Id::new("reader_link_index"))
-    })
-    .filter(|index| index.campaign.is_some())
-}
-
-/// The separation result of the creature search's campaign.
-fn identity_result(ctx: &egui::Context) -> Option<IdentityResult> {
-    let id = identity_campaign(ctx)?.campaign.as_ref()?.id;
-    ctx.data(|data| data.get_temp::<IdentityResult>(identity_key(id)))
-}
-
-/// The separation result's place among an editor's results: its stamp, words and Undo.
-fn identity_line(ctx: &egui::Context) -> Option<(design::ResultOrder, String, &'static str)> {
-    let (change, stamp) = identity_result(ctx)?.done?;
-    Some((
-        stamp,
-        change.0.message().to_owned(),
-        change.0.identity_undo_label(),
-    ))
-}
-
-/// A failed separation, or its failed Undo, as a reason in an editor's footer.
-fn identity_failure_into(ctx: &egui::Context, footer: &mut design::Footer<'_>) {
-    if let Some(error) = identity_result(ctx).and_then(|result| result.error) {
-        footer.reason(error.clone(), move |ui| {
-            design::message(ui, Tone::Warning, &error);
-        });
-    }
-}
-
-/// Undo the separation, after its Undo was pressed in a footer. A failure keeps the change, so
-/// its Undo stays offered with the reason.
-fn undo_identity(ctx: &egui::Context) {
-    let Some(index) = identity_campaign(ctx) else {
-        return;
-    };
-    let Some(campaign) = index.campaign.as_ref() else {
-        return;
-    };
-    let key = identity_key(campaign.id);
-    let Some(mut result) = ctx.data(|data| data.get_temp::<IdentityResult>(key)) else {
-        return;
-    };
-    let Some((change, _)) = &result.done else {
-        return;
-    };
-    match change.0.undo(campaign) {
-        Ok(()) => ctx.data_mut(|data| {
-            data.remove::<IdentityResult>(key);
-            data.insert_temp(egui::Id::new("encounter_identity_changed"), true);
-        }),
-        Err(error) => {
-            result.error = Some(error);
-            ctx.data_mut(|data| data.insert_temp(key, result));
-        }
-    }
-}
-
 /// How often a separation's change was copied, for its test.
 #[cfg(test)]
 pub(crate) fn identity_copies() -> usize {
@@ -2107,7 +2092,11 @@ pub(crate) fn identity_copies() -> usize {
 }
 
 /// A copied note is still a search result, with the same repair used by Lookup.
-fn duplicate_creature_results(ui: &mut egui::Ui, query: &str) -> bool {
+fn duplicate_creature_results(
+    ui: &mut egui::Ui,
+    query: &str,
+    separated: &std::cell::Cell<Option<Separated>>,
+) -> bool {
     let Some(index) = ui.ctx().data(|data| {
         data.get_temp::<Arc<crate::lookup::ContentIndex>>(egui::Id::new("reader_link_index"))
     }) else {
@@ -2147,26 +2136,22 @@ fn duplicate_creature_results(ui: &mut egui::Ui, query: &str) -> bool {
                 let filename = path.rsplit('/').next().unwrap_or(path);
                 let action = noun.action(filename);
                 if Action::secondary(&action).hint(&action).show(ui).clicked() {
-                    // FF8: the result, its Undo or the failure goes to the editor's footer. A
-                    // new separation replaces the result; a failed one keeps the last change
-                    // and its Undo.
-                    let key = identity_key(campaign.id);
-                    let mut result = ui
-                        .data(|data| data.get_temp::<IdentityResult>(key))
-                        .unwrap_or_default();
-                    match crate::world::new_identity(campaign, path) {
-                        Ok((change, _)) => {
+                    // FF8: the result, its Undo or the failure goes to the page's store, which
+                    // the editor's footer shows. A new separation of another note is a result
+                    // of its own; a failed one keeps the last change and its Undo.
+                    separated.set(Some(match crate::world::new_identity(campaign, path) {
+                        Ok((change, note)) => {
                             ui.data_mut(|data| {
                                 data.insert_temp(egui::Id::new("encounter_identity_changed"), true)
                             });
-                            result = IdentityResult {
-                                done: Some((Arc::new(IdentityChange(change)), result_stamp())),
-                                error: None,
-                            };
+                            Separated::Done {
+                                change,
+                                path: path.clone(),
+                                note,
+                            }
                         }
-                        Err(error) => result.error = Some(error),
-                    }
-                    ui.data_mut(|data| data.insert_temp(key, result));
+                        Err(error) => Separated::Failed(error),
+                    }));
                 }
                 if let Some(remaining) = paths.iter().find(|other| *other != path) {
                     crate::library::duplicate_repair_consequence(
@@ -2287,6 +2272,8 @@ fn replace_roster(
 
 struct SearchRoster<'a> {
     already: &'a dyn Fn(&Creature) -> bool,
+    /// Where a press of a copied note's repair says what it did (FF8), for the page's store.
+    separated: &'a std::cell::Cell<Option<Separated>>,
 }
 
 struct Snapshot {
@@ -5850,7 +5837,16 @@ impl Encounters {
                     match &mut self.creature {
                         Some(editor) => creature_step = Self::creature_pane(ui, editor),
                         None => {
-                            Self::add_pane(ui, draft, snapshot, search, focus_search, peek, compact)
+                            Self::add_pane(
+                                ui,
+                                draft,
+                                snapshot,
+                                search,
+                                focus_search,
+                                peek,
+                                &separated,
+                                compact,
+                            )
                         }
                     }
                     false
@@ -5897,7 +5893,16 @@ impl Encounters {
                     match creature {
                         Some(editor) => creature_step = Self::creature_pane(ui, editor),
                         None => {
-                            Self::add_pane(ui, draft, snapshot, search, focus_search, peek, compact)
+                            Self::add_pane(
+                                ui,
+                                draft,
+                                snapshot,
+                                search,
+                                focus_search,
+                                peek,
+                                &separated,
+                                compact,
+                            )
                         }
                     }
                 });
@@ -5947,6 +5952,7 @@ impl Encounters {
         search: &mut String,
         focus_search: &mut bool,
         peek: &mut Option<Uuid>,
+        separated: &std::cell::Cell<Option<Separated>>,
         compact: bool,
     ) {
         if !compact {
@@ -6015,6 +6021,7 @@ impl Encounters {
                 peek,
                 SearchRoster {
                     already: &|_| false,
+                    separated,
                 },
             );
             if let Some((id, party)) = chosen {
@@ -6030,6 +6037,7 @@ impl Encounters {
             peek,
             SearchRoster {
                 already: &|c: &Creature| snapshot.already_on_roster(draft, c),
+                separated,
             },
         );
         if let Some((id, party)) = chosen {
@@ -6133,7 +6141,7 @@ impl Encounters {
             chosen = Some((first.id, first.party));
             *focus_search = true;
         }
-        let hidden_duplicates = duplicate_creature_results(ui, &query);
+        let hidden_duplicates = duplicate_creature_results(ui, &query, roster.separated);
         if as_typed == 0 && !matches.is_empty() {
             ui.label(
                 Type::Small
