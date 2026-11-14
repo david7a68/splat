@@ -1884,16 +1884,8 @@ fn more_actions(ui: &mut egui::Ui, word: &str, chips: &[Chip], from: usize, chan
             !response.clicked_by(egui::PointerButton::Primary),
         );
     }
-    let popup = crate::design::menu_popup(&*ui, &response);
-    // As a row's menu: it ends at the button's right edge when it would cross the pane's
-    // splitter (egui sizes a popup on the frame it opens, before it shows it).
-    let width = popup.get_expected_size().map_or(0.0, |size| size.x);
-    let align = if response.rect.left() + width > ui.clip_rect().right() - design::S {
-        egui::RectAlign::BOTTOM_END
-    } else {
-        egui::RectAlign::BOTTOM_START
-    };
-    popup.align(align).show(|ui| {
+    // `menu_popup` opens it on the side of the button with more room in the pane, inside it.
+    crate::design::menu_popup(&*ui, &response).show(|ui| {
         for (place, chip) in chips.iter().enumerate().skip(from) {
             let shown = with_changes(&chip.link, changes);
             let label = Chip::new(shown.clone(), chip.text.clone())
