@@ -2355,7 +2355,8 @@ impl Splat {
             match content_workspace::use_in_campaign(&campaign, package, &module.name, Some(entry))
             {
                 Ok(()) => {
-                    self.library.refresh_destination(&campaign.path, ctx);
+                    self.library
+                        .refresh_destination(&campaign.path, ctx, &self.campaigns);
                     self.campaign_content.refresh_destination(&campaign.path);
                     self.encounters
                         .refresh_content(ctx, &self.campaigns, &campaign.path);
@@ -2370,7 +2371,8 @@ impl Splat {
             let root = module.path.clone();
             let result = self.campaigns.restore_module(module);
             if result.is_ok() {
-                self.library.refresh_destination(&root, ctx);
+                self.library
+                    .refresh_destination(&root, ctx, &self.campaigns);
                 self.encounters.refresh_content(ctx, &self.campaigns, &root);
                 self.lookup.refresh();
             }
@@ -2452,7 +2454,8 @@ impl Splat {
         if std::mem::take(&mut self.encounters.saved)
             && let Some(campaign) = &active
         {
-            self.library.refresh_destination(&campaign.path, ctx);
+            self.library
+                .refresh_destination(&campaign.path, ctx, &self.campaigns);
             self.campaign_content.refresh_destination(&campaign.path);
             self.lookup.refresh();
         }
@@ -2764,7 +2767,8 @@ impl eframe::App for Splat {
                 .chain(self.campaigns.active_campaign().map(|c| c.path))
                 .collect();
             for root in roots {
-                self.library.refresh_destination(&root, ctx);
+                self.library
+                    .refresh_destination(&root, ctx, &self.campaigns);
                 self.campaign_content.refresh_destination(&root);
                 self.encounters.refresh_content(ctx, &self.campaigns, &root);
             }
@@ -2973,7 +2977,8 @@ impl eframe::App for Splat {
                 self.encounters.add_to_draft(id);
             }
             if let Some(root) = dialog.refresh.take() {
-                self.library.refresh_destination(&root, ctx);
+                self.library
+                    .refresh_destination(&root, ctx, &self.campaigns);
                 self.campaign_content.refresh_destination(&root);
                 self.encounters.refresh_content(ctx, &self.campaigns, &root);
                 self.lookup.refresh();
