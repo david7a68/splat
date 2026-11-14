@@ -14790,7 +14790,8 @@ pub mod session_recording {
             let gap = words.zip(top).map(|(words, top)| words.top() - top);
             d.observe(
                 "iter-28-S-banner-height",
-                gap.is_some_and(|gap| gap <= crate::design::XS + 1.0),
+                // The rule's line is its 1 px rect's centre: the margin's top is half a pixel below it.
+                gap.is_some_and(|gap| (gap - (crate::design::XS - 0.5)).abs() <= 0.5),
                 format!("The banner's top line is XS above its first words: {gap:?} (top {top:?}, words {words:?})"),
             );
         });
