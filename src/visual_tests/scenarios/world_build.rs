@@ -5553,11 +5553,11 @@ pub fn package_rename(d: &mut Driver<'_>) {
     // fix left), and below, Discard's Undo and the heading fix.
     let same_frame_stat = d.aside(|d| {
         assert!(d.reader_focus("Markdown editor"), "the editor takes focus");
-        d.type_and_click(SAME_FRAME, "Use 24");
+        d.type_and_reader_click(SAME_FRAME, "Use 24");
         let fix = d.editor_text().unwrap_or_default();
         let fix_kept = fix.contains(SAME_FRAME) && d.has("Undo stat change");
         assert!(d.reader_focus("Markdown editor"), "the editor takes focus");
-        d.type_and_click(SAME_FRAME, "Undo stat change");
+        d.type_and_reader_click(SAME_FRAME, "Undo stat change");
         let undo = d.editor_text().unwrap_or_default();
         let undo_kept = undo.matches(SAME_FRAME).count() == 2;
         // Back to the typed draft for the steps below.
@@ -5649,7 +5649,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     // ends Discard's Undo, as any edit does. Then Discard again for the steps below.
     let same_frame_discard = d.aside(|d| {
         assert!(d.reader_focus("Markdown editor"), "the editor takes focus");
-        d.type_and_click(SAME_FRAME, "Undo discard of Cinder Wolf");
+        d.type_and_reader_click(SAME_FRAME, "Undo discard of Cinder Wolf");
         let kept = d
             .editor_text()
             .is_some_and(|text| text.contains(SAME_FRAME) && text != invalid);
@@ -6411,7 +6411,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     );
     d.wait_for_text("Use Ash Exposure");
     assert!(d.reader_focus("Markdown editor"), "the editor takes focus");
-    d.type_and_click(SAME_FRAME, "Use Ash Exposure");
+    d.type_and_reader_click(SAME_FRAME, "Use Ash Exposure");
     let same_frame_heading = d.editor_text().is_some_and(|text| {
         text.contains(SAME_FRAME)
             && text.contains("# Ash Exposure\n")
