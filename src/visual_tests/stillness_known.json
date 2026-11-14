@@ -1061,10 +1061,10 @@
     ["G1b/pressed-control-moved","08-world-generated-npc-saved","960x640","Button \"Reroll\"",1],
     ["G1b/pressed-control-moved","10-npc-add-to-run-form","960x640","Button \"Add to fight\"",1]
   ],
+  "world-broken-note": [
+    ["N4/quiet-action-line-start","13-both-counts-beside-lookup","960x640","Button \"Generate NPC\"",1]
+  ],
   "world-facts": [
-    ["G6/footer-far-below-body","07-group-joined-with-log","960x640","Link \"The Arena (opens The Arena)\"",1],
-    ["G6/footer-far-below-body","09-log-line-added","960x640","Link \"Session 1 (opens Session 1)\"",1],
-    ["G6/footer-far-below-body","11-group-joined-with-log-in-prep","960x640","Link \"The Arena (opens The Arena)\"",1],
     ["N4/quiet-action-line-start","12-session-world-changes-in-prep-beside-lookup","960x640","Button \"All sessions\"",1]
   ],
   "world-note-deleted": [

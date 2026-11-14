@@ -740,14 +740,25 @@ pub fn broken(d: &mut Driver<'_>) {
         opened,
         "At 960 the body's last action opens and closes its section under the footer's warning",
     );
-    action_at_text_edge(
-        d,
-        "iter-17-D-copy-text",
-        "Copy text",
-        "Resize World notes column",
-        &[SMALL, DEFAULT, LARGE],
-        |d| d.painted_left(lost),
-    );
+    // Copy text is a bordered choice now (ruling R3): its target, not its words, starts at the
+    // message text, clear of the splitter.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (target, edge, splitter) = d.at_size(size, |d| {
+            (
+                d.place_of("Copy text"),
+                d.painted_left(lost),
+                d.place_of("Resize World notes column"),
+            )
+        });
+        d.observe(
+            "iter-17-D-copy-text",
+            target.zip(edge).is_some_and(|(target, edge)| (target.left() - edge).abs() <= 1.0)
+                && target
+                    .zip(splitter)
+                    .is_some_and(|(target, splitter)| target.left() >= splitter.right()),
+            format!("At {size:?}, Copy text {target:?} starts at the text edge {edge:?}, right of {splitter:?}"),
+        );
+    }
     // Discard draft has no Undo: an `L` gap separates its target from Copy text's.
     for size in [SMALL, DEFAULT, LARGE] {
         let (copy, discard) = d.at_size(size, |d| {
@@ -9277,7 +9288,7 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     };
     let search_before = tops(d);
     d.click("Make Rook Ambry copy.md a separate note");
-    d.wait_for_text("Undo: separate note");
+    d.wait_for_text("Undo separate note");
     d.expect("Rook Ambry copy.md is now a separate note.");
     // iter-27-B FF8, AF1, SF1: the result and its Undo are in the editor's footer, below the
     // search's results, and the search and its filter do not move.
@@ -9308,15 +9319,15 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     d.replace_text_in(FIND_CREATURE, "Guard");
     d.click_beside_exact("Guard", "Add");
     d.expect("7. Guard");
-    let kept = d.has("Undo: separate note");
-    d.click("Undo: separate note");
+    let kept = d.has("Undo separate note");
+    d.click("Undo separate note");
     d.replace_text_in(FIND_CREATURE, "Rook Ambry");
     d.wait_for_text("Make Rook Ambry copy.md a separate note");
     d.observe(
         "iter-27-B-FF8-undo",
         kept && d.has("7. Guard") && !d.has("Rook Ambry copy.md is now a separate note."),
         format!(
-            "Undo: separate note ends its result and keeps the Guard added after it (kept through the search: {kept})"
+            "Undo separate note ends its result and keeps the Guard added after it (kept through the search: {kept})"
         ),
     );
     // The rest of the scenario starts from the saved encounter.
