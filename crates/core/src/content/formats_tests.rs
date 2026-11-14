@@ -1988,6 +1988,22 @@ fn readable_link_to_a_path_that_two_notes_share_is_refused_and_a_key_still_resol
         formats::resolve_readable("rook:package/core", &entries),
         Ok(entries[0].id)
     );
+    // Round 28 row 144: a built-in renamed from `Bard Subclass:` keeps its old name as an alias,
+    // so a readable requirement that names the old name still resolves.
+    for old in ["Barbarian Subclass:", "Bard Subclass:", "Druid Subclass:"] {
+        let renamed = note(
+            "rule",
+            &format!("splat_rule: {{}}\naliases: ['{old}']"),
+            "# Rook\n",
+        )
+        .entry("Rules/Rook.md");
+        assert_eq!(formats::aliases(&renamed), vec![old]);
+        assert_eq!(
+            formats::resolve_readable(old, std::slice::from_ref(&renamed)),
+            Ok(renamed.id),
+            "{old}"
+        );
+    }
 }
 
 #[test]

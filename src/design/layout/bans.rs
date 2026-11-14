@@ -105,7 +105,12 @@ fn patterns() -> Vec<(Group, Shape)> {
     ] {
         shapes(letter, lines, &mut out);
     }
-    for (name, args) in [("undo", 2), ("use_press", 1)] {
+    for (name, args) in [
+        ("undo", 2),
+        ("use_press", 1),
+        ("revise", 2),
+        ("revise_where", 2),
+    ] {
         out.push((Group::ByOwner, Shape::Arity(name.to_owned(), args)));
         out.push((
             Group::ByOwner,
@@ -551,6 +556,7 @@ mod tests {
             extras(
                 "fn f() { design::group_heading(ui, \"Ready\", 2); design::group_label(ui, \"Party\"); design::reader::section_heading(ui, \"Actions\"); }"
             ),
+            // `reader::section_heading` is gone (its last callers moved to `heading`): not counted.
             3
         );
         // The parts that replace them, and words in strings, are not calls.
