@@ -2385,11 +2385,15 @@ impl Lookup {
             let search =
                 LOOKUP_SEARCH.search(ui, SEARCH_NAME, &mut self.query, search_hint(width), width);
             if search.cleared {
-                self.typed_shown = false;
                 self.current = None;
                 self.reader.clear();
                 self.reading_written = None;
                 self.generated = None;
+            }
+            // The one place that decides the query became empty, by Clear or by the keyboard:
+            // the typing group ends, so the next search records what is on screen (FL4).
+            if self.query.trim().is_empty() {
+                self.typed_shown = false;
             }
             search.field
         };
@@ -3723,6 +3727,54 @@ mod tests {
         );
         lookup.step(Step::Forward);
         assert_eq!(lookup.on_screen(), OnScreen::Written(0));
+
+        // Review of 604dd023: keyboard deletion that empties the query ends the typing group,
+        // as Clear does. C stays on screen; a new search that opens D records C.
+        lookup.set_written(vec![
+            Written {
+                title: "Qorvax Landing".into(),
+                detail: "Session".into(),
+                text: "The pier at Qorvax".into(),
+                place: WrittenIn::Session(Uuid::from_u128(9)),
+            },
+            Written {
+                title: "Veldrin Tower".into(),
+                detail: "Session".into(),
+                text: "The tower at Veldrin".into(),
+                place: WrittenIn::Session(Uuid::from_u128(10)),
+            },
+        ]);
+        lookup.query.clear();
+        lookup.matches = None;
+        lookup.navigate(a);
+        lookup.navigate(b);
+        harness.run_steps(2);
+        harness.get_by_label(SEARCH_NAME).focus();
+        harness.run_steps(1);
+        for typed in ["qorvax", " landing"] {
+            harness.get_by_label(SEARCH_NAME).type_text(typed);
+            harness.run_steps(2);
+        }
+        assert_eq!(
+            harness.state().on_screen(),
+            OnScreen::Written(0),
+            "C opened"
+        );
+        harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+        harness.key_press(egui::Key::Backspace);
+        harness.run_steps(2);
+        assert!(harness.state().query.is_empty());
+        assert_eq!(harness.state().on_screen(), OnScreen::Written(0), "C stays");
+        harness.get_by_label(SEARCH_NAME).type_text("veldrin tower");
+        harness.run_steps(2);
+        let lookup = harness.state_mut();
+        assert_eq!(lookup.on_screen(), OnScreen::Written(1), "D opened");
+        lookup.step(Step::Back);
+        assert_eq!(
+            lookup.on_screen(),
+            OnScreen::Written(0),
+            "Back returns to C, where the new search started"
+        );
     }
 
     /// Beside the Library, Lookup takes a side button only under the pointer, and leaves
