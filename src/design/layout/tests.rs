@@ -13,6 +13,8 @@ struct Painted {
     rect: Rect,
     clip: Rect,
     elided: bool,
+    /// Whether its colour shows (a fully transparent text paints nothing).
+    shown: bool,
 }
 
 /// One frame at `size` with `events`, drawing `add` in a central panel.
@@ -38,6 +40,13 @@ fn frame_with(
                 rect: text.visual_bounding_rect(),
                 clip,
                 elided: text.galley.elided,
+                shown: text
+                    .galley
+                    .job
+                    .sections
+                    .iter()
+                    .any(|section| section.format.color.a() > 0)
+                    && text.opacity_factor > 0.0,
             }),
             egui::Shape::Vec(shapes) => {
                 for shape in shapes {
@@ -923,8 +932,10 @@ fn the_gate_finds_two_live_widgets_with_one_id() {
 }
 
 /// N10: a search field draws its `Clear` while it holds text, inside its width; `Clear` empties
-/// it, gives the field its focus back and says so once. Empty, it has no `Clear` and takes the
-/// whole width.
+/// it, gives the field its focus back and says so once. Empty, it has no `Clear`.
+/// X2: the field's frame is the whole `width`, with and without text; `Clear` shows inside the
+/// frame's right end, in a place the text area keeps from the start: typing one letter and
+/// deleting it moves and resizes nothing, and the hint stays inside the text area.
 #[test]
 fn a_search_field_always_draws_its_clear() {
     use egui_kittest::kittest::Queryable;
@@ -933,7 +944,7 @@ fn a_search_field_always_draws_its_clear() {
     struct State {
         query: String,
         cleared: usize,
-        width: f32,
+        field: Option<Rect>,
     }
     let mut h = egui_kittest::Harness::builder()
         .with_size(vec2(500.0, 120.0))
@@ -942,7 +953,7 @@ fn a_search_field_always_draws_its_clear() {
                 let search =
                     SEARCH.search(ui, "Search", &mut state.query, "Search by name…", 300.0);
                 state.cleared += usize::from(search.cleared);
-                state.width = search.field.rect.width();
+                state.field = Some(search.field.rect);
             },
             State {
                 query: "Wolf".to_owned(),
@@ -952,10 +963,14 @@ fn a_search_field_always_draws_its_clear() {
     theme::install(&h.ctx);
     h.run_steps(2);
     let clear = h.get_by_label("Clear").rect();
-    let field = h.get_by_label("Search").rect();
+    let field = h.state().field.expect("drawn");
     assert!(
-        clear.left() > field.right() && clear.right() <= field.left() + 300.0 + 0.5,
-        "n10-place: Clear {clear:?} after the field {field:?}, inside 300 px"
+        (field.width() - 300.0).abs() <= 0.5,
+        "x2-frame: the frame is the whole 300 px row: {field:?}"
+    );
+    assert!(
+        clear.left() >= field.left() + 100.0 && clear.right() <= field.right() + 0.5,
+        "x2-place: Clear {clear:?} inside the frame's right end {field:?}"
     );
     h.get_by_label("Clear").click();
     h.run_steps(2);
@@ -966,11 +981,120 @@ fn a_search_field_always_draws_its_clear() {
         "n10-focus: the field has its focus back"
     );
     assert!(h.query_by_label("Clear").is_none(), "n10-empty: no Clear");
-    assert!(
-        (h.state().width - 300.0).abs() <= 0.5,
-        "n10-width: {}",
-        h.state().width
+    assert_eq!(
+        h.state().field,
+        Some(field),
+        "x2-still: emptied, the field keeps its rect"
     );
+    h.event(egui::Event::Text("W".to_owned()));
+    h.run_steps(2);
+    assert_eq!(h.state().query, "W");
+    assert_eq!(h.state().field, Some(field), "x2-still: one letter typed");
+    assert_eq!(
+        h.get_by_label("Clear").rect(),
+        clear,
+        "x2-place: Clear comes back in its kept place"
+    );
+    h.key_press(egui::Key::Backspace);
+    h.run_steps(2);
+    assert!(h.state().query.is_empty());
+    assert_eq!(h.state().field, Some(field), "x2-still: the letter deleted");
+
+    // X2 boundaries: a row narrower than `search_min_row` (the frame keeps to it, with and
+    // without text; Clear stays inside), and hints that do not fit their text area: a long first
+    // word and a long word with no spaces in another script. Each hint is cut inside the text
+    // area (the frame less its margins and Clear's place), with an ellipsis.
+    const LONG_WORD: &str = "Supercalifragilisticexpialidocious creatures";
+    const UNSPACED: &str = "Αναζήτησηονομάτωνκαιλεπτομερειώνπλάσματος";
+    for (width, query, hint) in [
+        (50.0, "", "Search by name…"),
+        (50.0, "Wolf", "Search by name…"),
+        (30.0, "Wolf", "Search by name…"),
+        (30.0, "", "Search by name…"),
+        (150.4, "", LONG_WORD),
+        (150.4, "", UNSPACED),
+        (150.4, "Wolf", UNSPACED),
+    ] {
+        let ctx = context();
+        let mut query = query.to_owned();
+        let mut field = Rect::NOTHING;
+        let mut place = 0.0;
+        let mut painted = Vec::new();
+        for _ in 0..2 {
+            painted = frame_with(&ctx, vec2(500.0, 120.0), Vec::new(), |ui| {
+                assert!(
+                    width >= 100.0 || width < search_min_row(ui),
+                    "the narrow case is below the smallest usable row"
+                );
+                place = search_clear().natural_width(ui);
+                field = SEARCH
+                    .search(ui, "Search", &mut query, hint, width)
+                    .field
+                    .rect;
+            })
+            .1;
+        }
+        assert!(
+            field.width() <= width + 0.01,
+            "x2-narrow: the frame {field:?} keeps inside the {width} px row (not even half a pixel past it)"
+        );
+        if !query.is_empty() {
+            let clear = painted
+                .iter()
+                .find(|text| text.text == "Clear")
+                .expect("Clear is drawn");
+            assert!(
+                clear.rect.right() <= field.right() + 0.5,
+                "x2-narrow: Clear {:?} inside the frame {field:?}",
+                clear.rect
+            );
+        }
+        // X2 re-check 3: no two painted parts (the icon, the words, Clear) overlap, at any
+        // width; a part clipped away is not painted.
+        let parts: Vec<Rect> = painted
+            .iter()
+            .filter(|text| text.shown && !text.text.trim().is_empty())
+            .map(|text| text.rect.intersect(text.clip))
+            .filter(|rect| rect.is_positive())
+            .collect();
+        for (at, a) in parts.iter().enumerate() {
+            for b in &parts[at + 1..] {
+                assert!(
+                    a.intersect(*b).area() < 1.0,
+                    "x2-parts: at {width} px with {query:?}, painted parts {a:?} and {b:?} overlap"
+                );
+            }
+        }
+        if !query.is_empty() {
+            continue;
+        }
+        let shown: Vec<&Painted> = painted
+            .iter()
+            .filter(|text| text.text != crate::design::icons::SEARCH && !text.text.is_empty())
+            .collect();
+        // With no text area (the 50 px row) no hint is shown; with one, exactly one.
+        assert_eq!(
+            shown.len(),
+            usize::from(width >= 100.0),
+            "the hint is painted when it has room: {width} {hint}"
+        );
+        let text_right = field.right() - crate::design::components::SEARCH_RIGHT - place;
+        for hint in &shown {
+            assert!(
+                hint.rect.right() <= text_right + 0.5 && !hint.elided,
+                "x2-hint: {:?} ({:?}) ends inside the text area at {text_right}",
+                hint.text,
+                hint.rect
+            );
+        }
+        if width >= 100.0 {
+            assert!(
+                shown[0].text.ends_with('…') && shown[0].text.chars().count() > 1,
+                "x2-hint: the start of {hint:?} that fits, with an ellipsis: {:?}",
+                shown[0].text
+            );
+        }
+    }
 }
 
 /// Review 1, finding 3: the guard keeps at most `BOUND_TEXTS` records. The oldest goes first and

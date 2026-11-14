@@ -393,13 +393,15 @@ impl Run {
             // As wide as the group block below, so the panel has one right edge.
             let width = block
                 .unwrap_or_else(|| (ui.available_width() - design::M).min(design::LIST_MEASURE));
-            design::search_field(
-                ui,
-                FIELD,
-                &mut self.ad_hoc.query,
-                "Find or name a creature…",
-                width,
-            );
+            let _ = crate::field_id!("run_add_creature_search")
+                .once(crate::design::Once::PageSearch)
+                .search(
+                    ui,
+                    FIELD,
+                    &mut self.ad_hoc.query,
+                    "Find or name a creature…",
+                    width,
+                );
             let typed = self.ad_hoc.query.trim().to_lowercase();
             // Show all lasts while the words stay the same: new words start a short list again.
             if self.ad_hoc.show_all.as_deref() != Some(typed.as_str()) {

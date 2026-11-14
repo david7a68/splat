@@ -654,11 +654,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/campaign_content.rs", "page_footer", &[Ban::Results]),
         (
             "src/campaign_content.rs",
-            "packages_content",
-            &[Ban::Extras(2)],
-        ),
-        (
-            "src/campaign_content.rs",
             "repair_section_content",
             &[Ban::Results, Ban::Extras(1)],
         ),
@@ -808,7 +803,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/library.rs", "register_copy", &[Ban::Results]),
         ("src/library.rs", "reload_note_from_disk", &[Ban::Results]),
         ("src/library.rs", "unregister_dialog", &[Ban::Results]),
-        ("src/party.rs", "sheet_view", &[Ban::Extras(1), Ban::Body]),
+        ("src/party.rs", "sheet_view", &[Ban::Body]),
         ("src/sessions/carry.rs", "carry_in_messages", &[Ban::Order]),
         ("src/sessions/carry.rs", "record", &[Ban::Results]),
         (
@@ -852,11 +847,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/sessions/plan.rs", "travel_act", &[Ban::Results]),
         ("src/timeline/page.rs", "into_footer", &[Ban::Results]),
-        (
-            "src/timeline/page.rs",
-            "list_footer",
-            &[Ban::Results, Ban::Pane(1)],
-        ),
+        ("src/timeline/page.rs", "list_pane", &[Ban::Results]),
         ("src/timeline/page.rs", "show", &[Ban::Results]),
         ("src/timeline.rs", "next_result_order", &[Ban::Results]),
         ("src/timeline.rs", "remove", &[Ban::Results]),
@@ -906,7 +897,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/ad_hoc.rs",
             "add_creature_form",
-            &[Ban::Layout(1), Ban::Extras(1)],
+            &[Ban::Layout(1)],
         ),
         (
             "src/encounter_run/view.rs",
@@ -950,7 +941,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters.rs",
             "creature_search_with_summary",
-            &[Ban::Layout(1), Ban::Extras(1)],
+            &[Ban::Layout(1)],
         ),
         (
             "src/encounters.rs",
@@ -1036,7 +1027,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             // `ByOwner`: `checks::Results::undo(id, book)`, not the footer store's; counted by name.
             &[Ban::Layout(1), Ban::ByOwner(1)],
         ),
-        ("src/timeline/page.rs", "list", &[Ban::Layout(1)]),
         ("src/timeline/page.rs", "new_events_line", &[Ban::Layout(1)]),
         ("src/trackers/view.rs", "amount_field", &[Ban::RowKey(3)]),
         ("src/world/repair.rs", "editor_events", &[Ban::RowKey(1)]),
@@ -1089,6 +1079,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "a_body_fault_gives_its_repairs_back_by_id",
             &[Ban::Body],
         ),
+        ("src/processing/settings.rs", "cause", &[Ban::Words]),
+        ("src/processing/settings.rs", "key_fault", &[Ban::Body]),
+        ("src/timeline/checks.rs", "cause", &[Ban::Words]),
+        ("src/timeline/checks.rs", "check_fault", &[Ban::Body]),
+        ("src/timeline/checks.rs", "check_notice", &[Ban::Body]),
         ("src/trackers.rs", "act_words", &[Ban::Words]),
         ("src/combat_sync.rs", "cause", &[Ban::Words]),
         ("src/party.rs", "cause", &[Ban::Words]),
@@ -1129,11 +1124,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/encounter_run/view.rs", "log_link", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "word_link", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "plan_row_with", &[Ban::Extras(1)]),
-        (
-            "src/encounters.rs",
-            "replace_missing_creature",
-            &[Ban::Extras(1)],
-        ),
         ("src/encounters.rs", "add_pane", &[Ban::Extras(1)]),
         ("src/encounters.rs", "loot_field", &[Ban::Extras(1)]),
         ("src/encounters/list.rs", "heading", &[Ban::Extras(1)]),
@@ -1313,7 +1303,7 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "field_id! statement",
             &[Ban::Layout(1)],
         ),
-        ("src/design/layout.rs", "menu_popup", &[Ban::Layout(1)]),
+        ("src/design/layout.rs", "menu_popup_raw", &[Ban::Layout(1)]),
         ("src/design/layout.rs", "multi_line", &[Ban::Layout(1)]),
         ("src/design/layout.rs", "sideways_scroll", &[Ban::Layout(1)]),
         ("src/design/layout.rs", "single_line", &[Ban::Layout(1)]),

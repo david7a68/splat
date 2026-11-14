@@ -1054,7 +1054,7 @@ fn plan_menu(
         *focus = true;
     }
     let mut choice = None;
-    design::menu_popup(&response)
+    design::menu_popup(ui, &response)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .show(|ui| {
             // A fixed place, whatever the list's length.
@@ -3255,7 +3255,7 @@ impl Sessions {
                             } else {
                                 // Overflow is always at the row's right edge.
                                 let more = design::icon_button(ui, icons::EXPAND, &format!("More actions for {label}"));
-                                design::menu_popup(&more).show(|ui| {
+                                design::menu_popup(ui, &more).show(|ui| {
                                     if checks::offered(event, plan.tables) && Action::quiet("Roll for encounters").show(ui).clicked() {
                                         travel_act = Some((event.id.clone(), checks::Act::Start)); ui.close();
                                     }

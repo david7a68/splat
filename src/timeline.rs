@@ -871,6 +871,28 @@ pub struct Book {
     /// Goes up at each edit, read and write, so a reader can keep what it worked out from the
     /// events until they can have changed.
     changes: u64,
+    /// The same changes, and each change of the file's bytes as read or written, as a
+    /// `Revision` that a `Memo` can key by.
+    revision: BookRevision,
+}
+
+/// [`Book`]'s revision: it advances with `changes` and when `baseline` changes.
+#[derive(Clone, Debug)]
+struct BookRevision(crate::design::memo::Revised<u64>);
+
+impl Default for BookRevision {
+    fn default() -> Self {
+        Self(crate::design::memo::Revised::new(0))
+    }
+}
+
+impl BookRevision {
+    fn advance(&mut self) {
+        self.0.revise(|n| {
+            *n += 1;
+            crate::design::memo::Changed::Yes
+        });
+    }
 }
 
 impl Book {
@@ -910,6 +932,7 @@ impl Book {
     /// Read the file, and drop any edit not yet saved.
     pub fn reload(&mut self) {
         self.changes += 1;
+        self.revision.advance();
         self.rest_undo = None;
         self.dirty = false;
         self.reordered.clear();
@@ -957,6 +980,7 @@ impl Book {
                     }
                 }
                 self.baseline = Some(bytes);
+                self.revision.advance();
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 if self.baseline.is_some() {
@@ -982,6 +1006,7 @@ impl Book {
     )]
     pub fn touch(&mut self) {
         self.changes += 1;
+        self.revision.advance();
         self.run_write = false;
         self.merged_outside = false;
         self.rest_undo = None;
@@ -1011,6 +1036,7 @@ impl Book {
     /// the removal's own session (its event back from outside, say) ends it, as an edit does.
     fn accept_events(&mut self, events: Vec<Event>) {
         self.changes += 1;
+        self.revision.advance();
         self.events = events;
         self.end_removal_if_its_session_changed();
     }
@@ -1184,6 +1210,7 @@ impl Book {
         crate::sessions::sync_folder(parent)?;
         self.flags = formats::parse_with_sessions(&text, &self.session_links).1;
         self.baseline = Some(text.into_bytes());
+        self.revision.advance();
         self.accept_events(events);
         self.saved_events.clone_from(&self.events);
         self.merged_outside = outside;
@@ -1230,6 +1257,7 @@ impl Book {
                         }
                     }
                     self.baseline = Some(bytes);
+                    self.revision.advance();
                 }
                 Err(error) => {
                     self.error = Some(format!("Timeline.md could not be read. {error}"));
@@ -1248,6 +1276,7 @@ impl Book {
         self.gone = false;
         self.unreadable = None;
         self.baseline = None;
+        self.revision.advance();
         // Before the file is written, so that it holds what the open run said meanwhile.
         if let Some((fact, session, played, road)) = self.pending_run.take() {
             self.apply_run(&fact, session, played, road.as_ref());
@@ -1263,6 +1292,11 @@ impl Book {
     }
 
     /// The count of edits, reads and writes so far. The events are as they were while it stays.
+    /// What a `Memo` keys the events and the file's bytes by.
+    pub fn revision(&self) -> crate::design::memo::Revision {
+        self.revision.0.revision()
+    }
+
     pub fn changes(&self) -> u64 {
         self.changes
     }
