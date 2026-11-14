@@ -22,7 +22,6 @@
     ["G1b/pressed-control-moved","17-campaign-manifest-write-undone","960x640","Button \"Undo write Campaign.md\"",1]
   ],
   "column-resize": [
-    ["G1b/pressed-control-moved","06-run-rail-keeps-roster-room","1200x800","Button \"Next turn\"",1],
     ["G3/far-action","13-session-events-fill-their-column","1920x1080","Button \"Add to notes: Major event\"",1],
     ["N4/quiet-action-line-start","09-roster-follows-add-panel","1200x800","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","09-roster-follows-add-panel","1920x1080","Button \"Filter creatures\"",1],
@@ -50,7 +49,6 @@
     ["G1b/pressed-control-moved","07-campaign-added","960x640","Button \"Add campaign\"",1]
   ],
   "encounter-build": [
-    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Next turn\"",1],
     ["G1b/pressed-control-moved","05-saved","960x640","Button \"Save encounter\"",1],
     ["G3/far-action","01-encounter-list","1920x1080","Button \"Resume\"",1],
     ["G3/far-action","01-encounter-list","1920x1080","Button \"Start fight\"",1],
@@ -94,7 +92,6 @@
     ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Changes for Cinder Wolf\"",1],
     ["G1b/pressed-control-moved","03-group-member-changes","960x640","Button \"Changes for Ember Cultist\"",1],
     ["G1b/pressed-control-moved","06-group-invalid-change","960x640","Button \"Changes for Cinder Wolf\"",1],
-    ["G1b/pressed-control-moved","24-a-named-side-on-its-turn","960x640","Button \"Next turn\"",2],
     ["G1c/content-moved-with-bar","25-tied-arrival-moved-before","960x640","Button \"Brannoch Vale, party, HP 58/62, Temp 5, AC 19, Initiative 18\"",1],
     ["G3/far-action","01-groups-in-the-list","1920x1080","Button \"Edit group Goblin Wave\"",1],
     ["G3/far-action","01-groups-in-the-list","1920x1080","Button \"Edit group Lost Patrol\"",1],
@@ -194,7 +191,6 @@
     ["N4/quiet-action-line-start","11-belongs-to-open","960x640","Button \"Filter creatures\"",1]
   ],
   "encounter-run": [
-    ["G1b/pressed-control-moved","03-next-turn","960x640","Button \"Next turn\"",1]
   ],
   "gallery": [
     ["N4/quiet-action-line-start","02-components","1200x800","Button \"Quiet\"",1],
@@ -219,8 +215,7 @@
     ["G1b/pressed-control-moved","(after the last state)","1200x800","Button \"Add to Log: Warden Ostrel\"",1]
   ],
   "journey-j3": [
-    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Conditions for this participant\"",1],
-    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Next turn\"",8]
+    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Conditions for this participant\"",1]
   ],
   "journey-j4": [
     ["G1b/pressed-control-moved","(after the last state)","1200x800","Button \"Add Old Guard, 1-2 seals to the initiative list\"",1]
@@ -615,7 +610,6 @@
     ["G6/footer-far-below-body","01-run-folder-edited","960x640","Button \"Save without moving\"",1]
   ],
   "run-large-roster": [
-    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Next turn\"",4],
     ["G1c/content-moved-with-bar","02-roster-of-20","960x640","Button \"Brannoch Vale, party, HP 58/62, Temp 5, AC 19, Initiative 18\"",1]
   ],
   "run-long-names": [
@@ -647,7 +641,6 @@
     ["N4/quiet-action-line-start","03-slot-changes-open","960x640","Button \"Filter creatures\"",1]
   ],
   "run-restart": [
-    ["G1b/pressed-control-moved","01-before-restart","960x640","Button \"Next turn\"",1],
     ["G3/far-action","04-run-closed-in-one-step","1920x1080","Button \"Resume\"",1],
     ["G3/far-action","04-run-closed-in-one-step","1920x1080","Button \"Start fight\"",1]
   ],
@@ -671,7 +664,6 @@
     ["N4/quiet-action-line-start","05-row-menu","960x640","Button \"Stop\"",1]
   ],
   "run-roster-conflict": [
-    ["G1b/pressed-control-moved","05-after-full-round","960x640","Button \"Next turn\"",4],
     ["N2/icon-off-text-centre","04-loaded-roster-of-12","1200x800","Button \"Dismiss this message\"",1]
   ],
   "run-sync-conflict": [
