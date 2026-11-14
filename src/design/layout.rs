@@ -2640,6 +2640,10 @@ pub struct InlineCreate<'a, State, R: CreateReasons> {
     parts: Vec<CreatePart<'a>>,
     create: Option<Create<R>>,
     kept: KeptLine<'a>,
+    /// A layer above the form that Escape closes first (a chosen suggestion).
+    above: bool,
+    /// Create and Cancel on an action line under the last field, as after a drop-down.
+    under: bool,
     state: PhantomData<State>,
 }
 
@@ -2654,6 +2658,9 @@ pub struct InlineCreateResponse {
     pub fields: Vec<Response>,
     /// Each drop-down's control, in order.
     pub dropdowns: Vec<Response>,
+    /// Escape closed the layer above the form ([`InlineCreate::escape_closes_above`]) and not
+    /// the form: no Cancel, and the field keeps the keyboard.
+    pub closed_above: bool,
 }
 
 impl<'a, State, R: CreateReasons> InlineCreate<'a, State, R> {
@@ -2662,6 +2669,8 @@ impl<'a, State, R: CreateReasons> InlineCreate<'a, State, R> {
             parts: self.parts,
             create: self.create,
             kept: self.kept,
+            above: self.above,
+            under: self.under,
             state: PhantomData,
         }
     }
@@ -2673,6 +2682,8 @@ impl<R: CreateReasons> InlineCreate<'_, Empty, R> {
             parts: Vec::new(),
             create: None,
             kept: KeptLine::default(),
+            above: false,
+            under: false,
             state: PhantomData,
         }
     }
@@ -2845,6 +2856,34 @@ fn action_rows(ui: &mut Ui, room: f32, widths: &[f32], mut draw: impl FnMut(&mut
     }
 }
 
+/// A text field's width without its margins in `room`, and whether its side action and Create
+/// go beside it: they do while the field keeps [`CREATE_FIELD_MIN`] beside them.
+fn field_width<R: CreateReasons>(
+    ui: &Ui,
+    room: f32,
+    side: Option<&SideAction>,
+    create: Option<&Create<R>>,
+) -> (f32, bool) {
+    let side_width = side.map_or(0.0, |side| side.action().natural_width(ui) + S);
+    let create_width = create.map_or(0.0, |create| create.action().natural_width(ui) + S);
+    let actions = side.is_some() || create.is_some();
+    let beside_width = room - side_width - create_width - 2.0 * S;
+    (beside_width, !actions || beside_width >= CREATE_FIELD_MIN)
+}
+
+/// The width of a form's last text field, margins included, when the form has `room` (its
+/// column, at most [`FORM_WIDTH`]): what the field keeps beside Create when Create follows it
+/// (`beside`), or all the room when Create goes under it (`None`: a form with
+/// [`InlineCreate::actions_under`], or too little room). For a caller that puts words before the
+/// form on its line (a stamp) and needs the field's own room.
+pub fn create_field_width<R: CreateReasons>(ui: &Ui, room: f32, beside: Option<&Create<R>>) -> f32 {
+    let room = room.clamp(1.0, FORM_WIDTH);
+    match field_width(ui, room, None, beside) {
+        (width, true) => width + 2.0 * S,
+        (_, false) => room,
+    }
+}
+
 /// What one text field's line gave back.
 struct FieldLine {
     response: Response,
@@ -2862,14 +2901,8 @@ fn field_line<R: CreateReasons>(
     room: f32,
     create: Option<&Create<R>>,
 ) -> FieldLine {
-    let side_width = part
-        .side
-        .as_ref()
-        .map_or(0.0, |side| side.action().natural_width(ui) + S);
-    let create_width = create.map_or(0.0, |create| create.action().natural_width(ui) + S);
+    let (beside_width, beside) = field_width(ui, room, part.side.as_ref(), create);
     let actions = part.side.is_some() || create.is_some();
-    let beside_width = room - side_width - create_width - 2.0 * S;
-    let beside = !actions || beside_width >= CREATE_FIELD_MIN;
     let mut line = FieldLine {
         response: ui.response(),
         side: false,
@@ -2955,6 +2988,23 @@ fn field_line<R: CreateReasons>(
 }
 
 impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
+    /// While `above`, a layer shows above the form that Escape closes first (a chosen
+    /// suggestion under an add field): Escape then gives `closed_above`, not Cancel. It goes
+    /// through the form's input-method guard as every Escape does.
+    pub fn escape_closes_above(mut self, above: bool) -> Self {
+        self.above = above;
+        self
+    }
+
+    /// Create, then Cancel, on an action line under the last text field, as a form that ends
+    /// with a drop-down has them: the field keeps the whole room, so its hint and its words are
+    /// as wide as a field without actions. A form whose kept line can hold nothing (no declared
+    /// reason, no side lock, no preview) then has none.
+    pub fn actions_under(mut self) -> Self {
+        self.under = true;
+        self
+    }
+
     pub fn show(self, ui: &mut Ui) -> InlineCreateResponse {
         let room = form_room(ui);
         ui.scope(|ui| {
@@ -2973,6 +3023,8 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
         };
         let count = self.parts.len();
         let ends_with_dropdown = matches!(self.parts.last(), Some(CreatePart::Dropdown(_)));
+        // Create and Cancel on an action line of their own, under the last part.
+        let action_line = ends_with_dropdown || self.under;
         // Every declared lock reason of a side action keeps its room on the kept line.
         let sides: Vec<(Sentence, bool)> = self
             .parts
@@ -3064,7 +3116,8 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
                 }
                 CreatePart::Text(part) => {
                     last_help = part.help;
-                    let line = field_line(ui, part, None, room, Some(&create));
+                    let beside = (!self.under).then_some(&create);
+                    let line = field_line(ui, part, None, room, beside);
                     out.side |= line.side;
                     out.create |= line.create;
                     out.fields.push(line.response);
@@ -3087,7 +3140,7 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
             super::help(ui, help);
         }
         let cancel_shown = matches!(self.kept.cancel, Some((_, true)));
-        if ends_with_dropdown {
+        if action_line {
             // The action line: Create, then Cancel, at the form's text edge. Above it every
             // part has a fixed height, so a chosen value never moves it.
             // Whole actions in rows: in a narrow column Cancel goes under Create.
@@ -3121,7 +3174,14 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
         if left && enter && create.blocked.is_none() && ui.is_enabled() {
             out.create = true;
         }
-        if left && escape && cancel_shown {
+        // Escape closes the top layer first: a layer above the form (a chosen suggestion), after
+        // the input method's guard, so a composition keeps it too.
+        if left && escape && self.above {
+            out.closed_above = true;
+            if let Some(field) = out.fields.iter().find(|field| field.lost_focus()) {
+                field.request_focus();
+            }
+        } else if left && escape && cancel_shown {
             out.cancel = true;
         }
         // The composition goes on only in the field that had the keyboard at the frame's start
@@ -3137,12 +3197,13 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
                 ui.memory_mut(|memory| memory.set_focus_lock_filter(field, COMPOSING_FILTER));
             }
         }
+        // A form with its actions under its field and nothing that its kept line could ever
+        // hold has none.
+        if self.under && R::ALL.is_empty() && sides.is_empty() && self.kept.preview.is_none() {
+            return out;
+        }
         // The kept line: one fixed height for the life of the form, whatever it holds now.
-        let kept_cancel = if ends_with_dropdown {
-            None
-        } else {
-            self.kept.cancel
-        };
+        let kept_cancel = if action_line { None } else { self.kept.cancel };
         let declared: Vec<&str> = sides.iter().map(|(reason, _)| reason.as_str()).collect();
         let height = kept_line_height::<R>(
             ui,

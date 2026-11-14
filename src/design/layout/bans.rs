@@ -374,8 +374,9 @@ fn banned_paths() -> Vec<(String, String)> {
 }
 
 /// Whether `path` (an import's or an alias's, segment by segment) names a banned owner (a type
-/// whose functions `clippy.toml` bans: `Fills`, `Footer`, `ScrollArea`) or a banned function by
-/// its owner or module (`Fills::because`, `outcome::banner`).
+/// whose functions `clippy.toml` bans: `Fills`, `Footer`, `ScrollArea`), a banned method by its
+/// owner (`Fills::because`), or a banned free function by its name through any module: its own
+/// (`outcome::banner`) or one that re-exports it (`design::add_field_keys`, from `components`).
 fn names_a_ban(path: &[String], bans: &[(String, String)]) -> bool {
     let Some(last) = path.last() else {
         return false;
@@ -384,9 +385,11 @@ fn names_a_ban(path: &[String], bans: &[(String, String)]) -> bool {
         .iter()
         .any(|(owner, _)| owner == last && owner.starts_with(|c: char| c.is_ascii_uppercase()));
     let function = path.len() >= 2
-        && bans
-            .iter()
-            .any(|(owner, name)| name == last && *owner == path[path.len() - 2]);
+        && bans.iter().any(|(owner, name)| {
+            name == last
+                && (*owner == path[path.len() - 2]
+                    || !owner.starts_with(|c: char| c.is_ascii_uppercase()))
+        });
     owner || function
 }
 
@@ -669,6 +672,9 @@ mod tests {
             "use eframe::egui::ScrollArea as Area;",
             "use crate::design::outcome::banner as notice;",
             "type Hand = splat::design::components::Footer<'static>;",
+            // Round 29 P-1: a free function through a module that re-exports it.
+            "#[allow(clippy::disallowed_methods)] fn add_row() { use crate::design::add_field_keys as keys; }",
+            "use crate::design::{add_field_keys as keys, AddField};",
         ] {
             assert_eq!(rules(text), ["banned-alias"], "{text}");
         }

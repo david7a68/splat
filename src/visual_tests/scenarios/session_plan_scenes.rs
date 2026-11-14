@@ -399,10 +399,13 @@ pub fn run(d: &mut Driver<'_>) {
         "A suggestion adds a scene that links it, and the field stays open",
     );
     // App round 1, W8-D7: the field's result shows directly under the field, and no row above
-    // the field moves for it.
+    // the field moves for it. Round 29 P-1: the field's form ends at its action line (`Add`,
+    // `Cancel`), so the result is directly under that.
     let (now, field, undo) = (
         d.place_of(&format!("Resume: {RUN}")),
-        d.place_of("Plan a scene"),
+        d.place_of("Plan a scene")
+            .zip(d.place_of("Cancel"))
+            .map(|(field, cancel)| field.union(cancel)),
         d.place_of("Undo add scene"),
     );
     d.observe(

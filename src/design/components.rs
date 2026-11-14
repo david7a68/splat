@@ -1657,12 +1657,13 @@ type Suggest<'a, T> = Box<dyn FnOnce(&str) -> Vec<Suggestions<T>> + 'a>;
 
 /// A field that an action opened, which adds typed words to a list (`Add to Log`, `Scene`): an
 /// [`InlineCreate`](super::layout::InlineCreate) form of one field, with its hint in place of a
-/// caption. `Add` (bordered, key `Enter`) follows the field on its line, or goes under it where
-/// the field would be narrower than `CREATE_FIELD_MIN`; quiet `Cancel` (key `Esc`) is on the
-/// kept line under it. So the DM sees how to finish without knowing the keys, and the form's
-/// layout, keys and input-method guard are the one form's. Suggestions for the typed words go
-/// under the kept line: an arrow key and Enter, or a click, chooses one; Escape lets go of the
-/// chosen one first. It shows only with its actions:
+/// caption. `Add` (bordered, key `Enter`), then quiet `Cancel` (key `Esc`), are on the form's
+/// action line under the field (`InlineCreate::actions_under`), so the field keeps the whole
+/// room, as wide as a field without actions; in a narrow column `Cancel` wraps under `Add` at the
+/// text edge. So the DM sees how to finish without knowing the keys, and the form's layout, keys
+/// and input-method guard are the one form's. Suggestions for the typed words go under the
+/// action line: an arrow key and Enter, or a click, chooses one; Escape lets go of the chosen
+/// one first (`InlineCreate::escape_closes_above`). It shows only with its actions:
 ///
 /// ```
 /// use splat::layout::doc_parts::{AddField, add_field};
@@ -1735,41 +1736,40 @@ impl<'a, T, A> AddFieldForm<'a, T, A> {
 }
 
 impl<T> AddFieldForm<'_, T, WithActions> {
+    /// The named action that adds, as the form draws it.
+    fn create(&self) -> super::layout::Create<super::layout::NoReason> {
+        let (add, _) = self.actions.expect("WithActions holds its actions");
+        super::layout::Create::secondary(add).key("Enter")
+    }
+
+    /// The text field's width, margins included, when the form has `room`, as the form lays it
+    /// out: all the room, since `Add` is on the action line under it. For a caller that puts
+    /// words before the field on its line (World's stamp), so it never measures `Add` itself.
+    pub fn field_width(&self, ui: &Ui, room: f32) -> f32 {
+        super::layout::create_field_width::<super::layout::NoReason>(ui, room, None)
+    }
+
     pub fn show(self, ui: &mut Ui, state: &mut AddField) -> AddFieldResult<T> {
-        use super::layout::{Create, CreateField, InlineCreate, KeptLine, NoReason};
-        let Some((add, cancel)) = self.actions else {
-            unreachable!("WithActions holds its actions")
-        };
-        // Escape lets go of a chosen suggestion first: it leaves the frame's input before the
-        // form reads it, so the field keeps the keyboard and the form does not cancel.
-        let id = self.id.named_id(self.name);
-        if state.highlight.is_some()
-            && ui.memory(|memory| memory.has_focus(id))
-            && ui.input(|input| input.key_pressed(egui::Key::Escape))
-        {
-            ui.input_mut(|input| {
-                input.events.retain(|event| {
-                    !matches!(
-                        event,
-                        egui::Event::Key {
-                            key: egui::Key::Escape,
-                            ..
-                        }
-                    )
-                });
-            });
-            state.highlight = None;
-        }
+        use super::layout::{CreateField, InlineCreate, KeptLine, NoReason};
+        let create = self.create();
+        let (_, cancel) = self.actions.expect("WithActions holds its actions");
         let focus = std::mem::take(&mut state.focus);
+        // A chosen suggestion is a layer above the form: Escape lets go of it first, through
+        // the form's input-method guard.
         let out = InlineCreate::<_, NoReason>::new()
             .field(
                 CreateField::new(self.id, self.name, &mut state.words)
                     .placeholder(self.hint)
                     .focus(focus),
             )
-            .create(Create::secondary(add).key("Enter"))
+            .create(create)
             .kept_line(KeptLine::new().cancel(cancel, true).cancel_key("Esc"))
+            .escape_closes_above(state.highlight.is_some())
+            .actions_under()
             .show(ui);
+        if out.closed_above {
+            state.highlight = None;
+        }
         let field = out
             .fields
             .into_iter()
@@ -7385,6 +7385,17 @@ mod tests {
                     move |ui, (field, seen): &mut Seen| {
                         let result = add_field::<()>(id, NAME, "What happened?")
                             .actions(crate::word!("Add"), crate::word!("Cancel"))
+                            .suggest(|words| {
+                                let rows = if words.starts_with("Ash") {
+                                    vec![("Ashfall Keep".into(), "Location".into(), ())]
+                                } else {
+                                    Vec::new()
+                                };
+                                vec![Suggestions {
+                                    label: "World",
+                                    rows,
+                                }]
+                            })
                             .show(ui, field);
                         if result.enter || result.cancel {
                             seen.push((result.enter, result.cancel, field.words.clone()));
@@ -7396,34 +7407,45 @@ mod tests {
             harness.run_steps(2);
             harness
         };
-        // A reader's measure at 1200 px, and a column at 960 px too narrow for Add beside.
-        for (width, beside) in [(480.0, true), (220.0, false)] {
+        // A reader's measure at 1200 px, where Cancel follows Add, and a column too narrow for
+        // both on one line, where Cancel wraps under Add. Either way the field keeps the whole
+        // room, and every action is whole and at least 24 px high.
+        for (width, one_line) in [(480.0, true), (160.0, false)] {
             let harness = harness(width);
             let field = harness.get_by_label(NAME).rect();
             let (add, cancel) = (
                 harness.get_by_label("Add").rect(),
                 harness.get_by_label("Cancel").rect(),
             );
-            if beside {
+            let room = harness.ctx.content_rect().width();
+            assert!(
+                field.width() >= room - 2.0 * XL,
+                "{width}: the field keeps the room: field {field:?} in {room}"
+            );
+            assert!(
+                add.top() >= field.bottom() - 0.5 && (add.left() - field.left()).abs() <= 0.5,
+                "{width}: Add starts the action line under the field: field {field:?}, Add {add:?}"
+            );
+            assert!(
+                add.height() >= 24.0 && cancel.height() >= 24.0 && cancel.right() <= room,
+                "{width}: whole actions: Add {add:?}, Cancel {cancel:?}"
+            );
+            if one_line {
                 assert!(
-                    (add.center().y - field.center().y).abs() <= 0.5 && add.left() > field.right(),
-                    "{width}: Add follows the field on its line: field {field:?}, Add {add:?}"
+                    (cancel.center().y - add.center().y).abs() <= 0.5
+                        && cancel.left() >= add.right(),
+                    "{width}: quiet Cancel follows Add: Add {add:?}, Cancel {cancel:?}"
                 );
             } else {
+                // Cancel that starts a line holds its words at the text edge (`line_start`).
                 assert!(
-                    add.top() >= field.bottom() - 0.5 && (add.left() - field.left()).abs() <= 0.5,
-                    "{width}: Add starts the line under the field: field {field:?}, Add {add:?}"
+                    cancel.top() >= add.bottom() - 0.5
+                        && cancel.left() <= field.left() + 0.5
+                        && cancel.left() >= field.left() - LINE_START_HANG - 0.5,
+                    "{width}: Cancel wraps under Add at the text edge: Add {add:?}, \
+                     Cancel {cancel:?}"
                 );
             }
-            // Cancel starts the kept line: its words at the field's edge, its padding hanging
-            // left of it (`line_start`).
-            assert!(
-                cancel.top() >= add.bottom().max(field.bottom()) - 0.5
-                    && cancel.left() <= field.left() + 0.5
-                    && cancel.left() >= field.left() - LINE_START_HANG - 0.5,
-                "{width}: quiet Cancel starts the kept line: field {field:?}, Add {add:?}, \
-                 Cancel {cancel:?}"
-            );
         }
         let mut harness = harness(480.0);
         let act = |harness: &mut egui_kittest::Harness<'_, Seen>, words: &str, end: &str| {
@@ -7453,6 +7475,44 @@ mod tests {
         );
         assert_eq!(act(&mut harness, "Lost the map", "Escape"), cancelled);
         assert_eq!(act(&mut harness, "Lost the map", "Cancel"), cancelled);
+        // A chosen suggestion is the layer Escape closes first, after the form's input-method
+        // guard: during a composition Escape is the input method's, and the choice stays.
+        harness.get_by_label(NAME).focus();
+        harness.run_steps(1);
+        harness.get_by_label(NAME).type_text("Ash");
+        harness.run_steps(1);
+        harness.key_press(egui::Key::ArrowDown);
+        harness.run_steps(1);
+        assert_eq!(
+            harness.state().0.highlight,
+            Some(0),
+            "Down chooses the suggestion"
+        );
+        harness.event(egui::Event::Ime(egui::ImeEvent::Enabled));
+        harness.step();
+        harness.key_press(egui::Key::Escape);
+        harness.run_steps(2);
+        assert_eq!(
+            (harness.state().0.highlight, harness.state().1.clone()),
+            (Some(0), Vec::new()),
+            "Escape of a composition keeps the choice and cancels nothing"
+        );
+        harness.event(egui::Event::Ime(egui::ImeEvent::Disabled));
+        harness.step();
+        harness.key_press(egui::Key::Escape);
+        harness.run_steps(2);
+        assert_eq!(
+            (harness.state().0.highlight, harness.state().1.clone()),
+            (None, Vec::new()),
+            "Escape lets go of the choice first, and cancels nothing"
+        );
+        assert!(
+            harness.get_by_label(NAME).is_focused() && harness.state().0.words == "Ash",
+            "the field keeps the keyboard and its words"
+        );
+        harness.key_press(egui::Key::Escape);
+        harness.run_steps(2);
+        assert_eq!(std::mem::take(&mut harness.state_mut().1), cancelled);
         // An input method: a preedit, then Enter in the next frame to commit it, then the
         // commit. Nothing is added or cancelled, the field keeps the keyboard and the commit,
         // other words than the preedit, lands.

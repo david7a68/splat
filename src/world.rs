@@ -3595,6 +3595,10 @@ impl Reader {
         let name = format!("Log line for {}", item.entry.name);
         const LOG_LINE: crate::layout::FieldName = crate::field_id!("world_log_line");
         let entry = item.entry.id;
+        let form = || {
+            design::add_field::<()>(LOG_LINE.of(entry), &name, "What happened?")
+                .actions(crate::word!("Add"), crate::word!("Cancel"))
+        };
         // The field ends at the reader's measure, also when the stamp shares its line: a row of
         // a wrapping layout does not hold a nested row to its parent's width (round 27 AF2, FF1).
         let edge = ui.max_rect().right();
@@ -3605,9 +3609,7 @@ impl Reader {
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| {
                     ui.set_max_width(width);
-                    design::add_field::<()>(LOG_LINE.of(entry), &name, "What happened?")
-                        .actions(crate::word!("Add"), crate::word!("Cancel"))
-                        .show(ui, field)
+                    form().show(ui, field)
                 },
             )
             .inner
@@ -3621,10 +3623,11 @@ impl Reader {
                     .size();
                 let width = size.x;
                 let words = Type::Small.rich(ui, stamp).color(colors().muted);
-                // The stamp shares the field's line while the field keeps room for a sentence.
-                // One layout for both, so the field keeps its ID, and the keyboard, when the
-                // window changes size.
-                let room = ui.available_width() - width - design::S;
+                // The stamp shares the field's line while the field keeps room for a sentence,
+                // beside `Add` as the form places it (the form measures its own actions). One
+                // layout for both, so the field keeps its ID, and the keyboard, when the window
+                // changes size.
+                let room = form().field_width(ui, ui.available_width() - width - design::S);
                 let typed = ui
                     .painter()
                     .layout_no_wrap(
