@@ -628,6 +628,41 @@ pub fn run(d: &mut Driver<'_>) {
     let saved =
         fs::read_to_string(campaign.path.join("Encounter Groups/Bridge guards.md")).unwrap();
     assert_eq!(saved, text.replace("HP lots", "HP +5"));
+    // iter-28-B FC9: the repaired member's `Changed` has the muted pencil before it, on the
+    // member's detail line (the line that holds its CR), as the encounter editor and the list
+    // show a change.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let placed = d.at_size(size, |d| {
+            let link = d.place_of("Changed")?;
+            let mut pencil = None;
+            let mut detail = None;
+            d.each_painted_text(|text, clip| {
+                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                if !clip.intersects(rect) {
+                    return;
+                }
+                let words = &text.galley.job.text;
+                if words.starts_with(crate::design::icons::CHANGED)
+                    && rect.right() <= link.left() + 0.5
+                    && (rect.center().y - link.center().y).abs() < 4.0
+                {
+                    pencil = Some(rect);
+                }
+                if words.contains("CR ")
+                    && rect.top() <= link.center().y
+                    && rect.bottom() >= link.center().y
+                {
+                    detail = Some(rect);
+                }
+            });
+            Some((pencil.is_some(), detail.is_some()))
+        });
+        d.observe(
+            "iter-28-B-FC9",
+            placed == Some((true, true)),
+            format!("At {size:?}, Changed has its pencil, on the detail line: {placed:?}"),
+        );
+    }
     d.state("group-changes-cell-repaired", Sizes::All);
 
     d.click("Back to encounters");

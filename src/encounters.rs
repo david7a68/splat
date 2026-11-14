@@ -6480,12 +6480,18 @@ impl Encounters {
                                                 )
                                             })
                                             .unwrap_or_else(|| "Changed".into());
-                                        let change_width =
-                                            design::number_width(ui, &word, &Type::Small.font(ui));
+                                        // FC9: the muted pencil before the words, as in
+                                        // the list.
+                                        let marked = format!("{}{word}", groups::change_mark());
+                                        let change_width = design::number_width(
+                                            ui,
+                                            &marked,
+                                            &Type::Small.font(ui),
+                                        );
                                         let (fitted, fault_kept) = changed_detail_parts(
                                             ui,
                                             &detail,
-                                            &word,
+                                            &marked,
                                             ui.available_width(),
                                             hp_missing,
                                         );
@@ -6511,7 +6517,7 @@ impl Encounters {
                                                 ))
                                                 .layout(egui::Layout::top_down(egui::Align::Min)),
                                         );
-                                        if design::small_link(&mut inline, &word).clicked() {
+                                        if groups::change_link(&mut inline, &word) {
                                             groups::show_form_when_it_opens(ui);
                                             *expanded = Some(slot.key.clone());
                                         }

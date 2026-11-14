@@ -1618,25 +1618,56 @@ pub(super) fn change_words(
     }
 }
 
-/// `fault` puts a cause into the member-fault form (name and line), so the editor says a
-/// member's fault as the Encounters list and Arrivals do (FJ6).
-pub(super) fn changes_link(
+/// A member's change words (`Changed`, `Loot`…) for the end of its detail line, when its
+/// changes read.
+pub(super) fn change_word(
+    ui: &egui::Ui,
+    block: &Mapping,
+    entry: &Entry,
+    side: &str,
+) -> Option<String> {
+    if block.is_empty() {
+        return None;
+    }
+    let overrides = Overrides::parse(block).ok()?;
+    let missing = crate::loot_editor::missing_in(ui.ctx(), overrides.loot.as_deref());
+    Some(change_words(&overrides, entry, side, &missing))
+}
+
+/// The muted pencil and the change words before it opens the form (FC9): `✎ Changed`, as the
+/// Encounters list, the run's setup and Arrivals show a change. The words are the link.
+pub(super) fn change_mark() -> String {
+    format!("{}\u{a0}", icons::CHANGED)
+}
+
+/// The change link at the end of a detail line: the muted pencil, then the words as a `Small`
+/// link. Returns true when the DM opens the form.
+pub(super) fn change_link(ui: &mut egui::Ui, word: &str) -> bool {
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        ui.label(Type::Small.rich(ui, change_mark()).color(colors().muted));
+        design::small_link(ui, word).clicked()
+    })
+    .inner
+}
+
+/// A member's change faults, below its row. `fault` puts a cause into the member-fault form
+/// (name and line), so the editor says a member's fault as the Encounters list and Arrivals do
+/// (FJ6). The change words themselves are on the detail line ([`change_link`]).
+pub(super) fn change_faults(
     ui: &mut egui::Ui,
     block: &Mapping,
     entry: &Entry,
     side: &str,
     form_open: bool,
     fault: &dyn Fn(&str) -> String,
-) -> bool {
+) {
     if block.is_empty() || form_open {
-        return false;
+        return;
     }
     match Overrides::parse(block) {
         Ok(overrides) => {
             let rows = overrides.rows(&Base::of(entry, side));
-            let missing = crate::loot_editor::missing_in(ui.ctx(), overrides.loot.as_deref());
-            let word = change_words(&overrides, entry, side, &missing);
-            let clicked = design::link(ui, &word).clicked();
             if let Err(error) = overrides.resolve_for(entry, side) {
                 design::message(
                     ui,
@@ -1646,7 +1677,6 @@ pub(super) fn changes_link(
                 // The failed change stays visible beside its fault.
                 change_rows(ui, &rows);
             }
-            clicked
         }
         Err(error) => {
             design::message(
@@ -1654,7 +1684,6 @@ pub(super) fn changes_link(
                 FaultKind::InvalidChange.tone(),
                 &fault(&override_error(&error)),
             );
-            false
         }
     }
 }
@@ -3061,16 +3090,35 @@ fn members(
                 )
                 .on_hover_text(&name)
                 .rect;
-            if !detail.is_empty() {
-                let response = ui.add(
-                    egui::Label::new(super::detail_text(
-                        ui,
-                        &super::stat_line(&detail),
-                        hp_missing,
-                    ))
-                    .wrap(),
-                );
-                design::named(ui, &response, &detail);
+            // FC9: the change words end the detail line, after the muted pencil, as in the
+            // encounter editor; a closed form only.
+            let word = entry
+                .filter(|_| !is_open)
+                .and_then(|entry| change_word(ui, &member.overrides, entry, &side));
+            if !detail.is_empty() || word.is_some() {
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing.x = 0.0;
+                    if !detail.is_empty() {
+                        let response = ui.add(
+                            egui::Label::new(super::detail_text(
+                                ui,
+                                &super::stat_line(&detail),
+                                hp_missing,
+                            ))
+                            .wrap(),
+                        );
+                        design::named(ui, &response, &detail);
+                    }
+                    if let Some(word) = &word {
+                        if !detail.is_empty() {
+                            ui.label(Type::Small.rich(ui, " · ").color(colors().muted));
+                        }
+                        if change_link(ui, word) {
+                            show_form_when_it_opens(ui);
+                            *expanded = Some(key.clone());
+                        }
+                    }
+                });
             }
             ui.horizontal(|ui| {
                 ui.label(Type::Small.rich(ui, "Count").color(colors().muted));
@@ -3176,10 +3224,7 @@ fn members(
             }
             if let Some(entry) = entry {
                 let fault = |cause: &str| member_fault(&name, Some(&entry.name), line, cause);
-                if changes_link(ui, &member.overrides, entry, &side, is_open, &fault) {
-                    show_form_when_it_opens(ui);
-                    *expanded = Some(key.clone());
-                }
+                change_faults(ui, &member.overrides, entry, &side, is_open, &fault);
                 // The open form edits one member's changes: a change it writes is an edit. The form
                 // says so itself; nothing here copies the changes (review of PR 299).
                 if is_open {
