@@ -222,7 +222,7 @@ pub struct TimelinePage {
     pub plan_names: PlanNames,
     /// Row 123, point 5: why the last plan line's Undo failed, while its journey's block is not
     /// in view. The next act on checks or the next Undo ends it.
-    plan_fault: Option<String>,
+    plan_fault: Option<checks::UndoFault>,
     focus_length: bool,
     /// What the DM typed in a journey's checks, and each journey's last result with its Undo.
     checks: checks::State,
@@ -1059,7 +1059,11 @@ impl TimelinePage {
                         && !(self.selected.as_deref() == Some(journey.as_str())
                             && self.checks.failed_for(&journey, &act, words.clone()))
                     {
-                        self.plan_fault = Some(words);
+                        self.plan_fault = Some(checks::UndoFault {
+                            journey,
+                            act,
+                            words,
+                        });
                     }
                 }
                 ListAct::File(act) => file_act(book, act, press.ticket),
@@ -1085,8 +1089,17 @@ impl TimelinePage {
         notes.plan_line_result(&mut messages, ListAct::UndoPlanLine);
         // Row 123, point 5: a plan line's Undo that failed while its journey's block is not in
         // view says why here.
-        if let Some(fault) = &self.plan_fault {
-            messages.outcome(design::outcome::Outcome::Refused(as_sentence(fault)));
+        match self
+            .plan_fault
+            .as_ref()
+            .map(|fault| fault.standing(&book.events))
+        {
+            Some(Some(words)) => {
+                messages.outcome(design::outcome::Outcome::Refused(as_sentence(words)));
+            }
+            // Its journey is gone: the fault has no owner left.
+            Some(None) => self.plan_fault = None,
+            None => {}
         }
         if let Some(offer) = offer {
             messages.outcome(offer.notice(ListAct::UpdateLinks));

@@ -453,6 +453,26 @@ pub fn apply(
     }))
 }
 
+/// Row 123, review 3, point 4: a plan line's Undo that failed while its journey's block was not
+/// in view: the journey, the failed act and its words (result first). It ends when the journey
+/// goes.
+#[derive(Clone, Debug, PartialEq)]
+pub struct UndoFault {
+    pub journey: String,
+    pub act: Act,
+    pub words: String,
+}
+
+impl UndoFault {
+    /// The words while the fault's journey stands, else nothing.
+    pub fn standing(&self, events: &[Event]) -> Option<&str> {
+        events
+            .iter()
+            .any(|event| event.id == self.journey)
+            .then_some(self.words.as_str())
+    }
+}
+
 /// What one open block needs from its page.
 pub struct View<'a> {
     pub event: &'a Event,
