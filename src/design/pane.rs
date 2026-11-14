@@ -2069,6 +2069,14 @@ mod editor_region_tests {
             (at.top() - (save.bottom() + S)).abs() <= 1.0,
             "p2-short: the footer {at:?} is `S` under the save row {save:?}"
         );
+        // ... because the content is short, not because the region filled the room.
+        let room = pane_record(&short.ctx, Id::new(LOCAL))
+            .expect("a record")
+            .room();
+        assert!(
+            at.bottom() < room.bottom() - 4.0 * super::super::tokens::XXL,
+            "p2-short-follows: the footer {at:?} follows the short content, far above the room's bottom {room:?}"
+        );
         // Long, 300 px room: the save row whole above the footer, the region scrolls.
         let mut long = harness(
             300.0,
