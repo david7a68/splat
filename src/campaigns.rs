@@ -1367,6 +1367,9 @@ impl Campaigns {
                         design::Create::secondary(ADD_CAMPAIGN)
                     };
                     let cancel = !missing || self.remote.is_some();
+                    // G137, G138: the field cuts a long folder's end, the part Splat proposes.
+                    // The kept line names it whole (`Will add …/Salt Road`).
+                    let preview = folder_preview(&self.path);
                     let form = design::InlineCreate::new()
                         .field(
                             design::CreateField::new(name_id, "Campaign name", &mut self.name)
@@ -1378,7 +1381,11 @@ impl Campaigns {
                                 .help(FOLDER_HELP),
                         )
                         .create(create.blocked(reason))
-                        .kept_line(design::KeptLine::new().cancel(CANCEL, cancel))
+                        .kept_line(
+                            design::KeptLine::new()
+                                .cancel(CANCEL, cancel)
+                                .preview(preview.as_deref()),
+                        )
                         .show(ui);
                     if form.side
                         && let Some(path) = crate::hermetic::pick_folder()
@@ -1557,6 +1564,22 @@ fn links_to(campaign: &Campaign, remote_id: &str) -> bool {
         .as_deref()
         .and_then(|id| id.parse::<u64>().ok())
         == Some(remote)
+}
+
+/// What `Add campaign` will add, by the folder's last name (`Will add …/Salt Road`): the end of
+/// the path is what a narrow field cuts, and the part's preview line cuts a long one at its start.
+fn folder_preview(path: &str) -> Option<String> {
+    let path = std::path::Path::new(path.trim());
+    let name = path.file_name()?.to_string_lossy();
+    Some(
+        match path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
+            Some(_) => format!("Will add …/{name}"),
+            None => format!("Will add {name}"),
+        },
+    )
 }
 
 /// The result of registering a copied campaign folder, named for the new campaign.
@@ -2047,5 +2070,42 @@ mod tests {
         overlapping.path = folder;
         assert!(campaigns.restore_module(overlapping).is_err());
         assert_eq!(campaigns.modules()[0].path, temp.path().join("new-folder"));
+    }
+
+    /// G137, G138: at 960 px Settings gives the add form about 544 px, and the Folder field cuts
+    /// the folder Splat proposes. The kept line names it whole, `Will add …/<name>`.
+    #[test]
+    fn import_form_names_the_proposed_folder_whole() {
+        use egui_kittest::kittest::Queryable;
+        let temp = tempfile::tempdir().unwrap();
+        let settings = temp
+            .path()
+            .join("a-long-folder-of-settings/with/several/levels/settings");
+        let mut campaigns = Campaigns::at(settings.join("settings.json"));
+        campaigns.start_import("7", "Salt Road");
+        assert!(campaigns.path.ends_with("Salt Road"));
+        const WIDTH: f32 = 544.0;
+        let words = "Will add …/Salt Road";
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(WIDTH, 400.0))
+            .build_ui_state(
+                |ui, (campaigns, natural): &mut (Campaigns, f32)| {
+                    campaigns.show_import_form(ui, "7");
+                    let font = design::Type::Small.font(ui);
+                    *natural = ui
+                        .painter()
+                        .layout_no_wrap(words.into(), font, egui::Color32::WHITE)
+                        .size()
+                        .x;
+                },
+                (campaigns, 0.0),
+            );
+        harness.run();
+        let natural = harness.state().1;
+        let shown = harness.get_by_label(words).rect();
+        assert!(
+            shown.right() <= WIDTH && (shown.width() - natural).abs() < 1.0,
+            "the preview {shown:?} is not whole ({natural} px of words)"
+        );
     }
 }

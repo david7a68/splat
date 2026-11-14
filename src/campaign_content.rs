@@ -282,6 +282,8 @@ macro_rules! new_result {
             campaign,
             payload: $payload,
         });
+        // A newer act's answer: the refused pick is no longer the answer to the last act.
+        $page.refusal = None;
     };
 }
 
@@ -501,6 +503,9 @@ pub struct CampaignContent {
     pub found_package: Option<Module>,
     pub forget_package: Option<Uuid>,
     error: Option<String>,
+    /// The refusal of the DM's last folder pick for a missing package (ruling Q-x): the
+    /// answer to their last act, first in the footer. See [`Refusal`] for its owner and ends.
+    refusal: Option<Refusal>,
     disabled_selections: std::collections::BTreeMap<Uuid, Selection>,
     refresh_pending: bool,
     repairs: Vec<Repair>,
@@ -513,6 +518,18 @@ pub struct CampaignContent {
     /// changed; other changed repairs keep their drafts with a secondary Save.
     active_repair: Option<String>,
 }
+/// A folder pick that Splat refused (`Find the folder…`, `Register it again`): the folder holds
+/// another package, or no package. It belongs to one package in one campaign and is the answer
+/// to the DM's last act. It ends when a newer act answers (`new_result!`, the next press of a
+/// package choice), when its package is found again (`package_restored`), when the page loads
+/// again, and it shows only while its package is still missing in its campaign.
+struct Refusal {
+    campaign: Uuid,
+    /// The package, by its reference's label (as `details` keeps it).
+    package: String,
+    words: String,
+}
+
 struct RemovedPackage {
     /// The removed package's name, for its Undo (`Undo remove <name>`).
     name: String,
@@ -866,6 +883,7 @@ impl CampaignContent {
             Ok(()) => {
                 self.refresh_pending = true;
                 self.error = None;
+                self.refusal = None;
             }
             Err(error) => self.error = Some(error),
         }
@@ -1097,6 +1115,7 @@ impl CampaignContent {
         self.snapshot = None;
         self.entry_matches = None;
         self.error = None;
+        self.refusal = None;
         self.end_plain(PageResult::Saved);
         let (tx, rx) = mpsc::channel();
         self.pending = Some(rx);
@@ -1339,12 +1358,14 @@ impl CampaignContent {
         }
     }
 
-    /// The page's one message footer (round 26), made before the body: the kept results (one
-    /// with a live Undo first, newest first, as the store's orders say), then the reasons (each
-    /// repair's failed Save or refusal, the page's errors), then the plain results and the
-    /// warning about encounters a removal left without creatures. Each keeps its owner and end
-    /// event: a repair's message names its file and ends with that repair's state; a kept
-    /// result lives while its state does (`live`) and in its own campaign only.
+    /// The page's one message footer (round 26), made before the body. Ruling Q-x: the answer to
+    /// the DM's last act comes first. So a refused folder pick (`Refusal`) leads, then the kept
+    /// results (one with a live Undo first, newest first, as the store's orders say), the
+    /// warning about encounters a removal left without creatures, each repair's failed Save or
+    /// refusal, the page's errors, and last the package faults, which come from the files and
+    /// not from an act. Each keeps its owner and end event: a repair's message names its file
+    /// and ends with that repair's state; a kept result lives while its state does (`live`) and
+    /// in its own campaign only.
     fn page_footer<'f>(
         &self,
         frame: &'f design::outcome::PaneFrame,
@@ -1357,6 +1378,16 @@ impl CampaignContent {
         let mut messages =
             design::outcome::Messages::new(frame, ("campaign_page_footer", active.id), width);
         let locked = self.dirty();
+        let warnings = self.package_warnings_of(campaigns);
+        if let Some(refusal) = self.refusal.as_ref().filter(|refusal| {
+            refusal.campaign == active.id
+                && warnings
+                    .unavailable
+                    .iter()
+                    .any(|missing| missing.selection.package.label() == refusal.package)
+        }) {
+            messages.outcome(FaultMessage::new(&ContentFault::Error(&refusal.words)));
+        }
         for shown in self.results.newest_first(&active.id) {
             let line = shown.outcome(frame, |kept| outcome_of(&kept.payload, locked));
             messages.kept(line);
@@ -1397,10 +1428,6 @@ impl CampaignContent {
                 }));
             }
         }
-        // The package faults come before the page's errors: an error that a package choice brings
-        // (a wrong folder) comes below the pressed choice, so it does not move.
-        let warnings = self.package_warnings_of(campaigns);
-        self.package_messages(&mut messages, campaigns, &warnings.unavailable);
         // Round 27 FB3, AB1: with no package list to show, the page's errors are its content, at
         // the top of the page (`page`), not in the footer.
         if !self.body_missing() {
@@ -1422,6 +1449,8 @@ impl CampaignContent {
                 messages.outcome(FaultMessage::new(&ContentFault::Error(error)));
             }
         }
+        // The package faults come from the files, not from an act: after every answer.
+        self.package_messages(&mut messages, campaigns, &warnings.unavailable);
         messages
     }
 
@@ -2294,6 +2323,8 @@ impl CampaignContent {
             | ContentPress::Remove(at) => at,
             _ => return,
         };
+        // A new act on a package: the earlier refusal no longer answers the last act.
+        self.refusal = None;
         let Some(Unavailable {
             index: i,
             selection,
@@ -2343,7 +2374,13 @@ impl CampaignContent {
                 );
                 self.found_package = Some(module);
             }
-            Some(Err(error)) => self.error = Some(error),
+            Some(Err(words)) => {
+                self.refusal = Some(Refusal {
+                    campaign: self.active.as_ref().map_or(Uuid::nil(), |active| active.id),
+                    package: selection.package.label(),
+                    words,
+                });
+            }
             None => {}
         }
         if let Some(i) = remove {
@@ -3751,9 +3788,60 @@ mod tests {
         assert!(!check(&harness), "at 500 px Remove wraps");
         harness.set_size(egui::vec2(1200.0, 900.0));
         harness.run_steps(2);
+        let moved = |harness: &mut egui_kittest::Harness<'_, Page>, from: &str, to: &str| {
+            fs::rename(packages.join(from), packages.join(to)).unwrap();
+            harness
+                .state_mut()
+                .content
+                .refresh_destination(&packages.join(to));
+            settle(harness);
+        };
+        // The first package's `Find the folder…` (Watch's: the list's order).
+        let pick = |harness: &mut egui_kittest::Harness<'_, Page>, folder: &str| {
+            crate::hermetic::closed::next_folder(packages.join(folder));
+            harness
+                .get_all_by_label("Find the folder…")
+                .next()
+                .unwrap()
+                .click();
+            settle(harness);
+        };
+        // Ruling Q-x (G149): A = the refusal of a wrong pick for Watch, B = Toll's package fault.
+        // A is the answer to the last act, so it is first; B stays; A ends when its cause ends.
+        moved(&mut harness, "toll", "toll-a");
+        pick(&mut harness, "toll-a");
+        let refusal =
+            "The folder toll-a/ holds a different package. Choose the folder that holds Watch.";
+        // The footer and the message carry the words too: the smallest node is the words' own.
+        let message = |harness: &egui_kittest::Harness<'_, Page>, words: &str| {
+            harness
+                .query_all_by_label_contains(words)
+                .map(|node| node.rect())
+                .min_by(|a, b| a.area().total_cmp(&b.area()))
+        };
+        let toll_fault =
+            |harness: &egui_kittest::Harness<'_, Page>| message(harness, "Toll moved from ");
+        let shown = harness.get_by_label(refusal).rect();
+        let fault = toll_fault(&harness).expect("Toll's fault stays beside the refusal");
+        let watch_fault = message(&harness, "Watch moved from ").expect("Watch's fault stays");
+        assert!(
+            shown.bottom() <= fault.top() && shown.bottom() <= watch_fault.top(),
+            "the refusal {shown:?} is not first, above the package faults {watch_fault:?}, {fault:?}"
+        );
+        // Watch comes back to its folder outside Splat, with no press: the refusal's cause ends,
+        // and the refusal with it. Toll's fault stays.
+        moved(&mut harness, "watch-moved", "watch");
+        assert!(harness.query_by_label(refusal).is_none());
+        assert!(toll_fault(&harness).is_some());
+        // A newer act answers: the refusal of a second wrong pick ends when Watch is found.
+        moved(&mut harness, "watch", "watch-a");
+        pick(&mut harness, "toll-a");
+        assert!(harness.query_by_label(refusal).is_some());
+        pick(&mut harness, "watch-a");
+        assert!(harness.query_by_label(refusal).is_none());
+        assert!(toll_fault(&harness).is_some());
         // A finds Watch in watch-a/ and Toll in toll-a/.
-        find(&mut harness, "watch-moved", "watch-a");
-        find(&mut harness, "toll", "toll-a");
+        pick(&mut harness, "toll-a");
         assert!(
             harness
                 .query_by_label("Undo recover packages/watch-a")

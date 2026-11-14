@@ -899,7 +899,9 @@ campaign.` with `Undo remove Ashen Marches`); the warning about the encounters i
 follows it (`Bridge Ambush and Shrine of Cinders now have creatures Splat cannot find.`), with one `Open <name>`
 choice per encounter. A recovery's result names the folder (`Ashen Marches found in <folder>/.` with
 `Undo recover <folder>`). The choices start at the warning text, below its words, in this order: the repairs
-(Use this folder, Find the folder…), the `Open <name>` choices, Technical details, then Remove from this campaign. Say Splat cannot find the
+(Use this folder, Find the folder…), the `Open <name>` choices, Technical details, then Remove from this campaign.
+A refused folder pick is the answer to the DM's last act, so it comes first in the footer, above the package
+faults (ruling Q-x); it ends with the next act, when its package is found, or when the page loads again. Say Splat cannot find the
 package only when there is no match. Use Body text throughout the missing-package sentence. The picker
 starts beside the old folder and checks identity before restoring registration. A folder that holds another
 package says the fault first and names both: `The folder <folder>/ holds a different package. Choose the folder
