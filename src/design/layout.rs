@@ -530,9 +530,15 @@ impl FieldId {
     }
 
     /// A search field with this id: the search icon, the hint (what can be searched) and, while
-    /// it holds text, a quiet `Clear` after it on its line, inside `width`. `Clear` empties the
-    /// text and gives the field its focus back; `cleared` says so, for a caller that resets more
-    /// (the selected result). A search field has no form without its `Clear` (N10).
+    /// it holds text, a quiet `Clear` inside the field's right end. `Clear` empties the text and
+    /// gives the field its focus back; `cleared` says so, for a caller that resets more (the
+    /// selected result). A search field has no form without its `Clear` (N10).
+    ///
+    /// The field's frame is exactly `width` (X2). `Clear`'s place is kept inside the frame's
+    /// right end from the first frame (as a `Slot` keeps a value's widest form): the text area is
+    /// the frame less that place, with and without text, so nothing moves or narrows while the
+    /// DM types or deletes, and the hint has the same room in both states. Below
+    /// [`search_min_row`] the frame still keeps to `width`; its text area gives way.
     ///
     /// ```
     /// fn f(ui: &mut eframe::egui::Ui, query: &mut String) {
@@ -560,35 +566,33 @@ impl FieldId {
         hint: &str,
         width: f32,
     ) -> Search {
-        let clear = || Action::quiet("Clear").density(Density::Scan);
         let mut cleared = false;
         let id = self.named(name).id();
-        let field = ui
-            .horizontal(|ui| {
-                let room = if text.is_empty() {
-                    0.0
-                } else {
-                    clear().natural_width(ui) + ui.spacing().item_spacing.x
-                };
-                let guard = TextGuard::before(ui, id, text);
-                let field = super::components::search_box(
-                    ui,
-                    id,
-                    name,
-                    text,
-                    hint,
-                    (width - room).max(Density::Scan.control()),
-                );
-                guard.after(ui, text, &field);
-                record_field(ui, &field);
-                if !text.is_empty() && clear().show(ui).clicked() {
-                    text.clear();
-                    field.request_focus();
-                    cleared = true;
-                }
-                field
-            })
-            .inner;
+        // Clear's place, kept inside the frame's right end whether or not Clear shows.
+        let place = search_clear().natural_width(ui);
+        let guard = TextGuard::before(ui, id, text);
+        let field = super::components::search_box(ui, id, name, text, hint, width, place);
+        guard.after(ui, text, &field);
+        record_field(ui, &field);
+        if !text.is_empty() {
+            let frame = field.rect;
+            let at = Rect::from_min_max(
+                egui::pos2((frame.right() - place).max(frame.left()), frame.top()),
+                frame.right_bottom(),
+            );
+            let mut inside = ui.new_child(
+                UiBuilder::new()
+                    .max_rect(at)
+                    .layout(Layout::left_to_right(Align::Center)),
+            );
+            let clear = search_clear().show(&mut inside);
+            super::components::register_field_action(ui, field.id, clear.id);
+            if clear.clicked() {
+                text.clear();
+                field.request_focus();
+                cleared = true;
+            }
+        }
         Search { field, cleared }
     }
 
@@ -610,6 +614,18 @@ impl FieldId {
         record_field(ui, &response);
         response
     }
+}
+
+/// The smallest row a search field is usable in: its margins, `Clear`'s place and a 24 px text
+/// area. Below it the field still keeps inside the width it is given: its text area gives way.
+pub fn search_min_row(ui: &Ui) -> f32 {
+    use super::components::{SEARCH_LEFT, SEARCH_RIGHT};
+    SEARCH_LEFT + SEARCH_RIGHT + search_clear().natural_width(ui) + 24.0
+}
+
+/// The search row's `Clear`.
+fn search_clear() -> Action<'static> {
+    Action::quiet("Clear").density(Density::Scan)
 }
 
 /// What [`FieldId::editor`] drew: the field and where its text was laid out. The fields are
@@ -2213,12 +2229,214 @@ fn preview_line(ui: &mut Ui, preview: &str) {
 
 /// A menu that opens under `response`, for a row or a control with more actions. The one place
 /// a menu popup is made outside `row_menu`, so a placement rule for menus has one home.
+///
+/// Its room (X2): the menu stays inside the pane that `ui` draws in (its clip), one scroll
+/// lane (`lane_width`, at least `S`) clear of the pane's edges, so it lies over neither a
+/// splitter nor a scroll bar. It starts at the control's left edge and may reach that inner
+/// edge; when the control's right edge leaves more room on its left, it ends there instead.
+///
+/// Its width (X2): the part decides it on every draw, not egui's saved size. A menu of
+/// choices is as wide as its widest choice's words this frame, at most the room (the room is
+/// measured again on every draw, so a pane made narrower while the menu was closed still holds
+/// it). When the choices change while it is open, it measures again in the same frame. Other
+/// content is cut at the room. Close and reopen measure afresh.
+///
+/// How a caller moves a raw `egui::Popup::menu` of choices here: replace
+/// `egui::Popup::menu(&button).show(|ui| …)` with `design::menu_popup(ui, &button).show(|ui| …)`,
+/// keep the same `choice`/`choice_wrapped` rows inside, and remove the row's `Ban::Layout` count.
+pub fn menu_popup<'a, P: MenuPane + ?Sized>(pane: &P, response: &'a Response) -> MenuPopup<'a> {
+    let pane = pane.pane();
+    let rightward = menu_room(pane, response.rect, egui::RectAlign::BOTTOM_START);
+    let leftward = menu_room(pane, response.rect, egui::RectAlign::BOTTOM_END);
+    let (align, room) = if rightward >= leftward {
+        (egui::RectAlign::BOTTOM_START, rightward)
+    } else {
+        (egui::RectAlign::BOTTOM_END, leftward)
+    };
+    MenuPopup {
+        id: egui::Popup::default_response_id(response),
+        popup: menu_popup_raw(response).align(align).width(room),
+        room,
+        pane,
+        control: response.rect,
+    }
+}
+
+/// Where a menu's room comes from: the `Ui` its control is drawn in (that pane's clip), or,
+/// for a caller with no `Ui`, the `Context` (the screen).
+pub trait MenuPane: menu_pane::Sealed {
+    fn pane(&self) -> Rect;
+}
+
+mod menu_pane {
+    pub trait Sealed {}
+    impl Sealed for eframe::egui::Ui {}
+    impl Sealed for eframe::egui::Context {}
+}
+
+impl MenuPane for Ui {
+    fn pane(&self) -> Rect {
+        self.clip_rect()
+    }
+}
+
+impl MenuPane for egui::Context {
+    fn pane(&self) -> Rect {
+        self.content_rect()
+    }
+}
+
+/// A menu's room in `pane` beside `control` for `align`: from the control's left edge to the
+/// pane's inner right edge (or from its right edge leftward), one lane clear of the edges.
+fn menu_room(pane: Rect, control: Rect, align: egui::RectAlign) -> f32 {
+    let clear = lane_width().max(S);
+    let room = if align.parent().x() == egui::Align::Max {
+        control.right() - (pane.left() + clear)
+    } else {
+        pane.right() - clear - control.left()
+    };
+    room.max(Density::Read.control())
+}
+
 #[allow(
     clippy::disallowed_methods,
     reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
 )]
-pub fn menu_popup(response: &Response) -> egui::Popup<'_> {
+fn menu_popup_raw(response: &Response) -> egui::Popup<'_> {
     egui::Popup::menu(response)
+}
+
+/// A menu from [`menu_popup`]: `show` draws its content at the width the part decides.
+#[must_use = "call `show` to draw the menu"]
+pub struct MenuPopup<'a> {
+    popup: egui::Popup<'a>,
+    id: Id,
+    /// The menu's largest outer width: its room in the pane.
+    room: f32,
+    pane: Rect,
+    control: Rect,
+}
+
+impl MenuPopup<'_> {
+    /// Open it at a side of its control; its room is measured again for that side.
+    pub fn align(mut self, align: egui::RectAlign) -> Self {
+        self.room = menu_room(self.pane, self.control, align);
+        self.popup = self.popup.align(align).width(self.room);
+        self
+    }
+
+    /// Open or close it by the caller's flag (egui's `Popup::open`).
+    pub fn open(mut self, open: bool) -> Self {
+        self.popup = self.popup.open(open);
+        self
+    }
+
+    /// Open, close or toggle it by a command (egui's `Popup::open_memory`).
+    pub fn open_memory(mut self, command: Option<egui::SetOpenCommand>) -> Self {
+        self.popup = self.popup.open_memory(command);
+        self
+    }
+
+    /// The width egui first measures the menu in (egui's `Popup::width`); at most its room. The
+    /// part still decides the width it draws at.
+    pub fn width(mut self, width: f32) -> Self {
+        self.popup = self.popup.width(width.min(self.room));
+        self
+    }
+
+    /// The menu's size when it last drew, if it did.
+    pub fn get_expected_size(&self) -> Option<egui::Vec2> {
+        self.popup.get_expected_size()
+    }
+
+    /// When a click closes the menu (egui's `PopupCloseBehavior`).
+    pub fn close_behavior(mut self, behavior: egui::PopupCloseBehavior) -> Self {
+        self.popup = self.popup.close_behavior(behavior);
+        self
+    }
+
+    /// Draw the menu while it is open.
+    pub fn show<R>(self, content: impl FnOnce(&mut Ui) -> R) -> Option<egui::InnerResponse<R>> {
+        let Self {
+            popup, id, room, ..
+        } = self;
+        let ctx = popup.ctx().clone();
+        let key = id.with("splat_menu_width");
+        let shown = popup.show(|ui| {
+            let frame = ui.style().spacing.menu_margin.sum().x
+                + 2.0 * ui.style().visuals.window_stroke.width;
+            let inner_room = (room - frame).max(0.0);
+            let decided = ui.data(|data| data.get_temp::<f32>(key));
+            let width = decided.unwrap_or(inner_room).min(inner_room);
+            let top = ui.cursor().min;
+            let area = Rect::from_min_size(top, vec2(width, ui.ctx().content_rect().height()));
+            // At an opening the part measures: a sizing pass, in which widgets take their own
+            // size (egui keeps a reopened menu's old size and gives it no sizing pass of its own).
+            let mut builder = UiBuilder::new().max_rect(area).layout(*ui.layout());
+            if decided.is_none() {
+                builder = builder.sizing_pass().invisible();
+            }
+            let mut child = ui.new_child(builder);
+            child.set_clip_rect(child.clip_rect().intersect(area));
+            let outer = ui.data_mut(|data| data.remove_temp::<MenuMeasure>(menu_measure_id()));
+            ui.data_mut(|data| data.insert_temp(menu_measure_id(), MenuMeasure::default()));
+            let inner = content(&mut child);
+            let measured = ui
+                .data_mut(|data| data.remove_temp::<MenuMeasure>(menu_measure_id()))
+                .unwrap_or_default();
+            if let Some(outer) = outer {
+                ui.data_mut(|data| data.insert_temp(menu_measure_id(), outer));
+            }
+            let used = child.min_rect();
+            let wanted = if measured.any {
+                measured.widest
+            } else {
+                used.width()
+            };
+            let next = wanted.min(inner_room);
+            // A new width (an opening, changed choices, a narrower pane) draws the pass again.
+            // This pass, which egui discards, already allocates the new width: egui saves the
+            // menu's size at the end of a pass and places the next pass with it, so the drawn
+            // pass is anchored with the size it draws at.
+            let remeasure = (next - width).abs() > 0.5 || decided.is_none();
+            let allocated = if remeasure { next } else { width };
+            ui.allocate_rect(
+                Rect::from_min_size(top, vec2(allocated, used.height())),
+                Sense::hover(),
+            );
+            if remeasure {
+                ui.data_mut(|data| data.insert_temp(key, next));
+                ui.ctx().request_discard("a menu measured its width");
+            }
+            inner
+        });
+        if shown.is_none() {
+            ctx.data_mut(|data| data.remove_temp::<f32>(key));
+        }
+        shown
+    }
+}
+
+/// The widest choice drawn in the menu being drawn, so the menu can size itself to its choices.
+#[derive(Clone, Copy, Default)]
+struct MenuMeasure {
+    widest: f32,
+    any: bool,
+}
+
+fn menu_measure_id() -> Id {
+    Id::new("splat_menu_measure")
+}
+
+/// A choice notes its words' width (`natural`) for the menu it is drawn in, if any.
+pub(super) fn note_choice_width(ui: &Ui, natural: f32) {
+    ui.data_mut(|data| {
+        if let Some(mut measure) = data.get_temp::<MenuMeasure>(menu_measure_id()) {
+            measure.widest = measure.widest.max(natural);
+            measure.any = true;
+            data.insert_temp(menu_measure_id(), measure);
+        }
+    });
 }
 
 // The popup and status parts, public here so their doc tests can name them
