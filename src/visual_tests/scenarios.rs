@@ -15373,6 +15373,9 @@ pub mod session_recording {
             const SPEECH: &str = "The speech keyring refused it.";
             const LLM: &str = "The transcript keyring refused it.";
             const FILE: &str = "The settings file is not JSON.";
+            let anchor =
+                |d: &Driver<'_>| d.place_of("Transcript and summary API key").map(|r| r.top());
+            let start = anchor(d);
             d.app_mut()
                 .processing
                 .simulate_faults(Some(SPEECH), Some(LLM), Some(FILE));
@@ -15412,6 +15415,15 @@ pub mod session_recording {
             );
             d.app_mut().processing.simulate_faults(None, None, None);
             d.settle();
+            // The faults made the form taller for a moment: put it back where it was.
+            for _ in 0..4 {
+                match (start, anchor(d)) {
+                    (Some(start), Some(now)) if (now - start).abs() > 0.5 => {
+                        d.scroll_points_at(pos2(600.0, 400.0), now - start);
+                    }
+                    _ => break,
+                }
+            }
         });
         d.expect("Remove speech key (OpenAI)");
         d.state_prepared("key-for-another-service", Sizes::All, |d| {
