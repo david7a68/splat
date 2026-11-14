@@ -2922,6 +2922,8 @@ const ENCOUNTER_NAME: design::FieldName = crate::field_id!("encounter_name");
 const CREATURE_NAME: design::FieldName = crate::field_id!("encounter_creature_name");
 const INITIATIVE_GROUP: design::FieldName = crate::field_id!("roster_initiative_group");
 const RUN_FOLDER: design::FieldName = crate::field_id!("run_folder");
+const RUN_INITIATIVE: design::FieldName = crate::field_id!("run_initiative");
+const RUN_INSPIRATION: design::FieldName = crate::field_id!("run_inspiration");
 const SYNC_OPTION: &str = "Sync party with D&D Beyond";
 const REPEATABLE_OPTION: &str = "Keep in Ready during a run";
 const REPEATABLE_HELP: &str = "Lists this encounter under Ready to run while a fight from it is unfinished. Start fight waits until no fight is open.";
@@ -7368,21 +7370,18 @@ impl Encounters {
             );
             design::small_field(ui, "Roll NPC initiative", None, None, |ui| {
                 // The menu ends at the form's edge, where Run folder and Save end.
-                let combo = egui::ComboBox::from_id_salt("campaign_initiative")
-                    .icon(design::combo_icon)
+                let _ = design::Dropdown::new(RUN_INITIATIVE.of(active.id), "Roll NPC initiative")
                     .width(ui.available_width())
-                    .selected_text(snapshot.options.initiative.grouping.label())
-                    .show_ui(ui, |ui| {
-                        for mode in crate::encounter_settings::Grouping::ALL {
-                            design::choice_value(
-                                ui,
-                                &mut snapshot.options.initiative.grouping,
-                                mode,
-                                mode.label(),
-                            );
-                        }
-                    });
-                design::named(ui, &combo.response, "Roll NPC initiative");
+                    .choice(
+                        crate::encounter_settings::Grouping::ALL[0],
+                        crate::encounter_settings::Grouping::ALL[0].label(),
+                    )
+                    .choices(
+                        crate::encounter_settings::Grouping::ALL[1..]
+                            .iter()
+                            .map(|mode| (*mode, mode.label())),
+                    )
+                    .show(ui, &mut snapshot.options.initiative.grouping);
             });
             design::help(
                 ui,
@@ -7398,30 +7397,23 @@ impl Encounters {
                 let line = |rule: &crate::encounter_settings::InspirationRule| {
                     format!("{}: {}", rule.name, rule.effect.effect())
                 };
-                let selected = rules
-                    .iter()
-                    .find(|rule| Some(rule.id) == snapshot.options.inspiration_choice)
-                    .map_or_else(|| "Choose a rule".to_owned(), line);
                 design::small_field(ui, "Inspiration rule", None, None, |ui| {
-                    let combo = egui::ComboBox::from_id_salt("campaign_inspiration")
-                        .icon(design::combo_icon)
-                        .width(ui.available_width())
-                        .selected_text(selected)
-                        .show_ui(ui, |ui| {
-                            for rule in &rules {
-                                if design::extras::choice_wrapped(
-                                    ui,
-                                    snapshot.options.inspiration_choice == Some(rule.id),
-                                    &line(rule),
-                                    None,
-                                )
-                                .clicked()
-                                {
-                                    snapshot.options.inspiration_choice = Some(rule.id);
-                                }
-                            }
-                        });
-                    design::named(ui, &combo.response, "Inspiration rule");
+                    // No rule chosen yet: the control shows its name until one is.
+                    let mut chosen = snapshot.options.inspiration_choice;
+                    let mut dropdown = design::Dropdown::new(
+                        RUN_INSPIRATION.of(active.id),
+                        "Inspiration rule",
+                    )
+                    .width(ui.available_width())
+                    .choice(rules[0].id, line(&rules[0]));
+                    for rule in &rules[1..] {
+                        dropdown = dropdown.choices([(rule.id, line(rule))]);
+                    }
+                    let mut value = chosen.unwrap_or_default();
+                    if dropdown.show(ui, &mut value).changed {
+                        chosen = Some(value);
+                    }
+                    snapshot.options.inspiration_choice = chosen;
                 });
                 if snapshot.options.inspiration().is_none() {
                     design::help(ui, "This campaign’s packages have more than one inspiration rule. Runs offer inspiration once you choose one.");

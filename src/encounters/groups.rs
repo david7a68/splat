@@ -40,6 +40,7 @@ const OVERRIDE_NAME: design::FieldName = crate::field_id!("override_name");
 const OVERRIDE_NOTE: design::FieldName = crate::field_id!("override_note");
 const GROUP_NAME: design::FieldName = crate::field_id!("group_name");
 const ENCOUNTER_GROUP_NAME: design::FieldName = crate::field_id!("encounter_group_name");
+const BELONGS: design::FieldName = crate::field_id!("group_encounter");
 /// The name of a roster slot's button, for the form it opens.
 pub(super) const SLOT_OPTIONS: &str =
     "Options: starting HP, temporary HP, initiative group and changes";
@@ -1439,10 +1440,6 @@ pub(super) fn of_encounter(
 
 /// Who a group is for, in its editor. An encounter being built is a choice before it is saved,
 /// and under the name it has now.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn belongs_to(
     ui: &mut egui::Ui,
     draft: &mut GroupDraft,
@@ -1468,69 +1465,28 @@ fn belongs_to(
     });
     ui.horizontal(|ui| {
         choice_label(ui, BELONGS_TO);
-        // The choice ends where the name field ends, inside the column.
+        // The choice ends where the name field ends, inside the column. The part's list is as
+        // wide as its control at every size (FB8), and a long name wraps in it.
         let right = name_right.min(ui.max_rect().right());
         let width = (right - ui.cursor().left()).max(Density::Scan.control());
-        // FB8: egui keeps a popup's first size, so a menu opened at one width would stay that
-        // wide after a resize. When the control's width changes while its menu is open, the
-        // remembered sizes go, and the menu takes the control's width again. Only one popup is
-        // open at a time, and Splat has no window that keeps a place.
-        let key = width.round() as i32;
-        let last_id = ui.make_persistent_id("group_encounter_width");
-        // The combo's own popup id: its button is `make_persistent_id(Id::new(salt))`.
-        let popup = ui
-            .make_persistent_id(egui::Id::new("group_encounter"))
-            .with("popup");
-        if ui
-            .data(|data| data.get_temp::<i32>(last_id))
-            .is_some_and(|last| last != key)
-            && egui::Popup::is_id_open(ui.ctx(), popup)
-        {
-            ui.ctx().memory_mut(egui::Memory::reset_areas);
-        }
-        ui.data_mut(|data| data.insert_temp(last_id, key));
-        let was_open = egui::Popup::is_id_open(ui.ctx(), popup);
-        let combo = egui::ComboBox::from_id_salt("group_encounter")
-            .icon(design::combo_icon)
+        let mut chosen = current;
+        let mut dropdown = design::Dropdown::new(BELONGS.of(draft.id), BELONGS_TO)
             .width(width)
-            .truncate()
-            .selected_text(shown)
-            .show_ui(ui, |ui| {
-                // FB8: the menu is as wide as its control, as Library's scope menu is. Its
-                // content is the control's width less the menu's frame; a long name wraps.
-                let frame = ui.style().spacing.menu_margin.sum().x
-                    + 2.0 * ui.style().visuals.window_stroke.width;
-                let inner = (width - frame).max(0.0);
-                ui.set_min_width(inner);
-                ui.set_max_width(inner);
-                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
-                let any =
-                    design::extras::choice_wrapped(ui, current.is_none(), ANY_ENCOUNTER, None);
-                crate::rolls::menu_choice_focus(ui, &any);
-                if any.clicked() {
-                    draft.setup.encounter = None;
-                    draft.touch();
-                }
-                for (id, name) in &choices {
-                    // The same choice again keeps a link that the note gives.
-                    let choice =
-                        design::extras::choice_wrapped(ui, current == Some(*id), name, None);
-                    crate::rolls::menu_choice_focus(ui, &choice);
-                    if choice.clicked() && current != Some(*id) {
-                        draft.setup.encounter = Some(EntryRef::id(*id));
-                        draft.touch();
-                    }
-                }
-            });
-        // The menu's focus model (the run's menus use it too): the control owns its menu while it
-        // is open, and when the menu closes by the keys or a choice the focus comes back to it;
-        // a click on another control keeps the focus there.
-        crate::rolls::keep_menu_owner(&combo.response);
-        if !was_open && egui::Popup::is_id_open(ui.ctx(), popup) {
-            let by_mouse = ui.ctx().input(|input| input.pointer.any_click());
-            crate::rolls::own_menu(&combo.response, !by_mouse);
+            .choice(None, ANY_ENCOUNTER)
+            .choices(choices.iter().map(|(id, name)| (Some(*id), *name)));
+        // An encounter that is gone stays the value, as words the list cannot choose again.
+        if current.is_some_and(|id| !choices.iter().any(|(known, _)| *known == id)) {
+            dropdown = dropdown.blocked_choice(
+                current,
+                MISSING_ENCOUNTER,
+                "Its encounter was deleted. Choose another.",
+            );
         }
-        design::named(ui, &combo.response, &format!("{BELONGS_TO}: {shown}"));
+        if dropdown.show(ui, &mut chosen).changed {
+            // The same choice again keeps a link that the note gives: only a change writes.
+            draft.setup.encounter = chosen.map(EntryRef::id);
+            draft.touch();
+        }
     });
     // In an encounter's editor, belonging to it goes without saying.
     if current.is_some() && current == open.map(|(id, _)| id) {
