@@ -3541,7 +3541,6 @@ mod tests {
             vec![key(egui::Key::A, egui::Modifiers::COMMAND)],
         );
         frame(&mut value, vec![egui::Event::Text(" ".into())]);
-        drop(frame);
         assert!(ctx.memory(|memory| memory.has_focus(id)));
         assert!(draft.typed.holds_words(), "the draft holds the typed words");
         drop(draft);
