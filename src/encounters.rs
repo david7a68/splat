@@ -4952,7 +4952,7 @@ impl Encounters {
     fn members_into<'a>(
         footer: &mut design::Footer<'a>,
         results: &'a design::Results<MemberOwner, MemberMark>,
-        lines: &'a [(MemberOwner, String, &'static str)],
+        lines: &'a [(MemberOwner, String, String)],
         pressed: &'a std::cell::Cell<Option<MemberOwner>>,
     ) {
         for (owner, words, undo) in lines {
@@ -6015,7 +6015,7 @@ impl Encounters {
         self.record_member_results();
         self.refresh_separations();
         // Each of the encounter's groups' member results: its owner in the store, its words.
-        let member_lines: Vec<(MemberOwner, String, &'static str)> = self
+        let member_lines: Vec<(MemberOwner, String, String)> = self
             .active
             .as_ref()
             .map(|active| active.path.clone())
@@ -6026,11 +6026,7 @@ impl Encounters {
                     .iter_mut()
                     .filter_map(|group| {
                         let (words, undo) = group.member_result()?;
-                        let label = if undo.label() == "Undo replace member" {
-                            "Undo replace member"
-                        } else {
-                            "Undo remove member"
-                        };
+                        let label = undo.label();
                         Some((
                             MemberOwner {
                                 root: root.clone(),
