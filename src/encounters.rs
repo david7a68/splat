@@ -556,7 +556,7 @@ impl Draft {
     /// The draft's own results that show: a group taken from this encounter (FB7) and the
     /// roster replacement (FA2), each with its tone, words and Undo. An edit of the replaced
     /// rows ends the replacement's result. Their order is the page's store's.
-    fn result_lines(&mut self) -> Vec<(DraftResult, Tone, String, &'static str)> {
+    fn result_lines(&mut self) -> Vec<(DraftResult, Tone, String, design::outcome::UndoStep)> {
         if self
             .replacement
             .as_ref()
@@ -573,7 +573,7 @@ impl Draft {
                 DraftResult::Replacement,
                 Tone::Success,
                 undo.words.clone(),
-                "Undo replacement",
+                design::outcome::UndoStep::verb(design::outcome::Verb::Replace),
             ));
         }
         lines
@@ -607,19 +607,23 @@ impl Draft {
     /// The result of a group taken from this encounter, until the next save: its words and
     /// Undo. FF7: a group removed with its draft after its file was gone says what was lost.
     /// FB7: nothing is on disk until Save, so each says so in the info tone.
-    fn removed_group_result(&self) -> Option<(String, &'static str)> {
+    fn removed_group_result(&self) -> Option<(String, design::outcome::UndoStep)> {
+        use design::outcome::{UndoStep, Verb};
         let (_, removed, delete, _) = self.removed_group.as_ref()?;
         Some(if removed.file_gone() {
-            (disk::removed_with_draft(&removed.name()), "Undo remove")
+            (
+                disk::removed_with_draft(&removed.name()),
+                UndoStep::verb(Verb::Remove),
+            )
         } else if *delete {
             (
                 "Group deleted. Save deletes its file.".to_owned(),
-                "Undo remove group",
+                UndoStep::of(Verb::Remove, "group"),
             )
         } else {
             (
                 format!("{} moves to any encounter when you save.", removed.name()),
-                "Undo move",
+                UndoStep::verb(Verb::Move),
             )
         })
     }
@@ -1811,15 +1815,15 @@ fn missing_creature_mark(
     }
 }
 
+/// The encounter's read-aloud text and notes: the editor's one multi-line field, keyed by the
+/// draft (two encounters never share its text or its Undo).
+const NOTES_FIELD: design::layout::FieldName = crate::field_id!("encounter_notes");
+const NOTES_LABEL: &str = "Read-aloud and notes";
+
 /// A DM's notes in an editor. Every notes field has the same inner margin, and its frame ends at
 /// the right edge of the column it is in.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
-fn notes_field(text: &mut String, rows: usize) -> egui::TextEdit<'_> {
-    egui::TextEdit::multiline(text)
-        .desired_rows(rows)
+fn notes_style(edit: egui::TextEdit<'_>, rows: usize) -> egui::TextEdit<'_> {
+    edit.desired_rows(rows)
         // The width holds the margins, so the frame ends at the column's right edge.
         .desired_width(f32::INFINITY)
         .margin(egui::vec2(design::S, design::S))
@@ -2691,7 +2695,9 @@ enum EncounterFault {
     /// A copied note's separation, or its Undo, failed: the reason.
     SeparationFailed(String),
     /// A warning of a group's file that no member row states.
-    FileWarning(String),
+    FileWarning(String),    /// The draft cannot be saved as it is: a missing creature, an empty group. The DM fixes
+    /// it in the editor.
+    Invalid(String),
 }
 
 impl design::outcome::Fault for EncounterFault {
@@ -2701,7 +2707,8 @@ impl design::outcome::Fault for EncounterFault {
             Self::RunDeletedUnsent(_)
             | Self::RunFolderMissing(_)
             | Self::SeparationFailed(_)
-            | Self::FileWarning(_) => design::outcome::Severity::NeedsFixing,
+            | Self::FileWarning(_)
+            | Self::Invalid(_) => design::outcome::Severity::NeedsFixing,
         }
     }
     #[allow(
@@ -2720,6 +2727,8 @@ impl design::outcome::Fault for EncounterFault {
                 .unwrap_or(crate::sentence!("The note was not changed.")),
             Self::FileWarning(words) => design::outcome::Sentence::outside(words.as_str())
                 .unwrap_or(crate::sentence!("The group’s file has a problem.")),
+            Self::Invalid(words) => design::outcome::Sentence::outside(words.as_str())
+                .unwrap_or(crate::sentence!("Save cannot write this draft yet.")),
         }
     }
 }
@@ -2738,6 +2747,8 @@ fn outcome_words(words: &str) -> design::outcome::Sentence {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum FooterPress {
     Undo,
+    /// The Undo of the encounter draft's own result (`editor_results`).
+    UndoEditor,
     ChooseFolder,
     /// The Undo of a group draft's member result (`member_results`).
     UndoMember,
@@ -4862,73 +4873,10 @@ impl Encounters {
         }
     }
 
-    /// The encounter editor's old footer: the draft's own results through the store's view,
-    /// with their Undo. A pressed Undo names the result's owner in `pressed`.
-    fn editor_results_into<'a>(
-        footer: &mut design::Footer<'a>,
-        results: &'a design::Results<EditorOwner, EditorMark>,
-        lines: &'a [(EditorOwner, Tone, String, &'static str)],
-        pressed: &'a std::cell::Cell<Option<EditorOwner>>,
-    ) {
-        for (owner, tone, words, undo) in lines {
-            if let Some(shown) = results.get(owner) {
-                footer.kept(
-                    shown,
-                    true,
-                    |_| words.as_str().into(),
-                    move |_, ui| {
-                        // A result is a message, so its Undo keeps the undo icon.
-                        if design::undo_message(ui, *tone, words, undo) {
-                            pressed.set(Some(owner.clone()));
-                        }
-                    },
-                );
-            }
-        }
-    }
-
-    /// The draft result Undo for the encounter editor's old footer, which has no ticket: by its
-    /// owner, a counted escape (`Ban::ByOwner`) until that footer moves to `Messages` (part P2).
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
-    fn undo_editor_of(&mut self, owner: &EditorOwner) {
-        let mut results = std::mem::take(&mut self.editor_results);
-        let _ = results.undo(owner, |mark| match self.draft.as_mut() {
-            Some(draft) if draft.id == mark.0.draft => {
-                draft.undo_result(mark.0.kind);
-                Ok(())
-            }
-            _ => Err(()),
-        });
-        self.editor_results = results;
-    }
-
-    /// The discard Undo for the encounter editor's old footer, which has no ticket: by its
-    /// owner in the page's store, a counted escape (`Ban::ByOwner`) until part P2. It leaves
-    /// the store only when the Undo worked.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
-    fn undo_kept_of(&mut self, kind: KeptResult, campaign: Option<(&Campaign, &[Module])>) {
-        let Some(root) = self.active.as_ref().map(|active| active.path.clone()) else {
-            return;
-        };
-        let mut kept = std::mem::take(&mut self.kept);
-        let _ = kept.undo(&KeptOwner { root, kind }, |mark| {
-            if self.undo_kept(mark.0.kind, campaign) {
-                Ok(())
-            } else {
-                Err(())
-            }
-        });
-        self.kept = kept;
-    }
-
     /// The encounter draft's results that show, each with its owner, tone, words and Undo.
-    fn editor_result_lines(&mut self) -> Vec<(EditorOwner, Tone, String, &'static str)> {
+    fn editor_result_lines(
+        &mut self,
+    ) -> Vec<(EditorOwner, Tone, String, design::outcome::UndoStep)> {
         self.active
             .as_ref()
             .map(|active| active.path.clone())
@@ -4953,6 +4901,130 @@ impl Encounters {
                     .collect()
             })
             .unwrap_or_default()
+    }
+
+    /// The encounter editor's footer, made before its body: the draft's own results (a removed
+    /// group, a replacement), the kept results (a discard), the copies' separations and the
+    /// groups' member results, each from its own store with its ticket; then why the last
+    /// separation, act or Save failed. A fixed warning with actions (the file's unread rows) is
+    /// not here: it is drawn above the panes.
+    fn editor_messages<'f>(
+        &mut self,
+        frame: &'f design::outcome::PaneFrame,
+        width: f32,
+        root: &std::path::Path,
+        empty_group: Option<String>,
+    ) -> design::outcome::Messages<'f, FooterPress> {
+        use design::outcome::{FaultMessage, KeptOutcome, Notice, Said};
+        self.record_member_results();
+        self.record_editor_results();
+        let draft_id = self.draft.as_ref().map(|draft| draft.id);
+        let mut messages = design::outcome::Messages::new(
+            frame,
+            ("encounter_editor_footer", draft_id),
+            width,
+        );
+        for (owner, tone, words, undo) in self.editor_result_lines() {
+            let Some(shown) = self.editor_results.get(&owner) else {
+                continue;
+            };
+            let undo = undo.pressed_as(FooterPress::UndoEditor);
+            // A removed group is a notice (nothing is written until Save); a replacement is a
+            // finished change.
+            messages.kept(shown.outcome(frame, |_| {
+                if tone == Tone::Info {
+                    KeptOutcome::Notice(Notice::new(outcome_words(&words)), undo)
+                } else {
+                    Said::new(outcome_words(&words)).undo(undo).into()
+                }
+            }));
+        }
+        let kinds = self.kept_results(false);
+        for line in self.kept_lines(frame, &kinds) {
+            messages.kept(line);
+        }
+        for line in self.separation_lines(frame, root) {
+            messages.kept(line);
+        }
+        let members: Vec<(MemberOwner, String, design::outcome::UndoStep)> = self
+            .draft
+            .as_mut()
+            .map(|draft| {
+                draft
+                    .groups
+                    .iter_mut()
+                    .filter_map(|group| {
+                        let (words, undo) = group.member_result()?;
+                        let owner = MemberOwner {
+                            root: root.to_owned(),
+                            draft: group.id(),
+                        };
+                        Some((owner, words, undo))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        for (owner, words, undo) in members {
+            if let Some(shown) = self.member_results.get(&owner) {
+                messages.kept(shown.outcome(frame, |_| {
+                    Said::new(outcome_words(&words))
+                        .undo(undo.pressed_as(FooterPress::UndoMember))
+                        .into()
+                }));
+            }
+        }
+        if let Some(error) = self.separation_failure() {
+            messages.outcome(FaultMessage::new(&EncounterFault::SeparationFailed(error)));
+        }
+        if let Some(error) = self.error.clone() {
+            // A deleted entry and an unreadable file are stated in the rows' tone too.
+            let fault = if self.error_tone() == Tone::Warning {
+                EncounterFault::Invalid(error)
+            } else {
+                EncounterFault::Failed(error)
+            };
+            messages.outcome(FaultMessage::new(&fault));
+        } else if let Some(reason) = empty_group {
+            messages.outcome(FaultMessage::new(&EncounterFault::Invalid(reason)));
+        }
+        messages
+    }
+
+    /// A press in the encounter editor's footer: each Undo reaches only the entry its line came
+    /// from, by its ticket. A result that was replaced or ended since is `Gone`: nothing happens.
+    fn editor_press(
+        &mut self,
+        ctx: &egui::Context,
+        press: design::outcome::Press<FooterPress>,
+        active: &Campaign,
+        modules: &[Module],
+    ) {
+        let Some(ticket) = press.ticket else {
+            return;
+        };
+        match press.id {
+            FooterPress::Undo => self.undo_by_ticket(ticket, Some((active, modules))),
+            FooterPress::UndoSeparation => self.undo_separation(ctx, ticket, active),
+            FooterPress::UndoMember => self.undo_member(ticket),
+            FooterPress::UndoEditor => self.undo_editor(ticket),
+            FooterPress::ChooseFolder => {}
+        }
+    }
+
+    /// The Undo of the draft result a footer press names by its ticket: the draft gets its
+    /// roster or its removed group back, and its other edits stay.
+    fn undo_editor(&mut self, ticket: design::results::Ticket) {
+        let mut results = std::mem::take(&mut self.editor_results);
+        let _ = results.undo_by(ticket, |mark| match self.draft.as_mut() {
+            Some(draft) if draft.id == mark.0.draft => {
+                draft.undo_result(mark.0.kind);
+                Ok(())
+            }
+            _ => Err(()),
+        });
+        self.editor_results = results;
+        // An open form is keyed by place; the place may now hold another row or member.
+        self.expanded = None;
     }
 
     /// Record each group draft's new member result in the store (its order is issued now, in
@@ -5097,216 +5169,6 @@ impl Encounters {
                 });
             }
             Err(design::results::ByTicket::Gone) => {}
-        }
-    }
-
-    /// The same Undo for the encounter editor's old footer, which has no ticket: by its owner, a
-    /// counted escape (`Ban::ByOwner`) until that footer moves to `Messages` (part P2).
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
-    fn undo_separation_of(
-        &mut self,
-        ctx: &egui::Context,
-        owner: &SeparationOwner,
-        active: &Campaign,
-    ) {
-        match self.separations.undo(owner, |separation| {
-            separation
-                .change
-                .0
-                .undo(active)
-                .map(|()| separation.path.clone())
-                .map_err(|error| (separation.path.clone(), error))
-        }) {
-            Some(Ok((_, path))) => {
-                self.end_separation_failure(&active.path, &path);
-                note_identity_changed(ctx);
-            }
-            Some(Err((path, error))) => {
-                self.separation_error = Some(SeparationFailure {
-                    root: active.path.clone(),
-                    path,
-                    words: error,
-                });
-            }
-            None => {}
-        }
-    }
-
-    /// The encounter editor's old footer (its pane keeps main's form until part P2): each
-    /// separation of this campaign through the store's view, newest first, with its Undo, and why
-    /// the last one failed. A pressed Undo names its separation's owner in `pressed`.
-    fn separations_into<'a>(
-        footer: &mut design::Footer<'a>,
-        separations: &'a design::Results<SeparationOwner, Separation>,
-        root: &'a std::path::Path,
-        error: Option<&str>,
-        pressed: &'a std::cell::Cell<Option<SeparationOwner>>,
-    ) {
-        for shown in separations.newest_first(root) {
-            footer.kept(
-                shown,
-                true,
-                |separation| separation.change.0.message().into(),
-                move |separation, ui| {
-                    if design::undo_message(
-                        ui,
-                        Tone::Success,
-                        separation.change.0.message(),
-                        &separation.undo_step().label(),
-                    ) {
-                        pressed.set(Some(separation.owner.clone()));
-                    }
-                },
-            );
-        }
-        if let Some(error) = error.map(str::to_owned) {
-            footer.reason(error.clone(), move |ui| {
-                design::message(ui, Tone::Warning, &error);
-            });
-        }
-    }
-
-    /// The encounter editor's old footer: each of its groups' member results through the store's
-    /// view, with its Undo. A pressed Undo names the result's owner in `pressed`.
-    fn members_into<'a>(
-        footer: &mut design::Footer<'a>,
-        results: &'a design::Results<MemberOwner, MemberMark>,
-        lines: &'a [(MemberOwner, String, String)],
-        pressed: &'a std::cell::Cell<Option<MemberOwner>>,
-    ) {
-        for (owner, words, undo) in lines {
-            if let Some(shown) = results.get(owner) {
-                footer.kept(
-                    shown,
-                    true,
-                    |_| words.as_str().into(),
-                    move |_, ui| {
-                        if design::undo_message(ui, Tone::Success, words, undo) {
-                            pressed.set(Some(owner.clone()));
-                        }
-                    },
-                );
-            }
-        }
-    }
-
-    /// The member Undo for the encounter editor's old footer, which has no ticket: by its owner,
-    /// a counted escape (`Ban::ByOwner`) until that footer moves to `Messages` (part P2).
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
-    fn undo_member_of(&mut self, owner: &MemberOwner) {
-        let mut results = std::mem::take(&mut self.member_results);
-        let _ = results.undo(owner, |mark| {
-            let draft = self
-                .draft
-                .iter_mut()
-                .flat_map(|draft| draft.groups.iter_mut())
-                .find(|draft| draft.id() == mark.0.draft);
-            match draft {
-                Some(draft) => {
-                    draft.undo_member_result();
-                    Ok(())
-                }
-                None => Err(()),
-            }
-        });
-        self.member_results = results;
-        self.expanded = None;
-    }
-
-    /// Interim (slice 2 moves the editors to `Messages`): each kept result of `kinds` as an old
-    /// footer line, with its words and its Undo's label.
-    fn kept_footer_lines(
-        &self,
-        kinds: &[KeptResult],
-    ) -> Vec<(
-        KeptResult,
-        design::results::FooterResult,
-        Tone,
-        &'static str,
-        Option<String>,
-    )> {
-        let Some(root) = self.active.as_ref().map(|active| active.path.clone()) else {
-            return Vec::new();
-        };
-        kinds
-            .iter()
-            .filter_map(|kind| {
-                let (tone, words, undo, name) = match kind {
-                    KeptResult::Discarded => {
-                        let draft = self.discarded.as_ref()?;
-                        if draft.recovery.file_gone() {
-                            (
-                                Tone::Info,
-                                disk::removed_with_draft(&draft.name),
-                                "Undo remove",
-                                None,
-                            )
-                        } else {
-                            (
-                                Tone::Info,
-                                format!("{} draft discarded.", draft.name),
-                                "Undo discard",
-                                Some(format!("Undo discard of {}", draft.name)),
-                            )
-                        }
-                    }
-                    KeptResult::GroupDiscarded => {
-                        let draft = self.discarded_group.as_ref()?;
-                        if draft.file_gone() {
-                            (
-                                Tone::Info,
-                                disk::removed_with_draft(&draft.name()),
-                                "Undo remove",
-                                None,
-                            )
-                        } else {
-                            (
-                                Tone::Info,
-                                format!("{} draft discarded.", draft.name()),
-                                "Undo discard",
-                                Some(format!("Undo discard of {}", draft.name())),
-                            )
-                        }
-                    }
-                    _ => return None,
-                };
-                let line = self
-                    .kept
-                    .get(&KeptOwner {
-                        root: root.clone(),
-                        kind: *kind,
-                    })?
-                    .footer(|_| words);
-                Some((*kind, line, tone, undo, name))
-            })
-            .collect()
-    }
-
-    /// Interim: put the editor's kept lines in its old footer; a pressed Undo is recorded in
-    /// `pressed`.
-    fn kept_into_footer<'a>(
-        footer: &mut design::Footer<'a>,
-        lines: &'a [(
-            KeptResult,
-            design::results::FooterResult,
-            Tone,
-            &'static str,
-            Option<String>,
-        )],
-        pressed: &'a std::cell::Cell<Option<KeptResult>>,
-    ) {
-        for (kind, line, tone, undo, name) in lines {
-            footer.kept_line(line, true, move |words, ui| {
-                if design::undo_message_named(ui, *tone, words, undo, name.as_deref()) {
-                    pressed.set(Some(*kind));
-                }
-            });
         }
     }
 
@@ -5725,7 +5587,7 @@ impl Encounters {
                 }
                 FooterPress::ChooseFolder => self.wants_run_folder = true,
                 // The list shows no member result and no separation.
-                FooterPress::UndoMember | FooterPress::UndoSeparation => {}
+                FooterPress::UndoMember | FooterPress::UndoSeparation | FooterPress::UndoEditor => {}
             }
         }
         let Some(action) = paned.body else {
@@ -5858,7 +5720,7 @@ impl Encounters {
 
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+        reason = "staged: the editor's two columns fill the page, each with its own scroll (`Fills::because`) (design::results::STAGED_ALLOWS)"
     )]
     fn editor_view(
         &mut self,
@@ -6236,106 +6098,48 @@ impl Encounters {
         self.refresh_validation_error(false, edit_input(ui.ctx()));
         // Shared, so an unchanged frame copies no list of names.
         let difficulty = self.draft_difficulty();
-        // FA2, AB1: the editor's results, Save's reason and the unread rows' warning sit in one
-        // footer pinned below the panes, so none of them moves the roster, its rows or the
-        // search. Results with a live Undo come first, then reasons.
-        let kinds = self.kept_results(false);
-        let kept_lines = self.kept_footer_lines(&kinds);
-        let pressed = std::cell::Cell::new(None);
-        let separation_pressed = std::cell::Cell::new(None);
-        let member_pressed = std::cell::Cell::new(None);
-        self.record_member_results();
-        // Each of the encounter's groups' member results: its owner in the store, its words.
-        let member_lines: Vec<(MemberOwner, String, String)> = self
-            .active
-            .as_ref()
-            .map(|active| active.path.clone())
-            .zip(self.draft.as_mut())
-            .map(|(root, draft)| {
-                draft
-                    .groups
-                    .iter_mut()
-                    .filter_map(|group| {
-                        let (words, undo) = group.member_result()?;
-                        let label = undo.label();
-                        Some((
-                            MemberOwner {
-                                root: root.clone(),
-                                draft: group.id(),
-                            },
-                            words,
-                            label,
-                        ))
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-        // The draft's own results (a removed group, a replacement), each with its owner in the
-        // page's store, which issued its order when it was made.
-        self.record_editor_results();
-        let editor_pressed = std::cell::Cell::new(None);
-        let editor_lines = self.editor_result_lines();
-        let pressed_ref = &pressed;
-        let draft_id = self.draft.as_ref().map(|draft| draft.id);
-        let mut footer =
-            design::Footer::new(("encounter_editor_footer", draft_id), ui.available_width());
-        Self::editor_results_into(
-            &mut footer,
-            &self.editor_results,
-            &editor_lines,
-            &editor_pressed,
-        );
-        Self::kept_into_footer(&mut footer, &kept_lines, pressed_ref);
-        Self::separations_into(
-            &mut footer,
-            &self.separations,
-            &active.path,
-            self.separation_failure().as_deref(),
-            &separation_pressed,
-        );
-        Self::members_into(
-            &mut footer,
-            &self.member_results,
-            &member_lines,
-            &member_pressed,
-        );
-        if let Some(e) = self.error.clone() {
-            // A deleted entry and an unreadable file are stated in the rows' tone too.
-            let tone = self.error_tone();
-            footer.reason(e.clone(), move |ui| {
-                design::message(ui, tone, &e);
-            });
-        } else if dirty && let Some(reason) = empty_group.clone() {
-            footer.reason(reason.clone(), move |ui| {
-                design::message(ui, Tone::Warning, &reason);
-            });
-        }
+        // The encounter file's unread rows: a fixed warning whose file line has its links, drawn
+        // above the panes, so it never scrolls and never moves a row.
         if let Some((notes, faults, path)) =
-            unread_rows.clone().filter(|(notes, ..)| !notes.is_empty())
+            unread_rows.as_ref().filter(|(notes, ..)| !notes.is_empty())
         {
-            let root = active.path.clone();
-            let words = notes.join(" ");
-            footer.reason(words, move |ui| {
-                unread_roster_rows(ui, &root, &path, &notes, faults);
-            });
+            unread_roster_rows(ui, &active.path, path, notes, *faults);
         }
-        let bottom = footer.show_by_hand(ui);
-        if let Some(kind) = pressed.get() {
-            self.undo_kept_of(kind, Some((active, campaigns.modules())));
+        // FA2, AB1: the editor's results and Save's reason sit in one footer pinned below the
+        // panes, so none of them moves the roster, its rows or the search. Results with a live
+        // Undo come first, then reasons. The roster and Add participants are columns, each with
+        // its own scroll (in the narrow layout, one of them under its tab): the body fills its
+        // room above the footer.
+        let frame = design::outcome::PaneFrame::new(ui);
+        let messages = self.editor_messages(
+            &frame,
+            ui.available_width(),
+            &active.path,
+            empty_group.filter(|_| dirty),
+        );
+        let paned = messages.pane(
+            ui,
+            design::pane::Body::Fills(design::pane::Fills::because(
+                design::pane::FillsReason::Columns,
+            )),
+            |ui| self.editor_panes(ui, active, campaigns, party, compact, difficulty),
+        );
+        if let Some(press) = paned.pressed {
+            self.editor_press(ui.ctx(), press, active, campaigns.modules());
         }
-        if let Some(owner) = separation_pressed.take() {
-            self.undo_separation_of(ui.ctx(), &owner, active);
-        }
-        if let Some(owner) = member_pressed.take() {
-            self.undo_member_of(&owner);
-        }
-        if let Some(owner) = editor_pressed.take() {
-            self.undo_editor_of(&owner);
-            // An open form is keyed by place; the place may now hold another row or member.
-            self.expanded = None;
-        }
-        let mut body = body_above(ui, bottom);
-        let ui = &mut body;
+    }
+
+    /// The encounter editor's two columns, Add participants and the roster, in the pane's body
+    /// (`ui` ends at the footer's top). In the narrow layout they are tabs.
+    fn editor_panes(
+        &mut self,
+        ui: &mut egui::Ui,
+        active: &Campaign,
+        campaigns: &Campaigns,
+        party: &Party,
+        compact: bool,
+        difficulty: Option<Arc<crate::difficulty::Difficulty>>,
+    ) {
         let Some(snapshot) = &self.snapshot else {
             crate::design::spinner(ui);
             return;
@@ -6422,8 +6226,8 @@ impl Encounters {
         // stay together at the left.
         let panes_width = editor_panes_width(ui);
         ui.allocate_ui_with_layout(
-            // The panes end where the footer starts.
-            egui::vec2(panes_width, (bottom - ui.cursor().top()).max(0.0)),
+            // The panes end where the footer starts: the pane's body ends there.
+            egui::vec2(panes_width, ui.available_height().max(0.0)),
             egui::Layout::top_down(egui::Align::LEFT),
             |ui| {
                 ui.set_width(panes_width);
@@ -6811,10 +6615,6 @@ impl Encounters {
     }
 
     #[allow(clippy::too_many_arguments)]
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn roster_pane(
         ui: &mut egui::Ui,
         draft: &mut Draft,
@@ -6827,63 +6627,57 @@ impl Encounters {
         // holds the heading's place.
         heading: Option<Option<&crate::difficulty::Difficulty>>,
     ) -> bool {
-        // All of it scrolls, so that the settings give up their room to a group being built.
-        // A line-start quiet action reaches `S` into the page's
-        // gutter. The scroll area starts there too, so it shows the whole target, and its margin
-        // keeps the text where it was.
-        let area = ui.available_rect_before_wrap();
-        ui.scope_builder(
-            egui::UiBuilder::new()
-                .id(("encounter_roster", draft.id))
-                .max_rect(area.with_min_x(area.min.x - design::S)),
-            |ui| {
-        // The roster keeps the scroll bar's lane whether or not the bar shows (FB2's family).
-        let lane = scroll_lane(ui) - design::S;
-        egui::ScrollArea::vertical()
-            .id_salt("encounter_editor")
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                egui::Frame::new()
-                    .inner_margin(egui::Margin { left: design::S as i8, ..egui::Margin::ZERO })
-                    .show(ui, |ui| {
-                ui.set_width(ui.available_width().min(design::LIST_MEASURE).min(lane));
-                if let Some(difficulty) = heading { roster_heading(ui, draft.setup.roster.len(), difficulty); }
-                // Without a link there is no sheet to sync with, whatever the note says.
-                let live = linked_party.filter(|_| draft.setup.combat_sync);
-                if draft.setup.roster.is_empty() {
-                    design::gap(ui, design::Gap::S);
-                    blocked_reason(ui, Some("No participants yet. Add the party and creatures from Add participants."));
-                }
-                Self::roster(ui, draft, snapshot, focus_search, expanded, live, make_yours);
-                // The header's name field ends where the roster's rows and rules end (FA9, FI9).
-                let right = ui.available_rect_before_wrap().right();
-                ui.ctx().data_mut(|data| data.insert_temp(pane_right_id(draft.id, ROSTER_PANE), right));
-                design::gap(ui, design::Gap::M);
-                if let Some(party) = linked_party {
-                    Self::sync_option(ui, draft, snapshot, party);
-                }
-                ui.checkbox(&mut draft.setup.repeatable, REPEATABLE_OPTION);
-                // FI7: what the option changes, in the form the sync option's help uses.
-                design::help(ui, REPEATABLE_HELP);
-                design::gap(ui, design::Gap::M);
-                Self::loot_field(ui, draft);
-                design::gap(ui, design::Gap::M);
-                design::field(ui, "Read-aloud and notes", None, None, |ui| {
-                let output = notes_field(&mut draft.body, 5)
-                    .id(egui::Id::new(("encounter_notes", draft.id)))
-                    .hint_text(design::placeholder(ui, "What you read to the table, then your tactics. The run shows this before the first turn."))
-                    .show(ui);
+        // The roster column is a pane of its own, keyed by the draft (its scroll and its notes
+        // are this encounter's), whose messages are the editor's footer below both columns. All
+        // of it scrolls, so that the settings give up their room to a group being built. The
+        // notes are the pane's one editor (round 28, P2): when the column is full they scroll
+        // in a region of their own, so the groups after them stay in reach. A line-start quiet
+        // action paints its hang into the margin left of the pane.
+        let width = ui.available_width();
+        design::Footer::new(("encounter_roster", draft.id), width).pane_editor(ui, |ui, region| {
+            ui.set_width(ui.available_width().min(design::LIST_MEASURE));
+            if let Some(difficulty) = heading {
+                roster_heading(ui, draft.setup.roster.len(), difficulty);
+            }
+            // Without a link there is no sheet to sync with, whatever the note says.
+            let live = linked_party.filter(|_| draft.setup.combat_sync);
+            if draft.setup.roster.is_empty() {
+                design::gap(ui, design::Gap::S);
+                blocked_reason(
+                    ui,
+                    Some("No participants yet. Add the party and creatures from Add participants."),
+                );
+            }
+            Self::roster(ui, draft, snapshot, focus_search, expanded, live, make_yours);
+            // The header's name field ends where the roster's rows and rules end (FA9, FI9).
+            let right = ui.available_rect_before_wrap().right();
+            ui.ctx()
+                .data_mut(|data| data.insert_temp(pane_right_id(draft.id, ROSTER_PANE), right));
+            design::gap(ui, design::Gap::M);
+            if let Some(party) = linked_party {
+                Self::sync_option(ui, draft, snapshot, party);
+            }
+            ui.checkbox(&mut draft.setup.repeatable, REPEATABLE_OPTION);
+            // FI7: what the option changes, in the form the sync option's help uses.
+            design::help(ui, REPEATABLE_HELP);
+            design::gap(ui, design::Gap::M);
+            Self::loot_field(ui, draft);
+            design::gap(ui, design::Gap::M);
+            design::field(ui, NOTES_LABEL, None, None, |ui| {
+                let hint = design::placeholder(
+                    ui,
+                    "What you read to the table, then your tactics. The run shows this before the first turn.",
+                );
+                let output = region.editor(ui, NOTES_FIELD.of(draft.id), &mut draft.body, |edit| {
+                    notes_style(edit, 5).hint_text(hint)
+                });
                 if let Some(note) = crate::markdown_source::pressed_note_link(ui, &output, None) {
                     crate::markdown_view::send_note_link(ui.ctx(), note, None);
                 }
-                design::named(ui, &output.response, "Read-aloud and notes");
-                });
-                groups::of_encounter(ui, draft, snapshot, focus_search, expanded)
-                    })
-                    .inner
-            })
-            .inner
-        }).inner
+                design::named(ui, &output.response, NOTES_LABEL);
+            });
+            groups::of_encounter(ui, draft, snapshot, focus_search, expanded)
+        })
     }
 
     /// What the party finds when this fight is over, one line each. The note keeps it as its
@@ -9730,10 +9524,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `Footer::show_by_hand` (design::results::STAGED_ALLOWS)"
-    )]
     fn integrity_d8_a_changed_encounter_compares_and_keeps_unknown_fields() {
         let dir = tempfile::tempdir().unwrap();
         let campaign = campaign(dir.path());
@@ -9776,18 +9566,16 @@ mod tests {
         let mut harness = egui_kittest::Harness::builder().build_state(
             |ctx, editor: &mut Encounters| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    // The kept result in a footer, as the editor and the list draw it.
-                    let kinds = editor.kept_results(false);
-                    let lines = editor.kept_footer_lines(&kinds);
-                    let pressed = std::cell::Cell::new(None);
-                    let mut footer = design::Footer::new("test_footer", ui.available_width());
-                    Encounters::kept_into_footer(&mut footer, &lines, &pressed);
-                    let bottom = footer.show_by_hand(ui);
-                    if let Some(kind) = pressed.get() {
-                        editor.undo_kept(kind, None);
+                    // The kept result in the editor's own footer; its Undo goes by its ticket.
+                    let frame = design::outcome::PaneFrame::new(ui);
+                    let messages =
+                        editor.editor_messages(&frame, ui.available_width(), &campaign.path, None);
+                    let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
+                        if !editor.encounter_disk_view(ui, &campaign, &[]) {}
+                    });
+                    if let Some(press) = paned.pressed {
+                        editor.editor_press(ui.ctx(), press, &campaign, &[]);
                     }
-                    let mut body = body_above(ui, bottom);
-                    if !editor.encounter_disk_view(&mut body, &campaign, &[]) {}
                 });
             },
             editor,

@@ -2995,14 +2995,18 @@ fn group_fields(
     members(ui, draft, snapshot, expanded);
     ui.add_space(if open.is_some() { design::S } else { design::M });
     design::field(ui, NOTES_FIELD, None, None, |ui| {
-        let response = ui.add(
-            super::notes_field(&mut draft.notes, if open.is_some() { 2 } else { 4 }).hint_text(
-                design::placeholder(ui, "When they arrive, what they want. Markdown is fine."),
-            ),
-        );
-        design::named(ui, &response, &format!("{NOTES_FIELD} for {}", draft.name));
+        let hint = design::placeholder(ui, "When they arrive, what they want. Markdown is fine.");
+        let rows = if open.is_some() { 2 } else { 4 };
+        // Keyed by the group draft, so two groups never share its text or its Undo.
+        let output = GROUP_NOTES.of(draft.id()).editor(ui, &mut draft.notes, |edit| {
+            super::notes_style(edit, rows).hint_text(hint)
+        });
+        design::named(ui, &output.response, &format!("{NOTES_FIELD} for {}", draft.name));
     });
 }
+
+/// A group's notes field (`group_fields`).
+const GROUP_NOTES: design::layout::FieldName = crate::field_id!("group_notes");
 
 /// `members_heading` resolves the group against the whole catalogue; do it once per draft text.
 fn cached_members_heading(ui: &egui::Ui, draft: &GroupDraft, snapshot: &Snapshot) -> String {
@@ -5045,7 +5049,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::disallowed_methods)]
     fn a_group_changed_on_disk_blocks_the_whole_save_and_keeps_the_draft() {
         let dir = tempfile::tempdir().unwrap();
         let campaign = campaign(dir.path());
@@ -5096,29 +5099,27 @@ mod tests {
             |ctx, editor: &mut Encounters| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     if !editor.encounter_disk_view(ui, &campaign, &[]) {
-                        // The draft's results in a footer, from the page's store, as the editor
-                        // draws them; the Undo goes to the store.
-                        editor.record_editor_results();
-                        let lines = editor.editor_result_lines();
-                        let pressed = std::cell::Cell::new(None);
-                        let mut footer =
-                            design::Footer::new("group_test_footer", ui.available_width());
-                        Encounters::editor_results_into(
-                            &mut footer,
-                            &editor.editor_results,
-                            &lines,
-                            &pressed,
+                        // The draft's results in the editor's own footer, from the page's
+                        // store; the Undo goes to the store by its ticket.
+                        let frame = design::outcome::PaneFrame::new(ui);
+                        let messages = editor.editor_messages(
+                            &frame,
+                            ui.available_width(),
+                            &campaign.path,
+                            None,
                         );
-                        let bottom = footer.show_by_hand(ui);
-                        if let Some(owner) = pressed.take() {
-                            editor.undo_editor_of(&owner);
-                        }
-                        let Encounters {
-                            draft, snapshot, ..
-                        } = editor;
-                        if let (Some(draft), Some(snapshot)) = (draft.as_mut(), snapshot.as_ref()) {
-                            let mut body = super::super::body_above(ui, bottom);
-                            of_encounter(&mut body, draft, snapshot, &mut false, &mut None);
+                        let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
+                            let Encounters {
+                                draft, snapshot, ..
+                            } = &mut *editor;
+                            if let (Some(draft), Some(snapshot)) =
+                                (draft.as_mut(), snapshot.as_ref())
+                            {
+                                of_encounter(ui, draft, snapshot, &mut false, &mut None);
+                            }
+                        });
+                        if let Some(press) = paned.pressed {
+                            editor.editor_press(ui.ctx(), press, &campaign, &[]);
                         }
                     }
                 });
