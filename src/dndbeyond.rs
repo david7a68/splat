@@ -252,28 +252,35 @@ impl DndBeyond {
         });
     }
 
+    /// How to import from D&D Beyond, under the open Add campaign form when no account is
+    /// connected, in the narrow layout (the account section is then below the campaigns, often
+    /// out of view). It follows the form, so opening the form never moves what is above it, and
+    /// it depends on the form, the session and the layout, never on what is in view (review of
+    /// PR 320: it was drawn above the form when the account heading left the view, and moved
+    /// the pressed `Add campaign` by its height).
+    pub fn import_hint(ui: &mut egui::Ui) {
+        if ui.ctx().content_rect().width() >= 1000.0 {
+            return;
+        }
+        ui.horizontal_wrapped(|ui| {
+            ui.label("To import from D&D Beyond,");
+            if crate::design::link(ui, "connect your account").clicked() {
+                ui.ctx()
+                    .data_mut(|data| data.insert_temp(egui::Id::new("focus_cookie"), true));
+            }
+            ui.label("first.");
+        });
+    }
+
     pub fn show_import(
         &mut self,
         ui: &mut egui::Ui,
         session: Option<Session>,
         local: &mut Campaigns,
     ) {
+        // Without a session there is nothing to list: the open Add campaign form says how to
+        // import (`import_hint`).
         if session.is_none() {
-            // In the narrow layout the account section is below the campaigns, often out of
-            // view: the hint says how to import. It depends on the window's width and the
-            // session only, never on what is in view, so it keeps its place while the DM opens
-            // a form above the account (a press never moves the page under the pointer).
-            if ui.ctx().content_rect().width() >= 1000.0 {
-                return;
-            }
-            ui.horizontal_wrapped(|ui| {
-                ui.label("To import from D&D Beyond,");
-                if crate::design::link(ui, "connect your account").clicked() {
-                    ui.ctx()
-                        .data_mut(|data| data.insert_temp(egui::Id::new("focus_cookie"), true));
-                }
-                ui.label("first.");
-            });
             return;
         }
         let header = egui::CollapsingHeader::new("Add from D&D Beyond")

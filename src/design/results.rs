@@ -718,7 +718,14 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/world.rs", "entry_controls", &[Ban::Results]),
         ("src/world.rs", "stamp", &[Ban::Results]),
         // Package K: raw egui calls that a layout part replaces.
+        (
+            "src/campaigns.rs",
+            "selector",
+            &[Ban::Layout(1), Ban::Extras(2)],
+        ),
         ("src/copy_dialog.rs", "show", &[Ban::Layout(3)]),
+        ("src/creature_filter.rs", "filter_bar", &[Ban::Layout(1)]),
+        ("src/creature_filter.rs", "menu", &[Ban::Layout(2)]),
         (
             "src/encounter_run/ad_hoc.rs",
             "add_creature_form",

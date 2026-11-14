@@ -45,6 +45,8 @@ pub struct Campaigns {
     list_measure: (f32, f32),
 }
 
+/// The rail's campaign selector, with a name on two lines.
+const SELECTOR_HEIGHT: f32 = 44.0;
 /// A missing Campaign.md without a copy. The write is a choice the DM makes with the button.
 pub(crate) const NO_CAMPAIGN_COPY: &str = "Campaign.md is missing, and Splat has no copy. You can write a new one with the default packages.";
 
@@ -620,35 +622,120 @@ impl Campaigns {
             .cloned()
     }
 
-    /// The always-visible campaign switcher. `blocked` says why it cannot change now. With no
-    /// campaign, its one command is `Add campaign`; it returns true when the DM chose it.
+    /// The always-visible campaign switcher. `blocked` says why it cannot change now.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     pub fn selector(&mut self, ui: &mut egui::Ui, blocked: Option<&str>) -> bool {
         let current = self.data.active_campaign_id;
+        let mut add = false;
         let mut selected = current;
+        let label = self
+            .data
+            .campaigns
+            .iter()
+            .find(|p| Some(p.id) == current)
+            .map(|p| p.name.as_str())
+            .unwrap_or(if self.data.campaigns.is_empty() {
+                "No campaign"
+            } else {
+                "Select campaign"
+            });
         let reason = if self.writable {
             blocked
         } else {
             Some("Reload valid campaign settings in Settings first.")
         };
-        // A campaign's name is the DM's own words: the list wraps it, and the control cuts it
-        // with the whole name on hover and in its accessible name.
-        let mut dropdown = design::Dropdown::new(
-            crate::field_id!("active_campaign").once(design::Once::Settings),
-            "Active campaign",
-        )
-        .choice(None, "No campaign")
-        .choices(
-            self.data
-                .campaigns
-                .iter()
-                .map(|campaign| (Some(campaign.id), campaign.name.as_str())),
-        )
-        .width(ui.available_width())
-        .blocked(reason);
-        if self.data.campaigns.is_empty() {
-            dropdown = dropdown.command(crate::word!("Add campaign"));
+        // The name, lock and caret share a fixed-height control.
+        let top = ui.cursor().top();
+        let locked = reason.is_some();
+        let column_right = ui.clip_rect().right();
+        let combo = egui::ComboBox::from_id_salt("active_campaign")
+            .icon(move |ui, rect, visuals, open| {
+                if locked {
+                    ui.painter().text(
+                        rect.center(),
+                        egui::Align2::CENTER_CENTER,
+                        icons::READ_ONLY,
+                        Type::Body.font(ui),
+                        colors().muted,
+                    );
+                } else {
+                    design::combo_icon(ui, rect, visuals, open);
+                }
+            })
+            .width(ui.available_width())
+            .wrap()
+            .selected_text(Type::Small.rich(ui, label).color(colors().text))
+            .show_ui(ui, |ui| {
+                // The menu stays inside the navigation column, clear of its splitter. A
+                // narrow column wraps the names.
+                let room = column_right
+                    - design::S
+                    - ui.style().spacing.menu_margin.rightf()
+                    - ui.max_rect().left();
+                if room < 220.0 {
+                    ui.set_max_width(room);
+                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+                }
+                ui.set_min_width(room.min(220.0));
+                if let Some(reason) = reason {
+                    design::blocked_reason(ui, Some(reason));
+                    design::gap(ui, design::Gap::L);
+                }
+                ui.add_enabled_ui(reason.is_none(), |ui| {
+                    if self.data.campaigns.is_empty() {
+                        // Round 25 FE4: the one command keeps its words on one line, with `S` on
+                        // each side. In the menu's Strong type it needs 119 px and the column
+                        // gives 103, so it uses `Small`, the type of the switcher's own words. A
+                        // column the DM makes narrower still wraps it.
+                        let clicked = ui
+                            .scope(|ui| {
+                                ui.spacing_mut().button_padding.x = design::S;
+                                let words = Type::Small.rich(ui, "Add campaign");
+                                ui.selectable_label(false, words).clicked()
+                            })
+                            .inner;
+                        if clicked {
+                            add = true;
+                            ui.close();
+                        }
+                    } else {
+                        if design::extras::choice_wrapped(
+                            ui,
+                            selected.is_none(),
+                            "No campaign",
+                            None,
+                        )
+                        .clicked()
+                        {
+                            selected = None;
+                        }
+                    }
+                    for campaign in &self.data.campaigns {
+                        // A campaign's name is the DM's own words: it wraps, never cuts.
+                        if design::extras::choice_wrapped(
+                            ui,
+                            selected == Some(campaign.id),
+                            &campaign.name,
+                            None,
+                        )
+                        .clicked()
+                        {
+                            selected = Some(campaign.id);
+                        }
+                    }
+                });
+            });
+        design::named(ui, &combo.response, &format!("Active campaign: {label}"));
+        if let Some(reason) = reason {
+            ui.ctx()
+                .accesskit_node_builder(combo.response.id, |node| node.set_description(reason));
         }
-        let add = dropdown.show(ui, &mut selected).command;
+        combo.response.on_hover_text(reason.unwrap_or(label));
+        let used = ui.cursor().top() - top;
+        ui.add_space((SELECTOR_HEIGHT - used).max(0.0));
         if selected != current {
             self.select(selected);
         }
@@ -1032,6 +1119,9 @@ impl Campaigns {
             dndbeyond.show_import(ui, session.clone(), self);
             if self.editing.is_none() && self.remote.is_none() {
                 self.form(ui, false, true);
+                if session.is_none() && self.form_open {
+                    crate::dndbeyond::DndBeyond::import_hint(ui);
+                }
             }
         });
     }
