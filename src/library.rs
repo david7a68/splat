@@ -2665,6 +2665,7 @@ fn show_result(
                     line.words(),
                     "Undo package registration",
                     blocked.as_deref(),
+                    true,
                 ) {
                     pressed.page.registration = Some(*owner);
                 }
@@ -2691,6 +2692,7 @@ fn show_result(
                     line.words(),
                     "Undo source change",
                     *blocked,
+                    true,
                 )
             {
                 pressed.page.rosters = Some(*owner);
@@ -2716,7 +2718,7 @@ fn show_result(
         ResultKind::Manifest => {
             if let Some((words, action)) = &results.manifest {
                 pressed.manifest =
-                    kept_undo_message(ui, Tone::Success, words, action, results.locked);
+                    kept_undo_message(ui, Tone::Success, words, action, results.locked, false);
             }
         }
         ResultKind::Identities => {
@@ -2727,6 +2729,7 @@ fn show_result(
                     words,
                     "Undo separate entries",
                     results.locked,
+                    false,
                 );
             }
         }
@@ -2738,6 +2741,7 @@ fn show_result(
                     words,
                     crate::world::SEPARATE_ENTRY_UNDO,
                     results.locked,
+                    false,
                 );
             }
         }
@@ -2754,9 +2758,9 @@ pub(crate) const PACKAGE_USE_RESULT: &str =
     "Every entry in this package is now chosen for this campaign.";
 
 /// A kept result and its Undo, as `design::undo_message` draws them. When Undo is blocked, only
-/// Undo greys: the result's words keep the text colour, because the change still happened. The
-/// reason always follows in `Small` muted words at the message words, also when a draft's save
-/// row says it too (ruling Q-u: a locked Undo shows its reason line).
+/// Undo greys: the result's words keep the text colour, because the change still happened. With
+/// `say_why`, the reason follows in `Small` muted words at the message words. Without it, the
+/// reason is already on screen (a draft's reason in its save row) and on Undo's hover.
 #[allow(
     clippy::disallowed_methods,
     reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
@@ -2767,6 +2771,7 @@ pub(crate) fn kept_undo_message(
     text: &str,
     action: &str,
     blocked: Option<&str>,
+    say_why: bool,
 ) -> bool {
     let Some(reason) = blocked else {
         return design::undo_message(ui, tone, text, action);
@@ -2809,7 +2814,9 @@ pub(crate) fn kept_undo_message(
         });
     }
     // The reason starts at the message words, on its own line, in both layouts.
-    design::message_choice_row(ui, tone, |ui| design::blocked_reason(ui, Some(reason)));
+    if say_why {
+        design::message_choice_row(ui, tone, |ui| design::blocked_reason(ui, Some(reason)));
+    }
     false
 }
 

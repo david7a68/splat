@@ -1378,7 +1378,7 @@ pub fn patch(text: &str, changes: &[(&str, Option<Value>)]) -> Result<String, St
                     .split("\n## Rule choices")
                     .next()
                     .unwrap();
-                let at = after.find("\n## Rule choices").unwrap_or(after.len());
+                let at = package_list_end(&after);
                 after.insert_str(at, task);
             }
         } else if ["splat_run_storage", "splat_session_storage"].contains(key) {
@@ -2056,6 +2056,27 @@ pub fn with_prose(text: &str, notes: &str) -> Result<String, String> {
     } else {
         after
     })
+}
+
+/// Where a new package task line goes: at the end of the real `## Packages` section (the
+/// newline before the next `## ` heading), read as `package_section_lines` reads it, so a code
+/// block that holds those headings is never the place. With no section, before the real
+/// `## Rule choices` heading, else at the end.
+fn package_list_end(text: &str) -> usize {
+    let headings: Vec<_> = super::layout::content_lines(text)
+        .into_iter()
+        .filter(|cell| cell.value.starts_with("## "))
+        .collect();
+    let named = |name: &str| {
+        headings
+            .iter()
+            .position(|cell| cell.value.trim().eq_ignore_ascii_case(name))
+    };
+    let before = |cell: &super::layout::Cell| cell.range.start.saturating_sub(1);
+    match named("## Packages") {
+        Some(at) => headings.get(at + 1).map_or(text.len(), before),
+        None => named("## Rule choices").map_or(text.len(), |at| before(&headings[at])),
+    }
 }
 
 /// The lines of a campaign file's `## Packages` section, outside code blocks: the one reading

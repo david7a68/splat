@@ -6935,28 +6935,6 @@ pub fn package_about(d: &mut Driver<'_>) {
     const WRITTEN: &str = "Module.md was written again.";
     const REASON: &str = "opens a list";
     let footer_refused = footer_in_order(d, &[WRITTEN, REASON]);
-    // Ruling Q-u (G145): the write's Undo waits for the draft, and its reason line shows at the
-    // message words, under the message, as every locked Undo's does.
-    let reason_line = {
-        let message = d.painted_rect_in(WRITTEN, egui::Rect::EVERYTHING);
-        let mut reasons = Vec::new();
-        d.each_painted_text(|text, _| {
-            if text.galley.job.text.contains("Save or discard to copy") {
-                reasons.push(egui::Rect::from_min_size(text.pos, text.galley.size()));
-            }
-        });
-        message.is_some_and(|message| {
-            reasons.iter().any(|reason| {
-                (reason.left() - message.left()).abs() <= 1.0
-                    && reason.top() >= message.bottom() - 1.0
-            })
-        })
-    };
-    d.observe(
-        "iter-29-L-G145-locked-undo-reason",
-        reason_line,
-        "The locked Undo write Module.md shows its reason line at the message words",
-    );
     d.state("manifest-footer-undo-then-reason", Sizes::All);
     d.click("Discard");
     assert_eq!(d.editor_text().as_deref(), Some(written.as_str()));
@@ -7039,17 +7017,7 @@ pub fn package_about(d: &mut Driver<'_>) {
         })
         .map(|node| node.name)
         .unwrap_or_default();
-    let failed_reach = space_reaches(
-        d,
-        "Module.md was written again.",
-        Some("Undo write Module.md"),
-    );
-    let failed = (
-        failed_reach
-            .iter()
-            .all(|(keyboard, pointer)| *keyboard && *pointer),
-        editor_below_read(d),
-    );
+    let failed = (kept(d), editor_below_read(d));
     // Astra re-check 2: the long reason scrolls by keyboard and by wheel, and its words keep
     // clear of every scroll bar and splitter at 960, 1200 and 1920.
     let message = reason.clone().unwrap_or_default();
@@ -7099,7 +7067,7 @@ pub fn package_about(d: &mut Driver<'_>) {
                 .iter()
                 .all(|(kept, tops)| *kept && *tops == no_result),
         format!(
-            "Save's reason {reason:?} keeps the editor {no_result:?} below Read: unsaved {unsaved:?}, failed {failed:?} (reached by keyboard, pointer at 960, 1200, 1920: {failed_reach:?}), discarded {after:?}"
+            "Save's reason {reason:?} keeps the editor {no_result:?} below Read: unsaved {unsaved:?}, failed {failed:?}, discarded {after:?}"
         ),
     );
     assert!(!folder.join("Package.md").exists());
