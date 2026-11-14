@@ -644,12 +644,9 @@ pub fn run(d: &mut Driver<'_>) {
                 let words = &text.galley.job.text;
                 // Review of PR 327: the pencil is muted, as in the list.
                 if words.starts_with(crate::design::icons::CHANGED)
-                    && text
-                        .galley
-                        .job
-                        .sections
-                        .first()
-                        .is_some_and(|section| section.format.color == crate::design::colors().muted)
+                    && text.galley.job.sections.first().is_some_and(|section| {
+                        section.format.color == crate::design::colors().muted
+                    })
                     && rect.right() <= link.left() + 0.5
                     && (rect.center().y - link.center().y).abs() <= 1.0
                 {

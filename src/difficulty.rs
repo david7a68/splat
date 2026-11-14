@@ -464,7 +464,10 @@ impl<'a> Line<'a> {
     /// The label is part of this form; a caller cannot leave it out.
     #[cfg_attr(
         not(test),
-        expect(dead_code, reason = "N7: Arrivals (package R) draws its headings with it")
+        expect(
+            dead_code,
+            reason = "N7: Arrivals (package R) draws its headings with it"
+        )
     )]
     pub fn fight_after(difficulty: &'a Difficulty, parts: FightAfter<'a>) -> Self {
         let fact = |words, gives| Unit {
@@ -735,7 +738,11 @@ mod tests {
         assert_eq!(at(39), "Lost Patrol · Fight after: XP 400 · Low");
         assert_eq!(at(30), "Lost Patrol · Fight after: Low");
         // A fight with no form has no line.
-        assert!(Line::roster(&Difficulty::default(), summary).fit(fits(200)).is_none());
+        assert!(
+            Line::roster(&Difficulty::default(), summary)
+                .fit(fits(200))
+                .is_none()
+        );
         // Review of PR 327 (b): a mixed roster's reason keeps whose input is missing: whole
         // where it fits, the facts going first, then the first name shortened; never `XP not
         // known` alone while a letter of the name fits.
@@ -753,7 +760,10 @@ mod tests {
             at(200),
             "5 party · 2 × Cinder Wolf, 1 × Ember Cultist · XP not known: Nameless Thing and 1 more"
         );
-        assert_eq!(at(55), "5 party · … · XP not known: Nameless Thing and 1 more");
+        assert_eq!(
+            at(55),
+            "5 party · … · XP not known: Nameless Thing and 1 more"
+        );
         assert_eq!(at(45), "… · XP not known: Nameless Thing and 1 more");
         assert_eq!(at(32), "… · XP not known: Na… and 1 more");
     }
