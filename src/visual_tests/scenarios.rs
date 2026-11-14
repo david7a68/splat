@@ -8771,10 +8771,15 @@ pub mod gallery {
                 let parent = d.place_of("Make available to any encounter");
                 super::submenu_clear_of_chrome(
                     d,
-                    ["Move to…", "Make available to any encounter", "Delete group…"],
+                    [
+                        "Move to…",
+                        "Make available to any encounter",
+                        "Delete group…",
+                    ],
                     &["Bridge Ambush"],
                     false,
-                ).and_then(|frame| {
+                )
+                .and_then(|frame| {
                     // Right beside its menu, where egui puts it: only the menus' frames
                     // and egui's small gap lie between them.
                     parent
@@ -18321,7 +18326,7 @@ pub mod encounter_owned_groups {
                 &[RUN_ARENA, RUN],
                 true,
             )
-                .map(|frame| (frame, d.place_of("Move to")));
+            .map(|frame| (frame, d.place_of("Move to")));
             d.observe(
                 "iter-22-B-SD2",
                 clear.is_ok(),
