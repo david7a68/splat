@@ -383,7 +383,17 @@ impl design::outcome::Fault for ContentFault<'_> {
     )]
     fn cause(&self) -> design::outcome::Sentence {
         use design::outcome::Sentence;
-        let outside = |words: &str| Sentence::outside(words);
+        // `Sentence::outside` makes the first letter a capital. Words that start with a small
+        // letter most often start with a path or a file name (`notes/a.md: …`, `package.md
+        // changed on disk.`), so checked words come first and the path keeps its spelling.
+        let outside = |words: &str| {
+            let words = words.trim();
+            if words.chars().next()?.is_lowercase() {
+                Sentence::outside(format!("Problem: {words}"))
+            } else {
+                Sentence::outside(words)
+            }
+        };
         match self {
             Self::Error(error) => {
                 outside(error).unwrap_or(crate::sentence!("Something went wrong."))
@@ -3250,6 +3260,29 @@ mod tests {
                 assert!(!rendered.contains(guess), "{rendered}");
             }
         }
+    }
+
+    /// Wave 2 d (C) review: outside words that start with a path or a file name keep its
+    /// spelling (`Sentence::outside` makes a first letter a capital): checked words come first.
+    #[test]
+    fn outside_words_keep_a_path_s_spelling() {
+        use design::outcome::Fault;
+        let words = |fault: ContentFault<'_>| fault.cause().as_str().to_owned();
+        // `ManifestWrite::undo`'s refusal, as a failed Undo puts it in the page's errors.
+        let undo = undo_failed("package.md changed on disk. Reload before undoing.");
+        assert_eq!(
+            words(ContentFault::Error(&undo)),
+            "Undo did not work: package.md changed on disk. Reload before undoing."
+        );
+        // A content layer's flag or a load error that starts with the note's path.
+        assert_eq!(
+            words(ContentFault::Flag("notes/a.md: Missing YAML frontmatter")),
+            "Problem: notes/a.md: Missing YAML frontmatter."
+        );
+        assert_eq!(
+            words(ContentFault::Error("No such file (os error 2)")),
+            "No such file (os error 2)."
+        );
     }
 
     #[test]
