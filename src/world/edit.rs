@@ -604,6 +604,15 @@ fn switch_reason_below(ui: &egui::Ui, switch: &str) -> bool {
             + ui.spacing().item_spacing.x * 4.0
 }
 
+/// The edit form's text in the reader's face, unframed inside the form's well.
+fn edit_text_style(edit: egui::TextEdit<'_>, font: egui::FontId, width: f32) -> egui::TextEdit<'_> {
+    edit.font(font)
+        .desired_width(width)
+        .desired_rows(8)
+        .frame(false)
+        .margin(egui::Vec2::ZERO)
+}
+
 /// The reason's own line below the save row, kept while the form has no changes.
 fn reason_line(ui: &egui::Ui) -> f32 {
     Type::Small.line() + ui.spacing().item_spacing.y
@@ -1145,23 +1154,21 @@ impl Reader {
                     .show(ui, |ui| {
                         let width = ui.available_width();
                         let field = super::EDIT_TEXT.id(self.compact, id);
-                        let style = |edit: egui::TextEdit<'_>| {
-                            edit.font(font.clone())
-                                .desired_width(width)
-                                .desired_rows(8)
-                                .frame(false)
-                                .margin(egui::Vec2::ZERO)
-                        };
+                        let text = &mut draft.now.text;
                         match region {
                             // The pane's editor region (round 28, P2): it grows with the text
                             // and gives way, so Save stays in view under a long note.
                             Some(region) => {
                                 region
-                                    .editor(ui, field, &mut draft.now.text, style)
+                                    .editor(ui, field, text, |edit| {
+                                        edit_text_style(edit, font.clone(), width)
+                                    })
                                     .response
                             }
                             // No pane gave a region (a check that draws the reader alone).
-                            None => field.multi_line(ui, &mut draft.now.text, style),
+                            None => field.multi_line(ui, text, |edit| {
+                                edit_text_style(edit, font.clone(), width)
+                            }),
                         }
                     });
                 frame.response.widget_info(|| {
