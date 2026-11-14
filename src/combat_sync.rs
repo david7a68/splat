@@ -1781,14 +1781,9 @@ impl CombatSync {
         }
     }
     /// HP, temporary HP, the maximum HP modifier, death saves and inspiration.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn life(&mut self, ui: &mut egui::Ui, max_hp: i64, wells: Wells) {
         use crate::design;
-        ui.add_space(design::XS);
-        design::group_label(ui, "Hit points");
+        design::heading(ui, design::Heading::Label("Hit points"));
         sheet_grid(ui, "sheet_life", wells.life, |ui| {
             if let Some(hp) = self.desired.groups.get_mut("hp") {
                 let mut current = current_hp(hp, max_hp);
@@ -1837,14 +1832,9 @@ impl CombatSync {
         });
     }
     /// Short rest, long rest and restore to life. D&D Beyond applies each one itself.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn rests(&mut self, ui: &mut egui::Ui, max_hp: i64) {
         use crate::design::{self, Action, Density, Type, colors, icons};
-        ui.add_space(design::S);
-        design::group_label(ui, "Rests and recovery");
+        design::heading(ui, design::Heading::Label("Rests and recovery"));
         let blocker = self.action_blocker();
         let hp = self.desired.get("hp").map(|hp| current_hp(hp, max_hp));
         // Taken out while it shows, and put back unless the DM takes the rest or cancels.
@@ -2052,10 +2042,6 @@ impl CombatSync {
         });
     }
     /// Each item's quantity, and the charges spent where it has charges.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn inventory(&mut self, ui: &mut egui::Ui, wells: Wells) {
         use crate::design;
         let Some(remote) = &self.remote else {
@@ -2102,7 +2088,7 @@ impl CombatSync {
                             });
                         }
                     });
-                    ui.add_space(design::XS);
+                    design::gap(ui, design::Gap::XS);
                 }
                 design::help(
                     ui,
@@ -2112,10 +2098,6 @@ impl CombatSync {
         );
     }
     /// Companion and summon HP, as damage taken: the sheet works their maximum out itself.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn companions(&mut self, ui: &mut egui::Ui, wells: Wells) {
         use crate::design;
         let Some(remote) = &self.remote else {
@@ -2153,7 +2135,7 @@ impl CombatSync {
                         )
                     });
                 });
-                ui.add_space(design::XS);
+                design::gap(ui, design::Gap::XS);
             }
         });
     }

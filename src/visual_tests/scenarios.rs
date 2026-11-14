@@ -5537,6 +5537,33 @@ pub mod settings {
             );
         }
         d.state("campaign-list", Sizes::All);
+        // Wave 2 m1 (package C): the switcher's choices, `No campaign` too, wrap inside the rail
+        // column (960 px, the default rail): each ends left of the column's edge, which is `S`
+        // left of the splitter. Proof steps: the menu closes after.
+        const CHOICES: [&str; 3] = ["No campaign", "Quiet Harbor", "Hollow Keep"];
+        let (choices, column) = d.aside(|d| {
+            d.click_starting("Active campaign: ");
+            let nodes = d.nodes();
+            let column = nodes
+                .iter()
+                .find(|node| node.name.starts_with("Active campaign: "))
+                .map(|node| node.rect.right());
+            let choices: Vec<egui::Rect> = nodes
+                .iter()
+                .filter(|node| CHOICES.contains(&node.name.as_str()) && node.in_view())
+                .filter(|node| column.is_some_and(|right| node.rect.left() < right))
+                .map(|node| node.rect)
+                .collect();
+            d.press(egui::Key::Escape);
+            (choices, column)
+        });
+        d.observe(
+            "iter-28-m1-C-switcher-choices",
+            choices.len() == CHOICES.len()
+                && column
+                    .is_some_and(|right| choices.iter().all(|rect| rect.right() <= right + 0.5)),
+            format!("The switcher's choices {choices:?} end left of the column edge {column:?}"),
+        );
         d.goal("find campaign management");
 
         d.click(EDIT_DETAILS);

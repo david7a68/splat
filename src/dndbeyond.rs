@@ -113,10 +113,6 @@ fn fetch(session: Session) -> Result<Vec<RemoteCampaign>, String> {
     parse(&bytes)
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn connection_help(ui: &mut egui::Ui) {
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
@@ -131,7 +127,7 @@ fn connection_help(ui: &mut egui::Ui) {
             ui.ctx()
                 .data_mut(|data| data.insert_temp(egui::Id::new("open_account_settings"), true));
         }
-        ui.add_space(crate::design::XS);
+        crate::design::gap(ui, crate::design::Gap::XS);
         for word in "to update this link.".split_inclusive(' ') {
             ui.label(
                 crate::design::Type::Small
@@ -326,7 +322,7 @@ impl DndBeyond {
                 });
                 for remote in &self.campaigns {
                     let added = local.is_added(&remote.id);
-                    ui.horizontal(|ui| {
+                    let row = ui.horizontal(|ui| {
                         use crate::design::{self, Action, L};
                         let left = ui.cursor().left();
                         // Round 27 review: the action's room comes first, so Add (or Added) is
@@ -377,6 +373,7 @@ impl DndBeyond {
                             }
                         });
                     });
+                    crate::design::register_row(ui, row.response.rect);
                     local.show_import_form(ui, &remote.id);
                 }
             });
@@ -416,7 +413,13 @@ impl DndBeyond {
         blocked: Option<&str>,
     ) {
         ui.horizontal(|ui| {
-            crate::design::group_heading(ui, "D&D Beyond", 0);
+            crate::design::heading(
+                ui,
+                crate::design::Heading::Group {
+                    title: "D&D Beyond",
+                    count: 0,
+                },
+            );
             if self.pending.is_some() {
                 crate::design::spinner(ui);
                 ui.weak("Refreshing…");
@@ -492,7 +495,16 @@ impl DndBeyond {
                         },
                     ))
                     .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut selected, None, "Not linked");
+                        if crate::design::extras::choice_wrapped(
+                            ui,
+                            selected.is_none(),
+                            "Not linked",
+                            None,
+                        )
+                        .clicked()
+                        {
+                            selected = None;
+                        }
                         for remote in &self.campaigns {
                             let used = local.linked_elsewhere(&remote.id);
                             ui.add_enabled_ui(!used, |ui| {
@@ -501,7 +513,16 @@ impl DndBeyond {
                                 } else {
                                     remote.name.clone()
                                 };
-                                ui.selectable_value(&mut selected, Some(remote.id.clone()), name);
+                                if crate::design::extras::choice_wrapped(
+                                    ui,
+                                    selected.as_ref() == Some(&remote.id),
+                                    &name,
+                                    None,
+                                )
+                                .clicked()
+                                {
+                                    selected = Some(remote.id.clone());
+                                }
                             });
                         }
                     })
