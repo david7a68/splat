@@ -416,31 +416,6 @@ pub fn run(d: &mut Driver<'_>) {
             }),
         format!("The first row was at {first:?} and is at {now:?}; the field is at {field:?}, Undo scene at {undo:?}"),
     );
-    // Round 29 P-1 review: after Add, the result and its Undo are whole in the visible column at
-    // every size: the answer to the act is never cut by the column's end.
-    for size in [SMALL, DEFAULT, LARGE] {
-        let (whole, detail) = d.at_size(size, |d| {
-            let nodes = d.nodes();
-            let find = |name: &str| nodes.iter().find(|node| node.name == name);
-            let (words, undo) = (find("Scene added to tonight."), find("Undo add scene"));
-            (
-                words.is_some_and(|node| node.fully_in_view())
-                    && undo.is_some_and(|node| node.fully_in_view()),
-                format!(
-                    "the words at {:?} shown {:?}, Undo scene at {:?} shown {:?}",
-                    words.map(|node| node.rect),
-                    words.map(|node| node.shown),
-                    undo.map(|node| node.rect),
-                    undo.map(|node| node.shown),
-                ),
-            )
-        });
-        d.observe(
-            "T12.14",
-            whole,
-            format!("At {size:?}, the result and its Undo are whole in view: {detail}"),
-        );
-    }
     // App round 2, X13: `Undo scene` takes a line of its own only when it is wider than the
     // room after the words in their column, which ends where the rows' menus end.
     for size in [SMALL, DEFAULT, LARGE] {
@@ -501,6 +476,51 @@ pub fn run(d: &mut Driver<'_>) {
         !note(d).contains(KEEP) && !d.has("Plan a scene"),
         "Undo scene takes the line back out, and Escape closed the field",
     );
+    // Ruling R30 (round 29, P-1 review): the open field keeps room for its result, so a press on
+    // the Add button moves nothing, and the result and its Undo are whole in view, at every size.
+    // Words that match no World entry, so no suggestion comes or goes.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (still, detail) = d.act_at_size(size, |d| {
+            let before_note = note(d);
+            d.click("More Add actions");
+            d.click("Add Scene");
+            d.type_text("Cross at dawn");
+            let add_button = |d: &Driver<'_>| {
+                d.nodes()
+                    .into_iter()
+                    .find(|node| node.name == "Add" && node.role == egui::accesskit::Role::Button)
+                    .map(|node| node.rect)
+            };
+            let before = add_button(d);
+            d.click("Add");
+            d.expect("Undo add scene");
+            let after = add_button(d);
+            let nodes = d.nodes();
+            let find = |name: &str| nodes.iter().find(|node| node.name == name);
+            let (words, undo) = (find("Scene added to tonight."), find("Undo add scene"));
+            let still = before.is_some()
+                && before == after
+                && words.is_some_and(|node| node.fully_in_view())
+                && undo.is_some_and(|node| node.fully_in_view());
+            let detail = format!(
+                "Add at {before:?} then {after:?}; the words at {:?} shown {:?}, Undo scene at {:?} shown {:?}",
+                words.map(|node| node.rect),
+                words.map(|node| node.shown),
+                undo.map(|node| node.rect),
+                undo.map(|node| node.shown),
+            );
+            d.click("Undo add scene");
+            d.click("Cancel");
+            (still && note(d) == before_note && !d.has("Plan a scene"), detail)
+        });
+        d.observe(
+            "T12.14",
+            still,
+            format!(
+                "At {size:?}, pressing Add moves it not, and its result is whole in view: {detail}"
+            ),
+        );
+    }
 
     // The box: one click, one character.
     let before = note(d);
