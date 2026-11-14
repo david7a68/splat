@@ -697,6 +697,25 @@ fn timeline_plans_a_result(d: &mut Driver<'_>) {
             && !d.has(PLAN_SHRINE),
         format!("Timeline: the press writes the plan line, and the footer says so: {note}"),
     );
+    // Final review point 4: with the result in the footer, quiet frames check no note words,
+    // copy no names and read no plan.
+    let counts = || {
+        (
+            crate::timeline::page::PLAN_LINE_CHECKS.with(std::cell::Cell::get),
+            crate::timeline::page::PLAN_NAMES_MADE.with(std::cell::Cell::get),
+            crate::timeline::page::JOURNEY_PLAN_READS.with(std::cell::Cell::get),
+        )
+    };
+    let before = counts();
+    for _ in 0..3 {
+        d.settle();
+    }
+    let after = counts();
+    d.observe(
+        "iter-29-S1-G142",
+        before == after && d.has(PLANNED),
+        format!("Quiet frames after a Plan check nothing again: {before:?}, {after:?}"),
+    );
     d.click("Undo add plan line");
     d.observe(
         "iter-29-S1-G142",

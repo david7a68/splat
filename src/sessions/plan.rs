@@ -3037,6 +3037,17 @@ impl Sessions {
         );
     }
 
+    /// Final review point 2: whether `session`'s plan shows the plan line's result: only the
+    /// plan of the note that holds the line, wherever its journey is now, while it holds.
+    fn plan_line_shown_in(&mut self, session: Option<Uuid>) -> bool {
+        self.planned_live()
+            && self
+                .travel
+                .planned
+                .as_ref()
+                .is_some_and(|planned| Some(planned.note) == session)
+    }
+
     /// Whether the plan line's result still holds: the note is as the act left it, in the open
     /// draft when it holds that note, else as the last disk check read it.
     fn planned_live(&mut self) -> bool {
@@ -3642,12 +3653,8 @@ impl Sessions {
         }
         // Round 27 FE7: `Plan “<name>”`'s result and `Undo plan line`, in the plan of its
         // journey's session, while the note is as the act left it.
-        let live = self.planned_live();
-        // Final review point 2: the result is its note's: only that session's plan shows it,
-        // wherever its journey is now.
-        if let Some(planned) = &self.travel.planned
-            && live
-            && Some(planned.note) == session
+        if self.plan_line_shown_in(session)
+            && let Some(planned) = &self.travel.planned
         {
             kept_at(
                 &mut messages,
@@ -5961,6 +5968,39 @@ mod tests {
         sessions.notes[1].path = b_note.path.clone();
         sessions.draft = None;
         sessions.select(Some(a));
+        // Final review point 1: B open, its plan line's save fails (the Undo waits in the
+        // draft); write access comes back; selecting A saves B's draft with the line. Undo then
+        // takes the line out of the file.
+        fs::write(&b_note.path, &text).unwrap();
+        sessions.select(Some(b));
+        read_only(true);
+        let unsaved =
+            sessions.plan_from_timeline(&book, &road, &chosen("Shrine of Cinders"), &names);
+        read_only(false);
+        assert!(unsaved.is_err(), "{unsaved:?}");
+        b_file(0);
+        sessions.select(Some(a));
+        b_file(1);
+        assert_eq!(sessions.undo_plan_line(), None);
+        b_file(0);
+        // Final review point 2: planned for the journey in B while A is open. Wherever the
+        // journey goes, A's plan shows neither B's result nor its Undo; B's keeps them, and B's
+        // note keeps its line.
+        sessions
+            .plan_from_timeline(&book, &road, &chosen("Shrine of Cinders"), &names)
+            .unwrap();
+        assert!(!sessions.plan_line_shown_in(Some(a)), "not in A's plan");
+        assert!(sessions.plan_line_shown_in(Some(b)));
+        b_file(1);
+        // Final review point 4: a quiet frame checks no words.
+        let checks = || timeline::page::PLAN_LINE_CHECKS.with(std::cell::Cell::get);
+        sessions.plan_line_shown_in(Some(b));
+        let before = checks();
+        for _ in 0..3 {
+            assert!(sessions.plan_line_shown_in(Some(b)));
+        }
+        assert_eq!(checks(), before, "the result's validity is cached");
+        sessions.travel.planned = None;
         // The open session is the journey's: the act goes through its draft, as on the plan.
         fs::write(&b_note.path, &text).unwrap();
         sessions.select(Some(b));
@@ -5993,6 +6033,22 @@ mod tests {
         assert!(sessions.planned_live());
         sessions.notes.retain(|note| note.id != b);
         assert!(!sessions.planned_live());
+        assert_eq!(sessions.undo_plan_line(), None);
+        b_file(1);
+        // Final review point 3: the campaign-change event itself ends the result: A, then B,
+        // then A again, with no read of the result between.
+        sessions.notes = vec![a_note.clone(), b_note.clone()];
+        fs::write(&b_note.path, &text).unwrap();
+        sessions
+            .plan_from_timeline(&book, &road, &chosen("Shrine of Cinders"), &names)
+            .unwrap();
+        assert!(sessions.planned_live());
+        let home = sessions.campaign.clone().unwrap();
+        sessions.open_campaign(Some(&campaign("Other")));
+        sessions.open_campaign(Some(&home));
+        sessions.notes = vec![a_note.clone(), b_note.clone()];
+        sessions.last_check = Some(Instant::now());
+        assert!(!sessions.planned_live(), "the result ended at the change");
         assert_eq!(sessions.undo_plan_line(), None);
         b_file(1);
     }
