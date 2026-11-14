@@ -392,7 +392,9 @@ another. When the line is too narrow and the path goes to a second row, that row
 draft, Back opens the earlier entry in Lookup. Show file is on that line; vault entries also
 have Edit in Obsidian. The path shortens from the front only and keeps its file name whole
 (`…/Cinder Wolf copy.md`): when that does not fit beside the owner words and their action, the path takes its
-second Read row. An unreadable entry keeps `Cannot be read` on its owner line, in place of `Chosen for this campaign`.
+second Read row. An unreadable entry keeps `Cannot be read` on its owner line, in place of `Chosen for this campaign`, with the error
+icon in the error tone; `Manifest deleted` has the warning icon and tone. The fault's kind gives both
+(`Severity::status`), as for its row and its message: one fault, one tone.
 A file that the system will not read at all (not UTF-8 text, or no permission) has no text to repair, in a package
 or a campaign. Library keeps why the read failed, from the error's kind, as World does. Its row's cause is short
 (`Not a text file`). Its reader keeps the title and a file line with only `Show file`: no Edit in
@@ -861,7 +863,8 @@ copy.` shows nowhere. Bordered `Register as a new package` sits on the warning's
 line, above Technical details. It asks for a name, writes independent package and entry identities, and has
 one Undo for all files. Registration names the copy and what the registration chose, not what the campaign
 uses later: `Ashen Reaches is registered, with no entries chosen for this campaign.` (or `with every entry
-chosen`). Its use checkbox starts
+chosen`). A later change of the copy's use (`Use the copy in encounters`, or its entries chosen) ends that clause
+(R11): the result then says `Ashen Reaches is registered.`, and its Undo stays. Its use checkbox starts
 off when the original is used. Keep the warning above the `Register a copy` Label title and fields. The form has
 inline creation's one order: the use checkbox and its help, then `New package name` with `Register` at the end of
 its line, then the kept line with quiet Cancel at its start and the reason after it. `Register` keeps that one

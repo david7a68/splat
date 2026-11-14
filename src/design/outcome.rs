@@ -2671,6 +2671,14 @@ impl Severity {
             Self::NeedsFixing => Tone::Warning,
         }
     }
+
+    /// A status line that states this fault (an owner line `Ashen Marches · Cannot be read`):
+    /// the tone's icon and colour for the icon and the words, so a fault's status has the tone
+    /// its message and its row have. The caller gives the fault's kind, never a colour.
+    pub fn status(self, word: &str) -> super::Status<'_> {
+        let (icon, color) = self.tone().parts();
+        super::Status { icon, word, color }
+    }
 }
 
 /// Where a fault is: a name, and the line of its file when it has one.

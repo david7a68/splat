@@ -10794,6 +10794,16 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         crate::library::USE_COPY_RESULT,
         "Undo source change",
     );
+    // R11 (row 127, G147): the use changed after the registration, so the registration's
+    // result no longer says what the campaign chose: `Ashen Reaches is registered.`, its Undo
+    // kept. The old words contradicted `Encounters now use the copy.` above them.
+    d.observe(
+        "iter-29-L-R11-clause-ends",
+        d.has_containing("Ashen Reaches is registered.")
+            && !d.has_containing("is registered, with")
+            && d.has("Undo package registration"),
+        "After Use the copy in encounters, the registration result says `Ashen Reaches is registered.` and keeps its Undo",
+    );
     d.state("copy-entries-used", Sizes::All);
     // Round 26 review: each kept result is its own footer message, newest first: the source
     // change, then the registration it followed. Both Undos are reached; at 960 the footer
@@ -10805,13 +10815,13 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
             .into_iter()
             .find(|node| {
                 node.name.contains(crate::library::USE_COPY_RESULT)
-                    && node.name.contains("is registered, with")
+                    && node.name.contains("Ashen Reaches is registered")
             })
             .map(|node| node.name)
             .unwrap_or_default();
         let newest_first = order
             .find(crate::library::USE_COPY_RESULT)
-            .zip(order.find("is registered, with"))
+            .zip(order.find("Ashen Reaches is registered"))
             .is_some_and(|(source, registration)| source < registration);
         let first_in_view = d.in_view("Undo source change");
         let footer = d.place_of("Undo source change").map(|undo| undo.center());
