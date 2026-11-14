@@ -2510,7 +2510,8 @@ pub(super) fn register_field_action(ui: &Ui, field: Id, action: Id) {
 }
 
 /// The pairs `register_field_action` registered in the last pass: (field id, button id), as
-/// AccessKit ids.
+/// AccessKit ids. Only the gate reads them.
+#[cfg(test)]
 pub fn field_actions(ctx: &egui::Context) -> Vec<(u64, u64)> {
     let pass = ctx.cumulative_pass_nr();
     ctx.data(|data| data.get_temp::<(u64, Vec<(u64, u64)>)>(Id::new(FIELD_ACTIONS)))
