@@ -2183,10 +2183,6 @@ fn duplicate_creature_results(ui: &mut egui::Ui, query: &str) -> bool {
     !seen.is_empty()
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn replace_missing_creature(
     ui: &mut egui::Ui,
     snapshot: &Snapshot,
@@ -2198,13 +2194,16 @@ fn replace_missing_creature(
         .ctx()
         .data_mut(|data| data.get_temp::<String>(key))
         .unwrap_or_default();
-    design::search_field(
-        ui,
-        "Replacement creature",
-        &mut search,
-        "Choose another creature…",
-        ui.available_width(),
-    );
+    let width = ui.available_width();
+    let _ = crate::field_id!("replacement_creature_search")
+        .once(crate::design::Once::PageSearch)
+        .search(
+            ui,
+            "Replacement creature",
+            &mut search,
+            "Choose another creature…",
+            width,
+        );
     let all_key = key.with("all");
     let mut all = ui
         .ctx()
@@ -6070,13 +6069,17 @@ impl Encounters {
         let mut chosen = None;
         // FL3: the field ends at the results' scroll lane, where each row's Add ends, whether or
         // not the bar shows.
-        let response = design::search_field(
-            ui,
-            SEARCH_FIELD,
-            search,
-            "Find a creature by name or detail…",
-            scroll_lane(ui),
-        );
+        let width = scroll_lane(ui);
+        let response = crate::field_id!("encounter_creature_search")
+            .once(crate::design::Once::PageSearch)
+            .search(
+                ui,
+                SEARCH_FIELD,
+                search,
+                "Find a creature by name or detail…",
+                width,
+            )
+            .field;
         if std::mem::take(focus_search) {
             design::focus_and_select(ui, response.id, search);
         }

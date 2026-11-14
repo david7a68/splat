@@ -38,7 +38,7 @@ pub mod ownership {
     pub use crate::design::components::{Footer, ResultOrder};
     pub use crate::design::memo::{Changed, Key, Memo, Revised, Revision};
     pub use crate::design::results::{
-        DiskChanged, Ends, FooterResult, Kept, Owner, OwnerChanged, Press, Results, Shown,
+        DiskChanged, Ends, FooterResult, Gone, Kept, Owner, OwnerChanged, Press, Results, Shown,
     };
     pub use crate::design::save_row::{DraftState, Primary, SaveWeight, SaveWord};
 }
@@ -545,6 +545,7 @@ impl Splat {
             Some("Resolve the unsaved session file to change campaigns.")
         } else if self.world_page.dirty()
             || self.world_page.has_generated()
+            || self.lookup.generated_name().is_some()
             || self.any_unsaved_edits()
             || self.campaign_content.dirty()
             || self.encounters.dirty()
@@ -590,6 +591,13 @@ impl Splat {
             items.push((
                 format!("The generated NPC \u{201c}{name}\u{201d} is not saved."),
                 Page::World,
+            ));
+        }
+        // An NPC that Lookup rolled and holds; Lookup opens beside any page.
+        if let Some(name) = self.lookup.generated_name() {
+            items.push((
+                format!("The generated NPC \u{201c}{name}\u{201d} is not saved."),
+                self.page,
             ));
         }
         for (reader, page) in [
@@ -1192,12 +1200,17 @@ impl Splat {
     /// One status line in the rail. Some lead to where the DM can act on them.
     /// The account line also shows a spinner while the party is read.
     fn rail_status(&mut self, ui: &mut egui::Ui, state: Status<'static>, account: bool) {
-        let held = self.world_page.held_npc().map(|name| {
-            format!(
+        // Round 28 FJ6: World's held NPC, else the one Lookup holds. Each says where its card is.
+        let held = match self.world_page.held_npc() {
+            Some(name) => Some(format!(
                 "{}: {name}. Show its card on World.",
                 world::page::UNSAVED_NPC
-            )
-        });
+            )),
+            None => self
+                .lookup
+                .generated_name()
+                .map(|name| format!("{}: {name}. Show it in Lookup.", world::page::UNSAVED_NPC)),
+        };
         let full = match state.word {
             world::page::UNSAVED_NPC => held.as_deref().unwrap_or(state.word),
             "Signed out" => "Signed out of D&D Beyond",
@@ -1227,11 +1240,17 @@ impl Splat {
                 (response, rect)
             }
         } else if state.word == world::page::UNSAVED_NPC {
-            // The held NPC's card is on World, wherever the DM is now.
+            // The held NPC's card is on World, wherever the DM is now; Lookup's is in Lookup.
             let response = design::status_link(ui, state);
             if response.clicked() {
-                self.world_page.open_held();
-                self.page = Page::World;
+                if self.world_page.has_generated() {
+                    self.world_page.open_held();
+                    self.page = Page::World;
+                } else {
+                    // Lookup opens on the NPC's card, also from Trackers.
+                    self.notes_give_way();
+                    self.lookup.show_generated();
+                }
             }
             {
                 let rect = response.rect;
@@ -1541,7 +1560,11 @@ impl Splat {
                 },
             ),
             // A held NPC locks the campaign switcher, so the rail names it like other drafts.
-            (self.world_page.has_generated(), world::page::UNSAVED_NPC),
+            // Round 28 FJ6: the rail names an NPC that Lookup holds too, also when Lookup is closed.
+            (
+                self.world_page.has_generated() || self.lookup.generated_name().is_some(),
+                world::page::UNSAVED_NPC,
+            ),
             (
                 self.encounters.encounter_dirty(),
                 self.encounters.draft_word(),
@@ -1894,18 +1917,8 @@ impl Splat {
                     viewport.min.x -= design::S;
                     ui.scope_builder(egui::UiBuilder::new().max_rect(viewport), |ui| {
                         // Round 27 FI7: the tab's notices sit in its message footer, which the
-                        // pane places after the fields (round 28).
-                        let width = ui.available_width().min(design::LIST_MEASURE);
-                        let mut footer = design::Footer::new("recording_settings_footer", width);
-                        self.processing.footer_messages(&mut footer);
-                        footer.pane(ui, design::Body::Content, |ui| {
-                            let mut fields = ui.available_rect_before_wrap();
-                            fields.min.x += design::S;
-                            ui.scope_builder(egui::UiBuilder::new().max_rect(fields), |ui| {
-                                ui.set_max_width(design::FORM_WIDTH + design::XXL);
-                                self.processing.show(ui);
-                            });
-                        });
+                        // pane places after the fields (round 28: `ProcessingSettings::pane`).
+                        self.processing.pane(ui);
                     });
                     return;
                 }
@@ -2696,6 +2709,7 @@ impl eframe::App for Splat {
             if (self.library.dirty()
                 || self.world_page.dirty()
                 || self.world_page.has_generated()
+                || self.lookup.generated_name().is_some()
                 || self.any_unsaved_edits()
                 || self.campaign_content.dirty()
                 || self.encounters.unsaved()

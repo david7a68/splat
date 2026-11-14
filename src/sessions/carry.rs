@@ -788,41 +788,45 @@ impl Sessions {
 
     /// The result of the open session's act, in the Session page's message footer, so that the
     /// Last time line, the tabs and the plan never move when it comes or goes: its words and
-    /// `Undo carry over`, or why it wrote nothing. It is that note's, so it shows also when the
+    /// `Undo: Carry over`, or why it wrote nothing. It is that note's, so it shows also when the
     /// last session can no longer be found. A save that failed says so, and the Undo still works.
+    /// The result keeps the order its act issued (`Carries::record`): its Undo follows the note
+    /// to a moved file (`Carries::moved`), which a `design::Results` entry cannot do (staged).
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
+        reason = "staged: a carry-over result keeps its own order (`outcome_at`, design::results::STAGED_ALLOWS)"
     )]
-    pub(super) fn carry_in_footer<'a>(
-        &'a self,
-        undos: &mut crate::timeline::page::LiveUndos<'a>,
-        footer: &mut design::Footer<'a>,
-        act: &'a std::cell::Cell<Option<super::SessionAct>>,
+    pub(super) fn carry_in_messages(
+        &self,
+        messages: &mut crate::design::outcome::Messages<'_, super::SessionAct>,
     ) {
+        use crate::design::outcome::{FaultMessage, KeptOutcome, Said, UndoStep};
         let Some(session) = self.selected else {
             return;
         };
         match self.carries.results.get(&session) {
             Some(Outcome::Refused { words, .. }) => {
-                // The act's order, issued when it was done (`Carries::record`).
-                let order = self.carries.order(session);
-                footer.result(order, words.as_str(), false, move |ui| {
-                    design::message(ui, Tone::Warning, words);
-                });
+                messages.outcome(crate::design::outcome::Outcome::Refused(
+                    super::notice_sentence(words),
+                ));
             }
             Some(Outcome::Done { words, undo, .. }) => {
-                let (tone, words) = if undo.written() {
-                    (Tone::Success, words.as_str())
-                } else {
-                    (Tone::Warning, crate::sessions::NOT_SAVED)
-                };
                 let order = self.carries.order(session);
-                undos.push(order, words.to_owned(), move |ui| {
-                    if design::undo_message(ui, tone, words, "Undo carry over") {
-                        act.set(Some(super::SessionAct::UndoCarry(session)));
-                    }
-                });
+                let step =
+                    UndoStep::act("Carry over").pressed_as(super::SessionAct::UndoCarry(session));
+                if undo.written() {
+                    messages.outcome_at(order, Said::new(super::notice_sentence(words)).undo(step));
+                } else {
+                    messages.outcome_at(
+                        order,
+                        KeptOutcome::Fault(
+                            FaultMessage::new(&super::PageFault::Failed(crate::sentence!(
+                                "Notes not saved."
+                            ))),
+                            step,
+                        ),
+                    );
+                }
             }
             None => {}
         }
@@ -1421,7 +1425,6 @@ mod tests {
         assert_eq!(fs::read_to_string(&tonight.path).unwrap(), drafted);
     }
 
-    #[allow(clippy::disallowed_methods)]
     fn harness(
         dir: &Path,
         selected: Uuid,
@@ -1448,16 +1451,21 @@ mod tests {
                 move |ctx, (page, book): &mut (Sessions, Book)| {
                     with_plan(&fights, |plan| {
                         egui::CentralPanel::default().show(ctx, |ui| {
-                            page.last_time_block(ui, book, plan);
-                            // The page's footer, as `session_footer` draws the result.
+                            // The page's footer, as `session_messages` gives the result.
                             page.end_carry_results();
-                            let act = std::cell::Cell::new(None);
-                            let mut footer = design::Footer::new("carry", ui.available_width());
-                            let mut undos = crate::timeline::page::LiveUndos::new();
-                            page.carry_in_footer(&mut undos, &mut footer, &act);
-                            undos.into_footer(&mut footer);
-                            let _bottom = footer.show_by_hand(ui);
-                            if let Some(super::super::SessionAct::UndoCarry(session)) = act.take() {
+                            let frame = crate::design::outcome::PaneFrame::new(ui);
+                            let mut messages = crate::design::outcome::Messages::new(
+                                &frame,
+                                "carry",
+                                ui.available_width(),
+                            );
+                            page.carry_in_messages(&mut messages);
+                            let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
+                                page.last_time_block(ui, book, plan);
+                            });
+                            if let Some(super::super::SessionAct::UndoCarry(session)) =
+                                paned.pressed.map(|press| press.id)
+                            {
                                 page.undo_carry(session);
                             }
                         });
@@ -1596,18 +1604,18 @@ mod tests {
         rescan(&mut harness);
         assert!(
             harness
-                .query_all_by_label("Undo carry over")
+                .query_all_by_label("Undo: Carry over")
                 .next()
                 .is_some()
         );
         fs::write(&last.path, &last_text).unwrap();
         rescan(&mut harness);
-        harness.get_by_label("Undo carry over").click();
+        harness.get_by_label("Undo: Carry over").click();
         harness.run_steps(2);
         assert_eq!(read(), outside);
         assert!(
             harness
-                .query_all_by_label("Undo carry over")
+                .query_all_by_label("Undo: Carry over")
                 .next()
                 .is_none()
         );
@@ -1646,7 +1654,7 @@ mod tests {
         assert_eq!(read(), changed);
         assert!(
             harness
-                .query_all_by_label("Notes not saved")
+                .query_all_by_label("Notes not saved.")
                 .next()
                 .is_some()
         );
@@ -1660,7 +1668,7 @@ mod tests {
                 .body
                 .contains("Who burned the ropes?")
         );
-        harness.get_by_label("Undo carry over").click();
+        harness.get_by_label("Undo: Carry over").click();
         harness.run_steps(2);
         let draft = harness.state().0.draft.as_ref().unwrap();
         assert!(!draft.text().contains("carried_"));
@@ -1677,7 +1685,7 @@ mod tests {
         assert!(read().contains("Who burned the ropes?"));
         assert!(
             harness
-                .query_all_by_label("Notes not saved")
+                .query_all_by_label("Notes not saved.")
                 .next()
                 .is_none()
         );
@@ -1690,7 +1698,7 @@ mod tests {
                 .next()
                 .is_some()
         );
-        harness.get_by_label("Undo carry over").click();
+        harness.get_by_label("Undo: Carry over").click();
         harness.run_steps(2);
         assert_eq!(read(), changed);
 

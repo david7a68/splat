@@ -1,5 +1,5 @@
 //! Typographic parts of the one Reader. `library::view` composes them.
-use super::{components::rule, extras::space, tokens::*};
+use super::{extras::space, tokens::*};
 use eframe::egui::{self, Ui, vec2};
 
 /// Prose in a side panel is one step smaller than prose at full width.
@@ -36,14 +36,6 @@ pub fn title(ui: &mut Ui, text: &str) {
 
 pub fn subtitle(ui: &mut Ui, text: &str) {
     ui.add(egui::Label::new(Type::Small.rich(ui, text).color(colors().muted)).wrap());
-}
-
-pub fn section_heading(ui: &mut Ui, text: &str) {
-    space(ui, M);
-    ui.add(egui::Label::new(Type::Section.rich(ui, text).color(colors().text)).wrap());
-    space(ui, 2.0);
-    rule(ui);
-    space(ui, XS);
 }
 
 /// A heavy rule that opens and closes a stat block.

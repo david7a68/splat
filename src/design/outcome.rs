@@ -26,7 +26,7 @@ use super::components::{
     number_width, small_tone_message, tone_message, undo_message_line,
 };
 pub use super::components::{Footer, ResultOrder, Tone};
-pub use super::results::{ByTicket, Ticket};
+pub use super::results::{ByTicket, Gone, Ticket};
 use super::{extras::space, icons, tokens::*};
 use eframe::egui::{self, Rect, Response, Ui};
 use std::borrow::Cow;
@@ -298,11 +298,16 @@ macro_rules! sentence {
 // Verbs and Undo
 
 /// What an action did. A result says its past form (`Removed Take seal.`); its Undo says its
-/// present form (`Undo remove Take seal`), from the same value, so the two cannot differ.
+/// present form (`Undo remove Take seal`), from the same value, so the two cannot differ. The
+/// table also decides, per verb, the word that joins the verb to its object in an Undo
+/// (`Undo discard of Bridge Ambush`; none for `Undo remove Take seal`): a caller never writes it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Verb {
     Add,
+    /// `Undo carry over`, `Carried over …`.
+    CarryOver,
     Change,
+    Clear,
     Copy,
     Delete,
     Discard,
@@ -310,21 +315,59 @@ pub enum Verb {
     Link,
     Mark,
     Move,
+    Recover,
     Register,
     Reload,
     Remove,
     Rename,
     Replace,
     Restore,
+    Roll,
+    Separate,
+    /// A question ticked in Open questions: `Undo tick`, `… ticked in Horn Rings.`
+    Tick,
+    Unregister,
+    Use,
     Write,
 }
 
 impl Verb {
+    /// Every verb, for the part's tests of each verb's two forms.
+    #[cfg(test)]
+    const ALL: [Verb; 24] = [
+        Self::Add,
+        Self::CarryOver,
+        Self::Change,
+        Self::Clear,
+        Self::Copy,
+        Self::Delete,
+        Self::Discard,
+        Self::Dismiss,
+        Self::Link,
+        Self::Mark,
+        Self::Move,
+        Self::Recover,
+        Self::Register,
+        Self::Reload,
+        Self::Remove,
+        Self::Rename,
+        Self::Replace,
+        Self::Restore,
+        Self::Roll,
+        Self::Separate,
+        Self::Tick,
+        Self::Unregister,
+        Self::Use,
+        Self::Write,
+    ];
+
     /// The word after `Undo`: `remove`.
     pub const fn word(self) -> &'static str {
         match self {
             Self::Add => "add",
+            Self::CarryOver => "carry over",
             Self::Change => "change",
+            Self::Clear => "clear",
             Self::Copy => "copy",
             Self::Delete => "delete",
             Self::Discard => "discard",
@@ -332,12 +375,18 @@ impl Verb {
             Self::Link => "link",
             Self::Mark => "mark",
             Self::Move => "move",
+            Self::Recover => "recover",
             Self::Register => "register",
             Self::Reload => "reload",
             Self::Remove => "remove",
             Self::Rename => "rename",
             Self::Replace => "replace",
             Self::Restore => "restore",
+            Self::Roll => "roll",
+            Self::Separate => "separate",
+            Self::Tick => "tick",
+            Self::Unregister => "unregister",
+            Self::Use => "use",
             Self::Write => "write",
         }
     }
@@ -346,7 +395,9 @@ impl Verb {
     pub const fn past(self) -> &'static str {
         match self {
             Self::Add => "Added",
+            Self::CarryOver => "Carried over",
             Self::Change => "Changed",
+            Self::Clear => "Cleared",
             Self::Copy => "Copied",
             Self::Delete => "Deleted",
             Self::Discard => "Discarded",
@@ -354,28 +405,79 @@ impl Verb {
             Self::Link => "Linked",
             Self::Mark => "Marked",
             Self::Move => "Moved",
+            Self::Recover => "Recovered",
             Self::Register => "Registered",
             Self::Reload => "Reloaded",
             Self::Remove => "Removed",
             Self::Rename => "Renamed",
             Self::Replace => "Replaced",
             Self::Restore => "Restored",
+            Self::Roll => "Rolled",
+            Self::Separate => "Separated",
+            Self::Tick => "Ticked",
+            Self::Unregister => "Unregistered",
+            Self::Use => "Used",
             Self::Write => "Wrote",
+        }
+    }
+
+    /// The past form inside a sentence, after its object: `ticked` in `“…” ticked in Horn Rings.`
+    pub fn past_after(self) -> String {
+        self.past().to_lowercase()
+    }
+
+    /// The word between the verb and its object in an Undo, decided here for every verb (no
+    /// wildcard: a new verb must decide). `of` for discard (what was discarded is a draft *of*
+    /// the object); none for the others.
+    pub const fn join(self) -> Option<&'static str> {
+        match self {
+            Self::Discard => Some("of"),
+            Self::Add
+            | Self::CarryOver
+            | Self::Change
+            | Self::Clear
+            | Self::Copy
+            | Self::Delete
+            | Self::Dismiss
+            | Self::Link
+            | Self::Mark
+            | Self::Move
+            | Self::Recover
+            | Self::Register
+            | Self::Reload
+            | Self::Remove
+            | Self::Rename
+            | Self::Replace
+            | Self::Restore
+            | Self::Roll
+            | Self::Separate
+            | Self::Tick
+            | Self::Unregister
+            | Self::Use
+            | Self::Write => None,
         }
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Step {
-    /// `Undo remove`, `Undo remove Take seal`.
+    /// `Undo remove`, `Undo remove Take seal`, `Undo discard of Bridge Ambush`.
     Verb(Verb, Option<String>),
     /// An act the DM named: `Undo: Take seal`.
     Act(String),
 }
 
-/// What an Undo takes back, as its label says it. Its fields are private: a label is made only
-/// from a `Verb` (and an object), or from the name of an act, and the part that tells two steps
-/// apart (a copy number, a folder) is kept whole by every fit.
+/// What an Undo takes back, typed: a verb, an optional object, and the joining word the verb's
+/// table entry gives (`Verb::join`). Its fields are private: a label is made only from a `Verb`
+/// (and an object), or from the name of an act, and the part that tells two steps apart (a copy
+/// number, a folder) is kept whole by every fit.
+///
+/// One step has two forms of words, both made here: the accessible name is always the whole
+/// form (`label`: `Undo discard of Bridge Ambush`); the visible words are `fit`'s, for the room
+/// the footer line has: the whole form when it fits, else, for a verb with a joining word, the
+/// short form (`Undo discard`), and for the others the object cut by whole words
+/// (`Undo remove Ravenholm…`). The message part gives the action the whole form as its name
+/// whenever the visible words differ.
 ///
 /// ```
 /// let _ = splat::outcome::UndoStep::act("Undo it");
@@ -398,7 +500,7 @@ impl UndoStep {
         }
     }
 
-    /// `Undo <verb> <object>`: `Undo remove Take seal`.
+    /// `Undo <verb> [<join>] <object>`: `Undo remove Take seal`, `Undo discard of Bridge Ambush`.
     pub fn of(verb: Verb, object: impl Into<String>) -> Self {
         Self {
             step: Step::Verb(verb, Some(object.into())),
@@ -427,46 +529,339 @@ impl UndoStep {
         let mut label = head;
         if let Some(object) = object {
             label.push(' ');
-            label.push_str(object);
+            label.push_str(&object);
         }
-        if let Some(part) = &self.tell_apart {
-            label.push(' ');
-            label.push_str(part);
-        }
+        label.push_str(&self.tail());
         label
     }
 
-    /// `Undo remove` or `Undo:`, and the object.
-    fn parts(&self) -> (String, Option<&str>) {
+    /// The short form: `Undo discard`, `Undo remove`, `Undo:`, with the part that tells two
+    /// steps apart.
+    pub fn short(&self) -> String {
+        format!("{}{}", self.parts().0, self.tail())
+    }
+
+    /// ` 2`, ` in Ruins`, or nothing.
+    fn tail(&self) -> String {
+        self.tell_apart
+            .as_ref()
+            .map_or(String::new(), |part| format!(" {part}"))
+    }
+
+    /// `Undo remove` or `Undo:`, and the object with the verb's joining word before it.
+    fn parts(&self) -> (String, Option<String>) {
         match &self.step {
-            Step::Verb(verb, object) => (format!("Undo {}", verb.word()), object.as_deref()),
-            Step::Act(label) => ("Undo:".to_owned(), Some(label.as_str())),
+            Step::Verb(verb, object) => (
+                format!("Undo {}", verb.word()),
+                object.as_ref().map(|object| match verb.join() {
+                    Some(join) => format!("{join} {object}"),
+                    None => object.clone(),
+                }),
+            ),
+            Step::Act(label) => ("Undo:".to_owned(), Some(label.clone())),
         }
     }
 
-    /// The label's words for `width` in the action's font: the whole label when it fits, else
-    /// the object shortened by whole words with `…`. `Undo`, the verb and the part that tells
-    /// steps apart always stay, also when they alone are wider.
+    /// The label's visible words for `width` in the action's font: the whole label when it
+    /// fits; else, for a verb with a joining word (`Verb::join`), the short form
+    /// (`Undo discard`); else the object shortened by whole words with `…`. `Undo`, the verb
+    /// and the part that tells steps apart always stay, also when they alone are wider. The
+    /// accessible name stays `label` (the message part names the action with it).
     pub fn fit(&self, ui: &Ui, width: f32) -> String {
         let font = Type::Strong.font(ui);
         let whole = self.label();
         if number_width(ui, &whole, &font) <= width {
             return whole;
         }
+        if let Step::Verb(verb, Some(_)) = &self.step
+            && verb.join().is_some()
+        {
+            return self.short();
+        }
         let (head, object) = self.parts();
-        let tail = self
-            .tell_apart
-            .as_ref()
-            .map_or(String::new(), |part| format!(" {part}"));
-        let words: Vec<&str> = object.map_or(Vec::new(), |o| o.split(' ').collect());
-        for keep in (1..words.len()).rev() {
-            let shown = format!("{head} {}…{tail}", words[..keep].join(" "));
-            if number_width(ui, &shown, &font) <= width {
-                return shown;
+        let tail = self.tail();
+        let words: Vec<&str> = object
+            .as_deref()
+            .map_or(Vec::new(), |o| o.split(' ').collect());
+        // The most whole words that fit, by bisection: at most `log2` of the word count
+        // measurements per draw (the width grows with the words kept).
+        let cut = |keep: usize| format!("{head} {}…{tail}", words[..keep].join(" "));
+        let fits = |keep: usize| number_width(ui, &cut(keep), &font) <= width;
+        if words.len() < 2 || !fits(1) {
+            return format!("{head} …{tail}");
+        }
+        let (mut low, mut high) = (1, words.len() - 1);
+        while low < high {
+            let mid = (low + high).div_ceil(2);
+            if fits(mid) {
+                low = mid;
+            } else {
+                high = mid - 1;
             }
         }
-        format!("{head} …{tail}")
+        cut(low)
     }
+}
+
+// ------------------------------------------------------------------------------------------------
+// Choice words
+
+/// Proof that a choice template passed `check_choice`. Only `check_choice` makes one.
+#[doc(hidden)]
+#[derive(Clone, Copy)]
+pub struct CheckedChoice(());
+
+/// The rules of a choice template, checked at compile time by `choice!`: it starts with the
+/// app's fixed words (a capital letter first), it holds exactly `values` places `{}` for the
+/// objects, no other brace, and at least one fixed word of three letters or more (so an object
+/// cannot be the whole label behind a letter: `choice!("A{}", label)` does not compile).
+#[doc(hidden)]
+pub const fn check_choice(template: &str, values: usize) -> CheckedChoice {
+    let b = template.as_bytes();
+    assert!(
+        !b.is_empty() && b[0].is_ascii_uppercase(),
+        "A choice starts with the app's own words, a capital first: choice!(\"Repair {{}}\", name)."
+    );
+    let (mut i, mut places, mut run, mut word) = (0, 0, 0, false);
+    while i < b.len() {
+        if b[i] == b'{' {
+            assert!(
+                i + 1 < b.len() && b[i + 1] == b'}',
+                "A choice template has only `{{}}` places."
+            );
+            places += 1;
+            run = 0;
+            i += 2;
+            continue;
+        }
+        assert!(b[i] != b'}', "A choice template has only `{{}}` places.");
+        if b[i].is_ascii_alphabetic() {
+            run += 1;
+            if run >= 3 {
+                word = true;
+            }
+        } else {
+            run = 0;
+        }
+        i += 1;
+    }
+    assert!(
+        word,
+        "A choice has a fixed word of three letters or more: choice!(\"Repair {{}}\", name)."
+    );
+    assert!(
+        places == values,
+        "A choice template has one `{{}}` place for each object."
+    );
+    CheckedChoice(())
+}
+
+/// The words of a choice: the app's fixed words with zero or more objects from the DM's data
+/// between them (`Repair {}`, `Move {} before {}`). Made only by `choice!` (a template literal
+/// checked at compile time, the objects as values) or from fixed words (`"Open in Library".into()`);
+/// no `String` is ever the whole label. The part draws them: when the line is short it cuts the
+/// objects (each keeps at least a few letters and `…`), never the fixed words, and it names the
+/// action with the whole words.
+///
+/// The objects are the DM's data (names, paths of their files): the same count as a value of a
+/// `sentence!` template, none. Words from the system are not an object (they go in a message's
+/// sentence through `Sentence::outside`, `Ban::Words`).
+///
+/// ```
+/// use splat::outcome::{Choice, ChoiceWords};
+/// let (a, b) = (String::from("Ghost of the Mill"), String::from("Ember Cultist"));
+/// let words = splat::choice!("Move {} before {}", a, b);
+/// assert_eq!(words.label(), "Move Ghost of the Mill before Ember Cultist");
+/// let _ = Choice::named(words, 1);
+/// let _: ChoiceWords = "Open in Library".into();
+/// ```
+/// ```compile_fail
+/// use splat::outcome::Choice;
+/// let (a, b) = (String::from("Ghost of the Mill"), String::from("Ember Cultist"));
+/// let _ = Choice::named(format!("Move {a} before {b}"), 1);
+/// ```
+/// ```compile_fail
+/// let a = String::from("Ghost of the Mill");
+/// let _ = splat::choice!("Move {} before {}", a);
+/// ```
+///
+/// A fixed word is a word: an object behind one letter is not choice words (twin: `Add {}`).
+///
+/// ```
+/// let label = String::from("Repair Bridge Ambush");
+/// let _ = splat::choice!("Add {}", label);
+/// ```
+/// ```compile_fail
+/// let label = String::from("Repair Bridge Ambush");
+/// let _ = splat::choice!("A{}", label);
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ChoiceWords {
+    /// The fixed words: one more than the objects.
+    fixed: Vec<&'static str>,
+    objects: Vec<String>,
+}
+
+/// How many letters a cut object keeps at least.
+const OBJECT_KEEPS: usize = 3;
+
+impl From<&'static str> for ChoiceWords {
+    fn from(fixed: &'static str) -> Self {
+        Self {
+            fixed: vec![fixed],
+            objects: Vec::new(),
+        }
+    }
+}
+
+impl ChoiceWords {
+    /// `choice!`'s template and values: `checked` proves the template passed `check_choice`.
+    #[doc(hidden)]
+    pub fn __template(
+        checked: CheckedChoice,
+        template: &'static str,
+        objects: Vec<String>,
+    ) -> Self {
+        let _ = checked;
+        Self {
+            fixed: template.split("{}").collect(),
+            objects,
+        }
+    }
+
+    /// The whole words: the action's accessible name.
+    pub fn label(&self) -> String {
+        self.shown(usize::MAX)
+    }
+
+    /// The words with each object cut to `keep` letters and `…`.
+    fn shown(&self, keep: usize) -> String {
+        let mut words = String::new();
+        for (at, fixed) in self.fixed.iter().enumerate() {
+            words.push_str(fixed);
+            if let Some(object) = self.objects.get(at) {
+                if object.chars().count() > keep {
+                    words.extend(object.chars().take(keep));
+                    let trimmed = words.trim_end().len();
+                    words.truncate(trimmed);
+                    words.push('…');
+                } else {
+                    words.push_str(object);
+                }
+            }
+        }
+        words
+    }
+
+    /// The visible words: the whole words when `fits` them, else the longest cut that does
+    /// (every object cut to the same number of letters, at least `OBJECT_KEEPS`). When even the
+    /// shortest cut does not fit, the whole words wrap: a fixed word is never cut. The search is
+    /// a bisection over the letters kept: at most `log2` of the longest object's length
+    /// measurements per draw.
+    fn fit(&self, fits: impl Fn(&str) -> bool) -> Fitted {
+        let whole = self.label();
+        if fits(&whole) {
+            return Fitted::Whole(whole);
+        }
+        let longest = self
+            .objects
+            .iter()
+            .map(|object| object.chars().count())
+            .max()
+            .unwrap_or(0);
+        if longest <= OBJECT_KEEPS || !fits(&self.shown(OBJECT_KEEPS)) {
+            return Fitted::Wraps(whole);
+        }
+        // The widest cut that fits: the width grows with the letters kept.
+        let (mut low, mut high) = (OBJECT_KEEPS, longest - 1);
+        while low < high {
+            let mid = (low + high).div_ceil(2);
+            if fits(&self.shown(mid)) {
+                low = mid;
+            } else {
+                high = mid - 1;
+            }
+        }
+        Fitted::Cut(self.shown(low), whole)
+    }
+
+    /// `fit` for a choice of `kind` in `room`.
+    fn fit_choice(&self, ui: &Ui, kind: ChoiceKind, room: f32) -> Fitted {
+        self.fit(|words| kind.action(words).natural_width(ui) <= room)
+    }
+}
+
+/// What a choice's words look like in their room.
+enum Fitted {
+    /// All the words, on one line.
+    Whole(String),
+    /// The objects cut (the visible words), and the whole words for the name and the tip.
+    Cut(String, String),
+    /// All the words, wrapped onto more lines: even the shortest cut did not fit.
+    Wraps(String),
+}
+
+/// The kind of a choice whose words hold data, as `MessageChoice` is for fixed words: a safe
+/// choice is bordered; a `Lose` is red with exactly `L` before it, after the safe ones. (A
+/// dismissal has no words: it is the close icon, `MessageChoice::Dismiss`.)
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChoiceKind {
+    Safe,
+    Lose,
+}
+
+impl ChoiceKind {
+    fn action(self, words: &str) -> Action<'_> {
+        match self {
+            Self::Safe => Action::secondary(words),
+            Self::Lose => Action::destructive(words),
+        }
+        .density(Density::Read)
+    }
+}
+
+/// Draw a data choice of `kind` in `room`: whole, cut with the whole words as its name and its
+/// tip (on hover and on keyboard focus), or wrapped. `lock` is its reason while it holds.
+fn data_choice(
+    ui: &mut Ui,
+    words: &ChoiceWords,
+    kind: ChoiceKind,
+    room: f32,
+    lock: Option<&str>,
+) -> Response {
+    match words.fit_choice(ui, kind, room) {
+        Fitted::Whole(words) => kind.action(&words).blocked(lock).show(ui),
+        Fitted::Wraps(words) => kind.action(&words).wraps().blocked(lock).show(ui),
+        Fitted::Cut(shown, whole) => {
+            let response = kind.action(&shown).name(&whole).blocked(lock).show(ui);
+            cut_tip(response, &whole, lock)
+        }
+    }
+}
+
+/// The whole words of a control whose visible words are cut, on hover and on keyboard focus
+/// (`rich_tip`), with its lock's reason under them while it holds.
+fn cut_tip(response: Response, whole: &str, lock: Option<&str>) -> Response {
+    match lock {
+        Some(reason) => super::rich_tip(
+            response,
+            &[super::TipLine::body(whole), super::TipLine::detail(reason)],
+        ),
+        None => super::rich_tip(response, &[super::TipLine::body(whole)]),
+    }
+}
+
+/// Choice words with objects from data: the template's fixed words are checked at compile time
+/// (`check_choice`), the objects are values. See `ChoiceWords`.
+#[macro_export]
+macro_rules! choice {
+    ($template:literal, $($value:expr),+ $(,)?) => {{
+        #[allow(clippy::disallowed_methods, reason = "the macro's own check of its template")]
+        const CHECKED: $crate::outcome::CheckedChoice = $crate::outcome::check_choice($template, [$(::std::stringify!($value)),+].len());
+        #[allow(clippy::disallowed_methods, reason = "the template passed `check_choice`")]
+        let words = $crate::outcome::ChoiceWords::__template(CHECKED, $template, ::std::vec![$(::std::string::ToString::to_string(&$value)),+]);
+        words
+    }};
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -562,9 +957,38 @@ pub enum NoPress {}
 /// locked, if it is. A locked choice is drawn as every blocked action is: disabled, with its
 /// reason on hover and as its accessible description. Its words are `'static`: a choice holds
 /// no borrow of the app.
+///
+/// A lock has two forms, and the type picks by what the caller knows: `blocked(reason)` takes a
+/// reason that is always there (the choice is locked for as long as it is drawn), and a lock
+/// that comes and goes at run time is written only as `locked_when(condition, reason)`, which
+/// keeps the reason's line while it is open so nothing below moves. An optional reason does
+/// not fit `blocked`.
+///
+/// Two duties stay with the caller, as the types cannot see them: **one stable reason per
+/// lock**, and **never build the choice two ways** (`if cond { c.blocked(r) } else { c }`
+/// compiles and moves the line when `cond` changes). `locked_when` keeps the room of the
+/// reason it is given in each frame: a reason that changes to one of another height moves the
+/// line once.
+///
+/// ```
+/// use splat::outcome::{Choice, MessageChoice};
+/// let waiting = true;
+/// let _ = Choice::new(MessageChoice::Choice("Replace"), 1)
+///     .locked_when(waiting, splat::sentence!("Wait for the read."));
+/// let _ = Choice::new(MessageChoice::Choice("Replace"), 1)
+///     .blocked(splat::sentence!("Wait for the read."));
+/// ```
+/// ```compile_fail
+/// use splat::outcome::{Choice, MessageChoice};
+/// let waiting = true;
+/// let _ = Choice::new(MessageChoice::Choice("Replace"), 1)
+///     .blocked(waiting.then_some(splat::sentence!("Wait for the read.")));
+/// ```
 #[must_use = "give it to a message's `choice`"]
 pub struct Choice<A> {
     what: MessageChoice<'static>,
+    /// A choice whose words hold objects from data (`Choice::named`, `Choice::named_as`).
+    named: Option<(ChoiceKind, ChoiceWords)>,
     id: A,
     lock: Lock,
     hover: Option<String>,
@@ -586,6 +1010,29 @@ impl<A> Choice<A> {
     pub fn new(what: MessageChoice<'static>, id: A) -> Self {
         Self {
             what,
+            named: None,
+            id,
+            lock: None,
+            hover: None,
+        }
+    }
+
+    /// A bordered choice whose words hold objects from the DM's data
+    /// (`choice!("Move {} before {}", a, b)`). The part cuts the objects when the line is short,
+    /// never the fixed words, and names the action with the whole words.
+    pub fn named(words: ChoiceWords, id: A) -> Self {
+        Self::named_as(ChoiceKind::Safe, words, id)
+    }
+
+    /// `named`, of `kind`: `ChoiceKind::Lose` is red, with exactly `L` before it, after the
+    /// safe choices (`choice!("Delete {}", name)`).
+    pub fn named_as(kind: ChoiceKind, words: ChoiceWords, id: A) -> Self {
+        Self {
+            what: match kind {
+                ChoiceKind::Safe => MessageChoice::Choice(""),
+                ChoiceKind::Lose => MessageChoice::Lose(""),
+            },
+            named: Some((kind, words)),
             id,
             lock: None,
             hover: None,
@@ -598,10 +1045,10 @@ impl<A> Choice<A> {
         self
     }
 
-    /// Locked while `reason` holds (a live run, a save under way); open with `None`. A lock that
-    /// comes and goes in place is `locked_when`.
-    pub fn blocked(mut self, reason: Option<Sentence>) -> Self {
-        self.lock = reason.map(|reason| (reason, true));
+    /// Locked for as long as it is drawn, for `reason`. A lock that comes and goes is
+    /// `locked_when`.
+    pub fn blocked(mut self, reason: Sentence) -> Self {
+        self.lock = Some((reason, true));
         self
     }
 
@@ -614,7 +1061,19 @@ impl<A> Choice<A> {
 }
 
 /// A message's Undo: its step, the id the caller gets back when the DM presses it, and why it is
-/// locked, if it is (Settings' `Undo register campaign` while a run is live).
+/// locked, if it is (Settings' `Undo register campaign` while a run is live). Its lock has the
+/// two forms of [`Choice`]'s: an optional reason does not fit `blocked`.
+///
+/// ```
+/// use splat::outcome::{UndoStep, Verb};
+/// let live = true;
+/// let _ = UndoStep::verb(Verb::Register).pressed_as(1).locked_when(live, splat::sentence!("End the run first."));
+/// ```
+/// ```compile_fail
+/// use splat::outcome::{UndoStep, Verb};
+/// let live = true;
+/// let _ = UndoStep::verb(Verb::Register).pressed_as(1).blocked(live.then_some(splat::sentence!("End the run first.")));
+/// ```
 #[must_use = "give it to a result's `undo`"]
 pub struct Undo<A> {
     step: UndoStep,
@@ -634,9 +1093,10 @@ impl UndoStep {
 }
 
 impl<A> Undo<A> {
-    /// Locked while `reason` holds; open with `None`.
-    pub fn blocked(mut self, reason: Option<Sentence>) -> Self {
-        self.lock = reason.map(|reason| (reason, true));
+    /// Locked for as long as it is drawn, for `reason`; a lock that comes and goes is
+    /// `locked_when`.
+    pub fn blocked(mut self, reason: Sentence) -> Self {
+        self.lock = Some((reason, true));
         self
     }
 
@@ -670,12 +1130,38 @@ impl<A> Undo<A> {
 /// use splat::outcome::{Done, ResultOrder, Verb};
 /// let _ = Done::<u8>::new(ResultOrder::default(), Verb::Remove, "Take seal");
 /// ```
+///
+/// The object may come first, and the result may name where it was done; the Undo then tells
+/// itself apart by the same place (Open questions' tick):
+///
+/// ```
+/// use splat::outcome::{Done, Verb};
+/// let done = Done::new(Verb::Tick, "“Who hired the bandits?”").object_first().within("Horn Rings").undo(1);
+/// assert_eq!(done.words().as_str(), "“Who hired the bandits?” ticked in Horn Rings.");
+/// ```
+///
+/// Its Undo's lock has the two forms of [`Choice`]'s: an optional reason does not fit
+/// `undo_blocked`.
+///
+/// ```
+/// use splat::outcome::{Done, Verb};
+/// let live = true;
+/// let _ = Done::new(Verb::Remove, "Bell").undo(1).undo_locked_when(live, splat::sentence!("End the run first."));
+/// let _ = Done::new(Verb::Remove, "Bell").undo(1).undo_blocked(splat::sentence!("End the run first."));
+/// ```
+/// ```compile_fail
+/// use splat::outcome::{Done, Verb};
+/// let live = true;
+/// let _ = Done::new(Verb::Remove, "Bell").undo(1).undo_blocked(live.then_some(splat::sentence!("End the run first.")));
+/// ```
 #[must_use = "make a `KeptLine` of it with `Shown::outcome`"]
 pub struct Done<A> {
     verb: Verb,
     object: String,
+    object_first: bool,
+    within: Option<String>,
     more: Option<Sentence>,
-    undo: Option<(Option<String>, A, Option<Sentence>)>,
+    undo: Option<(Option<String>, A, Lock)>,
     choices: Vec<Choice<A>>,
 }
 
@@ -684,10 +1170,25 @@ impl<A> Done<A> {
         Self {
             verb,
             object: object.into(),
+            object_first: false,
+            within: None,
             more: None,
             undo: None,
             choices: Vec::new(),
         }
+    }
+
+    /// The object first, then the verb: `“…” ticked.` in place of `Ticked “…”.`
+    pub fn object_first(mut self) -> Self {
+        self.object_first = true;
+        self
+    }
+
+    /// Where it was done, a name of the DM's data: `… in Horn Rings.` Its Undo tells itself
+    /// apart by the same words (`Undo tick “…” in Horn Rings`), which a fit never drops.
+    pub fn within(mut self, name: impl Into<String>) -> Self {
+        self.within = Some(name.into());
+        self
     }
 
     /// Sentences after the first: `With it: Bell is done.`
@@ -711,10 +1212,18 @@ impl<A> Done<A> {
         self
     }
 
-    /// Its Undo is locked while `reason` holds.
-    pub fn undo_blocked(mut self, reason: Option<Sentence>) -> Self {
+    /// Its Undo is locked for as long as it is drawn, for `reason`.
+    pub fn undo_blocked(mut self, reason: Sentence) -> Self {
         if let Some(undo) = &mut self.undo {
-            undo.2 = reason;
+            undo.2 = Some((reason, true));
+        }
+        self
+    }
+
+    /// Its Undo is locked while `locked`, for `reason`; the reason's line is kept while open.
+    pub fn undo_locked_when(mut self, locked: bool, reason: Sentence) -> Self {
+        if let Some(undo) = &mut self.undo {
+            undo.2 = Some((reason, locked));
         }
         self
     }
@@ -724,13 +1233,18 @@ impl<A> Done<A> {
         self
     }
 
-    /// `Removed Take seal.`, then the other sentences.
+    /// `Removed Take seal.` (or `“…” ticked in Horn Rings.`), then the other sentences.
     pub fn words(&self) -> Sentence {
-        let first = Sentence(Cow::Owned(format!(
-            "{} {}.",
-            self.verb.past(),
-            self.object.trim_end_matches('.')
-        )));
+        let object = self.object.trim_end_matches('.');
+        let within = self
+            .within
+            .as_ref()
+            .map_or(String::new(), |name| format!(" in {name}"));
+        let first = Sentence(Cow::Owned(if self.object_first {
+            format!("{object} {}{within}.", self.verb.past_after())
+        } else {
+            format!("{} {object}{within}.", self.verb.past())
+        }));
         match &self.more {
             Some(more) => first.then(more.clone()),
             None => first,
@@ -927,6 +1441,7 @@ struct Body {
     undo: Option<UndoStep>,
     undo_lock: Lock,
     choices: Vec<MessageChoice<'static>>,
+    named: Vec<Option<(ChoiceKind, ChoiceWords)>>,
     locks: Vec<Lock>,
     hovers: Vec<Option<String>>,
 }
@@ -946,8 +1461,13 @@ impl<A> Typed<A> {
         };
         let mut ids = Vec::with_capacity(choices.len());
         let (mut whats, mut locks, mut hovers) = (Vec::new(), Vec::new(), Vec::new());
+        let mut named = Vec::new();
+        // Safe first: a choice that loses something follows every other (a stable order).
+        let mut choices = choices;
+        choices.sort_by_key(|choice| matches!(choice.what, MessageChoice::Lose(_)));
         for choice in choices {
             whats.push(choice.what);
+            named.push(choice.named);
             locks.push(choice.lock);
             hovers.push(choice.hover);
             ids.push(choice.id);
@@ -959,6 +1479,7 @@ impl<A> Typed<A> {
                 undo,
                 undo_lock,
                 choices: whats,
+                named,
                 locks,
                 hovers,
             },
@@ -1004,11 +1525,19 @@ impl<A> KeptOutcome<A> {
                 let words = done.words();
                 let undo = done.undo.map(|(part, id, lock)| {
                     let step = UndoStep::of(done.verb, done.object.trim_end_matches('.'));
+                    let within = done.within.as_ref().map(|name| format!("in {name}"));
+                    let part = match (within, part) {
+                        (Some(within), Some(part)) => Some(format!("{within} {part}")),
+                        (within, part) => within.or(part),
+                    };
                     let step = match part {
                         Some(part) => step.tell_apart(part),
                         None => step,
                     };
-                    step.pressed_as(id).blocked(lock)
+                    Undo {
+                        lock,
+                        ..step.pressed_as(id)
+                    }
                 });
                 Typed::new(Tone::Success, words, undo, done.choices)
             }
@@ -1356,6 +1885,21 @@ impl<'f, A: 'static> Messages<'f, A> {
             pressed: sink.0.borrow_mut().take(),
         }
     }
+
+    /// `pane` with a `Body::Content` body that holds one editor which grows with its text
+    /// (`Footer::pane_editor`, `pane::EditorRegion`).
+    pub fn pane_editor<R>(
+        self,
+        ui: &mut Ui,
+        add: impl for<'r> FnOnce(&mut Ui, super::pane::EditorRegion<'r>) -> R,
+    ) -> Paned<R, A> {
+        let Self { footer, sink, .. } = self;
+        let body = footer.pane_editor(ui, add);
+        Paned {
+            body,
+            pressed: sink.0.borrow_mut().take(),
+        }
+    }
 }
 
 impl Body {
@@ -1433,7 +1977,7 @@ impl Body {
                             let name = (shown != label).then_some(label.as_str());
                             let lock = holding(&self.undo_lock);
                             let (undo, centre) =
-                                undo_message_line(ui, self.tone, words, &shown, name, lock);
+                                undo_message_line(ui, self.tone, words, &shown, name, lock, true);
                             activated(ui, pressed, undo, words, Pressed::Undo);
                             line = centre;
                         }
@@ -1457,7 +2001,7 @@ impl Body {
                 // else Undo on its line and the choices on the lines under it, from the words.
                 let choices: f32 = self
                     .row_choices()
-                    .map(|(_, choice)| self.choice_width(ui, choice) + gap)
+                    .map(|(at, choice)| self.choice_width(ui, at, choice) + gap)
                     .sum();
                 let one_line =
                     inset + undo.as_ref().map_or(0.0, |(_, _, width)| width + L) + choices
@@ -1476,7 +2020,11 @@ impl Body {
                             if shown != label {
                                 action = action.name(label);
                             }
-                            let clicked = action.show(ui).clicked();
+                            let mut response = action.show(ui);
+                            if shown != label {
+                                response = cut_tip(response, label, holding(&self.undo_lock));
+                            }
+                            let clicked = response.clicked();
                             activated(ui, pressed, clicked, words, Pressed::Undo);
                             space(ui, (L - gap).max(0.0));
                         }
@@ -1531,7 +2079,11 @@ impl Body {
     }
 
     /// A choice's whole width, with the `L` before a red one.
-    fn choice_width(&self, ui: &Ui, choice: MessageChoice<'_>) -> f32 {
+    fn choice_width(&self, ui: &Ui, at: usize, choice: MessageChoice<'_>) -> f32 {
+        if let Some(Some((kind, words))) = self.named.get(at) {
+            let lose = if *kind == ChoiceKind::Lose { L } else { 0.0 };
+            return kind.action(&words.label()).natural_width(ui) + lose;
+        }
         match choice {
             MessageChoice::Choice(word) => Action::secondary(word)
                 .density(Density::Read)
@@ -1555,13 +2107,22 @@ impl Body {
         let gap = ui.spacing().item_spacing.x;
         for (at, choice) in self.row_choices() {
             let lock = self.locks.get(at).and_then(holding);
-            let clicked = match choice {
-                MessageChoice::Choice(word) => Action::secondary(word)
+            let clicked = match (choice, self.named.get(at).and_then(Option::as_ref)) {
+                // Words with objects: whole, cut (named and tipped with the whole words) or
+                // wrapped to the row's width.
+                // Words with objects: cut to the row's width, named with the whole words.
+                (_, Some((kind, words))) => {
+                    if *kind == ChoiceKind::Lose && at > 0 {
+                        space(ui, (L - gap).max(0.0));
+                    }
+                    data_choice(ui, words, *kind, ui.max_rect().width(), lock).clicked()
+                }
+                (MessageChoice::Choice(word), None) => Action::secondary(word)
                     .density(Density::Read)
                     .blocked(lock)
                     .show(ui)
                     .clicked(),
-                MessageChoice::Lose(word) => {
+                (MessageChoice::Lose(word), None) => {
                     if at > 0 {
                         space(ui, (L - gap).max(0.0));
                     }
@@ -1571,7 +2132,7 @@ impl Body {
                         .show(ui)
                         .clicked()
                 }
-                MessageChoice::Link { word, hover } => match lock {
+                (MessageChoice::Link { word, hover }, None) => match lock {
                     // A locked link is drawn disabled, with its reason, as a blocked action is.
                     Some(reason) => {
                         ui.add_enabled_ui(false, |ui| link(ui, word))
@@ -1589,7 +2150,7 @@ impl Body {
                         .clicked()
                     }
                 },
-                MessageChoice::Dismiss(_) => false,
+                (MessageChoice::Dismiss(_), None) => false,
             };
             activated(
                 ui,
@@ -1747,6 +2308,157 @@ impl<A> PagePlaceholder<A> {
         let typed = Typed::new(self.tone, self.words, None, self.choices);
         let pressed = typed.body.draw(ui, MessagePlace::Page)?;
         typed.id(pressed)
+    }
+}
+
+/// One repair of a [`BodyFault`]: its [`ChoiceWords`] (the app's fixed words, `Open in Library`,
+/// or a `choice!` template with objects from the DM's data, `Repair {}`,
+/// `Replace with a basic {}`), a help line under it, a lock, and the caller's id that comes back
+/// when it is pressed. The part cuts the objects to the fault's width, never the fixed words, and
+/// names the action with the whole words.
+///
+/// A label made at run time is not choice words; the twin gives the object as a value:
+///
+/// ```
+/// use splat::outcome::Repair;
+/// let name = String::from("Bridge Ambush");
+/// let _ = Repair::new(splat::choice!("Repair {}", name), 1);
+/// let _ = Repair::new("Open in Library", 2);
+/// ```
+/// ```compile_fail
+/// use splat::outcome::Repair;
+/// let name = String::from("Bridge Ambush");
+/// let _ = Repair::new(format!("Repair {name}"), 1);
+/// ```
+///
+/// Its lock has the two forms of [`Choice`]'s:
+///
+/// ```
+/// use splat::outcome::Repair;
+/// let unsaved = true;
+/// let _ = Repair::new("Replace with a basic manifest", 1)
+///     .locked_when(unsaved, splat::sentence!("Save or discard campaign changes first."));
+/// let _ = Repair::new("Replace with a basic manifest", 1)
+///     .blocked(splat::sentence!("Save or discard campaign changes first."));
+/// ```
+/// ```compile_fail
+/// use splat::outcome::Repair;
+/// let unsaved = true;
+/// let _ = Repair::new("Replace with a basic", 1)
+///     .blocked(unsaved.then_some(splat::sentence!("Save or discard campaign changes first.")));
+/// ```
+///
+/// Named escape: a leaked `String` (`String::leak`, `Box::leak`) is `'static`; a reviewer sees it.
+#[must_use = "give it to a `BodyFault`'s `repair`"]
+pub struct Repair<A> {
+    words: ChoiceWords,
+    help: Option<Sentence>,
+    lock: Lock,
+    id: A,
+}
+
+impl<A> Repair<A> {
+    /// The repair's words, and the id given back when it is pressed.
+    pub fn new(words: impl Into<ChoiceWords>, id: A) -> Self {
+        Self {
+            words: words.into(),
+            help: None,
+            lock: None,
+            id,
+        }
+    }
+
+    /// What pressing it keeps and what it replaces, in a help line under it.
+    pub fn help(mut self, help: Sentence) -> Self {
+        self.help = Some(help);
+        self
+    }
+
+    /// Locked for as long as it is drawn, for `reason`.
+    pub fn blocked(mut self, reason: Sentence) -> Self {
+        self.lock = Some((reason, true));
+        self
+    }
+
+    /// Locked while `locked`, for `reason`; the reason's line is kept while it is open.
+    pub fn locked_when(mut self, locked: bool, reason: Sentence) -> Self {
+        self.lock = Some((reason, locked));
+        self
+    }
+}
+
+/// A fault in a page's body that the DM can repair from where it is (Campaign content's package
+/// and dependency faults): the fault's words and tone, then each [`Repair`] on its own line from
+/// the words, with its lock's reason and its help line under it. Its tone and words come from the
+/// fault when it is made; the press comes back as the caller's id, at most one per draw (the
+/// first in drawing order): the first-press slot is per `show` call, not per pane or frame. It
+/// registers the fault's rect for the gate (`MessagePlace::Page`), not a whole row: a row that
+/// holds it registers itself. A body place: `show` is a reviewed suppression (`Ban::Body`).
+#[must_use = "call show"]
+pub struct BodyFault<A> {
+    tone: Tone,
+    words: Sentence,
+    repairs: Vec<Repair<A>>,
+}
+
+impl<A> BodyFault<A> {
+    pub fn new(fault: &dyn Fault) -> Self {
+        Self {
+            tone: fault.severity().tone(),
+            words: fault_words(fault),
+            repairs: Vec::new(),
+        }
+    }
+
+    pub fn repair(mut self, repair: Repair<A>) -> Self {
+        self.repairs.push(repair);
+        self
+    }
+
+    /// Draw it at the cursor, capped at `LIST_MEASURE`; the caller's id of the repair pressed.
+    pub fn show(self, ui: &mut Ui) -> Option<A> {
+        let Self {
+            tone,
+            words,
+            repairs,
+        } = self;
+        let mut pressed = None;
+        let response = ui
+            .scope(|ui| {
+                ui.set_max_width(ui.available_width().min(LIST_MEASURE));
+                let text = words.as_str();
+                tone_message(ui, tone, text);
+                for (at, repair) in repairs.iter().enumerate() {
+                    let clicked = message_choice_row(ui, tone, |ui| {
+                        let room = ui.available_width();
+                        let lock = holding(&repair.lock);
+                        data_choice(ui, &repair.words, ChoiceKind::Safe, room, lock).clicked()
+                    });
+                    activated(ui, &mut pressed, clicked, text, Pressed::Choice(at));
+                    if let Some((reason, locked)) = &repair.lock {
+                        message_choice_row(ui, tone, |ui| {
+                            if *locked {
+                                blocked_reason(ui, Some(reason.as_str()));
+                            } else {
+                                ui.scope_builder(egui::UiBuilder::new().invisible(), |ui| {
+                                    blocked_reason(ui, Some(reason.as_str()));
+                                });
+                            }
+                        });
+                    }
+                    if let Some(help) = &repair.help {
+                        message_choice_row(ui, tone, |ui| {
+                            super::components::help(ui, help.as_str());
+                        });
+                    }
+                }
+            })
+            .response;
+        register(ui, response.rect, MessagePlace::Page, tone);
+        match pressed? {
+            Pressed::Choice(at) => repairs.into_iter().nth(at).map(|repair| repair.id),
+            Pressed::Undo => None,
+        }
     }
 }
 
@@ -1968,6 +2680,7 @@ mod tests {
                 banner(ui, Banner::Fault(&fault));
                 row_fault(ui, &fault);
                 let _ = PagePlaceholder::<NoPress>::new(&fault).show(ui);
+                let _ = BodyFault::<NoPress>::new(&fault).show(ui);
                 let frame = PaneFrame::new(ui);
                 let mut messages =
                     Messages::<NoPress>::new(&frame, "one_fault", ui.available_width());
@@ -1984,6 +2697,7 @@ mod tests {
                 MessagePlace::Banner,
                 MessagePlace::Row,
                 MessagePlace::Page,
+                MessagePlace::Page,
                 MessagePlace::Footer
             ]
         );
@@ -1997,7 +2711,7 @@ mod tests {
                 "Cinder Wolf · line 14: The HP is missing."
             )
             .count(),
-            4
+            5
         );
     }
 
@@ -2019,6 +2733,45 @@ mod tests {
         );
         assert_eq!(UndoStep::act("Take seal").label(), "Undo: Take seal");
         assert_eq!(UndoStep::verb(Verb::Add).label(), "Undo add");
+        // M3 gap 1: each verb's two forms, from one entry of the table, with its joining word.
+        for verb in Verb::ALL {
+            let done = Done::new(verb, "Bridge Ambush").undo(0u8);
+            let join = verb.join().map_or(String::new(), |join| format!("{join} "));
+            assert_eq!(
+                done.words().as_str(),
+                format!("{} Bridge Ambush.", verb.past()),
+                "{verb:?}"
+            );
+            assert_eq!(
+                KeptOutcome::from(done).typed().body.undo.unwrap().label(),
+                format!("Undo {} {join}Bridge Ambush", verb.word()),
+                "{verb:?}"
+            );
+            assert_eq!(
+                UndoStep::of(verb, "Bell").short(),
+                format!("Undo {}", verb.word())
+            );
+        }
+        assert_eq!(
+            UndoStep::of(Verb::Discard, "Bridge Ambush").label(),
+            "Undo discard of Bridge Ambush"
+        );
+        assert_eq!(UndoStep::of(Verb::Tick, "“Q?”").label(), "Undo tick “Q?”");
+        // The object first, and the place, which the Undo keeps as its tell-apart part.
+        let tick = Done::new(Verb::Tick, "“Who hired the bandits?”")
+            .object_first()
+            .within("Horn Rings")
+            .undo(1u8);
+        assert_eq!(
+            tick.words().as_str(),
+            "“Who hired the bandits?” ticked in Horn Rings."
+        );
+        let step = KeptOutcome::from(tick).typed().body.undo.unwrap();
+        assert_eq!(
+            step.label(),
+            "Undo tick “Who hired the bandits?” in Horn Rings"
+        );
+        assert_eq!(step.short(), "Undo tick in Horn Rings");
         let ctx = egui::Context::default();
         crate::design::theme::install(&ctx);
         let _ = ctx.run(Default::default(), |ctx| {
@@ -2030,8 +2783,374 @@ mod tests {
                 assert_eq!(step.fit(ui, 10_000.0), whole);
                 assert_eq!(step.fit(ui, room), "Undo copy Ravenholm Ironside… 2");
                 assert_eq!(step.fit(ui, 1.0), "Undo copy … 2");
+                // A verb with a joining word: the whole form, or the short form, never a cut.
+                let discard = UndoStep::of(Verb::Discard, "Bridge Ambush");
+                let whole = number_width(ui, "Undo discard of Bridge Ambush", &font);
+                assert_eq!(
+                    discard.fit(ui, whole + 1.0),
+                    "Undo discard of Bridge Ambush"
+                );
+                assert_eq!(discard.fit(ui, whole - 1.0), "Undo discard");
+                assert_eq!(discard.fit(ui, 1.0), "Undo discard");
             });
         });
+    }
+
+    /// M3 gap 1, in the pane's footer: the visible Undo words are `fit`'s for the line's room,
+    /// and the accessible name is always the whole form. Narrow: `Undo discard` named
+    /// `Undo discard of Bridge Ambush`; a long object of a verb with no joining word is cut in
+    /// the visible words only. Wide: the whole form shows. The press reaches its entry.
+    #[test]
+    fn an_undo_shows_its_short_form_when_narrow_and_keeps_its_whole_name() {
+        use egui_kittest::kittest::NodeT;
+        use pilot::*;
+        let visible = |h: &Harness<'_, App>, name: &str| {
+            let node = h.get_by_label(name);
+            let first = name.split(' ').next().unwrap_or_default();
+            let shown: Vec<String> = h
+                .output()
+                .shapes
+                .iter()
+                .filter_map(|clipped| match &clipped.shape {
+                    egui::Shape::Text(text)
+                        if text.galley.job.text.starts_with(first)
+                            && node
+                                .rect()
+                                .contains(text.pos + text.galley.rect.center().to_vec2()) =>
+                    {
+                        Some(text.galley.job.text.clone())
+                    }
+                    _ => None,
+                })
+                .collect();
+            (node.accesskit_node().id(), shown)
+        };
+        let discard = || {
+            let mut app = two();
+            app.older_line = OlderLine::Discard("Bridge Ambush");
+            app
+        };
+        let mut narrow = discard();
+        narrow.narrow = Some(230.0);
+        let mut h = harness_sized(narrow, 960.0);
+        let (_, shown) = visible(&h, "Undo discard of Bridge Ambush");
+        assert_eq!(shown, ["Undo discard"], "narrow: the short form shows");
+        h.get_by_label("Undo discard of Bridge Ambush").click();
+        h.run_steps(2);
+        assert_eq!(h.state().acted, [Ok("Campaign link saved")]);
+        let h = harness_sized(discard(), 960.0);
+        let (_, shown) = visible(&h, "Undo discard of Bridge Ambush");
+        assert_eq!(
+            shown,
+            ["Undo discard of Bridge Ambush"],
+            "wide: the whole form"
+        );
+        // A long object with no joining word: cut by whole words in the visible words only.
+        let long = "Bridge Ambush at the Ravenholm Ironside Crossing";
+        let mut narrow = two();
+        narrow.older_line = OlderLine::Remove(long);
+        narrow.narrow = Some(320.0);
+        let h = harness_sized(narrow, 960.0);
+        let name = format!("Undo remove {long}");
+        let (_, shown) = visible(&h, &name);
+        assert!(
+            shown.len() == 1
+                && shown[0].starts_with("Undo remove Bridge")
+                && shown[0].ends_with('…'),
+            "the object is cut in the visible words: {shown:?}"
+        );
+        // A footer choice whose words hold two objects from data (package R's counterexample):
+        // narrow, each object is cut and the fixed words stay; the name keeps the whole words.
+        const MOVE: &str = "Move Ghost of the Mill before Ember Cultist";
+        // One result, so the footer shows the whole line without scrolling.
+        let one = || {
+            let mut app = App::default();
+            app.dndbeyond
+                .results
+                .record(Saved(Campaign("older"), "Campaign link saved"));
+            app.moves = Some(["Ghost of the Mill", "Ember Cultist"]);
+            app
+        };
+        let mut narrow = one();
+        narrow.narrow = Some(260.0);
+        let mut h = harness_sized(narrow, 960.0);
+        let (_, shown) = visible(&h, MOVE);
+        assert!(
+            shown.len() == 1
+                && shown[0].starts_with("Move Gho")
+                && shown[0].contains("… before Emb")
+                && shown[0].ends_with('…'),
+            "the objects are cut, the fixed words stay: {shown:?}"
+        );
+        h.get_by_label(MOVE).click();
+        h.run_steps(2);
+        assert_eq!(
+            h.state().renamed,
+            1,
+            "its press comes back as the caller's id"
+        );
+        let h = harness_sized(one(), 960.0);
+        assert_eq!(visible(&h, MOVE).1, [MOVE], "wide: the whole words");
+
+        // Review of PR 332, 3: two objects with one prefix are told apart by the tip, on hover
+        // and on keyboard focus, whenever the visible words are cut.
+        let painted = |h: &Harness<'_, App>, words: &str| {
+            h.output().shapes.iter().any(|clipped| {
+                matches!(&clipped.shape, egui::Shape::Text(text) if text.galley.job.text == words)
+            })
+        };
+        const ALIKE: &str = "Move Ghost north before Ghost south";
+        let mut narrow = one();
+        narrow.moves = Some(["Ghost north", "Ghost south"]);
+        narrow.narrow = Some(260.0);
+        let mut h = harness_sized(narrow, 960.0);
+        h.ctx
+            .all_styles_mut(|style| style.interaction.tooltip_delay = 0.0);
+        let shown = visible(&h, ALIKE).1;
+        assert!(
+            shown.len() == 1
+                && shown[0].matches('…').count() == 2
+                && !shown[0].contains("north")
+                && !shown[0].contains("south"),
+            "both objects cut alike: {shown:?}"
+        );
+        assert!(!painted(&h, ALIKE), "no tip before hover or focus");
+        let at = h.get_by_label(ALIKE).rect().center();
+        h.event(egui::Event::PointerMoved(at));
+        h.run_steps(4);
+        assert!(painted(&h, ALIKE), "hover shows the whole words");
+        h.event(egui::Event::PointerMoved(egui::pos2(1.0, 1.0)));
+        h.run_steps(4);
+        assert!(!painted(&h, ALIKE), "the tip goes with the pointer");
+        h.get_by_label(ALIKE).focus();
+        h.run_steps(4);
+        assert!(painted(&h, ALIKE), "keyboard focus shows the whole words");
+
+        // Review of PR 332, 2: a red choice with data is drawn red, exactly `L` after the safe
+        // choice before it, after the safe ones though it was given first; its press comes back.
+        let mut app = one();
+        app.moves = Some(["Ash", "Elm"]);
+        app.deletes = true;
+        let mut h = harness_sized(app, 960.0);
+        let (delete, moving) = (
+            h.get_by_label("Delete Ash").rect(),
+            h.get_by_label("Move Ash before Elm").rect(),
+        );
+        assert!(
+            (delete.top() - moving.top()).abs() < 0.5
+                && (delete.left() - moving.right() - L).abs() < 0.5,
+            "exactly L after the safe choice: {moving:?} {delete:?}"
+        );
+        let red = h.output().shapes.iter().any(|clipped| {
+            matches!(&clipped.shape, egui::Shape::Text(text)
+                if text.galley.job.text == "Delete Ash"
+                    && text.galley.job.sections.iter().all(|section| section.format.color == colors().destructive))
+        });
+        assert!(red, "the destructive colour");
+        h.get_by_label("Delete Ash").click();
+        h.run_steps(2);
+        assert_eq!(h.state().deleted, 1);
+    }
+
+    /// M3 gap 3, in the pilot: a press made on the line before its entry changed in place (in
+    /// the press's frame, by the body) still reaches the entry, and the action gets the revised
+    /// value; the unrelated result stays, and the next frame shows the revised words.
+    #[test]
+    fn a_press_made_before_a_revision_reaches_the_revised_entry() {
+        use pilot::*;
+        let mut h = harness(two());
+        let newer = order(h.state(), "newer");
+        let at = undo(&h, "older").rect().center();
+        pointer(&mut h, at, true);
+        h.run_steps(1);
+        h.state_mut().in_body = Some(InBody::Revise("older"));
+        pointer(&mut h, at, false);
+        h.run_steps(1);
+        assert_eq!(h.state().acted, [Ok("Campaign link moved")]);
+        h.run_steps(2);
+        assert_eq!(order(h.state(), "newer"), newer, "B keeps its order");
+        assert!(
+            h.query_by_role_and_label(egui::accesskit::Role::Label, "Folder saved.")
+                .is_some(),
+            "B stays"
+        );
+        // Revised, not pressed: the footer shows the revised words in the same place.
+        let mut h = harness(two());
+        let top = undo(&h, "older").rect().top();
+        h.state_mut().in_body = Some(InBody::Revise("older"));
+        h.run_steps(3);
+        let label = |h: &Harness<'_, App>, words: &str| {
+            h.query_by_role_and_label(egui::accesskit::Role::Label, words)
+                .is_some()
+        };
+        assert!(label(&h, "Campaign link moved."));
+        assert!(!label(&h, "Campaign link saved."));
+        assert_eq!(undo(&h, "older").rect().top(), top, "the same place");
+    }
+
+    /// M3 gap 2: a body fault's repairs. The verb words are the app's; the object comes from
+    /// data. A press comes back once, as the caller's id; a locked repair paints its reason and
+    /// gives nothing back; a long object is cut inside the fault's width at 320 px while the
+    /// accessible name keeps the whole words; each help line sits under its repair.
+    #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the test of the body place `BodyFault::show` itself"
+    )]
+    fn a_body_fault_gives_its_repairs_back_by_id() {
+        use egui_kittest::kittest::NodeT;
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum Fix {
+            Open,
+            Replace,
+            Repair(u8),
+        }
+        #[derive(Default)]
+        struct State {
+            locked: bool,
+            pressed: Vec<Fix>,
+            /// The right edge of the fault's 320 px column.
+            right: f32,
+        }
+        const PATH: &str =
+            "Packages/Ravenholm Ironside Wardens/Encounters/Bridge Ambush/manifest.md";
+        const LOCK: Sentence = crate::sentence!("Save or discard campaign changes first.");
+        const LONG: &str = "Ravenholm Ironside Wardens of the Northern Bridge Crossing";
+        let mut h = Harness::builder()
+            .with_size(egui::vec2(960.0, 600.0))
+            .build_ui_state(
+                |ui, state: &mut State| {
+                    let fault = Hp(Severity::NeedsFixing, None);
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(320.0, 600.0),
+                        egui::Layout::top_down(egui::Align::Min),
+                        |ui| {
+                            state.right = ui.max_rect().right();
+                            let pressed = BodyFault::new(&fault)
+                                .repair(Repair::new("Open in Library", Fix::Open))
+                                .repair(
+                                    Repair::new(
+                                        crate::choice!("Replace with a basic {}", PATH),
+                                        Fix::Replace,
+                                    )
+                                    .help(crate::sentence!("Your entries stay."))
+                                    .locked_when(state.locked, LOCK),
+                                )
+                                .repair(Repair::new(
+                                    crate::choice!("Repair {}", "Cinder Wolf"),
+                                    Fix::Repair(7),
+                                ))
+                                .repair(Repair::new(
+                                    crate::choice!("Repair {} in Library", LONG),
+                                    Fix::Repair(8),
+                                ))
+                                .show(ui);
+                            state.pressed.extend(pressed);
+                        },
+                    );
+                },
+                State::default(),
+            );
+        crate::design::theme::install(&h.ctx);
+        h.run_steps(4);
+        let name = format!("Replace with a basic {PATH}");
+        let replace = h.get_by_label(&name).rect();
+        assert!(
+            replace.right() <= h.state().right + 0.5 && replace.width() < 320.0,
+            "inside the fault's width: {replace:?}"
+        );
+        let help = h
+            .get_by_role_and_label(egui::accesskit::Role::Label, "Your entries stay.")
+            .rect();
+        assert!(
+            help.top() >= replace.bottom() - 1.0,
+            "help under its repair"
+        );
+        // The fixed words after a cut object stay; the name keeps the whole words.
+        let whole = format!("Repair {LONG} in Library");
+        let node = h.get_by_label(&whole).rect();
+        let shown: Vec<String> = h
+            .output()
+            .shapes
+            .iter()
+            .filter_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(text)
+                    if text.galley.job.text.starts_with("Repair")
+                        && node.contains(text.pos + text.galley.rect.center().to_vec2()) =>
+                {
+                    Some(text.galley.job.text.clone())
+                }
+                _ => None,
+            })
+            .collect();
+        assert!(
+            shown.len() == 1
+                && shown[0].starts_with("Repair Rav")
+                && shown[0].ends_with("… in Library"),
+            "the object is cut, the fixed words stay: {shown:?}"
+        );
+        h.get_by_label("Repair Cinder Wolf").click();
+        h.run_steps(2);
+        assert_eq!(
+            h.state().pressed,
+            [Fix::Repair(7)],
+            "once, as the caller's id"
+        );
+        h.get_by_label(&name).click();
+        h.run_steps(2);
+        assert_eq!(h.state().pressed, [Fix::Repair(7), Fix::Replace]);
+        // Locked: disabled, its reason painted, nothing given back; nothing above it moves.
+        let open = h.get_by_label("Repair Cinder Wolf").rect().top();
+        h.state_mut().locked = true;
+        h.state_mut().pressed.clear();
+        h.run_steps(3);
+        assert!(h.get_by_label(&name).accesskit_node().is_disabled());
+        assert!(
+            h.query_by_role_and_label(egui::accesskit::Role::Label, LOCK.as_str())
+                .is_some()
+        );
+        assert_eq!(
+            h.get_by_label("Repair Cinder Wolf").rect().top(),
+            open,
+            "a lock moves nothing"
+        );
+        h.get_by_label(&name).click();
+        h.run_steps(2);
+        assert!(h.state().pressed.is_empty());
+
+        // Review of PR 332, 4: narrower than the shortest cut, the words wrap inside the row;
+        // every fixed word is painted, none is cut.
+        const WHOLE: &str = "Repair Ravenholm in Library";
+        let mut h = Harness::builder()
+            .with_size(egui::vec2(400.0, 300.0))
+            .build_ui_state(
+                |ui, right: &mut f32| {
+                    let fault = Hp(Severity::NeedsFixing, None);
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(150.0, 300.0),
+                        egui::Layout::top_down(egui::Align::Min),
+                        |ui| {
+                            *right = ui.max_rect().right();
+                            let _ = BodyFault::<u8>::new(&fault)
+                                .repair(Repair::new(
+                                    crate::choice!("Repair {} in Library", "Ravenholm"),
+                                    1,
+                                ))
+                                .show(ui);
+                        },
+                    );
+                },
+                0.0,
+            );
+        crate::design::theme::install(&h.ctx);
+        h.run_steps(4);
+        let node = h.get_by_label(WHOLE).rect();
+        let wrapped = h.output().shapes.iter().any(|clipped| {
+            matches!(&clipped.shape, egui::Shape::Text(text)
+                if text.galley.job.text == WHOLE && text.galley.rows.len() > 1 && !text.galley.elided)
+        });
+        assert!(wrapped, "the whole words, wrapped, nothing cut");
+        assert!(node.right() <= *h.state() + 0.5, "inside the row: {node:?}");
     }
 
     /// The pane's one press: the first in the footer's drawing order wins, and a second press
@@ -2168,6 +3287,7 @@ mod tests {
             Register,
             Rename,
             Dismiss,
+            Delete,
         }
         /// What a change inside the body does in the next frame drawn.
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -2176,6 +3296,18 @@ mod tests {
             Replace(&'static str),
             End(&'static str),
             Add(&'static str),
+            /// M3 gap 3: the owner's kept value changes in place (its file moved).
+            Revise(&'static str),
+        }
+        /// What the older line says (M3 gap 1): the pilot's `Said`, or a typed Undo step.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+        pub(super) enum OlderLine {
+            #[default]
+            Said,
+            /// `<name> draft discarded.` with `Undo discard of <name>`.
+            Discard(&'static str),
+            /// `Removed <name>.` with `Undo remove <name>`.
+            Remove(&'static str),
         }
         /// Settings' page lock (a round 26 review repair): long enough to wrap in a narrow pane.
         pub(super) const LOCK: Sentence =
@@ -2194,6 +3326,13 @@ mod tests {
             pub two_panes: bool,
             /// The pane in a column this wide.
             pub narrow: Option<f32>,
+            /// What the older line says.
+            pub older_line: OlderLine,
+            /// The older line has a choice whose words hold two objects from data (M3).
+            pub moves: Option<[&'static str; 2]>,
+            /// It also has a red choice with data, given before `Move` (the part puts it after).
+            pub deletes: bool,
+            pub deleted: usize,
             /// What each Undo press did to the store: the words it took back, or `Gone`.
             pub acted: Vec<Result<&'static str, &'static str>>,
             /// Each press: the pane, the kind, and its ticket's order.
@@ -2203,6 +3342,10 @@ mod tests {
         }
 
         /// The pilot's `show_active`: it needs the owner by `&mut`.
+        #[allow(
+            clippy::disallowed_methods,
+            reason = "the pilot's by-owner revision, in the frame of its read"
+        )]
         fn show_active(ui: &mut Ui, dndbeyond: &mut DndBeyond, change: InBody) {
             dndbeyond.edits += 1;
             match change {
@@ -2214,6 +3357,11 @@ mod tests {
                 InBody::Add(owner) => dndbeyond
                     .results
                     .record(Saved(Campaign(owner), "Folder chosen")),
+                InBody::Revise(owner) => {
+                    let _ = dndbeyond
+                        .results
+                        .revise(&Campaign(owner), |saved| saved.1 = "Campaign link moved");
+                }
             }
             ui.label("Link and folder");
         }
@@ -2222,12 +3370,28 @@ mod tests {
         fn one_pane(ui: &mut Ui, app: &mut App, pane: usize) {
             let live = app.run_live;
             let older_undo_open = app.older_undo_open;
+            let older_line = app.older_line;
             let frame = PaneFrame::new(ui);
             let mut messages = Messages::new(&frame, ("pilot", pane), ui.available_width());
             for owner in ["older", "newer", "third"] {
                 if let Some(shown) = app.dndbeyond.results.get(&Campaign(owner)) {
                     let two_choices = app.two_choices;
+                    let moves = app.moves;
+                    let deletes = app.deletes;
                     let line = shown.outcome(&frame, |saved| {
+                        match (owner, older_line) {
+                            (_, OlderLine::Said) | ("newer" | "third", _) => {}
+                            ("older", OlderLine::Discard(name)) => {
+                                return KeptOutcome::Notice(
+                                    Notice::new(crate::sentence!("{} draft discarded.", name)),
+                                    UndoStep::of(Verb::Discard, name).pressed_as(Act::Undo),
+                                );
+                            }
+                            (_, OlderLine::Remove(name)) => {
+                                return Done::new(Verb::Remove, name).undo(Act::Undo).into();
+                            }
+                            _ => {}
+                        }
                         let mut said = Said::new(crate::sentence!("{}.", saved.1)).undo(
                             UndoStep::verb(Verb::Change)
                                 .tell_apart(owner)
@@ -2243,6 +3407,19 @@ mod tests {
                                 )
                                 .locked_when(live, LOCK),
                             );
+                            if let Some([a, b]) = moves {
+                                if deletes {
+                                    said = said.choice(Choice::named_as(
+                                        ChoiceKind::Lose,
+                                        crate::choice!("Delete {}", a),
+                                        Act::Delete,
+                                    ));
+                                }
+                                said = said.choice(Choice::named(
+                                    crate::choice!("Move {} before {}", a, b),
+                                    Act::Rename,
+                                ));
+                            }
                             if two_choices {
                                 said = said.choice(Choice::new(
                                     MessageChoice::Choice("Rename the campaign"),
@@ -2291,6 +3468,7 @@ mod tests {
                     Act::Register => app.registered += 1,
                     Act::Rename => app.renamed += 1,
                     Act::Dismiss => {}
+                    Act::Delete => app.deleted += 1,
                 }
             }
         }

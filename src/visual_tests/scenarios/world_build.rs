@@ -150,6 +150,7 @@ pub fn broken(d: &mut Driver<'_>) {
     d.state_prepared("broken-note-repair", Sizes::All, |d| {
         repair_footer_follows(d, "Line 3 opens a list", "iter-27-A-FE2");
     });
+    long_repair_keeps_save(d);
     let external = "---\nsplat_schema: 2\nsplat_id: [\n---\n\nOutside edit kept.\n";
     fs::write(&path, external).unwrap();
     d.settle();
@@ -1021,6 +1022,21 @@ pub fn broken(d: &mut Driver<'_>) {
         fits,
         "At 960, the longest path's message wraps whole and its choices stay in view",
     );
+    // Round 28 FH9: the title is the file's name, so the file line shows the folder, not the
+    // file name again.
+    let line = d.at_size(SMALL, |d| {
+        d.nodes()
+            .into_iter()
+            .find(|node| node.name.ends_with(long_path))
+            .map(|node| d.painted_in(node.rect))
+    });
+    d.observe(
+        "iter-28-D-FH9",
+        line.as_deref().is_some_and(|words| {
+            words.trim_end().ends_with('/') && !words.contains("Harbour Council.md")
+        }),
+        format!("The file line under the file-name title says {line:?}"),
+    );
     d.state("repair-cannot-open-long", Sizes::Small);
     // A file deleted outside Splat while its pane is open ends the pane on the next load.
     fs::remove_file(&long).unwrap();
@@ -1495,7 +1511,7 @@ pub fn broken(d: &mut Driver<'_>) {
     let outside = format!("{fixed}\nAn outside line.\n");
     fs::write(&path, &outside).unwrap();
     d.click("Save changes");
-    d.expect("This note changed on disk. Your draft is safe until you choose.");
+    d.expect("Repaired watchkeeper changed on disk. Your draft is safe until you choose.");
     d.settle();
     d.click("Reload and lose my draft");
     d.settle();
@@ -1980,7 +1996,7 @@ pub fn facts(d: &mut Driver<'_>) {
     let external = format!("{unchanged}\nWritten in Obsidian while the group draft was open.\n");
     fs::write(&lore_path, &external).unwrap();
     d.click("Save changes");
-    d.expect("This note changed on disk");
+    d.expect("Horn Rings changed on disk");
     assert_eq!(fs::read_to_string(&lore_path).unwrap(), external);
     d.click("Overwrite with my draft");
     d.wait_for_text("Changes saved.");
@@ -2208,6 +2224,25 @@ pub fn facts(d: &mut Driver<'_>) {
             format!("At {size:?} the stamp {stamp:?} and the field {field:?} end at the measure"),
         );
     }
+    // Round 28 AC3, FA6, AA4: beside the field, the stamp is centred on the field's line.
+    for size in [DEFAULT, LARGE] {
+        let (stamp, field) = d.at_size(size, |d| {
+            (
+                d.place_of("Session 1:"),
+                d.nodes()
+                    .into_iter()
+                    .find(|node| node.name == "Log line for Zarel" && node.role == Role::TextInput)
+                    .map(|node| node.rect),
+            )
+        });
+        d.observe(
+            "iter-28-D-FA6",
+            stamp.zip(field).is_some_and(|(stamp, field)| {
+                stamp.right() < field.left() && (stamp.center().y - field.center().y).abs() <= 1.0
+            }),
+            format!("At {size:?} the stamp {stamp:?} beside the field {field:?}"),
+        );
+    }
     d.state("log-field-open", Sizes::All);
     d.type_text("Gave the gate key to Iselle.");
     d.press(Key::Enter);
@@ -2343,8 +2378,38 @@ pub fn facts(d: &mut Driver<'_>) {
     let horn = root(d).join("Lore/Horn Rings.md");
     let open = fs::read_to_string(&horn).unwrap();
     let question = "Open: Can a horn ring be sold?";
+    // The list row just below the Open questions row.
+    let row_below = |d: &Driver<'_>| {
+        let nodes = d.nodes();
+        let open = nodes
+            .iter()
+            .find(|node| node.name.starts_with("Open questions · "))?
+            .rect;
+        nodes
+            .iter()
+            .filter(|node| {
+                node.name.contains(" · ")
+                    && node.rect.top() >= open.bottom() - 0.5
+                    && node.rect.left() < open.right()
+                    && node.rect.right() > open.left()
+            })
+            .map(|node| node.rect)
+            .min_by(|a, b| a.top().total_cmp(&b.top()))
+    };
+    let below_before = row_below(d);
     d.click(question);
     d.expect("Undo tick");
+    // Round 28 FE4: the last question ticked, the row stays while its page is open, says that
+    // none is open, and the row below keeps its place; the page says so too.
+    let below_after = row_below(d);
+    d.observe(
+        "iter-28-D-FE4",
+        d.has("Open questions · No open questions")
+            && d.visible_text("No open questions.")
+            && below_before.is_some()
+            && below_before == below_after,
+        format!("The row below: {below_before:?} → {below_after:?}"),
+    );
     d.observe(
         "T15.5",
         fs::read_to_string(&horn).unwrap()
@@ -3096,7 +3161,7 @@ pub fn tables(d: &mut Driver<'_>) {
     d.observe_both(
         "W6",
         "Table faults appear in the World list and warning count",
-        |d| d.has_containing("3 table faults") && d.visible_text("1 note needs fixing"),
+        |d| d.has_containing("4 table faults") && d.visible_text("1 note needs fixing"),
     );
     // F9: a `per` word that Splat cannot read warns on its table, and the table still rolls.
     // Round 27 FE13: the warning quotes the word the DM wrote and names the words that work.
@@ -3374,6 +3439,22 @@ pub fn generator(d: &mut Driver<'_>) {
     body_kept(d, "iter-26-D-FF1", "No note open", &empty, Some(&undo));
     look_up(d, "Tally");
     d.click("Clear");
+    d.click("Generate NPC");
+    d.expect(crate::lookup::USE_OWN_NAMES);
+    // Review of PR 323: an NPC that Lookup holds belongs to this campaign (its Save writes into
+    // the active one). The switch waits for it as for World's, with the same reason, and opens
+    // after Discard.
+    let switch = "Save or discard your changes to change campaigns.";
+    d.click_starting("Active campaign: ");
+    let held = (d.app().blocked_switch(), d.in_view_containing(switch));
+    d.press(Key::Escape);
+    d.click("Discard");
+    let discarded = d.app().blocked_switch();
+    d.observe(
+        "iter-28-C-lookup-npc-lock",
+        held == (Some(switch), true) && discarded.is_none(),
+        format!("Held in Lookup: (lock, reason in view) {held:?}; after Discard: {discarded:?}"),
+    );
     d.click("Generate NPC");
     d.expect(crate::lookup::USE_OWN_NAMES);
     // One label per card. A text run repeats its label's name, so it is not counted.
@@ -4405,6 +4486,8 @@ pub(super) fn lookup_prose_gap(d: &Driver<'_>, title: &str, kind: &str) -> Optio
                 && node.rect.top() <= kind.bottom() + design::XL
                 && (node.name.starts_with("Edit ")
                     || node.name == "Add to Log"
+                    || node.name == "Open this session"
+                    || node.name == "Open on the timeline"
                     || node.name.starts_with("Start a fight with "))
         })
         .map(|node| node.rect.bottom())
@@ -4849,6 +4932,62 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         d.has(&row) && !d.has("Save NPC"),
         "Back opens the last entry under the NPC's row, and the NPC stays held",
     );
+    // Round 28 FJ6: the rail names the NPC that Lookup holds, also with Lookup closed, and its
+    // status opens Lookup again, where the NPC's row is.
+    let in_rail = format!(
+        "{}: {npc}. Show it in Lookup.",
+        crate::world::page::UNSAVED_NPC
+    );
+    d.observe(
+        "iter-28-C-FJ6",
+        d.has(&in_rail),
+        "With Lookup open, the rail names the NPC it holds",
+    );
+    d.click(NAV_LOOKUP);
+    d.observe(
+        "iter-28-C-FJ6",
+        !d.has(&row) && d.has(&in_rail),
+        "With Lookup closed, the rail still names the NPC that waits to be saved",
+    );
+    d.click(&in_rail);
+    d.observe(
+        "iter-28-C-FJ6",
+        d.in_view("Save NPC") && !d.has(&row) && d.has(&in_rail),
+        "The rail's status opens Lookup on the NPC's card",
+    );
+    // Review of PR 323: from Trackers too, open or closed. The status leaves Trackers and shows
+    // the NPC's card.
+    d.press_ctrl(Key::T);
+    let on_trackers = d.app().lookup.on_trackers();
+    d.click(&in_rail);
+    let open_case = (
+        on_trackers,
+        d.app().lookup.on_trackers(),
+        d.in_view("Save NPC"),
+    );
+    d.press_ctrl(Key::T);
+    d.click(NAV_LOOKUP);
+    let closed = !d.app().lookup.open;
+    d.click(&in_rail);
+    let closed_case = (closed, d.app().lookup.on_trackers(), d.in_view("Save NPC"));
+    d.observe(
+        "iter-28-C-FJ6",
+        open_case == (true, false, true) && closed_case == (true, false, true),
+        format!(
+            "(on Trackers before, on Trackers after, the card in view): with Lookup on Trackers {open_case:?}; Lookup closed after Trackers {closed_case:?}"
+        ),
+    );
+    // Closing the app names the NPC that Lookup holds, as for World's.
+    let unsaved = format!("The generated NPC \u{201c}{npc}\u{201d} is not saved.");
+    d.request_close();
+    d.observe(
+        "iter-28-C-lookup-npc-close",
+        d.in_view_containing(&unsaved) && d.in_view("Keep editing"),
+        "The close dialog names the NPC that Lookup holds",
+    );
+    if d.has("Keep editing") {
+        d.click("Keep editing");
+    }
     // Section 7, recorded as it is: Lookup's place is not kept across a restart, and the held
     // NPC goes with it.
     d.restart();
@@ -6097,15 +6236,12 @@ pub fn package_about(d: &mut Driver<'_>) {
             "The About row warns for the manifest problem the header counts",
         );
         // Round 23 FD8: the About row's warning icon has the warning colour too.
-        // Round 25 FF4: where the marked name would be cut, the row drops `About` first.
-        let about = format!("{} About Emberfall Watch", crate::icons::WARN);
-        let short = format!("{} Emberfall Watch", crate::icons::WARN);
+        // Ruling R13 (row 151): the row keeps `About`; the name may shorten by whole words.
+        let about = format!("{} About Emberfall", crate::icons::WARN);
         let mut marks = Vec::new();
         d.each_painted_text(|text, clip| {
             let job = &text.galley.job;
-            if (job.text == about || job.text == short)
-                && clip.intersects(text.visual_bounding_rect())
-            {
+            if job.text.starts_with(&about) && clip.intersects(text.visual_bounding_rect()) {
                 marks.push(painted_marks(job));
             }
         });
@@ -6373,18 +6509,17 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
                 .starts_with(&format!("{} ", design::icons::ERROR)),
             format!("The About row still shows its mark at {size:?}"),
         );
-        // Round 25 FF4: a marked row whose name would be cut drops `About` first, so the whole
-        // name shows with its mark: no `…`.
+        // Ruling R13 (row 151; it replaces round 25 FF4's "drop `About` first"): the marked row
+        // keeps `About` and its mark; the name is whole or cut by whole words.
         let painted = d.painted_in(about);
+        let after = painted
+            .trim()
+            .strip_prefix(&format!("{} About ", design::icons::ERROR))
+            .unwrap_or_default();
         d.observe(
-            "iter-25-L-FF4",
-            [
-                format!("{} About Ashen Marches", design::icons::ERROR),
-                format!("{} Ashen Marches", design::icons::ERROR),
-            ]
-            .iter()
-            .any(|whole| painted.trim() == whole.as_str()),
-            format!("The marked About row shows the whole name at {size:?}: {painted:?}"),
+            "iter-28-L-151",
+            after == "Ashen Marches" || after == "Ashen…",
+            format!("The marked About row keeps `About` at {size:?}: {painted:?}"),
         );
         // Round 24 FC2: the mark is the error icon in the error colour.
         let mut marks = Vec::new();
@@ -6393,8 +6528,7 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
                 .galley
                 .job
                 .text
-                .starts_with(&format!("{} ", design::icons::ERROR))
-                && text.galley.job.text.contains("Ashen Marches")
+                .starts_with(&format!("{} About Ashen", design::icons::ERROR))
                 && clip.intersects(text.visual_bounding_rect())
             {
                 marks.push(painted_marks(&text.galley.job));
@@ -6416,7 +6550,7 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
         if size == DEFAULT {
             let shortened = !d.visible_text(&warned_about);
             let hover = d.painted_tooltip_shows(
-                &format!("{} Ashen Marches", design::icons::ERROR),
+                &format!("{} About Ashen", design::icons::ERROR),
                 &warned_about,
             );
             d.observe(
@@ -8311,7 +8445,7 @@ pub fn book_to_package(d: &mut Driver<'_>) {
     search_library(d, "Aboleth");
     d.click_starting("Aboleth · ");
     d.click(COPY_TO);
-    d.click("Destination");
+    d.click_starting("Destination");
     d.click(&format!("Package · {MODULE}"));
     d.replace_text_in("Copy name", "Watch Aboleth");
     d.type_into("Folder", "Creatures");
@@ -10636,7 +10770,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     );
 
     // A readable list: the draft adds a group while Obsidian adds another.
-    let conflict = "This note changed on disk. Your draft is safe until you choose.";
+    let conflict = "Safe Rook changed on disk. Your draft is safe until you choose.";
     let zarel = "- \"[[Zarel|the Archdevil]]\" # Keep the alias.\n";
     let outside_line = "- '[[Outside Guild]]' # Added in Obsidian.\n";
     let outside = readable.replace(zarel, &format!("{zarel}{outside_line}"));
@@ -10934,7 +11068,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     );
     fs::write(&path, &unread).unwrap();
     d.click("Save changes");
-    d.expect("This note changed on disk. Your draft is safe until you choose.");
+    d.expect("Safe Rook changed on disk. Your draft is safe until you choose.");
     // The save reads the note again, as a refused Part of write does.
     d.settle();
     d.observe_both(
@@ -10957,7 +11091,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
         choices_at_text(
             d,
             "iter-15-E-AD3-world-edit",
-            "This note changed on disk",
+            "Safe Rook changed on disk",
             "Overwrite with my draft",
             "Reload and lose my draft",
             None,
@@ -11246,7 +11380,7 @@ pub fn part_of_safety(d: &mut Driver<'_>) {
     d.expect("Added Guild");
     d.click("Added Guild");
     d.click("Save changes");
-    d.expect("This note changed on disk. Your draft is safe until you choose.");
+    d.expect("Safe Rook changed on disk. Your draft is safe until you choose.");
     d.click("Overwrite with my draft");
     d.settle();
     assert_eq!(
@@ -11706,11 +11840,43 @@ pub fn campaign_copy_registered(d: &mut Driver<'_>) {
     }
     d.type_into("Campaign name", NAME);
     d.type_into("Folder", &copy.display().to_string());
+    // Wave 2 d (C), from the review of PR 320: with no account at 960, the import hint follows
+    // the open form. It was drawn above the form once the account heading left the view (here
+    // the footer's result takes the room), and moved the form and its pressed Add campaign by
+    // its height. (The new campaign's row moves the form down by one row on purpose.)
+    const IMPORT_HINT: &str = "To import from D&D Beyond,";
+    let account_in_view = |d: &Driver<'_>| {
+        d.nodes()
+            .into_iter()
+            .find(|node| node.name.eq_ignore_ascii_case("D&D Beyond account"))
+            .map(|node| node.fully_in_view())
+    };
+    let header = |d: &Driver<'_>| d.place_of("Add campaign");
+    let pressed = (header(d), account_in_view(d));
     d.click_below("Folder", "Add campaign");
     d.expect("Register as a new campaign");
     d.click("Register as a new campaign");
     let result = crate::campaigns::copy_registered(NAME);
     d.wait_for_text(&result);
+    let create = d
+        .nodes()
+        .into_iter()
+        .filter(|node| node.name == "Add campaign")
+        .map(|node| node.rect)
+        .nth(1);
+    let hint = d.place_of(IMPORT_HINT);
+    let shown = (header(d), account_in_view(d));
+    d.observe(
+        "iter-28-C-import-hint",
+        pressed.1 == Some(true)
+            && shown.1 == Some(false)
+            && hint
+                .zip(create)
+                .is_some_and(|(hint, create)| hint.top() >= create.bottom()),
+        format!(
+            "Before Add campaign (its header, the account heading whole in view): {pressed:?}; after the result: {shown:?}; the hint {hint:?} under the form's Add campaign {create:?}"
+        ),
+    );
     undo_follows_message(d, "iter20-E-SD2-undo", &result, "Undo register campaign");
     for size in [SMALL, DEFAULT, LARGE] {
         let (message, build, words, clear) = d.at_size(size, |d| {
@@ -11828,6 +11994,124 @@ fn package_list_tops(d: &mut Driver<'_>) -> [Option<f32>; 3] {
 
 /// iter-27-A: a short repair's footer (the one whose words hold `words`) sits `S` below its
 /// save row, clear of the pane's bottom, and draws no hairline, as it cuts no body.
+/// Round 28, P2 (the review of PR 329): a 600-line broken note at 960x640. The DM edits a
+/// middle line: the editor's region gives way and scrolls, so Save and Discard stay whole in
+/// view above the footer, with the edited line in view. Discard works and the footer gains its
+/// Undo line: Save stays whole in view. Undo works. A valid long draft saves through Save. A
+/// second broken note holds the check, so `Notes/Broken.md`'s own steps go on unchanged; it is
+/// removed after, and the scenario goes back to `Broken.md`'s repair.
+fn long_repair_keeps_save(d: &mut Driver<'_>) {
+    const REASON: &str = "Line 3 opens a list with [ that never closes.";
+    const SAVE: &str = "Save repaired note";
+    let path = root(d).join("Notes/Long.md");
+    let lines: String = (1..=600).map(|n| format!("Long line {n}.\n")).collect();
+    let long = format!("---\nsplat_schema: 2\nsplat_id: [\n---\n\n{lines}");
+    fs::write(&path, &long).unwrap();
+    reload(d);
+    d.set_base(SMALL);
+    d.click("2 notes cannot be read");
+    d.click_starting("Notes/Long.md · ");
+    d.expect(SAVE);
+    assert_eq!(d.editor_text().as_deref(), Some(long.as_str()));
+    let editor_name = crate::world::repair::editor_name("Notes/Long.md");
+    // The wheel over the editor brings line 300 into view; the DM clicks after it and types.
+    let editor = d.place_of(&editor_name).expect("the long repair's editor");
+    let over = egui::pos2(editor.left() + design::XXL, editor.top() + design::XXL);
+    for _ in 0..120 {
+        if d.visible_passage("Long line 300.") {
+            break;
+        }
+        d.scroll_at(over, 1);
+    }
+    d.click_line_end("Long line 300.");
+    d.type_text(" Edited.");
+    // Save, Discard and the reason in the footer: each whole in view, Save above the reason.
+    // Discard shows only while the draft has changes.
+    let in_view = |d: &Driver<'_>, changed: bool| {
+        let nodes = d.nodes();
+        let find = |name: &str, role: Role| {
+            nodes
+                .iter()
+                .find(|node| node.name == name && node.role == role)
+                .map(|node| (node.rect, node.fully_in_view()))
+        };
+        let (save, discard, reason) = (
+            find(SAVE, Role::Button),
+            find("Discard", Role::Button),
+            find(REASON, Role::Label),
+        );
+        let whole = [save, reason]
+            .iter()
+            .all(|found| found.is_some_and(|(_, whole)| whole))
+            && (!changed || discard.is_some_and(|(_, whole)| whole))
+            && save
+                .zip(reason)
+                .is_some_and(|((save, _), (reason, _))| save.bottom() <= reason.top());
+        (
+            whole,
+            format!("Save {save:?}, Discard {discard:?}, reason {reason:?}"),
+        )
+    };
+    let (whole, detail) = in_view(d, true);
+    d.observe(
+        "iter-28-P2-long-repair-save",
+        whole
+            && d.visible_passage("Long line 300. Edited.")
+            && !d.visible_passage("Long line 1.\n")
+            && d.editor_text().is_some_and(|text| text.contains("Long line 300. Edited.")),
+        format!("At 960x640, editing line 300 of 600 keeps Save and Discard whole in view, with the edited line: {detail}"),
+    );
+    d.state("long-repair-middle-line-edited", Sizes::Small);
+    // Discard works, and the footer gains its Undo line: Save stays whole in view.
+    d.click("Discard");
+    let (whole, detail) = in_view(d, false);
+    d.observe(
+        "iter-28-P2-long-repair-discard",
+        whole
+            && d.editor_text().as_deref() == Some(long.as_str())
+            && d.has("Undo discard of Long.md"),
+        format!("Discard gives the file's text back; with its Undo in the footer: {detail}"),
+    );
+    d.click("Undo discard of Long.md");
+    d.observe(
+        "iter-28-P2-long-repair-undo",
+        d.editor_text()
+            .is_some_and(|text| text.contains("Long line 300. Edited.")),
+        "Undo discard brings the edited long draft back",
+    );
+    // A valid long draft: Save is whole in view and writes it.
+    let valid = format!(
+        "---\nsplat_schema: 2\nsplat_id: {}\nsplat_kind: world\nsplat_name: Long\nsplat_type: npc\n---\n\n{lines}",
+        splat::character::stable_id("long-repair")
+    );
+    d.replace_text_in(&editor_name, &valid);
+    let (whole, detail) = in_view(d, true);
+    let save_whole = d
+        .nodes()
+        .iter()
+        .any(|node| node.name == SAVE && node.role == Role::Button && node.fully_in_view());
+    d.observe(
+        "iter-28-P2-long-repair-save-valid",
+        save_whole && !whole && !d.is_disabled(SAVE),
+        format!(
+            "The valid long draft has no reason, and Save is whole in view and enabled: {detail}"
+        ),
+    );
+    d.click(SAVE);
+    d.settle();
+    d.observe(
+        "iter-28-P2-long-repair-saved",
+        fs::read_to_string(&path).ok().as_deref() == Some(valid.as_str()),
+        "Save writes the valid long draft",
+    );
+    fs::remove_file(&path).unwrap();
+    reload(d);
+    d.click("1 note cannot be read");
+    d.click_starting("Notes/Broken.md · ");
+    d.expect(SAVE);
+    d.set_base(DEFAULT);
+}
+
 fn repair_footer_follows(d: &mut Driver<'_>, words: &str, id: &str) {
     let size = d.window_size();
     let save = d.place_of("Save repaired note");

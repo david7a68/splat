@@ -11,7 +11,7 @@ const SCENE: &str = "Talk to Hobb the miller about the ropes";
 const THREAD: &str = "Who cut the ferry ropes at the crossing below the shrine?";
 const RESULT: &str = "Carried over from Session 1: the recap, 2 plan lines and 1 open thread.";
 const CARRY: &str = "Carry over";
-const UNDO: &str = "Undo carry over";
+const UNDO: &str = "Undo: Carry over";
 
 /// A session's note on disk, by its title.
 fn note_path(d: &Driver<'_>, title: &str) -> std::path::PathBuf {

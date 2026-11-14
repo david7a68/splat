@@ -330,10 +330,8 @@ fn represented_item_source(entry: &Entry, source: &str) -> bool {
             .is_some_and(|value| Some(value) == entry.fields.get("splat_item"))
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
+/// `after_stat_head`: a stat head is drawn just above. Its gap `S` comes before the first prose,
+/// and a section heading takes none (the heading part owns its space; d-rows L).
 pub(super) fn show(
     ui: &mut egui::Ui,
     entry: Option<&Entry>,
@@ -341,7 +339,14 @@ pub(super) fn show(
     builtin: bool,
     has_summary: bool,
     lead_gap: bool,
+    after_stat_head: bool,
 ) {
+    let mut after_stat_head = after_stat_head;
+    let mut settle = |ui: &mut egui::Ui, heading: bool| {
+        if std::mem::take(&mut after_stat_head) && !heading {
+            crate::design::gap(ui, crate::design::Gap::S);
+        }
+    };
     let table_stats = entry.is_some_and(|e| ["spell", "item"].contains(&e.kind.as_str()));
     // This reader also receives already-split sections. Restore their headings
     // before filtering, because table ownership is defined by the named section.
@@ -398,6 +403,10 @@ pub(super) fn show(
         if section.body.contains("<!-- splat:") {
             continue;
         } else {
+            settle(
+                ui,
+                section.title != "Source text" && section.title != "Overview",
+            );
             if section.title == "Source text"
                 && let Some(entry) = entry.filter(|entry| super::class::supports(entry))
                 && super::class::show_source(ui, section.body, &entry.name)
@@ -438,7 +447,7 @@ pub(super) fn show(
                     if crate::markdown_view::wanted_heading(ui.ctx(), &section.title) {
                         ui.scroll_to_cursor(Some(eframe::egui::Align::TOP));
                     }
-                    style::section_heading(ui, &section.title);
+                    crate::design::heading(ui, crate::design::Heading::Section(&section.title));
                 }
                 // A hand-written stat block's actions read as the book's do.
                 if let Some(entry) = entry.filter(|entry| super::creature::has_stats(entry)) {
@@ -475,6 +484,7 @@ mod tests {
                             false,
                             false,
                             true,
+                            false,
                         );
                     });
                 },
@@ -530,6 +540,7 @@ mod tests {
                         false,
                         false,
                         true,
+                        false,
                     );
                 });
             });
