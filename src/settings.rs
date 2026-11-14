@@ -386,10 +386,6 @@ impl Settings {
         Status { icon, word, color }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     pub fn show_compact(&mut self, ui: &mut egui::Ui) {
         let id = egui::Id::new("compact_account_open");
         let mut open = ui
@@ -401,11 +397,19 @@ impl Settings {
                 data.get_temp::<bool>(egui::Id::new("focus_cookie"))
                     .unwrap_or(false)
             });
-        let heading_top = ui.cursor().top();
+        let heading = design::heading(
+            ui,
+            design::Heading::Group {
+                title: "D&D Beyond account",
+                count: 0,
+            },
+        );
+        // The heading's own top (the heading adds its space above it first), which the import
+        // hint in `DndBeyond::show_import` reads to tell whether the heading is in view.
+        let heading_top = heading.rect.top();
         ui.ctx().data_mut(|data| {
             data.insert_temp(egui::Id::new("account_heading_content_y"), heading_top)
         });
-        design::group_heading(ui, "D&D Beyond account", 0);
         // Round 28 FO3: a connected account opens its sign-in and Disconnect as a caret section,
         // as the other inline forms on this page open (`Add campaign`).
         let details = !open
@@ -495,17 +499,19 @@ impl Settings {
 
     /// `status`: draw the account's status line (a caret section under the compact status line
     /// does not say it again).
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn show_account(&mut self, ui: &mut egui::Ui, heading: bool, status: bool) {
         if heading {
             ui.allocate_ui_with_layout(
                 egui::vec2(ui.available_width(), Density::Read.control()),
                 egui::Layout::left_to_right(egui::Align::Center),
                 |ui| {
-                    design::group_heading(ui, "D&D Beyond account", 0);
+                    design::heading(
+                        ui,
+                        design::Heading::Group {
+                            title: "D&D Beyond account",
+                            count: 0,
+                        },
+                    );
                 },
             );
         }

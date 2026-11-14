@@ -682,7 +682,7 @@ impl Campaigns {
                 ui.set_min_width(room.min(220.0));
                 if let Some(reason) = reason {
                     design::blocked_reason(ui, Some(reason));
-                    ui.add_space(design::L);
+                    design::gap(ui, design::Gap::L);
                 }
                 ui.add_enabled_ui(reason.is_none(), |ui| {
                     if self.data.campaigns.is_empty() {
@@ -702,10 +702,29 @@ impl Campaigns {
                             ui.close();
                         }
                     } else {
-                        ui.selectable_value(&mut selected, None, "No campaign");
+                        if design::extras::choice_wrapped(
+                            ui,
+                            selected.is_none(),
+                            "No campaign",
+                            None,
+                        )
+                        .clicked()
+                        {
+                            selected = None;
+                        }
                     }
                     for campaign in &self.data.campaigns {
-                        ui.selectable_value(&mut selected, Some(campaign.id), &campaign.name);
+                        // A campaign's name is the DM's own words: it wraps, never cuts.
+                        if design::extras::choice_wrapped(
+                            ui,
+                            selected == Some(campaign.id),
+                            &campaign.name,
+                            None,
+                        )
+                        .clicked()
+                        {
+                            selected = Some(campaign.id);
+                        }
                     }
                 });
             });
@@ -732,10 +751,6 @@ impl Campaigns {
     }
 
     /// The active campaign's folder and D&D Beyond link.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     pub fn show_active(
         &mut self,
         ui: &mut egui::Ui,
@@ -752,10 +767,10 @@ impl Campaigns {
             );
             return;
         };
-        ui.add_space(design::S);
+        design::gap(ui, design::Gap::S);
         ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
         ui.horizontal(|ui| {
-            design::group_label(ui, "Folder");
+            design::heading(ui, design::Heading::Label("Folder"));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if Action::quiet("Edit details")
                     .blocked(blocked)
@@ -785,11 +800,11 @@ impl Campaigns {
         design::blocked_reason(ui, link_blocked);
         ui.add(egui::Label::new(campaign.path.display().to_string()).wrap());
         Self::folder_status(ui, &campaign);
-        ui.add_space(design::S);
+        design::gap(ui, design::Gap::S);
         design::rule(ui);
-        ui.add_space(design::S);
+        design::gap(ui, design::Gap::S);
         dndbeyond.show(ui, session, self, link_blocked);
-        ui.add_space(design::S);
+        design::gap(ui, design::Gap::S);
         design::quiet_section(ui, "Technical details", |ui| {
             ui.label(format!("ID: {}", campaign.id));
             design::help(ui, "Settings are stored in the campaign manifest.");
@@ -819,10 +834,6 @@ impl Campaigns {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn remove_dialog(&mut self, ctx: &egui::Context) {
         let Some(id) = self.confirm_remove else {
             return;
@@ -853,7 +864,7 @@ impl Campaigns {
                     )
                     .wrap(),
                 );
-                ui.add_space(design::S);
+                design::gap(ui, design::Gap::S);
                 design::dialog_actions(
                     ui,
                     |ui| {
@@ -915,10 +926,6 @@ impl Campaigns {
     }
 
     /// The campaign list. Which exist, where, and how each is linked.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
@@ -930,7 +937,13 @@ impl Campaigns {
         ui.set_max_width(self.list_width(ui.available_width()));
         self.remove_dialog(ui.ctx());
         ui.horizontal(|ui| {
-            design::group_heading(ui, "Campaigns", self.data.campaigns.len());
+            design::heading(
+                ui,
+                design::Heading::Group {
+                    title: "Campaigns",
+                    count: self.data.campaigns.len(),
+                },
+            );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if (!self.data.campaigns.is_empty() || !self.writable)
                     && Action::quiet("Reload from disk")
@@ -952,7 +965,7 @@ impl Campaigns {
             blocked.or((!self.writable).then_some("Reload valid campaign settings first."));
         design::locked(ui, unwritable, |ui| {
             if self.data.campaigns.is_empty() {
-                ui.add_space(design::XS);
+                design::gap(ui, design::Gap::XS);
                 ui.label(
                     Type::Body
                         .rich(ui, "No campaign yet. Add one below.")
@@ -1102,7 +1115,7 @@ impl Campaigns {
             if let Some(id) = open {
                 self.select(Some(id));
             }
-            ui.add_space(design::S);
+            design::gap(ui, design::Gap::S);
             dndbeyond.show_import(ui, session.clone(), self);
             if self.editing.is_none() && self.remote.is_none() {
                 self.form(ui, false, true);
@@ -1269,14 +1282,10 @@ impl Campaigns {
 
     /// Edit the active campaign's details from the page that links to them.
     /// Draws the details form while it is open, and says whether it drew it (with its primary save).
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     pub fn show_form_if_editing(&mut self, ui: &mut egui::Ui) -> bool {
         let open = self.editing.is_some();
         if open {
-            ui.add_space(design::S);
+            design::gap(ui, design::Gap::S);
             let form = ui.scope(|ui| self.form(ui, false, true)).response.rect;
             // Once, when Edit details opened it: the form and its Save come into view.
             if std::mem::take(&mut self.reveal_details) {
@@ -1306,7 +1315,7 @@ impl Campaigns {
             let focus = self.focus_name;
             let empty = self.data.campaigns.is_empty();
             let mut fields = |ui: &mut egui::Ui| {
-                ui.add_space(design::XS);
+                design::gap(ui, design::Gap::XS);
                 let unchanged = self
                     .editing
                     .and_then(|id| {

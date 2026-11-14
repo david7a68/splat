@@ -135,10 +135,6 @@ fn menu(
 
 /// Two rows of challenge ratings: the lowest and the highest. A second click on a bound
 /// removes it.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn challenge_menu(ui: &mut egui::Ui, filter: &mut Filter, values: &[(String, usize)]) {
     ui.set_max_width(design::number_width(ui, "1/8", &Type::Body.font(ui)) * 9.0);
     for (title, high) in [("Lowest", false), ("Highest", true)] {
@@ -153,7 +149,7 @@ fn challenge_menu(ui: &mut egui::Ui, filter: &mut Filter, values: &[(String, usi
                 } else {
                     &mut filter.challenge.0
                 };
-                let response = ui.selectable_label(*bound == Some(number), value);
+                let response = design::choice_wrapped(ui, *bound == Some(number), value, None);
                 design::named(ui, &response, &format!("{title} CR {value}"));
                 if response.clicked() {
                     *bound = (*bound != Some(number)).then_some(number);

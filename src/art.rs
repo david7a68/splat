@@ -169,17 +169,13 @@ pub fn thumbnail(ui: &mut egui::Ui, path: &Path, name: &str) {
 }
 
 /// An image in the flow of a note, as wide as the text.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub fn figure(ui: &mut egui::Ui, path: &Path, caption: &str) {
     let name = match caption.trim() {
         "" => "Image",
         caption => caption,
     };
     picture(ui, path, name, vec2(ui.available_width(), FIGURE_HEIGHT));
-    ui.add_space(design::XS);
+    design::gap(ui, design::Gap::XS);
 }
 
 fn viewing_id() -> Id {
