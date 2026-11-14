@@ -1969,7 +1969,7 @@ pub fn facts(d: &mut Driver<'_>) {
         "The first frame after Edit on a 600-line note has Save changes whole in view",
     );
     d.settle();
-    long_draft_keeps_save(d, "iter-28-D-P2-long-note", (960.0, 520.0));
+    long_draft_keeps_save(d, "iter-28-D-P2-long-note", (960.0, 600.0));
     d.click("Cancel");
     fs::remove_file(&ledger).unwrap();
     reload(d);
@@ -4837,6 +4837,20 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         (strip.round, strip.current)
     };
     let at_start = turn(d);
+    // Review of PR 333 (lead P3), before the measured task: Lookup's form with a 600-line
+    // draft keeps Save in view; then the draft goes and the form closes, as it was.
+    d.click("Edit Rook Ambry");
+    d.wait_for_text("Save changes");
+    let kept = d.editor_text().unwrap();
+    let mut long = kept.clone();
+    for n in 1..=600 {
+        long.push_str(&format!("\nLine {n} of Rook's long record."));
+    }
+    d.replace_text_in("Text", &long);
+    long_draft_keeps_save(d, "iter-28-D-P2-long-draft-lookup", (960.0, 600.0));
+    d.replace_text_in("Text", &kept);
+    d.click("Cancel");
+    assert_eq!(fs::read_to_string(&path).unwrap(), before);
     d.begin_task();
     for size in [SMALL, DEFAULT, LARGE] {
         let named = d.at_size(size, |d| {
@@ -4866,15 +4880,6 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     let add = tops_at_sizes(d, "Add to fight");
     d.click("Edit Rook Ambry");
     d.wait_for_text("Save changes");
-    // Review of PR 333 (lead P3): Lookup's form with a 600-line draft keeps Save in view.
-    let kept = d.editor_text().unwrap();
-    let mut long = kept.clone();
-    for n in 1..=600 {
-        long.push_str(&format!("\nLine {n} of Rook's long record."));
-    }
-    d.replace_text_in("Text", &long);
-    long_draft_keeps_save(d, "iter-28-D-P2-long-draft-lookup", (960.0, 600.0));
-    d.replace_text_in("Text", &kept);
     d.click("Change In");
     d.type_into("Find a location", "North");
     d.click("North Gate");
