@@ -259,8 +259,9 @@ fn show_with_density(
                     continue;
                 }
                 if dest_url.starts_with("splat-missing:") {
+                    let icon = format!("{} ", design::icons::WARN);
                     job.append(
-                        &format!("{} ", design::icons::WARN),
+                        &icon,
                         0.0,
                         egui::TextFormat {
                             font_id: prose.font(ui),
@@ -268,6 +269,9 @@ fn show_with_density(
                             ..Default::default()
                         },
                     );
+                    if target.row && job.text.len() == icon.len() {
+                        target.lead = Some(icon.len());
+                    }
                     link = Some((job.text.len(), LinkTarget::Missing));
                     continue;
                 }
@@ -1238,6 +1242,9 @@ struct Targets {
     short_links: ShortLinks,
     /// A plan row's words: no space follows them.
     row: bool,
+    /// In a plan row's words, the bytes of a missing link's icon that starts the words: it takes
+    /// its own column, so the words' wrapped lines start at their text edge (row 49).
+    lead: Option<usize>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -2062,15 +2069,56 @@ pub fn send_note_link(ctx: &egui::Context, note: String, from: Option<uuid::Uuid
     clippy::disallowed_methods,
     reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
 )]
+/// A layout job cut at byte `cut` (a section boundary) into its head and its rest.
+fn split_job(job: LayoutJob, cut: usize) -> (LayoutJob, LayoutJob) {
+    let part = |range: std::ops::Range<usize>| LayoutJob {
+        text: job.text[range.clone()].to_owned(),
+        sections: job
+            .sections
+            .iter()
+            .filter(|section| {
+                section.byte_range.start < range.end && section.byte_range.end > range.start
+            })
+            .map(|section| egui::text::LayoutSection {
+                byte_range: section.byte_range.start.max(range.start) - range.start
+                    ..section.byte_range.end.min(range.end) - range.start,
+                ..section.clone()
+            })
+            .collect(),
+        wrap: job.wrap.clone(),
+        ..job.clone()
+    };
+    (part(0..cut), part(cut..job.text.len()))
+}
+
 fn flush(ui: &mut egui::Ui, job: &mut LayoutJob, target: &mut Targets) {
     if job.is_empty() {
         return;
     }
-    let links = std::mem::take(&mut target.links);
+    let mut links = std::mem::take(&mut target.links);
     let task = target.task.take();
     let reader = egui::Id::new(("markdown_reader", target.reader));
     let short_links = target.short_links;
     let job = std::mem::take(job);
+    if let Some(cut) = target.lead.take() {
+        // The icon in its own column; the words wrap at their own left edge.
+        let (icon, words) = split_job(job, cut);
+        for (range, _) in &mut links {
+            *range = range.start - cut..range.end - cut;
+        }
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
+            ui.add(egui::Label::new(icon).extend());
+            ui.vertical(|ui| {
+                if links.is_empty() {
+                    ui.add(egui::Label::new(words).wrap());
+                } else {
+                    draw_with_links(ui, words, links, reader, short_links);
+                }
+            });
+        });
+        return;
+    }
     let draw = |ui: &mut egui::Ui| {
         let rect = if links.is_empty() {
             ui.add(egui::Label::new(job).wrap()).rect
@@ -2381,6 +2429,61 @@ mod tests {
         let word = row.glyphs.iter().find(|glyph| glyph.chr == 'M').unwrap();
         let baseline = text.pos.y + row.pos.y + word.pos.y;
         assert_eq!(dots[0].y, baseline + design::HAIRLINE_WIDTH * 2.0);
+        // Row 49: a plan row's words that start with a missing link wrap at their text edge,
+        // right of the icon's column, not under the icon. Must stay true: the link keeps its dots.
+        let narrow = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(240.0, 400.0),
+            )),
+            ..Default::default()
+        };
+        let output = context.run(narrow, |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                show_row_words(
+                    ui,
+                    "[Captain Varra Black](<splat-missing:Captain Varra Black>): told the party who burned the ropes at the ford",
+                    true,
+                );
+            });
+        });
+        let texts: Vec<_> = output
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) => Some(text),
+                _ => None,
+            })
+            .collect();
+        let icon = texts
+            .iter()
+            .find(|text| text.galley.job.text.starts_with(design::icons::WARN))
+            .unwrap_or_else(|| panic!("row-49: the icon is painted: {:?}", texts.iter().map(|t| t.galley.job.text.clone()).collect::<Vec<_>>()));
+        // Every line of the words, also a wrapped one, starts right of the icon's column.
+        let icon_right = icon.pos.x + icon.galley.size().x;
+        let lines: Vec<(f32, f32)> = texts
+            .iter()
+            .filter(|text| !text.galley.job.text.starts_with(design::icons::WARN))
+            .flat_map(|text| {
+                text.galley
+                    .rows
+                    .iter()
+                    .map(|row| (text.pos.x + row.pos.x, text.pos.y + row.pos.y))
+            })
+            .collect();
+        let tops: std::collections::BTreeSet<i32> =
+            lines.iter().map(|(_, y)| y.round() as i32).collect();
+        assert!(
+            tops.len() > 1 && lines.iter().all(|(x, _)| *x >= icon_right - 0.5),
+            "row-49: the words' lines start at {lines:?}; the icon ends at {icon_right}"
+        );
+        assert!(
+            output
+                .shapes
+                .iter()
+                .any(|shape| matches!(shape.shape, egui::Shape::Circle(_))),
+            "row-49: the missing link keeps its dots"
+        );
     }
 
     /// Click the first letter of these words in the actual laid-out paragraph.
