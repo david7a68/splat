@@ -2845,10 +2845,43 @@ impl Sessions {
     ) {
         let session = self.selected;
         let here = self.group_session == session;
-        if plan.group_open && here {
-            (plan.group_editor.borrow_mut())(ui);
+        // The group being assembled, or the file's problem, takes the pane: on the session
+        // page, the page's messages keep their footer under it.
+        let takes_pane = (plan.group_open && here) || book.conflict;
+        if takes_pane {
+            let group = plan.group_open && here;
+            let mut draw = |ui: &mut egui::Ui, book: &mut Book| {
+                if group {
+                    (plan.group_editor.borrow_mut())(ui);
+                } else {
+                    let _ = problems(ui, book);
+                }
+            };
+            match page {
+                Some((settings, note)) => {
+                    let frame = PaneFrame::new(ui);
+                    let messages = self.session_messages(
+                        &frame,
+                        settings,
+                        book,
+                        plan,
+                        note,
+                        ui.available_width(),
+                    );
+                    let paned =
+                        messages.pane(ui, super::fills(design::pane::FillsReason::Columns), |ui| {
+                            draw(ui, book)
+                        });
+                    if let Some(press) = paned.pressed {
+                        self.session_press(press, book, plan);
+                    }
+                }
+                None => draw(ui, book),
+            }
             return;
         }
+        // A file that cannot be read says so above the plan; the plan stays.
+        let _ = problems(ui, book);
         let c = colors();
         self.end_plan_results_after_edits(book);
         self.scenes.end_what_changed(self.draft.as_ref());
@@ -2860,10 +2893,6 @@ impl Sessions {
             })
         {
             self.removed_group = None;
-        }
-        // The comparison or the unread file takes the pane: the DM must choose first.
-        if problems(ui, book) {
-            return;
         }
         let body = self
             .draft

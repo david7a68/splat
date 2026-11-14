@@ -800,7 +800,7 @@ impl Sessions {
         &self,
         messages: &mut crate::design::outcome::Messages<'_, super::SessionAct>,
     ) {
-        use crate::design::outcome::{FaultMessage, KeptOutcome, Said, UndoStep};
+        use crate::design::outcome::{FaultMessage, KeptOutcome, Said, UndoStep, Verb};
         let Some(session) = self.selected else {
             return;
         };
@@ -812,8 +812,8 @@ impl Sessions {
             }
             Some(Outcome::Done { words, undo, .. }) => {
                 let order = self.carries.order(session);
-                let step =
-                    UndoStep::act("Carry over").pressed_as(super::SessionAct::UndoCarry(session));
+                let step = UndoStep::verb(Verb::CarryOver)
+                    .pressed_as(super::SessionAct::UndoCarry(session));
                 if undo.written() {
                     messages.outcome_at(order, Said::new(super::notice_sentence(words)).undo(step));
                 } else {
@@ -1604,18 +1604,18 @@ mod tests {
         rescan(&mut harness);
         assert!(
             harness
-                .query_all_by_label("Undo: Carry over")
+                .query_all_by_label("Undo carry over")
                 .next()
                 .is_some()
         );
         fs::write(&last.path, &last_text).unwrap();
         rescan(&mut harness);
-        harness.get_by_label("Undo: Carry over").click();
+        harness.get_by_label("Undo carry over").click();
         harness.run_steps(2);
         assert_eq!(read(), outside);
         assert!(
             harness
-                .query_all_by_label("Undo: Carry over")
+                .query_all_by_label("Undo carry over")
                 .next()
                 .is_none()
         );
@@ -1668,7 +1668,7 @@ mod tests {
                 .body
                 .contains("Who burned the ropes?")
         );
-        harness.get_by_label("Undo: Carry over").click();
+        harness.get_by_label("Undo carry over").click();
         harness.run_steps(2);
         let draft = harness.state().0.draft.as_ref().unwrap();
         assert!(!draft.text().contains("carried_"));
@@ -1698,7 +1698,7 @@ mod tests {
                 .next()
                 .is_some()
         );
-        harness.get_by_label("Undo: Carry over").click();
+        harness.get_by_label("Undo carry over").click();
         harness.run_steps(2);
         assert_eq!(read(), changed);
 

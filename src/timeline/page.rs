@@ -2002,7 +2002,12 @@ mod tests {
         harness.get_by_label("Mark everyone at full").click();
         harness.run_steps(2);
         assert!(harness.state().events[0].restores);
-        assert!(harness.query_all_by_label(REST_RESTORES_WORDS).next().is_some());
+        assert!(
+            harness
+                .query_all_by_label(REST_RESTORES_WORDS)
+                .next()
+                .is_some()
+        );
         harness.get_by_label("Undo change ruling").click();
         harness.run_steps(2);
         assert!(!harness.state().events[0].restores);

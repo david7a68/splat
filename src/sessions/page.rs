@@ -6067,7 +6067,10 @@ impl Sessions {
             messages.kept(shown.outcome(frame, |separate| {
                 let filename = separate.undo.file_name();
                 Said::new(crate::sentence!("{} is now a separate session.", filename))
-                    .undo(UndoStep::act("Separate session").pressed_as(SessionAct::UndoIdentity))
+                    .undo(
+                        UndoStep::of(Verb::Separate, "session")
+                            .pressed_as(SessionAct::UndoIdentity),
+                    )
                     .into()
             }));
         }
