@@ -1020,11 +1020,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/timeline/page.rs", "list", &[Ban::Layout(1)]),
         ("src/timeline/page.rs", "new_events_line", &[Ban::Layout(1)]),
-        (
-            "src/trackers.rs",
-            "an_open_history_prepares_its_rows_once_and_draws_only_those_in_view",
-            &[Ban::Layout(1)],
-        ),
         ("src/trackers/view.rs", "amount_field", &[Ban::RowKey(3)]),
         ("src/world/repair.rs", "editor_events", &[Ban::RowKey(1)]),
         // Package M (round 28): the escapes of `design::outcome`, and its own helpers.
@@ -1065,6 +1060,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/trackers.rs", "cause", &[Ban::Words]),
         ("src/trackers/history.rs", "show", &[Ban::Body]),
         ("src/trackers/view.rs", "body", &[Ban::Body]),
+        // Package T (PR 328 review): a repeated amount field's problem stands at its line.
+        ("src/trackers/view.rs", "tracker_lines", &[Ban::Body]),
         ("src/trackers/view.rs", "messages", &[Ban::Words]),
         (
             "src/encounter_run/loot.rs",
