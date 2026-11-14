@@ -293,6 +293,7 @@ impl Run {
                     field,
                     "Effect",
                     &hint,
+                    design::AddEnds::Keys,
                     0.0,
                     |_| None::<()>,
                     |_| Vec::new(),

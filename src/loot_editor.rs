@@ -460,6 +460,7 @@ fn add_row(
         &mut state.add,
         &format!("Add loot to {name}"),
         "Type loot, or find an item or table",
+        design::AddEnds::Keys,
         menu,
         |ui| {
             table_menu(ui, ROLL_MENU, &format!("{ROLL_MENU} for {name}"), sources).map(Pick::Table)

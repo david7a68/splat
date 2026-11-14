@@ -3926,6 +3926,7 @@ impl Sessions {
             state,
             "Plan a scene",
             "Plan a scene: words, a person or a place",
+            design::AddEnds::Actions,
             0.0,
             |_| None,
             |words| {
@@ -3960,10 +3961,7 @@ impl Sessions {
         } else if result.enter && !typed.is_empty() {
             *act = Some(SceneAct::Add(typed));
         }
-        if ui.input(|input| input.key_pressed(egui::Key::Escape))
-            && (result.field.has_focus() || result.field.lost_focus())
-            && emptied
-        {
+        if result.cancel && emptied {
             self.scenes.field = None;
         }
     }

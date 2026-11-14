@@ -1634,28 +1634,53 @@ pub struct Suggestions<T> {
     pub rows: Vec<(String, String, T)>,
 }
 
+/// How the DM finishes an add field. Every caller says which, so a field that an action opened
+/// cannot leave out its actions by default.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AddEnds {
+    /// A field that an action opened and that closes (`Add to Log`, `Scene`): `Add`, then quiet
+    /// `Cancel`, on one action line under the field, at its left edge, each with its key
+    /// (`Enter`, `Esc`). So the DM sees how to finish without knowing the keys. The line is
+    /// there while the field is, so nothing under it moves while the DM types; suggestions go
+    /// under it.
+    Actions,
+    /// Keys only, no action line: a list's own field that stays open (the loot editor's), or a
+    /// field in a run row's line two (`Effect`), which keeps the row's height.
+    Keys,
+}
+
 /// What the add field did this frame.
 pub struct AddFieldResult<T> {
     pub field: Response,
     /// A suggestion, or a choice of the control beside the field.
     pub chosen: Option<T>,
-    /// Enter, as the field let go. With nothing `chosen`, the caller adds the typed words.
+    /// Enter, as the field let go, or `Add`. With nothing `chosen`, the caller adds the typed
+    /// words.
     pub enter: bool,
+    /// Escape with no chosen suggestion, or `Cancel`: the words are cleared. A field that an
+    /// action opened closes.
+    pub cancel: bool,
 }
 
-/// Add typed words to a list: one field with no button. Enter adds. A suggestion adds by an arrow
-/// key and Enter, or a click. Escape clears the highlight, then the words. `beside` draws a
-/// control right of the field, `beside_width` wide, and can choose a value too. `suggest` lists
-/// the suggestions for the typed words, which show only while there are words.
+/// Add typed words to a list: one field. Enter adds; with [`AddEnds::Actions`], `Add` under the
+/// field adds too, and `Cancel` beside it is Escape. A suggestion adds by an arrow key and Enter,
+/// or a click. Escape clears the highlight, then the words. `beside` draws a control right of the
+/// field, `beside_width` wide, and can choose a value too. `suggest` lists the suggestions for
+/// the typed words, which show only while there are words.
 #[allow(
     clippy::disallowed_methods,
     reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "each argument is one part of the field"
 )]
 pub fn add_field<T>(
     ui: &mut Ui,
     state: &mut AddField,
     name: &str,
     hint: &str,
+    ends: AddEnds,
     beside_width: f32,
     beside: impl FnOnce(&mut Ui) -> Option<T>,
     suggest: impl FnOnce(&str) -> Vec<Suggestions<T>>,
@@ -1669,6 +1694,28 @@ pub fn add_field<T>(
             field
         })
         .inner;
+    // The action line, as an inline create form that ends in a drop-down has one: the named
+    // action, then quiet Cancel, `S` apart, at the field's left edge.
+    let (add, cancel) = match ends {
+        AddEnds::Keys => (false, false),
+        AddEnds::Actions => {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = S;
+                let add = Action::secondary("Add")
+                    .density(Density::Read)
+                    .key("Enter")
+                    .show(ui)
+                    .clicked();
+                let cancel = Action::quiet("Cancel")
+                    .density(Density::Read)
+                    .key("Esc")
+                    .show(ui)
+                    .clicked();
+                (add, cancel)
+            })
+            .inner
+        }
+    };
     if std::mem::take(&mut state.focus) {
         field.request_focus();
     }
@@ -1691,12 +1738,18 @@ pub fn add_field<T>(
             }
         });
     }
-    let enter = field.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
-    // Escape closes the top layer first: the chosen suggestion, then the typed words.
-    if ui.input(|input| input.key_pressed(egui::Key::Escape))
+    let enter =
+        add || (field.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)));
+    // Escape closes the top layer first: the chosen suggestion, then the typed words. Cancel
+    // closes both.
+    let escape = ui.input(|input| input.key_pressed(egui::Key::Escape))
         && (field.has_focus() || field.lost_focus())
-        && state.highlight.take().is_none()
-    {
+        && state.highlight.take().is_none();
+    if cancel {
+        state.highlight = None;
+    }
+    let cancel = cancel || escape;
+    if cancel {
         state.words.clear();
     }
     // While there are typed words, so that a click on a suggestion lands after the field
@@ -1717,6 +1770,7 @@ pub fn add_field<T>(
         field,
         chosen,
         enter,
+        cancel,
     }
 }
 
@@ -7192,6 +7246,91 @@ mod tests {
                 "SD1-wide-look: words {left}+{width}, target {target:?}"
             );
         }
+    }
+
+    /// Round 29 P-1 (G167, G168, G180, G184; iter-28 row 146): a field that an action opened
+    /// shows how to finish it: `Add`, then quiet `Cancel`, on the action line under the field,
+    /// at its left edge. Enter and `Add` add the words; Escape and `Cancel` clear them and say
+    /// so. A field with keys only has no action line.
+    #[test]
+    fn iter29_p1_an_opened_add_field_shows_add_and_cancel() {
+        use egui_kittest::kittest::Queryable;
+        const NAME: &str = "Log line for Hob";
+        /// The field, and what each frame gave back: (enter, cancel, the words then).
+        type Seen = (AddField, Vec<(bool, bool, String)>);
+        let harness = |ends: AddEnds| {
+            let mut field = AddField::default();
+            field.focus = true;
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(480.0, 200.0))
+                .build_ui_state(
+                    move |ui, (field, seen): &mut Seen| {
+                        let result = add_field(
+                            ui,
+                            field,
+                            NAME,
+                            "What happened?",
+                            ends,
+                            0.0,
+                            |_| None::<()>,
+                            |_| Vec::new(),
+                        );
+                        if result.enter || result.cancel {
+                            seen.push((result.enter, result.cancel, field.words.clone()));
+                        }
+                    },
+                    (field, Vec::new()),
+                );
+            super::super::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            harness
+        };
+        let keys = harness(AddEnds::Keys);
+        assert!(
+            keys.query_by_label("Add").is_none() && keys.query_by_label("Cancel").is_none(),
+            "keys only: no action line"
+        );
+        let mut harness = harness(AddEnds::Actions);
+        let field = harness.get_by_label(NAME).rect();
+        let (add, cancel) = (
+            harness.get_by_label("Add").rect(),
+            harness.get_by_label("Cancel").rect(),
+        );
+        assert!(
+            add.top() >= field.bottom() - 0.5 && (add.left() - field.left()).abs() <= 0.5,
+            "Add starts the line under the field: field {field:?}, Add {add:?}"
+        );
+        assert!(
+            (cancel.center().y - add.center().y).abs() <= 0.5 && cancel.left() >= add.right(),
+            "quiet Cancel follows Add on its line: Add {add:?}, Cancel {cancel:?}"
+        );
+        let act = |harness: &mut egui_kittest::Harness<'_, Seen>, words: &str, end: &str| {
+            harness.get_by_label(NAME).focus();
+            harness.run_steps(1);
+            harness.get_by_label(NAME).type_text(words);
+            harness.run_steps(1);
+            match end {
+                "Enter" => harness.key_press(egui::Key::Enter),
+                "Escape" => harness.key_press(egui::Key::Escape),
+                action => harness.get_by_label(action).click(),
+            }
+            harness.run_steps(2);
+            let seen = std::mem::take(&mut harness.state_mut().1);
+            harness.state_mut().0.clear();
+            seen
+        };
+        let added = |words: &str| vec![(true, false, words.to_owned())];
+        let cancelled = vec![(false, true, String::new())];
+        assert_eq!(
+            act(&mut harness, "Met the ferryman", "Enter"),
+            added("Met the ferryman")
+        );
+        assert_eq!(
+            act(&mut harness, "Paid the toll", "Add"),
+            added("Paid the toll")
+        );
+        assert_eq!(act(&mut harness, "Lost the map", "Escape"), cancelled);
+        assert_eq!(act(&mut harness, "Lost the map", "Cancel"), cancelled);
     }
 }
 

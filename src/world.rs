@@ -3608,16 +3608,16 @@ impl Reader {
                         field,
                         &name,
                         "What happened?",
+                        design::AddEnds::Actions,
                         0.0,
                         |_| None::<()>,
                         |_| Vec::new(),
                     )
-                    .field
                 },
             )
             .inner
         };
-        let response = match &stamp {
+        let result = match &stamp {
             None => draw(ui, field),
             Some(stamp) => {
                 let size = ui
@@ -3654,7 +3654,7 @@ impl Reader {
                     let response = draw(ui, field);
                     ui.put(
                         egui::Rect::from_center_size(
-                            egui::pos2(slot.center().x, response.rect.center().y),
+                            egui::pos2(slot.center().x, response.field.rect.center().y),
                             size,
                         ),
                         egui::Label::new(words).extend(),
@@ -3664,6 +3664,7 @@ impl Reader {
                 .inner
             }
         };
+        let response = &result.field;
         if select {
             design::focus_and_select(ui, response.id, &field.words);
         }
@@ -3671,12 +3672,9 @@ impl Reader {
         if response.has_focus() || response.lost_focus() {
             self.form_focused = true;
         }
-        let enter = response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
-        if ui.input(|input| input.key_pressed(egui::Key::Escape))
-            && (response.has_focus() || response.lost_focus())
-        {
+        if result.cancel {
             self.held.log_fields.remove(&key);
-        } else if enter {
+        } else if result.enter {
             let words = field.words.trim().to_owned();
             if words.is_empty() {
                 self.held.log_fields.remove(&key);

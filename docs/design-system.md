@@ -1092,8 +1092,9 @@ opens the run's made-up form in Arrivals, with the name filled in and the keyboa
 keyboard in it; the line's stamp (`Session 12, Day 3:`, the stamp of a Change at that moment, or the day alone
 when no session is being played) stands before it in `Type::Small` `muted`, on the field's line while the field
 keeps 224 px and the words it holds fit whole, else above it, so a done scene's long words are never cut. Stamp and field end at the reader's measure
-(`READER_MEASURE`, 488 px), as its rules do. Enter adds one line at the end of the entry's `## Log` (Splat makes the heading
-when the note has none) and closes the field; Escape clears and closes it. Its result, `Added to <name>’s Log.`
+(`READER_MEASURE`, 488 px), as its rules do. Under the field, at its left edge, its action line holds `Add` (key
+`Enter`) and quiet `Cancel` (key `Esc`), as every opened add field has (`AddEnds::Actions`). Enter or `Add` adds one line at the end of the entry's `## Log` (Splat makes the heading
+when the note has none) and closes the field; Escape or `Cancel` clears and closes it. Its result, `Added to <name>’s Log.`
 with `Undo Log line`, sits in the pane's message footer, as every World and Lookup result does; Undo removes
 that line only while the file holds what the act wrote, and ends when the entry's text changes or the reader
 shows another entry. A failed read or write is the error of the last action, also in the footer: it names the
@@ -1447,7 +1448,10 @@ One editor holds an encounter's loot and a creature's loot in its Changes, from 
 a row with a `row_menu` Remove and `Removed <line>.`, a success message, with `Undo remove loot`. A text line edits in place. A Library
 item shows its name, the book icon and muted `Library item`. A roll shows the dice icon, `Roll`, a `number_field`
 count, `×` and the table as a `menu_button`, then muted dice and note, or a `Cannot roll` warning status with its
-reason. The add field is `design::add_field`, the one field for typed words that join a list: no button, Enter
+reason. The add field is `design::add_field`, the one field for typed words that join a list. Each caller says how
+it ends (`AddEnds`, a required argument): a field that an action opened and that closes has the action line `Add`
+then quiet `Cancel` under it (`AddEnds::Actions`), so the DM sees how to finish; the loot list's field, which stays,
+has keys only (`AddEnds::Keys`): no button, Enter
 adds, Escape clears the chosen suggestion, or the words when none is chosen, and the field stays open after Enter where several
 lines follow each other, as loot lines do. Suggestions under it, `ROLL TABLES` then `ITEMS`, are chosen
 only by arrows then Enter, or a click. `Roll on a table` beside the field lists every table. A creature's list
@@ -1607,8 +1611,8 @@ An effect is words that the DM pins to one row, with or without a time. The dock
 control of the line moves. That room alone decides: it shows with its word while the room holds it, also
 beside a name that its slot cut; else with its icon; and not at all otherwise. Where it has no room, the
 Conditions tab's field says `Other effect, such as Bless 10 rounds`. With several rows selected it is absent.
-`Effect` makes line two one `add_field`, `Effect on <name>, such as Bless 10 rounds`, that belongs to its row:
-Enter adds and Escape clears, and both put focus in Amount; another selection or Next turn closes it, and its
+`Effect` makes line two one `add_field`, `Effect on <name>, such as Bless 10 rounds`, that belongs to its row,
+with keys only (`AddEnds::Keys`), so the row keeps its height: Enter adds and Escape clears, and both put focus in Amount; another selection or Next turn closes it, and its
 words wait for that row. `E` opens that field, or the Conditions tab's `Other effect…` field with focus when
 `Effect` has no room. Both fields read one rule: `10 rounds`; `1 minute`, as 10 rounds; `on its turn`; `3 uses`;
 `recharge 6`, `recharge 5–6` or `recharge 5-6` at the end. Anything else stays words. An official condition's
@@ -2138,11 +2142,11 @@ for the session. A scene act's result or refusal has one place, decided each tim
 message footer. Words never go to a place that is not drawn.
 `Scene` (`icons::CHECK_SQUARE`) is a line of the Add strip's More menu only: the fit of the strip is measured
 without it, so no visible action moves, and a strip with no More has no `Scene`. It opens one `add_field` at
-the end of the plan, `Plan a scene: words, a person or a place`, with at most four World entries as
-suggestions. Enter adds `- [ ] <words>` at the end of the plan (a note with no plan gets the heading at its
+the end of the plan, `Plan a scene: words, a person or a place`, with its action line, `Add` then quiet
+`Cancel` (`AddEnds::Actions`), under it and at most four World entries as suggestions under that. Enter or `Add` adds `- [ ] <words>` at the end of the plan (a note with no plan gets the heading at its
 end), keeps the field open, and shows `Scene added to tonight.` with Undo scene directly under the field, so
-the field does not move for it; once the field closes, the result is in the plan's message footer. Escape
-clears and closes it. Every scene act goes through `Draft::apply` with `Apply::Now`, on the one line its row was drawn
+the field does not move for it; once the field closes, the result is in the plan's message footer. Escape or
+`Cancel` clears and closes it. Every scene act goes through `Draft::apply` with `Apply::Now`, on the one line its row was drawn
 from (its place and its whole text): what it cannot do shows, in a warning, where the DM acted, until the note's
 words change or, for `Notes not saved`, until the note saves. An act whose save failed keeps its Undo.
 
