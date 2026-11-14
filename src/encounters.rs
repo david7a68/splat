@@ -2819,7 +2819,7 @@ pub struct Encounters {
     /// The saved run `Delete` last removed, for one step of undo.
     deleted_run: Option<crate::encounter_run::DeletedRun>,
     removed_saved_group: Option<groups::RemovedNote>,
-    /// The encounter `Remove…` last removed, for `Undo remove encounter`.
+    /// The encounter `Remove` last removed, for `Undo remove encounter`.
     removed_encounter: Option<groups::RemovedNote>,
     /// When each kept result's action was done (`stamp_kept`), for the footer's newest-first
     /// order. An entry outlives its result; the next action of that kind replaces it.
@@ -3241,27 +3241,41 @@ impl Encounters {
             .is_some()
             .then_some("Still reading this campaign."))
     }
-    /// X36, X37: when a run opens in History, the list scrolls once so that the run's row is at
-    /// its top, at a clean edge. `list.inner` is the top of the row's gap on screen. The list
-    /// keeps room below its end while the run is open, so the row stays at the top when the
-    /// list's visible height changes, until the DM scrolls it.
+    /// R2 (FJ2): when a run opens in History, the list scrolls once, by the least distance that
+    /// brings the run's row, its Read-only line and its whole Final state into view. `list.inner`
+    /// is that span on screen, from the top of the row's gap. A run already whole in view does
+    /// not move the list. Only a run taller than the list's view goes to its top, at a clean
+    /// edge (X37). The list keeps no room below its end, and after this one scroll the DM's
+    /// scroll wins.
     fn reveal_history_run(
         &mut self,
         ui: &egui::Ui,
-        list: &egui::scroll_area::ScrollAreaOutput<Option<f32>>,
+        list: &egui::scroll_area::ScrollAreaOutput<Option<egui::Rangef>>,
     ) {
         if !std::mem::take(&mut self.history_reveal) {
             return;
         }
-        let Some(top) = list.inner else {
+        let Some(span) = list.inner else {
             return;
         };
         // The list paints `clip_rect_margin` above its top; the row's gap starts there, so no
         // letter of the line above shows cut (X37).
         let margin = ui.visuals().clip_rect_margin;
+        let view = list.inner_rect.y_range();
+        let top = span.min + margin;
+        let delta = if span.max - top > view.span() || top < view.min {
+            top - view.min
+        } else if span.max > view.max {
+            span.max - view.max
+        } else {
+            0.0
+        };
+        if delta == 0.0 {
+            return;
+        }
         let most = (list.content_size.y - list.inner_rect.height()).max(0.0);
         let mut state = list.state;
-        state.offset.y = (top + margin - list.inner_rect.top() + state.offset.y).clamp(0.0, most);
+        state.offset.y = (state.offset.y + delta).clamp(0.0, most);
         state.store(ui.ctx(), list.id);
         ui.ctx().request_repaint();
     }

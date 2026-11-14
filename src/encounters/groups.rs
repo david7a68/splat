@@ -1034,7 +1034,7 @@ fn list_row(
         None,
         |ui| {
             super::row_menu(ui, &group.name, |ui| {
-                if super::menu_action(ui, "Remove…", blocked) {
+                if super::menu_action(ui, "Remove", blocked) {
                     *action = Some(super::ListAction::RemoveGroup(group.path.clone()));
                 }
             });
@@ -1266,7 +1266,7 @@ pub(super) fn of_encounter(
         }
         let path = group.path.clone();
         let adding = add_to.as_deref() == Some(path.as_str());
-        // The editor's usable area: `Move to…` opens inside it, clear of the scroll bar and the
+        // The editor's usable area: `Move to` opens inside it, clear of the scroll bar and the
         // splitter beside it.
         let inside = ui.max_rect().intersect(ui.clip_rect());
         ui.push_id(&path, |ui| {
@@ -1286,7 +1286,7 @@ pub(super) fn of_encounter(
                     ui.horizontal(|ui| {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             super::row_menu(ui, &group.name.clone(), |ui| {
-                                design::menu_submenu(ui, "Move to…", inside, |ui| {
+                                design::menu_submenu(ui, "Move to", inside, |ui| {
                                     for (id, name) in
                                         snapshot.encounter_choices().filter(|(id, _)| *id != this.0)
                                     {
@@ -1298,7 +1298,7 @@ pub(super) fn of_encounter(
                                 if super::menu_action(ui, "Make available to any encounter", None) {
                                     discard = Some((index, false));
                                 }
-                                if super::menu_action(ui, "Delete group…", None) {
+                                if super::menu_action(ui, "Delete group", None) {
                                     discard = Some((index, true));
                                 }
                             });
@@ -3890,7 +3890,7 @@ mod tests {
         group.save(&active, &[]).unwrap();
         let path = note_path(dir.path(), &group.path).unwrap();
         let text = fs::read_to_string(&path).unwrap();
-        // A group is not an encounter, so an encounter's Remove… leaves it.
+        // A group is not an encounter, so an encounter's Remove leaves it.
         assert!(RemovedNote::remove(&active, &group.path, "encounter").is_err());
         assert!(path.exists());
         let removed = RemovedNote::remove(&active, &group.path, "encounter_group").unwrap();

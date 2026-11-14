@@ -220,10 +220,26 @@ pub(crate) fn history_edges(d: &mut Driver<'_>) {
             });
             Some((cut, log.map(|log| (log.top() - above_log.0, above_log.1))))
         });
+        // R2: the row goes to the list's top only when the run does not fit below it; then the
+        // top is a clean edge. A least scroll that keeps the row lower may cut a line above it.
+        let at_top = d.at_size(size, |d| {
+            let row = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("Close the run of "))?;
+            let mut list = None;
+            d.each_painted_text(|text, clip| {
+                if text.galley.job.text == "FINAL STATE" {
+                    list = Some(clip);
+                }
+            });
+            Some(row.rect.top() - list?.top() <= crate::design::L)
+        });
         d.observe(
             "X37-history-clean-edge",
-            edges.as_ref().is_some_and(|(cut, _)| cut.is_empty()),
-            format!("At {size:?}, the texts cut at the list's top: {edges:?}"),
+            at_top.is_some()
+                && (at_top == Some(false) || edges.as_ref().is_some_and(|(cut, _)| cut.is_empty())),
+            format!("At {size:?}, row at the list's top {at_top:?}; the texts cut there: {edges:?}"),
         );
         let gap = edges.and_then(|(_, gap)| gap);
         d.observe(
@@ -836,6 +852,41 @@ pub fn run(d: &mut Driver<'_>) {
             format!("At {size:?}, the Vault Guard's Final state row says {mark:?}: {marked:?}"),
         );
     }
+    // iter-28-B FK5: a Final state row at 0 HP says so in the run's form: its icon and word in
+    // the zero-HP colour, on its HP's line.
+    let zero = format!("{}\u{a0}0 HP", crate::design::icons::ZERO_HP);
+    let stated = d.at_size(DEFAULT, |d| {
+        let (mut hp, mut words) = (Vec::new(), Vec::new());
+        d.each_painted_text(|text, clip| {
+            let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+            if !clip.intersects(rect) {
+                return;
+            }
+            let job = &text.galley.job;
+            if job.text.starts_with("HP 0/") {
+                hp.push(rect);
+            }
+            if job.sections.iter().any(|section| {
+                job.text[section.byte_range.clone()] == zero
+                    && section.format.color == crate::design::colors().hp.zero
+            }) {
+                words.push(rect);
+            }
+        });
+        (!hp.is_empty()
+            && hp.iter().all(|hp| {
+                words.iter().any(|word| {
+                    word.left() > hp.right() && (word.top() - hp.top()).abs() < hp.height() / 2.0
+                })
+            }))
+        .then_some(())
+        .ok_or((hp, words))
+    });
+    d.observe(
+        "iter-28-B-FK5",
+        stated.is_ok(),
+        format!("Each Final state row at 0 HP says {zero:?} in the zero colour: {stated:?}"),
+    );
     // AI1: Final state keeps one HP column: every row's HP starts at one x, at every size.
     // iter-26-B AI1, FI6, SI1: temporary HP has a column of its own, the conditions start after
     // it also on a row with no temporary HP, and each row's values sit on its name's baseline.
