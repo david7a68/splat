@@ -13271,6 +13271,34 @@ pub mod session_notes {
                 "{frames} unchanged frames listed the session folder {done} times, with {ended} disk scans"
             ),
         );
+        // Review of PR 346, item 3: the kept listing ends at the disk scan. A template added
+        // outside Splat shows in the warning after the next scan, and leaves after the one
+        // after its removal.
+        const KEEPS_NOW: &str =
+            "The current folder keeps 1 note, 4 events, 2 templates and 1 recording.";
+        const KEEPS_ADDED: &str =
+            "The current folder keeps 1 note, 4 events, 3 templates and 1 recording.";
+        let campaign = d.app_mut().campaigns.active_campaign().unwrap();
+        let added = crate::sessions::folder(&campaign)
+            .unwrap()
+            .join("Templates")
+            .join("Added outside.md");
+        let before_scan = d.visible_text(KEEPS_NOW);
+        std::fs::write(&added, "Added outside Splat").unwrap();
+        d.app_mut().sessions.simulate_folder_scan();
+        d.settle();
+        let after_scan = d.visible_text(KEEPS_ADDED);
+        std::fs::remove_file(&added).unwrap();
+        d.app_mut().sessions.simulate_folder_scan();
+        d.settle();
+        d.observe(
+            "review-346-3",
+            before_scan && after_scan && d.visible_text(KEEPS_NOW),
+            format!(
+                "The warning follows a template added and removed outside Splat at each scan: \
+                 before {before_scan}, added {after_scan}"
+            ),
+        );
         // FT4 (round 16): with no run and no other form, moving the files is the one primary,
         // as Move runs and save is on Rules and runs.
         let offered_whole = d.at_size(SMALL, |d| {

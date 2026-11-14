@@ -510,13 +510,50 @@ pub(crate) fn storage_files(folder: &Path) -> Result<Vec<PathBuf>, String> {
 }
 
 /// Copy before changing the manifest; retain the old files if any step fails.
-pub(crate) fn move_storage(campaign: &Campaign, name: &str) -> Result<PathBuf, String> {
+/// The files of a session folder's storage by kind: what a Move files and save would move, or
+/// moved. Counted from one listing (`storage_files`), never from the page's own lists.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct StorageCounts {
+    pub files: usize,
+    pub notes: usize,
+    pub templates: usize,
+    pub recordings: usize,
+}
+
+impl StorageCounts {
+    pub(crate) fn of(folder: &Path, files: &[PathBuf]) -> Self {
+        let templates = folder.join(TEMPLATES);
+        let recordings = folder.join(RECORDINGS);
+        let kept = [folder.join("Timeline.md"), folder.join(NOTE_PATHS)];
+        let count = |holds: &dyn Fn(&PathBuf) -> bool| files.iter().filter(|p| holds(p)).count();
+        Self {
+            files: files.len(),
+            notes: count(&|path| {
+                path.parent() == Some(folder)
+                    && path.extension().is_some_and(|ext| ext == "md")
+                    && !kept.contains(path)
+            }),
+            templates: count(&|path| path.starts_with(&templates)),
+            recordings: count(&|path| {
+                path.starts_with(&recordings) && path.extension().is_some_and(|ext| ext == "wav")
+            }),
+        }
+    }
+}
+
+/// Moves the session storage to the folder `name`, and says what it moved: the counts of the
+/// files it listed and moved at this act.
+pub(crate) fn move_storage(
+    campaign: &Campaign,
+    name: &str,
+) -> Result<(PathBuf, StorageCounts), String> {
     let old = folder(campaign)?;
     let new = resolve(campaign, name)?;
     if old == new {
-        return save_folder(campaign, name);
+        return save_folder(campaign, name).map(|folder| (folder, StorageCounts::default()));
     }
     let files = storage_files(&old)?;
+    let moved = StorageCounts::of(&old, &files);
     let pairs: Vec<_> = files
         .iter()
         .map(|path| {
@@ -553,7 +590,7 @@ pub(crate) fn move_storage(campaign: &Campaign, name: &str) -> Result<PathBuf, S
         }
         return Err(errors.join(" "));
     }
-    Ok(new)
+    Ok((new, moved))
 }
 
 /// Moves `source` to `target` in one step, and never replaces a file at `target`: Linux's
@@ -3646,7 +3683,7 @@ mod tests {
             "Existing template"
         );
         fs::remove_file(new.join("Templates/Own.md")).unwrap();
-        assert_eq!(move_storage(&campaign, "Evenings").unwrap(), new);
+        assert_eq!(move_storage(&campaign, "Evenings").unwrap().0, new);
         assert_eq!(folder(&campaign).unwrap(), new);
         for (path, bytes) in relative.iter().zip(originals) {
             assert_eq!(fs::read(new.join(path)).unwrap(), bytes);
