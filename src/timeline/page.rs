@@ -1,7 +1,14 @@
 //! The Timeline page: the whole campaign in story order, apart from any one session.
 #![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{Book, Event, Kind, checks, clock, clock_now, clock_words, day_numbers, reference};
-use crate::design::{self, Action, Density, Status, Tone, Type, colors, icons};
+use crate::design::{
+    self, Action, Density, Status, Tone, Type, colors, icons,
+    outcome::{
+        Choice, Fault, FaultMessage, FaultPlace, KeptOutcome, MessageChoice, Messages, Notice,
+        PaneFrame, Said, Sentence, Severity, UndoStep, Verb,
+    },
+    results::ByTicket,
+};
 use eframe::egui;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
@@ -154,8 +161,7 @@ pub struct TimelinePage {
     reset_detail: bool,
     scroll_to: Option<usize>,
     /// An event just added with the buttons, with one step of undo.
-    /// The event just added, when, and the add's footer order.
-    just_added: Option<(String, Instant, design::ResultOrder)>,
+    added: design::Results<super::TimelineFile, JustAdded>,
     /// The list opens where the story is now, at its end.
     opened: bool,
     /// One column: the detail hides the list, so the open event's results end its form.
@@ -290,21 +296,82 @@ enum ListAct {
     UpdateLinks,
     UndoRuling,
     UndoRemove,
-    UndoAdd(String),
+    UndoAdd,
+    File(FileAct),
 }
 
 pub enum RestRulingAction {
     Set(bool),
-    Undo,
 }
 
 impl RestRulingAction {
     pub fn apply(self, book: &mut Book, id: &str) {
         match self {
             Self::Set(restores) => book.set_restores(id, restores),
-            Self::Undo => book.undo_restores(),
         }
     }
+}
+
+/// The Timeline page's add result: the event the buttons added, until the DM moves on, opens
+/// another event, or `UNDO_ADD_FOR` passes, so it cannot undo the wrong event.
+pub struct JustAdded {
+    file: super::TimelineFile,
+    id: String,
+    at: Instant,
+}
+
+impl design::results::Kept for JustAdded {
+    type Owner = super::TimelineFile;
+    const ENDS: design::results::Ends = design::results::Ends {
+        // Another selection, or the time running out, ends it (`list_messages`).
+        owner_changed: design::results::OwnerChanged::Ends,
+        disk_changed: design::results::DiskChanged::Stays,
+        press: design::results::Press::Undo,
+    };
+    fn owner(&self) -> super::TimelineFile {
+        self.file.clone()
+    }
+}
+
+/// A fault of the Timeline file that blocks nothing: a flag on one of its lines, another
+/// timeline file beside it, or a save that failed. The kind gives the tone.
+enum FileFault {
+    Flag(Sentence),
+    Duplicate(Sentence),
+    NotSaved(Sentence),
+}
+
+impl Fault for FileFault {
+    fn severity(&self) -> Severity {
+        match self {
+            Self::Flag(_) | Self::Duplicate(_) => Severity::NeedsFixing,
+            Self::NotSaved(_) => Severity::NotSaved,
+        }
+    }
+    fn place(&self) -> Option<FaultPlace<'_>> {
+        match self {
+            Self::Flag(_) => Some(FaultPlace {
+                name: super::FILE.into(),
+                line: None,
+            }),
+            _ => None,
+        }
+    }
+    fn cause(&self) -> Sentence {
+        match self {
+            Self::Flag(words) | Self::Duplicate(words) | Self::NotSaved(words) => words.clone(),
+        }
+    }
+}
+
+/// Words made elsewhere as text: a file's flag, an error of the system, a result's words that
+/// the Timeline builds from the events. The one place this file takes them as a sentence.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "words of a file, of the system or of the events, as text (design::results::STAGED_ALLOWS)"
+)]
+fn as_sentence(words: &str) -> Sentence {
+    Sentence::outside(words).unwrap_or(crate::sentence!("Something changed."))
 }
 
 /// Both pages use the same ruling words, icon and colour.
@@ -328,12 +395,8 @@ pub fn long_rest_status(restores: bool) -> Status<'static> {
     }
 }
 
-pub fn rest_ruling(ui: &mut egui::Ui, event: &Event, undo: bool) -> Option<RestRulingAction> {
-    let mut action = rest_ruling_line(ui, event);
-    if undo && let Some(undo) = rest_ruling_result(ui, event) {
-        action = Some(undo);
-    }
-    action
+pub fn rest_ruling(ui: &mut egui::Ui, event: &Event) -> Option<RestRulingAction> {
+    rest_ruling_line(ui, event)
 }
 
 /// The ruling now in force and the action that changes it. The action changes data, so it is a
@@ -362,18 +425,34 @@ pub fn rest_ruling_line(ui: &mut egui::Ui, event: &Event) -> Option<RestRulingAc
     action
 }
 
-/// The ruling's result: a finished change, so it has the success tone in both directions. It
-/// says the ruling now in force, and what it does to the next fight.
-pub fn rest_ruling_result(ui: &mut egui::Ui, event: &Event) -> Option<RestRulingAction> {
-    if event.kind != Kind::LongRest {
-        return None;
-    }
-    let words = if event.restores {
-        REST_RESTORES_WORDS
-    } else {
-        "The next fight starts from the HP the party has now."
+/// The ruling's result in a pane's typed footer, while its rest is the one open: a finished
+/// change, so it has the success tone in both directions. It says the ruling now in force, and
+/// what it does to the next fight. Both pages draw it from the book's store.
+pub fn ruling_line<'f, A: 'static>(
+    frame: &'f PaneFrame,
+    messages: &mut Messages<'f, A>,
+    book: &Book,
+    open: &str,
+    undo: A,
+) {
+    let Some(shown) = book
+        .results
+        .ruling
+        .get(&book.file())
+        .filter(|shown| shown.value().rest().id == open && book.rest_undo_id() == Some(open))
+    else {
+        return;
     };
-    design::undo_message(ui, Tone::Success, words, "Undo ruling").then_some(RestRulingAction::Undo)
+    messages.kept(shown.outcome(frame, |ruling| {
+        let words = if ruling.rest().restores {
+            crate::sentence!("Everyone starts the next fight at full.")
+        } else {
+            crate::sentence!("The next fight starts from the HP the party has now.")
+        };
+        Said::new(words)
+            .undo(UndoStep::of(Verb::Change, "ruling").pressed_as(undo))
+            .into()
+    }));
 }
 
 /// Timeline's removal notice: the plan's words, for the removed event's own session, then how
@@ -416,132 +495,69 @@ fn flag_words(flag: &splat::content::layout::Flag) -> String {
     flag.message.clone()
 }
 
-/// The file's notices that block nothing: the reload result, each flag with the file line, a
-/// duplicate, and a failed save. They arrive from outside edits and autosave, so pages draw
-/// them with their other results (Timeline's list column), never above the Add strip or a form.
-pub fn file_notices(ui: &mut egui::Ui, book: &mut Book) {
-    if let Some(count) = book.dropped()
-        && design::undo_message(
-            ui,
-            Tone::Info,
-            &format!(
-                "Reloaded. Your version, with {}, is gone unless you undo.",
-                design::count(count, "event", "events")
-            ),
-            "Undo reload",
-        )
-    {
-        book.undo_reload();
-    }
-    // The warning names the line; the file line below the last one names the file, at its words.
-    let folder = book.path.as_deref().and_then(std::path::Path::parent);
-    for (at, flag) in book.flags.iter().enumerate() {
-        let text = flag_words(flag);
-        match folder {
-            Some(folder) if at + 1 == book.flags.len() => {
-                design::message_with_actions(ui, Tone::Warning, &text, |ui| {
-                    crate::encounters::file_line(ui, folder, super::FILE);
-                });
-            }
-            _ => {
-                design::message(ui, Tone::Warning, &text);
-            }
-        }
-    }
-    if let Some(warning) = &book.duplicate {
-        design::message(ui, Tone::Warning, warning);
-    }
-    if book.unreadable.is_none()
-        && !book.conflict
-        && let Some(error) = book.error.clone()
-    {
-        let again = design::message_with_actions(ui, Tone::Error, &error, |ui| {
-            Action::secondary("Try to save again").show(ui).clicked()
-        });
-        if again {
-            book.error = None;
-            book.save();
-        }
-    }
-}
-
-/// What the DM chose in a file notice in a pane's footer, done after the footer is drawn.
+/// What the DM chose in a file notice in a pane's footer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FileAct {
     UndoReload,
     SaveAgain,
 }
 
-/// Round 26 FL1: `file_notices` for a pane with a message footer. The same words and choices,
-/// in the footer's order: the reload result with its live Undo, then the failed save (a
-/// reason), then the flags and the duplicate (notices). The choice lands in `act`.
-pub fn file_notices_in_footer<'a>(
-    footer: &mut design::Footer<'a>,
-    undos: &mut LiveUndos<'a>,
+/// The file's notices that block nothing, in a pane's typed footer: the reload result with its
+/// Undo (from the book's store), then the failed save with `Try to save again`, the flags and a
+/// second timeline file. They arrive from outside edits and autosave, so every pane that shows
+/// the Timeline's events (the Timeline page, a session's plan) puts them in its footer. `wrap`
+/// gives the pane's own press for each file act.
+pub fn file_messages<'f, A: 'static>(
+    frame: &'f PaneFrame,
+    messages: &mut Messages<'f, A>,
     book: &Book,
-    act: &'a std::cell::Cell<Option<FileAct>>,
+    wrap: impl Fn(FileAct) -> A,
 ) {
-    if let Some(count) = book.dropped() {
-        let words = format!(
-            "Reloaded. Your version, with {}, is gone unless you undo.",
-            design::count(count, "event", "events")
-        );
-        let order = book.dropped_order;
-        undos.push(order, words.clone(), move |ui| {
-            if design::undo_message(ui, Tone::Info, &words, "Undo reload") {
-                act.set(Some(FileAct::UndoReload));
-            }
-        });
+    if let Some(shown) = book.results.reloaded.get(&book.file()) {
+        let undo = wrap(FileAct::UndoReload);
+        messages.kept(shown.outcome(frame, |reloaded| {
+            KeptOutcome::Notice(
+                Notice::new(crate::sentence!(
+                    "Reloaded. Your version, with {}, is gone unless you undo.",
+                    design::count(reloaded.count(), "event", "events")
+                )),
+                UndoStep::verb(Verb::Reload).pressed_as(undo),
+            )
+        }));
     }
-    let folder = book
-        .path
-        .as_deref()
-        .and_then(std::path::Path::parent)
-        .map(std::path::Path::to_path_buf);
-    let last = book.flags.len();
-    for (at, flag) in book.flags.iter().enumerate() {
-        let text = flag_words(flag);
-        let folder = folder.clone().filter(|_| at + 1 == last);
-        footer.notice(text.clone(), move |ui| match folder {
-            Some(folder) => {
-                design::message_with_actions(ui, Tone::Warning, &text, |ui| {
-                    crate::encounters::file_line(ui, &folder, super::FILE);
-                });
-            }
-            None => {
-                design::message(ui, Tone::Warning, &text);
-            }
-        });
+    for flag in &book.flags {
+        messages.outcome(FaultMessage::new(&FileFault::Flag(as_sentence(
+            &flag_words(flag),
+        ))));
     }
-    if let Some(warning) = book.duplicate.clone() {
-        footer.notice(warning.clone(), move |ui| {
-            design::message(ui, Tone::Warning, &warning);
-        });
+    if let Some(warning) = &book.duplicate {
+        messages.outcome(FaultMessage::new(&FileFault::Duplicate(as_sentence(warning))));
     }
     if book.unreadable.is_none()
         && !book.conflict
-        && let Some(error) = book.error.clone()
+        && let Some(error) = &book.error
     {
-        footer.reason(error.clone(), move |ui| {
-            let again = design::message_with_actions(ui, Tone::Error, &error, |ui| {
-                Action::secondary("Try to save again").show(ui).clicked()
-            });
-            if again {
-                act.set(Some(FileAct::SaveAgain));
-            }
-        });
+        messages.outcome(
+            FaultMessage::new(&FileFault::NotSaved(as_sentence(error))).choice(Choice::new(
+                MessageChoice::Choice("Try to save again"),
+                wrap(FileAct::SaveAgain),
+            )),
+        );
     }
 }
 
-/// Do what the DM chose in a footer's file notice.
-pub fn file_act(book: &mut Book, act: Option<FileAct>) {
+/// Do what the DM chose in a footer's file notice; an Undo acts on the entry its ticket names.
+pub fn file_act(book: &mut Book, act: FileAct, ticket: Option<design::results::Ticket>) {
     match act {
-        Some(FileAct::UndoReload) => book.undo_reload(),
-        Some(FileAct::SaveAgain) => {
+        FileAct::UndoReload => {
+            if let Some(ticket) = ticket {
+                book.undo_reload(ticket);
+            }
+        }
+        FileAct::SaveAgain => {
             book.error = None;
             book.save();
         }
-        None => {}
     }
 }
 
@@ -968,102 +984,110 @@ impl TimelinePage {
 
     /// Round 26: the list column's results, reasons and notices sit in its message footer, so a
     /// result never moves a row: the link update after a rename and its Undo, the open event's
-    /// rest ruling, the file's notices, a removal and an add. Each keeps its owner and end event;
+    /// rest ruling, the file's notices, a removal and an add. Each comes from its own store (the
+    /// book's, the session page's, this page's) and a press acts on the entry its ticket names;
     /// the footer only places them. Round 28 (AL1, FL1, AM1): the column is one pane, so the
     /// footer comes `S` below the last row, pinned only when the rows fill the column. `body`
-    /// draws the rows, or the empty state, as the pane's content.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
+    /// draws the rows, the empty state, or (narrow) the open event's form, as the pane's content.
     fn list_pane<R>(
         &mut self,
         ui: &mut egui::Ui,
         book: &mut Book,
         notes: &mut crate::sessions::page::Sessions,
         open: Option<&str>,
-        body: impl FnOnce(&mut Self, &mut egui::Ui, &mut Book) -> R,
+        body: impl FnOnce(&mut Self, &mut egui::Ui, &mut Book, &mut crate::sessions::page::Sessions) -> R,
     ) -> R {
-        let act = std::cell::Cell::new(None);
-        let file = std::cell::Cell::new(None);
-        let mut footer = design::Footer::new("timeline_list_footer", ui.available_width());
-        let mut undos = LiveUndos::new();
-        if let (Some(words), Some(order)) = (notes.event_link_result(), notes.event_link_order()) {
-            let act = &act;
-            undos.push(order, words.clone(), move |ui| {
-                if design::undo_message(ui, Tone::Success, &words, "Undo link update") {
-                    act.set(Some(ListAct::UndoLinks));
+        let open = open.filter(|id| book.events.iter().any(|event| event.id == *id));
+        let offer = open.and_then(|id| notes.event_link_offer(book, id));
+        let frame = PaneFrame::new(ui);
+        let messages = self.list_messages(&frame, ui, book, notes, open, offer.as_ref());
+        let paned = messages.pane(ui, design::Body::Content, |ui| body(self, ui, book, notes));
+        if let Some(press) = paned.pressed {
+            match press.id {
+                ListAct::UndoLinks => {
+                    if let Some(ticket) = press.ticket {
+                        notes.undo_event_link_update(ticket);
+                    }
                 }
-            });
-        }
-        let offer = open
-            .filter(|id| book.events.iter().any(|event| event.id == *id))
-            .and_then(|id| notes.event_link_offer(book, id));
-        if let Some(offer) = &offer {
-            let (words, action) = (offer.words.clone(), offer.action.clone());
-            let act = &act;
-            // The rename that made the offer is Book's, which keeps its order by event.
-            let order = open
-                .and_then(|id| book.renamed_orders.get(id))
-                .copied()
-                .unwrap_or_default();
-            footer.result(order, words.clone(), false, move |ui| {
-                if design::message_with_action(ui, Tone::Info, &words, &action) {
-                    act.set(Some(ListAct::UpdateLinks));
+                ListAct::UpdateLinks => {
+                    if let Some(offer) = offer {
+                        notes.accept_event_link_offer(offer, book);
+                    }
                 }
-            });
-        }
-        if let Some(problem) = notes.event_link_problem().map(str::to_owned) {
-            footer.reason(problem.clone(), move |ui| {
-                design::message(ui, Tone::Warning, &problem);
-            });
-        }
-        if let Some(id) = open
-            && let Some(event) = book
-                .events
-                .iter()
-                .find(|event| event.id == id && book.rest_undo_id() == Some(id))
-                .filter(|event| event.kind == Kind::LongRest)
-        {
-            let words = if event.restores {
-                REST_RESTORES_WORDS
-            } else {
-                "The next fight starts from the HP the party has now."
-            };
-            let act = &act;
-            let order = book.rest_undo_order;
-            undos.push(order, words.to_owned(), move |ui| {
-                if design::undo_message(ui, Tone::Success, words, "Undo ruling") {
-                    act.set(Some(ListAct::UndoRuling));
+                ListAct::UndoRuling => {
+                    if let Some(ticket) = press.ticket {
+                        book.undo_restores(ticket);
+                        self.added.owner_changed(&book.file());
+                    }
                 }
-            });
+                ListAct::UndoRemove => {
+                    if let Some(ticket) = press.ticket {
+                        book.undo_remove(ticket);
+                    }
+                }
+                ListAct::UndoAdd => {
+                    if let Some(ticket) = press.ticket
+                        && let Ok((added, ())) = self.added.undo_by(ticket, |_| Ok::<(), ()>(()))
+                    {
+                        book.undo_add(&added.id);
+                        self.selected = None;
+                    }
+                }
+                ListAct::File(act) => file_act(book, act, press.ticket),
+            }
         }
-        file_notices_in_footer(&mut footer, &mut undos, book, &file);
-        if let Some(label) = book.removed().map(str::to_owned) {
+        paned.body
+    }
+
+    /// The Timeline page's footer messages for this frame (`list_pane`).
+    fn list_messages<'f>(
+        &mut self,
+        frame: &'f PaneFrame,
+        ui: &egui::Ui,
+        book: &Book,
+        notes: &crate::sessions::page::Sessions,
+        open: Option<&str>,
+        offer: Option<&crate::sessions::page::LinkOffer>,
+    ) -> Messages<'f, ListAct> {
+        let mut messages = Messages::new(frame, "timeline_list_footer", ui.available_width());
+        if let Some(line) = notes.event_link_line(frame, ListAct::UndoLinks) {
+            messages.kept(line);
+        }
+        if let Some(offer) = offer {
+            messages.outcome(offer.notice(ListAct::UpdateLinks));
+        }
+        if let Some(problem) = notes.event_link_problem() {
+            messages.outcome(design::outcome::Outcome::Refused(as_sentence(problem)));
+        }
+        if let Some(id) = open {
+            ruling_line(frame, &mut messages, book, id, ListAct::UndoRuling);
+        }
+        file_messages(frame, &mut messages, book, ListAct::File);
+        if let Some(shown) = book.results.removal.get(&book.file()) {
             let mentions = self.removed_mentions;
-            let words = timeline_removal_words(book, &label, mentions);
-            // A finished change has the success tone; links left to it make it a warning.
-            let tone = if mentions > 0 {
-                Tone::Warning
-            } else {
-                Tone::Success
-            };
-            let act = &act;
-            // The removal's own order, kept with it in Book, as the plan reads it too.
-            let order = book.removal_order().unwrap_or_default();
-            undos.push(order, words.clone(), move |ui| {
-                if design::undo_message(ui, tone, &words, "Undo remove") {
-                    act.set(Some(ListAct::UndoRemove));
+            let words = as_sentence(&timeline_removal_words(book, shown.value().label(), mentions));
+            messages.kept(shown.outcome(frame, |_| {
+                let undo = UndoStep::verb(Verb::Remove).pressed_as(ListAct::UndoRemove);
+                // A finished change has the success tone; links left to it make it a warning.
+                if mentions > 0 {
+                    KeptOutcome::Fault(FaultMessage::new(&FileFault::Duplicate(words)), undo)
+                } else {
+                    Said::new(words).undo(undo).into()
                 }
-            });
+            }));
         }
         // It goes when the DM moves on, or soon, so that it cannot undo the wrong event.
-        self.just_added = self.just_added.take().filter(|(id, at, _)| {
-            at.elapsed() < UNDO_ADD_FOR && self.selected.as_ref() == Some(id)
-        });
-        if let Some((id, _, order)) = self.just_added.clone() {
+        let file = book.file();
+        if self.added.get(&file).is_some_and(|shown| {
+            let added = shown.value();
+            added.at.elapsed() >= UNDO_ADD_FOR || self.selected.as_ref() != Some(&added.id)
+        }) {
+            self.added.owner_changed(&file);
+        }
+        if let Some(shown) = self.added.get(&file) {
             ui.ctx().request_repaint_after(UNDO_ADD_FOR);
             let days = day_numbers(&book.events);
+            let id = shown.value().id.clone();
             let label = book
                 .events
                 .iter()
@@ -1076,79 +1100,19 @@ impl TimelinePage {
                     super::fights_that_keep_hp(&book.events, event.session, &self.saved_runs)
                 });
             // Timeline lists every session, so its result names only the event.
-            let words = added_message(&label, None, restores);
-            let act = &act;
-            undos.push(order, words.clone(), move |ui| {
-                if design::undo_message(ui, Tone::Success, &words, "Undo add") {
-                    act.set(Some(ListAct::UndoAdd(id)));
-                }
-            });
+            let words = as_sentence(&added_message(&label, None, restores));
+            messages.kept(shown.outcome(frame, |_| {
+                Said::new(words)
+                    .undo(UndoStep::verb(Verb::Add).pressed_as(ListAct::UndoAdd))
+                    .into()
+            }));
         }
         if book.merged_outside {
-            // A result like the others in this column: an icon and a bar, not help text.
-            const MERGED: &str = "Timeline.md also changed outside Splat. Both changes are kept.";
-            footer.notice(MERGED, |ui| {
-                design::message(ui, Tone::Info, MERGED);
-            });
+            messages.outcome(Notice::new(crate::sentence!(
+                "Timeline.md also changed outside Splat. Both changes are kept."
+            )));
         }
-        undos.into_footer(&mut footer);
-        let drawn = footer.pane(ui, design::Body::Content, |ui| body(self, ui, book));
-        file_act(book, file.take());
-        match act.take() {
-            Some(ListAct::UndoLinks) => notes.undo_event_link_update(),
-            Some(ListAct::UpdateLinks) => {
-                if let Some(offer) = offer {
-                    notes.accept_event_link_offer(offer, book);
-                }
-            }
-            Some(ListAct::UndoRuling) => {
-                if let Some(id) = open {
-                    RestRulingAction::Undo.apply(book, id);
-                    self.just_added = None;
-                }
-            }
-            Some(ListAct::UndoRemove) => {
-                book.undo_remove();
-            }
-            Some(ListAct::UndoAdd(id)) => {
-                book.undo_add(&id);
-                self.just_added = None;
-                self.selected = None;
-            }
-            None => {}
-        }
-        drawn
-    }
-
-    /// The open event's results stay in the list column with the other results, so they never
-    /// move the form: the link offer after a rename, and the rest ruling's result with its Undo.
-    fn event_results(
-        &mut self,
-        ui: &mut egui::Ui,
-        book: &mut Book,
-        notes: &mut crate::sessions::page::Sessions,
-        id: &str,
-    ) {
-        if !book.events.iter().any(|event| event.id == id) {
-            return;
-        }
-        if let Some(offer) = notes.event_link_offer(book, id)
-            && design::message_with_action(ui, Tone::Info, &offer.words, &offer.action)
-        {
-            notes.accept_event_link_offer(offer, book);
-        }
-        if let Some(problem) = notes.event_link_problem() {
-            design::message(ui, Tone::Warning, problem);
-        }
-        let ruling = book
-            .events
-            .iter()
-            .find(|event| event.id == id && book.rest_undo_id() == Some(id))
-            .and_then(|event| rest_ruling_result(ui, event));
-        if let Some(action) = ruling {
-            action.apply(book, id);
-            self.just_added = None;
-        }
+        messages
     }
 
     /// The rows, in the list pane's scroll column. The column is as tall as every row, and only
@@ -1649,12 +1613,7 @@ impl TimelinePage {
                     placed = Some(after);
                 }
             });
-            // With the list hidden, the event's results end its form, so they move no field.
-            if self.narrow {
-                design::gap(ui, design::Gap::M);
-                file_notices(ui, book);
-                self.event_results(ui, book, notes, &id);
-            }
+
         });
         if changed {
             book.touch();
@@ -1676,14 +1635,14 @@ impl TimelinePage {
         }
         if let Some(action) = ruling {
             action.apply(book, &id);
-            self.just_added = None;
+            self.added.owner_changed(&book.file());
         }
         if let Some(after) = placed {
             book.place_after(&id, after.as_deref());
             self.scroll_to = book.events.iter().position(|event| event.id == id);
         }
         if removed {
-            self.just_added = None;
+            self.added.owner_changed(&book.file());
             self.removed_mentions = sessions
                 .iter()
                 .filter(|session| session.mentions.contains(&id))
@@ -1693,10 +1652,6 @@ impl TimelinePage {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
@@ -1775,7 +1730,11 @@ impl TimelinePage {
         ) {
             self.reveal(&id, book);
             self.focus_title = true;
-            self.just_added = Some((id, Instant::now(), design::ResultOrder::issue()));
+            self.added.record(JustAdded {
+                file: book.file(),
+                id,
+                at: Instant::now(),
+            });
         }
         if let Some(words) = self.dated.clone()
             && design::message_with_action(ui, Tone::Warning, &words, "Play this one")
@@ -1785,7 +1744,7 @@ impl TimelinePage {
         design::gap(ui, design::Gap::XS);
         if book.events.is_empty() && book.unreadable.is_none() {
             let open_run = self.open_run.is_some();
-            let first = self.list_pane(ui, book, notes, None, |_, ui, _| {
+            let first = self.list_pane(ui, book, notes, None, |_, ui, _, _| {
                 let mut first = false;
                 design::empty_state(
                     ui,
@@ -1808,7 +1767,11 @@ impl TimelinePage {
                 let id = book.add(Kind::Day, current);
                 self.reveal(&id, book);
                 self.focus_title = true;
-                self.just_added = Some((id, Instant::now(), design::ResultOrder::issue()));
+                self.added.record(JustAdded {
+                file: book.file(),
+                id,
+                at: Instant::now(),
+            });
             }
             return;
         }
@@ -1837,17 +1800,23 @@ impl TimelinePage {
                 {
                     self.selected = None;
                 }
-                self.detail(ui, book, sessions, notes);
+                // With the list hidden, the open event's results are in the form's own footer,
+                // so they move no field.
+                notes.expire_event_link_undo(true, book);
+                let open = self.selected.clone();
+                self.list_pane(ui, book, notes, open.as_deref(), |page, ui, book, notes| {
+                    page.detail(ui, book, sessions, notes);
+                });
             } else {
                 notes.expire_event_link_undo(true, book);
-                self.list_pane(ui, book, notes, None, |page, ui, book| {
+                self.list_pane(ui, book, notes, None, |page, ui, book, _| {
                     page.list(ui, book, sessions);
                 });
             }
             return;
         }
         if !event_open {
-            self.list_pane(ui, book, notes, None, |page, ui, book| {
+            self.list_pane(ui, book, notes, None, |page, ui, book, _| {
                 page.list(ui, book, sessions);
             });
             return;
@@ -1873,7 +1842,7 @@ impl TimelinePage {
                     .show_inside(ui, |ui| {
                         notes.expire_event_link_undo(true, book);
                         let open = self.selected.clone();
-                        self.list_pane(ui, book, notes, open.as_deref(), |page, ui, book| {
+                        self.list_pane(ui, book, notes, open.as_deref(), |page, ui, book, _| {
                             page.list(ui, book, sessions);
                         });
                     });

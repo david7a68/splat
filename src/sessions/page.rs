@@ -80,7 +80,7 @@ enum View {
 type FolderFiles = Result<Option<Vec<PathBuf>>, String>;
 
 /// What the DM chose in the session page's message footer, done after the footer is drawn.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 enum SessionAct {
     MoveRunHere(Uuid),
     UndoMove,
@@ -98,6 +98,8 @@ enum SessionAct {
     /// The notes panel's `Play it tonight` and `New session`.
     PlayTonight,
     NewSession,
+    /// A press in the plan's part of the footer: the plan acts on it (`plan_pane`).
+    Plan(plan::FooterAct),
 }
 
 /// What the session page's pane shows, as its header worked it out.
@@ -296,6 +298,24 @@ pub struct LinkOffer {
     pub action: String,
     changes: Vec<(Draft, String)>,
     title: String,
+    /// The old names the links say, and how many links would change.
+    old: Vec<String>,
+    count: usize,
+}
+
+impl LinkOffer {
+    /// The offer in a pane's typed footer: what changes, and the action that does it.
+    pub fn notice<A>(&self, update: A) -> Notice<A> {
+        Notice::new(crate::sentence!(
+            "Change links from “{}” to “{}”.",
+            self.old.join("” or “"),
+            self.title
+        ))
+        .choice(Choice::named(
+            crate::choice!("Update {}", design::count(self.count, "link", "links")),
+            update,
+        ))
+    }
 }
 
 struct LinkUndoState {
@@ -339,7 +359,8 @@ pub struct Sessions {
     /// pass it was last drawn in.
     pub(super) row_reveal: Option<(String, u8, u64)>,
     /// When the link update's result was made.
-    link_order: Option<design::ResultOrder>,
+    /// The link update's result, with its Undo.
+    link_updates: design::Results<kept::Page, kept::LinkUpdate>,
     /// When the group removal in `removed_group` was done.
     pub(super) removed_group_order: design::ResultOrder,
     /// When the run deletion in `deleted_run` was done.
@@ -363,7 +384,6 @@ pub struct Sessions {
     /// plan (the book's removal of that run's own event when the deletion happened). The
     /// deletion's result owns it: its Undo, or the plan's next note or event edit, ends it.
     deleted_run: Option<(crate::encounter_run::DeletedRun, Option<u64>)>,
-    row_notice: Option<(Option<Uuid>, usize)>,
     updated_links: Option<Vec<LinkWrite>>,
     link_undo_state: Option<LinkUndoState>,
     link_problem: Option<String>,
@@ -1979,11 +1999,11 @@ impl Sessions {
         self.form = None;
         self.notice = None;
         self.deleted_run = None;
-        self.row_notice = None;
         self.removed_group = None;
         self.plan_notice_state = None;
         self.removed_event_in_plan = false;
         self.updated_links = None;
+        self.link_updates.owner_changed(&kept::Page { root: self.folder.clone().unwrap_or_default() });
         self.link_undo_state = None;
         self.removed_fight = None;
         self.scenes = plan::Scenes::default();
@@ -2410,17 +2430,20 @@ impl Sessions {
             action,
             changes,
             title: current.title.clone(),
+            old: renamed.clone(),
+            count,
         })
     }
 
     /// The DM took the link offer: write the notes, and keep what Undo needs.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     pub fn accept_event_link_offer(&mut self, offer: LinkOffer, book: &Book) {
         self.update_event_link_notes(offer.changes);
-        self.link_order = Some(design::ResultOrder::issue());
+        if self.updated_links.is_some() {
+            self.link_updates.record(kept::LinkUpdate {
+                page: self.page(),
+                title: offer.title.clone(),
+            });
+        }
         self.link_undo_state = Some(LinkUndoState {
             notes: self.note_bodies(),
             events: book.events.clone(),
@@ -2437,19 +2460,38 @@ impl Sessions {
             .map(|state| format!("Links now say “{}”.", state.title))
     }
 
-    pub fn undo_event_link_update(&mut self) {
+    /// `Undo link update`, pressed on the result its ticket names. The result stays, with its
+    /// Undo and the reason, while some notes keep the new links.
+    pub fn undo_event_link_update(&mut self, ticket: design::results::Ticket) {
+        if self.link_updates.get(&self.page()).is_none() {
+            return;
+        }
         self.undo_event_link_notes();
+        let done = self.updated_links.is_none();
+        let _ = self
+            .link_updates
+            .undo_by(ticket, |_| if done { Ok(()) } else { Err(()) });
+    }
+
+    /// The link update's result with its Undo, from its store, for a pane's typed footer.
+    pub fn event_link_line<'f, A: 'static>(
+        &self,
+        frame: &'f PaneFrame,
+        undo: A,
+    ) -> Option<design::outcome::KeptLine<'f, A>> {
+        self.updated_links.as_ref()?;
+        let shown = self.link_updates.get(&self.page())?;
+        Some(shown.outcome(frame, |update| {
+            Said::new(crate::sentence!("Links now say “{}”.", update.title))
+                .undo(UndoStep::of(Verb::Change, "links").pressed_as(undo))
+                .into()
+        }))
     }
 
     /// A reveal that waits for its next draw, as one does just after an add or a travel act.
     #[cfg(test)]
     pub fn simulate_pending_reveal(&mut self, row: &str, pass: u64) {
         self.row_reveal = Some((row.to_owned(), 0, pass));
-    }
-
-    /// When the link update's result was made, for the footer's newest-first order.
-    pub fn event_link_order(&self) -> Option<design::ResultOrder> {
-        self.link_order
     }
 
     /// Why the last link update or its Undo did not finish.
@@ -2492,6 +2534,7 @@ impl Sessions {
             });
         if ends || changed {
             self.updated_links = None;
+            self.link_updates.owner_changed(&kept::Page { root: self.folder.clone().unwrap_or_default() });
             self.link_undo_state = None;
             self.link_problem = None;
         }
@@ -2501,6 +2544,7 @@ impl Sessions {
         // A new update ends the last one's result: its warning, its Undo and its hold.
         self.link_problem = None;
         self.updated_links = None;
+        self.link_updates.owner_changed(&kept::Page { root: self.folder.clone().unwrap_or_default() });
         self.link_partial = false;
         // Every target is checked before the first write: its draft, the open draft of the same
         // note (its owner here), and its file on disk. One blocked target writes nothing.
@@ -2523,6 +2567,7 @@ impl Sessions {
             ));
             // As before, a new update ends the last one's Undo.
             self.updated_links = None;
+            self.link_updates.owner_changed(&kept::Page { root: self.folder.clone().unwrap_or_default() });
             return;
         }
         // Each note is written by its own save, which checks the file once more right before
@@ -6145,8 +6190,8 @@ impl Sessions {
             }
             SessionAct::PlayTonight => self.play_this_one(),
             SessionAct::NewSession => self.start_new_session(),
-            // The template pane's own press (`draft_press`).
-            SessionAct::UndoDeleteTemplate => {}
+            // The template pane's own press (`draft_press`), and the plan's (`plan_pane`).
+            SessionAct::UndoDeleteTemplate | SessionAct::Plan(_) => {}
         }
     }
 
@@ -6218,12 +6263,18 @@ impl Sessions {
         // The body (Last time, the tabs and their pane) is the pane's; the part places the
         // footer below it.
         let view = self.session_header(ui, book, plan, &note, title_on_own_line);
+        // The plan's views: the plan's pane holds the page's messages too, in its one footer,
+        // which follows the plan's rows.
+        if matches!(view, SessionView::Tab { shown: Tab::Plan, .. }) {
+            self.session_content(ui, settings, book, plan, view, &note);
+            return;
+        }
         let frame = PaneFrame::new(ui);
         let messages =
             self.session_messages(&frame, settings, book, plan, &note, ui.available_width());
         let body = self.session_body_kind(&view);
         let paned = messages.pane(ui, body, |ui| {
-            self.session_content(ui, settings, book, plan, view);
+            self.session_content(ui, settings, book, plan, view, &note);
         });
         if let Some(press) = paned.pressed {
             self.session_press(press, book, plan);
@@ -6344,6 +6395,7 @@ impl Sessions {
         book: &mut Book,
         plan: &Plan<'_>,
         view: SessionView,
+        note: &Note,
     ) {
         let SessionView::Tab {
             shown,
@@ -6368,7 +6420,7 @@ impl Sessions {
                     ui.spacing_mut().item_spacing.x = design::L;
                     page_column(ui, plan_width, height, |ui| {
                         fixed_scope(ui, editing_group_here, "session_plan_pane", |ui| {
-                            self.plan_pane(ui, book, plan)
+                            self.plan_pane(ui, book, plan, Some((settings, note)))
                         });
                     });
                     page_column(ui, note_width, height, |ui| {
@@ -6388,7 +6440,7 @@ impl Sessions {
                         ui.set_max_width(toolbar_width + ui.spacing().scroll.allocated_width());
                     }
                     fixed_scope(ui, editing_group_here, "session_plan_pane", |ui| {
-                        self.plan_pane(ui, book, plan)
+                        self.plan_pane(ui, book, plan, Some((settings, note)))
                     })
                 })
                 .inner
