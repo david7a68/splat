@@ -2351,6 +2351,8 @@ mod tests {
         harness.run_steps(2);
         harness.state_mut().0.selected = Some(id.clone());
         harness.run_steps(2);
+        harness.get_by_label("More actions for Toll gate").click();
+        harness.run_steps(2);
         harness.get_by_label("Remove this event").click();
         harness.run_steps(3);
         let warned = |harness: &egui_kittest::Harness<'_, State>| {
