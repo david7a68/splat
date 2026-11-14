@@ -5900,6 +5900,18 @@ pub mod dialogs {
         );
         d.click(CREATE_COPY);
         d.expect("Copied to ");
+        // Row 4, must stay true: the copy is written to the destination the drop-down showed
+        // (the campaign), and not to the package that is the first row of its list.
+        let named = |root: &str| {
+            splat::content::read_directory(&d.root.join(root))
+                .map(|(entries, _)| entries.iter().any(|e| e.name == "Watch Aboleth"))
+                .unwrap_or(false)
+        };
+        d.observe(
+            "iter-28-L-4-written",
+            named("campaigns/emberfall") && !named("modules/ashen-marches"),
+            "The copy is written to the campaign the destination drop-down shows",
+        );
         d.state("copy-complete", Sizes::Default);
         d.click("Edit the copy");
         d.expect("Markdown editor");
