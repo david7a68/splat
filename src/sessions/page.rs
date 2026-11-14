@@ -1449,9 +1449,9 @@ impl Sessions {
             .and_then(|id| self.notes.iter().find(|note| note.id == id));
         (notes && self.other_recording_shown())
             || (notes
-            && self.notice_arrived()
-            && !self.processed_notice_read_here()
-            && (self.notice_session.is_none() || self.notice_session == self.selected))
+                && self.notice_arrived()
+                && !self.processed_notice_read_here()
+                && (self.notice_session.is_none() || self.notice_session == self.selected))
             || (notes && selected.is_some_and(|note| !note.also.is_empty()))
             || (notes && !self.unreadable.is_empty())
             || (self.notes_in_view() && self.draft.as_ref().is_some_and(Draft::needs_attention))
