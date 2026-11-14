@@ -2392,13 +2392,17 @@ impl MenuPopup<'_> {
                 used.width()
             };
             let next = wanted.min(inner_room);
+            // A new width (an opening, changed choices, a narrower pane) draws the pass again.
+            // This pass, which egui discards, already allocates the new width: egui saves the
+            // menu's size at the end of a pass and places the next pass with it, so the drawn
+            // pass is anchored with the size it draws at.
+            let remeasure = (next - width).abs() > 0.5 || decided.is_none();
+            let allocated = if remeasure { next } else { width };
             ui.allocate_rect(
-                Rect::from_min_size(top, vec2(width, used.height())),
+                Rect::from_min_size(top, vec2(allocated, used.height())),
                 Sense::hover(),
             );
-            // A new width (an opening, changed choices, a narrower pane) draws the pass again,
-            // so egui places the menu at its new size in the same frame.
-            if (next - width).abs() > 0.5 || decided.is_none() {
+            if remeasure {
                 ui.data_mut(|data| data.insert_temp(key, next));
                 ui.ctx().request_discard("a menu measured its width");
             }

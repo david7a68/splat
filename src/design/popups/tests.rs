@@ -1191,6 +1191,78 @@ fn a_menu_of_long_choices_stays_beside_its_splitter() {
             "x2-room: reopened in a narrower pane, the menu {reopened:?} keeps inside it"
         );
     }
+    // X2 re-check 2: a menu at its control's right edge (it opens leftward, its right edge
+    // anchored at the control's) whose choices change while it is open: on the FIRST frame after
+    // each change, the painted frame already ends at the control's right edge, inside the
+    // column (narrow → wide, then wide → narrow).
+    {
+        const PATH: &str = "Campaigns/Ashen Marches/Encounters/Below the old mill/Second floor";
+        let ctx = context();
+        let size = vec2(960.0, 640.0);
+        let label = Cell::new("All");
+        let opener = Cell::new(None::<Response>);
+        let draw = |events| {
+            frame(&ctx, size, events, |ui| {
+                let pane = Rect::from_min_size(Pos2::ZERO, vec2(COLUMN, 640.0));
+                ui.scope_builder(egui::UiBuilder::new().max_rect(pane), |ui| {
+                    ui.set_clip_rect(pane);
+                    ScrollColumn::new("test_menu_pane").show(ui, |ui| {
+                        let button = ui
+                            .with_layout(Layout::right_to_left(Align::Min), |ui| ui.button("Roll"))
+                            .inner;
+                        crate::design::menu_popup(ui, &button).show(|ui| {
+                            let _ = crate::design::choice_wrapped(ui, true, label.get(), None);
+                        });
+                        opener.set(Some(button));
+                    });
+                });
+            })
+        };
+        // The popup's frame: the window-filled rect that holds the choice's words.
+        let painted_frame = |output: &egui::FullOutput, words: &str| {
+            fn rects(shape: &egui::Shape, fill: egui::Color32, out: &mut Vec<Rect>) {
+                match shape {
+                    egui::Shape::Rect(rect) if rect.fill == fill => out.push(rect.rect),
+                    egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| rects(s, fill, out)),
+                    _ => {}
+                }
+            }
+            let fill = ctx.style().visuals.window_fill();
+            let mut frames = Vec::new();
+            for clipped in &output.shapes {
+                rects(&clipped.shape, fill, &mut frames);
+            }
+            let text = texts(output)
+                .into_iter()
+                .find(|text| text.words == words)
+                .expect("the choice is painted")
+                .rect;
+            frames
+                .into_iter()
+                .filter(|frame| frame.contains_rect(text))
+                .min_by(|a, b| a.area().total_cmp(&b.area()))
+                .expect("the menu's frame")
+        };
+        draw(Vec::new());
+        let button = opener.take().expect("the button");
+        draw(click(button.rect.center()));
+        for _ in 0..3 {
+            draw(Vec::new());
+        }
+        for words in [PATH, "All"] {
+            label.set(words);
+            let first = draw(Vec::new());
+            let menu = painted_frame(&first, words);
+            assert!(
+                (menu.right() - button.rect.right()).abs() <= 1.0
+                    && menu.left() >= -0.5
+                    && menu.right() <= COLUMN - lane_width() + 0.5,
+                "x2-first-frame: the first frame after {words:?}: the frame {menu:?} ends at the \
+                 control's right edge {} inside the column",
+                button.rect.right()
+            );
+        }
+    }
     // X2 review: a menu of actions (no choices) reopened under the same id is measured again
     // in a sizing pass: it stays as narrow as its actions, not as wide as its room.
     {
