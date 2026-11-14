@@ -336,13 +336,13 @@ impl EditorRegion<'_> {
         // (no animation: the first frame shown has the caret in view):
         // - the view's height changed under the caret (the footer gained or lost a line, the
         //   window changed): the least scroll that keeps the caret in view;
-        // - a reveal is pending (the caret moved outside the view in the last pass): the least
-        //   scroll when the caret is less than a view away, else the caret centred.
+        // - a reveal is pending (the caret moved outside the view in the last pass): the caret
+        //   centred in the view as tall as it is now.
         // Otherwise nothing, so the DM's own wheel is never pulled back.
         /// The editor region's one offset for a pass: `caret` (content rows) was seen at `offset` in
-        /// the last pass; `view` is the region's height NOW. A changed height gives the least scroll
-        /// that keeps the caret in view; a pending `reveal` gives the same when the caret is less than
-        /// a view away, else the caret centred. `None`: leave the offset as it is.
+        /// the last pass; `view` is the region's height NOW. A pending `reveal` centres the caret;
+        /// else a changed height gives the least scroll that keeps the caret in view. `None`:
+        /// leave the offset as it is.
         fn follow_caret(
             caret: std::ops::Range<f32>,
             offset: f32,
@@ -353,17 +353,14 @@ impl EditorRegion<'_> {
             if !(reveal || height_changed) {
                 return None;
             }
-            let least = if caret.end > offset + view {
+            let at = if reveal {
+                (caret.start + caret.end - view) / 2.0
+            } else if caret.end > offset + view {
                 caret.end - view
             } else if caret.start < offset {
                 caret.start
             } else {
                 offset
-            };
-            let at = if reveal && (least - offset).abs() > view {
-                (caret.start + caret.end - view) / 2.0
-            } else {
-                least
             }
             .max(0.0);
             ((at - offset).abs() > 0.5).then_some(at)
@@ -2482,8 +2479,10 @@ mod editor_region_tests {
             1.0 / 60.0,
         );
         let view = region_view(&harness);
-        // The last line whose bottom is in the view: Shift+Down takes the caret past it.
-        let last = ((view.height() / 18.0).floor() as usize).saturating_sub(1);
+        // The line before the last whole line in the view: two Shift+Down take the caret past
+        // the view's bottom.
+        let last = ((view.height() / 18.0).floor() as usize).saturating_sub(2);
+        let rest = painted_offset(&harness);
         let at: usize = (0..last).map(|line| format!("Line {line}").len() + 1).sum();
         harness.state_mut().set_caret = Some(at);
         harness.run_steps(3);
@@ -2493,6 +2492,10 @@ mod editor_region_tests {
             "key-setup: the caret {before:?} starts in the view {view:?}"
         );
         let start = painted_offset(&harness);
+        assert!(
+            (start - rest).abs() < 0.5,
+            "key-setup: the view did not move ({rest} to {start})"
+        );
         harness.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::ArrowDown);
         harness.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::ArrowDown);
         // The key frames (the first frame shown after the key), then one more frame.
@@ -2510,8 +2513,8 @@ mod editor_region_tests {
             first == second && second.is_some_and(|second| view.contains_rect(second)),
             "key-in-view: the caret {first:?} then {second:?} is in the view {view:?}"
         );
-        // Twenty Shift+Down in one frame: the caret goes more than a view past the edge, so the
-        // region centres it while egui's own ask would stop at the edge. With egui's animated
+        // Twenty Shift+Down in one frame: the caret goes more than a view past the edge; the
+        // region centres it while egui's own ask would stop at the edge, so with egui's animated
         // ask left in place, the offset would go on moving toward that edge.
         let start = second_offset;
         let press = egui::Event::Key {
