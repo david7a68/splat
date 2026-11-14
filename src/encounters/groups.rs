@@ -2370,9 +2370,41 @@ impl Encounters {
         // Save, and Save is blocked and not primary.
         let refusal = self.group_refusal();
         // The Session page has no save of its own to give this key to.
+        // One `DraftState` decides the save row's word, Save's weight and reason, Discard and the
+        // campaign lock; keyboard Save runs exactly when Save can (migrate:O, rows 139, FB9).
+        let empty = self
+            .group_draft
+            .as_ref()
+            .is_some_and(|draft| draft.setup.members.is_empty());
+        let state = {
+            let changed = if dirty {
+                design::memo::Changed::Yes
+            } else {
+                design::memo::Changed::No
+            };
+            // An open run's `Next turn` owns the one primary action.
+            let primary = if has_run {
+                design::save_row::Primary::Elsewhere
+            } else {
+                design::save_row::Primary::Draft
+            };
+            let mut state = design::DraftState::new(changed, primary).locks_campaign();
+            if empty {
+                state = state.refused(EMPTY_REASON);
+            } else if let Some(refusal) = &refusal {
+                state = state.refused(refusal.text.clone());
+            } else if self.shows_validation_error() {
+                // AH1: the last refusal still shows: Invalid, as the encounter editor says.
+                state = state.invalid();
+            }
+            if self.message.is_some() {
+                // FC1: the shared `Saved`; the list keeps the full sentence for after Back.
+                state = state.just_saved();
+            }
+            state
+        };
         let save_key = in_plan
-            && refusal.is_none()
-            && dirty
+            && state.can_save()
             && ui
                 .ctx()
                 .input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
@@ -2383,9 +2415,6 @@ impl Encounters {
         };
         let compact = ui.available_width() < 760.0;
 
-        let saved_note = self.message.clone();
-        // AH1: a draft that Save's check refused says Invalid, as the encounter editor does.
-        let refused = self.shows_validation_error() || refusal.is_some();
         let focus_name = std::mem::take(&mut self.focus_name);
         let draft = self.group_draft.as_mut().expect("the editor has a draft");
         let column_right = ui.data(|data| data.get_temp::<f32>(column_right_id(&draft.path)));
@@ -2399,7 +2428,6 @@ impl Encounters {
         let block_right = column_right.map_or(ui.max_rect().right(), |right| {
             right.min(ui.max_rect().right())
         });
-        let empty = draft.setup.members.is_empty();
         // FB7: Save group is on the title line at the editor's right edge, above the Add
         // creatures column, where Save encounter is in the encounter editor (round 28: one place
         // in both editors). The name and Belongs to keep the block's edge. The save row below
@@ -2411,19 +2439,12 @@ impl Encounters {
             .natural_width(ui)
             .max(Action::secondary("Save group").natural_width(ui))
             .ceil();
-        let button = if dirty && !has_run && !empty && !refused {
-            Action::primary("Save group")
-        } else {
-            Action::secondary("Save group")
+        let button = match state.save_weight() {
+            design::save_row::SaveWeight::Primary => Action::primary("Save group"),
+            design::save_row::SaveWeight::Secondary => Action::secondary("Save group"),
         }
         .min_width(save_width)
-        .blocked(if empty {
-            Some(EMPTY_REASON)
-        } else if !dirty {
-            Some("No changes to save.")
-        } else {
-            refusal.as_ref().map(|refusal| refusal.text.as_str())
-        });
+        .blocked(state.save_blocked());
         ui.horizontal(|ui| {
             back = Action::quiet(icons::BACK)
                 .name(back_name)
@@ -2467,18 +2488,8 @@ impl Encounters {
         let mut below: Vec<(&'static str, Option<&'static str>)> = Vec::new();
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Scan.control());
-            let (icon, word, color) = if empty || refused {
-                (icons::ERROR, "Invalid", colors().document.invalid)
-            } else if dirty {
-                (icons::DRAFT, "Unsaved", colors().document.unsaved)
-            } else if saved_note.is_some() {
-                // FC1: the save row says the shared `Saved`, as the encounter editor does. The
-                // list keeps the full sentence for after Back.
-                (icons::OK, "Saved", colors().document.saved)
-            } else {
-                (icons::OK, "No changes", colors().muted)
-            };
-            discard = super::editor_save_state(ui, Status { icon, word, color }, dirty, None);
+            discard =
+                super::editor_save_state(ui, state.word().status(), state.discard_shown(), None);
             let gap = ui.spacing().item_spacing.x;
             let font = Type::Small.font(ui);
             let mut room = block_right - ui.cursor().left();
@@ -2496,16 +2507,11 @@ impl Encounters {
                 }
             };
             let empty_reason = beside(EMPTY_REASON, empty.then_some(EMPTY_REASON));
-            // FB6: while Save is blocked, Discard is the one way out, so the lock says only that.
+            // FB6: while Save is blocked, Discard is the one way out, so the lock says only that
+            // (`DraftState::lock_reason`). Its place is measured by the longer form.
             let switch = beside(
-                super::draft_switch_reason(),
-                dirty.then(|| {
-                    if empty {
-                        super::blocked_draft_switch_reason()
-                    } else {
-                        super::draft_switch_reason()
-                    }
-                }),
+                design::save_row::SAVE_OR_DISCARD_TO_SWITCH,
+                state.lock_reason(),
             );
             super::blocked_reason(ui, switch);
             ui.allocate_ui_with_layout(
