@@ -989,7 +989,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/library.rs",
             "package_form",
-            &[Ban::Layout(5), Ban::Extras(3)],
+            &[Ban::Layout(4), Ban::Extras(3)],
         ),
         ("src/library.rs", "scope_menu", &[Ban::Layout(1)]),
         ("src/library.rs", "show", &[Ban::Layout(1)]),
@@ -1171,7 +1171,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Extras(2)],
         ),
         ("src/library.rs", "duplicate_choices", &[Ban::Extras(2)]),
-        ("src/library.rs", "form_heading", &[Ban::Extras(1)]),
         ("src/library.rs", "kept_undo_message", &[Ban::Extras(2)]),
         ("src/library.rs", "recovery_action", &[Ban::Extras(2)]),
         ("src/library.rs", "repair_notice", &[Ban::Extras(1)]),
