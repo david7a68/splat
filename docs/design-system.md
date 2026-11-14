@@ -2185,7 +2185,8 @@ Field labels have `M` before them. Copy link uses a check and Copied for two sec
 quiet section; Place after is the only ordering control. Adds to shares the filter line. Kind, Session, Place
 after and Show one session are `Dropdown`s: the control shows the whole chosen label, cut at its end.
 A title that is empty or only says the event's kind (the plan names a new event by its kind) is no title
-(`Event::own_title`): the header, the row and the label say the kind once (`Day 1`, not `Day 1: Day`). Context shows visible
+(`Event::own_title`): the header, the row and the label say the kind once (`Day 1`, not `Day 1: Day`). The
+file and the event links keep the title exactly (`timeline::Stored`): `## Day 1: Day` stays in `Timeline.md`. Context shows visible
 out of total while filtering; the filter says Major events.
 
 Added, removed and link-update notices sit in the list column's message footer (`design::Footer`), below
