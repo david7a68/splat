@@ -1044,6 +1044,17 @@
     ["N4/quiet-action-line-start","04-item-facts","960x640","Button \"Filter creatures\"",1]
   ],
   "trackers": [
+    ["N4/quiet-action-line-start","02-trackers-beside-the-plan","1200x800","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","02-trackers-beside-the-plan","960x640","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","03-trackers-three-notices","1200x800","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","03-trackers-three-notices","960x640","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","05-trackers-over-an-entry","960x640","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","06-trackers-day-mark-due","1200x800","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","06-trackers-day-mark-due","960x640","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","07-tracker-history-in-the-reader","1200x800","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","07-tracker-history-in-the-reader","960x640","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","08-tracker-history-removed","1200x800","Button \"All sessions\"",1],
+    ["N4/quiet-action-line-start","08-tracker-history-removed","960x640","Button \"All sessions\"",1]
   ],
   "travel-checks": [
     ["G1b/pressed-control-moved","06-travel-checks-timeline","960x640","Button \"Travel · 1 day · Session 1\"",1],
