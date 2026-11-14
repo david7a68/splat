@@ -8034,6 +8034,9 @@ impl Library {
                 self.draft_revision += 1;
             }
         }
+        // In Read the pane draws the body and then this footer (`Footer::pane`), so the footer
+        // follows a short body; its presses are read after the pane (round 28, row G6).
+        let mut read_footer = None;
         if choices_in_reader && !slot_row {
             let mut footer =
                 design::Footer::new("library_footer", editor_width.min(design::READER_MEASURE));
@@ -8049,14 +8052,8 @@ impl Library {
                 &mut reader_press,
             );
             page_error(&mut footer, self.error.as_deref());
-            body_bottom = footer.show_by_hand(ui);
-            heading_pressed = reader_press.heading;
-            // Presses come only from the footer that drew the results: this one in Read. With a
-            // save row, Edit Markdown's list drew them and `pressed` already holds them.
-            pressed = reader_press.results.get();
+            read_footer = Some(footer);
         }
-        new_identity = new_identity.or(reader_press.new_identity.take());
-        new_identities = new_identities.or(reader_press.new_identities.take());
         let mut reload_from_disk = false;
         let mut read_disk_again = false;
         if let Some(fault) = self
@@ -8155,8 +8152,6 @@ impl Library {
         }
         let mut open_link = None;
         let mut pressed_link = None;
-        let copy_dependency = reader_press.copy_dependency;
-        let undo_dependency = reader_press.undo_dependency.get();
         if self.source && self.disk_change.is_none() {
             egui::Frame::new()
                 .fill(colors().well)
@@ -8248,141 +8243,152 @@ impl Library {
                         });
                 });
         } else {
+            // The body's words, in Read (in the pane) and beside an open conflict (in its own
+            // scroll area, as Edit Markdown's form keeps until the pane part P2).
+            let mut content = |ui: &mut egui::Ui| {
+                if let Some(change) = &mut self.disk_change {
+                    if let Some(text) = &change.text {
+                        // The side-by-side comparison is the one state that takes the full width.
+                        ui.set_max_width(editor_width);
+                        design::grouped_draft_comparison(
+                            ui,
+                            &self.draft,
+                            text,
+                            (&note.path, text),
+                            true,
+                        );
+                    } else {
+                        design::heading(
+                            ui,
+                            design::Heading::Group {
+                                title: "Your draft",
+                                count: 0,
+                            },
+                        );
+                        let mut draft = self.draft.as_str();
+                        // The field belongs to this note: its owner and path key it.
+                        let field = DISK_DRAFT.of(note.owner.id()).with(note.field_key());
+                        let response = field.multi_line(ui, &mut draft, |edit| {
+                            edit.font(egui::TextStyle::Monospace)
+                                .margin(egui::vec2(design::S, design::S))
+                                .desired_width(editor_width - 2.0 * design::S)
+                                .interactive(false)
+                        });
+                        design::named(ui, &response, "Your draft");
+                    }
+                    return;
+                }
+                // A failed parse must never render YAML properties as book prose.
+                let body = parsed.as_ref().map_or("", |e| e.body.as_str());
+                ui.push_id(&note.path, |ui| {
+                    reader_style::measure(ui, |ui| {
+                        design::gap(ui, design::Gap::XS);
+                        let reading_subtitle = reader_kind_line(&note.owner, &reading_subtitle);
+                        let subtitle = reading_subtitle.as_str();
+                        let subtitle = subtitle.strip_suffix(" · Campaign").unwrap_or(subtitle);
+                        let subtitle = if note.error.is_some() {
+                            match note.unreadable_kind() {
+                                Section::Unreadable | Section::Other => "",
+                                Section::PackageDetails => "Package",
+                                kind => kind.label().trim_end_matches('s'),
+                            }
+                        } else if subtitle == "Campaign" {
+                            note.section().label().trim_end_matches('s')
+                        } else {
+                            subtitle
+                        };
+                        view::title_with_art(ui, title, subtitle, parsed.as_ref().ok());
+                        // Round 27 FH9: `L` between the kind line and its
+                        // first warning, as between a kind line and prose,
+                        // so the kind word does not read as the warning's.
+                        if fault.is_some() || repair_problem.is_some() {
+                            ui.add_space(design::L - ui.spacing().item_spacing.y);
+                        }
+                        if let Some(fault) = &fault {
+                            read_again = fault_notice(ui, fault);
+                        }
+                        // A read fault has no repair problem: there is no text to repair.
+                        if let Some(problem) = &repair_problem {
+                            repair_pressed =
+                                repair_notice(ui, problem, recovery.as_ref(), draft_reason, false);
+                        }
+                    });
+                    open_link = view::show_with_related(
+                        ui,
+                        note.name(),
+                        parsed.as_ref().ok(),
+                        body,
+                        &view::Origin {
+                            path: &note.path,
+                            owner: &note.owner.label(),
+                            builtin: note.owner == Owner::Builtin,
+                        },
+                        self.loaded.as_ref().unwrap(),
+                        // The Library draws no value block above the entry.
+                        false,
+                        // A package entry's campaign links sit in the
+                        // pane's message footer (round 26).
+                        |_| None,
+                    );
+                });
+            };
             // The body takes the whole pane, so a wide table can use it; prose keeps its
             // measure. A draft's comparison keeps the pane it had.
             let right = pane_right
                 .filter(|_| self.disk_change.is_none())
                 .unwrap_or(ui.max_rect().right())
                 .max(ui.max_rect().right());
-            // It starts `S` left of the text, with an `S` margin, so a quiet `line_start` action
-            // that hangs its icon left of the message words (an Undo below its result) is not
-            // clipped at the pane's edge. The text stays where it was.
-            let body = egui::Rect::from_min_max(
-                egui::pos2(ui.cursor().min.x - design::S, ui.cursor().min.y),
-                egui::pos2(right, ui.max_rect().bottom().min(body_bottom)),
-            );
-            ui.scope_builder(egui::UiBuilder::new().max_rect(body), |ui| {
-                crate::markdown_view::with_wide_tables(ui, |ui| {
-                    egui::ScrollArea::vertical()
-                        .id_salt(("entry_body", note.owner.id(), &note.path))
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| {
-                            egui::Frame::new()
-                                .inner_margin(egui::Margin {
-                                    left: design::S as i8,
-                                    ..Default::default()
-                                })
-                                .show(ui, |ui| {
-                                    if let Some(change) = &mut self.disk_change {
-                                        if let Some(text) = &change.text {
-                                            // The side-by-side comparison is the one state that takes the full width.
-                                            ui.set_max_width(editor_width);
-                                            design::grouped_draft_comparison(
-                                                ui,
-                                                &self.draft,
-                                                text,
-                                                (&note.path, text),
-                                                true,
-                                            );
-                                        } else {
-                                            design::heading(
-                                                ui,
-                                                design::Heading::Group {
-                                                    title: "Your draft",
-                                                    count: 0,
-                                                },
-                                            );
-                                            let mut draft = self.draft.as_str();
-                                            // The field belongs to this note: its owner and path key it.
-                                            let field = DISK_DRAFT
-                                                .of(note.owner.id())
-                                                .with(note.field_key());
-                                            let response =
-                                                field.multi_line(ui, &mut draft, |edit| {
-                                                    edit.font(egui::TextStyle::Monospace)
-                                                        .margin(egui::vec2(design::S, design::S))
-                                                        .desired_width(
-                                                            editor_width - 2.0 * design::S,
-                                                        )
-                                                        .interactive(false)
-                                                });
-                                            design::named(ui, &response, "Your draft");
-                                        }
-                                        return;
-                                    }
-                                    // A failed parse must never render YAML properties as book prose.
-                                    let body = parsed.as_ref().map_or("", |e| e.body.as_str());
-                                    ui.push_id(&note.path, |ui| {
-                                        reader_style::measure(ui, |ui| {
-                                            design::gap(ui, design::Gap::XS);
-                                            let reading_subtitle =
-                                                reader_kind_line(&note.owner, &reading_subtitle);
-                                            let subtitle = reading_subtitle.as_str();
-                                            let subtitle = subtitle
-                                                .strip_suffix(" · Campaign")
-                                                .unwrap_or(subtitle);
-                                            let subtitle = if note.error.is_some() {
-                                                match note.unreadable_kind() {
-                                                    Section::Unreadable | Section::Other => "",
-                                                    Section::PackageDetails => "Package",
-                                                    kind => kind.label().trim_end_matches('s'),
-                                                }
-                                            } else if subtitle == "Campaign" {
-                                                note.section().label().trim_end_matches('s')
-                                            } else {
-                                                subtitle
-                                            };
-                                            view::title_with_art(
-                                                ui,
-                                                title,
-                                                subtitle,
-                                                parsed.as_ref().ok(),
-                                            );
-                                            // Round 27 FH9: `L` between the kind line and its
-                                            // first warning, as between a kind line and prose,
-                                            // so the kind word does not read as the warning's.
-                                            if fault.is_some() || repair_problem.is_some() {
-                                                ui.add_space(
-                                                    design::L - ui.spacing().item_spacing.y,
-                                                );
-                                            }
-                                            if let Some(fault) = &fault {
-                                                read_again = fault_notice(ui, fault);
-                                            }
-                                            // A read fault has no repair problem: there is no text to repair.
-                                            if let Some(problem) = &repair_problem {
-                                                repair_pressed = repair_notice(
-                                                    ui,
-                                                    problem,
-                                                    recovery.as_ref(),
-                                                    draft_reason,
-                                                    false,
-                                                );
-                                            }
-                                        });
-                                        open_link = view::show_with_related(
-                                            ui,
-                                            note.name(),
-                                            parsed.as_ref().ok(),
-                                            body,
-                                            &view::Origin {
-                                                path: &note.path,
-                                                owner: &note.owner.label(),
-                                                builtin: note.owner == Owner::Builtin,
-                                            },
-                                            self.loaded.as_ref().unwrap(),
-                                            // The Library draws no value block above the entry.
-                                            false,
-                                            // A package entry's campaign links sit in the
-                                            // pane's message footer (round 26).
-                                            |_| None,
-                                        );
-                                    });
-                                });
-                        });
+            if !slot_row {
+                // Read: the pane draws the body, then its message footer `S` below a short body,
+                // or pinned when the body scrolls (round 28 rows 17, 50, 53, 54; G6).
+                let footer = read_footer.take().unwrap_or_else(|| {
+                    design::Footer::new("library_footer", editor_width.min(design::READER_MEASURE))
                 });
-            });
+                let body = egui::Rect::from_min_max(
+                    ui.cursor().min,
+                    egui::pos2(right, ui.max_rect().bottom()),
+                );
+                ui.scope_builder(egui::UiBuilder::new().max_rect(body), |ui| {
+                    crate::markdown_view::with_wide_tables(ui, |ui| {
+                        footer.pane(ui, design::Body::Content, |ui| content(ui));
+                    });
+                });
+            } else {
+                // It starts `S` left of the text, with an `S` margin, so a quiet `line_start`
+                // action that hangs its icon left of the message words is not clipped at the
+                // pane's edge. The text stays where it was.
+                let body = egui::Rect::from_min_max(
+                    egui::pos2(ui.cursor().min.x - design::S, ui.cursor().min.y),
+                    egui::pos2(right, ui.max_rect().bottom().min(body_bottom)),
+                );
+                ui.scope_builder(egui::UiBuilder::new().max_rect(body), |ui| {
+                    crate::markdown_view::with_wide_tables(ui, |ui| {
+                        egui::ScrollArea::vertical()
+                            .id_salt(("entry_body", note.owner.id(), &note.path))
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
+                                egui::Frame::new()
+                                    .inner_margin(egui::Margin {
+                                        left: design::S as i8,
+                                        ..Default::default()
+                                    })
+                                    .show(ui, |ui| content(ui));
+                            });
+                    });
+                });
+            }
         }
+        // The Read footer's presses, after the pane drew it.
+        if choices_in_reader && !slot_row {
+            heading_pressed = reader_press.heading;
+            // Presses come only from the footer that drew the results: this one in Read. With a
+            // save row, Edit Markdown's list drew them and `pressed` already holds them.
+            pressed = reader_press.results.get();
+        }
+        new_identity = new_identity.or(reader_press.new_identity.take());
+        new_identities = new_identities.or(reader_press.new_identities.take());
+        let copy_dependency = reader_press.copy_dependency;
+        let undo_dependency = reader_press.undo_dependency.get();
         if heading_pressed.0 || heading_pressed.1 {
             self.draft_revision += 1;
         }
