@@ -2958,6 +2958,10 @@ impl Run {
             self.selected = self.current().unwrap_or(0);
         }
         self.syncs.retain(|index, _| *index < count);
+        // A pending line ends with its row or its sync.
+        let syncs = &self.syncs;
+        self.pending_lines
+            .retain(|index, _| *index < count && syncs.contains_key(index));
         self.sync_shadows.retain(|index, _| *index < count);
         self.setup_inputs.retain(|index, _| *index < count);
         for place in [

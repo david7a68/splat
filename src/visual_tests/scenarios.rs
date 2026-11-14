@@ -9810,9 +9810,9 @@ pub mod run_edge_states {
         });
         d.observe(
             "iter-29-R1-G131",
-            reached,
+            hidden && reached,
             format!(
-                "Behind the notice before scrolling {hidden}; in view after scrolling {reached}"
+                "Not wholly in view before scrolling {hidden}; wholly in view after scrolling {reached}"
             ),
         );
         d.goal("see the run changed on disk");

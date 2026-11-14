@@ -3645,6 +3645,13 @@ fn keep_focus_inside(ui: &Ui) {
     if focused_layer == Some(layer) {
         return;
     }
+    // Never from another dialog: a modal that opened over this one in this pass (its first
+    // request comes after this dialog drew) or that is open above it holds its own focus. Only
+    // a lost focus (none, or a control that is gone) or one on the page under the dialogs is
+    // taken; so when the dialog above closes, its focus goes and this one takes it back.
+    if focused_layer.is_some_and(|other| other.order == egui::Order::Foreground) {
+        return;
+    }
     // Only a control of the page under the dialogs is the place to give the focus back to,
     // never one of another dialog (a prompt that was open over this one).
     if let Some(focused) = focused

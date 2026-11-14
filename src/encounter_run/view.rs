@@ -14147,6 +14147,22 @@ mod tests {
         run.borrow_mut().syncs.insert(0, changed(8, 6));
         harness.run_steps(2);
         assert!(work() > first, "a changed value works the line out again");
+        // The kept line ends with its row: a row that goes (Undo of its arrival) takes its
+        // sync and its line with it.
+        {
+            let mut run = run.borrow_mut();
+            assert!(run.pending_lines.contains_key(&0));
+            let last = run.state.participants.len() - 1;
+            let sync = run.syncs.remove(&0).unwrap();
+            run.syncs.insert(last, sync);
+            run.pending_lines.insert(last, (0, String::new()));
+            run.state.participants.truncate(last);
+            run.forget_removed_participants();
+            assert!(
+                !run.pending_lines.contains_key(&last),
+                "iter-29-R1-G178: a removed row's line is gone"
+            );
+        }
     }
 
     /// iter-29 G44, through the WHOLE run view (as the app draws it, dock included): after the
@@ -14236,24 +14252,23 @@ mod tests {
                 // Fifth review, point 1: the app's close prompt opens over the run's dialog.
                 // The top modal holds the focus; the run's dialog does not take it back.
                 app_prompt.set(true);
-                harness.run_steps(2);
+                // On EACH pass from its opening, the upper prompt's control has the focus; no
+                // pass is skipped, and an empty focus does not pass (a dead keyboard).
                 let mut top = Vec::new();
-                for _ in 0..3 {
+                for _ in 0..4 {
                     harness.run_steps(1);
                     top.push(focused_name(&harness));
                 }
-                // The lower dialog never takes the focus while the upper prompt is open. (The
-                // production prompt asks for its own focus once per opening; opened over
-                // another modal, egui gives that request no widget: a fault of the prompt's
-                // own once-only form, not of this part, and outside this package.)
                 assert!(
                     top.iter()
-                        .all(|name| name.as_deref() != Some("Keep running")),
-                    "iter-29-R1-G44 two modals: focus on each frame {top:?}"
+                        .all(|name| name.as_deref() == Some("Keep working")),
+                    "iter-29-R1-G44 two modals: focus on each pass {top:?}"
                 );
-                harness.get_by_label("Keep working").click();
-                harness.run_steps(4);
-                assert!(!app_prompt.get());
+                // Enter dismisses the upper prompt; the focus goes back to the lower dialog.
+                harness.key_press(egui::Key::Enter);
+                harness.run_steps(1);
+                assert!(!app_prompt.get(), "Enter dismissed the upper prompt");
+                harness.run_steps(3);
                 assert_eq!(
                     focused_name(&harness).as_deref(),
                     Some("Keep running"),
