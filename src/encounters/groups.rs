@@ -127,16 +127,18 @@ pub(super) struct GroupDraft {
     saved_notes: String,
     flags: Vec<splat::content::layout::Flag>,
     repair: Option<(usize, Mapping)>,
-    removed_unread: Option<(usize, String, String)>,
-    removed_member: Option<(usize, MemberDraft, String)>,
     /// The words typed in a change form's field while it has focus ([`TypedWords`]).
     typed: TypedWords,
-    /// The last `Use` on a member this campaign could not find. It owns the result line until
-    /// its Undo, a newer member result, or a move or removal that changes the members' places.
-    replaced: Option<Replaced>,
-    /// A member result was just made: the page records it in its store, which issues its order
-    /// (`Encounters::record_member_results`), in the frame of the act.
-    member_new: bool,
+    /// A member result just made, with what its Undo gives back. The draft keeps none: the page
+    /// moves it into its store (`Encounters::record_member_results`), which issues its order and
+    /// holds it with its ticket, so an Undo applies only its own data.
+    member_new: Option<MemberUndo>,
+    /// A member moved: a stored replacement's place no longer names its member, so it ends.
+    members_moved: bool,
+    /// This draft's content, as the owner of its member result: a fresh one at each open, kept
+    /// by a clone, so a discarded draft and the clean draft that replaces it (same note, same
+    /// `id`) never share a result.
+    results_key: Uuid,
     /// Changes at each edit of the draft (`touch`), and only then; a new draft has its own. Save's
     /// cached check is keyed by it (FN5, review of PR 299).
     revision: u64,
@@ -156,9 +158,61 @@ pub(super) struct Refusal {
     pub(super) in_place: bool,
 }
 
+/// What a member result's Undo gives back, held in the page's store with the result's ticket.
+#[derive(Clone)]
+pub(super) enum MemberUndo {
+    /// `Use` on a member this campaign could not find: its creature before and after.
+    Replaced(Replaced),
+    /// A removed member, at its place.
+    Removed {
+        index: usize,
+        member: MemberDraft,
+        name: String,
+    },
+    /// A removed unread row: its line and its text.
+    Unread {
+        line: usize,
+        row: String,
+        name: String,
+    },
+}
+
+impl MemberUndo {
+    /// The result's words.
+    pub(super) fn words(&self) -> String {
+        match self {
+            Self::Replaced(result) => result.words.clone(),
+            Self::Removed { name, .. } | Self::Unread { name, .. } => format!("Removed {name}."),
+        }
+    }
+    /// Its Undo's words.
+    pub(super) fn step(&self) -> design::outcome::UndoStep {
+        use design::outcome::{UndoStep, Verb};
+        match self {
+            Self::Replaced(_) => UndoStep::of(Verb::Replace, "member"),
+            Self::Removed { .. } | Self::Unread { .. } => UndoStep::of(Verb::Remove, "member"),
+        }
+    }
+    /// Whether a replacement still names its member: its member still holds the chosen
+    /// creature. A removal always holds.
+    pub(super) fn holds(&self, draft: &GroupDraft) -> bool {
+        match self {
+            Self::Replaced(result) => draft
+                .setup
+                .members
+                .get(result.index)
+                .is_some_and(|member| member.creature == result.after),
+            Self::Removed { .. } | Self::Unread { .. } => true,
+        }
+    }
+    pub(super) fn is_replacement(&self) -> bool {
+        matches!(self, Self::Replaced(_))
+    }
+}
+
 /// A member's creature before and after `Use`, with the result's words.
 #[derive(Clone)]
-struct Replaced {
+pub(super) struct Replaced {
     index: usize,
     before: EntryRef,
     after: EntryRef,
@@ -193,10 +247,9 @@ impl GroupDraft {
             saved_notes: String::new(),
             flags: Vec::new(),
             repair: None,
-            removed_unread: None,
-            removed_member: None,
-            replaced: None,
-            member_new: false,
+            member_new: None,
+            members_moved: false,
+            results_key: crate::hermetic::new_uuid(),
             revision: next_revision(),
             members_saved: None,
             edited_last_frame: false,
@@ -232,10 +285,9 @@ impl GroupDraft {
             source: text,
             flags: entry.flags.clone(),
             repair: None,
-            removed_unread: None,
-            removed_member: None,
-            replaced: None,
-            member_new: false,
+            member_new: None,
+            members_moved: false,
+            results_key: crate::hermetic::new_uuid(),
             revision: next_revision(),
             members_saved: None,
             edited_last_frame: false,
@@ -255,9 +307,17 @@ impl GroupDraft {
     pub(super) fn id(&self) -> Uuid {
         self.id
     }
-    /// Whether a member result was made since the page last looked, and the look.
-    pub(super) fn take_member_new(&mut self) -> bool {
-        std::mem::take(&mut self.member_new)
+    /// The member result made since the page last looked, handed to the page's store.
+    pub(super) fn take_member_new(&mut self) -> Option<MemberUndo> {
+        self.member_new.take()
+    }
+    /// Whether a member moved since the page last looked, and the look.
+    pub(super) fn take_members_moved(&mut self) -> bool {
+        std::mem::take(&mut self.members_moved)
+    }
+    /// The owner of this draft's member result in the page's store.
+    pub(super) fn results_key(&self) -> Uuid {
+        self.results_key
     }
     /// Give this group the owner `earlier` had, and change nothing else: Undo of a move.
     pub(super) fn take_owner_from(&mut self, earlier: &GroupDraft) {
@@ -272,61 +332,35 @@ impl GroupDraft {
     pub(super) fn is_empty(&self) -> bool {
         self.setup.members.is_empty()
     }
-    /// The member result that shows now, with its Undo: the newest of a replacement, a removed
-    /// member and a removed unread row owns it. A replacement's ends when its member no longer
-    /// holds the chosen creature.
-    /// The member result that shows: its words and its Undo. Its order is the page's store's.
-    pub(super) fn member_result(&mut self) -> Option<(String, design::outcome::UndoStep)> {
-        if let Some(result) = &self.replaced {
-            if self
-                .setup
-                .members
-                .get(result.index)
-                .is_some_and(|member| member.creature == result.after)
-            {
-                return Some((
-                    result.words.clone(),
-                    design::outcome::UndoStep::of(design::outcome::Verb::Replace, "member"),
-                ));
-            }
-            self.replaced = None;
-        }
-        self.removed_member
-            .as_ref()
-            .map(|(_, _, name)| name)
-            .or(self.removed_unread.as_ref().map(|(_, _, name)| name))
-            .map(|name| {
-                (
-                    format!("Removed {name}."),
-                    design::outcome::UndoStep::of(design::outcome::Verb::Remove, "member"),
-                )
-            })
-    }
-    /// Undo the member result that shows: the creature, the member or the unread row comes
-    /// back at its place, and other draft edits stay.
-    pub(super) fn undo_member_result(&mut self) {
+    /// Undo one member result, from the data its store holds with its ticket: the creature,
+    /// the member or the unread row comes back at its place, and other draft edits stay.
+    pub(super) fn undo_member_result(&mut self, undo: &MemberUndo) {
         self.members_saved = None;
         self.touch();
-        if let Some(result) = self.replaced.take() {
-            if let Some(member) = self.setup.members.get_mut(result.index) {
-                member.creature = result.before;
+        match undo {
+            MemberUndo::Replaced(result) => {
+                if let Some(member) = self.setup.members.get_mut(result.index) {
+                    member.creature = result.before.clone();
+                }
             }
-        } else if let Some((index, member, _)) = self.removed_member.take() {
-            self.setup
-                .members
-                .insert(index.min(self.setup.members.len()), member);
-        } else if let Some((line, row, _)) = self.removed_unread.take() {
-            let at = self
-                .source
-                .split_inclusive('\n')
-                .take(line - 1)
-                .map(str::len)
-                .sum();
-            self.source.insert_str(at, &row);
-            if let Ok(entry) = Entry::parse(&self.path, &self.source) {
-                self.flags = entry.flags;
+            MemberUndo::Removed { index, member, .. } => {
+                self.setup
+                    .members
+                    .insert((*index).min(self.setup.members.len()), member.clone());
             }
-            self.reread_lines();
+            MemberUndo::Unread { line, row, .. } => {
+                let at = self
+                    .source
+                    .split_inclusive('\n')
+                    .take(line - 1)
+                    .map(str::len)
+                    .sum();
+                self.source.insert_str(at, row);
+                if let Ok(entry) = Entry::parse(&self.path, &self.source) {
+                    self.flags = entry.flags;
+                }
+                self.reread_lines();
+            }
         }
     }
     /// Whether no member has moved, been added, changed or removed since the note was read.
@@ -466,18 +500,16 @@ impl GroupDraft {
             let end = source[row[0].range.start..]
                 .find('\n')
                 .map_or(source.len(), |at| row[0].range.start + at + 1);
-            self.removed_member = None;
-            self.replaced = None;
-            self.member_new = true;
-            self.removed_unread = Some((
+            // One result line: the newest member result takes it (the store replaces).
+            self.member_new = Some(MemberUndo::Unread {
                 line,
-                source[start..end].to_owned(),
-                if member.name.is_empty() {
+                row: source[start..end].to_owned(),
+                name: if member.name.is_empty() {
                     member.label.clone()
                 } else {
                     member.name.clone()
                 },
-            ));
+            });
             source.replace_range(start..end, "");
         }
         let mut entry = Entry::parse(&self.path, &source)?;
@@ -1295,7 +1327,7 @@ pub(super) fn of_encounter(
         groups,
         add_to,
         focus_group,
-        removed_group,
+        new_results,
         deleted_groups,
         ..
     } = draft;
@@ -1422,7 +1454,11 @@ pub(super) fn of_encounter(
         } else {
             groups[index].setup.encounter = None;
         }
-        *removed_group = Some((index, gone, delete, true));
+        new_results.push(super::DraftUndo::RemovedGroup {
+            index,
+            group: gone,
+            delete,
+        });
     }
     if Action::secondary("New group for this encounter")
         .icon(icons::ADD)
@@ -2535,18 +2571,13 @@ impl Encounters {
             ui.available_width(),
         );
         if let Some(root) = self.active.as_ref().map(|active| active.path.clone())
-            && let Some(draft) = self.group_draft.as_mut()
-            && let Some((words, undo)) = draft.member_result()
+            && let Some(draft) = self.group_draft.as_ref()
             && let Some(shown) = self.member_results.get(&super::MemberOwner {
                 root,
-                draft: draft.id(),
+                draft: draft.results_key(),
             })
         {
-            messages.kept(shown.outcome(&frame, |_| {
-                design::outcome::Said::new(super::outcome_words(&words))
-                    .undo(undo.pressed_as(super::FooterPress::UndoMember))
-                    .into()
-            }));
+            messages.kept(shown.outcome(&frame, super::MemberMark::outcome));
         }
         for line in self.kept_lines(&frame, &kinds) {
             messages.kept(line);
@@ -3014,6 +3045,24 @@ fn group_fields(
 /// A group's notes field (`group_fields`).
 const GROUP_NOTES: design::layout::FieldName = crate::field_id!("group_notes");
 
+/// Remove the member at `index`: its data goes with the result to the page's store.
+fn remove_member(draft: &mut GroupDraft, index: usize, snapshot: &Snapshot) {
+    let member = draft.setup.members.remove(index);
+    let base = snapshot
+        .catalogue
+        .resolve_ref(&member.creature)
+        .ok()
+        .and_then(|id| snapshot.catalogue.entries.get(&id))
+        .map(|entry| entry.entry.name.clone())
+        .unwrap_or_else(|| missing_member_name(None, member.creature.link.as_deref()));
+    let name = shown_name(&member.overrides, base);
+    draft.member_new = Some(MemberUndo::Removed {
+        index,
+        member,
+        name,
+    });
+}
+
 /// `members_heading` resolves the group against the whole catalogue; do it once per draft text.
 fn cached_members_heading(ui: &egui::Ui, draft: &GroupDraft, snapshot: &Snapshot) -> String {
     let revision = egui::Id::new((
@@ -3339,29 +3388,17 @@ fn members(
     {
         *expanded = None;
     }
+    // A move or a removal changes the members' places: a stored replacement ends. The page
+    // reads this before it records a result made in the same frame.
     if remove.or(raise).or(lower).is_some() {
-        draft.replaced = None;
+        draft.members_moved = true;
     }
-    // One result line: the newest member result takes it.
+    // One result line: the newest member result takes it (the store replaces).
     if let Some(result) = replaced {
-        draft.removed_member = None;
-        draft.removed_unread = None;
-        draft.replaced = Some(result);
-        draft.member_new = true;
+        draft.member_new = Some(MemberUndo::Replaced(result));
     }
     if let Some(index) = remove {
-        let member = draft.setup.members.remove(index);
-        let base = snapshot
-            .catalogue
-            .resolve_ref(&member.creature)
-            .ok()
-            .and_then(|id| snapshot.catalogue.entries.get(&id))
-            .map(|entry| entry.entry.name.clone())
-            .unwrap_or_else(|| missing_member_name(None, member.creature.link.as_deref()));
-        let name = shown_name(&member.overrides, base);
-        draft.removed_unread = None;
-        draft.removed_member = Some((index, member, name));
-        draft.member_new = true;
+        remove_member(draft, index, snapshot);
     } else if let Some(index) = raise {
         draft.setup.members.swap(index, index - 1);
     } else if let Some(index) = lower {
@@ -3771,11 +3808,15 @@ mod tests {
         id
     }
 
-    /// The draft, its open form, and the member result store, as the page holds them.
+    /// The draft, its open form, the member result store, as the page holds them; a member the
+    /// body removes in the next frame; and a footer press held one frame (`Some(None)` holds the
+    /// next press), so that it is applied after a later body, with the ticket it was made with.
     type MembersState = (
         GroupDraft,
         Option<String>,
         design::Results<super::super::MemberOwner, super::super::MemberMark>,
+        Option<usize>,
+        Option<Option<design::outcome::Press<super::super::FooterPress>>>,
     );
 
     /// The members with the editor's typed footer, as the group editor draws them: the member
@@ -3784,37 +3825,53 @@ mod tests {
     fn editor_members(ui: &mut egui::Ui, state: &mut MembersState, snapshot: &Snapshot) {
         let owner = super::super::MemberOwner {
             root: std::path::PathBuf::from("campaign"),
-            draft: state.0.id(),
+            draft: state.0.results_key(),
         };
-        if state.0.take_member_new() {
-            state.2.record(super::super::MemberMark(owner.clone()));
-        }
-        if state.0.member_result().is_none() {
-            state.2.owner_changed(&owner);
-        }
+        let mut page = super::super::Encounters {
+            // Not a folder: nothing is written.
+            active: Some(campaign(&owner.root)),
+            group_draft: Some(std::mem::replace(&mut state.0, GroupDraft::new())),
+            member_results: std::mem::take(&mut state.2),
+            ..Default::default()
+        };
+        // The page's own recording: the draft hands its new result, with its data, to the store.
+        page.record_member_results();
         let frame = design::outcome::PaneFrame::new(ui);
         let mut messages =
             design::outcome::Messages::new(&frame, "members_test_footer", ui.available_width());
-        if let Some((words, undo)) = state.0.member_result()
-            && let Some(shown) = state.2.get(&owner)
-        {
-            messages.kept(shown.outcome(&frame, |_| {
-                design::outcome::Said::new(super::super::outcome_words(&words))
-                    .undo(undo.pressed_as(super::super::FooterPress::UndoMember))
-                    .into()
-            }));
+        if let Some(shown) = page.member_results.get(&owner) {
+            messages.kept(shown.outcome(&frame, super::super::MemberMark::outcome));
         }
-        let (draft, expanded, results) = state;
+        let expanded = &mut state.1;
+        let body_removes = &mut state.3;
+        let draft = page.group_draft.as_mut().expect("the draft");
         let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
             members(ui, draft, snapshot, expanded);
+            // Review of PR 347: the body removes another member before a press is applied.
+            if let Some(index) = body_removes.take() {
+                remove_member(draft, index, snapshot);
+            }
         });
-        if let Some(ticket) = paned.pressed.and_then(|press| press.ticket) {
-            let _ = results.undo_by(ticket, |_| {
-                draft.undo_member_result();
-                Ok::<(), ()>(())
-            });
+        // A press held from the frame before is applied after this frame's body.
+        let held = match &mut state.4 {
+            Some(slot @ Some(_)) => slot.take(),
+            _ => None,
+        };
+        if let Some(press) = paned.pressed {
+            if matches!(state.4, Some(None)) {
+                state.4 = Some(Some(press));
+            } else if let Some(ticket) = press.ticket {
+                page.undo_member(ticket);
+                *expanded = None;
+            }
+        }
+        if let Some(ticket) = held.and_then(|press| press.ticket) {
+            page.undo_member(ticket);
+            state.4 = None;
             *expanded = None;
         }
+        state.0 = page.group_draft.take().expect("the draft");
+        state.2 = std::mem::take(&mut page.member_results);
     }
 
     /// Review of PR 339 (1): a member result belongs to its draft's content. Remove a member,
@@ -3838,12 +3895,15 @@ mod tests {
         // Remove as the member list does: the member's data, then the mark.
         let draft = page.group_draft.as_mut().unwrap();
         let member = draft.setup.members.remove(0);
-        draft.removed_member = Some((0, member, "Goblin".into()));
-        draft.member_new = true;
+        draft.member_new = Some(MemberUndo::Removed {
+            index: 0,
+            member,
+            name: "Goblin".into(),
+        });
         draft.touch();
         let owner = super::super::MemberOwner {
             root: active.path.clone(),
-            draft: draft.id(),
+            draft: draft.results_key(),
         };
         page.record_member_results();
         assert!(
@@ -3860,7 +3920,6 @@ mod tests {
         page.record_member_results();
         let draft = page.group_draft.as_mut().unwrap();
         assert_eq!(draft.setup.members.len(), 1, "the member is still removed");
-        assert!(draft.member_result().is_some());
         assert!(
             page.member_results.get(&owner).is_some(),
             "Undo discard shows the member result again, with its Undo"
@@ -3982,7 +4041,7 @@ mod tests {
                     egui::CentralPanel::default()
                         .show(ctx, |ui| editor_members(ui, state, &snapshot));
                 },
-                (draft, None, design::Results::default()),
+                (draft, None, design::Results::default(), None, None),
             );
         design::theme::install(&harness.ctx);
         harness.run_steps(2);
@@ -3993,10 +4052,49 @@ mod tests {
         assert_eq!(harness.state().0.setup.members.len(), 1);
         harness.state_mut().0.notes = "A new note after removal".into();
         harness.state_mut().0.setup.members[0].count = 7;
+        // Review of PR 347: A (Scout) is in the footer, and its Undo is pressed; the body then
+        // removes B (Wolf) before that press is applied. A comes back from its own data, kept
+        // with its ticket; B stays removed, with its own line.
+        harness.state_mut().4 = Some(None);
+        harness.get_by_label("Undo remove member").click();
+        harness.run_steps(1);
+        assert!(
+            matches!(harness.state().4, Some(Some(_))),
+            "the press is held for the next frame"
+        );
+        harness.state_mut().3 = Some(0);
+        harness.run_steps(2);
+        let names: Vec<_> = harness
+            .state()
+            .0
+            .setup
+            .members
+            .iter()
+            .map(|member| member.creature.label())
+            .collect();
+        assert_eq!(
+            harness.state().0.setup.members,
+            vec![member.clone()],
+            "A comes back and B stays removed: {names:?}"
+        );
+        assert!(
+            harness.query_all_by_label("Removed Wolf.").next().is_some()
+                && harness
+                    .query_all_by_label("Removed Scout.")
+                    .next()
+                    .is_none(),
+            "B's own line shows, A's left with its data"
+        );
+        // B's Undo gives B back too; each kept the edits made since.
         harness.get_by_label("Undo remove member").click();
         harness.run_steps(2);
-        assert_eq!(harness.state().0.setup.members[0], member);
-        assert_eq!(harness.state().0.setup.members[1].count, 7);
+        let members = &harness.state().0.setup.members;
+        assert!(
+            members.len() == 2
+                && members.contains(&member)
+                && members.iter().any(|other| other.count == 7),
+            "both are back, Wolf with its count of 7"
+        );
         assert_eq!(harness.state().0.notes, "A new note after removal");
 
         // A member's Other effect draft is its own, with its own cursor and text Undo: type in A
@@ -4053,7 +4151,7 @@ mod tests {
                     egui::CentralPanel::default()
                         .show(ctx, |ui| editor_members(ui, state, &snapshot));
                 },
-                (draft, None, design::Results::default()),
+                (draft, None, design::Results::default(), None, None),
             );
         design::theme::install(&harness.ctx);
         harness.run_steps(2);

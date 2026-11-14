@@ -447,14 +447,18 @@ struct Draft {
     reveal_group: bool,
     /// The last save wrote a group, even if it then stopped, so the campaign needs a new read.
     groups_written: bool,
-    /// One group detached from this draft, until the next save.
-    /// Its place, the group, whether it is deleted, and whether it was just made (the page
-    /// records it in its store, which issues its order: `Encounters::record_editor_results`).
-    removed_group: Option<(usize, GroupDraft, bool, bool)>,
-    /// The last replacement of missing roster rows, for its result and Undo. A later edit of
-    /// those rows, or a Save (a start that saves too), ends it (FC3): after a Save its Undo
-    /// would make a draft that differs from the file while it looks like it.
-    replacement: Option<ReplacementUndo>,
+    /// Results just made (a group detached from this draft, a replacement of missing roster
+    /// rows), each with what its Undo gives back. The draft keeps none: the page moves each into
+    /// its store (`Encounters::record_editor_results`), which issues its order and holds it with
+    /// its ticket, so an Undo applies only its own data.
+    new_results: Vec<DraftUndo>,
+    /// A Save ended this draft's results (FC3: after a Save a replacement's Undo would make a
+    /// draft that differs from the file while it looks like it; a removed group is written).
+    results_ended: bool,
+    /// This draft's content, as the owner of its results: a fresh one at each open, kept by a
+    /// clone, so a discarded draft and the clean draft that replaces it (same note, same `id`)
+    /// never share a result.
+    results_key: Uuid,
 }
 impl Draft {
     fn new() -> Self {
@@ -488,8 +492,9 @@ impl Draft {
             focus_group: None,
             reveal_group: false,
             groups_written: false,
-            removed_group: None,
-            replacement: None,
+            new_results: Vec::new(),
+            results_ended: false,
+            results_key: crate::hermetic::new_uuid(),
         }
     }
     fn open(root: &std::path::Path, path: &str) -> Result<Self, String> {
@@ -540,8 +545,9 @@ impl Draft {
             focus_group: None,
             reveal_group: false,
             groups_written: false,
-            removed_group: None,
-            replacement: None,
+            new_results: Vec::new(),
+            results_ended: false,
+            results_key: crate::hermetic::new_uuid(),
         })
     }
     fn dirty(&self) -> bool {
@@ -553,90 +559,29 @@ impl Draft {
             || self.groups.iter().any(GroupDraft::dirty)
             || !self.deleted_groups.is_empty()
     }
-    /// The draft's own results that show: a group taken from this encounter (FB7) and the
-    /// roster replacement (FA2), each with its tone, words and Undo. An edit of the replaced
-    /// rows ends the replacement's result. Their order is the page's store's.
-    fn result_lines(&mut self) -> Vec<(DraftResult, Tone, String, design::outcome::UndoStep)> {
-        if self
-            .replacement
-            .as_ref()
-            .is_some_and(|undo| undo.after != self.setup.roster)
-        {
-            self.replacement = None;
-        }
-        let mut lines = Vec::new();
-        if let Some((words, undo)) = self.removed_group_result() {
-            lines.push((DraftResult::RemovedGroup, Tone::Info, words, undo));
-        }
-        if let Some(undo) = &self.replacement {
-            lines.push((
-                DraftResult::Replacement,
-                Tone::Success,
-                undo.words.clone(),
-                design::outcome::UndoStep::verb(design::outcome::Verb::Replace),
-            ));
-        }
-        lines
+    /// The results made since the page last looked, handed to the page's store.
+    fn take_new_results(&mut self) -> Vec<DraftUndo> {
+        std::mem::take(&mut self.new_results)
     }
-    /// The kinds of this draft's results made since the page last looked, and the look.
-    fn take_new_results(&mut self) -> Vec<DraftResult> {
-        let mut new = Vec::new();
-        if let Some(removed) = &mut self.removed_group
-            && std::mem::take(&mut removed.3)
-        {
-            new.push(DraftResult::RemovedGroup);
-        }
-        if let Some(replacement) = &mut self.replacement
-            && std::mem::take(&mut replacement.new)
-        {
-            new.push(DraftResult::Replacement);
-        }
-        new
-    }
-    /// Undo the draft's result of this kind: the roster, or the removed group.
-    fn undo_result(&mut self, kind: DraftResult) {
-        match kind {
-            DraftResult::Replacement => {
-                if let Some(undo) = self.replacement.take() {
-                    self.setup.roster = undo.before;
-                }
-            }
-            DraftResult::RemovedGroup => self.undo_removed_group(),
+    /// Undo one of this draft's results, from the data its store holds with its ticket: the
+    /// roster, or the removed group.
+    fn undo_result(&mut self, undo: &DraftUndo) {
+        match undo {
+            DraftUndo::Replacement { before, .. } => self.setup.roster = before.clone(),
+            DraftUndo::RemovedGroup {
+                index,
+                group,
+                delete,
+            } => self.undo_removed_group(*index, group, *delete),
         }
     }
-    /// The result of a group taken from this encounter, until the next save: its words and
-    /// Undo. FF7: a group removed with its draft after its file was gone says what was lost.
-    /// FB7: nothing is on disk until Save, so each says so in the info tone.
-    fn removed_group_result(&self) -> Option<(String, design::outcome::UndoStep)> {
-        use design::outcome::{UndoStep, Verb};
-        let (_, removed, delete, _) = self.removed_group.as_ref()?;
-        Some(if removed.file_gone() {
-            (
-                disk::removed_with_draft(&removed.name()),
-                UndoStep::verb(Verb::Remove),
-            )
-        } else if *delete {
-            (
-                "Group deleted. Save deletes its file.".to_owned(),
-                UndoStep::of(Verb::Remove, "group"),
-            )
-        } else {
-            (
-                format!("{} moves to any encounter when you save.", removed.name()),
-                UndoStep::verb(Verb::Move),
-            )
-        })
-    }
-    /// Undo the group's removal: it comes back in its place, with its draft.
-    fn undo_removed_group(&mut self) {
-        let Some((index, removed, delete, _)) = self.removed_group.take() else {
-            return;
-        };
+    /// Undo a group's removal: it comes back in its place, with its draft.
+    fn undo_removed_group(&mut self, index: usize, removed: &GroupDraft, delete: bool) {
         let path = removed.path().to_owned();
         if let Some(group) = self.groups.iter_mut().find(|group| group.path() == path) {
             // A move changed only who owns the group: Undo gives that back, and the group
             // keeps its members, edits and member results made since.
-            group.take_owner_from(&removed);
+            group.take_owner_from(removed);
             return;
         }
         // A deleted group comes back as it was deleted; a group whose file went comes back from
@@ -645,7 +590,7 @@ impl Draft {
             .deleted_groups
             .iter()
             .position(|group| delete && group.path() == path)
-            .map_or(removed, |at| self.deleted_groups.remove(at));
+            .map_or_else(|| removed.clone(), |at| self.deleted_groups.remove(at));
         let at = index.min(self.groups.len());
         self.groups.insert(at, back);
     }
@@ -878,8 +823,8 @@ impl Draft {
         // A group the DM gave to another encounter is no longer this one's.
         let id = self.id;
         self.groups.retain(|group| group.belongs_to(id));
-        self.removed_group = None;
-        self.replacement = None;
+        self.new_results.clear();
+        self.results_ended = true;
         Ok(())
     }
     fn validate(&self, snapshot: &Snapshot) -> Result<(), Invalid> {
@@ -2212,16 +2157,6 @@ fn choose_replacement_creature(ui: &mut egui::Ui, snapshot: &Snapshot) -> Option
     replace_missing_creature(ui, snapshot, 1, "").map(|(id, _)| EntryRef::id(id))
 }
 
-#[derive(Clone)]
-struct ReplacementUndo {
-    before: Vec<Slot>,
-    after: Vec<Slot>,
-    /// It was just made: the page records it in its store (`record_editor_results`).
-    new: bool,
-    /// The result in words, such as `2 Cinder Wolf rows replaced with Guard.`
-    words: String,
-}
-
 /// The replacement's result for its Undo message.
 fn replacement_words(old: &str, rows: usize, new: &str) -> String {
     if rows > 1 {
@@ -2598,8 +2533,8 @@ enum DraftResult {
     Replacement,
 }
 
-/// Whose editor result it is: the campaign, the encounter draft's own identity, and its kind
-/// (one of each per draft; a newer one of a kind replaces it).
+/// Whose editor result it is: the campaign, the encounter draft's content (`results_key`), and
+/// its kind (one of each per draft; a newer one of a kind replaces it).
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct EditorOwner {
     root: std::path::PathBuf,
@@ -2614,9 +2549,80 @@ impl design::results::Owner for EditorOwner {
     }
 }
 
-/// An encounter draft's result in the page's store: its owner and its order. Its words and its
-/// data are the draft's (`removed_group`, `replacement`), which end it.
-struct EditorMark(EditorOwner);
+/// An encounter draft's result in the page's store: its owner and what its Undo gives back. The
+/// data lives here, with the ticket, never beside the store in the draft: a result the body makes
+/// in the frame of a press cannot be what an older result's Undo restores.
+struct EditorMark {
+    owner: EditorOwner,
+    undo: DraftUndo,
+}
+
+/// What an encounter draft's result's Undo gives back, held in the page's store with its ticket.
+#[derive(Clone)]
+enum DraftUndo {
+    /// A group detached from this draft (FB7), until the next save: its place, the group, and
+    /// whether it is deleted (a move keeps it in the draft, owned by no encounter).
+    RemovedGroup {
+        index: usize,
+        group: GroupDraft,
+        delete: bool,
+    },
+    /// The replacement of missing roster rows (FA2): the roster before and after, and its words.
+    Replacement {
+        before: Vec<Slot>,
+        after: Vec<Slot>,
+        words: String,
+    },
+}
+
+impl DraftUndo {
+    fn kind(&self) -> DraftResult {
+        match self {
+            Self::RemovedGroup { .. } => DraftResult::RemovedGroup,
+            Self::Replacement { .. } => DraftResult::Replacement,
+        }
+    }
+    /// Whether it still holds: a replacement ends at an edit of the replaced rows.
+    fn holds(&self, draft: &Draft) -> bool {
+        match self {
+            Self::Replacement { after, .. } => *after == draft.setup.roster,
+            Self::RemovedGroup { .. } => true,
+        }
+    }
+    /// Its footer line, from its own value. FF7: a group removed with its draft after its file
+    /// was gone says what was lost. FB7: nothing is on disk until Save, so a removed group is a
+    /// notice; a replacement is a finished change.
+    fn outcome(&self) -> design::outcome::KeptOutcome<FooterPress> {
+        use design::outcome::{KeptOutcome, Notice, Said, UndoStep, Verb};
+        match self {
+            Self::RemovedGroup { group, delete, .. } => {
+                let (words, step) = if group.file_gone() {
+                    (
+                        disk::removed_with_draft(&group.name()),
+                        UndoStep::verb(Verb::Remove),
+                    )
+                } else if *delete {
+                    (
+                        "Group deleted. Save deletes its file.".to_owned(),
+                        UndoStep::of(Verb::Remove, "group"),
+                    )
+                } else {
+                    (
+                        format!("{} moves to any encounter when you save.", group.name()),
+                        UndoStep::verb(Verb::Move),
+                    )
+                };
+                KeptOutcome::Notice(
+                    Notice::new(outcome_words(&words)),
+                    step.pressed_as(FooterPress::UndoEditor),
+                )
+            }
+            Self::Replacement { words, .. } => Said::new(outcome_words(words))
+                .undo(UndoStep::verb(Verb::Replace).pressed_as(FooterPress::UndoEditor))
+                .into(),
+        }
+    }
+}
 
 impl design::results::Kept for EditorMark {
     type Owner = EditorOwner;
@@ -2629,7 +2635,7 @@ impl design::results::Kept for EditorMark {
         press: design::results::Press::Undo,
     };
     fn owner(&self) -> EditorOwner {
-        self.0.clone()
+        self.owner.clone()
     }
 }
 
@@ -2757,9 +2763,8 @@ enum FooterPress {
     UndoSeparation,
 }
 
-/// Whose member result it is: the campaign and the group draft's own identity. A draft has
-/// one member result at a time (a newer one replaces it); its data is the draft's (`removed_member`,
-/// `replaced`, `removed_unread`), which ends it.
+/// Whose member result it is: the campaign and the group draft's content (`results_key`). A
+/// draft has one member result at a time (a newer one replaces it).
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct MemberOwner {
     root: std::path::PathBuf,
@@ -2773,8 +2778,22 @@ impl design::results::Owner for MemberOwner {
     }
 }
 
-/// A group draft's member result in the page's store: its owner and its order.
-struct MemberMark(MemberOwner);
+/// A group draft's member result in the page's store: its owner and what its Undo gives back.
+/// The data lives here, with the ticket, never beside the store in the draft: a member removed
+/// by the body in the frame of a press cannot be what an older result's Undo restores.
+struct MemberMark {
+    owner: MemberOwner,
+    undo: groups::MemberUndo,
+}
+
+impl MemberMark {
+    /// Its footer line, from its own value.
+    fn outcome(&self) -> design::outcome::KeptOutcome<FooterPress> {
+        design::outcome::Said::new(outcome_words(&self.undo.words()))
+            .undo(self.undo.step().pressed_as(FooterPress::UndoMember))
+            .into()
+    }
+}
 
 impl design::results::Kept for MemberMark {
     type Owner = MemberOwner;
@@ -2787,7 +2806,7 @@ impl design::results::Kept for MemberMark {
         press: design::results::Press::Undo,
     };
     fn owner(&self) -> MemberOwner {
-        self.0.clone()
+        self.owner.clone()
     }
 }
 
@@ -4828,8 +4847,11 @@ impl Encounters {
         }
     }
 
-    /// Record the encounter draft's new results in the store (their order is issued now, in
-    /// the frame of the act), and end those whose data went.
+    /// Move the encounter draft's new results into the store, with their data (the order is
+    /// issued now, in the frame of the act), and end those whose data went: a Save, or an edit
+    /// of the replaced rows. A discarded draft's results stay in the store, hidden (its
+    /// `results_key` is not the clean draft's), and show again with Undo discard (review of
+    /// PR 339).
     fn record_editor_results(&mut self) {
         let Some(root) = self.active.as_ref().map(|active| active.path.clone()) else {
             return;
@@ -4837,71 +4859,57 @@ impl Encounters {
         let Some(draft) = self.draft.as_mut() else {
             return;
         };
-        for kind in draft.take_new_results() {
-            self.editor_results.record(EditorMark(EditorOwner {
-                root: root.clone(),
-                draft: draft.id,
-                kind,
-            }));
+        let key = draft.results_key;
+        let owner = |kind| EditorOwner {
+            root: root.clone(),
+            draft: key,
+            kind,
+        };
+        // A Save ends the results from before it; a result made after it is new.
+        if std::mem::take(&mut draft.results_ended) {
+            for kind in [DraftResult::RemovedGroup, DraftResult::Replacement] {
+                self.editor_results.owner_changed(&owner(kind));
+            }
         }
-        let shown: Vec<DraftResult> = draft
-            .result_lines()
-            .into_iter()
-            .map(|(kind, ..)| kind)
-            .collect();
-        // The discarded draft of this encounter keeps its results with it (hidden), so Undo
-        // discard shows them again (review of PR 339).
-        let held: Vec<DraftResult> = self
-            .discarded
-            .as_mut()
-            .filter(|discarded| discarded.id == draft.id)
-            .map(|discarded| {
-                discarded
-                    .result_lines()
-                    .into_iter()
-                    .map(|(kind, ..)| kind)
-                    .collect()
-            })
-            .unwrap_or_default();
+        for undo in draft.take_new_results() {
+            self.editor_results.record(EditorMark {
+                owner: owner(undo.kind()),
+                undo,
+            });
+        }
+        // A replacement ends at an edit of its rows (made by the body or by another Undo).
         for kind in [DraftResult::RemovedGroup, DraftResult::Replacement] {
-            if !shown.contains(&kind) && !held.contains(&kind) {
-                self.editor_results.owner_changed(&EditorOwner {
-                    root: root.clone(),
-                    draft: draft.id,
-                    kind,
-                });
+            let owner = owner(kind);
+            if self
+                .editor_results
+                .get(&owner)
+                .is_some_and(|shown| !shown.value().undo.holds(draft))
+            {
+                self.editor_results.owner_changed(&owner);
             }
         }
     }
 
-    /// The encounter draft's results that show, each with its owner, tone, words and Undo.
-    fn editor_result_lines(
-        &mut self,
-    ) -> Vec<(EditorOwner, Tone, String, design::outcome::UndoStep)> {
-        self.active
-            .as_ref()
-            .map(|active| active.path.clone())
-            .zip(self.draft.as_mut())
-            .map(|(root, draft)| {
-                let id = draft.id;
-                draft
-                    .result_lines()
-                    .into_iter()
-                    .map(|(kind, tone, words, undo)| {
-                        (
-                            EditorOwner {
-                                root: root.clone(),
-                                draft: id,
-                                kind,
-                            },
-                            tone,
-                            words,
-                            undo,
-                        )
+    /// The encounter draft's results in the store, as footer lines for this frame.
+    fn editor_result_lines<'f>(
+        &self,
+        frame: &'f design::outcome::PaneFrame,
+    ) -> Vec<design::outcome::KeptLine<'f, FooterPress>> {
+        let (Some(root), Some(draft)) = (self.active.as_ref(), self.draft.as_ref()) else {
+            return Vec::new();
+        };
+        [DraftResult::RemovedGroup, DraftResult::Replacement]
+            .into_iter()
+            .filter_map(|kind| {
+                self.editor_results
+                    .get(&EditorOwner {
+                        root: root.path.clone(),
+                        draft: draft.results_key,
+                        kind,
                     })
-                    .collect()
+                    .map(|shown| shown.outcome(frame, |mark| mark.undo.outcome()))
             })
-            .unwrap_or_default()
+            .collect()
     }
 
     /// The encounter editor's footer, made before its body: the draft's own results (a removed
@@ -4916,26 +4924,14 @@ impl Encounters {
         root: &std::path::Path,
         empty_group: Option<String>,
     ) -> design::outcome::Messages<'f, FooterPress> {
-        use design::outcome::{FaultMessage, KeptOutcome, Notice, Said};
+        use design::outcome::FaultMessage;
         self.record_member_results();
         self.record_editor_results();
         let draft_id = self.draft.as_ref().map(|draft| draft.id);
         let mut messages =
             design::outcome::Messages::new(frame, ("encounter_editor_footer", draft_id), width);
-        for (owner, tone, words, undo) in self.editor_result_lines() {
-            let Some(shown) = self.editor_results.get(&owner) else {
-                continue;
-            };
-            let undo = undo.pressed_as(FooterPress::UndoEditor);
-            // A removed group is a notice (nothing is written until Save); a replacement is a
-            // finished change.
-            messages.kept(shown.outcome(frame, |_| {
-                if tone == Tone::Info {
-                    KeptOutcome::Notice(Notice::new(outcome_words(&words)), undo)
-                } else {
-                    Said::new(outcome_words(&words)).undo(undo).into()
-                }
-            }));
+        for line in self.editor_result_lines(frame) {
+            messages.kept(line);
         }
         let kinds = self.kept_results(false);
         for line in self.kept_lines(frame, &kinds) {
@@ -4944,31 +4940,18 @@ impl Encounters {
         for line in self.separation_lines(frame, root) {
             messages.kept(line);
         }
-        let members: Vec<(MemberOwner, String, design::outcome::UndoStep)> = self
+        let members: Vec<MemberOwner> = self
             .draft
-            .as_mut()
-            .map(|draft| {
-                draft
-                    .groups
-                    .iter_mut()
-                    .filter_map(|group| {
-                        let (words, undo) = group.member_result()?;
-                        let owner = MemberOwner {
-                            root: root.to_owned(),
-                            draft: group.id(),
-                        };
-                        Some((owner, words, undo))
-                    })
-                    .collect()
+            .iter()
+            .flat_map(|draft| draft.groups.iter())
+            .map(|group| MemberOwner {
+                root: root.to_owned(),
+                draft: group.results_key(),
             })
-            .unwrap_or_default();
-        for (owner, words, undo) in members {
+            .collect();
+        for owner in members {
             if let Some(shown) = self.member_results.get(&owner) {
-                messages.kept(shown.outcome(frame, |_| {
-                    Said::new(outcome_words(&words))
-                        .undo(undo.pressed_as(FooterPress::UndoMember))
-                        .into()
-                }));
+                messages.kept(shown.outcome(frame, MemberMark::outcome));
             }
         }
         if let Some(error) = self.separation_failure() {
@@ -5014,8 +4997,8 @@ impl Encounters {
     fn undo_editor(&mut self, ticket: design::results::Ticket) {
         let mut results = std::mem::take(&mut self.editor_results);
         let _ = results.undo_by(ticket, |mark| match self.draft.as_mut() {
-            Some(draft) if draft.id == mark.0.draft => {
-                draft.undo_result(mark.0.kind);
+            Some(draft) if draft.results_key == mark.owner.draft => {
+                draft.undo_result(&mark.undo);
                 Ok(())
             }
             _ => Err(()),
@@ -5025,25 +5008,15 @@ impl Encounters {
         self.expanded = None;
     }
 
-    /// Record each group draft's new member result in the store (its order is issued now, in
-    /// the frame of the act), and end the result of a draft whose member result went.
+    /// Move each group draft's new member result into the store, with its data (its order is
+    /// issued now, in the frame of the act), and end a replacement whose member moved or no
+    /// longer holds its creature. A discarded draft's result stays in the store, hidden (its
+    /// `results_key` is not the clean draft's), and shows again with Undo discard (review of
+    /// PR 339).
     fn record_member_results(&mut self) {
         let Some(root) = self.active.as_ref().map(|active| active.path.clone()) else {
             return;
         };
-        // A discarded draft keeps its member result with it: the result belongs to the draft's
-        // content, so it stays (hidden) while that draft waits for Undo discard, and shows again
-        // with it (review of PR 339).
-        let held: Vec<Uuid> = self
-            .discarded_group
-            .iter_mut()
-            .chain(
-                self.discarded
-                    .iter_mut()
-                    .flat_map(|draft| draft.groups.iter_mut()),
-            )
-            .filter_map(|draft| draft.member_result().map(|_| draft.id()))
-            .collect();
         let drafts = self.group_draft.iter_mut().chain(
             self.draft
                 .iter_mut()
@@ -5052,14 +5025,41 @@ impl Encounters {
         for draft in drafts {
             let owner = MemberOwner {
                 root: root.clone(),
-                draft: draft.id(),
+                draft: draft.results_key(),
             };
-            if draft.take_member_new() {
-                self.member_results.record(MemberMark(owner.clone()));
+            // A move made before this frame's new result ends only an older replacement.
+            let moved = draft.take_members_moved();
+            if let Some(undo) = draft.take_member_new() {
+                if moved {
+                    Self::end_moved_replacement(&mut self.member_results, &owner);
+                }
+                self.member_results.record(MemberMark {
+                    owner: owner.clone(),
+                    undo,
+                });
+            } else if moved {
+                Self::end_moved_replacement(&mut self.member_results, &owner);
             }
-            if draft.member_result().is_none() && !held.contains(&draft.id()) {
+            if self
+                .member_results
+                .get(&owner)
+                .is_some_and(|shown| !shown.value().undo.holds(draft))
+            {
                 self.member_results.owner_changed(&owner);
             }
+        }
+    }
+
+    /// A member moved: the owner's stored replacement no longer names its member.
+    fn end_moved_replacement(
+        results: &mut design::Results<MemberOwner, MemberMark>,
+        owner: &MemberOwner,
+    ) {
+        if results
+            .get(owner)
+            .is_some_and(|shown| shown.value().undo.is_replacement())
+        {
+            results.owner_changed(owner);
         }
     }
 
@@ -5098,10 +5098,10 @@ impl Encounters {
                         .iter_mut()
                         .flat_map(|draft| draft.groups.iter_mut()),
                 )
-                .find(|draft| draft.id() == mark.0.draft);
+                .find(|draft| draft.results_key() == mark.owner.draft);
             match draft {
                 Some(draft) => {
-                    draft.undo_member_result();
+                    draft.undo_member_result(&mark.undo);
                     Ok(())
                 }
                 None => Err(()),
@@ -7255,10 +7255,9 @@ impl Encounters {
                 .entries
                 .get(&creature)
                 .map_or_else(|| "the new creature".to_owned(), |e| e.entry.name.clone());
-            draft.replacement = Some(ReplacementUndo {
+            draft.new_results.push(DraftUndo::Replacement {
                 before,
                 after: draft.setup.roster.clone(),
-                new: true,
                 words: replacement_words(&old, rows, &new),
             });
         }
@@ -8976,15 +8975,14 @@ mod tests {
         let roster = draft.setup.roster.clone();
         let mut before = roster.clone();
         before[0].initial.insert("hp".into(), 3.into());
-        draft.replacement = Some(ReplacementUndo {
+        draft.new_results.push(DraftUndo::Replacement {
             before: before.clone(),
-            after: roster,
-            new: true,
+            after: roster.clone(),
             words: "1 Wolf row replaced with Wolf.".into(),
         });
         let owner = EditorOwner {
             root: active.path.clone(),
-            draft: draft.id,
+            draft: draft.results_key,
             kind: DraftResult::Replacement,
         };
         page.record_editor_results();
@@ -8998,9 +8996,16 @@ mod tests {
             page.editor_results.get(&owner).is_some(),
             "the discarded draft keeps its result while it waits for Undo discard"
         );
+        let clean = EditorOwner {
+            draft: page.draft.as_ref().unwrap().results_key,
+            ..owner.clone()
+        };
+        assert!(
+            page.editor_results.get(&clean).is_none(),
+            "the clean draft that replaced it shows none"
+        );
         page.undo_discard();
         page.record_editor_results();
-        assert!(!page.editor_result_lines().is_empty());
         assert!(
             page.editor_results.get(&owner).is_some(),
             "Undo discard shows the result again, with its Undo"
@@ -9011,6 +9016,12 @@ mod tests {
         use egui_kittest::kittest::Queryable;
         const WORDS: &str = "1 Wolf row replaced with Wolf.";
         let campaign = active.clone();
+        // A footer press held one frame (`Some(None)` holds the next press), so that it is applied
+        // after a later body, with the ticket it was made with.
+        let hold = std::rc::Rc::new(std::cell::RefCell::new(
+            None::<Option<design::outcome::Press<FooterPress>>>,
+        ));
+        let held_by_page = hold.clone();
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(960.0, 640.0))
             .build_state(
@@ -9025,8 +9036,37 @@ mod tests {
                         );
                         let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
                             ui.label("The editor's body");
+                            // Review of PR 347: the body makes a newer replacement before the
+                            // older one's Undo press is applied, as `Use` in the roster does.
+                            let replace = egui::Id::new("test_body_replaces");
+                            if ui
+                                .data_mut(|data| data.remove_temp::<bool>(replace))
+                                .is_some()
+                                && let Some(draft) = page.draft.as_mut()
+                            {
+                                let before = draft.setup.roster.clone();
+                                draft.setup.roster[0].initial.insert("hp".into(), 9.into());
+                                draft.new_results.push(DraftUndo::Replacement {
+                                    before,
+                                    after: draft.setup.roster.clone(),
+                                    words: "1 Wolf row replaced again.".into(),
+                                });
+                            }
                         });
+                        let mut hold = held_by_page.borrow_mut();
+                        let held = match &mut *hold {
+                            Some(slot @ Some(_)) => slot.take(),
+                            _ => None,
+                        };
                         if let Some(press) = paned.pressed {
+                            if matches!(*hold, Some(None)) {
+                                *hold = Some(Some(press));
+                            } else {
+                                page.editor_press(ui.ctx(), press, &campaign, &[]);
+                            }
+                        }
+                        if let Some(press) = held {
+                            *hold = None;
                             page.editor_press(ui.ctx(), press, &campaign, &[]);
                         }
                     });
@@ -9046,18 +9086,35 @@ mod tests {
             .body
             .push_str("Ash falls on the ford.");
         harness.run_steps(2);
+        *hold.borrow_mut() = Some(None);
         harness.get_by_label("Undo replace").click();
+        harness.run_steps(1);
+        assert!(
+            matches!(*hold.borrow(), Some(Some(_))),
+            "the press is held for the next frame"
+        );
+        harness
+            .ctx
+            .data_mut(|data| data.insert_temp(egui::Id::new("test_body_replaces"), true));
         harness.run_steps(2);
         let draft = harness.state().draft.as_ref().unwrap();
-        assert_eq!(draft.setup.roster, before, "Undo gives the roster back");
+        assert_eq!(
+            draft.setup.roster, before,
+            "Undo gives back the roster from before its own replacement, not from before the \
+             body's newer one in the same frame"
+        );
         assert!(
             draft.body.contains("Ash falls on the ford."),
             "the later, unrelated edit stays"
         );
         assert!(
             harness.query_by_label(WORDS).is_none()
-                && harness.query_by_label("Undo replace").is_none(),
-            "the result's words leave with its data"
+                && harness.query_by_label("Undo replace").is_none()
+                && harness
+                    .query_by_label("1 Wolf row replaced again.")
+                    .is_none(),
+            "the result's words leave with its data; the newer replacement's rows were given \
+             back too, so it ends"
         );
     }
     /// Older notes do not change, and a note says so only when the DM turned this on.
