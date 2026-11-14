@@ -804,7 +804,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/library.rs", "reload_note_from_disk", &[Ban::Results]),
         ("src/library.rs", "unregister_dialog", &[Ban::Results]),
         ("src/party.rs", "sheet_view", &[Ban::Body]),
-        ("src/sessions/carry.rs", "carry_in_footer", &[Ban::Results]),
+        ("src/sessions/carry.rs", "carry_in_messages", &[Ban::Order]),
         ("src/sessions/carry.rs", "record", &[Ban::Results]),
         (
             "src/sessions/page.rs",
@@ -819,22 +819,10 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "markers",
             &[Ban::Results, Ban::Extras(1)],
         ),
-        (
-            "src/sessions/page.rs",
-            "move_run_to_session",
-            &[Ban::Results],
-        ),
         ("src/sessions/page.rs", "new_notice", &[Ban::Results]),
-        (
-            "src/sessions/page.rs",
-            "reading_view",
-            &[Ban::Results, Ban::Layout(1)],
-        ),
-        (
-            "src/sessions/page.rs",
-            "session_footer",
-            &[Ban::Results, Ban::Pane(1)],
-        ),
+        ("src/sessions/page.rs", "reading_view", &[Ban::Results]),
+        ("src/sessions/page.rs", "session_messages", &[Ban::Order]),
+        ("src/sessions/page.rs", "add_dropped", &[Ban::Order]),
         (
             "src/sessions/page.rs",
             "template_editor",
@@ -1029,8 +1017,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/page.rs", "note_editor", &[Ban::Layout(2)]),
         ("src/sessions/page.rs", "notes_view", &[Ban::Layout(3)]),
         ("src/sessions/page.rs", "read_tab", &[Ban::Layout(1)]),
-        ("src/sessions/page.rs", "recordings_tab", &[Ban::Layout(1)]),
-        ("src/sessions/page.rs", "template_list", &[Ban::Layout(1)]),
         ("src/sessions/plan.rs", "fight_block", &[Ban::Layout(1)]),
         ("src/sessions/plan.rs", "plan_menu", &[Ban::Layout(1)]),
         ("src/sessions/slash.rs", "note", &[Ban::Layout(1)]),
@@ -1107,6 +1093,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         // Package T (PR 328 review): a repeated amount field's problem stands at its line.
         ("src/trackers/view.rs", "tracker_lines", &[Ban::Body]),
         ("src/trackers/view.rs", "messages", &[Ban::Words]),
+        ("src/sessions/page.rs", "notice_sentence", &[Ban::Words]),
         (
             "src/encounter_run/loot.rs",
             "loot_section",
@@ -1209,10 +1196,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "a_group_changed_on_disk_blocks_the_whole_save_and_keeps_the_draft",
             &[Ban::Pane(1)],
         ),
-        ("src/sessions/carry.rs", "harness", &[Ban::Pane(1)]),
-        ("src/sessions/page.rs", "draft_footer", &[Ban::Pane(1)]),
-        ("src/sessions/page.rs", "notes_panel", &[Ban::Pane(1)]),
-        ("src/sessions/page.rs", "templates_view", &[Ban::Pane(1)]),
+        ("src/sessions/page.rs", "fills", &[Ban::Pane(1)]),
         (
             "src/encounters.rs",
             "integrity_d8_a_changed_encounter_compares_and_keeps_unknown_fields",
@@ -1424,7 +1408,7 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/encounters/groups.rs", 2),
             ("src/library.rs", 16),
             ("src/sessions/carry.rs", 1),
-            ("src/sessions/page.rs", 8),
+            ("src/sessions/page.rs", 3),
             ("src/sessions/plan.rs", 8),
             ("src/timeline.rs", 3),
             ("src/timeline/page.rs", 2),
