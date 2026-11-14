@@ -760,9 +760,7 @@
     ["N4/quiet-action-line-start","03-attack-rolled","1200x800","Button \"Stop\"",1],
     ["N4/quiet-action-line-start","03-attack-rolled","1920x1080","Button \"Stop\"",1],
     ["N4/quiet-action-line-start","03-attack-rolled","960x640","Button \"Stop\"",1],
-    ["N4/quiet-action-line-start","05-row-menu","960x640","Button \"Stop\"",1],
-    ["N4/quiet-action-line-start","09-player-attack","960x640","Button \"Roll for them\"",1],
-    ["N4/quiet-action-line-start","10-reroll-menu","960x640","Button \"Roll for them\"",1]
+    ["N4/quiet-action-line-start","05-row-menu","960x640","Button \"Stop\"",1]
   ],
   "run-roster-conflict": [
     ["G1b/pressed-control-moved","05-after-full-round","960x640","Button \"Next turn\"",4]
