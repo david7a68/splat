@@ -2826,6 +2826,7 @@ mod tests {
         const PATH: &str =
             "Packages/Ravenholm Ironside Wardens/Encounters/Bridge Ambush/manifest.md";
         const LOCK: Sentence = crate::sentence!("Save or discard campaign changes first.");
+        const LONG: &str = "Ravenholm Ironside Wardens of the Northern Bridge Crossing";
         let mut h = Harness::builder()
             .with_size(egui::vec2(960.0, 600.0))
             .build_ui_state(
@@ -2850,6 +2851,10 @@ mod tests {
                                     crate::choice!("Repair {}", "Cinder Wolf"),
                                     Fix::Repair(7),
                                 ))
+                                .repair(Repair::new(
+                                    crate::choice!("Repair {} in Library", LONG),
+                                    Fix::Repair(8),
+                                ))
                                 .show(ui);
                             state.pressed.extend(pressed);
                         },
@@ -2871,6 +2876,29 @@ mod tests {
         assert!(
             help.top() >= replace.bottom() - 1.0,
             "help under its repair"
+        );
+        // The fixed words after a cut object stay; the name keeps the whole words.
+        let whole = format!("Repair {LONG} in Library");
+        let node = h.get_by_label(&whole).rect();
+        let shown: Vec<String> = h
+            .output()
+            .shapes
+            .iter()
+            .filter_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(text)
+                    if text.galley.job.text.starts_with("Repair")
+                        && node.contains(text.pos + text.galley.rect.center().to_vec2()) =>
+                {
+                    Some(text.galley.job.text.clone())
+                }
+                _ => None,
+            })
+            .collect();
+        assert!(
+            shown.len() == 1
+                && shown[0].starts_with("Repair Rav")
+                && shown[0].ends_with("… in Library"),
+            "the object is cut, the fixed words stay: {shown:?}"
         );
         h.get_by_label("Repair Cinder Wolf").click();
         h.run_steps(2);
