@@ -4763,7 +4763,7 @@ impl Library {
                                 .min(design::READER_MEASURE)
                                 .ceil();
                             ui.set_width(width);
-                            egui::ScrollArea::vertical()
+                            design::ScrollColumn::new("library_file_issues")
                                 .max_height(design::XXL * 6.0)
                                 .show(ui, |ui| {
                                     for message in loaded
@@ -5067,93 +5067,90 @@ impl Library {
                         self.unreadable_kind = None;
                         self.source = false;
                     }
-                    egui::ScrollArea::vertical()
-                        .id_salt("section_list")
-                        .show(ui, |ui| {
-                            ui.spacing_mut().item_spacing.y = 0.0;
-                            for &(group, sections) in Section::GROUPS {
-                                // Keep the empty encounter section discoverable, but hide an unused fallback.
-                                if sections
-                                    .iter()
-                                    .all(|section| count_of(*section, &counts) == 0)
-                                {
+                    design::ScrollColumn::new("section_list").show(ui, |ui| {
+                        ui.spacing_mut().item_spacing.y = 0.0;
+                        for &(group, sections) in Section::GROUPS {
+                            // Keep the empty encounter section discoverable, but hide an unused fallback.
+                            if sections
+                                .iter()
+                                .all(|section| count_of(*section, &counts) == 0)
+                            {
+                                continue;
+                            }
+                            if !group.is_empty() {
+                                design::heading(
+                                    ui,
+                                    design::Heading::Group {
+                                        title: group,
+                                        count: sections
+                                            .iter()
+                                            .map(|section| count_of(*section, &counts))
+                                            .sum(),
+                                    },
+                                );
+                            }
+                            for &section in sections {
+                                let count = count_of(section, &counts);
+                                if count == 0 {
                                     continue;
                                 }
-                                if !group.is_empty() {
-                                    design::heading(
-                                        ui,
-                                        design::Heading::Group {
-                                            title: group,
-                                            count: sections
-                                                .iter()
-                                                .map(|section| count_of(*section, &counts))
-                                                .sum(),
-                                        },
-                                    );
-                                }
-                                for &section in sections {
-                                    let count = count_of(section, &counts);
-                                    if count == 0 {
-                                        continue;
-                                    }
-                                    if section == Section::Unreadable {
-                                        for kind in Section::GROUPS
+                                if section == Section::Unreadable {
+                                    for kind in Section::GROUPS
+                                        .iter()
+                                        .flat_map(|(_, sections)| sections.iter())
+                                        .copied()
+                                    {
+                                        let count = loaded
+                                            .notes
                                             .iter()
-                                            .flat_map(|(_, sections)| sections.iter())
-                                            .copied()
+                                            .filter(|note| {
+                                                note.error.is_some()
+                                                    && loaded.in_scope(note, scope)
+                                                    && note.unreadable_kind() == kind
+                                            })
+                                            .count();
+                                        if count == 0 {
+                                            continue;
+                                        }
+                                        let label = if kind == Section::Unreadable {
+                                            "Entries"
+                                        } else {
+                                            kind.label()
+                                        };
+                                        if section_row(
+                                            ui,
+                                            label,
+                                            count,
+                                            !about_open
+                                                && self.section == section
+                                                && self.unreadable_kind == Some(kind)
+                                                && !searching,
+                                        )
+                                        .clicked()
                                         {
-                                            let count = loaded
-                                                .notes
-                                                .iter()
-                                                .filter(|note| {
-                                                    note.error.is_some()
-                                                        && loaded.in_scope(note, scope)
-                                                        && note.unreadable_kind() == kind
-                                                })
-                                                .count();
-                                            if count == 0 {
-                                                continue;
-                                            }
-                                            let label = if kind == Section::Unreadable {
-                                                "Entries"
-                                            } else {
-                                                kind.label()
-                                            };
-                                            if section_row(
-                                                ui,
-                                                label,
-                                                count,
-                                                !about_open
-                                                    && self.section == section
-                                                    && self.unreadable_kind == Some(kind)
-                                                    && !searching,
-                                            )
-                                            .clicked()
-                                            {
-                                                self.section = section;
-                                                self.unreadable_kind = Some(kind);
-                                                self.matches = None;
-                                                self.search.clear();
-                                            }
+                                            self.section = section;
+                                            self.unreadable_kind = Some(kind);
+                                            self.matches = None;
+                                            self.search.clear();
                                         }
-                                        continue;
                                     }
-                                    let selected =
-                                        self.section == section && !searching && !about_open;
-                                    let label = section.label();
-                                    let response = section_row(ui, label, count, selected);
-                                    if response.clicked() {
-                                        if about_open && !dirty {
-                                            self.selected = None;
-                                            self.draft.clear();
-                                        }
-                                        self.section = section;
-                                        self.unreadable_kind = None;
-                                        self.search.clear();
+                                    continue;
+                                }
+                                let selected = self.section == section && !searching && !about_open;
+                                let label = section.label();
+                                let response = section_row(ui, label, count, selected);
+                                if response.clicked() {
+                                    if about_open && !dirty {
+                                        self.selected = None;
+                                        self.draft.clear();
                                     }
+                                    self.section = section;
+                                    self.unreadable_kind = None;
+                                    self.search.clear();
                                 }
                             }
-                        });
+                        }
+                    });
                 });
         }
         // A query always searches the whole scope. Clearing it returns to the selected section.
