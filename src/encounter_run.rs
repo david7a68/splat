@@ -2961,7 +2961,15 @@ impl Run {
             Command::RollMode(i, _) => format!("roll mode on {}", name(i)),
             Command::Begin => "begin combat".into(),
             Command::Next => "next turn".into(),
-            Command::Move(..) => "tie order".into(),
+            // FJ5: the row and its direction, as Undo names every other step's act.
+            Command::Move(from, to) => {
+                let row = self.state.order.get(*from).copied().unwrap_or_default();
+                format!(
+                    "move {} {}",
+                    name(&row),
+                    if to < from { "up" } else { "down" }
+                )
+            }
             Command::MoveArrivalBefore(first, before) => {
                 let target = Self::roll_block_name(&self.state, &self.state.participants[*before]);
                 format!(
@@ -2979,8 +2987,9 @@ impl Run {
                 format!("initiative for {}", name(i))
             }
             Command::Bonus(i, _) => format!("initiative bonus on {}", name(i)),
+            // FK6: the act first, then the row.
             Command::Presence(i, present) => format!(
-                "{} {}",
+                "mark {} {}",
                 name(i),
                 if *present { "present" } else { "absent" }
             ),
@@ -3045,7 +3054,16 @@ impl Run {
                 if *value { "start" } else { "stop" },
                 name(i)
             ),
-            Command::DeathSaves(i, ..) => format!("death saves on {}", name(i)),
+            // FJ5: which save the step added, success or failure.
+            Command::DeathSaves(i, successes, failures) => {
+                let before = self.state.participants.get(*i);
+                let (had_s, had_f) = before.map_or((0, 0), |p| (p.successes, p.failures));
+                match (*successes > had_s, *failures > had_f) {
+                    (true, false) => format!("add death save success on {}", name(i)),
+                    (false, true) => format!("add death save failure on {}", name(i)),
+                    _ => format!("change death saves on {}", name(i)),
+                }
+            }
             Command::Note(i, _) => format!("note on {}", name(i)),
             Command::AddGroup(group, _) => format!("add {}", group.name),
             // Every row it adds is named: `add 2 × Wolf`, as its button said.

@@ -7039,7 +7039,8 @@ pub mod run_absent_player {
                     d.painted_rect_in("joined at", egui::Rect::EVERYTHING)
                         .map(|rect| rect.center().y),
                     d.place_of("Log").map(|rect| rect.center().y),
-                    d.place_of("Dismiss this message").map(|rect| rect.center().y),
+                    d.place_of("Dismiss this message")
+                        .map(|rect| rect.center().y),
                 )
             });
             d.observe(
@@ -7237,7 +7238,7 @@ pub mod prep_to_table {
             "iter-23-R-FI4",
             add_before.iter().all(Option::is_some)
                 && add_before == add_after
-                && d.has_containing(&format!("Undo: {player} absent")),
+                && d.has_containing(&format!("Undo: mark {player} absent")),
             format!(
                 "A longer Undo label does not move Add to fight: {add_before:?} then {add_after:?}"
             ),
@@ -7393,7 +7394,15 @@ pub mod prep_to_table {
         if let Some(tie) = tie {
             d.click(&tie);
         }
-        d.expect("Undo: tie order");
+        // iter-28-R FJ5: the Undo names the moved row and its direction.
+        d.observe(
+            "iter-28-R-FJ5-tie",
+            d.nodes().iter().any(|node| {
+                node.name.starts_with("Undo: move ")
+                    && (node.name.ends_with(" up") || node.name.ends_with(" down"))
+            }) && !d.has_containing("tie order"),
+            "The tie's Undo names the row and its direction",
+        );
         let after = places(d);
         let first = after
             .iter()
@@ -8418,6 +8427,13 @@ pub mod party_from_run {
             "iter7-B-FT1",
             "A player at zero HP keeps visible editable death saves",
             |d| d.in_view("Add a death save success") && d.in_view("Add a death save failure"),
+        );
+        // iter-28-R FJ5: the step's Undo says which save it added.
+        d.observe(
+            "iter-28-R-FJ5-save",
+            d.has_containing("Undo: add death save success on ")
+                && !d.has_containing("death saves on"),
+            "The death save's Undo says success",
         );
         d.state("live-death-saves-once", Sizes::All);
 
