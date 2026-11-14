@@ -567,10 +567,11 @@ fn inline_create_moves_nothing_while_the_dm_types() {
     // K4a gap 2: in a column whose clip is its text edge (a reader nested in a pane), the form
     // takes the column's width: the actions go under the field before they are cut, Cancel
     // does not hang past the clip, and every target is at least 24 px and inside the clip.
-    let in_column = |clip_left: f32, width: f32| {
+    let in_column = |clip_left: f32, width: f32, cut: f32| {
         let mut folder = "/home/dm/Obsidian/a very long folder name that scrolls inside its field".to_owned();
         let column = Rect::from_min_size(pos2(100.0, 20.0), vec2(width, 400.0));
-        let clip = column.with_min_x(clip_left);
+        // `cut`: the clip ends this far before the column's right edge (a pane's lane).
+        let clip = column.with_min_x(clip_left).with_max_x(column.right() - cut);
         let (nodes, _) = frame_with(&ctx, vec2(1000.0, 500.0), Vec::new(), |ui| {
             ui.scope_builder(egui::UiBuilder::new().max_rect(column), |ui| {
                 ui.set_clip_rect(clip);
@@ -593,8 +594,8 @@ fn inline_create_moves_nothing_while_the_dm_types() {
             ["Folder", "Browse…", "Add campaign", "Cancel"].map(|name| bounds(&nodes, name)),
         )
     };
-    for width in [NARROWEST_PANE - 60.0, 300.0, 800.0] {
-        let (clip, [field, browse, create, cancel]) = in_column(100.0, width);
+    for (width, cut) in [(NARROWEST_PANE - 60.0, 0.0), (300.0, 0.0), (800.0, 0.0), (800.0, 400.0)] {
+        let (clip, [field, browse, create, cancel]) = in_column(100.0, width, cut);
         for (name, target) in [("Browse…", browse), ("Add campaign", create), ("Cancel", cancel)] {
             assert!(
                 clip.expand(0.5).contains_rect(target)
@@ -607,10 +608,14 @@ fn inline_create_moves_nothing_while_the_dm_types() {
         let beside = (create.center().y - field.center().y).abs() < 1.0;
         let under = create.top() >= field.bottom() && (browse.left() - field.left()).abs() < 1.0;
         assert!(beside || under, "Create beside the field or on its own line: {width}");
-        assert_eq!(beside, width >= 800.0, "the actions wrap only when they do not fit: {width}");
+        assert_eq!(
+            beside,
+            clip.width() >= 400.0,
+            "the actions wrap only when they do not fit: {width}, clip {clip:?}"
+        );
     }
     // Where the clip has room, Cancel hangs its padding left of the text edge (line_start).
-    let (_, [_, _, _, cancel]) = in_column(0.0, 800.0);
+    let (_, [_, _, _, cancel]) = in_column(0.0, 800.0, 0.0);
     assert!((cancel.left() - (100.0 - S)).abs() < 0.5, "Cancel hangs: {cancel:?}");
     // K4a gap 1: a form that ends with a drop-down. Create, then Cancel, on an action line
     // under the drop-down and its help; the action line keeps its y whatever is chosen,
