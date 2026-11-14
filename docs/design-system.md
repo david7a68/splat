@@ -1071,7 +1071,7 @@ campaign change, and the campaign switch's guard and the close warning count the
 `“<name>” was deleted. The Log line was not added: “<words>”` with `Copy text` and, an `L` gap after it, `Dismiss`
 (the choices of a lost draft), whatever the reader shows and also while Lookup shows no entry, until the DM copies
 or dismisses it. While the entry's edit form is open, here or in the other reader, the field waits with its words
-and takes no room; the reason `Save or discard your edit first.` is in the pane's footer, so the form never moves. A package's entry has no `Add to Log`. Edit replaces the rows and
+and takes no room; the reason `Save or discard your edit to add a Log line.` is in the pane's footer, so the form never moves. A package's entry has no `Add to Log`. Edit replaces the rows and
 the text with one form. Read and Edit show Stat block, In, Part of, then Status, so a value keeps its place when the DM
 presses Edit; conflict lines after Overwrite use the same order. Text follows in the reader's prose type,
 without the title line. The Text field ends at the same `FORM_WIDTH` edge as Status. One frame holds

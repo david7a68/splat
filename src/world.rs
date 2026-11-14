@@ -2095,7 +2095,7 @@ struct LogField {
 }
 
 /// Why an open `Add to Log` field waits: an edit form of its entry is open.
-pub(crate) const LOG_WAITS: &str = "Save or discard your edit first.";
+pub(crate) const LOG_WAITS: &str = "Save or discard your edit to add a Log line.";
 
 /// The least room that `Add to Log`'s field keeps for a sentence when its stamp shares its line.
 /// It also keeps the words it holds whole, with the field's margins.
