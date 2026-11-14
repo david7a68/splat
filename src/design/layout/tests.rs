@@ -811,7 +811,9 @@ fn inline_create_moves_nothing_while_the_dm_types() {
                     let row = painted
                         .iter()
                         .find(|text| {
+                            // Found by its words, whatever their line breaks.
                             text.text
+                                .replace('\n', " ")
                                 .ends_with(&preview.replace('\n', " ")[preview.len() - 6..])
                         })
                         .expect("the preview is painted");
@@ -933,6 +935,24 @@ fn inline_create_moves_nothing_while_the_dm_types() {
         );
         *typed.borrow_mut() = "Ash on the Road".to_owned();
     }
+    // A commit with no preedit before it (some input methods send only that) and Enter in one
+    // pass: the commit's frame takes no command.
+    let _ = draw_form(Vec::new(), 0, None, None, true);
+    let (out, _, _) = draw_form(
+        with(
+            vec![ime(egui::ImeEvent::Commit("か".to_owned()))],
+            key(egui::Key::Enter),
+        ),
+        0,
+        None,
+        None,
+        false,
+    );
+    assert!(
+        out.fields[0].lost_focus() && !out.create && typed.borrow().ends_with('か'),
+        "a commit's frame alone takes no command"
+    );
+    *typed.borrow_mut() = "Ash on the Road".to_owned();
     // The commit's own frame takes no command; after it, Enter creates.
     let _ = draw_form(Vec::new(), 0, None, None, true);
     let _ = draw_form(preedit(), 0, None, None, false);
