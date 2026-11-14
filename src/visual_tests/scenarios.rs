@@ -15395,6 +15395,64 @@ pub mod session_recording {
                 && !d.has_containing("Save a key for it"),
             "The key warning does not repeat the footer's instruction",
         );
+        // Review of PR 334: two key faults at once each stay at their own key row, and the
+        // settings file's fault is in the tab's footer. Proof steps that end where they began.
+        d.aside(|d| {
+            const SPEECH: &str = "The speech keyring refused it.";
+            const LLM: &str = "The transcript keyring refused it.";
+            const FILE: &str = "The settings file is not JSON.";
+            let anchor =
+                |d: &Driver<'_>| d.place_of("Transcript and summary API key").map(|r| r.top());
+            let start = anchor(d);
+            d.app_mut()
+                .processing
+                .simulate_faults(Some(SPEECH), Some(LLM), Some(FILE));
+            d.settle();
+            let rect = |d: &Driver<'_>, words: &str| {
+                d.nodes()
+                    .into_iter()
+                    .find(|node| node.name.contains(words))
+                    .map(|node| node.rect)
+            };
+            let speech_field = d.place_of("Speech API key");
+            let llm_heading = d.place_of("TRANSCRIPT AND SUMMARY").or_else(|| d.place_of("Transcript and summary"));
+            let llm_field = d.place_of("Transcript and summary API key");
+            let (speech, llm, file) = (rect(d, SPEECH), rect(d, LLM), rect(d, FILE));
+            let bands = d.footer_bands();
+            d.observe(
+                "iter-28-S2-two-key-faults",
+                speech_field
+                    .zip(speech)
+                    .zip(llm_heading)
+                    .is_some_and(|((field, fault), heading)| {
+                        fault.top() >= field.bottom() && fault.bottom() <= heading.top()
+                    })
+                    && llm_field
+                        .zip(llm)
+                        .is_some_and(|(field, fault)| fault.top() >= field.bottom()),
+                format!(
+                    "Speech key {speech_field:?}, its fault {speech:?}, next heading {llm_heading:?}; transcript key {llm_field:?}, its fault {llm:?}"
+                ),
+            );
+            d.observe(
+                "iter-28-S2-settings-file-fault",
+                file.is_some_and(|file| {
+                    bands.iter().any(|band| band.expand(0.5).contains_rect(file))
+                }),
+                format!("The settings file's fault {file:?} is in a footer band {bands:?}"),
+            );
+            d.app_mut().processing.simulate_faults(None, None, None);
+            d.settle();
+            // The faults made the form taller for a moment: put it back where it was.
+            for _ in 0..4 {
+                match (start, anchor(d)) {
+                    (Some(start), Some(now)) if (now - start).abs() > 0.5 => {
+                        d.scroll_points_at(pos2(600.0, 400.0), now - start);
+                    }
+                    _ => break,
+                }
+            }
+        });
         d.expect("Remove speech key (OpenAI)");
         d.state_prepared("key-for-another-service", Sizes::All, |d| {
             d.scroll_until(
@@ -16123,6 +16181,26 @@ pub mod session_recording {
             "iter-13-R4",
             "Recording heading and input stay in view",
             |d| d.visible_text("RECORDING") && d.in_view_containing("Recording input: "),
+        );
+        // Round 28 FM11: the notice is in the tab's message footer, not in the form under
+        // Input, so it pushes no field down while a recording runs.
+        let notice = d
+            .nodes()
+            .into_iter()
+            .find(|node| {
+                node.name
+                    .contains("A new input applies to the next recording")
+            })
+            .map(|node| node.rect);
+        let bands = d.footer_bands();
+        d.observe(
+            "iter-28-S2-FM11",
+            notice.is_some_and(|notice| {
+                bands
+                    .iter()
+                    .any(|band| band.expand(0.5).contains_rect(notice))
+            }),
+            format!("The new-input notice {notice:?} is in a footer band {bands:?}"),
         );
         d.state("input-during-recording", Sizes::Default);
         d.click_containing("Recording 0:");

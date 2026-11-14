@@ -2204,8 +2204,8 @@ A title that is empty or only says the event's kind (the plan names a new event 
 file and the event links keep the title exactly (`timeline::Stored`): `## Day 1: Day` stays in `Timeline.md`. Context shows visible
 out of total while filtering; the filter says Major events.
 
-Added, removed and link-update notices sit in the list column's message footer (`design::Footer`), below
-the rows, with the rest ruling's result and the file's flags, duplicate warning, reload result, save error and
+Added, removed and link-update notices sit in the list column's message footer (`design::Footer`), `S` below
+the last row, pinned at the column's bottom only when the rows fill it (the column is one pane), with the rest ruling's result and the file's flags, duplicate warning, reload result, save error and
 `Timeline.md also changed outside Splat.`, so a result never moves the Add strip, a row or the open form. A
 journey's encounter checks keep their own act's result on one kept line under the table's line, reserved while
 the block shows, so that result moves no field either and stays in view where the DM pressed `Roll`.
@@ -2470,7 +2470,8 @@ own help. A value that blocks processing says so below its own field (`Enter the
 name.`), `XS` below the field and before the field's own help; the field part then keeps `L` before the next
 label, as after any help. A key for another service says why it is not sent; the key's reason and the footer
 say what to do. The tab's notices (`You cannot process yet. …`, a
-settings file that cannot be read or saved) sit in its message footer, so the form never moves when one comes or
+settings file that cannot be read or saved, no recorder found, and `A new input applies to the next recording.`
+while one runs) sit in its message footer, `S` below the fields, so the form never moves when one comes or
 goes. When the DM chooses a service that leaves such a field empty, that reason scrolls into view, once; a key
 problem keeps its reason at the key row, so the view stays. A saved key says `Saved on this computer.`;
 `keyring` stays in warnings about the keyring itself.

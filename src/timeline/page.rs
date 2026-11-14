@@ -27,7 +27,7 @@ const PLACE_AFTER: design::FieldName = crate::field_id!("timeline_place_after");
 const SESSION_FILTER: design::FieldId =
     crate::field_id!("timeline_session_filter").once(design::Once::PageSearch);
 
-#[derive(Clone, Copy, Default, PartialEq)]
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
 enum Filter {
     #[default]
     All,
@@ -51,6 +51,81 @@ impl Filter {
     }
 }
 
+/// What the list and the header show, worked out from the events, the file's bytes and the
+/// filters: the days the file wrote with another number, each event's day, the rows that pass
+/// the filters, each road fight's day on its journey (round 27 FE10), and the clock now. Made
+/// once per change of the book's revision or of the filters (`TimelinePage::view`).
+struct ListView {
+    flagged: std::collections::HashMap<String, u32>,
+    days: Vec<u32>,
+    rows: Vec<usize>,
+    road: std::collections::HashMap<String, String>,
+    now: Option<u64>,
+}
+
+/// The filters as one value with a revision, so the list view's `Memo` can key by them.
+struct FilterKey(design::memo::Revised<(Filter, String, Option<Uuid>)>);
+
+impl Default for FilterKey {
+    fn default() -> Self {
+        Self(design::memo::Revised::new(Default::default()))
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many times this thread worked out a list view: the test counts the work itself.
+    static VIEWS_MADE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+impl ListView {
+    fn make(book: &Book, (filter, search, session): &(Filter, String, Option<Uuid>)) -> Self {
+        #[cfg(test)]
+        VIEWS_MADE.with(|made| made.set(made.get() + 1));
+        let days = day_numbers(&book.events);
+        let rows = (0..book.events.len())
+            .filter(|&index| matches(*filter, search, *session, &book.events[index], days[index]))
+            .collect();
+        Self {
+            flagged: book
+                .baseline
+                .as_deref()
+                .and_then(|bytes| std::str::from_utf8(bytes).ok())
+                .map(super::formats::flagged_days)
+                .unwrap_or_default()
+                .into_iter()
+                .collect(),
+            days,
+            rows,
+            road: super::road_days(&book.events),
+            now: clock_now(&book.events),
+        }
+    }
+}
+
+/// Does this event pass the filters?
+fn matches(filter: Filter, search: &str, session: Option<Uuid>, event: &Event, day: u32) -> bool {
+    if !filter.includes(event.kind) {
+        return false;
+    }
+    if session.is_some() && event.session != session {
+        return false;
+    }
+    let search = search.trim().to_lowercase();
+    if search.is_empty() {
+        return true;
+    }
+    [
+        event.label(day).as_str(),
+        event.place.as_str(),
+        event.notes.as_str(),
+        event.result.as_str(),
+        event.kind.word(),
+    ]
+    .iter()
+    .any(|text| text.to_lowercase().contains(&search))
+}
+
 /// A session, as the timeline knows it.
 #[derive(Clone, Debug)]
 pub struct SessionLink {
@@ -62,8 +137,13 @@ pub struct SessionLink {
 
 #[derive(Default)]
 pub struct TimelinePage {
-    /// Each road fight's day on its journey (round 27 FE10), for the Timeline's count of changes.
-    road: Option<(u64, std::rc::Rc<std::collections::HashMap<String, String>>)>,
+    /// The filters, with a revision.
+    filters: FilterKey,
+    /// The list view, by the book's revision and the filters' (`ListView`).
+    view: design::memo::Memo<
+        (design::memo::Revision, design::memo::Revision),
+        std::sync::Arc<ListView>,
+    >,
     removed_mentions: usize,
     filter: Filter,
     search: String,
@@ -553,26 +633,22 @@ impl TimelinePage {
         self.scroll_to = book.events.iter().position(|event| event.id == id);
     }
 
-    fn matches(&self, event: &Event, day: u32) -> bool {
-        if !self.filter.includes(event.kind) {
-            return false;
+    /// The list view for this frame: worked out again only when the book or the filters
+    /// changed. The filters' value is compared, not copied, on a frame with no change.
+    fn view(&mut self, book: &Book) -> std::sync::Arc<ListView> {
+        let (filter, search, session) = &*self.filters.0;
+        if *filter != self.filter || *search != self.search || *session != self.session {
+            self.filters
+                .0
+                .set((self.filter, self.search.clone(), self.session));
         }
-        if self.session.is_some() && event.session != self.session {
-            return false;
-        }
-        let search = self.search.trim().to_lowercase();
-        if search.is_empty() {
-            return true;
-        }
-        [
-            event.label(day).as_str(),
-            event.place.as_str(),
-            event.notes.as_str(),
-            event.result.as_str(),
-            event.kind.word(),
-        ]
-        .iter()
-        .any(|text| text.to_lowercase().contains(&search))
+        let key = (book.revision(), self.filters.0.revision());
+        let filters = &self.filters;
+        self.view
+            .get_or(key, || {
+                std::sync::Arc::new(ListView::make(book, &filters.0))
+            })
+            .clone()
     }
 
     /// Where a new event goes, said before it happens. An encounter run goes there too.
@@ -905,21 +981,24 @@ impl TimelinePage {
         changed
     }
 
-    /// Round 26: the list column's results, reasons and notices sit in its message footer,
-    /// pinned below the rows, so a result never moves a row: the link update after a rename and
-    /// its Undo, the open event's rest ruling, the file's notices, a removal and an add. Each
-    /// keeps its owner and end event; the footer only places them. Returns where the rows end.
+    /// Round 26: the list column's results, reasons and notices sit in its message footer, so a
+    /// result never moves a row: the link update after a rename and its Undo, the open event's
+    /// rest ruling, the file's notices, a removal and an add. Each keeps its owner and end event;
+    /// the footer only places them. Round 28 (AL1, FL1, AM1): the column is one pane, so the
+    /// footer comes `S` below the last row, pinned only when the rows fill the column. `body`
+    /// draws the rows, or the empty state, as the pane's content.
     #[allow(
         clippy::disallowed_methods,
         reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
     )]
-    fn list_footer(
+    fn list_pane<R>(
         &mut self,
         ui: &mut egui::Ui,
         book: &mut Book,
         notes: &mut crate::sessions::page::Sessions,
         open: Option<&str>,
-    ) -> f32 {
+        body: impl FnOnce(&mut Self, &mut egui::Ui, &mut Book) -> R,
+    ) -> R {
         let act = std::cell::Cell::new(None);
         let file = std::cell::Cell::new(None);
         let mut footer = design::Footer::new("timeline_list_footer", ui.available_width());
@@ -1028,7 +1107,7 @@ impl TimelinePage {
             });
         }
         undos.into_footer(&mut footer);
-        let bottom = footer.show_by_hand(ui);
+        let drawn = footer.pane(ui, design::Body::Content, |ui| body(self, ui, book));
         file_act(book, file.take());
         match act.take() {
             Some(ListAct::UndoLinks) => notes.undo_event_link_update(),
@@ -1053,7 +1132,7 @@ impl TimelinePage {
             }
             None => {}
         }
-        bottom
+        drawn
     }
 
     /// The open event's results stay in the list column with the other results, so they never
@@ -1087,34 +1166,11 @@ impl TimelinePage {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
+    /// The rows, in the list pane's scroll column. The column is as tall as every row, and only
+    /// the rows in view draw, so a long timeline costs no more per frame than a short one.
     fn list(&mut self, ui: &mut egui::Ui, book: &mut Book, sessions: &[SessionLink]) {
-        let flagged: std::collections::HashMap<String, u32> = book
-            .baseline
-            .as_deref()
-            .and_then(|bytes| std::str::from_utf8(bytes).ok())
-            .map(super::formats::flagged_days)
-            .unwrap_or_default()
-            .into_iter()
-            .collect();
-        let days = day_numbers(&book.events);
-        if self
-            .road
-            .as_ref()
-            .is_none_or(|(changes, _)| *changes != book.changes())
-        {
-            self.road = Some((
-                book.changes(),
-                std::rc::Rc::new(super::road_days(&book.events)),
-            ));
-        }
-        let road = self.road.as_ref().map(|(_, road)| road.clone());
-        let rows: Vec<usize> = (0..book.events.len())
-            .filter(|&index| self.matches(&book.events[index], days[index]))
-            .collect();
+        let view = self.view(book);
+        let (flagged, days, rows, road) = (&view.flagged, &view.days, &view.rows, &view.road);
         if rows.is_empty() {
             // An unreadable file has its own message, and no filter caused it.
             if book.unreadable.is_none() {
@@ -1134,23 +1190,46 @@ impl TimelinePage {
             }
             return;
         }
-        let step = ROW + ui.spacing().item_spacing.y;
-        let mut area = egui::ScrollArea::vertical()
-            .id_salt("timeline_list")
-            .auto_shrink([false, false]);
+        let gap = ui.spacing().item_spacing.y;
+        let step = ROW + gap;
+        let width = ui.available_width();
+        let (column, _) = ui.allocate_exact_size(
+            egui::vec2(width, rows.len() as f32 * step - gap),
+            egui::Sense::hover(),
+        );
+        let place = |row: usize| {
+            egui::Rect::from_min_size(
+                egui::pos2(column.left(), column.top() + row as f32 * step),
+                egui::vec2(width, ROW),
+            )
+        };
+        // The row before the target comes to the top, as the list opened before.
         if let Some(target) = self.scroll_to.take()
             && let Some(row) = rows.iter().position(|&index| index == target)
         {
-            area = area.vertical_scroll_offset((row as f32 * step - step).max(0.0));
+            ui.scroll_to_rect(place(row.saturating_sub(1)), Some(egui::Align::Min));
         }
-        area.show_rows(ui, ROW, rows.len(), |ui, range| {
-            for &index in &rows[range] {
-                let event = &book.events[index];
-                let session = event
-                    .session
-                    .and_then(|id| sessions.iter().find(|session| session.id == id))
-                    .map(|session| short_session(&session.label));
-                let on_road = road.as_ref().and_then(|road| road.get(&event.id));
+        let shown = ui.clip_rect();
+        let first = ((shown.top() - column.top()) / step).floor().max(0.0) as usize;
+        let last =
+            (((shown.bottom() - column.top()) / step).ceil().max(0.0) as usize + 1).min(rows.len());
+        for (row, &index) in rows.iter().enumerate().take(last).skip(first) {
+            let event = &book.events[index];
+            let session = event
+                .session
+                .and_then(|id| sessions.iter().find(|session| session.id == id))
+                .map(|session| short_session(&session.label));
+            let on_road = road.get(&event.id);
+            // The row's ids come from its event, never from its place in view: when the list
+            // scrolls, a focused row keeps its event (review of PR 334). egui makes a child's
+            // ids from the parent's running count of children, which here is the slot in view;
+            // a global scope gives the child exactly this id: the list's own and the event's key.
+            let rect = place(row);
+            let builder = egui::UiBuilder::new()
+                .id_salt(ui.id().with(design::TextKey::of(event)))
+                .global_scope(true)
+                .max_rect(rect);
+            ui.scope_builder(builder, |ui| {
                 self.row(
                     ui,
                     event,
@@ -1159,8 +1238,8 @@ impl TimelinePage {
                     flagged.get(&event.id).copied(),
                     on_road.map(String::as_str),
                 );
-            }
-        });
+            });
+        }
     }
 
     #[allow(
@@ -1662,7 +1741,9 @@ impl TimelinePage {
                 String::new()
             } else {
                 // The clock shows once a day sets it; before that, there is nothing to name.
-                let now = clock_now(&book.events)
+                let view = self.view(book);
+                let now = view
+                    .now
                     .map_or_else(String::new, |now| format!(" · Now: {}", clock_words(now)));
                 format!(
                     "{}{now}",
@@ -1670,13 +1751,7 @@ impl TimelinePage {
                         || !self.search.trim().is_empty()
                         || self.session.is_some()
                     {
-                        let days = day_numbers(&book.events);
-                        let shown = book
-                            .events
-                            .iter()
-                            .zip(days)
-                            .filter(|(event, day)| self.matches(event, *day))
-                            .count();
+                        let shown = view.rows.len();
                         format!(
                             "{} of {}",
                             if shown == 0 {
@@ -1724,10 +1799,9 @@ impl TimelinePage {
         }
         design::gap(ui, design::Gap::XS);
         if book.events.is_empty() && book.unreadable.is_none() {
-            let bottom = self.list_footer(ui, book, notes, None);
-            let mut first = false;
             let open_run = self.open_run.is_some();
-            body_above(ui, bottom, |ui| {
+            let first = self.list_pane(ui, book, notes, None, |_, ui, _| {
+                let mut first = false;
                 design::empty_state(
                     ui,
                     icons::TIMELINE,
@@ -1743,6 +1817,7 @@ impl TimelinePage {
                         .clicked();
                     },
                 );
+                first
             });
             if first {
                 let id = book.add(Kind::Day, current);
@@ -1780,14 +1855,16 @@ impl TimelinePage {
                 self.detail(ui, book, sessions, notes);
             } else {
                 notes.expire_event_link_undo(true, book);
-                let bottom = self.list_footer(ui, book, notes, None);
-                body_above(ui, bottom, |ui| self.list(ui, book, sessions));
+                self.list_pane(ui, book, notes, None, |page, ui, book| {
+                    page.list(ui, book, sessions);
+                });
             }
             return;
         }
         if !event_open {
-            let bottom = self.list_footer(ui, book, notes, None);
-            body_above(ui, bottom, |ui| self.list(ui, book, sessions));
+            self.list_pane(ui, book, notes, None, |page, ui, book| {
+                page.list(ui, book, sessions);
+            });
             return;
         }
         let width = design::side_panel_width(ui.available_width());
@@ -1811,8 +1888,9 @@ impl TimelinePage {
                     .show_inside(ui, |ui| {
                         notes.expire_event_link_undo(true, book);
                         let open = self.selected.clone();
-                        let bottom = self.list_footer(ui, book, notes, open.as_deref());
-                        body_above(ui, bottom, |ui| self.list(ui, book, sessions));
+                        self.list_pane(ui, book, notes, open.as_deref(), |page, ui, book| {
+                            page.list(ui, book, sessions);
+                        });
                     });
             },
         );
@@ -2030,6 +2108,121 @@ mod tests {
 
     /// Row 7 of the plain evening's contract: a line of More alone moves no action of the strip.
     /// A strip that needs no More has none of those lines; one that has More lists them last.
+    /// A list of 30 events in a scroll column, drawn twice.
+    fn long_list() -> egui_kittest::Harness<'static, (TimelinePage, Book)> {
+        let mut book = Book::default();
+        for i in 0..30 {
+            let id = book.add(Kind::Event, None);
+            if let Some(event) = book.events.iter_mut().find(|event| event.id == id) {
+                event.title = format!("Event {i}");
+            }
+        }
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(600.0, 400.0))
+            .build_ui_state(
+                |ui, (page, book): &mut (TimelinePage, Book)| {
+                    design::ScrollColumn::new("timeline_list_test")
+                        .show(ui, |ui| page.list(ui, book, &[]));
+                },
+                (TimelinePage::default(), book),
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        harness
+    }
+
+    /// Review of PR 334: the list view is worked out once for frames with an unchanged book and
+    /// filters (the count is inside `ListView::make`).
+    #[test]
+    fn a_long_list_works_out_its_view_once() {
+        let made = VIEWS_MADE.with(std::cell::Cell::get);
+        let mut harness = long_list();
+        harness.run_steps(10);
+        assert_eq!(
+            VIEWS_MADE.with(std::cell::Cell::get) - made,
+            1,
+            "twelve frames with an unchanged book and filters work out the list view once"
+        );
+        // Must stay true: a change of the filters works it out again, once.
+        harness.state_mut().0.filter = Filter::Events;
+        harness.run_steps(10);
+        assert_eq!(
+            VIEWS_MADE.with(std::cell::Cell::get) - made,
+            2,
+            "a new filter, one new view"
+        );
+    }
+
+    /// Review of PR 334: the list draws only the rows in view, and each row's ids come from its
+    /// event. A focused row keeps its event when the list scrolls, and Enter opens that event.
+    #[test]
+    fn a_focused_row_keeps_its_event_when_the_list_scrolls() {
+        use egui_kittest::kittest::NodeT;
+        let mut harness = long_list();
+        let focused = |harness: &egui_kittest::Harness<'_, (TimelinePage, Book)>| {
+            harness
+                .root()
+                .children_recursive()
+                .find(|node| node.is_focused())
+                .and_then(|node| node.accesskit_node().label())
+        };
+        let top_of = |harness: &egui_kittest::Harness<'_, (TimelinePage, Book)>, name: &str| {
+            harness
+                .root()
+                .children_recursive()
+                .find(|node| {
+                    node.accesskit_node()
+                        .label()
+                        .is_some_and(|label| label.starts_with(name))
+                })
+                .and_then(|node| node.accesskit_node().bounding_box())
+                .map(|rect| rect.y0)
+        };
+        for _ in 0..10 {
+            if focused(&harness).is_some_and(|label| label.starts_with("Event 3 ")) {
+                break;
+            }
+            harness.key_press(egui::Key::Tab);
+            harness.run_steps(2);
+        }
+        assert!(
+            focused(&harness).is_some_and(|label| label.starts_with("Event 3 ")),
+            "Tab reaches Event 3: {:?}",
+            focused(&harness)
+        );
+        let before = top_of(&harness, "Event 3 ");
+        harness.event(egui::Event::PointerMoved(egui::pos2(300.0, 200.0)));
+        harness.event(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -(ROW + 16.0)),
+            modifiers: Default::default(),
+        });
+        harness.run_steps(20);
+        let after = top_of(&harness, "Event 3 ");
+        assert!(
+            before
+                .zip(after)
+                .is_some_and(|(before, after)| after < before - f64::from(ROW)),
+            "the list scrolled by more than a row: {before:?} then {after:?}"
+        );
+        assert!(
+            focused(&harness).is_some_and(|label| label.starts_with("Event 3 ")),
+            "the focused row still names Event 3 after the scroll: {:?}",
+            focused(&harness)
+        );
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(2);
+        let opened = harness.state().0.selected.clone();
+        let event_3 = harness
+            .state()
+            .1
+            .events
+            .iter()
+            .find(|event| event.title == "Event 3")
+            .map(|event| event.id.clone());
+        assert_eq!(opened, event_3, "Enter opens the focused event, Event 3");
+    }
+
     #[test]
     fn a_line_of_more_alone_moves_no_action() {
         use egui_kittest::kittest::Queryable;
