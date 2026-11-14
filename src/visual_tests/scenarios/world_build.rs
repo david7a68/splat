@@ -4204,14 +4204,17 @@ fn fixed_part_scrolls(d: &mut Driver<'_>, message: &str) -> (bool, bool, bool, [
         }
         _ => false,
     };
-    // The same proof at this size, where the part's words need a scroll (the key and the wheel
-    // above moved them): an overflowing part at its bottom must not count as fitting. A fault
-    // here clears every size's ring result.
-    let here = d
-        .nodes()
-        .into_iter()
-        .find(|node| node.role == Role::GenericContainer && node.name.contains(message))
-        .map(|group| fit_against_wheel(d, group.shown));
+    // The same proof in a short window (960 x 300), where a Library part's words need a scroll
+    // (at 960, 1200 and 1920 these parts hold their messages whole): an overflowing part at its
+    // bottom must not count as fitting, and a part that fits must. A fault here clears every
+    // size's ring result.
+    let here = d.act_at_size((960.0, SHORT_EDITOR), |d| {
+        let group = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.role == Role::GenericContainer && node.name.contains(message))?;
+        Some(fit_against_wheel(d, group.shown))
+    });
     let proof_here = here.is_some_and(|(fits, overflows)| fits != overflows);
     (
         tabbed,
