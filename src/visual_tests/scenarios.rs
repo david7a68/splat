@@ -4633,15 +4633,6 @@ pub mod encounter_build {
             format!("At 1920, the Sync party and Keep in Ready help widths: {widths:?}"),
         );
 
-        // iter-28-B FL7: the way back shows its word beside the arrow, at every size.
-        for size in [SMALL, DEFAULT, LARGE] {
-            let words = d.at_size(size, |d| d.place_of(BACK_TO_LIST).map(|rect| d.painted_in(rect)));
-            d.observe(
-                "iter-28-B-FL7",
-                words.as_deref().is_some_and(|words| words.contains("Encounters")),
-                format!("At {size:?}, the encounter editor's way back paints {words:?}"),
-            );
-        }
         // Another program changes the encounter while the DM edits it. The choices start at the
         // message text: the safe one first, then exactly `L` before the red one.
         let file = d
@@ -16340,18 +16331,6 @@ pub mod encounter_groups {
         d.expect("MEMBERS 3");
         d.expect("XP 600");
         d.state("group-editor", Sizes::All);
-        // iter-28-B FL7: the way back shows its word beside the arrow, at every size.
-        for size in [SMALL, DEFAULT, LARGE] {
-            let words = d.at_size(size, |d| {
-                d.place_of("Back to encounters")
-                    .map(|rect| d.painted_in(rect))
-            });
-            d.observe(
-                "iter-28-B-FL7-group",
-                words.as_deref().is_some_and(|words| words.contains("Encounters")),
-                format!("At {size:?}, the group editor's way back paints {words:?}"),
-            );
-        }
         // FD3: where FORM_WIDTH ends first, the name and Belongs to still share one edge, and it
         // is clearly apart from the members column's.
         for size in [SMALL, DEFAULT, LARGE] {

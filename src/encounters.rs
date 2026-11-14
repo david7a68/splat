@@ -5306,10 +5306,10 @@ impl Encounters {
         };
         let (roster_right, header_right) = (edge(ROSTER_PANE), edge(ADD_PANE));
         ui.horizontal_wrapped(|ui| {
-            let (back_word, back_name) = if from_session.is_some() {
-                ("Session", "Back to session")
+            let back_name = if from_session.is_some() {
+                "Back to session"
             } else {
-                ("Encounters", "Back to encounters")
+                "Back to encounters"
             };
             // X51, SB1: Save and Start keep their width on line one, and the name field takes
             // the rest. The actions are measured, as they are drawn. They take a line of their
@@ -5351,32 +5351,16 @@ impl Encounters {
                 };
             let saved_name =
                 design::number_width(ui, &draft_ref.saved_name, &Type::Heading.font(ui));
-            // FL7: the way back says where it goes, as Timeline's `← All events` does. Only
-            // where its word would push Save and Start off this line (beside Lookup at 960,
-            // SB1) is it the arrow alone, with its words on hover and in its name.
-            let back_action = |word: bool| {
-                let action = if word {
-                    Action::quiet(back_word).icon(icons::BACK)
-                } else {
-                    Action::quiet(icons::BACK).hint(back_name)
-                };
-                action.line_start().name(back_name).blocked(
+            back = Action::quiet(icons::BACK)
+                .name(back_name)
+                .hint(back_name)
+                .blocked(
                     dirty
                         .then_some("Save or discard this encounter first.")
                         .or(creature_dirty.then_some(BLOCKED_BY_CREATURE)),
                 )
-            };
-            let room = |word: bool| {
-                ui.available_rect_before_wrap().width()
-                    - back_action(word).natural_width(ui).ceil()
-                    - gap
-                    - actions
-                    - 2.0 * design::S
-                    - gap
-            };
-            let word = room(true) >= saved_name.max(Density::Scan.control())
-                || room(false) < saved_name.max(Density::Scan.control());
-            back = back_action(word).show(ui).clicked();
+                .show(ui)
+                .clicked();
             // The field's margins are outside its desired width.
             let rest = ui.available_rect_before_wrap().width() - actions - 2.0 * design::S - gap;
             let stack_actions = rest < saved_name.max(Density::Scan.control());

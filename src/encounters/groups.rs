@@ -2365,11 +2365,18 @@ impl Encounters {
         // in both editors). The name and Belongs to keep the block's edge. The save row below
         // keeps the state, Discard and reasons.
         let title_right = ui.max_rect().right();
+        // Save keeps one width in both weights, so its left edge does not move when a press
+        // changes its weight (G1b): it ends at the editor's right edge.
+        let save_width = Action::primary("Save group")
+            .natural_width(ui)
+            .max(Action::secondary("Save group").natural_width(ui))
+            .ceil();
         let button = if dirty && !has_run && !empty && !refused {
             Action::primary("Save group")
         } else {
             Action::secondary("Save group")
         }
+        .min_width(save_width)
         .blocked(if empty {
             Some(EMPTY_REASON)
         } else if !dirty {
@@ -2378,11 +2385,9 @@ impl Encounters {
             refusal.as_ref().map(|refusal| refusal.text.as_str())
         });
         ui.horizontal(|ui| {
-            // FL7: the way back says where it goes, as Timeline's `← All events` does.
-            back = Action::quiet(back_word)
-                .icon(icons::BACK)
-                .line_start()
+            back = Action::quiet(icons::BACK)
                 .name(back_name)
+                .hint(back_word)
                 .blocked_if(dirty, "Save or discard this group first.")
                 .show(ui)
                 .clicked();
