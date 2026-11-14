@@ -433,10 +433,6 @@
     ["N5/icon-starts-wrapping-text","07-deleted-package-entry-replacement-undone","960x640","Text \"\\u{e5ba} Enemies · \\u{e4e0} Not found. Its package entry was deleted.\"",2]
   ],
   "package-duplicate-id": [
-    ["G6/footer-far-below-body","01-duplicate-package-library-list","1920x1080","Button \"Source and identifiers\"",1],
-    ["G6/footer-far-below-body","04-duplicate-copy-reader","1920x1080","Button \"Source and identifiers\"",1],
-    ["G6/footer-far-below-body","05-duplicate-copy-new-identity","1920x1080","Button \"Source and identifiers\"",1],
-    ["G6/footer-far-below-body","06-duplicate-identity-restored","1920x1080","Button \"Source and identifiers\"",1],
     ["N4/quiet-action-line-start","01-duplicate-package-library-list","1200x800","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","01-duplicate-package-library-list","1920x1080","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","01-duplicate-package-library-list","960x640","Button \"Filter creatures\"",1],
@@ -464,8 +460,6 @@
   ],
   "package-file-changed": [
     ["G1b/pressed-control-moved","16-repair-draft-parses","1920x1080","Button \"Read the new version\"",1],
-    ["G6/footer-far-below-body","05-package-disk-version-kept","1200x800","Button \"Source and identifiers\"",1],
-    ["G6/footer-far-below-body","05-package-disk-version-kept","1920x1080","Button \"Source and identifiers\"",1],
     ["G6/footer-far-below-body","13-invalid-package-in-paused-run","1200x800","Button \"Source and identifiers\"",1],
     ["G6/footer-far-below-body","13-invalid-package-in-paused-run","1920x1080","Button \"Source and identifiers\"",1],
     ["G6/footer-far-below-body","15-repaired-package-in-paused-run","1200x800","Button \"Source and identifiers\"",1],
@@ -554,21 +548,6 @@
     ["N4/quiet-action-line-start","12-manifest-restored-encounter-keeps-creatures","960x640","Button \"Filter creatures\"",1]
   ],
   "package-rename": [
-    ["G6/footer-far-below-body","02-linked-entry-renamed-on-disk","1200x800","Button \"Source and identifiers\"",1],
-    ["G6/footer-far-below-body","02-linked-entry-renamed-on-disk","1920x1080","Button \"Source and identifiers\"",1],
-    ["G6/footer-far-below-body","02-linked-entry-renamed-on-disk","960x640","Button \"Source and identifiers\"",1],
-    ["G6/footer-far-below-body","03-renamed-entry-heading-fixed","1200x800","Button \"Source and identifiers\"",1],
-    ["G6/footer-far-below-body","03-renamed-entry-heading-fixed","1920x1080","Button \"Source and identifiers\"",1],
-    ["G6/footer-far-below-body","03-renamed-entry-heading-fixed","960x640","Button \"Source and identifiers\"",1],
-    ["G6/footer-far-below-body","05-renamed-creature-offers-link-update","1200x800","Button \"Source and identifiers\"",1],
-    ["G6/footer-far-below-body","05-renamed-creature-offers-link-update","1920x1080","Button \"Source and identifiers\"",1],
-    ["G6/footer-far-below-body","06-renamed-creature-links-updated","1200x800","Button \"Source and identifiers\"",1],
-    ["G6/footer-far-below-body","06-renamed-creature-links-updated","1920x1080","Button \"Source and identifiers\"",1],
-    ["G6/footer-far-below-body","07-renamed-creature-link-update-undone","1200x800","Button \"Source and identifiers\"",1],
-    ["G6/footer-far-below-body","07-renamed-creature-link-update-undone","1920x1080","Button \"Source and identifiers\"",1],
-    ["G6/footer-far-below-body","11-package-folder-restored-with-links","1200x800","Button \"Source and identifiers\"",1],
-    ["G6/footer-far-below-body","11-package-folder-restored-with-links","1920x1080","Button \"Source and identifiers\"",1],
-    ["G6/footer-far-below-body","11-package-folder-restored-with-links","960x640","Button \"Source and identifiers\"",1],
     ["N4/quiet-action-line-start","04-stat-fix-undo-message","1200x800","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","04-stat-fix-undo-message","1920x1080","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","05-renamed-creature-offers-link-update","1200x800","Button \"Filter creatures\"",1],
