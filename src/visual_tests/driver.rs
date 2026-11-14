@@ -850,6 +850,11 @@ impl<'a> Driver<'a> {
     }
 
     /// Where a control is, by its exact name.
+    /// Points to physical pixels: accessible node rects are in pixels, painted shapes in points.
+    pub fn pixels_per_point(&self) -> f32 {
+        self.harness.ctx.pixels_per_point()
+    }
+
     pub fn place_of(&self, name: &str) -> Option<egui::Rect> {
         self.nodes()
             .into_iter()

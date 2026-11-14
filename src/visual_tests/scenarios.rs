@@ -14509,12 +14509,16 @@ pub mod session_recording {
     fn check_live_recording_colours(d: &mut Driver<'_>, surfaces: &[Surface]) {
         let c = crate::design::colors();
         let record = crate::design::icons::RECORD;
-        let rail = d.place_of(NAV_SESSIONS).map_or(0.0, |nav| nav.right());
+        // Node rects are in pixels; painted texts in points.
+        let points = 1.0 / d.pixels_per_point();
+        let rail = d
+            .place_of(NAV_SESSIONS)
+            .map_or(0.0, |nav| nav.right() * points);
         let rows: Vec<egui::Rect> = d
             .nodes()
             .into_iter()
             .filter(|node| node.name.starts_with("Session ") && node.name.contains(" · "))
-            .map(|node| node.rect)
+            .map(|node| node.rect * points)
             .collect();
         let small = crate::design::Type::Small.size();
         // Per surface: icons, words and times, each with its colour.
@@ -14917,12 +14921,20 @@ pub mod session_recording {
                     .all(|(_, color)| *color == c.result.error)
         };
         let stalled_rail = status_parts(d, "Not saving audio");
+        // What B's list row says before: B's own words stay as they are.
+        let b_name = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("Session 2: Unprocessed recording · "))
+                .map(|node| node.name)
+        };
+        let b_before = b_name(d);
         d.app_mut()
             .sessions
             .simulate_recorder_health(Health::Stopped("microphone unplugged".to_owned()));
         d.settle();
         let stopped_rail = status_parts(d, "Recording stopped");
-        // A's list row only: one `Stopped`, in the error colour (B's row has none).
+        // Every painted `Stopped` (A's row, and B's own earlier stop), in the error colour.
         let stopped_row: Vec<_> = status_parts(d, "Stopped")
             .into_iter()
             .filter(|(words, _)| words.contains("Stopped"))
@@ -14933,18 +14945,26 @@ pub mod session_recording {
         );
         let banner_bar = banner.is_some_and(|words| d.has_tone_bar(words, c.result.error));
         let live = live_recording_words(d);
+        // Whose list row says it: A's; B's row says what it said before.
+        let a_row = d.nodes().iter().any(|node| {
+            node.name.starts_with("Session 1: Failed processing · ")
+                && node.name.contains("Stopped")
+        });
+        let b_after = b_name(d);
+        let b_row = b_before.is_some() && b_after != b_before;
         d.observe(
             "iter-28-S-FO1-stop-elsewhere",
             red(&stalled_rail)
                 && red(&stopped_rail)
                 && red(&stopped_row)
-                && stopped_row.len() == 1
+                && a_row
+                && !b_row
                 && banner_bar
                 && live.is_empty()
                 && !d.has_containing("The recording of “Session 2")
                 && !d.has_containing("Not saving audio"),
             format!(
-                "A's stall then exit stays A's and red: stalled {stalled_rail:?}, stopped {stopped_rail:?}, row {stopped_row:?}, banner {banner:?} bar {banner_bar}, live words {live:?}"
+                "A's stall then exit stays A's and red: stalled {stalled_rail:?}, stopped {stopped_rail:?}, row {stopped_row:?}, banner {banner:?} bar {banner_bar}, live words {live:?}, A's row {a_row}, B's row {b_before:?} then {b_after:?}"
             ),
         );
         assert!(d.in_view("Record again"));
