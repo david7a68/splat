@@ -5660,11 +5660,7 @@ impl Run {
                             title.clone(),
                             colors().text,
                         );
-                        ui.painter().galley(
-                            pos2(rect.left() + design::S, top + first_line),
-                            detail,
-                            colors().muted,
-                        );
+                        detail.paint(ui, pos2(rect.left() + design::S, top + first_line));
                     })
                 })
                 .inner;

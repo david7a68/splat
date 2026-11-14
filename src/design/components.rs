@@ -1,8 +1,8 @@
 //! Shared UI parts. Screens compose these instead of styling widgets themselves.
 use super::{comparison::Comparison, extras::space, icons, status::Tinted, tokens::*};
 use eframe::egui::{
-    self, Align, Align2, Color32, CornerRadius, FontId, Id, Layout, Rect, Response, Sense, Stroke,
-    StrokeKind, Ui, Vec2, WidgetInfo, WidgetType, pos2, text::LayoutJob, vec2,
+    self, Align, Align2, Color32, CornerRadius, FontId, Id, Layout, Pos2, Rect, Response, Sense,
+    Stroke, StrokeKind, Ui, Vec2, WidgetInfo, WidgetType, pos2, text::LayoutJob, vec2,
 };
 use std::sync::Arc;
 
@@ -1755,14 +1755,18 @@ impl From<super::StatusKind> for InTextLook {
 
 /// A painted row keeps its status word in the shared status colour. With a kind, the part of
 /// the status up to its kind's icon takes the icon's colour, and the rest the word's.
+///
+/// A disabled parent dims the words around the status and a one-colour status, but never a
+/// kind's colours (R5: a live recording stays in its own colours under any lock).
 pub fn status_in_text<L: Into<InTextLook>>(
     ui: &Ui,
     text: &str,
     status: Option<(&str, L)>,
     width: f32,
-) -> Arc<egui::Galley> {
+) -> StatusText {
     let mut job = LayoutJob::default();
     job.wrap.max_width = width;
+    let dim = |color: Color32| color.gamma_multiply(ui.opacity());
     let muted = colors().muted;
     let (before, word, after, look) = status
         .and_then(|(word, look)| {
@@ -1771,7 +1775,7 @@ pub fn status_in_text<L: Into<InTextLook>>(
         })
         .unwrap_or((text, "", "", InTextLook::One(muted)));
     let (icon, word, icon_color, word_color) = match look {
-        InTextLook::One(color) => ("", word, color, color),
+        InTextLook::One(color) => ("", word, dim(color), dim(color)),
         InTextLook::Kind(kind) => {
             let at = word
                 .find(kind.icon())
@@ -1785,10 +1789,10 @@ pub fn status_in_text<L: Into<InTextLook>>(
         }
     };
     for (text, color) in [
-        (before, muted),
+        (before, dim(muted)),
         (icon, icon_color),
         (word, word_color),
-        (after, muted),
+        (after, dim(muted)),
     ] {
         job.append(
             text,
@@ -1800,7 +1804,40 @@ pub fn status_in_text<L: Into<InTextLook>>(
             },
         );
     }
-    ui.fonts_mut(|fonts| fonts.layout_job(job))
+    StatusText(ui.fonts_mut(|fonts| fonts.layout_job(job)))
+}
+
+/// A row's text with its status, from [`status_in_text`]. It holds the parent's dimming in its
+/// own colours, so its one way to paint is [`StatusText::paint`], at full opacity: a parent's
+/// painter would dim it again, and dim a kind's colours (R5).
+pub struct StatusText(Arc<egui::Galley>);
+
+impl StatusText {
+    pub fn size(&self) -> Vec2 {
+        self.0.size()
+    }
+
+    /// Each laid-out line: its characters and the left edge of its first one.
+    #[cfg(test)]
+    pub(crate) fn lines(&self) -> Vec<(String, f32)> {
+        self.0
+            .rows
+            .iter()
+            .map(|row| {
+                (
+                    row.glyphs.iter().map(|g| g.chr).collect(),
+                    row.pos.x + row.glyphs.first().map_or(0.0, |g| g.pos.x),
+                )
+            })
+            .collect()
+    }
+
+    /// Paints the text with its top left at `pos`, in the parent's clip, at full opacity.
+    pub fn paint(self, ui: &Ui, pos: Pos2) {
+        let mut painter = ui.painter().clone();
+        painter.set_opacity(1.0);
+        painter.galley(pos, self.0, colors().muted);
+    }
 }
 
 /// Rail notices wrap so their cause stays visible in a narrow column. A second line starts at
@@ -3159,12 +3196,43 @@ impl<'a> Footer<'a> {
             .collect::<Vec<_>>()
             .join(" ");
         let messages = std::mem::take(&mut self.messages);
+        // Ruling R29: the room an open lock keeps for its reason is a reservation. It stays while
+        // the footer has room for it under its cap, so a lock moves nothing; else it is not drawn,
+        // so it never makes the footer scroll. The footer keeps its height (up to the cap) either
+        // way: a message that comes later takes that room, and no pressed choice moves. The room
+        // the reservations want is measured in this pass, at this width, for these messages.
+        use super::outcome::{DRAWN, GIVE_UP, RESERVED};
+        let give_up_key = self.id.with("give_up");
+        let give_up = ui
+            .ctx()
+            .data(|data| data.get_temp::<bool>(give_up_key).unwrap_or(false));
+        ui.ctx().data_mut(|data| {
+            data.insert_temp(Id::new(GIVE_UP), give_up);
+            data.insert_temp(Id::new(RESERVED), 0.0_f32);
+            data.insert_temp(Id::new(DRAWN), 0.0_f32);
+        });
         let (_, content) = scroll_part(ui, rect, self.id, &name, |ui| {
             for (_, _, _, draw) in messages {
                 draw(ui);
             }
         });
-        let wanted = (content + 2.0 * PART_INSET).ceil().min(most);
+        let (room, drawn) = ui.ctx().data_mut(|data| {
+            data.remove::<bool>(Id::new(GIVE_UP));
+            (
+                data.remove_temp::<f32>(Id::new(RESERVED)).unwrap_or(0.0),
+                data.remove_temp::<f32>(Id::new(DRAWN)).unwrap_or(0.0),
+            )
+        });
+        let bare = content - drawn;
+        let fits = (bare + room + 2.0 * PART_INSET).ceil() <= most;
+        let next = room > 0.0 && !fits;
+        ui.ctx()
+            .data_mut(|data| data.insert_temp(give_up_key, next));
+        if next != give_up {
+            ui.ctx()
+                .request_discard("the message footer's reservations changed");
+        }
+        let wanted = (bare + room + 2.0 * PART_INSET).ceil().min(most);
         if (wanted - stored).abs() >= HAIRLINE_WIDTH {
             ui.ctx()
                 .data_mut(|data| data.insert_temp(self.id.with("height"), wanted));

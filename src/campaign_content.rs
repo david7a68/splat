@@ -2181,6 +2181,8 @@ impl CampaignContent {
                 );
             }
             // Round 25 family: a message action without an icon has the secondary border.
+            // Ruling R21: the removal loses the package's place in the campaign, so it is a
+            // `Lose` choice: the part puts it after every other choice, with `L` before it.
             fault = fault
                 .choice(
                     Choice::new(
@@ -2193,7 +2195,7 @@ impl CampaignContent {
                     ),
                 )
                 .choice(Choice::new(
-                    MessageChoice::Choice("Remove from this campaign"),
+                    MessageChoice::Lose("Remove from this campaign"),
                     ContentPress::Remove(*i),
                 ));
             // The encounters that use its creatures, each a way to open it.
@@ -3694,8 +3696,63 @@ mod tests {
                 .map(|module| module.path.clone())
         };
         settle(&mut harness);
+        // Ruling R21 (G45): the repairs, then the links, then `Remove from this campaign` last
+        // with exactly `L` before it. A reading-order test on the message's choices.
+        fs::rename(packages.join("watch"), packages.join("watch-moved")).unwrap();
+        harness
+            .state_mut()
+            .content
+            .refresh_destination(&packages.join("watch-moved"));
+        settle(&mut harness);
+        // `L` after the choice before it on a shared line; else a line of its own at the words,
+        // `M` below the others (`docs/design-system.md`, the destructive choice rule).
+        let check = |harness: &egui_kittest::Harness<'_, Page>| {
+            let order = [
+                "Use this folder",
+                "Find the folder…",
+                "Technical details",
+                "Remove from this campaign",
+            ]
+            .map(|name| harness.get_by_label(name).rect());
+            assert!(
+                order
+                    .windows(2)
+                    .all(|pair| (pair[0].center().y - pair[1].center().y).abs() < 1.0
+                        && pair[0].right() < pair[1].left()
+                        || pair[0].bottom() <= pair[1].top()),
+                "the moved-folder choices are not in the order repairs, links, Remove: {order:?}"
+            );
+            let (before, remove) = (order[2], order[3]);
+            let shares = (before.center().y - remove.center().y).abs() < 1.0;
+            let gap = remove.left() - before.right();
+            let above = remove.top()
+                - order[..3]
+                    .iter()
+                    .map(|rect| rect.bottom())
+                    .fold(f32::MIN, f32::max);
+            assert!(
+                if shares {
+                    (gap - design::L).abs() < 0.5
+                } else {
+                    (remove.left() - order[0].left()).abs() < 0.5 && (above - design::M).abs() < 0.5
+                },
+                "`Remove from this campaign` has not its room: shares a line {shares}, gap {gap}, \
+                 above {above}"
+            );
+            shares
+        };
+        assert!(
+            check(&harness),
+            "at 1200 px Remove shares the safe choices' line"
+        );
+        // Narrow: Remove wraps to a line of its own.
+        harness.set_size(egui::vec2(500.0, 900.0));
+        harness.run_steps(2);
+        assert!(!check(&harness), "at 500 px Remove wraps");
+        harness.set_size(egui::vec2(1200.0, 900.0));
+        harness.run_steps(2);
         // A finds Watch in watch-a/ and Toll in toll-a/.
-        find(&mut harness, "watch", "watch-a");
+        find(&mut harness, "watch-moved", "watch-a");
         find(&mut harness, "toll", "toll-a");
         assert!(
             harness
