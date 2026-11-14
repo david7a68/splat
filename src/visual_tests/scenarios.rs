@@ -12110,6 +12110,14 @@ pub mod session_notes {
         d.begin_task();
         d.click("New session");
         d.state("session-form", Sizes::Default);
+        // Review of PR 324: the Session template drop-down, open at 960 and 1200 px; the second
+        // press closes it again.
+        d.aside(|d| {
+            d.click_starting("Session template:");
+            d.expect("Short notes");
+            d.state("session-template-open", Sizes::Standard);
+            d.click_starting("Session template:");
+        });
         d.type_into("Session title", TITLE);
         d.click("Create session");
         d.expect(&format!("Session 1: {TITLE}"));
@@ -13059,6 +13067,22 @@ pub mod session_notes {
         d.state("templates-deleted", Sizes::Default);
         d.click("Undo delete");
         d.expect("Downtime");
+        // Review of PR 335: beside Lookup the templates page is narrow, and `All templates` shows
+        // the list alone, its rows in the pane's own scroll column (a second column inside the
+        // pane was refused by a debug build). Choosing a template goes back to its editor.
+        d.aside(|d| {
+            d.press_ctrl(Key::K);
+            d.click("All templates");
+            d.expect("Short notes");
+            d.observe(
+                "round-28-S-template-list-narrow",
+                d.has_containing("Short notes") && !d.has("All templates"),
+                "With Lookup beside it, All templates shows the list alone",
+            );
+            d.click_starting("Downtime");
+            d.expect("All templates");
+            d.press_ctrl(Key::K);
+        });
 
         d.click("Sessions");
         d.click("Campaign");
@@ -15885,6 +15909,12 @@ pub mod session_recording {
         d.expect("Earlier part");
         d.click("Earlier part");
         d.expect("Part 1 of 2");
+        // Review of PR 324: the Go to a time drop-down, open at 960 and 1200 px.
+        d.aside(|d| {
+            d.click_starting("Go to a time:");
+            d.state("recording-part-open", Sizes::Standard);
+            d.click_starting("Go to a time:");
+        });
         choose_view(d, "What the check changed");
         d.expect("Restored");
         d.state("second-pass-review", Sizes::Default);

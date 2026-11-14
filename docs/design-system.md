@@ -1901,7 +1901,7 @@ against your memory.`, which the embed replaces once What happened has prose), t
 with empty boxes and the open threads, each below what its heading holds and never twice, and the properties
 `carried_from` and `carried_parts`. The result is an `undo_message` in the Session page's message footer (as
 every result of that page, so the Last time line, the tabs and the plan never move), success tone, naming only
-what it added, with `Undo carry over`, which puts back the exact text and properties. The result belongs to
+what it added, with `Undo: Carry over`, which puts back the exact text and properties. The result belongs to
 the new note by its ID: another session or page leaves it, it shows also when the last session can no longer be
 found, and any other change of the note's text ends it. A refusal shows in the same footer, in a warning. Read draws an embed of a session note's heading as that heading's words under a
 `Type::Small` muted `From` and, one `S` after it in every layout, a small link to the session. Its target is resolved as every campaign link is
@@ -2248,7 +2248,7 @@ below the last flag starts at its words and holds `Timeline.md` with the shared 
 use error Timeline not saved. Run updates change only the Result line and never convert Timeline.
 
 Copied sessions say `<first file> and <second file> claim to be the same session.` They offer
-Make <file> a separate session with Undo separate session. The header names the clock (`Now: Day 1, 00:10`) only once a day sets it. Moved or deleted note drafts
+Make <file> a separate session with `Undo: Separate session`. The header names the clock (`Now: Day 1, 00:10`) only once a day sets it. Moved or deleted note drafts
 offer the new path, a new file and red `Discard`. Discard follows the moved file when it still holds the note:
 the editor shows that file's words and saves there. With no file left, the editor keeps the last saved words in
 the File gone state, says so, and offers `Save these words as a new file`; no edit or Save writes the old path.
@@ -2269,10 +2269,11 @@ the session pane's message footer (`design::Footer`), below the pane's body, so 
 the tabs, the plan's rows and the recording row never move when one comes: `Recording saved: …`, `Recording
 deleted.`, `Added to the notes.`, `<file> is now a separate session.`, where an open run stays or moved, `No entry
 is named …`, `Draft discarded.` or `Reloaded from disk.` with their Undo, the warning that this is not the session
-being played or that its date has passed, the chosen input that is not connected, and another session's
-recording state (`● Recording 12:04 in Session 1: …`); while the bottom banner says that recording stopped saving
-audio, the footer does not say it again. The line below the title holds only this session's
-recording state, which keeps one height from Record to Stop, and the Record step. The plan has its own message
+being played or that its date has passed, and the chosen input that is not connected. The line below the title
+holds this session's recording state, which keeps one height from Record to Stop, and the Record step. Another
+session's recording state (`● Recording 12:04 in Session 1: …`) is in the bottom banner, so it moves nothing on the
+page; while the banner says that recording stopped saving audio, it does not say it again. (It stays out of the
+typed footer until a footer notice can colour a state word.) The plan has its own message
 footer below its rows for its Add, Remove, ruling and deleted-run results with their Undo, the file's notices, the
 group being assembled elsewhere and a rename problem, and each fight's `Add rewards` result and fault, naming the
 fight; no result sits under a row. The row keeps its own state word (`✓ In notes`). The marker `Add` result
