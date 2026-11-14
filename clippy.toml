@@ -9,7 +9,9 @@
 disallowed-methods = [
     # Package O: kept results, the save row.
     { path = "splat::design::components::ResultOrder::issue", reason = "record the result in a `design::Results` store: it issues the order at the action" },
-    { path = "splat::design::components::Footer::result", reason = "give the footer a kept result from a `design::Results` store with `Footer::kept` or `Footer::kept_line`" },
+    { path = "splat::design::components::Footer::result", reason = "give the footer a kept result as a `KeptLine` (`Shown::outcome`, `Messages::kept`)" },
+    { path = "splat::design::results::Results::undo", reason = "a footer press names its entry by its ticket: use `Results::undo_by(press.ticket, …)`; by owner, a press could undo a newer result of that owner: `Ban::Results`" },
+    { path = "splat::design::results::Results::use_press", reason = "a footer press names its entry by its ticket: use `Results::use_press_by(press.ticket)`: `Ban::Results`" },
     { path = "splat::design::components::save_row_state", reason = "use `design::save_row` with a `DraftState`" },
     # Package K: layout parts.
     # Scroll areas: `design::ScrollColumn` keeps the scroll bar's lane, so nothing moves when the bar
@@ -36,14 +38,12 @@ disallowed-methods = [
     { path = "egui::Slider::new", reason = "a Slider's value field takes its id from its place", allow-invalid = true },
     { path = "egui::Slider::from_get_set", reason = "a Slider's value field takes its id from its place", allow-invalid = true },
     { path = "splat::design::components::text_field", reason = "use design::labelled_field with a FieldId", allow-invalid = true },
-    { path = "splat::design::components::small_text_field", reason = "use design::labelled_field with a FieldId", allow-invalid = true },
     { path = "splat::design::components::text_input", reason = "use design::line_field with a FieldId", allow-invalid = true },
     # Words and field ids are checked when the program compiles: build them with `word!` and
     # `field_id!`, which take a literal and check it in a `const` block.
     { path = "splat::design::layout::Word::checked", reason = "use word!(\"…\")", allow-invalid = true },
     { path = "splat::design::layout::FieldName::checked", reason = "use field_id!(\"…\")", allow-invalid = true },
     # The image viewer says its size, known or not (package K2).
-    { path = "splat::design::components::image_viewer", reason = "use design::popups::image_viewer with an ImageSize, known when the file's header gives it", allow-invalid = true },
     # Row keys that take any number or text: each use is a counted row a reviewer reads.
     { path = "splat::design::layout::RowIndex::from_data", reason = "a row key from the row's data: one row in design::results::STAGED_ALLOWS (Ban::RowKey)", allow-invalid = true },
     { path = "splat::design::layout::TextKey::from_data", reason = "a row key from the row's data: one row in design::results::STAGED_ALLOWS (Ban::RowKey)", allow-invalid = true },
@@ -147,7 +147,7 @@ disallowed-methods = [
     { path = "splat::design::outcome::Sentence::__literal", reason = "make sentences with `sentence!`" },
     { path = "splat::design::outcome::check_template", reason = "make sentences with `sentence!`" },
     { path = "splat::design::outcome::check_literal", reason = "make sentences with `sentence!`" },
-    { path = "splat::design::components::Footer::outcome_at", reason = "record the result in a `design::Results` store and use `Footer::kept_outcome`; a hand-issued order is staged: `Ban::Order`" },
+    { path = "splat::design::outcome::Messages::outcome_at", reason = "record the result in a `design::Results` store, make a `KeptLine` with `Shown::outcome` and use `Messages::kept`; a hand-issued order is staged: `Ban::Order`" },
     { path = "splat::design::outcome::banner", reason = "put the notice in the pane's `Footer`; a body place is a review decision: `Ban::Body`" },
     { path = "splat::design::outcome::row_fault", reason = "put the fault in the pane's `Footer`; a body place is a review decision: `Ban::Body`" },
     { path = "splat::design::outcome::PagePlaceholder::show", reason = "a page placeholder is a review decision: `Ban::Body`" },

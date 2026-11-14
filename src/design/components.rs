@@ -1203,16 +1203,6 @@ pub fn text_field(
     text_field_label(ui, label, Type::Small, text, help, error)
 }
 
-pub fn small_text_field(
-    ui: &mut Ui,
-    label: &str,
-    text: &mut String,
-    help: Option<&str>,
-    error: Option<&str>,
-) -> Response {
-    text_field_label(ui, label, Type::Small, text, help, error)
-}
-
 #[allow(
     clippy::disallowed_methods,
     reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
@@ -2021,10 +2011,8 @@ pub fn signed(value: i64) -> String {
 }
 
 /// A count and the right word for it: `1 entry`, `2 entries`.
-pub fn count(n: usize, one: &str, many: &str) -> String {
-    if n == 0 {
-        return String::new();
-    }
+/// The app's one number form: digits grouped by threes with commas (`2,310`).
+pub(super) fn grouped_number(n: usize) -> String {
     let digits = n.to_string();
     let mut grouped = String::new();
     for (i, digit) in digits.chars().enumerate() {
@@ -2033,6 +2021,14 @@ pub fn count(n: usize, one: &str, many: &str) -> String {
         }
         grouped.push(digit);
     }
+    grouped
+}
+
+pub fn count(n: usize, one: &str, many: &str) -> String {
+    if n == 0 {
+        return String::new();
+    }
+    let grouped = grouped_number(n);
     let unit = if n == 1 { one } else { many };
     if unit.is_empty() {
         grouped
@@ -3145,12 +3141,33 @@ pub enum DiskConflictChoice {
     Reload,
 }
 
-pub fn disk_conflict_choices(ui: &mut Ui, noun: &str) -> Option<DiskConflictChoice> {
+/// What changed on disk, in a disk conflict's message: the thing's own name, or, only when it
+/// has none, `This <noun>`. An enum, so a caller says which: a noun cannot pass as a name.
+#[derive(Clone, Copy, Debug)]
+pub enum ConflictSubject<'a> {
+    /// The name the DM knows the thing by (`Bridge Ambush`), and the noun for it when the name
+    /// is blank.
+    Named { name: &'a str, noun: &'static str },
+    /// A thing with no name of its own: `note` gives `This note`.
+    This(&'static str),
+}
+
+/// The message names the thing the DM knows (`Bridge Ambush changed on disk.`), not its file
+/// (ruling R10); `This <noun>` only for a thing with no name of its own. Callers: World's edit
+/// form and World's repair editor (`src/world/edit.rs`, `src/world/repair.rs`).
+pub fn disk_conflict_choices(
+    ui: &mut Ui,
+    subject: ConflictSubject<'_>,
+) -> Option<DiskConflictChoice> {
+    let thing = match subject {
+        ConflictSubject::Named { name, .. } if !name.trim().is_empty() => name.trim().to_owned(),
+        ConflictSubject::Named { noun, .. } | ConflictSubject::This(noun) => format!("This {noun}"),
+    };
     // The choices start at the message text, like every other message with choices.
     actions_message(
         ui,
         Tone::Warning,
-        &format!("This {noun} changed on disk. Your draft is safe until you choose."),
+        &format!("{thing} changed on disk. Your draft is safe until you choose."),
         |ui| {
             ui.horizontal_wrapped(|ui| {
                 let mut choice = None;
@@ -3272,20 +3289,23 @@ pub(super) fn undo_message_capped(
     action: &str,
     name: Option<&str>,
 ) -> bool {
-    undo_message_line(ui, tone, text, action, name).0
+    undo_message_line(ui, tone, text, action, name, None).0
 }
 
-/// `undo_message_capped`, and the y of the centre of the words' first line.
+/// `undo_message_capped`, with Undo blocked for `blocked`'s reason (only Undo greys, and the line
+/// keeps its layout, so blocking moves nothing on it; the caller paints the reason), and the y of
+/// the centre of the words' first line.
 pub(super) fn undo_message_line(
     ui: &mut Ui,
     tone: Tone,
     text: &str,
     action: &str,
     name: Option<&str>,
+    blocked: Option<&str>,
 ) -> (bool, f32) {
     ui.scope(|ui| {
         ui.set_max_width(ui.available_width().min(LIST_MEASURE));
-        undo_message_inside(ui, tone, text, action, name)
+        undo_message_inside(ui, tone, text, action, name, blocked)
     })
     .inner
 }
@@ -3296,10 +3316,12 @@ fn undo_message_inside(
     text: &str,
     action: &str,
     name: Option<&str>,
+    blocked: Option<&str>,
 ) -> (bool, f32) {
     let button = Action::quiet(action)
         .icon(icons::UNDO)
-        .density(Density::Read);
+        .density(Density::Read)
+        .blocked(blocked);
     let button = match name {
         Some(name) => button.name(name),
         None => button,
@@ -3402,13 +3424,6 @@ fn dialog_width<R>(
                 .inner
         })
         .inner
-}
-
-/// An image at full size, within the window, its size not known. Returns true when the DM closes
-/// it, by a click or Escape. Use `design::popups::image_viewer` with an `ImageSize`: Clippy bans
-/// this one outside `src/design/`.
-pub fn image_viewer(ctx: &egui::Context, name: &str, uri: &str) -> bool {
-    super::popups::image_viewer(ctx, name, uri, super::popups::ImageSize::Unknown)
 }
 
 /// The width of a panel beside a page: Lookup, or the run's side panel.

@@ -489,10 +489,6 @@ fn source_status(ui: &mut egui::Ui, source: &Source, word: &str) {
 
 /// The players that do not fit, as a muted count. It takes keyboard focus. Hover, focus and the
 /// accessible name list each one with HP.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn more_players(ui: &mut egui::Ui, count: Arc<egui::Galley>, hidden: &[Glance]) {
     let c = colors();
     let size = count.size() + vec2(2.0 * design::XS, 0.0);
@@ -532,24 +528,19 @@ fn more_players(ui: &mut egui::Ui, count: Arc<egui::Galley>, hidden: &[Glance]) 
             ),
         )
     });
-    let list = |ui: &mut egui::Ui| {
-        ui.spacing_mut().item_spacing.y = 0.0;
-        for glance in hidden {
-            ui.label(Type::Strong.rich(ui, &glance.name).color(c.text));
-            ui.label(Type::Small.rich(ui, hp(glance)).color(c.muted));
-        }
-    };
-    if response.has_focus() {
-        response.show_tooltip_ui(list);
-    } else {
-        response.on_hover_ui(list);
-    }
+    // On hover, and while the count has keyboard focus.
+    let lines: Vec<design::TipLine<'_>> = hidden
+        .iter()
+        .flat_map(|glance| {
+            [
+                design::TipLine::title(glance.name.as_str()),
+                design::TipLine::detail(hp(glance)),
+            ]
+        })
+        .collect();
+    design::rich_tip(response, &lines);
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn paint(ui: &mut egui::Ui, glance: &Glance, item: Item, source: &str) -> egui::Response {
     let c = colors();
     let (rect, response) = ui.allocate_exact_size(
@@ -620,15 +611,15 @@ fn paint(ui: &mut egui::Ui, glance: &Glance, item: Item, source: &str) -> egui::
     for stat in item.stats {
         put(&mut x, design::S, stat);
     }
-    response
-        .on_hover_ui(|ui| {
-            ui.spacing_mut().item_spacing.y = 0.0;
-            ui.label(Type::Strong.rich(ui, &glance.name).color(c.text));
-            for fact in &facts {
-                ui.label(Type::Small.rich(ui, fact).color(c.muted));
-            }
-        })
-        .on_hover_cursor(egui::CursorIcon::PointingHand)
+    let lines: Vec<design::TipLine<'_>> =
+        std::iter::once(design::TipLine::title(glance.name.as_str()))
+            .chain(
+                facts
+                    .iter()
+                    .map(|fact| design::TipLine::detail(fact.as_str())),
+            )
+            .collect();
+    design::rich_tip(response, &lines).on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
 #[cfg(test)]

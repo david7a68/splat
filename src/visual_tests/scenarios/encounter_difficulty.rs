@@ -377,35 +377,26 @@ pub fn run(d: &mut Driver<'_>) {
         }
         for size in sizes {
             let [low, unknown, high] = d.at_size(size, |d| {
-                [
-                    "5 party · 2 × Ember Cultist",
-                    "5 party · 1 × Nameless Thing",
-                    "5 party · 1 × Cinder Tyrant",
-                ]
-                .map(|summary| {
-                    // Nameless Visitor's members may give way to its reason (X1): its row is the
-                    // one that says it.
-                    if summary.contains("Nameless") {
-                        let mut found = None;
-                        d.each_painted_text(|text, clip| {
-                            let words = text
-                                .galley
-                                .job
-                                .text
-                                .replace('\u{a0}', " ")
-                                .replace('\n', " · ");
-                            if found.is_none()
-                                && clip.intersects(text.visual_bounding_rect())
-                                && words.starts_with("5 party")
-                                && words.contains(UNKNOWN_FORM)
-                            {
-                                found = Some(words);
-                            }
-                        });
-                        found
-                    } else {
-                        plan_summary_line(d, summary)
-                    }
+                // Each row by its form, which no other row has: round 28 FE6 lets the party's
+                // size give way first, so a cut row need not start with `5 party`.
+                ["XP 400 ·", UNKNOWN_FORM, "XP 6,300 ·"].map(|form| {
+                    let mut found = None;
+                    d.each_painted_text(|text, clip| {
+                        // A line break stands for the separator it dropped (FI7).
+                        let words = text
+                            .galley
+                            .job
+                            .text
+                            .replace('\u{a0}', " ")
+                            .replace('\n', " · ");
+                        if found.is_none()
+                            && clip.intersects(text.visual_bounding_rect())
+                            && words.contains(form)
+                        {
+                            found = Some(words);
+                        }
+                    });
+                    found
                 })
             });
             // FB2: Mill Road's difficulty is on its row at every size; its members give way
@@ -416,16 +407,19 @@ pub fn run(d: &mut Driver<'_>) {
                     low == format!("5 party · 2 × Ember Cultist · {LOW_FORM}")
                         || low == "5 party · 2 × Ember Cultist · XP 400 · Low"
                 }) && unknown.as_deref().is_some_and(|unknown| {
-                    // X1: the name keeps at least its first letter; the members give way first.
-                    unknown.starts_with("5 party")
-                        && unknown.contains(&format!(" · {UNKNOWN_FORM}: N"))
+                    // Round 28 FB6: the summary already names the creature, so it stays whole
+                    // with the short reason; the name is not cut to be said again.
+                    unknown == format!("5 party · 1 × Nameless Thing · {UNKNOWN_FORM}")
                 }) && high.as_deref().is_some_and(|high| {
+                    // Round 28 FE6: the party's size gives way first, then the members.
+                    let roster = HIGH_SUMMARY.trim_start_matches("5 party · ");
                     high == format!("{HIGH_SUMMARY} · {HIGH_FORM}")
                         || high == format!("{HIGH_SUMMARY} · {HIGH_SHORT}")
+                        || high == format!("{roster} · {HIGH_SHORT}")
                         || high
                             .strip_suffix(&format!("… · {HIGH_SHORT}"))
                             .is_some_and(|cut| {
-                                HIGH_SUMMARY.starts_with(cut.trim_end_matches([' ', '·', ',']))
+                                roster.starts_with(cut.trim_end_matches([' ', '·', ',']))
                             })
                 }),
                 format!(
@@ -485,7 +479,9 @@ pub fn run(d: &mut Driver<'_>) {
             // X1: at every size, also at 1200x800 with the note beside the plan, the name
             // shortens from its end and keeps at least its first letter. iter-27-B FB4, FH6: it
             // is in the row's `XP not known` place, once; `Read encounter` does not repeat it.
-            let name_shown = words.contains(" · XP not known: N");
+            // Round 28 FB6: the summary names the creature once, and the short reason follows.
+            let name_shown = words.contains(&format!("1 × Nameless Thing · {UNKNOWN_FORM}"))
+                && !words.contains(&format!("{UNKNOWN_FORM}: N"));
             d.observe(
                 "W1-D2-why",
                 words.contains("Read encounter")

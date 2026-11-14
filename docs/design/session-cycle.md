@@ -1264,7 +1264,7 @@ happened?`. Result: `Added to Captain Varra’s Log.` `Undo Log line`.
 | State | What shows |
 |---|---|
 | The entry has no Log | The first line makes `## Log` as the last heading |
-| The entry's edit form has changes | Blocked: `Save or discard your edit first.` |
+| The entry's edit form has changes | Blocked: `Save or discard your edit to add a Log line.` |
 | The entry belongs to a package | No action. Its Log would belong to every campaign that uses the package |
 | The file cannot be read | Blocked: `Splat cannot read NPCs/Captain Varra.md. Repair the file first.` |
 | The file changed on disk | Splat reads the file again and adds the line to what is there |

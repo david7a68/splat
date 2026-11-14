@@ -2141,10 +2141,6 @@ impl CombatSync {
     }
 }
 /// A small label, the value's stepper and an optional note, kept together on one line.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn labelled_stepper(
     ui: &mut egui::Ui,
     column: Column,
@@ -2156,13 +2152,20 @@ fn labelled_stepper(
 ) -> bool {
     use crate::design::{Type, colors};
     ui.horizontal(|ui| {
-        let left = ui.cursor().left();
-        ui.label(Type::Small.rich(ui, label).color(colors().muted));
-        // The stepper starts at the block's label column, whatever this label's width.
-        let gap = left + column.label - ui.cursor().left();
-        if gap > 0.0 {
-            ui.add_space(gap);
-        }
+        // The stepper starts at the block's label column, whatever this label's width: the
+        // label takes a cell that ends one item gap before it.
+        let cell = egui::vec2(
+            (column.label - ui.spacing().item_spacing.x).max(0.0),
+            ui.spacing().interact_size.y,
+        );
+        ui.allocate_ui_with_layout(
+            cell,
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                ui.set_min_size(cell);
+                ui.label(Type::Small.rich(ui, label).color(colors().muted));
+            },
+        );
         ui.spacing_mut().interact_size.x = column.well;
         stepper_and_note(ui, name, value, range, note)
     })

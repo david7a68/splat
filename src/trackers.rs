@@ -54,6 +54,41 @@ pub struct Definition {
     pub quick: Vec<Quick>,
     #[serde(default)]
     pub marks: Vec<Mark>,
+    /// Two amount fields that would have one owner (tracker, line, label), found when the note
+    /// is read (`repeat`), never in a frame.
+    #[serde(skip)]
+    pub repeat: Option<Repeat>,
+}
+
+/// Two amount fields with one owner: the view leaves out every one after the first and says why
+/// under that line. Two actions with one label and fixed amounts have no field, and load as
+/// they are.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Repeat {
+    /// Two lines with this name, and the places in `quick` of the actions that ask: the second
+    /// line leaves those out.
+    Line { word: String, asking: Vec<usize> },
+    /// Two or more actions with this label, and one of them asks: the view matches the open
+    /// field by label, so each of them would draw it. Only the first, at `keep`, is drawn.
+    Label { label: String, keep: usize },
+}
+
+impl Repeat {
+    /// The problem's words, at the line that leaves the actions out.
+    pub fn words(&self) -> String {
+        match self {
+            Self::Line { word, .. } => crate::sentence!(
+                "Two lines are named “{}”, and an action asks for an amount. Give each line its own name.",
+                word
+            )
+            .to_string(),
+            Self::Label { label, .. } => crate::sentence!(
+                "Two actions are named “{}”, and one asks for an amount. Give each action its own name.",
+                label
+            )
+            .to_string(),
+        }
+    }
 }
 
 /// The first value: one number, or one for each `per` word.
@@ -546,7 +581,10 @@ fn read_rules(
         .map(
             |tracker| match (&tracker.def, shared(&tracker.key).as_ref()) {
                 (Err(error), _) | (Ok(_), Some(error)) => Err(error.clone()),
-                (Ok(def), None) => check(def, &rules).map(|()| def.clone()),
+                (Ok(def), None) => check(def, &rules).map(|()| Definition {
+                    repeat: repeat(def),
+                    ..def.clone()
+                }),
             },
         )
         .collect();
@@ -676,6 +714,34 @@ fn check(def: &Definition, rules: &Rules) -> Result<(), String> {
         check_says(rules, Some(def), mark.says())?;
     }
     Ok(())
+}
+
+/// Two amount fields that one owner would draw: a label of two or more actions where one of
+/// them asks, else (when an action asks) a line name that comes twice. Read once, when the note
+/// is read.
+fn repeat(def: &Definition) -> Option<Repeat> {
+    let asking: Vec<usize> = (0..def.quick.len())
+        .filter(|&at| def.quick[at].asks())
+        .collect();
+    let label = asking.iter().find_map(|&at| {
+        let label = &def.quick[at].label;
+        let mut twins = (0..def.quick.len()).filter(|&i| def.quick[i].label == *label);
+        let keep = twins.next()?;
+        twins.next().map(|_| Repeat::Label {
+            label: label.clone(),
+            keep,
+        })
+    });
+    let mut seen = std::collections::HashSet::new();
+    label.or_else(|| {
+        (!asking.is_empty())
+            .then(|| def.per.iter().find(|word| !seen.insert(*word)))
+            .flatten()
+            .map(|word| Repeat::Line {
+                word: word.clone(),
+                asking,
+            })
+    })
 }
 
 /// A day mark has `at` or `every`, a day of 1 or more, `from` only with `every`, and words that
@@ -1388,25 +1454,40 @@ fn stamp(mut entries: Vec<Entry>, session: Option<Uuid>) -> Op {
     Op::Append(entries)
 }
 
+/// A quick action as a press names it: its label, and its place in `quick` when the press came
+/// from a drawn button, so of two actions with one label each press makes its own changes.
+#[derive(Clone, Copy, Debug)]
+pub struct QuickRef<'a> {
+    pub label: &'a str,
+    pub at: Option<usize>,
+}
+
+impl<'a> From<&'a str> for QuickRef<'a> {
+    fn from(label: &'a str) -> Self {
+        Self { label, at: None }
+    }
+}
+
 /// The entries of a quick action, pressed on one line.
-fn press_op(
+fn press_op<'a>(
     rules: &Rules,
     state: &State,
     key: &str,
     instance: Option<&str>,
-    label: &str,
+    action: impl Into<QuickRef<'a>>,
     asked: Option<i64>,
     session: Option<Uuid>,
 ) -> Result<Op, String> {
+    let QuickRef { label, at } = action.into();
     let def = rules.def(key).ok_or("That tracker is no longer in play.")?;
     if instance.is_some_and(|name| !def.per.iter().any(|word| word == name)) {
         return Err("That name changed in its note. Nothing was recorded.".into());
     }
-    let quick = def
-        .quick
-        .iter()
-        .find(|quick| quick.label == label)
-        .ok_or("That action changed in its note. Nothing was recorded.")?;
+    let quick = match at {
+        Some(at) => def.quick.get(at).filter(|quick| quick.label == label),
+        None => def.quick.iter().find(|quick| quick.label == label),
+    }
+    .ok_or("That action changed in its note. Nothing was recorded.")?;
     let changes = if quick.changes.is_empty() {
         vec![Change {
             tracker: None,
@@ -1891,10 +1972,23 @@ impl Trackers {
         }
     }
 
-    /// A quick action, on the line of `instance`, named by the label it was drawn with.
+    /// A quick action, on the line of `instance`, named by its label alone: the tests' press.
+    #[cfg(test)]
     pub fn press(&mut self, key: &str, instance: Option<&str>, label: &str, asked: Option<i64>) {
+        self.press_at(key, instance, label.into(), asked);
+    }
+
+    /// A quick action, named by its label and, from a drawn button, its place in `quick`.
+    pub fn press_at(
+        &mut self,
+        key: &str,
+        instance: Option<&str>,
+        action: QuickRef<'_>,
+        asked: Option<i64>,
+    ) {
+        let label = action.label;
         let session = self.played;
-        self.act(|rules, state| press_op(rules, state, key, instance, label, asked, session));
+        self.act(|rules, state| press_op(rules, state, key, instance, action, asked, session));
         // A typed number of an act that recorded nothing stays in its field.
         if let Some(amount) = asked
             && self.reason.is_some()
@@ -2810,6 +2904,70 @@ mod tests {
             check(teams, &rules),
             Err("Score: rivals has no line for Party.".into())
         );
+        // Two amount fields with one owner (tracker, line, label) are a repeat: the definition
+        // loads, and the view leaves out each field after the first. Two actions with one label
+        // and fixed amounts draw no field, and load as they are (as before).
+        let pay_twice = "name: Purses\nquick: [{label: Pay, add: ask}, {label: Pay, add: 1}]";
+        let ann_twice =
+            "name: Purses\nper: [Ann, Ann]\nquick: [{label: Tip, add: 1}, {label: Pay, add: ask}]";
+        for (yaml, want) in [
+            (
+                pay_twice,
+                Some(Repeat::Label {
+                    label: "Pay".into(),
+                    keep: 0,
+                }),
+            ),
+            (
+                ann_twice,
+                Some(Repeat::Line {
+                    word: "Ann".into(),
+                    asking: vec![1],
+                }),
+            ),
+            (
+                "name: Purses\nquick: [{label: Tip, add: 2}, {label: Tip, add: 1}]",
+                None,
+            ),
+            (
+                "name: Purses\nper: [Ann, Ann]\nquick: [{label: Tip, add: 1}]",
+                None,
+            ),
+            (
+                "name: Purses\nper: [Ann, Bo]\nquick: [{label: Pay, add: ask}, {label: Tip, add: 1}]",
+                None,
+            ),
+        ] {
+            assert_eq!(check(&def(yaml), &rules), Ok(()), "{yaml}");
+            assert_eq!(repeat(&def(yaml)), want, "{yaml}");
+        }
+        assert_eq!(
+            repeat(&def(pay_twice)).map(|r| r.words()),
+            Some("Two actions are named “Pay”, and one asks for an amount. Give each action its own name.".into())
+        );
+        // Of two actions with one label, a press from the second button makes its own change.
+        let tips = Rules {
+            notes: vec!["Rules".into()],
+            trackers: vec![Tracker {
+                key: "purses".into(),
+                note: Uuid::nil(),
+                def: Ok(def(
+                    "name: Purses\nquick: [{label: Tip, add: 2}, {label: Tip, add: 1}]",
+                )),
+            }],
+            ..Rules::default()
+        };
+        let tip_state = replay(&tips, &Ledger::default(), &Today::default());
+        let second = QuickRef {
+            label: "Tip",
+            at: Some(1),
+        };
+        let Ok(Op::Append(entries)) =
+            press_op(&tips, &tip_state, "purses", None, second, None, None)
+        else {
+            panic!("the second Tip records");
+        };
+        assert_eq!(entries[0].add, Some(1));
         let state = replay(&rules, &Ledger::default(), &Today::default());
         assert_eq!(
             press_op(&rules, &state, "teams", Some("Party"), "Score", None, None),
@@ -3539,10 +3697,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn an_open_history_prepares_its_rows_once_and_draws_only_those_in_view() {
         use crate::test_support::{CachedWork, Counts};
         use egui_kittest::{Harness, kittest::Queryable};
@@ -3570,7 +3724,8 @@ mod tests {
             .with_size(eframe::egui::vec2(346.0, 640.0))
             .build_ui_state(
                 move |ui, t: &mut Trackers| {
-                    eframe::egui::ScrollArea::vertical().show(ui, |ui| history::show(ui, t, &note));
+                    crate::design::ScrollColumn::new("tracker history")
+                        .show(ui, |ui| history::show(ui, t, &note));
                 },
                 t,
             );
@@ -3640,6 +3795,9 @@ mod tests {
             .with_size(eframe::egui::vec2(480.0, 640.0))
             .build_ui_state(|ui, t: &mut Trackers| view::show(ui, t, false), t);
         crate::design::theme::install(&h.ctx);
+        // The harness drew a first frame with egui's own fonts, before the theme's: measure the
+        // columns again with the theme's, as the app does from its first frame.
+        h.state_mut().revision += 1;
         h.run_steps(4);
         let left = |h: &Harness<'_, Trackers>, name: &str| h.get_by_label(name).rect().left();
         let firsts = |h: &Harness<'_, Trackers>| {
