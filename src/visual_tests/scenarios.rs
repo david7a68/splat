@@ -22528,9 +22528,11 @@ pub mod session_plan {
         d.state("resumed-setup-after-long-rest", Sizes::All);
         const SAVED_HP_SET: &str = crate::encounter_run::SAVED_HP_USED;
         const SAVED_HP_UNDO: &str = "Undo: use saved HP";
-        let notice_top = d
+        // The typed footer (M2) is pinned under the setup roster: a message keeps its left edge
+        // and the footer its bottom; its top follows its height.
+        let notice_at = d
             .place_of("Party HP is full after the long rest.")
-            .map(|rect| rect.top());
+            .map(|rect| rect.left());
         // iter-26-R FI2: the offer, its result and the offer back after Undo are in the setup's
         // message footer below the rows: no row moves through the three.
         // Setup rows, by their initiative fields.
@@ -22549,16 +22551,18 @@ pub mod session_plan {
             "Use the saved HP puts back the saved HP",
         );
         // FT2: the press is its own step, so the full HP stays one Undo away.
-        let result_top = d.place_of(SAVED_HP_SET).map(|rect| rect.top());
+        let result_at = d.place_of(SAVED_HP_SET).map(|rect| rect.left());
         d.observe(
             "iter-16-B-FT2-message",
-            notice_top
-                .zip(result_top)
+            notice_at
+                .zip(result_at)
                 .is_some_and(|(notice, result)| (notice - result).abs() < 1.0),
             format!(
-                "The result replaces the notice in its place: {notice_top:?} then {result_top:?}"
+                "The result replaces the notice in its place: {notice_at:?} then {result_at:?}"
             ),
         );
+        // The message part places its Undo: beside the words when it fits, else under them,
+        // from their first letter (proofs-M2). Here: it is offered, in view, at the words.
         d.observe(
             "iter-16-B-FT2-message-undo",
             d.in_view(SAVED_HP_UNDO)
@@ -22566,8 +22570,9 @@ pub mod session_plan {
                     .zip(d.place_of(SAVED_HP_SET))
                     .is_some_and(|(undo, words)| {
                         (undo.center().y - words.center().y).abs() < crate::design::S
+                            || undo.top() >= words.bottom() - 0.5
                     }),
-            "The result offers Undo on its own line",
+            "The result offers its Undo, at its words",
         );
         d.observe(
             "iter-16-B-FT2-header",
@@ -22614,6 +22619,8 @@ pub mod session_plan {
             "Undo of B gives back A's result and its Undo, with A's HP",
         );
         // AT1: this Undo has the shape of every Undo after a message: quiet, with its icon.
+        // Without keyboard focus (the press can leave the focus on the line's Undo).
+        d.clear_focus();
         let saved_hp_undo = undo_shape(d, SAVED_HP_UNDO);
         d.observe(
             "iter-17-B-AT1",

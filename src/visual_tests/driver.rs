@@ -26,7 +26,9 @@ const ASYNC_TIMEOUT: Duration = Duration::from_secs(180);
 // Diagnostic feedback may stop early, but must still fail on missing text.
 // The full gate retains the original allowance for slow background work.
 const DIAGNOSTIC_TEXT_TIMEOUT: Duration = Duration::from_secs(5);
-const TAB_LIMIT: usize = 80;
+// The typed footer (M2) comes after its pane's body in the reading order: a run with a full
+// roster and a sheet beside it reaches its footer after more than 80 stops.
+const TAB_LIMIT: usize = 160;
 
 pub(super) fn check_settle_deadline(scenario: &str, started: Instant, timeout: Duration) {
     if started.elapsed() < timeout {
@@ -3424,7 +3426,7 @@ impl<'a> Driver<'a> {
         self.settle();
     }
 
-    fn clear_focus(&mut self) {
+    pub(super) fn clear_focus(&mut self) {
         self.harness.ctx.memory_mut(|memory| {
             if let Some(id) = memory.focused() {
                 memory.surrender_focus(id);
