@@ -4329,6 +4329,10 @@ impl Run {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    )]
     fn reference_tab(&mut self, ui: &mut egui::Ui, index: usize) {
         self.card_loot(ui, index);
         let p = &self.state.participants[index];
@@ -4448,8 +4452,11 @@ impl Run {
                 .collect();
             design::overflow_tabs_small(ui, &mut self.sheet_page, &pages);
             let page = self.sheet_page;
-            design::ScrollColumn::new(("run_sheet", record.definition.splat_id, page)).show(
+            super::rolling::gutter_scroll(
                 ui,
+                egui::ScrollArea::vertical()
+                    .id_salt(("run_sheet", record.definition.splat_id, page))
+                    .auto_shrink([false, false]),
                 |ui| {
                     crate::rolls::set_roller(ui.ctx(), Some(index));
                     self.armed_tiles_begin(ui.ctx());
@@ -4469,27 +4476,46 @@ impl Run {
                 .iter()
                 .any(|error| error.contains(&definition.path));
             notice = snapshot_notice(definition, current, unreadable).map(|words| {
-                // FD3: a file that cannot be read now is an error, as in every other view; a
-                // changed file is one to look at (warning). The kind decides the tone.
-                (
-                    SnapshotFault {
-                        words,
-                        severity: if unreadable {
-                            design::outcome::Severity::CannotRead
-                        } else {
-                            design::outcome::Severity::NeedsFixing
-                        },
-                    },
-                    at,
-                )
+                // FD3: a file that cannot be read now is an error, as in every other view.
+                let tone = if unreadable {
+                    Tone::Error
+                } else {
+                    Tone::Warning
+                };
+                (words, tone, at)
             });
         }
         // FD5 (iter-27-R): the notice comes and goes with the file, so it is in the panel's
         // footer and the stat block keeps its top. Its owner is this row's snapshot: the notice
         // is worked out again each frame from it and the campaign's read, and ends when the
-        // file matches again or another row is selected. Rows 66, 67 (round 28): the panel is
-        // the footer's pane, so the notice is `S` under a short stat block and pinned under a
-        // long one. The pane's id is the participant's, so each card keeps its own scroll.
+        // file matches again or another row is selected. Base: view.rs:4230-4262 (a3d947bd).
+        let read = std::cell::Cell::new(None);
+        let mut footer =
+            design::Footer::new(("run_reference_footer", self.id), ui.available_width());
+        if let Some((words, tone, at)) = &notice {
+            footer.notice(words.as_str(), |ui| match at {
+                Some(at) => {
+                    let pressed = design::message_with_actions(ui, *tone, words, |ui| {
+                        // AJ1: a message action without an icon has the secondary border,
+                        // and its border starts at the notice's words.
+                        Action::secondary("Read the new version")
+                            .density(Density::Read)
+                            .show(ui)
+                            .clicked()
+                    });
+                    if pressed {
+                        read.set(Some(*at));
+                    }
+                }
+                None => {
+                    design::message(ui, *tone, words);
+                }
+            });
+        }
+        let body_bottom = footer.show_by_hand(ui);
+        if let Some(at) = read.get() {
+            self.lookup_request = Some(at);
+        }
         if definition.fields.contains_key("splat_external") {
             ui.add(
                 egui::Label::new(
@@ -4500,76 +4526,64 @@ impl Run {
                 .wrap(),
             );
         }
-        let frame = design::outcome::PaneFrame::new(ui);
-        let mut messages = design::outcome::Messages::<ReferencePress>::new(
-            &frame,
-            ("run_reference_footer", self.id, &p.key),
-            ui.available_width(),
-        );
-        if let Some((fault, at)) = &notice {
-            let message = design::outcome::FaultMessage::new(fault);
-            messages.outcome(match at {
-                Some(at) => message.choice(design::outcome::Choice::new(
-                    design::outcome::MessageChoice::Choice("Read the new version"),
-                    ReferencePress::Read(*at),
-                )),
-                None => message,
-            });
-        }
-        let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
-            changes_block(ui, p, true);
-            let links: &dyn view::Links = match &self.content {
-                Some(index) => index.as_ref(),
-                None => &view::NoLinks,
-            };
-            if definition.path == "Made up in this fight" {
-                design::empty_state(
-                    ui,
-                    icons::INFO,
-                    "Made up in this fight",
-                    "It has no stat block.",
-                    |_| {},
-                );
-                ui.horizontal(|ui| {
-                    design::stat_tile(ui, "AC", &display(p.armor_class));
-                    design::stat_tile(ui, "HP", &display(p.hp));
-                });
-            } else {
-                let values = view::RunValues {
-                    armor_class: p.armor_class,
-                    hp: p.max_hp,
-                    current_hp: p.hp,
-                    initiative: p.initiative_bonus,
-                    speed: p.changes.as_ref().and_then(|changes| {
-                        changes
-                            .overrides
-                            .rows(&changes.base)
-                            .into_iter()
-                            .find(|row| row.label == "Speed")
-                            .map(|row| row.changed)
-                    }),
+        super::rolling::gutter_scroll(
+            ui,
+            egui::ScrollArea::vertical()
+                // By participant: copies of one creature can differ, and each card opens on its
+                // own changes, not at the place the last copy was left.
+                .id_salt(("run_reference", &p.key))
+                .auto_shrink([false, false])
+                .max_height((body_bottom - ui.cursor().top()).max(0.0)),
+            |ui| {
+                changes_block(ui, p, true);
+                let links: &dyn view::Links = match &self.content {
+                    Some(index) => index.as_ref(),
+                    None => &view::NoLinks,
                 };
-                crate::rolls::set_roller(ui.ctx(), Some(index));
-                self.armed_tiles_begin(ui.ctx());
-                link = view::show_run(
-                    ui,
-                    definition,
-                    &view::Origin {
-                        path: &definition.path,
-                        owner: "Starting snapshot, saved with this run",
-                        builtin: false,
-                    },
-                    links,
-                    &values,
-                );
-                crate::rolls::set_roller(ui.ctx(), None);
-            }
-        });
-        if let Some(press) = paned.pressed {
-            match press.id {
-                ReferencePress::Read(at) => self.lookup_request = Some(at),
-            }
-        }
+                if definition.path == "Made up in this fight" {
+                    design::empty_state(
+                        ui,
+                        icons::INFO,
+                        "Made up in this fight",
+                        "It has no stat block.",
+                        |_| {},
+                    );
+                    ui.horizontal(|ui| {
+                        design::stat_tile(ui, "AC", &display(p.armor_class));
+                        design::stat_tile(ui, "HP", &display(p.hp));
+                    });
+                } else {
+                    let values = view::RunValues {
+                        armor_class: p.armor_class,
+                        hp: p.max_hp,
+                        current_hp: p.hp,
+                        initiative: p.initiative_bonus,
+                        speed: p.changes.as_ref().and_then(|changes| {
+                            changes
+                                .overrides
+                                .rows(&changes.base)
+                                .into_iter()
+                                .find(|row| row.label == "Speed")
+                                .map(|row| row.changed)
+                        }),
+                    };
+                    crate::rolls::set_roller(ui.ctx(), Some(index));
+                    self.armed_tiles_begin(ui.ctx());
+                    link = view::show_run(
+                        ui,
+                        definition,
+                        &view::Origin {
+                            path: &definition.path,
+                            owner: "Starting snapshot, saved with this run",
+                            builtin: false,
+                        },
+                        links,
+                        &values,
+                    );
+                    crate::rolls::set_roller(ui.ctx(), None);
+                }
+            },
+        );
         if link.is_some() {
             self.lookup_request = link;
         }
@@ -6364,44 +6378,20 @@ impl design::outcome::Fault for RunFault {
     }
 }
 
-/// What the stat-block pane's footer can press.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ReferencePress {
-    /// `Read the new version`: the entry at this place in the campaign's content.
-    Read(usize),
-}
-
-/// A row's stat block whose file is no longer the run's copy: changed, gone, or unreadable.
-/// Its kind decides its tone (FD3).
-struct SnapshotFault {
-    words: design::outcome::Sentence,
-    severity: design::outcome::Severity,
-}
-
-impl design::outcome::Fault for SnapshotFault {
-    fn severity(&self) -> design::outcome::Severity {
-        self.severity
-    }
-    fn cause(&self) -> design::outcome::Sentence {
-        self.words.clone()
-    }
-}
-
-fn snapshot_notice(
-    snapshot: &Entry,
-    current: Option<&Entry>,
-    unreadable: bool,
-) -> Option<design::outcome::Sentence> {
+fn snapshot_notice(snapshot: &Entry, current: Option<&Entry>, unreadable: bool) -> Option<String> {
     let name = std::path::Path::new(&snapshot.path)
         .file_name()
         .unwrap_or_default()
         .to_string_lossy();
     // The card says first what it shows: the copy the run took at its start.
-    let kind = if snapshot.fields.contains_key("splat_external") {
-        "sheet"
-    } else {
-        "stat block"
-    };
+    let lead = format!(
+        "This {} uses the copy from the start of the fight.",
+        if snapshot.fields.contains_key("splat_external") {
+            "sheet"
+        } else {
+            "stat block"
+        }
+    );
     let Some(current) = current else {
         if !unreadable
             && let Some(path) = snapshot
@@ -6415,16 +6405,10 @@ fn snapshot_notice(
                 .get("splat_run_source_owner")
                 .and_then(|value| value.as_str())
                 .unwrap_or("This package");
-            return Some(crate::sentence!(
-                "This {} uses the copy from the start of the fight. {} is not used in this campaign now.",
-                kind,
-                owner
-            ));
+            return Some(format!("{lead} {owner} is not used in this campaign now."));
         }
-        return Some(crate::sentence!(
-            "This {} uses the copy from the start of the fight. {} {}.",
-            kind,
-            name,
+        return Some(format!(
+            "{lead} {name} {}.",
             if unreadable {
                 "cannot be read now"
             } else if snapshot.fields.contains_key("splat_run_source_path") {
@@ -6451,13 +6435,7 @@ fn snapshot_notice(
         || ((snapshot.body != current.body || snapshot.kind != current.kind)
             && splat::content::stat_blocks::comparison_body(snapshot)
                 != splat::content::stat_blocks::comparison_body(current)))
-    .then(|| {
-        crate::sentence!(
-            "This {} uses the copy from the start of the fight. {} has changed.",
-            kind,
-            name
-        )
-    })
+    .then(|| format!("{lead} {name} has changed."))
 }
 
 fn change_origin(p: &Participant) -> Option<String> {
@@ -11113,7 +11091,6 @@ mod tests {
         assert!(
             snapshot_notice(&snapshot, Some(&changed), false)
                 .unwrap()
-                .as_str()
                 .contains("has changed.")
         );
         let folder = tempfile::tempdir().unwrap();
@@ -11129,14 +11106,12 @@ mod tests {
         assert!(
             snapshot_notice(&snapshot, None, false)
                 .unwrap()
-                .as_str()
                 .contains("Ashen Marches is not used in this campaign now")
         );
         std::fs::remove_file(path).unwrap();
         assert!(
             snapshot_notice(&snapshot, None, false)
                 .unwrap()
-                .as_str()
                 .contains("was deleted")
         );
     }
@@ -11202,17 +11177,13 @@ mod tests {
         let mut current = snapshot.clone();
         current.body.push_str("The pack howls.");
         assert_eq!(
-            snapshot_notice(&snapshot, Some(&current), false)
-                .as_ref()
-                .map(|words| words.as_str()),
+            snapshot_notice(&snapshot, Some(&current), false).as_deref(),
             Some(
                 "This stat block uses the copy from the start of the fight. Cinder Wolf.md has changed."
             )
         );
         assert_eq!(
-            snapshot_notice(&snapshot, None, true)
-                .as_ref()
-                .map(|words| words.as_str()),
+            snapshot_notice(&snapshot, None, true).as_deref(),
             Some(
                 "This stat block uses the copy from the start of the fight. Cinder Wolf.md cannot be read now."
             )
@@ -11224,7 +11195,6 @@ mod tests {
         assert!(
             snapshot_notice(&sheet, Some(&current), false)
                 .unwrap()
-                .as_str()
                 .starts_with("This sheet uses the copy from the start of the fight.")
         );
         assert_eq!(
@@ -11486,19 +11456,16 @@ mod tests {
         assert!(
             snapshot_notice(&snapshot, Some(&current), false)
                 .unwrap()
-                .as_str()
                 .contains("has changed.")
         );
         assert!(
             snapshot_notice(&snapshot, None, true)
                 .unwrap()
-                .as_str()
                 .contains("cannot be read now")
         );
         assert!(
             snapshot_notice(&snapshot, None, false)
                 .unwrap()
-                .as_str()
                 .contains("is not available in this campaign now")
         );
     }
