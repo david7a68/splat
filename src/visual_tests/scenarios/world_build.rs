@@ -4553,6 +4553,39 @@ fn blocked_reason_shown(d: &Driver<'_>, words: &str) -> (Option<egui::Color32>, 
     )
 }
 
+/// Row 125 (G143, G144, G146, G148, G17), the image witness: in this frame, before its PNG is
+/// saved, the owner line that ends with `words` is painted whole in the viewport, with `icon`
+/// first and the icon and the words in `color` (the fault's tone).
+fn owner_line_in_tone(d: &mut Driver<'_>, id: &str, words: &str, icon: &str, color: egui::Color32) {
+    let (width, height) = d.window_size();
+    let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, height));
+    let mut found = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let job = &text.galley.job;
+        if job.text.ends_with(words) && job.sections.len() >= 3 {
+            let rect = text.visual_bounding_rect();
+            let first = &job.sections[0];
+            found.push((
+                job.text[first.byte_range.clone()].to_owned(),
+                first.format.color,
+                job.sections[job.sections.len() - 1].format.color,
+                clip.contains_rect(rect) && viewport.contains_rect(rect),
+            ));
+        }
+    });
+    d.observe(
+        id,
+        found
+            .iter()
+            .any(|(painted, icon_color, word_color, whole)| {
+                painted == icon && *icon_color == color && *word_color == color && *whole
+            }),
+        format!(
+            "The owner line `…{words}` is whole in view with {icon:?} and the fault tone {color:?}: {found:?}"
+        ),
+    );
+}
+
 /// The marks in each visible row line that holds `row_words`: every painted part that is not in
 /// the muted colour, with its colour. A row's detail line has ` · `; a message has none.
 pub(super) fn row_marks(d: &Driver<'_>, row_words: &str) -> Vec<Vec<(String, egui::Color32)>> {
@@ -7344,6 +7377,13 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
         "Library states the replacement in Campaign’s words, without field names",
     );
     d.state_prepared("manifest-opened-for-repair", Sizes::All, |d| {
+        owner_line_in_tone(
+            d,
+            "iter-29-L-G17-owner-line",
+            " · Cannot be read",
+            design::icons::ERROR,
+            design::colors().result.error,
+        );
         let tone = manifest_fault_tone(d, "Line 4 opens a list");
         d.observe(
             "iter-23-C-AE4-library",
@@ -7471,6 +7511,13 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.click_containing("About Ashen Marches");
     d.expect("Write the manifest again");
     d.state_prepared("manifest-deleted-library-repair", Sizes::All, |d| {
+        owner_line_in_tone(
+            d,
+            "iter-29-L-G148-owner-line",
+            " · Manifest deleted",
+            design::icons::WARN,
+            design::colors().result.warning,
+        );
         let read = d.place_of("Read").expect("Read tab is visible");
         let reader = egui::Rect::from_min_max(read.min, egui::pos2(10000.0, 10000.0));
         let words = d.painted_in(reader);
@@ -7658,6 +7705,13 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     d.focus_window(true);
     d.wait_for_text("Cannot be read");
     d.state_prepared("package-yaml-broken-on-disk", Sizes::All, |d| {
+        owner_line_in_tone(
+            d,
+            "iter-29-L-G146-owner-line",
+            " · Cannot be read",
+            design::icons::ERROR,
+            design::colors().result.error,
+        );
         check_unreadable_owner(d, "iter-8-E-FD10-entry");
         check_read_repair(d, "Creatures/Cinder Wolf.md");
         let fix = d
@@ -10804,7 +10858,29 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
             && d.has("Undo package registration"),
         "After Use the copy in encounters, the registration result says `Ashen Reaches is registered.` and keeps its Undo",
     );
-    d.state("copy-entries-used", Sizes::All);
+    d.state_prepared("copy-entries-used", Sizes::All, |d| {
+        // G147, the image witness: before each PNG, the registration result's shorter words and
+        // its Undo are whole in view, below the source change's result.
+        let (width, height) = d.window_size();
+        let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, height));
+        let words = d.painted_rect_in("Ashen Reaches is registered.", egui::Rect::EVERYTHING);
+        let undo = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name == "Undo package registration")
+            .map(|node| (node.rect, node.fully_in_view()));
+        let source = d.painted_rect_in(crate::library::USE_COPY_RESULT, egui::Rect::EVERYTHING);
+        d.observe(
+            "iter-29-L-G147-image",
+            words.is_some_and(|rect| viewport.contains_rect(rect))
+                && undo.is_some_and(|(rect, whole)| whole && viewport.contains_rect(rect))
+                && source.zip(words).is_some_and(|(source, words)| source.top() < words.top())
+                && !d.visible_text("is registered, with"),
+            format!(
+                "The registration result {words:?} and its Undo {undo:?} are whole in view below the source change {source:?}"
+            ),
+        );
+    });
     // Round 26 review: each kept result is its own footer message, newest first: the source
     // change, then the registration it followed. Both Undos are reached; at 960 the footer
     // scrolls to the older one.
@@ -12243,6 +12319,13 @@ pub fn library_file_fault(d: &mut Driver<'_>) {
         );
     }
     d.state_prepared("package-file-not-text", Sizes::All, |d| {
+        owner_line_in_tone(
+            d,
+            "iter-29-L-G144-owner-line",
+            " · Cannot be read",
+            design::icons::ERROR,
+            design::colors().result.error,
+        );
         file_fault_reader(
             d,
             "iter20-E-SD1-package",
