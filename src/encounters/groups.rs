@@ -688,7 +688,7 @@ impl GroupDraft {
             &campaign.path,
             &mut self.path,
             self.baseline.as_deref(),
-            "group",
+            ("group", &self.name),
         )
     }
     pub(super) fn file_gone(&self) -> bool {
@@ -705,7 +705,7 @@ impl GroupDraft {
     ) -> Result<Option<bool>, String> {
         let choice = self
             .recovery
-            .show(ui, &self.comparison_text(snapshot)?, "group");
+            .show(ui, &self.comparison_text(snapshot)?, ("group", &self.name));
         if let Some(keep) = choice {
             if keep {
                 if let Some(change) = self.recovery.accept() {
@@ -1179,7 +1179,7 @@ impl Encounters {
         if let Some(keep) = draft.recovery.show(
             ui,
             &draft.comparison_text(snapshot).unwrap_or_default(),
-            "group",
+            ("group", &draft.name),
         ) {
             if keep {
                 if let Some(change) = draft.recovery.accept() {
@@ -4827,7 +4827,8 @@ mod tests {
         draft.name = "Renamed".into();
         draft.groups[0].name = "Changed".into();
         let error = draft.save(&campaign, &[]).unwrap_err();
-        assert_eq!(error, super::super::disk::changed_on_disk("group"));
+        assert_eq!(error, super::super::disk::changed_on_disk("group", "Changed"));
+        assert!(error.starts_with("Changed changed on disk."), "R10: {error}");
         assert!(draft.groups[0].recovery.change.is_some());
         assert_eq!(fs::read_to_string(&note).unwrap(), external);
         assert!(draft.dirty(), "the group's change is still here to save");

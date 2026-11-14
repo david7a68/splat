@@ -810,7 +810,7 @@ impl Draft {
             &campaign.path,
             &mut self.path,
             self.baseline.as_deref(),
-            "encounter",
+            ("encounter", &self.name),
         )?;
         let snapshot = Snapshot::load(campaign, modules)?;
         self.validate(&snapshot)?;
@@ -1174,7 +1174,12 @@ impl CreatureEditor {
     }
     fn save(&mut self, root: &std::path::Path) -> Result<(), String> {
         self.recovery
-            .check(root, &mut self.path, Some(&self.baseline), "creature")?;
+            .check(
+                root,
+                &mut self.path,
+                Some(&self.baseline),
+                ("creature", &self.fields.name),
+            )?;
         let text = self.text()?;
         Entry::parse(&self.path, &text)?;
         write_note(root, &self.path, Some(&self.baseline), &text)?;
@@ -4076,7 +4081,11 @@ impl Encounters {
             if let Some(keep) =
                 editor
                     .recovery
-                    .show(ui, &editor.text().unwrap_or_default(), "creature")
+                    .show(
+                        ui,
+                        &editor.text().unwrap_or_default(),
+                        ("creature", &editor.fields.name),
+                    )
             {
                 if keep {
                     if let Some(change) = editor.recovery.accept() {

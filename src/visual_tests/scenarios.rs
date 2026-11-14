@@ -4205,9 +4205,10 @@ pub mod encounter_build {
     const LIVE_ROW: &str = "HP\u{a0}11/41";
     const LOCAL_ONLY: &str = "Nothing in this encounter reaches D&D Beyond";
     const VIRTUALISED_LIMIT: usize = 100;
-    // One disk-change form, as World and Library: it names the encounter, never its file.
+    // One disk-change form: it names the encounter, never its file (iter-28-B R10, FG4: by its
+    // name, not `This encounter`).
     const CHANGED_ON_DISK: &str =
-        "This encounter changed on disk. Your draft is safe until you choose.";
+        "Bridge Ambush changed on disk. Your draft is safe until you choose.";
     const OVERWRITE: &str = "Overwrite with my draft";
     const RELOAD: &str = "Reload and lose my draft";
     const OUTSIDE_WORDS: &str = "\nWritten outside Splat.\n";

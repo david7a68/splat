@@ -20,24 +20,32 @@ pub(super) struct Change {
     pub copies: Vec<String>,
 }
 
-/// The one sentence for a draft whose file changed on disk. It names what changed, never the file.
 /// The result after `Remove <noun> and lose draft`, as Library says it (FF7).
 pub(super) fn removed_with_draft(name: &str) -> String {
     format!("{name} removed. Its draft was discarded.")
 }
 
-pub(super) fn changed_on_disk(what: &str) -> String {
-    format!("This {what} changed on disk. Your draft is safe until you choose.")
+/// The one sentence for a draft whose file changed on disk. It names the thing by its name, never
+/// the file (R10): `Bridge Ambush changed on disk.` Only a draft with no name yet says
+/// `This <what>`.
+pub(super) fn changed_on_disk(what: &str, name: &str) -> String {
+    let name = name.trim();
+    if name.is_empty() {
+        format!("This {what} changed on disk. Your draft is safe until you choose.")
+    } else {
+        format!("{name} changed on disk. Your draft is safe until you choose.")
+    }
 }
 
 impl Recovery {
-    /// `what` names the draft's kind in the DM's words: `encounter`, `group` or `creature`.
+    /// `what` names the draft's kind in the DM's words: `encounter`, `group` or `creature`;
+    /// `name` is the draft's name.
     pub fn check(
         &mut self,
         root: &Path,
         path: &mut String,
         baseline: Option<&str>,
-        what: &str,
+        (what, name): (&str, &str),
     ) -> Result<(), String> {
         let Some(baseline) = baseline else {
             return Ok(());
@@ -70,7 +78,7 @@ impl Recovery {
                 text: current,
                 copies: peers.into_iter().map(|(path, _)| path).collect(),
             });
-            return Err(changed_on_disk(what));
+            return Err(changed_on_disk(what, name));
         }
         self.change = None;
         Ok(())
@@ -89,9 +97,14 @@ impl Recovery {
         self.change.take()
     }
 
-    pub fn show(&self, ui: &mut egui::Ui, draft: &str, what: &str) -> Option<bool> {
+    pub fn show(
+        &self,
+        ui: &mut egui::Ui,
+        draft: &str,
+        (what, name): (&str, &str),
+    ) -> Option<bool> {
         let change = self.change.as_ref()?;
-        let mut messages = vec![changed_on_disk(what)];
+        let mut messages = vec![changed_on_disk(what, name)];
         messages.extend(
             change
                 .copies
@@ -433,7 +446,7 @@ impl super::Encounters {
         let choice = draft.recovery.show(
             ui,
             &draft.comparison_text(snapshot).unwrap_or_default(),
-            "encounter",
+            ("encounter", &draft.name),
         );
         if let Some(keep) = choice {
             if keep {
