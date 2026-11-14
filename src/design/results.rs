@@ -645,7 +645,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/sessions/page.rs",
             "reading_view",
-            &[Ban::Results, Ban::Layout(3)],
+            &[Ban::Results, Ban::Layout(1)],
         ),
         (
             "src/sessions/page.rs",
@@ -904,7 +904,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/page.rs", "notes_view", &[Ban::Layout(3)]),
         ("src/sessions/page.rs", "read_tab", &[Ban::Layout(1)]),
         ("src/sessions/page.rs", "recordings_tab", &[Ban::Layout(1)]),
-        ("src/sessions/page.rs", "show_form", &[Ban::Layout(1)]),
         ("src/sessions/page.rs", "template_list", &[Ban::Layout(1)]),
         ("src/sessions/plan.rs", "event_fields", &[Ban::Layout(2)]),
         ("src/sessions/plan.rs", "fight_block", &[Ban::Layout(1)]),
@@ -1070,7 +1069,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/carry.rs", "last_time_line", &[Ban::Extras(1)]),
         ("src/sessions/page.rs", "draft_warning", &[Ban::Extras(2)]),
         ("src/sessions/page.rs", "record_line", &[Ban::Extras(1)]),
-        ("src/sessions/page.rs", "recording_row", &[Ban::Extras(3)]),
+        ("src/sessions/page.rs", "recording_row", &[Ban::Extras(2)]),
         (
             "src/sessions/plan.rs",
             "gone_scene_words",

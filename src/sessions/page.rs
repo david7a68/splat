@@ -59,6 +59,9 @@ const SESSION_DATE: design::FieldName = crate::field_id!("session_date");
 const TEMPLATE_NAME: design::FieldId =
     crate::field_id!("template_name").once(design::Once::CreateForm);
 const SESSION_FOLDER: design::FieldName = crate::field_id!("session_folder");
+const SESSION_TEMPLATE: design::FieldName = crate::field_id!("session_template");
+const RECORDING_VIEW: design::FieldName = crate::field_id!("recording_view");
+const RECORDING_PART: design::FieldName = crate::field_id!("recording_part");
 
 #[derive(Clone, Copy, Default, PartialEq)]
 enum View {
@@ -3365,10 +3368,6 @@ impl Sessions {
         });
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn show_form(&mut self, ui: &mut egui::Ui) {
         let Some(mut form) = self.form.take() else {
             return;
@@ -3419,21 +3418,18 @@ impl Sessions {
         );
         if form.editing.is_none() {
             design::field(ui, "Template", None, None, |ui| {
-                let inner = egui::ComboBox::from_id_salt("session_template")
-                    .selected_text(&form.template)
-                    .width(ui.available_width().min(design::FORM_WIDTH))
-                    .icon(design::combo_icon)
-                    .show_ui(ui, |ui| {
-                        for template in &self.templates {
-                            design::choice_value(
-                                ui,
-                                &mut form.template,
-                                template.name.clone(),
-                                &template.name,
-                            );
-                        }
-                    });
-                design::named(ui, &inner.response, "Session template");
+                let mut names = self.templates.iter().map(|template| {
+                    (template.name.clone(), template.name.as_str())
+                });
+                if let Some((first, label)) = names.next() {
+                    let _ = design::Dropdown::new(
+                        SESSION_TEMPLATE.once(design::Once::CreateForm),
+                        "Session template",
+                    )
+                    .choice(first, label)
+                    .choices(names)
+                    .show(ui, &mut form.template);
+                }
             });
         }
         if form.editing.is_none()
@@ -4577,11 +4573,15 @@ impl Sessions {
         let mut delete = false;
         let mut again = false;
         // Round 27 FO1: the `⋯` follows its date-time title an `L` gap after it, on the title's
-        // line, so it belongs to this row and never floats at the pane's edge.
+        // line, so it belongs to this row and never floats at the pane's edge. Round 28 FB8: the
+        // title's column is as tall as the `⋯`, so the title's line and the `⋯` share one centre.
         ui.horizontal(|ui| {
             let menu = Density::Read.control() + design::L;
             ui.allocate_ui_with_layout(
-                egui::vec2((ui.available_width() - menu).max(0.0), 0.0),
+                egui::vec2(
+                    (ui.available_width() - menu).max(0.0),
+                    Density::Read.control(),
+                ),
                 egui::Layout::left_to_right(egui::Align::Center),
                 |ui| {
                     ui.add(
@@ -4691,7 +4691,11 @@ impl Sessions {
         } else {
             (icons::DOCUMENT, "Not processed", c.muted)
         };
-        if !processing {
+        if processing {
+            // Round 28 FM10: the spinner line takes the status line's place, so every state keeps
+            // one order: size, status, detail, result links, actions.
+            self.processing_lines(ui);
+        } else {
             design::status(ui, Status { icon, word, color }).on_hover_text(word);
         }
         let stalled = live
@@ -4805,8 +4809,7 @@ impl Sessions {
         // from this recording's links. Draw the row only when it holds something.
         let has_actions = stalled
             || live
-            || job_here
-            || !recording.summary
+            || (!job_here && !recording.summary)
             || stored
                 .as_ref()
                 .is_some_and(|words| words.starts_with("Stopped by itself:"));
@@ -4870,43 +4873,6 @@ impl Sessions {
                         .clicked()
                 {
                     self.wants_processing_settings = true;
-                }
-            }
-            if job_here {
-                let words = self
-                    .job
-                    .as_ref()
-                    .map(|(job, _)| job.progress.words())
-                    .unwrap_or_default();
-                {
-                    let row_left = ui.cursor().left();
-                    design::spinner(ui);
-                    let text_left = ui.cursor().left();
-                    ui.label(
-                        Type::Small
-                            .rich(ui, format!("Processing · {words}"))
-                            .color(c.muted),
-                    );
-                    // Round 27 AN1: Cancel has its own line at the progress words' left edge, so
-                    // a stage's longer sentence never moves it under the pointer.
-                    ui.end_row();
-                    ui.add_space(text_left - row_left);
-                    let cancelling = self.job.as_ref().is_some_and(|(job, _)| job.cancelling());
-                    if cancelling {
-                        ui.label(
-                            Type::Small
-                                .rich(ui, "Cancelling. This ends after the current step.")
-                                .color(c.muted),
-                        );
-                    } else if Action::quiet("Cancel")
-                        .name("Cancel processing")
-                        .density(Density::Read)
-                        .show(ui)
-                        .clicked()
-                        && let Some((job, _)) = &self.job
-                    {
-                        job.cancel();
-                    }
                 }
             }
             let reason = if !recording.path.exists() {
@@ -5031,6 +4997,47 @@ impl Sessions {
         }
         if let Some(made) = open {
             self.open_reading(recording, made, None, None);
+        }
+    }
+
+    /// The status line of the recording being processed: the spinner and the progress words, and
+    /// under the words quiet `Cancel` on its own line (round 27 AN1), so a stage's longer words
+    /// never move it under the pointer. Its words start at the progress words' left edge (round
+    /// 28 FM7): the spinner keeps its own column, and `Cancel` hangs its padding into it.
+    fn processing_lines(&mut self, ui: &mut egui::Ui) {
+        let c = colors();
+        let Some((job, _)) = &self.job else {
+            return;
+        };
+        let words = job.progress.words();
+        let cancelling = job.cancelling();
+        let mut cancel = false;
+        ui.horizontal_top(|ui| {
+            design::spinner(ui);
+            ui.vertical(|ui| {
+                ui.label(
+                    Type::Small
+                        .rich(ui, format!("Processing · {words}"))
+                        .color(c.muted),
+                );
+                if cancelling {
+                    ui.label(
+                        Type::Small
+                            .rich(ui, "Cancelling. This ends after the current step.")
+                            .color(c.muted),
+                    );
+                } else {
+                    cancel = Action::quiet("Cancel")
+                        .name("Cancel processing")
+                        .density(Density::Read)
+                        .line_start()
+                        .show(ui)
+                        .clicked();
+                }
+            });
+        });
+        if cancel && let Some((job, _)) = &self.job {
+            job.cancel();
         }
     }
 
@@ -5347,14 +5354,14 @@ impl Sessions {
         let switched = if segments_width + design::XS <= ui.available_width() {
             design::segmented(ui, &mut made, &options)
         } else {
-            let inner = egui::ComboBox::from_id_salt("recording_view")
-                .selected_text(made.word())
-                .show_ui(ui, |ui| {
-                    for (option, label) in &options {
-                        design::choice_value(ui, &mut made, *option, label);
-                    }
-                });
-            design::named(ui, &inner.response, "Recording view");
+            // The reader belongs to the selected session's page; one is open at a time.
+            let mut views = options.iter().copied();
+            if let Some((first, label)) = views.next() {
+                let _ = design::Dropdown::new(RECORDING_VIEW.of(self.selected), "Recording view")
+                    .choice(first, label)
+                    .choices(views)
+                    .show(ui, &mut made);
+            }
             made != reading.made
         };
         if switched
@@ -5367,6 +5374,7 @@ impl Sessions {
             self.open_reading(&recording, made, None, None);
         }
         // A marker's Add result names the session that gets the event.
+        let selected = self.selected;
         let Some(reading) = &mut self.reading else {
             return;
         };
@@ -5407,16 +5415,18 @@ impl Sessions {
                         .rich(ui, format!("Part {} of {count}", reading.part + 1))
                         .color(c.muted),
                 );
-                let inner = egui::ComboBox::from_id_salt("recording_part")
-                    .selected_text(&reading.parts[reading.part].0)
-                    .width(120.0)
-                    .icon(design::combo_icon)
-                    .show_ui(ui, |ui| {
-                        for (at, (time, _)) in reading.parts.iter().enumerate() {
-                            design::choice_value(ui, &mut reading.part, at, time);
-                        }
-                    });
-                design::named(ui, &inner.response, "Go to a time");
+                let mut times = reading
+                    .parts
+                    .iter()
+                    .enumerate()
+                    .map(|(at, (time, _))| (at, time.as_str()));
+                if let Some((first, label)) = times.next() {
+                    let _ = design::Dropdown::new(RECORDING_PART.of(selected), "Go to a time")
+                        .choice(first, label)
+                        .choices(times)
+                        .width(120.0)
+                        .show(ui, &mut reading.part);
+                }
                 if Action::quiet("Later")
                     .icon(icons::DOWN)
                     .name("Later part")

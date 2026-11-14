@@ -707,12 +707,32 @@ fn plan_details(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
 /// form never gives way (FB2): where it would add a line, the summary gives way from its end,
 /// by whole words, with `…`; hover and the accessible name keep the whole summary. FL2, FI7:
 /// each fact keeps its words together, the members wrap between members and never inside one,
-/// and no line starts or ends with `·`.
+/// and no line starts or ends with `·`. The plan's rows draw it through `planned_summary_on_road`.
+#[cfg(test)]
 fn planned_summary(
     ui: &mut egui::Ui,
     summary: &str,
     difficulty: Option<&crate::difficulty::Difficulty>,
 ) {
+    planned_summary_on_road(ui, summary, None, difficulty);
+}
+
+/// `planned_summary` with a journey's day after the summary (`road_day`). Round 28 FE6: the day
+/// ties the fight to its journey, so it gives way last: the party's size first, then the
+/// roster's members from the end, then the day.
+fn planned_summary_on_road(
+    ui: &mut egui::Ui,
+    summary: &str,
+    day: Option<&str>,
+    difficulty: Option<&crate::difficulty::Difficulty>,
+) {
+    let roster = summary;
+    let with_day = match day {
+        Some(day) if !roster.trim().is_empty() => format!("{roster} · {day}"),
+        Some(day) => day.to_owned(),
+        None => roster.to_owned(),
+    };
+    let summary = with_day.as_str();
     let c = colors();
     let font = Type::Small.font(ui);
     let width = ui.available_width();
@@ -753,25 +773,67 @@ fn planned_summary(
     let missing = difficulty
         .filter(|difficulty| difficulty.rating.is_none())
         .and_then(|difficulty| difficulty.missing.as_ref());
-    // The summary's facts and members, each with the separator before it. It gives way by
-    // whole ones, from its end: `5 party · 1 × Cinder Tyrant, …`.
-    let mut units: Vec<(&str, &str)> = Vec::new();
-    for (index, fact) in summary.split(" · ").enumerate() {
-        for (at, member) in fact.split(", ").enumerate() {
+    // The summary's facts and members, each with the separator before it and its turn to give
+    // way: the party's size first (`5 party`, the first fact), then the roster's members from
+    // the end, then the journey's day. A cut member leaves `…` in its place:
+    // `2 × Ember Cultist, … · Day 2 of Travel`; the party's size goes without one.
+    #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+    enum Turn {
+        Party,
+        Member,
+        Day,
+    }
+    let mut units: Vec<(&str, &str, Turn)> = Vec::new();
+    for (index, fact) in roster
+        .split(" · ")
+        .filter(|_| !roster.trim().is_empty())
+        .enumerate()
+    {
+        let members: Vec<&str> = fact.split(", ").collect();
+        for (at, member) in members.iter().enumerate() {
             let before = match (index, at) {
                 (0, 0) => "",
                 (_, 0) => " · ",
                 _ => ", ",
             };
-            units.push((before, member));
+            let turn = if index == 0 && members.len() == 1 && member.ends_with(" party") {
+                Turn::Party
+            } else {
+                Turn::Member
+            };
+            units.push((before, member, turn));
         }
     }
+    if let Some(day) = day {
+        let before = if units.is_empty() { "" } else { " · " };
+        units.push((before, day, Turn::Day));
+    }
+    // The units in the order they give way.
+    let mut giving_way: Vec<usize> = (0..units.len()).collect();
+    giving_way.sort_by_key(|&at| (units[at].2, std::cmp::Reverse(at)));
+    // The summary with only `count` units kept: the last `count` to give way.
     let cut_at = |count: usize| {
-        let kept: String = units[..count]
-            .iter()
-            .map(|(before, unit)| format!("{before}{unit}"))
-            .collect();
-        format!("{kept}{}…", units[count].0)
+        let gone = &giving_way[..units.len() - count];
+        let mut pieces: Vec<(&str, &str)> = Vec::new();
+        let mut cut_before = false;
+        for (at, (before, unit, turn)) in units.iter().enumerate() {
+            if !gone.contains(&at) {
+                pieces.push((before, unit));
+                cut_before = false;
+            } else if *turn != Turn::Party && !cut_before {
+                pieces.push((before, "…"));
+                cut_before = true;
+            }
+        }
+        // A cut party leaves the next piece first on the line, without its separator.
+        let mut text = String::new();
+        for (index, (before, unit)) in pieces.iter().enumerate() {
+            if index > 0 {
+                text.push_str(before);
+            }
+            text.push_str(unit);
+        }
+        text
     };
     // The most whole facts and members before `form` that keep the lines, by halves.
     let most = |form: &str| {
@@ -795,8 +857,22 @@ fn planned_summary(
                 rows(&with_form(facts, &words.replace(' ', "\u{a0}"))) <= lines
             };
             let short = missing.short();
-            let mut fitted = missing.fitted(|words| fits_with(summary, words));
-            if fitted.as_deref() == Some(short)
+            // Round 28 FB6: a summary that already names every creature after the colon keeps
+            // them whole with the short reason; cutting a member to name it again says less.
+            let named = !missing.names.is_empty()
+                && missing.names.iter().all(|name| {
+                    units.iter().any(|(_, unit, _)| {
+                        unit.rsplit_once(" × ").map_or(*unit, |(_, named)| named) == name.as_str()
+                    })
+                });
+            let whole_summary = named && fits_with(summary, short);
+            let mut fitted = if whole_summary {
+                Some(short.to_owned())
+            } else {
+                missing.fitted(|words| fits_with(summary, words))
+            };
+            if !whole_summary
+                && fitted.as_deref() == Some(short)
                 && let Some(first) = missing.names.first().and_then(|name| name.chars().next())
             {
                 let least = format!("{short}: {first}…").replace(' ', "\u{a0}");
@@ -1909,13 +1985,12 @@ fn road_days(
         .collect()
 }
 
-/// A planned fight's summary with the day it is played on: `… · Day 2 of Road to the ford`.
-/// As the row's rating word does, the words show only while the line keeps its rows (rule P):
-/// first the journey's name goes, then the day.
-fn on_road(ui: &egui::Ui, summary: &str, day: Option<&str>) -> String {
-    let Some(day) = day else {
-        return summary.to_owned();
-    };
+/// The day a planned fight is played on, in the form that fits after its summary: `Day 2 of
+/// Road to the ford`, else `Day 2`, else none. As the row's rating word does, the words show
+/// only while the line keeps its rows (rule P): first the journey's name goes, then the day.
+/// `planned_summary_on_road` draws it after the summary.
+fn road_day(ui: &egui::Ui, summary: &str, day: Option<&str>) -> Option<String> {
+    let day = day?;
     let font = Type::Small.font(ui);
     let width = ui.available_width();
     let rows = |text: &str| {
@@ -1936,10 +2011,10 @@ fn on_road(ui: &egui::Ui, summary: &str, day: Option<&str>) -> String {
     };
     let alone = rows(summary).max(1);
     let short = day.split_once(" of ").map_or(day, |(head, _)| head);
-    [with(day), with(short)]
+    [day, short]
         .into_iter()
-        .find(|words| rows(words) <= alone)
-        .unwrap_or_else(|| summary.to_owned())
+        .find(|words| rows(&with(words)) <= alone)
+        .map(str::to_owned)
 }
 
 /// The help line of **How long** when the clock cannot place the journey.
@@ -2749,11 +2824,6 @@ impl Sessions {
         if removed_line == Some(model.lines.len()) {
             removed_slot = Some(place_now(&scenes));
         }
-        let open_scenes = scenes
-            .iter()
-            .flatten()
-            .filter(|(_, scene)| !scene.task.done)
-            .count();
         let scene_count = scenes.iter().map(Vec::len).sum::<usize>();
         // While the DM types a scene, the fold holds.
         let hold =
@@ -2800,6 +2870,8 @@ impl Sessions {
                     .cloned()
             })
             .collect();
+        // Round 28 FD3: the heading counts the rows it stands above, as every group heading does:
+        // the events, the planned fights and groups, and every scene, done or not.
         let heading = design::group_heading_text(
             ui,
             if session == self.current() {
@@ -2813,7 +2885,7 @@ impl Sessions {
                 .count()
                 + planned.len()
                 + planned_groups.len()
-                + open_scenes,
+                + scene_count,
         );
         let heading = ui.label(heading);
         if fold_line {
@@ -3260,7 +3332,7 @@ impl Sessions {
                                 }
                             } else if let Some(saved) = saved {
                                 design::status(ui, Status { icon: icons::RUN, word: &plan_saved_status(saved), color: c.muted });
-                            } else { planned_summary(ui, &on_road(ui, &fight.summary, day.as_deref()), Some(&fight.difficulty)); }
+                            } else { planned_summary_on_road(ui, &fight.summary, road_day(ui, &fight.summary, day.as_deref()).as_deref(), Some(&fight.difficulty)); }
                         }, |ui| {
                             design::row_menu(ui, &fight.name, |ui| {
                                 if Action::quiet("Remove from tonight").show(ui).clicked() {
@@ -4782,15 +4854,13 @@ mod tests {
                     let road = ui
                         .scope(|ui| {
                             ui.set_width(width as f32);
-                            let words = on_road(ui, summary, Some(day));
-                            if words.contains("of The road") {
-                                full += 1;
-                            } else if words.contains("Day 2") {
-                                short += 1;
-                            } else {
-                                hidden += 1;
+                            let words = road_day(ui, summary, Some(day));
+                            match words.as_deref() {
+                                Some(words) if words.contains("of The road") => full += 1,
+                                Some(_) => short += 1,
+                                None => hidden += 1,
                             }
-                            planned_summary(ui, &words, Some(&rating));
+                            planned_summary_on_road(ui, summary, words.as_deref(), Some(&rating));
                         })
                         .response
                         .rect
@@ -4803,6 +4873,52 @@ mod tests {
             full > 0 && short > 0 && hidden > 0,
             "{full} {short} {hidden}"
         );
+        // Round 28 FE6: where the row is cut, the party's size gives way first, then the
+        // roster; the day, which ties the fight to its journey, goes last.
+        let mut day_kept_in_a_cut = 0;
+        for width in (120..=600).step_by(10) {
+            let mut words = None;
+            let mut painted = None;
+            for _ in 0..2 {
+                let output = ctx.run(Default::default(), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.set_width(width as f32);
+                        words = road_day(ui, summary, Some(day));
+                        planned_summary_on_road(ui, summary, words.as_deref(), Some(&rating));
+                    });
+                });
+                painted = output.shapes.iter().find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text.contains("XP") => Some(
+                        text.galley
+                            .job
+                            .text
+                            .replace('\u{a0}', " ")
+                            .replace('\n', " "),
+                    ),
+                    _ => None,
+                });
+            }
+            let painted = painted.unwrap_or_else(|| panic!("at {width} px: no summary"));
+            if words.is_none() {
+                continue;
+            }
+            if painted.contains("Ember Cultist") {
+                assert!(
+                    painted.contains("Day 2"),
+                    "at {width} px the day gave way before the roster: {painted:?}"
+                );
+            }
+            if painted.contains("5 party") {
+                assert!(
+                    painted.contains("Ember Cultist"),
+                    "at {width} px the roster gave way before the party's size: {painted:?}"
+                );
+            }
+            if !painted.contains("5 party") && painted.contains("Day 2") {
+                day_kept_in_a_cut += 1;
+            }
+        }
+        assert!(day_kept_in_a_cut > 0, "no width kept the day in a cut row");
     }
 
     #[test]
@@ -5243,72 +5359,86 @@ mod tests {
             if facts.replace(" · ", " ") == summary.replace(" · ", " ") {
                 whole += 1;
             } else {
-                // The summary gives way by whole facts and members, never inside one.
+                // The summary gives way by whole facts and members, never inside one. Round 28
+                // FE6: the party's size gives way first (with no `…`), then the members from
+                // the end.
                 cut += 1;
-                let kept = facts
-                    .strip_suffix('…')
-                    .unwrap_or_else(|| panic!("{line:?}"));
+                let kept = facts.strip_suffix('…').unwrap_or(facts);
                 let kept = kept.trim_end_matches([' ', '·', ',']);
                 assert!(
                     kept.is_empty()
                         || [
-                            "5 party",
-                            "5 party · Cinder Tyrant",
-                            "5 party · Cinder Tyrant · 2 × Ember Cultist"
+                            "Cinder Tyrant · 2 × Ember Cultist, 1 × Wolf",
+                            "Cinder Tyrant · 2 × Ember Cultist",
+                            "Cinder Tyrant",
                         ]
                         .iter()
                         .any(|unit| kept.replace(" · ", " ") == unit.replace(" · ", " ")),
-                    "at {width} px a member was cut inside: {line:?}"
+                    "at {width} px a member was cut inside, or before the party's size: {line:?}"
                 );
             }
         }
         assert!(whole > 0 && cut > 0, "whole {whole}, cut {cut}");
-        // Review of PR 299: one creature whose XP is not known, at a width where the named
-        // reason fits alone but not after the summary: the summary gives way, the name shows.
+        // Review of PR 299: one input that is not known, at a width where the named reason fits
+        // alone but not after the summary: the summary gives way, the name shows. Round 28 FB6:
+        // that holds for a name the summary does not hold (a character's level); a creature the
+        // summary already names stays whole in it, with the short reason after it.
         use crate::difficulty::{Difficulty, Missing, Unknown};
-        let nameless = Difficulty {
+        let unknown = |what| Difficulty {
             xp: 0,
             rating: None,
             unknown: 1,
             missing: Some(Missing {
-                what: Unknown::Xp,
+                what,
                 at: vec![0],
                 names: vec!["Nameless Thing".into()],
             }),
         };
         let one = "1 × Nameless Thing";
-        let mut painted = None;
-        let mut widths = None;
-        for _ in 0..3 {
-            let output = ctx.run(Default::default(), |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    let font = Type::Small.font(ui);
-                    let wide =
-                        |text: &str| design::number_width(ui, &text.replace(' ', "\u{a0}"), &font);
-                    let alone = wide("XP not known: Nameless Thing");
-                    let after = wide(&format!("{one} · XP not known: N…"));
-                    let width = (alone + after) / 2.0;
-                    widths = Some((alone, after, width, wide(one)));
-                    ui.scope(|ui| {
-                        ui.set_width(width);
-                        planned_summary(ui, one, Some(&nameless));
+        let wolf = "1 × Ember Wolf";
+        let case = |summary: &str, difficulty: &Difficulty, reason: &str| {
+            let mut painted = None;
+            let mut widths = None;
+            for _ in 0..3 {
+                let output = ctx.run(Default::default(), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let font = Type::Small.font(ui);
+                        let wide = |text: &str| {
+                            design::number_width(ui, &text.replace(' ', "\u{a0}"), &font)
+                        };
+                        let alone = wide(&format!("{reason}: Nameless Thing"));
+                        let after = wide(&format!("{summary} · {reason}: N…"));
+                        let width = (alone + after) / 2.0;
+                        widths = Some((alone, after, width, wide(summary)));
+                        ui.scope(|ui| {
+                            ui.set_width(width);
+                            planned_summary(ui, summary, Some(difficulty));
+                        });
                     });
                 });
-            });
-            painted = output.shapes.iter().find_map(|shape| match &shape.shape {
-                egui::Shape::Text(text) if text.galley.job.text.contains("XP") => {
-                    Some(text.galley.job.text.replace('\u{a0}', " "))
-                }
-                _ => None,
-            });
-        }
-        let (alone, after, width, summary_width) = widths.unwrap();
-        assert!(alone < width && width < after && summary_width < width);
+                painted = output.shapes.iter().find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text.contains("not known") => {
+                        Some(text.galley.job.text.replace('\u{a0}', " "))
+                    }
+                    _ => None,
+                });
+            }
+            let (alone, after, width, summary_width) = widths.unwrap();
+            assert!(alone < width && width < after && summary_width < width);
+            (painted, width)
+        };
+        let (painted, width) = case(wolf, &unknown(Unknown::Level), "Level not known");
         assert!(
             painted
                 .as_deref()
-                .is_some_and(|line| line.contains("XP not known: Nameless")),
+                .is_some_and(|line| line.contains("Level not known: Nameless")),
             "at {width} px: {painted:?}"
+        );
+        let (painted, width) = case(one, &unknown(Unknown::Xp), "XP not known");
+        assert_eq!(
+            painted.as_deref(),
+            Some("1 × Nameless Thing · XP not known"),
+            "FB6: the member stays whole and is not named twice, at {width} px"
         );
     }
 
@@ -5624,8 +5754,8 @@ mod tests {
                 shown(harness, "Open: Captain Varra")
             })
             .expect("scene-model-steady");
-        // Two scenes, each with its box; the plain list line has no row. A done scene does not
-        // count among the rows still to come.
+        // Two scenes, each with its box; the plain list line has no row. Round 28 FD3: the
+        // heading counts every row under it, a done scene too (it said 2 for these 3 rows).
         assert!(harness.query_by_label("Open: Captain Varra").is_some());
         assert!(
             harness
@@ -5633,7 +5763,7 @@ mod tests {
                 .is_some()
         );
         assert!(harness.query_by_label_contains("Hobb").is_none());
-        assert!(harness.query_by_label("TONIGHT 2").is_some());
+        assert!(harness.query_by_label("TONIGHT 3").is_some());
 
         // An edit on disk a moment before is in the words that a tick changes. One character.
         let outside = read().replace(
