@@ -2499,6 +2499,26 @@ pub fn register_row(ui: &Ui, rect: Rect) {
     keep_for_pass(ui, ROW_RECTS, rect);
 }
 
+/// Where `register_field_action` keeps this pass's pairs: a field's id and the id of the button
+/// that the field's part draws inside it (the search field's `Clear`).
+pub const FIELD_ACTIONS: &str = "design_field_actions";
+
+/// A field part registers the button it draws inside its field (the search field's `Clear`),
+/// so the gate's `no-overlap` check knows that pair, and only that pair, is meant.
+pub(super) fn register_field_action(ui: &Ui, field: Id, action: Id) {
+    keep_for_pass(ui, FIELD_ACTIONS, (field.value(), action.value()));
+}
+
+/// The pairs `register_field_action` registered in the last pass: (field id, button id), as
+/// AccessKit ids.
+pub fn field_actions(ctx: &egui::Context) -> Vec<(u64, u64)> {
+    let pass = ctx.cumulative_pass_nr();
+    ctx.data(|data| data.get_temp::<(u64, Vec<(u64, u64)>)>(Id::new(FIELD_ACTIONS)))
+        .filter(|(kept, _)| kept + 1 >= pass)
+        .map(|(_, pairs)| pairs)
+        .unwrap_or_default()
+}
+
 /// The rects `register_row` registered so far in this pass.
 pub(super) fn rows_this_pass(ctx: &egui::Context) -> Vec<Rect> {
     let pass = ctx.cumulative_pass_nr();

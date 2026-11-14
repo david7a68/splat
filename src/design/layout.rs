@@ -585,7 +585,9 @@ impl FieldId {
                     .max_rect(at)
                     .layout(Layout::left_to_right(Align::Center)),
             );
-            if search_clear().show(&mut inside).clicked() {
+            let clear = search_clear().show(&mut inside);
+            super::components::register_field_action(ui, field.id, clear.id);
+            if clear.clicked() {
                 text.clear();
                 field.request_focus();
                 cleared = true;
