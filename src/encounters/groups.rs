@@ -1264,9 +1264,10 @@ impl Encounters {
                 }
             } else {
                 let path = draft.path.clone();
-                self.discarded_group = self.group_draft.take();
+                self.discarded_group.set(self.group_draft.take());
                 self.stamp_kept(super::KeptResult::GroupDiscarded);
-                self.group_draft = GroupDraft::open(&campaign.path, &path).ok();
+                self.group_draft
+                    .set(GroupDraft::open(&campaign.path, &path).ok());
                 self.error = None;
             }
         }
@@ -2337,7 +2338,7 @@ impl Encounters {
 
     /// The plan shows again. The group stays where the DM left it.
     fn close_group_in_plan(&mut self) {
-        self.group_draft = None;
+        self.group_draft.set(None);
         self.group_in_plan = false;
         self.message = None;
     }
@@ -2645,15 +2646,15 @@ impl Encounters {
         let draft = self.group_draft.take().expect("the editor has a draft");
         if draft.baseline.is_some() {
             match GroupDraft::open(&active.path, &draft.path) {
-                Ok(reopened) => self.group_draft = Some(reopened),
+                Ok(reopened) => self.group_draft.set(Some(reopened)),
                 Err(e) => self.error = Some(e),
             }
         }
-        self.discarded_group = Some(draft);
+        self.discarded_group.set(Some(draft));
         // The Session plan's footer reads this order (package S's caller).
         self.discarded_group_order = Some(design::ResultOrder::issue());
         self.stamp_kept(super::KeptResult::GroupDiscarded);
-        self.discarded = None;
+        self.discarded.set(None);
     }
 
     /// The group editor's body, in the pane: the members and Add creatures, as columns or tabs.
@@ -3833,7 +3834,7 @@ mod tests {
         let mut page = super::super::Encounters {
             // Not a folder: nothing is written.
             active: Some(campaign(&owner.root)),
-            group_draft: Some(std::mem::replace(&mut state.0, GroupDraft::new())),
+            group_draft: Some(std::mem::replace(&mut state.0, GroupDraft::new())).into(),
             member_results: std::mem::take(&mut state.2),
             ..Default::default()
         };
@@ -3899,7 +3900,7 @@ mod tests {
         saved.save(&active, &[]).unwrap();
         let mut page = Encounters {
             active: Some(active.clone()),
-            group_draft: Some(GroupDraft::open(dir.path(), &saved.path).unwrap()),
+            group_draft: Some(GroupDraft::open(dir.path(), &saved.path).unwrap()).into(),
             ..Default::default()
         };
         // Remove as the member list does: the member's data, then the mark.
@@ -3935,8 +3936,10 @@ mod tests {
             "Undo discard shows the member result again, with its Undo"
         );
         // Review 2 of PR 347: the result lives while its draft can come back, and ends when it
-        // cannot. Discard again: the sweep keeps it. Edit the clean draft: Undo discard expires,
-        // and the sweep ends the result. Repeated, no entry builds up.
+        // cannot, through `poll` as the app calls it. Discard again: it is kept. Edit the clean
+        // draft: Undo discard expires, and the result ends. Repeated, no entry builds up.
+        let ctx = egui::Context::default();
+        let campaigns = crate::campaigns::Campaigns::default();
         for _ in 0..2 {
             let draft = page.group_draft.as_mut().unwrap();
             let owner = super::super::MemberOwner {
@@ -3952,7 +3955,7 @@ mod tests {
             draft.touch();
             page.record_member_results();
             page.discard_group_draft(&active);
-            page.end_unreachable_results();
+            page.poll(&ctx, &campaigns);
             assert!(
                 page.member_results.get(&owner).is_some(),
                 "kept while Undo discard can bring its draft back"
@@ -3960,14 +3963,14 @@ mod tests {
             page.group_draft.as_mut().unwrap().name = "Edited".into();
             let _ = page.kept_results(false);
             assert!(page.discarded_group.is_none(), "Undo discard expired");
-            page.end_unreachable_results();
+            page.poll(&ctx, &campaigns);
             assert!(
                 page.member_results.get(&owner).is_none(),
                 "its draft cannot come back: the result ends"
             );
             assert!(page.member_results.is_empty(), "no entry is left behind");
             let reopened = GroupDraft::open(dir.path(), &saved.path).unwrap();
-            page.group_draft = Some(reopened);
+            page.group_draft.set(Some(reopened));
         }
     }
 
@@ -4319,7 +4322,7 @@ mod tests {
             refusal_watch: true,
             error: Some(error),
             snapshot: Some(snapshot),
-            group_draft: Some(group),
+            group_draft: Some(group).into(),
             ..Default::default()
         };
         encounters.group_draft.as_mut().unwrap().name = "Scouts".into();
@@ -4442,7 +4445,7 @@ mod tests {
         let scout = creature(dir.path(), "Scout");
         let ctx = egui::Context::default();
         let mut encounters = Encounters {
-            group_draft: Some(GroupDraft::new()),
+            group_draft: Some(GroupDraft::new()).into(),
             ..Encounters::default()
         };
         let draft = encounters.group_draft.as_mut().unwrap();
@@ -4479,7 +4482,7 @@ mod tests {
         let ctx = egui::Context::default();
         let mut encounters = Encounters {
             snapshot: Some(Snapshot::load(&campaign, &[]).unwrap()),
-            group_draft: Some(GroupDraft::open(dir.path(), &draft.path).unwrap()),
+            group_draft: Some(GroupDraft::open(dir.path(), &draft.path).unwrap()).into(),
             ..Encounters::default()
         };
         encounters.group_draft.as_mut().unwrap().name = "Scouts".into();
@@ -4574,7 +4577,7 @@ mod tests {
         let mut draft = GroupDraft::for_encounter(owner);
         draft.name = "Wave".into();
         draft.add(scout);
-        encounters.group_draft = Some(draft);
+        encounters.group_draft.set(Some(draft));
         encounters.save_group_draft(&ctx, &campaign, &[]);
         assert_eq!(encounters.error, None);
         assert_eq!(encounters.saved_for_plan, None);
@@ -4584,11 +4587,13 @@ mod tests {
     #[test]
     fn an_encounter_draft_left_open_does_not_hide_a_plan_groups_undo() {
         let mut encounters = Encounters {
-            draft: Some(Draft::new()),
+            draft: Some(Draft::new()).into(),
             ..Encounters::default()
         };
         encounters.new_group_in_plan();
-        encounters.discarded_group = encounters.group_draft.take();
+        encounters
+            .discarded_group
+            .set(encounters.group_draft.take());
         assert!(encounters.group_discarded_in_plan());
         encounters.undo_group_discard_in_plan();
         assert!(encounters.group_open_in_plan());
@@ -4599,7 +4604,9 @@ mod tests {
         let mut encounters = Encounters::default();
         encounters.new_group_in_plan();
         encounters.group_draft.as_mut().unwrap().name = "Ash Pack".into();
-        encounters.discarded_group = encounters.group_draft.take();
+        encounters
+            .discarded_group
+            .set(encounters.group_draft.take());
         assert!(encounters.group_discarded_in_plan());
         assert!(!encounters.group_open_in_plan());
         encounters.undo_group_discard_in_plan();
@@ -5313,7 +5320,7 @@ mod tests {
         let editor = Encounters {
             // The draft's results are the campaign's (`EditorOwner`).
             active: Some(campaign.clone()),
-            draft: Some(draft),
+            draft: Some(draft).into(),
             snapshot: Some(Snapshot::load(&campaign, &[]).unwrap()),
             ..Default::default()
         };
@@ -5404,7 +5411,7 @@ mod tests {
         harness.get_by_label("1 line differs");
         drop(harness);
         let editor = Encounters {
-            group_draft: Some(group),
+            group_draft: Some(group).into(),
             snapshot: Some(Snapshot::load(&campaign, &[]).unwrap()),
             ..Default::default()
         };
