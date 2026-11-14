@@ -1560,8 +1560,11 @@ the block's edge, and a total of three digits gives up `=` there. Each place hol
 ends in `…`, and hover keeps the roll's whole line. No control of the dock moves when a total comes, changes or goes.
 Fit whole words, retain a distinguishing last word or copy number or
 letter, end shortened names with an ellipsis and drop trailing joining words: `Seraphina… Bell`, `Cinder… 2`.
-The dock's name wraps to its two lines before it ends in `…`; a first word longer than both lines is cut by letters,
-within the slot, so no control moves. Hover and accessibility keep full names. A row at 0 HP with the panel hidden has `Death saves` first on the
+The dock's name wraps to its two lines before it ends in `…`. R15: the name wraps at whole words onto at most two
+lines; a word that stands alone on its line and still does not fit that line is cut by letters with `…`, on the first
+line or the second (`Seraphina` / `Thornwood-Ash…`), with as many letters as fit; no other cut falls inside a word.
+A second line that would hold no word of the name takes the next word that way. All within the slot, so no control
+moves. Hover and accessibility keep full names. A row at 0 HP with the panel hidden has `Death saves` first on the
 action tiles' line above the dock, so no control of the dock moves and the name keeps its slot.
 
 ### Effects and turn reminders
@@ -1598,7 +1601,8 @@ total's hover say `Rolled 2 for Cinder Drake: Fire Breath still spent.` until th
 Undo. The row's
 hover and accessible name hold every whole word. After damage to a row marked Conc, `Conc save DC 12` ends
 its second line until the next step, only in the room that the effects leave; else only in the hover and the
-accessible name. In Conditions an official condition's count is on its tick, `✓ Frightened 10`, while the
+accessible name. Right after the row's own `Conc` mark it says `save DC 12` (`✧ Conc · save DC 12`); the hover and
+the accessible name keep `Conc save DC 12`. In Conditions an official condition's count is on its tick, `✓ Frightened 10`, while the
 grid fits its room; else it is listed under Other effects, which lists other words with their whole words. The
 tab's help says `No HP, AC or roll changes by itself. A time you type counts down at the end of that creature’s turn: Bless 10 rounds goes from 10 to 9.` An
 ended run shows them as words, and a click does nothing.
@@ -1682,10 +1686,11 @@ name, after its conditions (and after its state word where the row has no state 
 They are the chance to hit it while an attack is armed, with the way it rolls (`51% to hit · advantage`), then the
 result against it, a plain comparison with no hit or miss verdict (`17 vs AC 13 · 10 damage`). They take the longest
 form that fits whole, dropping words before the result first; the result's last two parts (the comparison or save
-outcome, and the damage with its `(half)`) never drop. A roll result does not change a row's height: when the result
-does not fit whole after the effects and the save DC, the row without them shows it whole if it can; else the words are
-cut by whole words after the conditions. Only where not one word fits there do they take a line of their own under
-the conditions, at the name's edge, and that row grows by the line. The row's accessible name holds them whole. Roll words
+outcome, and the damage with its `(half)`) never drop. A roll result is never cut, and it does not change a row's height while it fits: when the
+result does not fit whole after the effects and the save DC, the row without them shows it whole if it can; else
+condition words give way into the row's `N more` until it fits. State marks (Bloodied, Conc) never give way: a DM who
+does not see Conc misses a concentration save. Only when its two parts fit in none of these does it
+take a line of its own under the conditions, at the name's edge, and that row grows by the line. The row's accessible name holds them whole. Roll words
 never move a row's columns. A save's creature targets show their roll in the AC
 cell. After `Roll damage`, each target says its own result, from the amount Enter gives it (`Saved · 1 damage
 (half)`, `Failed · 3 damage`), and keeps it after Enter. Enter finishes the save: its tile disarms, the hint and `Roll
@@ -1778,16 +1783,16 @@ member of a shared-roll block. Keep tie details in Arrivals and Log, outside the
 
 ### Saving and closing
 
-Recovery copies keep the encounter name and preserve the other file. Start their second line with `Copy 2`, before `Played last`, round and state. Only file names keep the UTC save-time suffix.
+Recovery copies keep the encounter name and preserve the other file. Start their second line with `Copy 2`, before `Closed last`, round and state. Only file names keep the UTC save-time suffix.
 The last closed run owns primary Resume, unless the encounter's editor holds unsaved changes (then `Save
-encounter` is primary). `Played last` follows a copy number; Changed on disk marks a preserved disk version, after the copy number when present. Keep last-change wording from the close dialog. Saved rows use relative time today and yesterday,
+encounter` is primary). `Closed last` (the run closed last, also in Setup; it says what the value is) follows a copy number; Changed on disk marks a preserved disk version, after the copy number when present. Keep last-change wording from the close dialog. Saved rows use relative time today and yesterday,
 then a short UTC date. Edit stays for recovery copies whose encounter exists; reserve an empty slot otherwise.
 Measure actions before assigning paused-row text width. Saved time follows turn without a full stop. State
 words come from one function: Setup, Setup · Paused, Round 2, Round 2 · Paused, Ended · Round 2. An open run
 with other unfinished copies names its copy beside Saved and in rail hover.
 
 A disconnected run has Connect to sync on its header only; blocked footer Sync party uses that cause on hover.
-End encounter… shortens to End… before it moves into a menu. Keep End… visible while it fits, including on recovery copies. Hover and accessibility keep End encounter…. Keys keeps its word beside Lookup, Notes and a wide panel. With Keys on, the panel's title is `Keyboard commands`, and the
+End encounter… shortens to End… before it moves into a menu. Keep End… visible while it fits, including on recovery copies. Hover and accessibility keep End encounter…. Keys keeps its word beside Lookup, Notes and a wide panel. With Keys on, the panel's title is `This fight · Keys`, as the other fight panels name theirs, and the
 list has no label of its own. Saved and Undo
 align with the roster's right edge. The footer uses error status when saving stops. Ended runs put short
 conflict and pending-change counts below blocked Close after sync at the panel's right edge, with an `L` gap
@@ -1813,7 +1818,7 @@ labels (`Undo: 2 loot rolls`), with the full action in hover and its accessible 
 secondary `Continue fight` on its own line under Read-only, blocked with `Close the open run first.` while another
 run is open. Continue fight is offered only for the fight that was played last (`README.md`, Running an encounter
 as DM). For any other ended fight the control is absent, and one muted `Small` sentence stands in its place and says
-why: `A later fight or rest was played. Start a new run to play this one again.` It is a sentence and not a blocked
+why: `A later fight or rest was played, so this fight cannot go on. Start a new run to play it again.` It is a sentence and not a blocked
 button, because no step in this view makes the control work. In the ended header the sentence wraps to at most
 `15 × L` wide, so Close run and the title keep their places; on the two-line header it follows Undo on the second
 line. In History it is the line under Read-only, `S` below it and `M` above `FINAL STATE`. Neither is modal, and Undo names the step: `Undo: continue fight`. After Continue fight, the
