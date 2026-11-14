@@ -1416,7 +1416,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/encounters/groups.rs", 1),
             ("src/library.rs", 1),
             ("src/lookup.rs", 2),
-            ("src/sessions/page.rs", 3),
         ],
     ),
 ];
