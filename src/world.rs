@@ -1589,14 +1589,6 @@ impl Change {
         self.kind.undo_step(note)
     }
 
-    /// For the encounter editor's own footer (package B), which still draws by hand.
-    pub(crate) fn identity_undo_label(&self) -> &'static str {
-        match self.kind {
-            ChangeKind::Identity(noun) => noun.undo_label(),
-            _ => "Undo changes",
-        }
-    }
-
     pub(crate) fn message(&self) -> &str {
         &self.word
     }
@@ -1810,14 +1802,6 @@ impl IdentityNoun {
 
     fn result(self, filename: &str) -> String {
         format!("{filename} is now a separate {}.", self.word())
-    }
-
-    /// The Undo label that the encounter editor's footer still draws by hand.
-    fn undo_label(self) -> &'static str {
-        match self {
-            Self::Note => "Undo separate note",
-            Self::Entry => SEPARATE_ENTRY_UNDO,
-        }
     }
 
     /// What a separate note's Undo names after its verb: `Undo separate note`.
@@ -5562,7 +5546,10 @@ mod tests {
             before
         );
         assert_eq!(undo.message(), "Rook copy.md is now a separate note.");
-        assert_eq!(undo.identity_undo_label(), "Undo separate note");
+        assert_eq!(
+            undo.undo_step("Rook copy").label(),
+            "Undo separate note"
+        );
         assert_eq!(Entry::parse("copy.md", &undo.after).unwrap().id, id);
         let repaired = Entry::parse("copy.md", &undo.after).unwrap();
         assert_eq!(repaired.name, "Rook copy");
