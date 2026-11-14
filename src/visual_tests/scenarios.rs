@@ -17459,11 +17459,15 @@ pub mod encounter_groups {
             );
         });
         d.check_tab_order("run, group panel");
+        // R1: the heading's line is the fight after; the group's own XP is its hover and
+        // accessible description, and the member count is on the line where it fits.
+        let members = d.at_size(DEFAULT, |d| {
+            d.painted_in(egui::Rect::EVERYTHING).contains("3 members")
+        });
         d.observe(
             "T13.1",
-            d.has_containing("3\u{a0}×\u{a0}Goblin\u{a0}Warrior")
-                && d.visible_text("3 members · XP 150"),
-            "The panel lists each group's members and total XP",
+            d.has_containing("3\u{a0}×\u{a0}Goblin\u{a0}Warrior") && members,
+            "The panel lists each group's members, and the line says the fight after",
         );
         // T5.7 in Arrivals: after a group's XP, what the fight becomes when it joins. Bridge
         // Ambush's three creatures and the goblins are far below the party's Low 2,800.
@@ -17478,7 +17482,13 @@ pub mod encounter_groups {
                 .filter_map(|node| {
                     let words = d.painted_in(node.shown).replace('\u{a0}', " ");
                     let at = words.find("Fight after: ")?;
-                    Some((node.name.clone(), words[at..].to_owned()))
+                    let word = words[at..]
+                        .split(crate::design::icons::DRAG)
+                        .next()
+                        .unwrap_or_default()
+                        .trim()
+                        .to_owned();
+                    Some((node.name.clone(), word))
                 })
                 .collect::<Vec<_>>()
         };
@@ -17540,9 +17550,14 @@ pub mod encounter_groups {
             !d.is_disabled(&add_group(GROUP_LOST)),
             "A group with one valid member has a working Add button",
         );
+        // R1: the member count is the first to give way, so it is read at 1200.
+        let can_join = d.at_size(DEFAULT, |d| {
+            d.painted_in(egui::Rect::EVERYTHING)
+                .contains("1 of 3 can join")
+        });
         d.observe(
             "T13.1",
-            d.visible_text("1 of 3 can join")
+            can_join
                 && d.has_containing("not in this campaign’s packages")
                 && d.has_containing("Cinder Wolf · line\u{a0}14: Maximum HP would become −28."),
             "A group counts a creature it cannot find, and gives every reason it cannot be added",

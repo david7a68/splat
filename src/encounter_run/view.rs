@@ -3788,7 +3788,10 @@ impl Run {
                 .map_or(text, |rest| rest.trim_start_matches(" · "))
                 .to_owned()
         };
-        let room = grip.rect.width() - heading_width - design::L - status_room;
+        // The status words take their room only after the line has its own (R1: the line's
+        // `Fight after` never gives way to them); with no room left they are not in the heading,
+        // as before.
+        let room = grip.rect.width() - heading_width - design::L;
         let fitted = fight.as_ref().and_then(|line| {
             line.fit(|text| {
                 design::number_width(ui, &after_name(text), &Type::Small.font(ui)) <= room
@@ -3797,7 +3800,18 @@ impl Run {
         // A group with no word keeps its totals, where they fit.
         let totals_in_heading = fitted.is_none()
             && design::number_width(ui, &totals_text, &Type::Small.font(ui)) <= room;
-        let status_in_heading = !status.is_empty();
+        let line_width = fitted.as_ref().map_or_else(
+            || {
+                if totals_in_heading {
+                    design::number_width(ui, &totals_text, &Type::Small.font(ui))
+                } else {
+                    0.0
+                }
+            },
+            |fitted| design::number_width(ui, &after_name(&fitted.text()), &Type::Small.font(ui)),
+        );
+        let status_in_heading = !status.is_empty() && line_width + status_room <= room;
+        let status_room = if status_in_heading { status_room } else { 0.0 };
         let shown = rating.as_ref().and_then(|fight| fight.rating.as_ref());
         // A pointer's way to do what the Add button does, so the keyboard does not stop here.
         grip.widget_info(|| {
