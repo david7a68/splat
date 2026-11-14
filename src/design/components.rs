@@ -3436,13 +3436,6 @@ fn dialog_width<R>(
         .inner
 }
 
-/// An image at full size, within the window, its size not known. Returns true when the DM closes
-/// it, by a click or Escape. Use `design::popups::image_viewer` with an `ImageSize`: Clippy bans
-/// this one outside `src/design/`.
-pub fn image_viewer(ctx: &egui::Context, name: &str, uri: &str) -> bool {
-    super::popups::image_viewer(ctx, name, uri, super::popups::ImageSize::Unknown)
-}
-
 /// The width of a panel beside a page: Lookup, or the run's side panel.
 pub fn side_panel_width(available: f32) -> f32 {
     (available * 0.36).clamp(PANEL_MIN_WIDTH, PANEL_MAX_WIDTH)
