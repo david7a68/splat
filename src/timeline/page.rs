@@ -135,10 +135,33 @@ fn matches(filter: Filter, search: &str, session: Option<Uuid>, event: &Event, d
 /// Row 123: the campaign's fights and groups by name, which a check result on Timeline can offer
 /// to the plan of its journey's session. The app gives them each frame, as it gives the Session
 /// page its `Plan`.
-#[derive(Clone, Debug, Default, PartialEq)]
+/// One copy for each read of the encounters (`revision`); a clone shares it.
+#[derive(Clone, Debug, Default)]
 pub struct PlanNames {
-    pub fights: Vec<String>,
-    pub groups: Vec<String>,
+    /// The read of the campaign's encounters these names come from (`Encounters::plan_revision`).
+    pub revision: Option<Uuid>,
+    pub fights: std::sync::Arc<[String]>,
+    pub groups: std::sync::Arc<[String]>,
+}
+
+impl PlanNames {
+    pub fn new(revision: Option<Uuid>, fights: Vec<String>, groups: Vec<String>) -> Self {
+        #[cfg(test)]
+        PLAN_NAMES_MADE.with(|made| made.set(made.get() + 1));
+        Self {
+            revision,
+            fights: fights.into(),
+            groups: groups.into(),
+        }
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many times the plan's names were copied from the encounters (row 123, point 4).
+    pub static PLAN_NAMES_MADE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// How many times a session plan was read for Timeline's offers or a plan line's write.
+    pub static JOURNEY_PLAN_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// A session, as the timeline knows it.
@@ -197,6 +220,9 @@ pub struct TimelinePage {
     pub tables: Option<std::sync::Arc<crate::loot_editor::Sources>>,
     /// Row 123: the campaign's fights and groups by name, for a check result's plan offer.
     pub plan_names: PlanNames,
+    /// Row 123, point 5: why the last plan line's Undo failed, while its journey's block is not
+    /// in view. The next act on checks or the next Undo ends it.
+    plan_fault: Option<String>,
     focus_length: bool,
     /// What the DM typed in a journey's checks, and each journey's last result with its Undo.
     checks: checks::State,
@@ -1026,8 +1052,14 @@ impl TimelinePage {
                     }
                 }
                 ListAct::UndoPlanLine => {
-                    if let Some((act, words)) = notes.undo_plan_line() {
-                        self.checks.failed(&act, words);
+                    self.plan_fault = None;
+                    // Row 123, point 5: the fault keeps its journey: that journey's open block,
+                    // else this footer.
+                    if let Some((journey, act, words)) = notes.undo_plan_line()
+                        && !(self.selected.as_deref() == Some(journey.as_str())
+                            && self.checks.failed_for(&journey, &act, words.clone()))
+                    {
+                        self.plan_fault = Some(words);
                     }
                 }
                 ListAct::File(act) => file_act(book, act, press.ticket),
@@ -1042,7 +1074,7 @@ impl TimelinePage {
         frame: &'f PaneFrame,
         ui: &egui::Ui,
         book: &Book,
-        notes: &crate::sessions::page::Sessions,
+        notes: &mut crate::sessions::page::Sessions,
         open: Option<&str>,
         offer: Option<&crate::sessions::page::LinkOffer>,
     ) -> Messages<'f, ListAct> {
@@ -1051,6 +1083,11 @@ impl TimelinePage {
             messages.kept(line);
         }
         notes.plan_line_result(&mut messages, ListAct::UndoPlanLine);
+        // Row 123, point 5: a plan line's Undo that failed while its journey's block is not in
+        // view says why here.
+        if let Some(fault) = &self.plan_fault {
+            messages.outcome(design::outcome::Outcome::Refused(as_sentence(fault)));
+        }
         if let Some(offer) = offer {
             messages.outcome(offer.notice(ListAct::UpdateLinks));
         }
@@ -1626,6 +1663,7 @@ impl TimelinePage {
         checks::note_taken(book, length_taken);
         if let Some(act) = checks_act {
             self.checks.clear_problem();
+            self.plan_fault = None;
             if act == checks::Act::Start {
                 self.focus_length = book.events[index].duration.trim().is_empty();
             }

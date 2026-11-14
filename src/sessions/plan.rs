@@ -2076,34 +2076,62 @@ impl JourneyPlan {
     }
 
     /// Read from the plan's words: the fights still to come take one link each, as the plan's
-    /// rows do (`plan_links`), and a linked group is to come.
+    /// rows do (`plan_links`), and a linked group is to come. The offer and the write ask this
+    /// one reader (row 123, point 3).
     fn read(
         body: &str,
         events: &[timeline::Event],
         session: Option<Uuid>,
-        names: &PlanNames,
+        fights: &[String],
+        groups: &[String],
     ) -> Self {
-        let fights = plan_fight_stubs(&names.fights);
-        let mut coming: Vec<String> = plan_links(body, events, session, &fights)
+        #[cfg(test)]
+        timeline::page::JOURNEY_PLAN_READS.with(|reads| reads.set(reads.get() + 1));
+        let stubs = plan_fight_stubs(fights);
+        let mut coming: Vec<String> = plan_links(body, events, session, &stubs)
             .into_iter()
             .filter(|(_, _, waiting)| *waiting)
             .map(|(_, fight, _)| fight.name.clone())
             .collect();
         coming.extend(linked_names(body).into_iter().filter(|name| {
-            !names
-                .fights
-                .iter()
-                .any(|fight| fight.eq_ignore_ascii_case(name))
-                && names
-                    .groups
-                    .iter()
-                    .any(|group| group.eq_ignore_ascii_case(name))
+            !fights.iter().any(|fight| fight.eq_ignore_ascii_case(name))
+                && groups.iter().any(|group| group.eq_ignore_ascii_case(name))
         }));
         Self {
-            known: names.fights.iter().chain(&names.groups).cloned().collect(),
+            known: fights.iter().chain(groups).cloned().collect(),
             coming,
         }
     }
+}
+
+/// Row 123: `Plan “<name>”`, done: the journey and the check it was clicked on, the note it
+/// wrote (its session and file) and that note's Undo. It lasts while the note's words are what
+/// the act left, as every note act's Undo does.
+struct PlannedLine {
+    journey: String,
+    chosen: checks::Planned,
+    note: Uuid,
+    path: std::path::PathBuf,
+    undo: NoteUndo,
+}
+
+/// Row 123, point 2: a session note that no draft holds, as the periodic disk check last read
+/// it: its campaign and file, its words, and a count that changes only when the words do.
+struct Watched {
+    campaign: Option<Uuid>,
+    path: std::path::PathBuf,
+    body: Option<String>,
+    generation: u64,
+    /// The disk check (`Sessions::last_check`) that read it.
+    tick: Option<Instant>,
+}
+
+/// Where a note's words come from for Timeline: the open draft (its revision), or the file as
+/// the last disk check read it (its generation).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NoteSource {
+    Draft(u64),
+    Disk(u64),
 }
 
 /// Fights known only by their names: what `plan_links` and `plan_first` read of a fight.
@@ -2119,6 +2147,43 @@ fn plan_fight_stubs(names: &[String]) -> Vec<PlanFight> {
             difficulty: Default::default(),
         })
         .collect()
+}
+
+/// What a plan line's write did.
+enum Written {
+    /// The fight is already to come in the words as they are now: nothing was written.
+    Already,
+    Done(Result<NoteUndo, ActFault>),
+}
+
+/// Row 123, point 3: `Plan “<name>”`'s line into `draft`, through the note's checked path
+/// (`Apply::Now`: it follows the disk first). The words as they are then decide, by the offer's
+/// own reader: a fight still to come there gets no second line.
+fn write_plan_line(
+    draft: &mut crate::sessions::Draft,
+    note: Uuid,
+    book: &Book,
+    journey: &str,
+    chosen: &checks::Planned,
+    fights: &[PlanFight],
+    groups: &[String],
+) -> Written {
+    let line = road_plan_line(book, journey, chosen);
+    let names: Vec<String> = fights.iter().map(|fight| fight.name.clone()).collect();
+    let mut already = false;
+    let written = draft.apply(note, Apply::Now, |words| {
+        let plan = JourneyPlan::read(words, &book.events, Some(note), &names, groups);
+        if plan.get(&chosen.name) == Some(true) {
+            already = true;
+            return None;
+        }
+        Some(plan_first(words, &line, &book.events, Some(note), fights))
+    });
+    if already {
+        Written::Already
+    } else {
+        Written::Done(written)
+    }
 }
 
 /// Each fight still to come in the plan, in order, by its name, with the day it is played on
@@ -2205,7 +2270,7 @@ pub(super) struct Travel {
     /// `Plan “<name>”`: the journey, the name and the check it was clicked on, and the note's
     /// Undo. It lasts while the note's words are what the act left, as every note act's Undo
     /// does; a page change keeps it.
-    planned: Option<(String, checks::Planned, NoteUndo)>,
+    planned: Option<PlannedLine>,
     /// When the line in `planned` was written: its result's footer order.
     planned_order: design::ResultOrder,
     /// The fights still to come with their days on the road, while the note, the Timeline and
@@ -2214,16 +2279,22 @@ pub(super) struct Travel {
     /// Row 123: the plan that Timeline's open journey offers to, while its session, its note,
     /// the Timeline and the campaign's names are as they were.
     journey_plan: Option<(JourneyKey, Arc<JourneyPlan>)>,
+    /// Row 123, point 2: the session notes Timeline reads that no draft holds, by session.
+    watched: BTreeMap<Uuid, Watched>,
+    /// The last generation a watched note was given.
+    generation: u64,
 }
 
-/// What Timeline's view of a session plan is read from: the session, the note's words (the open
-/// draft's revision, or the file's time when no draft holds it), the Timeline's count of
-/// changes, and the campaign's names.
+/// What Timeline's view of a session plan is read from: the campaign, the session and its file,
+/// the note's words (`NoteSource`), the Timeline's count of changes, and the read of the
+/// campaign's names.
 type JourneyKey = (
+    Option<Uuid>,
     Uuid,
-    (Option<u64>, Option<std::time::SystemTime>),
+    std::path::PathBuf,
+    NoteSource,
     u64,
-    PlanNames,
+    Option<Uuid>,
 );
 
 /// What the plan's days on the road are read from: the session, the note's revision, the
@@ -2797,22 +2868,116 @@ impl Sessions {
         days
     }
 
-    /// Take back the plan line of `Plan “…”`, while the note is as that act left it. A note that
-    /// changed since gives the act and its fault, for the block where the DM pressed Undo (the
-    /// plan's or Timeline's).
-    pub fn undo_plan_line(&mut self) -> Option<(checks::Act, String)> {
-        let (Some((_, line, undo)), Some(draft)) = (self.travel.planned.take(), &mut self.draft)
-        else {
-            return None;
+    /// Take back the plan line of `Plan “…”`, while the note is as that act left it: through the
+    /// open draft when it is that note, else by the note's own checked path on its file. A note
+    /// that changed since gives the act's journey, the act and its fault, for the block of that
+    /// journey (row 123, point 5).
+    pub fn undo_plan_line(&mut self) -> Option<(String, checks::Act, String)> {
+        let planned = self.travel.planned.take()?;
+        let result = match &mut self.draft {
+            Some(draft) if draft.path == planned.path => planned.undo.undo(draft),
+            _ => match crate::sessions::Draft::open(&planned.path) {
+                Ok(mut other) => {
+                    let result = planned.undo.undo(&mut other);
+                    self.saw(planned.note, &planned.path, &other.body);
+                    result
+                }
+                Err(_) => Err(ActFault::Missing),
+            },
         };
-        undo.undo(draft)
-            .err()
-            .map(|fault| (checks::Act::Plan(line), fault.words().to_owned()))
+        result.err().map(|fault| {
+            (
+                planned.journey,
+                checks::Act::Plan(planned.chosen),
+                fault.words().to_owned(),
+            )
+        })
+    }
+
+    /// Row 123, point 2: where `note`'s words come from now. A note the open draft holds is the
+    /// draft's; any other is read once at each disk check (`poll`, every `CHECK_DISK_EVERY`),
+    /// and its generation changes only when its words do, whatever the file's time says.
+    fn note_source(&mut self, note: Uuid, path: &Path) -> NoteSource {
+        if let Some(draft) = self.draft.as_ref().filter(|draft| draft.path == path) {
+            return NoteSource::Draft(draft.revision());
+        }
+        let campaign = self.campaign.as_ref().map(|campaign| campaign.id);
+        let tick = self.last_check;
+        let fresh = self.travel.watched.get(&note).is_some_and(|watched| {
+            watched.campaign == campaign && watched.path == path && watched.tick == tick
+        });
+        if !fresh {
+            let body = std::fs::read_to_string(path)
+                .ok()
+                .map(|text| crate::sessions::body_of(&text).to_owned());
+            self.see_words(note, path, body);
+        }
+        if let Some(watched) = self.travel.watched.get_mut(&note) {
+            watched.tick = tick;
+            return NoteSource::Disk(watched.generation);
+        }
+        NoteSource::Disk(0)
+    }
+
+    /// The words of a note that no draft holds, as an act or a disk check just read them.
+    fn saw(&mut self, note: Uuid, path: &Path, body: &str) {
+        self.see_words(note, path, Some(body.to_owned()));
+    }
+
+    fn see_words(&mut self, note: Uuid, path: &Path, body: Option<String>) {
+        let campaign = self.campaign.as_ref().map(|campaign| campaign.id);
+        let same = self.travel.watched.get(&note).is_some_and(|watched| {
+            watched.campaign == campaign && watched.path == path && watched.body == body
+        });
+        if same {
+            return;
+        }
+        self.travel.generation += 1;
+        let tick = self.last_check;
+        self.travel.watched.insert(
+            note,
+            Watched {
+                campaign,
+                path: path.to_owned(),
+                body,
+                generation: self.travel.generation,
+                tick,
+            },
+        );
+    }
+
+    /// Whether the plan line's result still holds: the note is as the act left it, in the open
+    /// draft when it holds that note, else as the last disk check read it.
+    fn planned_live(&mut self) -> bool {
+        let Some((note, path)) = self
+            .travel
+            .planned
+            .as_ref()
+            .map(|planned| (planned.note, planned.path.clone()))
+        else {
+            return false;
+        };
+        let source = self.note_source(note, &path);
+        let Some(planned) = &self.travel.planned else {
+            return false;
+        };
+        match source {
+            NoteSource::Draft(_) => self
+                .draft
+                .as_ref()
+                .is_some_and(|draft| planned.undo.live(draft)),
+            NoteSource::Disk(_) => self
+                .travel
+                .watched
+                .get(&note)
+                .is_some_and(|watched| watched.body.as_deref() == Some(planned.undo.after())),
+        }
     }
 
     /// Row 123: Timeline's view of the plan of `journey`'s session, for its check results'
-    /// offers. Read again only when its session, the note, the Timeline or the names changed.
-    /// A journey with no session, or whose note is gone, offers nothing.
+    /// offers. Read again only when the campaign, the session's note or its words, the Timeline
+    /// or the read of the names changed. A journey with no session, or whose note is gone,
+    /// offers nothing.
     pub fn journey_plan(
         &mut self,
         book: &Book,
@@ -2824,42 +2989,48 @@ impl Sessions {
             .iter()
             .find(|event| event.id == journey)
             .and_then(|event| event.session);
-        let Some(note) = session.and_then(|id| self.notes.iter().find(|note| note.id == id)) else {
+        let Some((note, path)) = session.and_then(|id| {
+            self.notes
+                .iter()
+                .find(|note| note.id == id)
+                .map(|note| (note.id, note.path.clone()))
+        }) else {
             return Arc::default();
         };
-        let draft = self.draft.as_ref().filter(|draft| draft.path == note.path);
-        let stamp = match draft {
-            Some(draft) => (Some(draft.revision()), None),
-            None => (
-                None,
-                std::fs::metadata(&note.path)
-                    .and_then(|meta| meta.modified())
-                    .ok(),
-            ),
-        };
-        let key = (note.id, stamp, book.changes(), names.clone());
+        let source = self.note_source(note, &path);
+        let key = (
+            self.campaign.as_ref().map(|campaign| campaign.id),
+            note,
+            path,
+            source,
+            book.changes(),
+            names.revision,
+        );
         if let Some((known, plan)) = &self.travel.journey_plan
             && *known == key
         {
             return Arc::clone(plan);
         }
-        let body = match draft {
-            Some(draft) => Some(draft.body.clone()),
-            None => std::fs::read_to_string(&note.path)
-                .ok()
-                .map(|text| crate::sessions::body_of(&text).to_owned()),
+        let body = match source {
+            NoteSource::Draft(_) => self.draft.as_ref().map(|draft| draft.body.as_str()),
+            NoteSource::Disk(_) => self
+                .travel
+                .watched
+                .get(&note)
+                .and_then(|watched| watched.body.as_deref()),
         };
         let plan = Arc::new(body.map_or_else(JourneyPlan::default, |body| {
-            JourneyPlan::read(&body, &book.events, Some(note.id), names)
+            JourneyPlan::read(body, &book.events, Some(note), &names.fights, &names.groups)
         }));
         self.travel.journey_plan = Some((key, Arc::clone(&plan)));
         plan
     }
 
-    /// Row 123: `Plan “<name>”` pressed on Timeline. It writes the plan line into the note of the
-    /// journey's session by the plan's own act (`plan_line_act`), so its result and Undo are the
-    /// one the plan shows. That note becomes the selected session's, as a press on its row in
-    /// Sessions makes it. The fault, when there is one, is for Timeline's block.
+    /// Row 123, R26: `Plan “<name>”` pressed on Timeline. It never changes the Sessions page's
+    /// selection, open draft, scene results or open event. The journey's session open there: the
+    /// line goes through its draft, as the plan's own act. Another session: the act writes that
+    /// note itself, through the note's checked path on a draft of its own, and its result and
+    /// Undo stay bound to that note. The fault, when there is one, is for Timeline's block.
     pub fn plan_from_timeline(
         &mut self,
         book: &Book,
@@ -2871,48 +3042,90 @@ impl Sessions {
             .events
             .iter()
             .find(|event| event.id == journey)
-            .and_then(|event| event.session)
-            .filter(|id| self.notes.iter().any(|note| note.id == *id));
-        let Some(session) = session else {
+            .and_then(|event| event.session);
+        let Some((note, path)) = session.and_then(|id| {
+            self.notes
+                .iter()
+                .find(|note| note.id == id)
+                .map(|note| (note.id, note.path.clone()))
+        }) else {
             return Err("This journey’s session note is gone.".to_owned());
         };
-        if self.selected != Some(session) || self.draft.is_none() {
-            self.select(Some(session));
-        }
-        if self.selected != Some(session) || self.draft.is_none() {
-            return Err(
-                "The open session note needs a choice first; resolve it and try again.".to_owned(),
-            );
-        }
         let fights = plan_fight_stubs(&names.fights);
-        self.plan_line_act(book, Some(session), journey, chosen, &fights)
+        if self.selected == Some(note)
+            && self.draft.as_ref().is_some_and(|draft| draft.path == path)
+        {
+            return self.plan_line_act(book, Some(note), journey, chosen, &fights, &names.groups);
+        }
+        let mut other = crate::sessions::Draft::open(&path)
+            .map_err(|_| ActFault::Missing.words().to_owned())?;
+        let written = write_plan_line(
+            &mut other,
+            note,
+            book,
+            journey,
+            chosen,
+            &fights,
+            &names.groups,
+        );
+        self.saw(note, &path, &other.body);
+        self.mentions
+            .insert(note, timeline::referenced_ids(&other.body));
+        match written {
+            Written::Already => Ok(()),
+            Written::Done(Ok(undo)) => {
+                self.keep_plan_line(journey, chosen, note, path, undo);
+                Ok(())
+            }
+            // A draft of its own that could not save holds nothing for an Undo.
+            Written::Done(Err(fault)) => Err(fault.words().to_owned()),
+        }
     }
 
     /// Row 123: `Plan “<name>”`'s result and `Undo add plan line`, in the footer of Timeline's
     /// list, from the one store the plan's footer reads (`Travel::planned`), while the note is as
     /// the act left it.
-    pub fn plan_line_result<A: 'static>(&self, messages: &mut Messages<'_, A>, undo: A) {
-        if let Some((_, line, plan_undo)) = &self.travel.planned
-            && self
-                .draft
-                .as_ref()
-                .is_some_and(|draft| plan_undo.live(draft))
-        {
+    pub fn plan_line_result<A: 'static>(&mut self, messages: &mut Messages<'_, A>, undo: A) {
+        if !self.planned_live() {
+            return;
+        }
+        if let Some(planned) = &self.travel.planned {
             kept_at(
                 messages,
                 self.travel.planned_order,
-                Said::new(as_sentence(&line.words()))
+                Said::new(as_sentence(&planned.chosen.words()))
                     .undo(UndoStep::of(Verb::Add, "plan line").pressed_as(undo)),
             );
         }
     }
 
-    /// `Plan “<name>”`: write its line into the selected session's note, before the first fight
-    /// still to come. The result and its Undo go to `Travel::planned`; the fault comes back.
+    /// A plan line written: its result's order, and its Undo, which replaces an earlier one.
     #[allow(
         clippy::disallowed_methods,
         reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
     )]
+    fn keep_plan_line(
+        &mut self,
+        journey: &str,
+        chosen: &checks::Planned,
+        note: Uuid,
+        path: std::path::PathBuf,
+        undo: NoteUndo,
+    ) {
+        self.travel.planned_order = design::ResultOrder::issue();
+        self.travel.planned = Some(PlannedLine {
+            journey: journey.to_owned(),
+            chosen: chosen.clone(),
+            note,
+            path,
+            undo,
+        });
+    }
+
+    /// `Plan “<name>”`: write its line into the selected session's note, before the first fight
+    /// still to come. A fight already to come there, in the words as they are now, writes nothing
+    /// and keeps the earlier Undo. The result and its Undo go to `Travel::planned`; the fault
+    /// comes back.
     fn plan_line_act(
         &mut self,
         book: &Book,
@@ -2920,32 +3133,29 @@ impl Sessions {
         journey: &str,
         chosen: &checks::Planned,
         fights: &[PlanFight],
+        groups: &[String],
     ) -> Result<(), String> {
         let (Some(draft), Some(note)) = (&mut self.draft, session) else {
             return Ok(());
         };
-        let line = road_plan_line(book, journey, chosen);
-        let written = draft.apply(note, Apply::Now, |words| {
-            Some(plan_first(words, &line, &book.events, session, fights))
-        });
-        let result = match written {
-            Ok(undo) => {
-                self.travel.planned_order = design::ResultOrder::issue();
-                self.travel.planned = Some((journey.to_owned(), chosen.clone(), undo));
+        let path = draft.path.clone();
+        let written = write_plan_line(draft, note, book, journey, chosen, fights, groups);
+        self.mentions
+            .insert(note, timeline::referenced_ids(&draft.body));
+        match written {
+            Written::Already => Ok(()),
+            Written::Done(Ok(undo)) => {
+                self.keep_plan_line(journey, chosen, note, path, undo);
                 Ok(())
             }
-            Err(fault) => {
+            Written::Done(Err(fault)) => {
                 let words = fault.words().to_owned();
-                if let crate::sessions::ActFault::NotSaved(_, undo) = fault {
-                    self.travel.planned_order = design::ResultOrder::issue();
-                    self.travel.planned = Some((journey.to_owned(), chosen.clone(), undo));
+                if let ActFault::NotSaved(_, undo) = fault {
+                    self.keep_plan_line(journey, chosen, note, path, undo);
                 }
                 Err(words)
             }
-        };
-        self.mentions
-            .insert(note, timeline::referenced_ids(&draft.body));
-        result
+        }
     }
 
     /// Carry out an act on a journey's checks. `Plan` writes the session note; the others write
@@ -2969,7 +3179,9 @@ impl Sessions {
                 .any(|event| event.id == id && event.duration.trim().is_empty());
         }
         if let checks::Act::Plan(chosen) = &act {
-            if let Err(words) = self.plan_line_act(book, session, id, chosen, plan.fights) {
+            let groups: Vec<String> = plan.groups.iter().map(|group| group.name.clone()).collect();
+            if let Err(words) = self.plan_line_act(book, session, id, chosen, plan.fights, &groups)
+            {
                 self.travel.block.failed(&act, words);
             }
             return;
@@ -3316,17 +3528,18 @@ impl Sessions {
         }
         // Round 27 FE7: `Plan “<name>”`'s result and `Undo plan line`, in the plan of its
         // journey's session, while the note is as the act left it.
-        if let Some((journey, line, undo)) = &self.travel.planned
-            && self.draft.as_ref().is_some_and(|draft| undo.live(draft))
+        let live = self.planned_live();
+        if let Some(planned) = &self.travel.planned
+            && live
             && book
                 .events
                 .iter()
-                .any(|event| event.id == *journey && event.is_in(session))
+                .any(|event| event.id == planned.journey && event.is_in(session))
         {
             kept_at(
                 &mut messages,
                 self.travel.planned_order,
-                Said::new(as_sentence(&line.words())).undo(
+                Said::new(as_sentence(&planned.chosen.words())).undo(
                     UndoStep::of(Verb::Add, "plan line")
                         .pressed_as(pressed(FooterAct::UndoPlanLine)),
                 ),
@@ -3366,12 +3579,8 @@ impl Sessions {
         // A length that settled changed the Timeline, so the start is read again.
         let (_, journey_start) = self.journey_start(book, open_event.as_deref());
         self.travel.done.follow(book);
-        if self
-            .travel
-            .planned
-            .as_ref()
-            .is_some_and(|(_, _, undo)| self.draft.as_ref().is_none_or(|draft| !undo.live(draft)))
-        {
+        // The plan line's result ends when its note is no longer as the act left it.
+        if self.travel.planned.is_some() && !self.planned_live() {
             self.travel.planned = None;
         }
         let mut length_taken = checks::Taken::Nothing;
@@ -3771,8 +3980,14 @@ impl Sessions {
                     FooterAct::Scene(act) => scene_act = Some(act),
                     FooterAct::Rewards(act) => rewards_act = Some(act),
                     FooterAct::UndoPlanLine => {
-                        if let Some((act, words)) = self.undo_plan_line() {
-                            self.travel.block.failed(&act, words);
+                        // Row 123, point 5: the fault keeps its journey: that journey's open
+                        // block, else the plan's notice.
+                        if let Some((journey, act, words)) = self.undo_plan_line()
+                            && !(self.open_event.as_deref() == Some(journey.as_str())
+                                && self.travel.block.failed_for(&journey, &act, words.clone()))
+                        {
+                            self.notice = Some((Tone::Warning, words));
+                            self.notice_session = None;
                         }
                     }
                     FooterAct::File(act) => file_act(book, act, press.ticket),
@@ -5305,6 +5520,241 @@ mod tests {
                 "- [[Bridge Ambush]]\n- [[Wolf Pack]]\n"
             )
         );
+        // Row 123, point 3: the plan's rows (`PlanModel`) and the offer's and the write's reader
+        // (`plan_links`, through `JourneyPlan::read`) read one plan alike: a duplicate, a link
+        // with other words, a done task and a struck-out line.
+        let odd = "## Plan for tonight\n\n- [[Wolf Pack]]\n- [[wolf pack|the wolves]] again\n- [x] [[Bridge Ambush]]\n- ~~[[Shrine]]~~\n\n## After\n\n[[Shrine]]\n";
+        let fights = [
+            planned_fight("Wolf Pack", "Encounters/Wolf Pack.md"),
+            planned_fight("Bridge Ambush", "Encounters/Bridge Ambush.md"),
+            planned_fight("Shrine", "Encounters/Shrine.md"),
+        ];
+        let rows: Vec<String> = PlanModel::build(odd, &fights, &[], None)
+            .lines
+            .iter()
+            .flat_map(|line| match line {
+                ModelLine::Fights(names) => names.clone(),
+                ModelLine::Scene(_) => Vec::new(),
+            })
+            .collect();
+        let read: Vec<String> = plan_links(odd, &[], Some(session), &fights)
+            .into_iter()
+            .map(|(_, fight, _)| fight.name.clone())
+            .collect();
+        assert_eq!(rows, read, "one reading of the plan's links");
+        assert_eq!(rows, ["Wolf Pack", "Wolf Pack", "Bridge Ambush", "Shrine"]);
+        let names: Vec<String> = fights.iter().map(|fight| fight.name.clone()).collect();
+        let offer = JourneyPlan::read(odd, &[], Some(session), &names, &[]);
+        assert_eq!(offer.get("SHRINE"), Some(true));
+        assert_eq!(offer.get("Ravens"), None);
+    }
+
+    /// Row 123, R26 and points 1 to 3, 5: Timeline's `Plan “<name>”` for a journey of session B
+    /// while session A is open on the Sessions page. A keeps its selection, draft, unsent Scene
+    /// words, scene Undo and open event; B's note gets the line; the result and Undo are B's.
+    #[test]
+    fn row_123_timeline_plans_into_another_session_and_leaves_the_open_one() {
+        use crate::sessions::{NewNote, create_note};
+        let dir = tempfile::tempdir().unwrap();
+        let new_note = |number, title| {
+            create_note(
+                dir.path(),
+                &NewNote {
+                    number,
+                    title,
+                    date: "2026-11-14",
+                    campaign: "Marches",
+                    template: "## Plan for tonight\n",
+                },
+            )
+            .unwrap()
+        };
+        let b_note = new_note(1, "Road");
+        let a_note = new_note(2, "Keep");
+        let (a, b) = (a_note.id, b_note.id);
+        let mut book = Book::default();
+        book.open(Some(dir.path()));
+        let road = book.add(Kind::Travel, Some(b));
+        let journey = book.event_mut(&road).unwrap();
+        journey.duration = "1 day".into();
+        journey.checks = vec![timeline::Check::new(
+            0,
+            "19 · [[Shrine of Cinders]] and [[Bridge Ambush]] wait.".into(),
+        )];
+        let check = (
+            journey.checks[0].label.clone(),
+            journey.checks[0].words.clone(),
+        );
+        let names = PlanNames::new(
+            Some(Uuid::from_u128(1)),
+            vec!["Shrine of Cinders".into(), "Bridge Ambush".into()],
+            Vec::new(),
+        );
+        let chosen = |name: &str| checks::Planned {
+            name: name.into(),
+            check: check.clone(),
+        };
+        let mut sessions = Sessions {
+            selected: Some(a),
+            notes: vec![a_note.clone(), b_note.clone()],
+            draft: Some(Draft::open(&a_note.path).unwrap()),
+            open_event: Some("an event of A".into()),
+            last_check: Some(Instant::now()),
+            ..Sessions::default()
+        };
+        // A's scene Undo, and unsent Scene words.
+        let scene = sessions
+            .draft
+            .as_mut()
+            .unwrap()
+            .apply(a, Apply::Now, |words| {
+                Some(format!("{words}- [ ] Watch the ford\n"))
+            })
+            .unwrap();
+        sessions.scenes.added = Some(scene.clone());
+        let mut field = design::AddField::default();
+        field.words = "Unsent scene".into();
+        sessions.scenes.field = Some(field);
+        let a_words = sessions.draft.as_ref().unwrap().body.clone();
+        let b_file = |shrine: usize| {
+            let text = fs::read_to_string(&b_note.path).unwrap();
+            assert_eq!(
+                text.matches("[[Shrine of Cinders]]").count(),
+                shrine,
+                "{text}"
+            );
+            text
+        };
+        assert_eq!(
+            sessions
+                .journey_plan(&book, &road, &names)
+                .get("Shrine of Cinders"),
+            Some(false)
+        );
+        // Point 1: the press writes B's note, and A is as it was.
+        sessions
+            .plan_from_timeline(&book, &road, &chosen("Shrine of Cinders"), &names)
+            .unwrap();
+        b_file(1);
+        assert_eq!(sessions.selected, Some(a));
+        assert_eq!(sessions.draft.as_ref().unwrap().path, a_note.path);
+        assert_eq!(sessions.draft.as_ref().unwrap().body, a_words);
+        assert_eq!(sessions.scenes.added.as_ref(), Some(&scene));
+        assert_eq!(
+            sessions
+                .scenes
+                .field
+                .as_ref()
+                .map(|field| field.words.as_str()),
+            Some("Unsent scene")
+        );
+        assert_eq!(sessions.open_event.as_deref(), Some("an event of A"));
+        assert_eq!(
+            sessions
+                .journey_plan(&book, &road, &names)
+                .get("Shrine of Cinders"),
+            Some(true)
+        );
+        assert!(sessions.planned_live(), "the result is B's, and holds");
+        // An unrelated act on A leaves B's result; Undo takes back only B's line.
+        sessions
+            .draft
+            .as_mut()
+            .unwrap()
+            .apply(a, Apply::Now, |words| Some(format!("{words}More.\n")))
+            .unwrap();
+        assert!(sessions.planned_live());
+        assert_eq!(sessions.undo_plan_line(), None);
+        b_file(0);
+        assert!(sessions.draft.as_ref().unwrap().body.ends_with("More.\n"));
+        assert!(sessions.scenes.added.is_some());
+        // Point 2: an edit outside Splat with the file's time kept is seen at the next disk check.
+        let modified = fs::metadata(&b_note.path).unwrap().modified().unwrap();
+        let edit_keeping_time = |text: String| {
+            fs::write(&b_note.path, text).unwrap();
+            fs::File::options()
+                .write(true)
+                .open(&b_note.path)
+                .unwrap()
+                .set_modified(modified)
+                .unwrap();
+        };
+        let text = b_file(0);
+        edit_keeping_time(text.replace(
+            "## Plan for tonight\n",
+            "## Plan for tonight\n- [[Shrine of Cinders]]\n",
+        ));
+        sessions.last_check = Some(Instant::now());
+        assert_eq!(
+            sessions
+                .journey_plan(&book, &road, &names)
+                .get("Shrine of Cinders"),
+            Some(true),
+            "an outside edit with the same file time changes the offer"
+        );
+        edit_keeping_time(text.clone());
+        sessions.last_check = Some(Instant::now());
+        assert_eq!(
+            sessions
+                .journey_plan(&book, &road, &names)
+                .get("Shrine of Cinders"),
+            Some(false)
+        );
+        // Point 3: a line for Bridge Ambush, then Shrine of Cinders added outside before the
+        // press that the offer still shows: no second line, and Bridge Ambush's Undo stays.
+        sessions
+            .plan_from_timeline(&book, &road, &chosen("Bridge Ambush"), &names)
+            .unwrap();
+        let with_bridge = b_file(0);
+        fs::write(
+            &b_note.path,
+            with_bridge.replace(
+                "## Plan for tonight\n",
+                "## Plan for tonight\n- [[Shrine of Cinders]]\n",
+            ),
+        )
+        .unwrap();
+        sessions
+            .plan_from_timeline(&book, &road, &chosen("Shrine of Cinders"), &names)
+            .unwrap();
+        b_file(1);
+        assert_eq!(
+            sessions
+                .travel
+                .planned
+                .as_ref()
+                .map(|planned| planned.chosen.name.as_str()),
+            Some("Bridge Ambush"),
+            "the earlier Undo stays"
+        );
+        // Point 5: B changed on disk; the failed Undo names its journey.
+        let changed = b_file(1).replace("[[Shrine of Cinders]]", "[[Shrine of Cinders]] (moved)");
+        fs::write(&b_note.path, changed).unwrap();
+        sessions.last_check = Some(Instant::now());
+        let (from, act, _) = sessions.undo_plan_line().expect("the Undo fails");
+        assert_eq!(from, road);
+        assert_eq!(act, checks::Act::Plan(chosen("Bridge Ambush")));
+        let mut block = checks::State::default();
+        assert!(
+            !block.failed_for(&road, &act, "x".into()),
+            "a block of another journey keeps no fault"
+        );
+        // The open session is the journey's: the act goes through its draft, as on the plan.
+        fs::write(&b_note.path, &text).unwrap();
+        sessions.select(Some(b));
+        sessions
+            .plan_from_timeline(&book, &road, &chosen("Shrine of Cinders"), &names)
+            .unwrap_or_else(|fault| panic!("{fault}"));
+        assert!(
+            sessions
+                .draft
+                .as_ref()
+                .unwrap()
+                .body
+                .contains("[[Shrine of Cinders]]")
+                && sessions.planned_live()
+        );
+        b_file(1);
     }
 
     #[test]

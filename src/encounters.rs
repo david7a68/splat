@@ -3283,6 +3283,33 @@ impl Encounters {
     }
 
     /// Every encounter the campaign has, for a session's plan.
+    /// Row 123: which read of the campaign's encounters and groups this is. It changes when
+    /// they are read again or a saved encounter changes them, so a copy of their names is made
+    /// once for each.
+    pub fn plan_revision(&self) -> Option<Uuid> {
+        self.snapshot.as_ref().map(|snapshot| snapshot.revision)
+    }
+    /// Row 123: the names of the fights and the groups the plan can hold (`plan_fights`,
+    /// `plan_groups`), with no look at the runs.
+    pub fn plan_names(&self) -> (Vec<String>, Vec<String>) {
+        self.snapshot
+            .as_ref()
+            .map_or_else(Default::default, |snapshot| {
+                (
+                    snapshot
+                        .templates
+                        .iter()
+                        .map(|template| template.name.clone())
+                        .collect(),
+                    snapshot
+                        .groups
+                        .iter()
+                        .filter(|group| group.encounter.is_none())
+                        .map(|group| group.name.clone())
+                        .collect(),
+                )
+            })
+    }
     pub fn plan_fights(&self) -> Vec<PlanFight> {
         self.snapshot.as_ref().map_or_else(Vec::new, |snapshot| {
             snapshot
@@ -3962,6 +3989,8 @@ impl Encounters {
                     (&mut self.snapshot, Entry::parse(&draft.path, &draft.source))
                 {
                     s.templates.retain(|template| template.path != draft.path);
+                    // A saved encounter can have a new name: what is read from the list is new.
+                    s.revision = Uuid::new_v4();
                     s.templates.push(Template {
                         path: draft.path.clone(),
                         id: entry.id,

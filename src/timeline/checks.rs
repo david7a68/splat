@@ -495,6 +495,16 @@ impl State {
         self.problem = Some((at, error));
     }
 
+    /// `failed`, for the block of `journey` only: false, with nothing kept, when this block
+    /// now follows another journey (row 123, point 5: a fault keeps its journey).
+    pub fn failed_for(&mut self, journey: &str, act: &Act, error: String) -> bool {
+        let here = self.event == journey;
+        if here {
+            self.failed(act, error);
+        }
+        here
+    }
+
     pub fn clear_problem(&mut self) {
         self.problem = None;
     }

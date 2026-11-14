@@ -537,6 +537,23 @@ pub fn run(d: &mut Driver<'_>) {
         d.has_containing("In the plan") && !d.has(PLAN_AMBUSH),
         "Timeline: the rolled Bridge Ambush says In the plan, as the plan of its session does",
     );
+    // Point 4: frames with nothing changed copy no names and read no plan.
+    let counts = || {
+        (
+            crate::timeline::page::PLAN_NAMES_MADE.with(std::cell::Cell::get),
+            crate::timeline::page::JOURNEY_PLAN_READS.with(std::cell::Cell::get),
+        )
+    };
+    let before = counts();
+    for _ in 0..3 {
+        d.settle();
+    }
+    let after = counts();
+    d.observe(
+        "iter-29-S1-G142",
+        before == after,
+        format!("Unchanged frames copy no names and read no plan: {before:?}, {after:?}"),
+    );
     d.state("travel-checks-timeline", Sizes::Default);
     d.state_prepared("travel-checks-timeline-lookup", Sizes::Small, |d| {
         if !d.has("Close Lookup") {
