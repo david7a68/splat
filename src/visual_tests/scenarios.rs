@@ -9825,26 +9825,27 @@ pub mod run_sync_states {
         );
         // iter-26-R FK3: every sync block heading has one form: the name in the text colour,
         // ` · `, then the status's icon and word in its own colour.
-        // At 1200 x 800, where every block is in the column's view (at 960 the pending block
-        // scrolls below the three blocks above it).
+        // At 960 the pending block is below the sync column's fold, as it was before row 154's
+        // line: scroll the column to it and read every heading there; the scroll goes back
+        // after the checks (proof steps outside the DM's task).
+        let column = d.place_of(USE_REMOTE).expect("the sync column").center();
+        d.aside(|d| d.scroll_at(column, 3));
         let mut headings = Vec::new();
-        d.at_size_mut(DEFAULT, |d| {
-            d.each_painted_text(|text, _| {
-                let job = &text.galley.job;
-                if job.sections.len() == 3
-                    && STATES
+        d.each_painted_text(|text, _| {
+            let job = &text.galley.job;
+            if job.sections.len() == 3
+                && STATES
+                    .iter()
+                    .any(|(name, _, _)| job.text.starts_with(&format!("{name} · ")))
+            {
+                headings.push((
+                    job.text.clone(),
+                    job.sections
                         .iter()
-                        .any(|(name, _, _)| job.text.starts_with(&format!("{name} · ")))
-                {
-                    headings.push((
-                        job.text.clone(),
-                        job.sections
-                            .iter()
-                            .map(|s| s.format.color)
-                            .collect::<Vec<_>>(),
-                    ));
-                }
-            })
+                        .map(|s| s.format.color)
+                        .collect::<Vec<_>>(),
+                ));
+            }
         });
         let text = crate::design::colors().text;
         d.observe(
@@ -9862,13 +9863,21 @@ pub mod run_sync_states {
         );
         // iter-28-R FL4: the pending block says what waits, that Splat tries again, and how to
         // close now; the conflict block beside it keeps `Choose which values to keep`.
+        let pending = d.nodes().into_iter().find(|node| {
+            node.name
+                .contains("changes have not reached D&D Beyond yet")
+        });
         d.observe(
             "iter-28-R-FL4",
-            d.has_containing("changes have not reached D&D Beyond yet")
-                && d.has_containing("Splat tries again by itself")
-                && d.has_containing("Choose which values to keep"),
-            "The pending sync block says what waits and what the DM can do",
+            pending.as_ref().is_some_and(|node| {
+                node.in_view() && node.name.contains("Splat tries again by itself")
+            }) && d.has_containing("Choose which values to keep"),
+            format!(
+                "The pending sync block says what waits and what the DM can do: {:?}",
+                pending.map(|node| node.rect)
+            ),
         );
+        d.aside(|d| d.scroll_up_at(column, 3));
         d.state("ended-with-conflict", Sizes::All);
         // FJ3: the closed Prep and Combat log sections start at one x.
         for size in [SMALL, DEFAULT, LARGE] {

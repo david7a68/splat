@@ -339,12 +339,11 @@ fn arrival_add_word(group: &super::RunGroup) -> String {
     }
 }
 
-/// FL4: the line under a pending sync block in the ended view.
-fn pending_words(name: &str) -> String {
-    format!(
-        "{name}’s changes have not reached D&D Beyond yet. Splat tries again by itself. To close now, stop sync for {name}."
-    )
-}
+/// FL4: the line under a pending sync block's heading in the ended view. The heading above it
+/// names the character, and `Stop sync for …` under it is the way to close now, so the line
+/// says only what waits and that it needs no step (two lines at 960, not three).
+const PENDING_WORDS: &str =
+    "Its changes have not reached D&D Beyond yet. Splat tries again by itself.";
 
 pub(super) fn sync_status(state: SyncState) -> Status<'static> {
     let s = colors().sync;
@@ -2803,7 +2802,7 @@ impl Run {
                     );
                     if sync.state() == SyncState::Pending {
                         // FL4: say what waits, that it needs no step, and the way to close now.
-                        design::help(ui, &pending_words(&name));
+                        design::help(ui, PENDING_WORDS);
                     }
                 }
                 if Action::quiet(&format!("Stop sync for {name}"))
