@@ -3802,14 +3802,7 @@ impl Run {
         };
         let (fitted, status_in_heading) = match fit_in(room - status_room) {
             Some(fitted) if !status.is_empty() => (Some(fitted), true),
-            _ => (
-                fit_in(room).or_else(|| {
-                    fight
-                        .as_ref()
-                        .and_then(|line| line.fit(|text| width(text) <= room))
-                }),
-                false,
-            ),
+            _ => (fit_in(room), false),
         };
         // A group with no word keeps its totals, where they fit, and its status beside them.
         let totals = design::number_width(ui, &totals_text, &Type::Small.font(ui));
@@ -3880,7 +3873,9 @@ impl Run {
         .into_galley(
             ui,
             Some(egui::TextWrapMode::Truncate),
-            (word_rect.left() - status_room - grip.rect.left() - design::S).max(0.0),
+            // The line was fitted to the room the whole name leaves, so the name keeps it.
+            (word_rect.left() - status_room - grip.rect.left() - design::S)
+                .max(heading_width.min(grip.rect.width())),
             Type::Strong.font(ui),
         );
         ui.painter().galley(

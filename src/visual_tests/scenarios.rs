@@ -17482,8 +17482,9 @@ pub mod encounter_groups {
                 .filter_map(|node| {
                     let words = d.painted_in(node.shown).replace('\u{a0}', " ");
                     let at = words.find("Fight after: ")?;
+                    // The line ends at the next icon (the status's or the name's).
                     let word = words[at..]
-                        .split(crate::design::icons::DRAG)
+                        .split(|c: char| ('\u{E000}'..='\u{F8FF}').contains(&c))
                         .next()
                         .unwrap_or_default()
                         .trim()
