@@ -2409,7 +2409,12 @@ impl CampaignContent {
                     }
                     *open_run_settings |= fault.show(ui).is_some();
                     if last {
-                        crate::encounters::file_line(ui, &active.path, &document.path);
+                        // The file line starts at the warning's words, as its repairs do.
+                        design::message_choice_row(ui, design::Tone::Warning, |ui| {
+                            ui.vertical(|ui| {
+                                crate::encounters::file_line(ui, &active.path, &document.path)
+                            });
+                        });
                     }
                 });
             }
@@ -3146,9 +3151,10 @@ mod tests {
                                 design::outcome::Messages::new(&frame, "warnings", 800.0);
                             let unavailable = content.package_warnings_of(&campaigns).unavailable;
                             content.package_messages(&mut messages, &campaigns, &unavailable);
-                            let _ = messages.pane(ui, design::Body::Content, |ui| {
-                                content.packages_content(ui, &campaigns, &active)
-                            });
+                            // The footer, then the package list beside it (a Content pane
+                            // refuses the list's own scroll column).
+                            let _ = messages.pane(ui, design::Body::Content, |_| ());
+                            content.packages_content(ui, &campaigns, &active);
                         });
                     },
                 );
