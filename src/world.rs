@@ -1097,10 +1097,8 @@ impl NoteFault {
             Some(Self::Tables(tables))
         } else if !problems.is_empty() {
             Some(Self::Links(problems))
-        } else if let Some(stem) = renamed_file(item, index) {
-            Some(Self::Renamed(format!("{stem}.md")))
         } else {
-            None
+            renamed_file(item, index).map(|stem| Self::Renamed(format!("{stem}.md")))
         }
     }
 
