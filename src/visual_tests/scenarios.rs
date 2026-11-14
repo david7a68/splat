@@ -19393,7 +19393,24 @@ pub mod encounter_owned_groups {
         // A group whose encounter is gone says so in its editor.
         d.click(&edit_group(GROUP_ORPHAN));
         d.expect("Deleted encounter");
-        d.state_prepared("group-whose-encounter-is-gone", Sizes::Default, |d| {
+        d.state_prepared("group-whose-encounter-is-gone", Sizes::All, |d| {
+            // iter-29 G122 (AB1): one message under Belongs to says the cause and the repair,
+            // whole and in view; the footer does not say the fault again.
+            let gone = "Its encounter was deleted, so no fight offers this group. Choose another encounter, or Any encounter.";
+            let mut said = 0;
+            d.each_painted_text(|text, _| {
+                let words = text.galley.job.text.as_str();
+                said += usize::from(
+                    words.contains("encounter was deleted")
+                        || words.contains("no longer has the encounter")
+                        || words.contains("No fight offers"),
+                );
+            });
+            d.observe(
+                "iter-29-BC5-G122",
+                d.visible_text(gone) && said == 1,
+                format!("One message says the gone encounter: {said} painted"),
+            );
             let edges = group_field_edges(d, GROUP_ORPHAN);
             d.observe(
                 "iter-19-B-FD3",
@@ -19426,7 +19443,7 @@ pub mod encounter_owned_groups {
                 format!("Default side starts at {side:?}, Belongs to at {belongs:?}"),
             );
             // A group no fight can offer says so as a warning, not as field help.
-            let tones = tones_beside(d, "No fight offers this group now.");
+            let tones = tones_beside(d, "Its encounter was deleted, so no fight offers");
             d.observe(
                 "iter-23-B-FB2",
                 tones == ["warning"],
@@ -21439,7 +21456,17 @@ pub mod session_plan_groups {
 
         d.click(&format!("Edit group {GROUP_RIVALS}"));
         d.expect("Back to the plan");
-        d.state("plan-group-edit", Sizes::Default);
+        // iter-29 G135 (AN1): the whole change link is readable at every size: after the stats
+        // where it fits, else on its own row. No stat is left out for it.
+        d.state_prepared("plan-group-edit", Sizes::All, |d| {
+            d.observe(
+                "iter-29-BC5-G135",
+                d.visible_text("Changed · 1 to add by hand")
+                    && d.in_view_containing("Changed · 1 to add by hand")
+                    && d.visible_text("as\u{a0}Ember\u{a0}Cultist"),
+                "Rival Captain's stats and its whole change link are on screen",
+            );
+        });
         // FK1: the first edit adds the campaign-switch reason in its reserved place, so no field
         // moves. A proof aside: Discard puts the clean group back.
         d.aside(|d| {

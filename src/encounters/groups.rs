@@ -31,6 +31,10 @@ const BELONGS_TO: &str = "Belongs to";
 const ROSTER: &str = "Roster";
 const ANY_ENCOUNTER: &str = "Any encounter";
 const MISSING_ENCOUNTER: &str = "Deleted encounter";
+/// G122: the one message for a group whose encounter is gone, under Belongs to: the cause and
+/// the repair together. Save's check refuses with the same words, in place, so the footer does
+/// not say them again.
+const GONE_ENCOUNTER: &str = "Its encounter was deleted, so no fight offers this group. Choose another encounter, or Any encounter.";
 /// The Groups list's heading for groups whose encounter is gone; Arrivals says the same words
 /// beside such a group's name (FB10).
 pub(crate) const ENCOUNTER_DELETED: &str = "Encounter deleted";
@@ -710,9 +714,11 @@ impl GroupDraft {
                 Some(id) != saving && !snapshot.encounter_choices().any(|(known, _)| known == id)
             })
         {
-            return refuse(format!(
-                "This campaign no longer has the encounter this group belongs to. Under {BELONGS_TO}, choose another, or {ANY_ENCOUNTER}."
-            ));
+            // Its words are under Belongs to (`belongs_to`).
+            return Err(Refusal {
+                text: GONE_ENCOUNTER.into(),
+                in_place: true,
+            });
         }
         Ok(())
     }
@@ -1537,11 +1543,7 @@ fn belongs_to(
         None => "A run of any encounter offers this group.",
         // A group no fight can offer is a fault, not field help.
         Some(_) if shown == MISSING_ENCOUNTER => {
-            design::small_message(
-                ui,
-                Tone::Warning,
-                "No fight offers this group now. Choose an encounter, or Any encounter.",
-            );
+            design::small_message(ui, Tone::Warning, GONE_ENCOUNTER);
             return;
         }
         Some(_) => "Only runs of this encounter offer this group.",
@@ -1673,6 +1675,20 @@ pub(super) fn change_word(
 /// Encounters list, the run's setup and Arrivals show a change. The words are the link.
 pub(super) fn change_mark() -> String {
     format!("{}\u{a0}", icons::CHANGED)
+}
+
+/// What separates a detail line from the change link after it.
+const CHANGE_SEPARATOR: &str = " · ";
+
+/// Whether the whole change link (the pencil and `word`) fits after `detail` and its separator
+/// in `width` (G135). When it does not, the link starts its own row.
+fn link_fits_after(ui: &egui::Ui, detail: &str, word: &str, width: f32) -> bool {
+    let font = Type::Small.font(ui);
+    let link = design::number_width(ui, &format!("{}{word}", change_mark()), &font).max(design::XL);
+    design::number_width(ui, detail, &font)
+        + design::number_width(ui, CHANGE_SEPARATOR, &font)
+        + link
+        <= width
 }
 
 /// The change link at the end of a detail line: the muted pencil, then the words as a `Small`
@@ -3223,13 +3239,28 @@ fn members(
                     .wrap(),
                 );
                 design::named(ui, &response, &detail);
-            } else if word.is_some() {
+            } else if let Some(word) = &word {
+                // G135: the whole link fits after the detail, or it starts its own row under
+                // the whole detail. It is never cut, and no stat is left out for it.
+                let own_row = !detail.is_empty()
+                    && !link_fits_after(ui, &super::stat_line(&detail), word, ui.available_width());
+                if own_row {
+                    let response = ui.add(
+                        egui::Label::new(super::detail_text(
+                            ui,
+                            &super::stat_line(&detail),
+                            hp_missing,
+                        ))
+                        .wrap(),
+                    );
+                    design::named(ui, &response, &detail);
+                }
                 ui.horizontal_wrapped(|ui| {
                     // One row as tall as the link's target, so the detail and the link share
                     // their centre line.
                     ui.set_row_height(design::XL);
                     ui.spacing_mut().item_spacing.x = 0.0;
-                    if !detail.is_empty() {
+                    if !own_row && !detail.is_empty() {
                         let response = ui.add(
                             egui::Label::new(super::detail_text(
                                 ui,
@@ -3240,14 +3271,12 @@ fn members(
                         );
                         design::named(ui, &response, &detail);
                     }
-                    if let Some(word) = &word {
-                        if !detail.is_empty() {
-                            ui.label(Type::Small.rich(ui, " · ").color(colors().muted));
-                        }
-                        if change_link(ui, word) {
-                            show_form_when_it_opens(ui);
-                            *expanded = Some(key.clone());
-                        }
+                    if !own_row && !detail.is_empty() {
+                        ui.label(Type::Small.rich(ui, CHANGE_SEPARATOR).color(colors().muted));
+                    }
+                    if change_link(ui, word) {
+                        show_form_when_it_opens(ui);
+                        *expanded = Some(key.clone());
                     }
                 });
             }
@@ -5125,7 +5154,20 @@ mod tests {
         let mut reopened = GroupDraft::open(dir.path(), &draft.path).unwrap();
         reopened.name = "Renamed".into();
         let error = reopened.save(&campaign, &[]).unwrap_err();
-        assert!(error.contains(BELONGS_TO), "{error}");
+        assert_eq!(error, GONE_ENCOUNTER);
+        // G122: one message, under Belongs to, says the cause and the repair; the footer does
+        // not say the refusal again.
+        assert!(
+            error.contains("deleted") && error.contains(ANY_ENCOUNTER),
+            "{error}"
+        );
+        assert_eq!(
+            reopened.check(&snapshot, None),
+            Err(Refusal {
+                text: GONE_ENCOUNTER.into(),
+                in_place: true,
+            })
+        );
         reopened.setup.encounter = None;
         reopened.save(&campaign, &[]).unwrap();
     }

@@ -26,8 +26,6 @@ use std::{
 };
 use uuid::Uuid;
 
-/// The last sentence of a deleted-entry roster fault.
-const REPLACE_DELETED_ENTRY: &str = "Choose a replacement in the roster.";
 /// Where the party members that Add participants offers come from.
 const PARTY_SOURCE: &str = "Party members come from the sheets Splat saved last.";
 /// Where an encounter that this editor cannot change is repaired.
@@ -877,20 +875,26 @@ impl Draft {
             match (&slot.creature, &slot.party_slot) {
                 (Some(reference), None) => {
                     let id = snapshot.catalogue.resolve_ref(reference).map_err(|_| {
-                        let count = self.setup.roster.iter().filter(|other| other.creature.as_ref() == Some(reference)).count();
-                        let mut named = slot.clone();
-                        named.overrides.remove("name");
-                        let name = roster_name(&named, None, &snapshot.known_creature_names);
                         // The kind of fault sets the tone, here where the message is made.
                         let unreadable = snapshot.catalogue.unreadable_ref(reference);
                         Invalid {
                             tone: missing_creature_tone(unreadable),
-                            text: unreadable.map_or_else(|| if count > 1 {
-                                format!("{count} {name} rows have no creature. Their package entry was deleted. {REPLACE_DELETED_ENTRY}")
-                            } else {
-                                format!("{name} has no creature. Its package entry was deleted. {REPLACE_DELETED_ENTRY}")
-                            },
-                                |note| format!("{}. Open in {} to fix it.", note.word, if crate::world::repair_in_world(&note.path) { "World" } else { "Library" })),
+                            // G125: each row says its deleted entry (`MISSING_CREATURE`), so the
+                            // message says only the next act, for every such row.
+                            text: unreadable.map_or_else(
+                                || replace_deleted_rows(&self.deleted_rows(snapshot)),
+                                |note| {
+                                    format!(
+                                        "{}. Open in {} to fix it.",
+                                        note.word,
+                                        if crate::world::repair_in_world(&note.path) {
+                                            "World"
+                                        } else {
+                                            "Library"
+                                        }
+                                    )
+                                },
+                            ),
                         }
                     })?;
                     if !snapshot.creatures.iter().any(|c| c.id == id) {
@@ -922,6 +926,25 @@ impl Draft {
             }
         }
         Ok(())
+    }
+    /// The names of the roster rows whose package entry was deleted, in roster order, as each
+    /// row names its creature.
+    fn deleted_rows(&self, snapshot: &Snapshot) -> Vec<String> {
+        self.setup
+            .roster
+            .iter()
+            .filter(|slot| {
+                slot.creature.as_ref().is_some_and(|reference| {
+                    snapshot.catalogue.resolve_ref(reference).is_err()
+                        && snapshot.catalogue.unreadable_ref(reference).is_none()
+                })
+            })
+            .map(|slot| {
+                let mut named = slot.clone();
+                named.overrides.remove("name");
+                roster_name(&named, None, &snapshot.known_creature_names)
+            })
+            .collect()
     }
     /// A change to a stat must leave it valid for this slot's creature and starting state.
     fn validate_overrides(&self, row: &str, slot: &Slot, entry: &Entry) -> Result<(), String> {
@@ -1739,6 +1762,35 @@ fn stat_line(text: &str) -> String {
 }
 
 const MISSING_CREATURE: &str = "Not found. Its package entry was deleted.";
+
+/// The message for roster rows whose package entry was deleted: only the next act, naming or
+/// counting the rows by creature. The rows themselves say the cause ([`MISSING_CREATURE`]).
+fn replace_deleted_rows(names: &[String]) -> String {
+    let mut counted: Vec<(&str, usize)> = Vec::new();
+    for name in names {
+        match counted.iter_mut().find(|(known, _)| known == name) {
+            Some((_, count)) => *count += 1,
+            None => counted.push((name, 1)),
+        }
+    }
+    let rows: Vec<String> = counted
+        .iter()
+        .map(|(name, count)| match count {
+            1 => format!("the {name} row"),
+            count => format!("the {count} {name} rows"),
+        })
+        .collect();
+    let rows = match rows.as_slice() {
+        [] => "those rows".to_owned(),
+        [one] => one.clone(),
+        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
+    };
+    if names.len() == 1 {
+        format!("Choose a replacement for {rows}.")
+    } else {
+        format!("Choose replacements for {rows}.")
+    }
+}
 
 /// The tone of a roster row whose creature is not there, and of the message that states the same
 /// fault. The tone comes from the fault's kind: a file that cannot be read is an error; a deleted
@@ -8750,18 +8802,31 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let active = campaign(dir.path());
         let id = creature(dir.path(), "Cinder Wolf", false);
+        let goblin = creature(dir.path(), "Goblin", false);
+        let guard = creature(dir.path(), "Guard", false);
         let old = Snapshot::load(&active, &[]).unwrap();
         fs::remove_file(dir.path().join("Cinder Wolf.md")).unwrap();
+        fs::remove_file(dir.path().join("Goblin.md")).unwrap();
         let mut snapshot = Snapshot::load(&active, &[]).unwrap();
         snapshot.keep_edited_settings(&old);
+        // G125: the rows say their entry was deleted; the message says only the next act, and
+        // names and counts every such row, among rows whose creature is there.
+        let mut mixed = Draft::new();
+        mixed.add(id, false);
+        mixed.add(guard, false);
+        mixed.add(goblin, false);
+        mixed.add(id, false);
+        assert_eq!(
+            mixed.validate(&snapshot).unwrap_err().text,
+            "Choose replacements for the 2 Cinder Wolf rows and the Goblin row."
+        );
         let mut draft = Draft::new();
         draft.add(id, false);
         draft.add(id, false);
         let error = draft.validate(&snapshot).unwrap_err();
-        assert!(
-            error
-                .text
-                .starts_with("2 Cinder Wolf rows have no creature.")
+        assert_eq!(
+            error.text,
+            "Choose replacements for the 2 Cinder Wolf rows."
         );
         let mut encounters = Encounters {
             snapshot: Some(snapshot),
@@ -8779,7 +8844,7 @@ mod tests {
                 .error
                 .as_ref()
                 .unwrap()
-                .starts_with("Cinder Wolf has no creature.")
+                .starts_with("Choose a replacement for the Cinder Wolf row.")
         );
         let missing = encounters.draft.as_ref().unwrap().setup.roster.clone();
         encounters.draft.as_mut().unwrap().setup.roster.clear();
@@ -8792,7 +8857,7 @@ mod tests {
                 .error
                 .as_ref()
                 .unwrap()
-                .starts_with("Cinder Wolf has no creature.")
+                .starts_with("Choose a replacement for the Cinder Wolf row.")
         );
 
         // Round 24 review: drawn frames check the refused draft again only when it or the
@@ -8851,7 +8916,7 @@ mod tests {
             work: VALIDATIONS.with(std::cell::Cell::get),
         });
         frame(&mut encounters, wide, Vec::new());
-        let shown = shows(&encounters, "Cinder Wolf has no creature.");
+        let shown = shows(&encounters, "Choose a replacement for the Cinder Wolf row.");
         check
             .warm(&mut encounters, shown, 1)
             .expect("refusal-check-warm");
@@ -8860,7 +8925,7 @@ mod tests {
                 for size in [wide, wide, wide, narrow, wide] {
                     frame(encounters, size, Vec::new());
                 }
-                shows(encounters, "Cinder Wolf has no creature.")
+                shows(encounters, "Choose a replacement for the Cinder Wolf row.")
             })
             .expect("refusal-check-steady");
         // An edit: the second row comes back, and the reason counts both.
@@ -8870,7 +8935,10 @@ mod tests {
                 encounters.draft.as_mut().unwrap().setup.roster.push(row);
                 frame(encounters, wide, key());
                 frame(encounters, wide, Vec::new());
-                shows(encounters, "2 Cinder Wolf rows have no creature.")
+                shows(
+                    encounters,
+                    "Choose replacements for the 2 Cinder Wolf rows.",
+                )
             })
             .expect("refusal-check-edit");
         // Discard: a new draft has no saved encounter to go back to, so its refusal goes with it.
@@ -8888,7 +8956,10 @@ mod tests {
                 encounters.undo_discard();
                 frame(encounters, wide, key());
                 frame(encounters, wide, Vec::new());
-                shows(encounters, "2 Cinder Wolf rows have no creature.")
+                shows(
+                    encounters,
+                    "Choose replacements for the 2 Cinder Wolf rows.",
+                )
             })
             .expect("refusal-check-undo");
         check
@@ -8896,7 +8967,10 @@ mod tests {
                 for size in [wide, narrow, wide] {
                     frame(encounters, size, Vec::new());
                 }
-                shows(encounters, "2 Cinder Wolf rows have no creature.")
+                shows(
+                    encounters,
+                    "Choose replacements for the 2 Cinder Wolf rows.",
+                )
             })
             .expect("refusal-check-steady-after-undo");
         // A check that passes clears the stored refusal.
@@ -10269,7 +10343,10 @@ mod tests {
         let mut draft = Draft::new();
         draft.add(id, false);
         let invalid = draft.validate(&deleted).unwrap_err();
-        assert!(invalid.text.ends_with(REPLACE_DELETED_ENTRY), "{invalid:?}");
+        assert_eq!(
+            invalid.text,
+            "Choose a replacement for the Cinder Wolf row."
+        );
         assert!(invalid.tone == Tone::Warning);
         // The row says the same fault in the same tone.
         assert!(invalid.tone == missing_creature_tone(None));
@@ -10284,7 +10361,7 @@ mod tests {
         };
         assert!(encounters.error_tone() == Tone::Warning);
         // Another message with the same last sentence is not that fault, so it is an error.
-        encounters.error = Some(format!("The file did not save. {REPLACE_DELETED_ENTRY}"));
+        encounters.error = Some(format!("The file did not save. {}", invalid.text));
         assert!(encounters.error_tone() == Tone::Error);
         encounters.validation_error = None;
         assert!(encounters.error_tone() == Tone::Error);
