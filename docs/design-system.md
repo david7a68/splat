@@ -1533,7 +1533,7 @@ possible; shorten to character name and first changed value, with full text in h
 Undo steps, the notice ends with their count (`Brannoch Vale: HP 49 → 46 · 1 Undo step removed`) in every form, in the
 header and below the roster; the Log names each. Otherwise show
 once below the roster, keeping Undo visible. Sheet-change notices use `small_message`: warning icon and bar,
-text-colour words. A result below the roster (`Brannoch Vale joined at 20 · acts next round.`) uses the same
+text-colour words. A result below the roster (`Brannoch Vale joined at 20. It acts next round.`) uses the same
 `small_message` in the success tone, with the past tense Arrivals uses (`joined at`, `moved to`). Centre compact notices with their Log and Dismiss controls, in the header and below
 the roster. Wrapped notices keep top alignment. Keep an `XS` gap after the icon and an `S` gap before
 the bar. Include those gaps in the header measure. Stat-block errors use `small_message` in the error tone: the fault in
@@ -1755,7 +1755,7 @@ group and a creature added by hand: `Lost Patrol joined at 9.`, `Ghost of the Mi
 Cultist at 9, placed after.`, `Wolf 1 and Wolf 2 joined at 14.` Every result is a success message, tied or not; the
 `Move … before …` button below a tied one shows that a choice is open. The result and that button sit in a footer pinned to the panel's bottom, below the scrolling list, so a result that comes, grows with a tie or goes moves no group row. That button, the moved result and its Undo
 name the arrival as its message does (`Move Lost Patrol before Ember Cultist`). When the roster has two groups of
-one name, the arrival adds its first member: `Rival Team (Rival Captain 2) moved before Rival Team`. When the Move
+one name, the arrival adds its first member: `Rival Team (Rival Captain 2) moved before Rival Captain at 14.`; the row it passed is named by its own name. When the Move
 button cannot show those words whole, it gives up the whole parenthesis, never only the member's name
 (`Move Shrine Reserve before Brannoch Vale`): it sits under the message that names the arrival whole and moves only
 that arrival. Undo is not beside that message, so a shortened move Undo keeps the copy number and gives up the

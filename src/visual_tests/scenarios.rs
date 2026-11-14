@@ -7063,7 +7063,7 @@ pub mod run_absent_player {
             );
         }
         d.state("initiative-set-in-combat", Sizes::Default);
-        let joined = "Brannoch Vale joined at\u{a0}20 ·\u{a0}acts next round.";
+        let joined = "Brannoch Vale joined at\u{a0}20. It acts next round.";
         d.expect(joined);
         let words = d.place_of(joined);
         d.observe(
@@ -17805,7 +17805,7 @@ pub mod encounter_groups {
         d.expect_moves("Move before puts the tied arrival above its twin.");
         d.click("Move Rival Team (Rival Captain 2) before Rival Team");
         d.at_size(DEFAULT, |d| {
-            d.expect("Rival Team (Rival Captain 2) moved before Rival Team at\u{a0}14")
+            d.expect("Rival Team (Rival Captain 2) moved before Rival Captain at\u{a0}14.")
         });
         d.observe(
             "F4",

@@ -3334,7 +3334,8 @@ impl Run {
                     }
                     let adds = added.iter().map(|xp| xp.unwrap_or(0)).sum();
                     let fight = scale.weigh(&party, foes.iter().copied().chain(added));
-                    Some((group.id, (fight.rating?, adds)))
+                    fight.rating.as_ref()?;
+                    Some((group.id, (fight, adds)))
                 })
                 .collect();
             self.arrival_words = Some((key, words));
@@ -3762,40 +3763,42 @@ impl Run {
             &format!("{} {name}", icons::DRAG),
             &Type::Strong.font(ui),
         );
-        let totals_in_heading = heading_width
-            + design::L
-            + design::number_width(ui, &totals_text, &Type::Small.font(ui))
-            <= grip.rect.width();
-        let status_in_heading = totals_in_heading
-            && !status.is_empty()
-            && heading_width
-                + design::L
-                + design::number_width(
-                    ui,
-                    &format!("{status} · {totals_text}"),
-                    &Type::Small.font(ui),
-                )
-                <= grip.rect.width();
-        // F1, FI10: what the fight becomes when the group joins, after the group's own XP, in
-        // the one difficulty form: ` · Fight after: XP 450 · Low`. Only where the totals and
-        // the status words are in the heading and stay there with it.
-        let word = rating
-            .as_ref()
-            .map(|rating| format!(" · {FIGHT_AFTER}{}", rating.form(false)));
-        let word = word.filter(|word| {
-            let line = if status.is_empty() {
-                format!("{totals_text}{word}")
-            } else {
-                format!("{status} · {totals_text}{word}")
-            };
-            totals_in_heading
-                && (status.is_empty() || status_in_heading)
-                && heading_width
-                    + design::L
-                    + design::number_width(ui, &line, &Type::Small.font(ui))
-                    <= grip.rect.width()
+        let status_room = if status.is_empty() {
+            0.0
+        } else {
+            design::number_width(ui, &status, &Type::Small.font(ui)) + design::L
+        };
+        // R1 (FL3, FI1, FJ1, FB2): `Fight after` never gives way. The one difficulty line
+        // (`difficulty::Line`) decides what does, in its order: the member count, then the
+        // side, then the XP number; it never adds a line. The name is the heading's.
+        let side = style::human_label(&group.side);
+        let members = group.count_label();
+        let fight = rating.as_ref().map(|fight| {
+            crate::difficulty::Line::fight_after(
+                fight,
+                crate::difficulty::FightAfter {
+                    name,
+                    members: &members,
+                    side: &side,
+                },
+            )
         });
-        let shown = rating.as_ref().filter(|_| word.is_some());
+        let after_name = |text: &str| -> String {
+            text.strip_prefix(name.as_str())
+                .map_or(text, |rest| rest.trim_start_matches(" · "))
+                .to_owned()
+        };
+        let room = grip.rect.width() - heading_width - design::L - status_room;
+        let fitted = fight.as_ref().and_then(|line| {
+            line.fit(|text| {
+                design::number_width(ui, &after_name(text), &Type::Small.font(ui)) <= room
+            })
+        });
+        // A group with no word keeps its totals, where they fit.
+        let totals_in_heading = fitted.is_none()
+            && design::number_width(ui, &totals_text, &Type::Small.font(ui)) <= room;
+        let status_in_heading = !status.is_empty();
+        let shown = rating.as_ref().and_then(|fight| fight.rating.as_ref());
         // A pointer's way to do what the Add button does, so the keyboard does not stop here.
         grip.widget_info(|| {
             egui::WidgetInfo::labeled(
@@ -3809,39 +3812,28 @@ impl Run {
         });
         if let Some(rating) = shown {
             let words = format!(
-                "Adds {} XP. {FIGHT_AFTER}{}.",
+                "{}. Adds {} XP. {FIGHT_AFTER}{}.",
+                totals_text,
                 crate::encounter_run::grouped_number(adds),
                 rating.form(true)
             );
             ui.ctx()
                 .accesskit_node_builder(grip.id, |node| node.set_description(words));
         }
-        // The word in the text colour; the rest muted, as every difficulty line.
+        // The line's facts muted, the word in the text colour, as every difficulty line.
         let mut job = egui::text::LayoutJob::default();
-        if let Some(rating) = shown {
-            crate::difficulty::append(
-                &mut job,
-                ui,
-                Type::Small,
-                &format!(" · {FIGHT_AFTER}"),
-                c.muted,
-            );
-            crate::difficulty::append_form(&mut job, ui, Type::Small, &rating.parts(false));
+        if let Some(fitted) = &fitted {
+            let lead = after_name(&fitted.lead);
+            if !lead.is_empty() {
+                crate::difficulty::append(&mut job, ui, Type::Small, &format!("{lead} · "), c.muted);
+            }
+            crate::difficulty::append_form(&mut job, ui, Type::Small, &fitted.form);
+        } else if totals_in_heading {
+            crate::difficulty::append(&mut job, ui, Type::Small, &totals_text, c.muted);
         }
         let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
         let word_rect = Align2::RIGHT_CENTER.anchor_size(grip.rect.right_center(), galley.size());
         ui.painter().galley(word_rect.min, galley, c.text);
-        let totals = ui.painter().text(
-            pos2(word_rect.left(), grip.rect.center().y),
-            Align2::RIGHT_CENTER,
-            if totals_in_heading {
-                totals_text.clone()
-            } else {
-                String::new()
-            },
-            Type::Small.font(ui),
-            c.muted,
-        );
         if status_in_heading {
             ui.painter().text(
                 pos2(
@@ -3854,7 +3846,7 @@ impl Run {
                 c.muted,
             );
         }
-        // A long name stops short of the totals, and its row shows it whole on hover.
+        // A long name stops short of the line, and its row shows it whole on hover.
         let title = egui::WidgetText::from(
             Type::Strong
                 .rich(ui, format!("{} {name}", icons::DRAG))
@@ -3863,7 +3855,7 @@ impl Run {
         .into_galley(
             ui,
             Some(egui::TextWrapMode::Truncate),
-            (totals.left() - grip.rect.left() - design::S).max(0.0),
+            (word_rect.left() - status_room - grip.rect.left() - design::S).max(0.0),
             Type::Strong.font(ui),
         );
         ui.painter().galley(
@@ -3895,7 +3887,7 @@ impl Run {
             movable.then_some(GroupDrag(group.id)),
             design::Ghost::new(icons::ADD, name),
         );
-        if !totals_in_heading {
+        if fitted.is_none() && !totals_in_heading {
             ui.add(egui::Label::new(Type::Small.rich(ui, &totals_text).color(c.muted)).wrap());
         }
         let mut add = false;

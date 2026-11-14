@@ -707,7 +707,9 @@ pub(crate) struct ArrivalSummary {
     pub above: bool,
 }
 /// What each group would make the fight, with the XP its members on the other side add.
-pub(crate) type ArrivalWords = BTreeMap<Uuid, (crate::difficulty::Rating, u64)>;
+/// Per group: the fight it makes (with its word: groups without one are not listed) and the
+/// XP it adds.
+pub(crate) type ArrivalWords = BTreeMap<Uuid, (crate::difficulty::Difficulty, u64)>;
 /// Each carried player's place in the roster, and HP and temporary HP from their sheet.
 type SheetValues = Vec<(usize, Option<i64>, i64)>;
 /// HP that came from the last fight, not from the sheets.
@@ -1889,7 +1891,7 @@ impl Run {
                     .position(|i| *i == index)
                     .is_some_and(|at| at >= after.cursor);
             return format!(
-                "{name} moves to\u{a0}{total} when this turn ends ·\u{a0}acts {}.",
+                "{name} moves to\u{a0}{total} when this turn ends. It acts {}.",
                 if later {
                     "later this round"
                 } else {
@@ -1902,15 +1904,16 @@ impl Run {
         let when = if !state.participants[index].present {
             ""
         } else if passed {
-            " ·\u{a0}acts next round"
+            " It acts next round."
         } else if acted {
-            " ·\u{a0}acts again this round"
+            " It acts again this round."
         } else {
             ""
         };
-        // The change is done, so it says so in the past tense, as Arrivals does.
+        // The change is done, so it says so in the past tense, as Arrivals does. FJ8: in
+        // sentences, as every result is.
         let verb = if had { "moved to" } else { "joined at" };
-        format!("{name} {verb}\u{a0}{total}{when}.")
+        format!("{name} {verb}\u{a0}{total}.{when}")
     }
     /// Give the turn to the next present participant. A current row whose total changed in
     /// its turn goes to its new place first: if that is still to come in this round, it acts
@@ -2428,15 +2431,15 @@ impl Run {
                         .position(|i| *i == current)
                         .unwrap_or(next.cursor);
                 }
+                // FH6: the arrival as its `joined at` result names it. FI4: the row it passed
+                // by its own name (never its group's, which can be the arrival's too), in
+                // sentences.
                 format!(
-                    "{} moved before {target} at\u{a0}{}{}.",
+                    "{} moved before {} at\u{a0}{}.{}",
                     Self::arrival_name(&next, first, &target),
+                    next.participants[before].name,
                     display(next.participants[before].initiative),
-                    if waits {
-                        " ·\u{a0}acts next round"
-                    } else {
-                        ""
-                    }
+                    if waits { " It acts next round." } else { "" }
                 )
             }
             Command::Move(from, to) => {
@@ -10198,7 +10201,10 @@ mod tests {
                 .log
                 .last()
                 .unwrap()
-                .contains("moved before First wave at\u{a0}15 ·\u{a0}acts next round")
+                .contains(&format!(
+                    "moved before {} at\u{a0}15. It acts next round.",
+                    run.state.participants[3].name
+                ))
         );
         run.undo();
         assert_eq!(run.state.order, order);
@@ -10798,7 +10804,8 @@ mod tests {
         }));
         // 600 XP in the fight and 200 more: Low for five at level 4 (1,250). Counting the ally
         // (1,800) would make it Above High; the run's level-3 copies would make it Moderate.
-        let (rating, adds) = run.arrival_words().unwrap()[&group.id].clone();
+        let (fight, adds) = run.arrival_words().unwrap()[&group.id].clone();
+        let rating = fight.rating.unwrap();
         assert_eq!(
             (rating.word, rating.xp, rating.budgets[0], adds),
             (crate::difficulty::Word::Low, 800, 1250, 200)
@@ -10809,7 +10816,7 @@ mod tests {
             run.arrival_words().unwrap().get(&group.id).cloned()
         };
         run.state.participants[0].present = false;
-        let (rating, _) = weigh(&mut run).unwrap();
+        let rating = weigh(&mut run).unwrap().0.rating.unwrap();
         assert_eq!(
             (rating.characters, rating.budgets, rating.xp),
             (4, [1000, 1500, 2000], 800)
