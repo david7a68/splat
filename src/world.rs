@@ -2839,10 +2839,9 @@ impl Reader {
             .then(|| start_fight(item, index))
             .flatten()
             .filter(|fight| {
-                !fight.npc
-                    || (!self.in_run.contains_key(&id)
-                        && !editing_entry
-                        && !(fight.creature.is_none() && self.adding.is_some()))
+                let form_open = fight.creature.is_none() && self.adding.is_some();
+                let elsewhere = self.in_run.contains_key(&id) || editing_entry || form_open;
+                !fight.npc || !elsewhere
             });
         {
             let width = ui.available_width();
