@@ -23,7 +23,6 @@ src/library/view.rs allow-deprecated 1
 src/lookup.rs allow-deprecated 1
 src/loot_editor.rs allow-deprecated 1
 src/party.rs allow-deprecated 1
-src/processing/settings.rs allow-deprecated 1
 src/roll_table.rs allow-deprecated 1
 src/sessions/carry.rs allow-deprecated 1
 src/sessions/page.rs allow-deprecated 1

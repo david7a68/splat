@@ -1,12 +1,15 @@
 //! Settings for recording and processing: which input, which speech service, which LLM.
 //! The choices live in a small file beside the settings file. Keys live in the keyring.
-#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use super::{
     ANTHROPIC_MODEL, ANTHROPIC_URL, CODEX_MODEL, Config, OPENAI_SPEECH_MODEL, OPENAI_URL, Provider,
 };
 use crate::{
     credentials::{self, KeySlot},
-    design::{self, Action, Density, Tone, Type, colors, icons},
+    design::outcome::{
+        Fault, FaultMessage, Messages, NoPress, Notice, PaneFrame, Sentence, Severity,
+    },
+    design::pane::Body,
+    design::{self, Action, Density, Type, colors, icons},
     recording::{self, Probe},
 };
 use eframe::egui;
@@ -17,6 +20,62 @@ use std::{
     sync::mpsc,
 };
 use zeroize::{Zeroize, Zeroizing};
+
+/// A fault of the recording settings, the recorder or a key, by kind. The kind decides its
+/// severity, so each one has one tone wherever it shows.
+enum SettingsFault<'a> {
+    /// The settings file cannot be read, so the defaults are in use: the reader's words.
+    Unreadable(&'a str),
+    /// A change was not saved: the system's words.
+    NotSaved(&'a str),
+    /// No recorder is installed on this computer.
+    NoRecorder,
+    /// The keyring did not keep or remove a key: its words. Splat holds the key until it closes.
+    KeyNotKept(&'a str),
+    /// The saved key is for another service, so Splat does not send it.
+    KeyForAnother { owner: &'a str, target: &'a str },
+}
+
+impl Fault for SettingsFault<'_> {
+    fn severity(&self) -> Severity {
+        match self {
+            Self::Unreadable(_) => Severity::CannotRead,
+            Self::NotSaved(_) | Self::KeyNotKept(_) => Severity::NotSaved,
+            Self::NoRecorder | Self::KeyForAnother { .. } => Severity::NeedsFixing,
+        }
+    }
+
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the faults carry the settings reader's, the system's and the keyring's words"
+    )]
+    fn cause(&self) -> Sentence {
+        use crate::sentence;
+        match self {
+            Self::Unreadable(error) => Sentence::outside(*error).unwrap_or(sentence!(
+                "The settings file could not be read, so these are the defaults."
+            )),
+            Self::NotSaved(error) => {
+                let said = sentence!("These settings were not saved.");
+                match Sentence::outside(*error) {
+                    Some(error) => said.then(error),
+                    None => said,
+                }
+            }
+            Self::NoRecorder => sentence!(
+                "No recorder found. Install pw-record (PipeWire), parecord (PulseAudio) or arecord (ALSA). Notes and the timeline work without one."
+            ),
+            Self::KeyNotKept(error) => Sentence::outside(*error)
+                .unwrap_or(sentence!("The key was not saved on this computer."))
+                .then(sentence!("Splat keeps the key until it closes.")),
+            Self::KeyForAnother { owner, target } => sentence!(
+                "The saved key is for {}, so Splat will not send it to {}.",
+                owner,
+                target
+            ),
+        }
+    }
+}
 
 /// Which text setting a [`ProcessingSettings::setting_field`] edits.
 #[derive(Clone, Copy)]
@@ -381,7 +440,7 @@ impl ProcessingSettings {
             .store
             .save(&self.config)
             .err()
-            .map(|error| format!("These settings were not saved. {error}"));
+            .map(|error| error.to_string());
     }
 
     fn key_row(&mut self, ui: &mut egui::Ui, slot: KeySlot, label: &str) {
@@ -398,13 +457,12 @@ impl ProcessingSettings {
             KeySlot::Speech => &self.config.speech_key_for,
             KeySlot::Llm => &self.config.llm_key_for,
         };
-        let owner = key_service_name(saved_for);
+        let owner = key_service_name(saved_for).to_owned();
         let target = key_service_name(match slot {
             KeySlot::Speech => &self.config.speech_url,
             KeySlot::Llm => &self.config.llm_url,
-        });
-        let warning =
-            format!("The saved key is for {owner}, so Splat will not send it to {target}.");
+        })
+        .to_owned();
         let slot_word = if slot == KeySlot::Speech {
             "speech"
         } else {
@@ -479,7 +537,13 @@ impl ProcessingSettings {
             }
         });
         if (saved || held) && !fits {
-            design::message(ui, Tone::Warning, &warning);
+            key_fault(
+                ui,
+                &SettingsFault::KeyForAnother {
+                    owner: &owner,
+                    target: &target,
+                },
+            );
         }
         if save {
             match slot {
@@ -500,13 +564,8 @@ impl ProcessingSettings {
                 });
             }
         }
-        let field = self.field(slot);
-        if let Some(error) = &field.error {
-            design::message(
-                ui,
-                Tone::Warning,
-                &format!("{error} Splat keeps the key until it closes."),
-            );
+        if let Some(error) = self.field(slot).error.clone() {
+            key_fault(ui, &SettingsFault::KeyNotKept(&error));
         }
         if (saved || held)
             && Action::quiet(&remove)
@@ -542,13 +601,8 @@ impl ProcessingSettings {
             None => {
                 design::help(ui, "Looking for a recorder…");
             }
-            Some(Probe { tool: None, .. }) => {
-                design::message(
-                    ui,
-                    Tone::Warning,
-                    "No recorder found. Install pw-record (PipeWire), parecord (PulseAudio) or arecord (ALSA). Notes and the timeline work without one.",
-                );
-            }
+            // Round 28: why it cannot record is in the tab's footer.
+            Some(Probe { tool: None, .. }) => {}
             Some(Probe {
                 tool: Some(tool),
                 inputs,
@@ -589,13 +643,8 @@ impl ProcessingSettings {
                     if changed {
                         self.persist();
                     }
-                    if self.recording_now {
-                        design::message(
-                            ui,
-                            Tone::Info,
-                            "A new input applies to the next recording. Stop and record again to use it.",
-                        );
-                    }
+                    // Round 28 FM11: the notice that a new input waits for the next recording is
+                    // in the tab's footer, so it never pushes the form down.
                 }
             }
         }
@@ -852,18 +901,46 @@ impl ProcessingSettings {
         }
     }
 
+    /// The Recording tab as one pane: its fields, then its message footer, `S` below them, pinned
+    /// only when they fill the pane (round 28, `Body::Content`). The messages are made before the
+    /// fields draw, from owned words.
+    pub fn pane(&mut self, ui: &mut egui::Ui) {
+        let width = ui.available_width().min(design::LIST_MEASURE);
+        let frame = PaneFrame::new(ui);
+        let messages = self.messages(&frame, width);
+        let _ = messages.pane(ui, Body::Content, |ui| {
+            let mut fields = ui.available_rect_before_wrap();
+            fields.min.x += design::S;
+            ui.scope_builder(egui::UiBuilder::new().max_rect(fields), |ui| {
+                ui.set_max_width(design::FORM_WIDTH + design::XXL);
+                self.show(ui);
+            });
+        });
+    }
+
     /// Round 27 FI7: the Recording tab's notices sit in its message footer, so the form never
-    /// moves when one comes or goes (the DM fills the last missing value, a save fails).
-    pub fn footer_messages(&self, footer: &mut design::Footer<'_>) {
-        if let Some(error) = self.load_error.clone() {
-            footer.notice(error.clone(), move |ui| {
-                design::message(ui, Tone::Warning, &error);
-            });
+    /// moves when one comes or goes (the DM fills the last missing value, a save fails). Round
+    /// 28 FM11: so does the notice that a new input waits for the next recording.
+    fn messages<'f>(&self, frame: &'f PaneFrame, width: f32) -> Messages<'f, NoPress> {
+        let mut messages = Messages::new(frame, "recording_settings_footer", width);
+        if let Some(error) = &self.load_error {
+            messages.outcome(FaultMessage::new(&SettingsFault::Unreadable(error)));
         }
-        if let Some(error) = self.save_error.clone() {
-            footer.reason(error.clone(), move |ui| {
-                design::message(ui, Tone::Error, &error);
-            });
+        if let Some(error) = &self.save_error {
+            messages.outcome(FaultMessage::new(&SettingsFault::NotSaved(error)));
+        }
+        match &self.probe {
+            Some(Probe { tool: None, .. }) => {
+                messages.outcome(FaultMessage::new(&SettingsFault::NoRecorder));
+            }
+            Some(Probe {
+                tool: Some(tool), ..
+            }) if tool.can_choose_input() && self.recording_now => {
+                messages.outcome(Notice::new(crate::sentence!(
+                    "A new input applies to the next recording. Stop and record again to use it."
+                )));
+            }
+            _ => {}
         }
         if let Some(problem) = self.problem() {
             let problem = if problem.starts_with("Save an API key for this speech service") {
@@ -879,12 +956,22 @@ impl ProcessingSettings {
             } else {
                 problem.replace(" in Settings", "")
             };
-            let words = format!("You cannot process yet. {problem}");
-            footer.notice(words.clone(), move |ui| {
-                design::message(ui, Tone::Info, &words);
-            });
+            messages.outcome(Notice::new(crate::sentence!(
+                "You cannot process yet. {}.",
+                problem.trim_end_matches('.')
+            )));
         }
+        messages
     }
+}
+
+/// A key's fault, where its key row is: the row's own place, so the DM reads it beside the key.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "a key's fault belongs to its key row (`Ban::Body`)"
+)]
+fn key_fault(ui: &mut egui::Ui, fault: &SettingsFault<'_>) {
+    crate::design::outcome::row_fault(ui, fault);
 }
 
 /// The service a key was saved for, by its address.

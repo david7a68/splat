@@ -1061,6 +1061,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "one_fault_has_one_tone_in_every_place",
             &[Ban::Body],
         ),
+        ("src/processing/settings.rs", "cause", &[Ban::Words]),
+        ("src/processing/settings.rs", "key_fault", &[Ban::Body]),
         ("src/trackers.rs", "act_words", &[Ban::Words]),
         ("src/trackers.rs", "cause", &[Ban::Words]),
         ("src/trackers/history.rs", "show", &[Ban::Body]),
