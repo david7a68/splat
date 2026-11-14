@@ -9770,29 +9770,35 @@ pub mod run_edge_states {
         d.state_prepared("changed-on-disk", Sizes::Default, |d| {
             conflict_choices_read_height(d, "iter-15-B2-density-run", SAVE_AS_NEW, KEEP_RUN);
         });
-        // iter-29 G131 (R25, FK2): the notice cannot be dismissed, so the roster's room ends
-        // above it. At 1200 every row of this roster fits there: no `N below` while the DM
-        // chooses.
-        let below = d.at_size(DEFAULT, |d| {
-            let mut found = None;
-            d.each_painted_text(|text, clip| {
-                let words = &text.galley.job.text;
-                if clip.intersects(text.visual_bounding_rect())
-                    && words.ends_with(" below")
-                    && words
-                        .split(' ')
-                        .next()
-                        .is_some_and(|count| count.parse::<u32>().is_ok())
-                {
-                    found = Some(words.clone());
-                }
-            });
-            found
+        // iter-29 G131 (R25, FK2): the notice cannot be dismissed. It keeps its lines and its
+        // choices, the roster's scroll body ends above it at a whole row (FI2 above: no row
+        // moved), and every roster row is reached by scrolling: at 1200, Ember Cultist, the row
+        // behind the notice, comes into view with the wheel.
+        let shown = |d: &Driver<'_>| {
+            d.nodes().into_iter().any(|node| {
+                node.name.starts_with("Ember Cultist, ")
+                    && node.name.contains(", HP ")
+                    && node.in_view()
+            })
+        };
+        let (hidden, reached) = d.act_at_size(DEFAULT, |d| {
+            let hidden = !shown(d);
+            let top = roster_places(d).first().map(|(_, rect)| rect.center());
+            if let Some(at) = top {
+                d.scroll_at(at, 3);
+            }
+            let reached = shown(d);
+            if let Some(at) = top {
+                d.scroll_up_at(at, 3);
+            }
+            (hidden, reached)
         });
         d.observe(
             "iter-29-R1-G131",
-            below.is_none(),
-            format!("Every roster row shows above the notice that cannot be dismissed: {below:?}"),
+            reached,
+            format!(
+                "Behind the notice before scrolling {hidden}; in view after scrolling {reached}"
+            ),
         );
         d.goal("see the run changed on disk");
         // The state cannot be dismissed, and closing tells the truth about it.

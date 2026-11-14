@@ -102,8 +102,8 @@ pub(crate) struct AddedFrom {
     pub group_id: Option<Uuid>,
 }
 /// A second step that the DM opened: the close dialog. Each opening owes the dialog's default
-/// focus once (FO2): the first frame that draws the default control gives it the focus, and the
-/// next opening is a new value that owes it again. No flag outlives the opening it was for.
+/// focus (FO2) until the default control holds it; the next opening is a new value that owes
+/// it again. No flag outlives the opening it was for.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum Opening {
     #[default]
@@ -129,11 +129,17 @@ impl Opening {
         matches!(self, Self::Open { .. })
     }
 
-    /// True once for each opening: the frame that draws the default control gives it focus.
-    pub(crate) fn take_focus(&mut self) -> bool {
-        match self {
-            Self::Open { focus_owed } => std::mem::take(focus_owed),
-            Self::Shut => false,
+    /// Whether this opening still owes the default control its focus. It owes it until the
+    /// control holds the focus (`focus_given`), so a change of the dialog's content in its
+    /// first frames (a conflict that arrives) cannot lose it.
+    pub(crate) fn owes_focus(self) -> bool {
+        matches!(self, Self::Open { focus_owed: true })
+    }
+
+    /// The default control holds the focus: this opening owes it no more.
+    pub(crate) fn focus_given(&mut self) {
+        if let Self::Open { focus_owed } = self {
+            *focus_owed = false;
         }
     }
 }

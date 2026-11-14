@@ -1290,19 +1290,12 @@ impl Run {
                                                 Layout::top_down(Align::LEFT),
                                                 |ui| {
                                                     ui.set_min_height(list);
-                                                    // R25 (iter-29 G131, FK2): a footer
-                                                    // notice that cannot be dismissed (the run
-                                                    // changed on disk) stays until the DM
-                                                    // chooses, so the roster's room ends above
-                                                    // it: the rows fit there, or the list
-                                                    // scrolls and cuts at a whole row. Only a
-                                                    // passing footer gets the kept room (R6).
-                                                    let hidden = if self.has_disk_conflict() {
-                                                        0.0
-                                                    } else {
-                                                        footer_room
-                                                    };
-                                                    self.roster(ui, list, notice_height, hidden);
+                                                    self.roster(
+                                                        ui,
+                                                        list,
+                                                        notice_height,
+                                                        footer_room,
+                                                    );
                                                 },
                                             );
                                             self.group_drop_zone(ui, roster.response.rect);
@@ -2698,7 +2691,8 @@ impl Run {
         let lost = self.unsent_only_here_names();
         let block = self.close_reason();
         let mut keep = ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape));
-        let focus = self.closing.take_focus();
+        let focus = self.closing.owes_focus();
+        let mut focused = false;
         let mut close = false;
         let mut save_new = false;
         let conflict = self.first_sync_in(SyncState::Conflict);
@@ -2810,14 +2804,23 @@ impl Run {
                     // (`docs/design-system.md:218`); the opening owns it, so a second opening
                     // in the same view gives it again.
                     let response = Action::secondary("Keep running").show(ui);
+                    // Given once Keep running already holds the focus when it is drawn; until
+                    // then it is asked for again, also under a new id after the content changed.
                     if focus {
-                        response.request_focus();
+                        if response.has_focus() {
+                            focused = true;
+                        } else {
+                            response.request_focus();
+                        }
                     }
                     keep |= response.clicked();
                 },
             );
             close |= lose;
         });
+        if focused {
+            self.closing.focus_given();
+        }
         if review {
             self.review_conflict();
             self.panel = Panel::Reference;
