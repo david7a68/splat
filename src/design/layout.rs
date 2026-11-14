@@ -1854,40 +1854,47 @@ impl<'a> BackLink<'a> {
         self
     }
 
-    /// Draw the link (and its context) on one line. The response is the link's.
+    /// Draw the link (and its context) on one line. The response is the link's. In a
+    /// left-to-right row it draws in that row, so it shares the row's centre with the row's
+    /// other controls; elsewhere it makes its own line.
     pub fn show(self, ui: &mut Ui) -> Response {
-        ui.horizontal(|ui| {
-            let icon_font = Type::Body.font(ui);
-            let icon = number_width(ui, BACK_LINK_ICON, &icon_font).ceil();
-            let action = Action::quiet(self.word.as_str())
-                .density(Density::Read)
-                .blocked(self.blocked);
-            let action = match self.edge {
-                BackEdge::Text => action.line_start(),
-                BackEdge::Segments => action,
-            };
-            // The word's target, and room for the icon `XS` after the word.
-            let width = action.natural_width(ui).ceil() + XS + icon;
-            let response = action.min_width(width).show(ui);
-            if ui.is_rect_visible(response.rect) {
-                let mut painter = ui.painter().clone();
-                if self.blocked.is_some() {
-                    painter.multiply_opacity(ui.visuals().disabled_alpha());
-                }
-                painter.text(
-                    egui::pos2(response.rect.right() - S - icon, response.rect.center().y),
-                    egui::Align2::LEFT_CENTER,
-                    BACK_LINK_ICON,
-                    icon_font,
-                    colors().text,
-                );
+        if ui.layout().main_dir() == egui::Direction::LeftToRight {
+            self.draw(ui)
+        } else {
+            ui.horizontal(|ui| self.draw(ui)).inner
+        }
+    }
+
+    fn draw(self, ui: &mut Ui) -> Response {
+        let icon_font = Type::Body.font(ui);
+        let icon = number_width(ui, BACK_LINK_ICON, &icon_font).ceil();
+        let action = Action::quiet(self.word.as_str())
+            .density(Density::Read)
+            .blocked(self.blocked);
+        let action = match self.edge {
+            BackEdge::Text => action.line_start(),
+            BackEdge::Segments => action,
+        };
+        // The word's target, and room for the icon `XS` after the word.
+        let width = action.natural_width(ui).ceil() + XS + icon;
+        let response = action.min_width(width).show(ui);
+        if ui.is_rect_visible(response.rect) {
+            let mut painter = ui.painter().clone();
+            if self.blocked.is_some() {
+                painter.multiply_opacity(ui.visuals().disabled_alpha());
             }
-            if let Some(context) = self.context {
-                ui.label(Type::Small.rich(ui, context).color(colors().muted));
-            }
-            response
-        })
-        .inner
+            painter.text(
+                egui::pos2(response.rect.right() - S - icon, response.rect.center().y),
+                egui::Align2::LEFT_CENTER,
+                BACK_LINK_ICON,
+                icon_font,
+                colors().text,
+            );
+        }
+        if let Some(context) = self.context {
+            ui.label(Type::Small.rich(ui, context).color(colors().muted));
+        }
+        response
     }
 }
 

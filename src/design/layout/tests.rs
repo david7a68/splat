@@ -319,9 +319,20 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
             ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
                 let _ = TitleLine::back(ALL_EVENTS, BackEdge::Text).show(ui);
                 rows = line().show(ui).rows;
-                let _ = TitleLine::back(RECORDINGS, BackEdge::Segments)
-                    .context("2026-01-01 19:00")
-                    .show(ui);
+                // As Session's recording viewer: an action at the line's far end, the back link
+                // and its context in a left-to-right part of a right-to-left row.
+                ui.horizontal(|ui| {
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        Action::secondary("Add to notes")
+                            .density(Density::Read)
+                            .show(ui);
+                        ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                            let _ = TitleLine::back(RECORDINGS, BackEdge::Segments)
+                                .context("2026-01-01 19:00")
+                                .show(ui);
+                        });
+                    });
+                });
             });
         });
         for words in WORDS.into_iter().chain([title, kind]) {
@@ -364,6 +375,15 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
             assert!(target.height() >= 24.0 && target.width() >= 24.0);
             assert!(target.left() >= left - S - 0.5, "{word:?} hangs at most S");
         }
+        // The link and the action at the line's end share one line (`iter-2-R11`).
+        let (back, add) = (
+            bounds(&nodes, RECORDINGS.as_str()),
+            bounds(&nodes, "Add to notes"),
+        );
+        assert!(
+            (back.center().y - add.center().y).abs() < 0.5,
+            "one line: {back:?} {add:?} at {width}"
+        );
         let rects = WORDS.map(|word| bounds(&nodes, word));
         // The draw keeps to the measure: every action ends inside the width it was given.
         for (word, rect) in WORDS.iter().zip(&rects) {

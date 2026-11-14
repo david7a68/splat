@@ -1436,10 +1436,7 @@ impl ContentIndex {
             let group = if entry.kind != "world" {
                 // A note in the campaign folder itself has the empty path: the root group
                 // (`design::FolderGroup::of_path` names it; no folder is called `Notes`).
-                let folder = entry
-                    .path
-                    .rsplit_once('/')
-                    .map_or("", |(folder, _)| folder);
+                let folder = entry.path.rsplit_once('/').map_or("", |(folder, _)| folder);
                 (3, folder.to_owned())
             } else {
                 match world::world_type(entry) {
