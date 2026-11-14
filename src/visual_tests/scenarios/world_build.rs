@@ -4126,6 +4126,27 @@ fn fixed_part_scrolls(d: &mut Driver<'_>, message: &str) -> (bool, bool, bool, [
         let back = tops(d);
         !top.0.is_empty() && down == top && back == top
     }
+    /// (the proof says the part fits, the part overflows): wheeled from its top to its bottom
+    /// over a point inside its visible rect, an overflowing part's words move; the proof then
+    /// runs from that bottom. In an `aside`: the part ends at its top.
+    fn fit_against_wheel(d: &mut Driver<'_>, part: egui::Rect) -> (bool, bool) {
+        d.aside(|d| {
+            let words = |d: &Driver<'_>| {
+                let mut tops = Vec::new();
+                d.each_painted_text(|text, _| {
+                    if text.visual_bounding_rect().intersects(part) {
+                        tops.push(text.pos.y);
+                    }
+                });
+                tops
+            };
+            d.scroll_up_at(part.center(), 8);
+            let top = words(d);
+            d.scroll_at(part.center(), 8);
+            let overflows = words(d) != top;
+            (part_fits(d, part), overflows)
+        })
+    }
     let ring_clear =
         [SMALL, DEFAULT, LARGE].map(|size| {
             d.act_at_size(size, |d| {
@@ -4137,22 +4158,7 @@ fn fixed_part_scrolls(d: &mut Driver<'_>, message: &str) -> (bool, bool, bool, [
                     return false;
                 };
                 let focused = d.focused_name().as_deref() == Some(group.name.as_str());
-                let (fits, overflows) = d.aside(|d| {
-                    let words = |d: &Driver<'_>| {
-                        let mut tops = Vec::new();
-                        d.each_painted_text(|text, _| {
-                            if text.visual_bounding_rect().intersects(group.shown) {
-                                tops.push(text.pos.y);
-                            }
-                        });
-                        tops
-                    };
-                    d.scroll_up_at(group.shown.center(), 8);
-                    let top = words(d);
-                    d.scroll_at(group.shown.center(), 8);
-                    let overflows = words(d) != top;
-                    (part_fits(d, group.shown), overflows)
-                });
+                let (fits, overflows) = fit_against_wheel(d, group.shown);
                 // The proof, run from the part's bottom, agrees with what the wheel did.
                 let proof = fits != overflows;
                 let fits = fits && rings.is_empty() && !focused;
@@ -4198,7 +4204,21 @@ fn fixed_part_scrolls(d: &mut Driver<'_>, message: &str) -> (bool, bool, bool, [
         }
         _ => false,
     };
-    (tabbed, key_scrolled, wheel_scrolled, ring_clear)
+    // The same proof at this size, where the part's words need a scroll (the key and the wheel
+    // above moved them): an overflowing part at its bottom must not count as fitting. A fault
+    // here clears every size's ring result.
+    let here = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.role == Role::GenericContainer && node.name.contains(message))
+        .map(|group| fit_against_wheel(d, group.shown));
+    let proof_here = here.is_some_and(|(fits, overflows)| fits != overflows);
+    (
+        tabbed,
+        key_scrolled,
+        wheel_scrolled,
+        ring_clear.map(|clear| clear && proof_here),
+    )
 }
 
 /// Wheel the message space that holds `words` until `control` is fully in view, at the current size.
