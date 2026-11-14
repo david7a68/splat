@@ -3573,20 +3573,6 @@ pub fn undo_line(ui: &mut Ui, tone: Tone, result: Option<(&str, &str)>) -> bool 
 
 /// `undo_message`, with an accessible name for the action when its words are not enough. Capped
 /// at `LIST_MEASURE` like every notice.
-#[deprecated(
-    note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."
-)]
-pub fn undo_message_named(
-    ui: &mut Ui,
-    tone: Tone,
-    text: &str,
-    action: &str,
-    name: Option<&str>,
-) -> bool {
-    undo_message_capped(ui, tone, text, action, name)
-}
-
-/// `undo_message_named`'s drawing.
 pub(super) fn undo_message_capped(
     ui: &mut Ui,
     tone: Tone,
@@ -5840,7 +5826,7 @@ mod tests {
                         for (at, words) in words.iter().enumerate().filter(|(at, _)| shown[*at]) {
                             let live = &live;
                             footer.result(orders[at], words.as_str(), true, move |ui| {
-                                if undo_message_named(
+                                if undo_message_capped(
                                     ui,
                                     Tone::Success,
                                     words,
