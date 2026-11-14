@@ -678,7 +678,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters.rs",
             "run_settings",
-            &[Ban::Results, Ban::Layout(2), Ban::Pane(1)],
+            &[Ban::Results, Ban::Pane(1)],
         ),
         ("src/encounters.rs", "save_draft", &[Ban::Results]),
         ("src/library.rs", "add_reader_result", &[Ban::Results]),
@@ -907,7 +907,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters.rs",
             "editor_view",
-            &[Ban::Pane(1), Ban::Extras(1)],
+            &[Ban::Pane(1)],
         ),
         ("src/encounters.rs", "notes_field", &[Ban::Layout(1)]),
         (
