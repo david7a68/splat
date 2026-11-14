@@ -99,18 +99,24 @@ fn check_choices_at_text(
 }
 
 /// iter-25-S FD3 family: a banner's dismiss is the close icon at the message end, on its first
-/// line, with no words of its own on screen.
+/// line, with no words of its own on screen. Row 83a (N6): its centre is the centre of the
+/// words' first line, within 1 px.
 fn check_dismiss_at_message_end(d: &mut Driver<'_>, id: &str, words: &str) {
+    let name = crate::design::outcome::DISMISS_NAME;
     let text = d.painted_rect_in(words, egui::Rect::EVERYTHING);
-    let icon = d.place_of("Dismiss this error");
+    let icon = d.place_of(name);
+    let line = crate::design::Type::Body.line();
     d.observe(
         id,
         text.zip(icon).is_some_and(|(text, icon)| {
             icon.left() >= text.right() - 0.5
                 && icon.top() <= text.top() + crate::design::S
                 && icon.right() <= text.left() + crate::design::LIST_MEASURE + 0.5
-        }) && !d.visible_text("Dismiss this error"),
-        format!("The dismiss icon {icon:?} ends the first line of \"{words}\" {text:?}"),
+                && (icon.center().y - (text.top() + line / 2.0)).abs() <= 1.0
+        }) && !d.visible_text(name),
+        format!(
+            "The dismiss icon {icon:?} ends the first line of \"{words}\" {text:?}, centred on it"
+        ),
     );
 }
 
@@ -825,18 +831,46 @@ fn submenu_clear_of_chrome(
     Ok(submenu + margin)
 }
 
-/// A warning's file line starts at the message words: the path, whole, then `Edit in Obsidian`
-/// and `Show file`. A link that wraps starts its row at the message words too.
+/// A typed footer file line (`design::outcome::FileLine`, the Timeline's flags) starts at the
+/// message words: the path, whole, then `Edit in Obsidian: <relative>` and `Show file:
+/// <relative>`, named with the file. A link that wraps starts its row at the message words too.
 fn file_links_at_message_words(
     d: &Driver<'_>,
     message: &str,
     path: &std::path::Path,
     relative: &str,
 ) -> Result<(), String> {
+    file_links_at_words(d, message, path, relative, true)
+}
+
+/// The same for a file line still drawn by hand (`encounters::file_line` in
+/// `message_with_actions`: Encounters' unread rows, Campaign's and Rules and runs' flags, run
+/// setup), whose links are named only `Edit in Obsidian` and `Show file`.
+fn file_links_at_message_words_by_hand(
+    d: &Driver<'_>,
+    message: &str,
+    path: &std::path::Path,
+    relative: &str,
+) -> Result<(), String> {
+    file_links_at_words(d, message, path, relative, false)
+}
+
+fn file_links_at_words(
+    d: &Driver<'_>,
+    message: &str,
+    path: &std::path::Path,
+    relative: &str,
+    typed: bool,
+) -> Result<(), String> {
     let nodes = d.nodes();
     let words = nodes
         .iter()
-        .find(|node| node.name.starts_with(message) && node.in_view())
+        // The words' own label, not the footer group that is named with every message.
+        .find(|node| {
+            node.role == egui::accesskit::Role::Label
+                && node.name.starts_with(message)
+                && node.in_view()
+        })
         .ok_or(format!("{message}… is not in view"))?
         .rect;
     let shown = nodes
@@ -856,10 +890,15 @@ fn file_links_at_message_words(
         ));
     }
     for link in ["Edit in Obsidian", "Show file"] {
+        let named = if typed {
+            format!("{link}: {relative}")
+        } else {
+            link.to_owned()
+        };
         let target = nodes
             .iter()
             .filter(|node| {
-                node.name == link && node.in_view() && node.rect.center().y >= shown.top()
+                node.name == named && node.in_view() && node.rect.center().y >= shown.top()
             })
             .min_by(|a, b| a.rect.top().total_cmp(&b.rect.top()))
             .ok_or(format!("{link} is not in view below the message"))?
@@ -11393,6 +11432,22 @@ pub mod signed_in {
             edges.is_some_and(|(picker, folder)| (picker.right() - folder.right()).abs() <= 1.0),
             format!("Locked picker and session folder field: {edges:?}"),
         );
+        // Row 93 (FO6): `D&D BEYOND`, a heading in a row, starts as far below the rule over it
+        // as a column's heading does (`Heading::above`, `L`, from the rule's line).
+        let heading = d.painted_rect_in("D&D BEYOND", egui::Rect::EVERYTHING);
+        let rule = heading.and_then(|heading| {
+            d.horizontal_rules(heading.left() + 1.0, heading.top() - 64.0, heading.top())
+                .last()
+                .copied()
+        });
+        let above = heading
+            .zip(rule)
+            .map(|(heading, rule)| heading.top() - (rule + 0.5));
+        d.observe(
+            "iter-28-C-FO6",
+            above.is_some_and(|above| (above - crate::design::L).abs() <= 1.0),
+            format!("D&D BEYOND starts L below the rule over it, as a column heading: {above:?} (heading {heading:?}, rule {rule:?})"),
+        );
         d.state("link-tab-during-run", Sizes::Default);
         d.begin_task();
 
@@ -12033,7 +12088,8 @@ pub mod world {
             "Lookup's reader shows the NPC's status in its Status row only, not on the kind line",
         );
         // Round 28 FF4: `Nothing written yet.` stands where prose starts, `L` below the control
-        // above it (here the NPC's `Add to fight`), so it does not read as that control's reason.
+        // above it (here the Status row's `Change`), so it does not read as that control's
+        // reason.
         let gap = d
             .painted_rect_in("Nothing written yet.", egui::Rect::EVERYTHING)
             .and_then(|words| {
@@ -12055,8 +12111,51 @@ pub mod world {
                 .is_some_and(|(_, gap)| *gap >= crate::design::L - 1.0),
             format!("The control above the words, and the gap: {gap:?}"),
         );
+        // Round 28 FF1: the NPC's `Add to fight` is on its title line, as a creature's is, not
+        // a bordered button under Status. With no stat block, it opens the form that asks for
+        // one; while the form is open, the form is the one way to add them (review of PR 355),
+        // and Cancel gives the title line its action back in its place.
+        let add = format!("Add {NPC} to the fight");
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (placed, detail) = d.at_size(size, |d| world_build::npc_add_on_title_line(d, NPC));
+            d.observe(
+                "iter-28-D-FF1",
+                placed,
+                format!("At {size:?}, the new NPC's Add to fight is on its title line: {detail}"),
+            );
+        }
         d.state("world-new-npc", Sizes::Default);
-        d.click("Add to fight");
+        let title_place = d.place_of(&add);
+        d.click(&add);
+        d.expect("Stat block");
+        // One way to add: no title action, and one painted `Add to fight` in Lookup, the form's.
+        let lookup = d.place_of(SEARCH_LOOKUP).map(|search| {
+            egui::Rect::from_min_max(
+                egui::pos2(search.left(), 0.0),
+                egui::pos2(f32::INFINITY, f32::INFINITY),
+            )
+        });
+        let painted = lookup
+            .map(|lookup| d.painted_in(lookup).matches("Add to fight").count())
+            .unwrap_or(0);
+        // The form's heading has the same words as a label: only a button counts.
+        let title_action = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .any(|node| node.name == add && node.role == Role::Button)
+        };
+        let one_way = !title_action(d) && painted == 1;
+        d.click("Cancel");
+        let back = d.place_of(&add);
+        d.click(&add);
+        d.expect("Stat block");
+        d.observe(
+            "iter-28-D-FF1-form",
+            one_way && title_place.is_some() && back == title_place,
+            format!(
+                "With the form open: one way {one_way}, painted Add to fight in Lookup {painted}; after Cancel it is at {back:?}, before {title_place:?}"
+            ),
+        );
         d.type_into("Stat block", "Guard");
         d.click("Guard");
         d.type_into("Initiative", "11");
@@ -12302,7 +12401,9 @@ pub mod session_notes {
                 "Focus, text and last line in view {kept_parts:?}; the note's y {note_before:?} then {note_after:?} (banner below it)"
             ),
         );
-        d.click("Dismiss");
+        // Row 83a (N6): the banner notice's close icon is on its first line, centred on it.
+        check_dismiss_at_message_end(d, "iter-28-S-FO5-notice", "is processed.");
+        d.click(crate::design::outcome::DISMISS_NAME);
         assert!(!d.has_containing("is processed."));
         let (wide_text, wide_state) = d.at_size(LARGE, |d| {
             eprintln!(
@@ -12699,7 +12800,17 @@ pub mod session_notes {
         d.click("Copy link");
         d.expect("Copied");
         d.expect("Mentioned in");
+        // `Copied` above proves the acknowledgement. Its two-second real-time expiry must not
+        // choose the words of this state's captures (four sizes taken across it): wait until
+        // it has ended, as before `timeline-with-run`.
+        d.wait_for_text("Copy link");
         d.state_prepared("timeline-event", Sizes::AllAndHiDpi, |d| {
+            // Every size shows the same words: the timer has ended before the first capture.
+            d.observe(
+                "iter-28-S-copied-timer",
+                d.visible_text("Copy link") && !d.visible_text("Copied"),
+                "The Timeline event's captures show Copy link, not a timed Copied",
+            );
             // iter-23-S FK5: the list row draws the rest ruling as the plan row and the detail
             // do: its icon and word in the ruling's colour.
             let mut rulings = Vec::new();
@@ -13048,7 +13159,9 @@ pub mod session_notes {
         // A long title wraps, and the controls stay where they are.
         d.click("Edit session details");
         d.replace_text_in("Date", "Nov 2");
-        d.click("Save details");
+        // Round 28 K4a: a date in another form locks Save details, with the reason on the
+        // form's kept line.
+        assert!(d.is_disabled("Save details"));
         d.expect("Enter the date as YYYY-MM-DD.");
         d.replace_text_in("Date", crate::hermetic::today().as_str());
         d.replace_text_in("Session title", LONG_TITLE);
@@ -13809,6 +13922,10 @@ pub mod session_notes {
             d.in_view("Title"),
             "Opening Timeline resets its selected detail to the top",
         );
+        // The earlier `Copy link` check (`timeline-event`) already proves the acknowledgement.
+        // Its two-second real-time expiry must not choose this capture's words (`Copied` or
+        // `Copy link`): wait until it has ended.
+        d.wait_for_text("Copy link");
         d.state("timeline-with-run", Sizes::All);
         d.observe_both(
             "iter-18-B-S2-timeline",
@@ -14382,6 +14499,167 @@ pub mod session_recording {
         );
     }
 
+    /// Where a live recording's status shows (R5, routing row 100).
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum Surface {
+        Rail,
+        ListRow,
+        RecordLine,
+        RecordingsTab,
+        Banner,
+    }
+
+    /// Whether a painted part is a live recording's state word: `Recording`, with or without its
+    /// time, after its icon; a list row's part may go on after ` · ` or a new line.
+    fn live_word(part: &str) -> bool {
+        let first = part.split(['·', '\n']).next().unwrap_or_default();
+        let first = first
+            .trim()
+            .trim_start_matches(crate::design::icons::RECORD)
+            .trim();
+        first == "Recording" || first.strip_prefix("Recording ").is_some_and(clock_like)
+    }
+
+    fn clock_like(words: &str) -> bool {
+        let words = words.trim();
+        !words.is_empty()
+            && words.contains(':')
+            && words.chars().all(|ch| ch.is_ascii_digit() || ch == ':')
+    }
+
+    /// Every painted live recording word, with its colour.
+    fn live_recording_words(d: &Driver<'_>) -> Vec<(String, egui::Color32)> {
+        let mut words = Vec::new();
+        d.each_painted_text(|text, _| {
+            let job = &text.galley.job;
+            for section in &job.sections {
+                let part = &job.text[section.byte_range.clone()];
+                if live_word(part) {
+                    words.push((part.to_owned(), section.format.color));
+                }
+            }
+        });
+        words
+    }
+
+    /// The sections of every painted text that holds `words`, with their colours.
+    fn status_parts(d: &Driver<'_>, words: &str) -> Vec<(String, egui::Color32)> {
+        let mut parts = Vec::new();
+        d.each_painted_text(|text, _| {
+            let job = &text.galley.job;
+            if job.text.contains(words) {
+                parts.extend(job.sections.iter().map(|section| {
+                    (
+                        job.text[section.byte_range.clone()].to_owned(),
+                        section.format.color,
+                    )
+                }));
+            }
+        });
+        parts
+    }
+
+    /// R5 (routing row 100): red is a fault. On each named surface a live recording shows its
+    /// record icon in the `recording` token, and its word `Recording` and its time in the text
+    /// colour (a muted, green or red word fails). Each surface must be found.
+    fn check_live_recording_colours(d: &mut Driver<'_>, surfaces: &[Surface]) {
+        let c = crate::design::colors();
+        let record = crate::design::icons::RECORD;
+        // Node rects are in pixels; painted texts in points.
+        let points = 1.0 / d.pixels_per_point();
+        let rail = d
+            .place_of(NAV_SESSIONS)
+            .map_or(0.0, |nav| nav.right() * points);
+        let rows: Vec<egui::Rect> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name.starts_with("Session ") && node.name.contains(" · "))
+            .map(|node| node.rect * points)
+            .collect();
+        let small = crate::design::Type::Small.size();
+        // Per surface: icons, words and times, each with its colour.
+        let mut found: Vec<(Surface, &'static str, String, egui::Color32)> = Vec::new();
+        d.each_painted_text(|text, _| {
+            let job = &text.galley.job;
+            let at = text.visual_bounding_rect().center();
+            // The Recordings tab's live row has its time on its own line: `0:00 recorded · …`.
+            if job.text.contains(" recorded · ") && !rows.iter().any(|row| row.contains(at)) {
+                let first = job
+                    .sections
+                    .first()
+                    .map(|s| (job.text[s.byte_range.clone()].to_owned(), s.format.color));
+                let (part, color) = first.unwrap_or_default();
+                // The time alone is its first part; a whole muted line has no time part.
+                if clock_like(&part) {
+                    found.push((Surface::RecordingsTab, "time", part, color));
+                } else {
+                    found.push((Surface::RecordingsTab, "line", part, color));
+                }
+                return;
+            }
+            if !job
+                .sections
+                .iter()
+                .any(|s| live_word(&job.text[s.byte_range.clone()]))
+            {
+                return;
+            }
+            let size = job
+                .sections
+                .first()
+                .map_or(small, |s| s.format.font_id.size);
+            let surface = if job.text.contains(" in ") {
+                Surface::Banner
+            } else if rows.iter().any(|row| row.contains(at)) {
+                Surface::ListRow
+            } else if at.x < rail {
+                Surface::Rail
+            } else if size > small + 0.5 {
+                Surface::RecordLine
+            } else {
+                Surface::RecordingsTab
+            };
+            for section in &job.sections {
+                let part = &job.text[section.byte_range.clone()];
+                let color = section.format.color;
+                if part.trim() == record
+                    || part.trim_start().starts_with(record) && !live_word(part)
+                {
+                    found.push((surface, "icon", part.to_owned(), color));
+                } else if live_word(part) {
+                    let first = part.split(['·', '\n']).next().unwrap_or_default();
+                    let first = first.trim().trim_start_matches(record).trim();
+                    found.push((surface, "word", part.to_owned(), color));
+                    if let Some(time) = first.strip_prefix("Recording ") {
+                        found.push((surface, "time", time.to_owned(), color));
+                    }
+                } else if clock_like(part) {
+                    found.push((surface, "time", part.to_owned(), color));
+                }
+            }
+        });
+        for surface in surfaces {
+            let mine: Vec<_> = found.iter().filter(|(at, ..)| at == surface).collect();
+            let has = |kind: &str| mine.iter().any(|(_, k, ..)| *k == kind);
+            // Every surface but the list row shows the live time.
+            let timed = *surface != Surface::ListRow;
+            d.observe(
+                "iter-28-S-FO1",
+                has("icon")
+                    && has("word")
+                    && (!timed || has("time"))
+                    && mine.iter().all(|(_, kind, _, color)| match *kind {
+                        "icon" => *color == c.recording,
+                        "line" => false,
+                        _ => *color == c.text,
+                    }),
+                format!(
+                    "{surface:?}: a live recording's record icon alone is in the recording token; its word and its time are in the text colour: {mine:?}"
+                ),
+            );
+        }
+    }
+
     fn check_processing_action(d: &mut Driver<'_>, prefix: &str, primary: bool) {
         let actions: Vec<_> = d
             .nodes()
@@ -14538,6 +14816,44 @@ pub mod session_recording {
             assert!(d.in_view("Continue processing") && !d.is_disabled("Continue processing"));
             check_one_primary(d, "Record again", "iter-9-C2-ST1-two-alerts");
             check_processing_action(d, "Process:", false);
+            // Repair 3 of PR 363: the close icon's target reaches into the banner's padding and
+            // does not make the banner taller: its top line is `XS` (its inner margin) above the
+            // first message's words.
+            let words = d.painted_rect_in(
+                "Processing “Session 1: Failed processing” failed",
+                egui::Rect::EVERYTHING,
+            );
+            let scale = d.pixels_per_point();
+            let top = words.and_then(|words| {
+                d.horizontal_rules(
+                    (words.left() + 1.0) * scale,
+                    (words.top() - 40.0) * scale,
+                    words.top() * scale,
+                )
+                .last()
+                .map(|y| y / scale)
+            });
+            let gap = words.zip(top).map(|(words, top)| words.top() - top);
+            // And its last row of choices ends `XS` (the inner margin) above the window's bottom.
+            let bottom = words.and_then(|words| {
+                d.nodes()
+                    .into_iter()
+                    .filter(|node| node.role == egui::accesskit::Role::Button)
+                    .map(|node| node.rect * (1.0 / scale))
+                    .filter(|rect| rect.top() > words.top())
+                    .map(|rect| rect.bottom())
+                    .reduce(f32::max)
+            });
+            let end = bottom.map(|bottom| d.window_size().1 - bottom);
+            d.observe(
+                "iter-28-S-banner-height",
+                // The rule's line is its 1 px rect's centre: the margin's top is half a pixel below it.
+                gap.is_some_and(|gap| (gap - (crate::design::XS - 0.5)).abs() <= 0.5)
+                    && end.is_some_and(|end| (end - crate::design::XS).abs() <= 1.0),
+                format!(
+                    "The banner is XS above its first words and XS below its last choices: {gap:?}, {end:?} (top {top:?}, words {words:?}, bottom {bottom:?})"
+                ),
+            );
         });
         let tabs_stopped = recording_tabs(d);
         assert!(d.in_view("Record again"));
@@ -14638,8 +14954,9 @@ pub mod session_recording {
             parts
         };
         // Round 24 FC7 (moved by round 27 FE8 to the recording that still saves, where the line
-        // stays): only the icon and the state word have the state's colour; the other
-        // session's time and title are muted.
+        // stays): only the icon and the state word have the state's colours; the other
+        // session's time and title are muted. R5 (row 100): red is a fault, so a live
+        // recording's icon alone is in the `recording` token, its word in the text colour.
         let parts = other_line(d, "Recording");
         let c = crate::design::colors();
         d.observe(
@@ -14647,16 +14964,24 @@ pub mod session_recording {
             parts
                 .iter()
                 .any(|(words, _)| words.contains("in Session 1"))
+                && parts.iter().any(|(words, _)| words == "Recording")
+                // The time is the state's, apart from the session's name.
+                && parts.iter().any(|(words, _)| clock_like(words))
                 && parts.iter().all(|(words, color)| {
                     *color
                         == if words.contains("in Session 1") {
                             c.muted
-                        } else {
+                        } else if words == crate::design::icons::RECORD {
                             c.recording
+                        } else {
+                            c.text
                         }
                 }),
-            format!("Only the state has its colour on the other session's line: {parts:?}"),
+            format!(
+                "Only the state has its colours on the other session's line, the record icon alone red: {parts:?}"
+            ),
         );
+        check_live_recording_colours(d, &[Surface::Banner]);
         d.app_mut()
             .sessions
             .simulate_recorder_health(Health::Stalled);
@@ -14690,6 +15015,66 @@ pub mod session_recording {
                 && tabs_saved == tabs_elsewhere,
             format!(
                 "Session 2's tabs at 960, 1200 and 1920: stopped {tabs_stopped:?}, saved {tabs_saved:?}, stalled elsewhere {tabs_elsewhere:?}"
+            ),
+        );
+        // Row 100 review, point 6: Session 1 (A) records, Session 2 (B) is open, A's recorder
+        // stalls and then exits by itself. The fault stays A's and red: the rail goes from
+        // `Not saving audio` to `Recording stopped`, A's list row says `Stopped`, the banner
+        // names A with its error bar; no live `Recording` word is left, and B gains no fault.
+        let c = crate::design::colors();
+        let red = |parts: &[(String, egui::Color32)]| {
+            !parts.is_empty()
+                && parts
+                    .iter()
+                    .filter(|(words, _)| !words.trim().is_empty())
+                    .all(|(_, color)| *color == c.result.error)
+        };
+        let stalled_rail = status_parts(d, "Not saving audio");
+        // What B's list row says before: B's own words stay as they are.
+        let b_name = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("Session 2: Unprocessed recording · "))
+                .map(|node| node.name)
+        };
+        let b_before = b_name(d);
+        d.app_mut()
+            .sessions
+            .simulate_recorder_health(Health::Stopped("microphone unplugged".to_owned()));
+        d.settle();
+        let stopped_rail = status_parts(d, "Recording stopped");
+        // Every painted `Stopped` (A's row, and B's own earlier stop), in the error colour.
+        let stopped_row: Vec<_> = status_parts(d, "Stopped")
+            .into_iter()
+            .filter(|(words, _)| words.contains("Stopped"))
+            .collect();
+        let banner = d.painted_rect_in(
+            "The recording of “Session 1: Failed processing” stopped by itself",
+            egui::Rect::EVERYTHING,
+        );
+        let banner_bar = banner.is_some_and(|words| d.has_tone_bar(words, c.result.error));
+        let live = live_recording_words(d);
+        // Whose list row says it: A's; B's row says what it said before.
+        let a_row = d.nodes().iter().any(|node| {
+            node.name.starts_with("Session 1: Failed processing · ")
+                && node.name.contains("Stopped")
+        });
+        let b_after = b_name(d);
+        // B's row was found before, and says the same after.
+        let b_same = b_before.is_some() && b_after == b_before;
+        d.observe(
+            "iter-28-S-FO1-stop-elsewhere",
+            red(&stalled_rail)
+                && red(&stopped_rail)
+                && red(&stopped_row)
+                && a_row
+                && b_same
+                && banner_bar
+                && live.is_empty()
+                && !d.has_containing("The recording of “Session 2")
+                && !d.has_containing("Not saving audio"),
+            format!(
+                "A's stall then exit stays A's and red: stalled {stalled_rail:?}, stopped {stopped_rail:?}, row {stopped_row:?}, banner {banner:?} bar {banner_bar}, live words {live:?}, A's row {a_row}, B's row {b_before:?} then {b_after:?}"
             ),
         );
         assert!(d.in_view("Record again"));
@@ -14741,7 +15126,7 @@ pub mod session_recording {
         d.settle();
         d.click_starting("Recordings");
         d.click("Edit session details");
-        d.expect("Dismiss this error");
+        d.expect(crate::design::outcome::DISMISS_NAME);
         assert!(!d.has("Open the session") && !d.has("Record again"));
         let size = d.window_size();
         let _ = size;
@@ -15212,6 +15597,11 @@ pub mod session_recording {
             d.app_mut()
                 .sessions
                 .simulate_recorder_health(Health::Hearing);
+            // R5: the rail, the list row and the Record line.
+            check_live_recording_colours(
+                d,
+                &[Surface::Rail, Surface::ListRow, Surface::RecordLine],
+            );
         });
         // Capturing several sizes can outlast the five-second sound indicator.
         d.app_mut()
@@ -15221,6 +15611,8 @@ pub mod session_recording {
         d.expect(&format!("{} Recording", crate::design::icons::RECORD));
         d.expect("0:00 recorded · Hearing sound");
         d.state_prepared("recording-listed", Sizes::Default, |d| {
+            // R5: the rail and the Recordings tab's row.
+            check_live_recording_colours(d, &[Surface::Rail, Surface::RecordingsTab]);
             // AT1: with no fight open, the party bar keeps every first name at 960. Portraits give
             // way before names; HP and state words stay.
             let (items, painted) = party_bar_items(d);
@@ -15350,6 +15742,8 @@ pub mod session_recording {
             d.has_containing("Recording 0:00") && d.has_containing("Recording"),
             "Recording, with its time, stays in the rail on other pages",
         );
+        // R5 (capture `session-recording__09`): the rail's live status.
+        check_live_recording_colours(d, &[Surface::Rail]);
         d.state("recording-on-another-page", Sizes::Default);
         // A close does not end it by surprise.
         d.request_close();

@@ -253,6 +253,77 @@ fn reasons_without_end_mark(text: &str, last_line: usize) -> usize {
     reasons.bad
 }
 
+/// Whether a label is only arrows (and spaces): a bare back or forward arrow with no word.
+fn arrow_only(label: &str) -> bool {
+    let phosphor = [
+        egui_phosphor::regular::ARROW_LEFT,
+        egui_phosphor::regular::ARROW_RIGHT,
+        egui_phosphor::regular::ARROW_UP,
+        egui_phosphor::regular::ARROW_DOWN,
+        egui_phosphor::regular::ARROW_U_UP_LEFT,
+        egui_phosphor::regular::ARROW_BEND_UP_LEFT,
+        egui_phosphor::regular::ARROW_ARC_LEFT,
+        egui_phosphor::regular::ARROW_CIRCLE_LEFT,
+        egui_phosphor::regular::ARROW_FAT_LEFT,
+        egui_phosphor::regular::CARET_LEFT,
+        egui_phosphor::regular::CARET_RIGHT,
+    ];
+    let arrow = |c: char| {
+        matches!(c as u32, 0x2190..=0x21FF | 0x27F0..=0x27FF | 0x2900..=0x297F | 0x2B00..=0x2BFF)
+            || "<>‹›«»".contains(c)
+            || phosphor.iter().any(|glyph| glyph.starts_with(c))
+    };
+    let label = label.trim();
+    !label.is_empty() && label.chars().filter(|c| !c.is_whitespace()).all(arrow)
+}
+
+/// Actions whose label is only an arrow, read by `syn`: the first argument of
+/// `Action::quiet`, `secondary`, `primary` or `destructive` when it is a string literal of
+/// arrows alone, on lines up to `last_line`.
+fn arrow_labels(text: &str, last_line: usize) -> usize {
+    use syn::{
+        spanned::Spanned,
+        visit::{self, Visit},
+    };
+    struct Labels {
+        last_line: usize,
+        bad: usize,
+    }
+    impl<'ast> Visit<'ast> for Labels {
+        fn visit_expr_call(&mut self, call: &'ast syn::ExprCall) {
+            if let syn::Expr::Path(path) = &*call.func {
+                let names: Vec<String> = path
+                    .path
+                    .segments
+                    .iter()
+                    .map(|segment| segment.ident.to_string())
+                    .collect();
+                let constructor = names.len() >= 2
+                    && names[names.len() - 2] == "Action"
+                    && ["quiet", "secondary", "primary", "destructive"]
+                        .contains(&names[names.len() - 1].as_str());
+                if constructor
+                    && call.span().start().line <= self.last_line
+                    && let Some(syn::Expr::Lit(syn::ExprLit {
+                        lit: syn::Lit::Str(label),
+                        ..
+                    })) = call.args.first()
+                    && arrow_only(&label.value())
+                {
+                    self.bad += 1;
+                }
+            }
+            visit::visit_expr_call(self, call);
+        }
+    }
+    let Ok(file) = syn::parse_file(text) else {
+        return 0;
+    };
+    let mut labels = Labels { last_line, bad: 0 };
+    labels.visit_file(&file);
+    labels.bad
+}
+
 /// Phrases with one owner file: the one function that writes that form. A literal outside its
 /// owner fails (round 27 family F4: one fact in two forms).
 fn phrase_owner(path: &str, words: &str) -> bool {
@@ -289,6 +360,8 @@ fn phrase_owner(path: &str, words: &str) -> bool {
 /// - `crate-wide-allow`: such an inner attribute at a crate root, which would cover every module.
 /// - `reason-end-mark`: a blocked reason without `.`, `?` or `!`.
 /// - `phrase-owner`: a phrase in a string literal outside its owner file.
+/// - `arrow-label`: an action whose label is only an arrow (`Action::quiet("←")`); a back link
+///   that starts a line is `TitleLine::back`, whose word is always shown (K4b).
 fn message_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
     let mut found = Vec::new();
     let crate_root = path.ends_with("src/lib.rs") || path.ends_with("src/main.rs");
@@ -310,6 +383,7 @@ fn message_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> 
         }
     }
     found.extend((0..reasons_without_end_mark(text, last_line)).map(|_| "reason-end-mark"));
+    found.extend((0..arrow_labels(text, last_line)).map(|_| "arrow-label"));
     found
 }
 
@@ -406,6 +480,9 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
                 }
                 "phrase-owner" => {
                     "Call the phrase's owner: `XP {` in src/difficulty.rs, `· line {` in `fault_words`, `N of M chosen` in `chosen_count`, a close icon's `Dismiss this …` in `MessageChoice::Dismiss`"
+                }
+                "arrow-label" => {
+                    "Give the action its word: a back link that starts a line is `TitleLine::back(word!(…), BackEdge)`"
                 }
                 _ => "Use design tokens",
             };
@@ -516,6 +593,38 @@ fn the_message_rules_find_what_they_should() {
         rules("src/a.rs", "const A: &str = \"{a} of {b} chosen\";"),
         ["phrase-owner"]
     );
+    // K4b: an action whose label is only an arrow; a word with an arrow, or an icon, passes.
+    for label in [
+        "←",
+        " ← ",
+        "‹",
+        "\u{2190}",
+        egui_phosphor::regular::ARROW_LEFT,
+    ] {
+        assert_eq!(
+            rules(
+                "src/a.rs",
+                &format!("fn f() {{ Action::quiet({label:?}).show(ui); }}")
+            ),
+            ["arrow-label"],
+            "{label:?}"
+        );
+    }
+    assert_eq!(
+        rules(
+            "src/a.rs",
+            "fn f() { design::Action::secondary(\"→\").show(ui); }"
+        ),
+        ["arrow-label"]
+    );
+    for code in [
+        "fn f() { Action::quiet(\"← Back\").show(ui); }",
+        "fn f() { Action::quiet(\"Back\").icon(icons::UNDO).show(ui); }",
+        "fn f() { Action::quiet(icons::EXPAND).show(ui); }",
+        "fn f() { other::quiet(\"←\"); }",
+    ] {
+        assert!(rules("src/a.rs", code).is_empty(), "{code}");
+    }
 
     // Levels across files: a child under an allow must write its own level.
     let level = |code: &str| file_level(&attributes::read(code).unwrap());

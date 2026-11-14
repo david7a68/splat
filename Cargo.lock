@@ -3849,6 +3849,7 @@ dependencies = [
  "tempfile",
  "tikv-jemallocator",
  "tungstenite",
+ "url",
  "uuid",
  "zeroize",
 ]

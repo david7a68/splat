@@ -5877,7 +5877,7 @@ impl Encounters {
                 };
             let saved_name =
                 design::number_width(ui, &draft_ref.saved_name, &Type::Heading.font(ui));
-            back = Action::quiet(icons::BACK)
+            back = Action::quiet(icons::LEGACY_BACK)
                 .name(back_name)
                 .hint(back_name)
                 .blocked(

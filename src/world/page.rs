@@ -1704,7 +1704,7 @@ impl WorldPage {
                     },
                 );
                 ui.spacing_mut().item_spacing.y = spacing;
-                design::folder_group_heading(ui, title, rows.len());
+                design::folder_group_heading(ui, design::FolderGroup::of_path(title), rows.len());
             } else {
                 design::heading(
                     ui,

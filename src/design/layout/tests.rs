@@ -186,7 +186,26 @@ fn slot_and_status_slot_keep_the_next_control_still() {
     const SAVES: Slot = Slot::new(&["0 of 3", "3 of 3 saves"], SlotType::Small);
     let ctx = context();
     let after = |value: &str, state: usize| {
-        let nodes = frame(&ctx, vec2(600.0, 300.0), |ui| {
+        let letter = [KeyLetter::Hidden, KeyLetter::Shown][state];
+        let (nodes, painted) = frame_with(&ctx, vec2(600.0, 300.0), Vec::new(), |ui| {
+            // Row 62: a control's key letter comes and goes; the control after it stays, in a
+            // right-to-left row as in Run's header, and in a left-to-right row.
+            ui.horizontal(|ui| {
+                let _ =
+                    KeySlot::new(Action::primary("Next turn"), crate::key!("N")).show(ui, letter);
+                Action::secondary("Add to fight").show(ui);
+            });
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                let _ =
+                    KeySlot::new(Action::primary("Next turn"), crate::key!("N")).show(ui, letter);
+                Action::secondary("Add").show(ui);
+            });
+            // An action's own least width is kept when it is wider than its measure.
+            ui.horizontal(|ui| {
+                let wide = Action::secondary("Next").min_width(200.0);
+                let _ = KeySlot::new(wide, crate::key!("X")).show(ui, letter);
+                Action::quiet("After").show(ui);
+            });
             ui.horizontal(|ui| {
                 SAVES.show(ui, value, colors().text);
                 Action::quiet("Success").show(ui);
@@ -200,7 +219,21 @@ fn slot_and_status_slot_keep_the_next_control_still() {
                 Action::quiet("Account").show(ui);
             });
         });
-        (bounds(&nodes, "Success"), bounds(&nodes, "Account"))
+        // The letter itself comes and goes, so the case is not still because nothing changed.
+        let letters = painted.iter().filter(|text| text.text == "N").count();
+        assert_eq!(letters, 2 * state, "key letters painted for {letter:?}");
+        let next = bounds(&nodes, "Next");
+        assert!(
+            next.width() >= 200.0 - 0.5,
+            "the action's own least width stays: {next:?}"
+        );
+        (
+            bounds(&nodes, "Success"),
+            bounds(&nodes, "Account"),
+            bounds(&nodes, "Add to fight"),
+            bounds(&nodes, "Add"),
+            bounds(&nodes, "After"),
+        )
     };
     let narrow = after("0 of 3", 0);
     let wide = after("3 of 3 saves", 1);
@@ -258,6 +291,8 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
     const START: Word = crate::word!("Start fight");
     const OPEN: Word = crate::word!("Open in Lookup");
     const WORDS: [&str; 4] = ["Edit", "Add to Log", "Start fight", "Open in Lookup"];
+    const ALL_EVENTS: Word = crate::word!("All events");
+    const RECORDINGS: Word = crate::word!("Back to recordings");
     let (title, kind) = ("Cinder Wolf", "Beast · CR 3");
     let ctx = context();
     let line = || {
@@ -296,12 +331,73 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
             let rect = Rect::from_min_size(ui.cursor().min, vec2(width, 300.0));
             left = rect.left();
             ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                let _ = TitleLine::back(ALL_EVENTS, BackEdge::Text).show(ui);
                 rows = line().show(ui).rows;
+                // As Session's recording viewer: an action at the line's far end, the back link
+                // and its context in a left-to-right part of a right-to-left row.
+                ui.horizontal(|ui| {
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        Action::secondary("Add to notes")
+                            .density(Density::Read)
+                            .show(ui);
+                        ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                            let _ = TitleLine::back(RECORDINGS, BackEdge::Segments)
+                                .context("2026-01-01 19:00")
+                                .show(ui);
+                        });
+                    });
+                });
             });
         });
         for words in WORDS.into_iter().chain([title, kind]) {
             assert!(painted_whole(&painted, words), "{words:?} whole at {width}");
         }
+        // FL7: a back link's word is whole and starts at the text edge: the title's edge, or a
+        // segmented row's words `S` inside it. Its icon follows the word inside its own target,
+        // whole, centred on the word's line; the target is a 28 px control that hangs at most
+        // `S` into the gutter, and the word is its accessible name.
+        for (word, edge) in [(ALL_EVENTS, left), (RECORDINGS, left + S)] {
+            let word = word.as_str();
+            assert!(painted_whole(&painted, word), "{word:?} whole at {width}");
+            let target = bounds(&nodes, word);
+            let ink = painted
+                .iter()
+                .find(|text| text.text == word)
+                .map(|text| text.rect)
+                .unwrap();
+            assert!(
+                (ink.left() - edge).abs() <= 1.5,
+                "{word:?} starts at the text edge {edge}: {ink:?} at {width}"
+            );
+            let icon = painted
+                .iter()
+                .find(|text| text.text == BACK_LINK_ICON && target.contains_rect(text.rect))
+                .unwrap_or_else(|| panic!("{word:?}'s icon inside its target {target:?}"));
+            assert!(
+                icon.clip.expand(0.5).contains_rect(icon.rect),
+                "{word:?}'s icon whole in its clip"
+            );
+            assert!(
+                icon.rect.left() > ink.right(),
+                "{word:?}'s icon after the word"
+            );
+            assert!(
+                (icon.rect.center().y - target.center().y).abs() <= 2.0,
+                "{word:?}'s icon centred on its line: {:?} in {target:?}",
+                icon.rect
+            );
+            assert!(target.height() >= 24.0 && target.width() >= 24.0);
+            assert!(target.left() >= left - S - 0.5, "{word:?} hangs at most S");
+        }
+        // The link and the action at the line's end share one line (`iter-2-R11`).
+        let (back, add) = (
+            bounds(&nodes, RECORDINGS.as_str()),
+            bounds(&nodes, "Add to notes"),
+        );
+        assert!(
+            (back.center().y - add.center().y).abs() < 0.5,
+            "one line: {back:?} {add:?} at {width}"
+        );
         let rects = WORDS.map(|word| bounds(&nodes, word));
         // The draw keeps to the measure: every action ends inside the width it was given.
         for (word, rect) in WORDS.iter().zip(&rects) {
@@ -406,8 +502,21 @@ fn inline_create_moves_nothing_while_the_dm_types() {
     const CANCEL: Word = crate::word!("Cancel");
     const PREVIEW: &str = "Will create /home/dm/Obsidian/Vault/Campaigns/The Copper Coast and the Salt Road/Modules/Sessions/A very long folder name that goes on/Copper Coast/Campaign.md";
     let ctx = context();
-    let draw_at = |width: f32, reason: Option<TestReason>, cancel: bool, preview: bool| {
+    const LOCKED: &str = "Wait until the Library has loaded.";
+    // `lock`: None for a plain side action; Some(locked) for one with `locked_when`.
+    let draw_with = |width: f32,
+                     reason: Option<TestReason>,
+                     cancel: bool,
+                     preview: bool,
+                     lock: Option<bool>| {
         let (mut name, mut folder) = (String::from("Copper Coast"), String::from("/vault"));
+        let side = match lock {
+            None => SideAction::new(BROWSE),
+            Some(locked) => SideAction::new(BROWSE).locked_when(
+                locked,
+                crate::sentence!("Wait until the Library has loaded."),
+            ),
+        };
         let (nodes, painted) = frame_with(&ctx, vec2(width, 500.0), Vec::new(), |ui| {
             let _ = InlineCreate::new()
                 .field(
@@ -424,7 +533,7 @@ fn inline_create_moves_nothing_while_the_dm_types() {
                         "Folder",
                         &mut folder,
                     )
-                    .side_action(BROWSE)
+                    .side_action(side.clone())
                     .help("Splat keeps the notes here."),
                 )
                 .create(Create::primary(CREATE).blocked(reason))
@@ -439,6 +548,7 @@ fn inline_create_moves_nothing_while_the_dm_types() {
         let rects = ["Folder", "Browse…", "Add campaign", "Below"].map(|name| bounds(&nodes, name));
         (rects, nodes, painted)
     };
+    let draw_at = |width, reason, cancel, preview| draw_with(width, reason, cancel, preview, None);
     let draw = |reason, cancel, preview| draw_at(800.0, reason, cancel, preview);
     let (still, _, _) = draw(None, false, false);
     for reason in [None, Some(TestReason::NoFolder), Some(TestReason::Long)] {
@@ -515,6 +625,681 @@ fn inline_create_moves_nothing_while_the_dm_types() {
         narrow >= wide,
         "a narrower form wraps its tallest reason on more lines"
     );
+    // K4a gap 3: a side action locked with its reason. Locked, Browse is disabled and says the
+    // reason as its description and on the kept line; nothing moves when the lock comes and
+    // goes (the kept line keeps the reason's room), with any reason of Create's beside it.
+    for reason in [None, Some(TestReason::NoFolder), Some(TestReason::Long)] {
+        let (open, nodes, painted) = draw_with(800.0, reason, true, false, Some(false));
+        let browse = |nodes: &Nodes| {
+            nodes
+                .iter()
+                .find(|(_, node)| node.label() == Some("Browse…"))
+                .map(|(_, node)| (node.is_disabled(), node.description().map(str::to_owned)))
+                .expect("Browse")
+        };
+        assert_eq!(browse(&nodes), (false, None), "open: {reason:?}");
+        assert!(!painted.iter().any(|text| text.text == LOCKED));
+        let (locked, nodes, painted) = draw_with(800.0, reason, true, false, Some(true));
+        assert_eq!(
+            open, locked,
+            "a lock that comes and goes moves nothing: {reason:?}"
+        );
+        assert_eq!(
+            browse(&nodes),
+            (true, Some(LOCKED.to_owned())),
+            "locked: {reason:?}"
+        );
+        let words = painted
+            .iter()
+            .find(|text| text.text == LOCKED)
+            .expect("the lock's reason is painted");
+        assert!(
+            words.rect.top() >= open[0].bottom() && words.rect.bottom() <= open[3].top() + 0.5,
+            "the lock's reason is on the kept line: {:?}",
+            words.rect
+        );
+        if let Some(reason) = reason {
+            let create = painted
+                .iter()
+                .find(|text| text.text == reason.words())
+                .expect("Create's reason is painted too");
+            assert!(
+                create.rect.top() >= words.rect.bottom() - 0.5
+                    && create.rect.bottom() <= open[3].top() + 0.5,
+                "both reasons fit the kept line"
+            );
+        }
+    }
+    // K4a gap 2: in a column whose clip is its text edge (a reader nested in a pane), the form
+    // takes the column's width: the actions go under the field before they are cut, Cancel
+    // does not hang past the clip, and every target is at least 24 px and inside the clip.
+    let in_column_with =
+        |clip_left: f32, width: f32, cut: f32, side: Word, create: Word, text: &str| {
+            let mut folder = text.to_owned();
+            let column = Rect::from_min_size(pos2(100.0, 20.0), vec2(width, 400.0));
+            // `cut`: the clip ends this far before the column's right edge (a pane's lane).
+            let clip = column
+                .with_min_x(clip_left)
+                .with_max_x(column.right() - cut);
+            let (nodes, painted) = frame_with(&ctx, vec2(1000.0, 500.0), Vec::new(), |ui| {
+                ui.scope_builder(egui::UiBuilder::new().max_rect(column), |ui| {
+                    ui.set_clip_rect(clip);
+                    let _ = InlineCreate::new()
+                        .field(
+                            CreateField::new(
+                                crate::field_id!("test_create_column").once(Once::Example),
+                                "Folder",
+                                &mut folder,
+                            )
+                            .side_action(side),
+                        )
+                        .create(Create::primary(create).blocked(None::<TestReason>))
+                        .kept_line(KeptLine::new().cancel(CANCEL, true))
+                        .show(ui);
+                });
+            });
+            (
+                clip,
+                ["Folder", side.as_str(), create.as_str(), "Cancel"]
+                    .map(|name| bounds(&nodes, name)),
+                painted,
+            )
+        };
+    const LONG_FOLDER: &str =
+        "/home/dm/Obsidian/a very long folder name that scrolls inside its field";
+    let in_column = |clip_left: f32, width: f32, cut: f32| {
+        let (clip, rects, _) = in_column_with(clip_left, width, cut, BROWSE, CREATE, LONG_FOLDER);
+        (clip, rects)
+    };
+    for (width, cut) in [
+        (NARROWEST_PANE - 60.0, 0.0),
+        (300.0, 0.0),
+        (800.0, 0.0),
+        (800.0, 400.0),
+    ] {
+        let (clip, [field, browse, create, cancel]) = in_column(100.0, width, cut);
+        for (name, target) in [
+            ("Browse…", browse),
+            ("Add campaign", create),
+            ("Cancel", cancel),
+        ] {
+            assert!(
+                clip.expand(0.5).contains_rect(target)
+                    && target.height() >= 24.0
+                    && target.width() >= 24.0,
+                "{name} at {width}: {target:?} in {clip:?}"
+            );
+        }
+        assert!(
+            field.right() <= clip.right() + 0.5,
+            "the field ends inside the column"
+        );
+        let beside = (create.center().y - field.center().y).abs() < 1.0;
+        let under = create.top() >= field.bottom() && (browse.left() - field.left()).abs() < 1.0;
+        assert!(
+            beside || under,
+            "Create beside the field or on its own line: {width}"
+        );
+        assert_eq!(
+            beside,
+            clip.width() >= 400.0,
+            "the actions wrap only when they do not fit: {width}, clip {clip:?}"
+        );
+    }
+    // Where the clip has room, Cancel hangs its padding left of the text edge (line_start).
+    let (_, [_, _, _, cancel]) = in_column(0.0, 800.0, 0.0);
+    assert!(
+        (cancel.left() - (100.0 - S)).abs() < 0.5,
+        "Cancel hangs: {cancel:?}"
+    );
+    // Review of PR 351, item 2: actions as long as a word may be, in the narrowest pane (the
+    // longest word's action is 283 px: it fits a pane, `the_longest_word_fits_the_narrowest_pane`,
+    // and no column narrower than the action can show it whole). Each
+    // stays whole (never cut, never split), inside the clip, in rows of whole actions; the
+    // rows are the same with a short and a long text (they never flip while the DM types).
+    const LONG_SIDE: Word = crate::word!("WWWWWWWWWWWWWWWWWWWW");
+    const LONG_CREATE: Word = crate::word!("WWWWWWWWWWWWWWWWWWWM");
+    let (clip, long, painted) = in_column_with(
+        100.0,
+        NARROWEST_PANE,
+        0.0,
+        LONG_SIDE,
+        LONG_CREATE,
+        LONG_FOLDER,
+    );
+    let [field, side, create, _] = long;
+    assert!(
+        side.width() + S + create.width() > clip.width(),
+        "the pressure: the two actions cannot share one row"
+    );
+    for (word, target) in [(LONG_SIDE, side), (LONG_CREATE, create)] {
+        assert!(
+            painted_whole(&painted, word.as_str()) && clip.expand(0.5).contains_rect(target),
+            "{} whole and inside the clip: {target:?} in {clip:?}",
+            word.as_str()
+        );
+    }
+    assert!(
+        side.top() >= field.bottom() && create.top() >= side.bottom() - 0.5,
+        "whole actions on rows of their own: {side:?} {create:?}"
+    );
+    let (_, short, _) = in_column_with(100.0, NARROWEST_PANE, 0.0, LONG_SIDE, LONG_CREATE, "/a");
+    assert_eq!(long, short, "the rows do not change while the DM types");
+    // Re-check of PR 351, item 4: a form that ends with a drop-down, in the narrowest pane, with
+    // the longest Create. Cancel wraps to a row of its own and starts the line: its words at the
+    // text edge where the clip shows its padding, its target inside the clip where the clip is
+    // the text edge. The rows do not change while the DM types.
+    let dropdown_in_column = |clip_left: f32, text: &str| {
+        let mut title = text.to_owned();
+        let mut template = 0;
+        let column = Rect::from_min_size(pos2(100.0, 20.0), vec2(NARROWEST_PANE, 400.0));
+        let clip = column.with_min_x(clip_left);
+        let (nodes, painted) = frame_with(&ctx, vec2(1000.0, 500.0), Vec::new(), |ui| {
+            ui.scope_builder(egui::UiBuilder::new().max_rect(column), |ui| {
+                ui.set_clip_rect(clip);
+                let _ = InlineCreate::new()
+                    .field(CreateField::new(
+                        crate::field_id!("test_create_wrap_title").once(Once::Example),
+                        "Session title",
+                        &mut title,
+                    ))
+                    .dropdown(CreateDropdown::new(
+                        "Template",
+                        Selection::new(
+                            crate::field_id!("test_create_wrap_template").once(Once::Example),
+                            "Session template",
+                            0,
+                            "Short notes",
+                        ),
+                        &mut template,
+                    ))
+                    .create(Create::primary(LONG_CREATE).blocked(None::<TestReason>))
+                    .kept_line(KeptLine::new().cancel(CANCEL, true))
+                    .show(ui);
+            });
+        });
+        let words = painted
+            .iter()
+            .find(|text| text.text == CANCEL.as_str())
+            .map(|text| text.rect)
+            .expect("Cancel's words are painted");
+        let rects = [LONG_CREATE.as_str(), CANCEL.as_str()].map(|name| bounds(&nodes, name));
+        (clip, rects, words)
+    };
+    let (clip, [create, cancel], words) = dropdown_in_column(0.0, LONG_FOLDER);
+    assert!(
+        cancel.top() >= create.bottom() - 0.5,
+        "the pressure: Cancel wraps under Create: {create:?} {cancel:?}"
+    );
+    assert!(
+        (words.left() - 100.0).abs() < 1.0 && clip.contains_rect(cancel),
+        "Cancel's words start at the text edge: {words:?}, target {cancel:?}"
+    );
+    let (_, same, _) = dropdown_in_column(0.0, "/a");
+    assert_eq!(
+        same,
+        [create, cancel],
+        "the rows do not change while the DM types"
+    );
+    let (clip, [_, cancel], _) = dropdown_in_column(100.0, LONG_FOLDER);
+    assert!(
+        clip.expand(0.5).contains_rect(cancel),
+        "Cancel inside a clip at the text edge: {cancel:?} in {clip:?}"
+    );
+    // K4a gap 1: a form that ends with a drop-down. Create, then Cancel, on an action line
+    // under the drop-down and its help; the action line keeps its y whatever is chosen,
+    // whatever the preview's length and whatever reason shows; the reasons and the preview
+    // are on the kept line under it.
+    const SHORT: &str = "Short notes";
+    let lines = "x\n".repeat(40);
+    const LONG_LABEL: &str =
+        "A customized standard session template with a very long name that the control cuts";
+    // The title's words live across frames, so a test can see what a key did to them.
+    let typed = std::cell::RefCell::new(String::from("Ash on the Road"));
+    let draw_form = |events: Vec<egui::Event>,
+                     chosen: u8,
+                     reason: Option<TestReason>,
+                     preview: Option<&str>,
+                     focus: bool| {
+        let mut title = typed.borrow().clone();
+        let mut date = String::from("14 November");
+        let mut template = chosen;
+        let mut out = InlineCreateResponse::default();
+        let (nodes, painted) = frame_with(&ctx, vec2(800.0, 600.0), events, |ui| {
+            out = InlineCreate::new()
+                .field(
+                    CreateField::new(
+                        crate::field_id!("test_create_title").once(Once::Example),
+                        "Session title",
+                        &mut title,
+                    )
+                    .focus(focus),
+                )
+                .field(CreateField::new(
+                    crate::field_id!("test_create_date").once(Once::Example),
+                    "Date",
+                    &mut date,
+                ))
+                .dropdown(
+                    CreateDropdown::new(
+                        "Template",
+                        Selection::new(
+                            crate::field_id!("test_create_template").once(Once::Example),
+                            "Session template",
+                            0,
+                            SHORT,
+                        )
+                        .choices([(1, LONG_LABEL)]),
+                        &mut template,
+                    )
+                    .help("What the note starts with."),
+                )
+                .create(Create::primary(crate::word!("Create session")).blocked(reason))
+                .kept_line(KeptLine::new().cancel(CANCEL, true).preview(preview))
+                .show(ui);
+            let _ = Action::quiet("Below").show(ui);
+        });
+        *typed.borrow_mut() = title;
+        (out, nodes, painted)
+    };
+    let starting = |nodes: &Nodes, prefix: &str| {
+        let found: Vec<_> = nodes
+            .iter()
+            .filter(|(_, node)| node.label().is_some_and(|label| label.starts_with(prefix)))
+            .collect();
+        assert_eq!(found.len(), 1, "one node starting {prefix:?}");
+        let b = found[0].1.bounds().expect("bounds");
+        Rect::from_min_max(
+            pos2(b.x0 as f32, b.y0 as f32),
+            pos2(b.x1 as f32, b.y1 as f32),
+        )
+    };
+    let actions =
+        |nodes: &Nodes| ["Create session", "Cancel", "Below"].map(|name| bounds(nodes, name));
+    let (_, nodes, painted) = draw_form(Vec::new(), 0, None, None, false);
+    let still = actions(&nodes);
+    let [create, cancel, below] = still;
+    let title = bounds(&nodes, "Session title");
+    let template = starting(&nodes, "Session template");
+    let help = painted
+        .iter()
+        .find(|text| text.text == "What the note starts with.")
+        .expect("the drop-down's help");
+    assert!(
+        title.bottom() <= template.top()
+            && template.bottom() <= help.rect.top()
+            && help.rect.bottom() <= create.top(),
+        "the title, the drop-down, its help, then the action line"
+    );
+    assert!(
+        (create.center().y - cancel.center().y).abs() < 1.0 && create.right() <= cancel.left(),
+        "Cancel follows Create on the action line"
+    );
+    assert!(
+        (create.left() - title.left()).abs() <= 1.0,
+        "the action line starts at the text edge"
+    );
+    for chosen in [0, 1] {
+        for reason in [None, Some(TestReason::NoFolder), Some(TestReason::Long)] {
+            for preview in [
+                None,
+                Some("Sessions/Session 1.md"),
+                Some(PREVIEW),
+                Some(lines.as_str()),
+            ] {
+                let (_, nodes, painted) = draw_form(Vec::new(), chosen, reason, preview, false);
+                assert_eq!(actions(&nodes), still, "{chosen} {reason:?} {preview:?}");
+                let kept = |words: &str| {
+                    painted
+                        .iter()
+                        .find(|text| text.text == words)
+                        .is_some_and(|text| {
+                            text.rect.top() >= create.bottom()
+                                && text.rect.bottom() <= below.top() + 0.5
+                        })
+                };
+                if let Some(reason) = reason {
+                    assert!(
+                        kept(reason.words()),
+                        "the reason is on the kept line: {reason:?}"
+                    );
+                } else if let Some(preview) = preview.filter(|preview| preview.len() < 40) {
+                    assert!(kept(preview), "the preview is on the kept line");
+                }
+                // Review of PR 351, item 5: any preview is one rendered row on the kept line,
+                // also one with forty line breaks.
+                if reason.is_none()
+                    && let Some(preview) = preview
+                {
+                    let row = painted
+                        .iter()
+                        .find(|text| {
+                            // Found by its words, whatever their line breaks.
+                            text.text
+                                .replace('\n', " ")
+                                .ends_with(&preview.replace('\n', " ")[preview.len() - 6..])
+                        })
+                        .expect("the preview is painted");
+                    assert!(
+                        row.rect.height() < 1.5 * Type::Small.line()
+                            && row.rect.top() >= create.bottom()
+                            && row.rect.bottom() <= below.top() + 0.5,
+                        "one row on the kept line: {preview:?} {:?}",
+                        row.rect
+                    );
+                }
+            }
+        }
+    }
+    // Keyboard: the title, the date, the drop-down, Create, Cancel.
+    let focused = |nodes: &Nodes| {
+        let id = ctx.memory(|memory| memory.focused())?;
+        nodes
+            .iter()
+            .find(|(node, _)| node.0 == id.value())
+            .and_then(|(_, node)| node.label().map(str::to_owned))
+    };
+    // Keys go in with their releases: a press with no release is held, and egui marks the next
+    // press of that key a repeat (which egui's text field drops during a composition).
+    let key = |key: egui::Key| {
+        [true, false]
+            .map(|pressed| egui::Event::Key {
+                key,
+                physical_key: None,
+                pressed,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            })
+            .to_vec()
+    };
+    let _ = draw_form(Vec::new(), 0, None, None, true);
+    let (_, nodes, _) = draw_form(Vec::new(), 0, None, None, false);
+    let mut order = vec![focused(&nodes)];
+    for _ in 0..4 {
+        let (_, nodes, _) = draw_form(key(egui::Key::Tab), 0, None, None, false);
+        order.push(focused(&nodes));
+    }
+    assert_eq!(
+        order,
+        [
+            "Session title",
+            "Date",
+            "Session template: Short notes",
+            "Create session",
+            "Cancel"
+        ]
+        .map(|name| Some(name.to_owned())),
+        "the keyboard order"
+    );
+    // Enter in the field creates when nothing blocks; Escape cancels. Both leave the field.
+    for reason in [None, Some(TestReason::NoFolder)] {
+        let _ = draw_form(Vec::new(), 0, reason, None, true);
+        let (out, nodes, _) = draw_form(key(egui::Key::Enter), 0, reason, None, false);
+        assert_eq!(
+            out.create,
+            reason.is_none(),
+            "Enter creates only when nothing blocks"
+        );
+        assert!(!out.cancel && focused(&nodes).is_none());
+    }
+    let _ = draw_form(Vec::new(), 0, None, None, true);
+    let (out, nodes, _) = draw_form(key(egui::Key::Escape), 0, None, None, false);
+    assert!(
+        out.cancel && !out.create && focused(&nodes).is_none(),
+        "Escape cancels"
+    );
+    // Review of PR 351, item 1: keys during an input method's composition. Each frame's events
+    // reach the form in ONE pass (`frame_with` runs one `Context::run` with all of them): typed
+    // text and Enter in one frame both land.
+    let text = |words: &str| egui::Event::Text(words.to_owned());
+    let ime = |event: egui::ImeEvent| egui::Event::Ime(event);
+    let with = |mut events: Vec<egui::Event>, key_events: Vec<egui::Event>| {
+        events.extend(key_events);
+        events
+    };
+    let _ = draw_form(Vec::new(), 0, None, None, true);
+    let (out, _, _) = draw_form(
+        with(vec![text("!")], key(egui::Key::Enter)),
+        0,
+        None,
+        None,
+        false,
+    );
+    assert!(
+        out.create && typed.borrow().ends_with('!'),
+        "one pass: the text and Enter both land"
+    );
+    let preedit = || {
+        vec![
+            ime(egui::ImeEvent::Enabled),
+            ime(egui::ImeEvent::Preedit("か".to_owned())),
+        ]
+    };
+    // The commit is other words than the preedit, so a test sees whether it landed.
+    let commit = || {
+        vec![
+            ime(egui::ImeEvent::Commit("火".to_owned())),
+            ime(egui::ImeEvent::Disabled),
+        ]
+    };
+    // Re-check of PR 351, item 3: what egui alone does, with one design text field and no form.
+    // A preedit, then a fresh Enter (pressed and released, so not a repeat) in the next frame:
+    // egui ends the input on that Enter, takes the field's keyboard and ends its composition,
+    // so the commit of the frame after never reaches the field.
+    {
+        let alone_id = crate::field_id!("test_ime_alone").once(Once::Example);
+        let mut alone = String::from("Ash");
+        let mut frame_alone = |events: Vec<egui::Event>, focus: bool| {
+            let mut fresh = false;
+            let _ = frame_with(&ctx, vec2(800.0, 200.0), events, |ui| {
+                fresh = ui.input(|input| {
+                    input.events.iter().any(|event| {
+                        matches!(
+                            event,
+                            egui::Event::Key {
+                                key: egui::Key::Enter,
+                                pressed: true,
+                                repeat: false,
+                                ..
+                            }
+                        )
+                    })
+                });
+                let response = form_field(ui, alone_id, "Alone", &mut alone, 300.0);
+                if focus {
+                    response.request_focus();
+                }
+            });
+            let has = ctx.memory(|memory| memory.has_focus(alone_id.named_id("Alone")));
+            (fresh, has, alone.clone())
+        };
+        let _ = frame_alone(Vec::new(), true);
+        let _ = frame_alone(Vec::new(), false);
+        let (_, has, words) = frame_alone(preedit(), false);
+        assert!(
+            has && words == "Ashか",
+            "egui alone: the preedit lands: {words}"
+        );
+        let (fresh, has, _) = frame_alone(key(egui::Key::Enter), false);
+        assert!(fresh, "the helper's Enter is a fresh press, not a repeat");
+        assert!(
+            !has,
+            "egui alone: a fresh Enter takes the composing field's keyboard"
+        );
+        let (_, has, words) = frame_alone(commit(), false);
+        assert!(
+            !has && words == "Ashか",
+            "egui alone: the commit after it is lost: {words}"
+        );
+    }
+    let title = Some("Session title".to_owned());
+    let reset = || *typed.borrow_mut() = "Ash on the Road".to_owned();
+    // Re-check of PR 351, items 1 and 3: a fresh Enter or Escape in a frame of its own during
+    // the composition stays with the input method: no command, the field keeps the keyboard,
+    // and the commit of the next frame lands. After the commit, a fresh Enter creates and a
+    // fresh Escape cancels.
+    for then in [egui::Key::Enter, egui::Key::Escape] {
+        reset();
+        let _ = draw_form(Vec::new(), 0, None, None, true);
+        let (_, nodes, _) = draw_form(preedit(), 0, None, None, false);
+        assert!(
+            focused(&nodes) == title && typed.borrow().ends_with('か'),
+            "the pressure: the title composes ({then:?})"
+        );
+        let (out, nodes, _) = draw_form(key(then), 0, None, None, false);
+        assert!(
+            !out.create && !out.cancel && focused(&nodes) == title,
+            "{then:?} during composition: no command, the title keeps the keyboard: {:?}",
+            focused(&nodes)
+        );
+        let (out, nodes, _) = draw_form(commit(), 0, None, None, false);
+        assert!(
+            !out.create && !out.cancel && focused(&nodes) == title,
+            "the commit's frame ({then:?})"
+        );
+        assert_eq!(*typed.borrow(), "Ash on the Road火", "the commit lands");
+        let (out, nodes, _) = draw_form(key(then), 0, None, None, false);
+        assert!(
+            out.create == (then == egui::Key::Enter)
+                && out.cancel == (then == egui::Key::Escape)
+                && focused(&nodes).is_none(),
+            "after the commit, a fresh {then:?} is the form's"
+        );
+    }
+    // A preedit and Enter in one pass: the same, Enter stays with the input method.
+    reset();
+    let _ = draw_form(Vec::new(), 0, None, None, true);
+    let (out, nodes, _) = draw_form(with(preedit(), key(egui::Key::Enter)), 0, None, None, false);
+    assert!(
+        !out.create && focused(&nodes) == title && typed.borrow().ends_with('か'),
+        "a preedit and Enter in one pass: {:?}",
+        focused(&nodes)
+    );
+    let _ = draw_form(commit(), 0, None, None, false);
+    assert_eq!(*typed.borrow(), "Ash on the Road火", "its commit lands");
+    // A preedit and Escape in one pass: egui takes the keyboard on Escape before any widget
+    // runs (no composition kept Escape in the field yet), so the preedit is not typed. The
+    // form gives no Cancel in a frame with an IME event.
+    reset();
+    let _ = draw_form(Vec::new(), 0, None, None, true);
+    let (out, nodes, _) = draw_form(
+        with(preedit(), key(egui::Key::Escape)),
+        0,
+        None,
+        None,
+        false,
+    );
+    assert!(
+        !out.create && !out.cancel && focused(&nodes).is_none(),
+        "a preedit and Escape in one pass: {:?}",
+        focused(&nodes)
+    );
+    assert_eq!(*typed.borrow(), "Ash on the Road");
+    // A commit with no preedit before it (some input methods send only that) and Enter in one
+    // pass: the commit lands, no command, the field keeps the keyboard. Commit, then a fresh
+    // Enter in the next frame creates.
+    reset();
+    let _ = draw_form(Vec::new(), 0, None, None, true);
+    let (out, nodes, _) = draw_form(
+        with(
+            vec![ime(egui::ImeEvent::Commit("火".to_owned()))],
+            key(egui::Key::Enter),
+        ),
+        0,
+        None,
+        None,
+        false,
+    );
+    assert!(
+        !out.create && focused(&nodes) == title && typed.borrow().ends_with('火'),
+        "a commit's frame alone takes no command"
+    );
+    let (out, _, _) = draw_form(key(egui::Key::Enter), 0, None, None, false);
+    assert!(
+        out.create,
+        "Commit, then a fresh Enter in the next frame creates"
+    );
+    // Re-check of PR 351, item 2: the composition belongs to its field. A press on Date during
+    // it moves the keyboard to Date (egui ends the title's composition and keeps its preedit
+    // as typed words), and Enter in Date creates.
+    reset();
+    let _ = draw_form(Vec::new(), 0, None, None, true);
+    let (_, nodes, _) = draw_form(preedit(), 0, None, None, false);
+    assert!(focused(&nodes) == title, "the pressure: the title composes");
+    let at = bounds(&nodes, "Date").center();
+    let button = |pressed| egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    let _ = draw_form(vec![egui::Event::PointerMoved(at)], 0, None, None, false);
+    let _ = draw_form(vec![button(true)], 0, None, None, false);
+    let (_, nodes, _) = draw_form(vec![button(false)], 0, None, None, false);
+    assert!(
+        focused(&nodes).as_deref() == Some("Date"),
+        "a press on Date takes the keyboard: {:?}",
+        focused(&nodes)
+    );
+    assert_eq!(
+        *typed.borrow(),
+        "Ash on the Roadか",
+        "the preedit stays typed"
+    );
+    let (out, nodes, _) = draw_form(key(egui::Key::Enter), 0, None, None, false);
+    assert!(
+        out.create && focused(&nodes).is_none(),
+        "Enter in Date creates after a composition in the title: {:?}",
+        focused(&nodes)
+    );
+    // The form closed during a composition and opened again: Enter creates.
+    reset();
+    let _ = draw_form(Vec::new(), 0, None, None, true);
+    let (_, nodes, _) = draw_form(preedit(), 0, None, None, false);
+    assert!(focused(&nodes) == title, "the pressure: the title composes");
+    let _ = frame_with(&ctx, vec2(800.0, 600.0), Vec::new(), |ui| {
+        let _ = Action::quiet("Below").show(ui);
+    });
+    let _ = draw_form(Vec::new(), 0, None, None, true);
+    let (_, nodes, _) = draw_form(Vec::new(), 0, None, None, false);
+    assert!(focused(&nodes) == title, "the title has the keyboard again");
+    let (out, _, _) = draw_form(key(egui::Key::Enter), 0, None, None, false);
+    assert!(out.create, "a composition ends with its form");
+    // Second re-check of PR 351: the window loses the keyboard during a composition, with no
+    // commit and no `Disabled`, and gets it back. egui keeps the title's focus; the composition
+    // ends, so a fresh Enter creates and a fresh Escape cancels. The same with no composition:
+    // nothing changes.
+    let window = |focused: bool| vec![egui::Event::WindowFocused(focused)];
+    for compose in [true, false] {
+        for then in [egui::Key::Enter, egui::Key::Escape] {
+            reset();
+            let _ = draw_form(Vec::new(), 0, None, None, true);
+            let (_, nodes, _) = draw_form(
+                if compose { preedit() } else { Vec::new() },
+                0,
+                None,
+                None,
+                false,
+            );
+            assert!(
+                focused(&nodes) == title,
+                "the pressure: the title has the keyboard"
+            );
+            let _ = draw_form(window(false), 0, None, None, false);
+            let (_, nodes, _) = draw_form(window(true), 0, None, None, false);
+            assert!(
+                focused(&nodes) == title,
+                "the title keeps the keyboard across the window's focus ({compose})"
+            );
+            let (out, nodes, _) = draw_form(key(then), 0, None, None, false);
+            assert!(
+                out.create == (then == egui::Key::Enter)
+                    && out.cancel == (then == egui::Key::Escape)
+                    && focused(&nodes).is_none(),
+                "after the window's focus comes back, a fresh {then:?} is the form's (composed: {compose})"
+            );
+        }
+    }
 }
 
 /// Whether `after` is `before` with `letter` inserted at one place: every letter of `before`

@@ -3218,8 +3218,8 @@ impl Sessions {
         // whole inside its scroll column, and the rows keep their place.
         let hang = box_hang();
         let full = ui.available_rect_before_wrap();
-        // The file's flags, with their file line, below the pane and outside its scroll.
-        let wide = timeline::page::file_flags_below(ui, book);
+        // The file's flags and their file line are footer messages (`file_messages`).
+        let wide = full;
         // The fold's room: the pane's, with an empty footer.
         let room = wide.height();
         let wide = wide.with_min_x(wide.left() - hang);

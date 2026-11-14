@@ -742,6 +742,11 @@ impl<'a> Action<'a> {
         self.icon.map_or(0.0, |_| ICON_SLOT)
     }
 
+    /// The least width the caller gave (`min_width`), or 0.
+    pub(in crate::design) fn least_width(&self) -> f32 {
+        self.min_width.unwrap_or_default()
+    }
+
     /// The width before any text is cut, using the same parts as the painted button.
     pub fn natural_width(&self, ui: &Ui) -> f32 {
         let icon = self.icon_width();
@@ -1697,25 +1702,62 @@ pub fn status<'a>(ui: &mut Ui, state: impl Into<Tinted<'a>>) -> Response {
     status_label(ui, state.into())
 }
 
-/// A painted row keeps its status word in the shared status colour.
-pub fn status_in_text(
+/// The look of a status in a painted row: one colour for its icon and word, or a
+/// [`super::StatusKind`]'s, which decides both apart (R5: a live recording's icon alone is red).
+#[derive(Clone, Copy, Debug)]
+pub enum InTextLook {
+    One(Color32),
+    Kind(super::StatusKind),
+}
+
+impl From<Color32> for InTextLook {
+    fn from(color: Color32) -> Self {
+        Self::One(color)
+    }
+}
+
+impl From<super::StatusKind> for InTextLook {
+    fn from(kind: super::StatusKind) -> Self {
+        Self::Kind(kind)
+    }
+}
+
+/// A painted row keeps its status word in the shared status colour. With a kind, the part of
+/// the status up to its kind's icon takes the icon's colour, and the rest the word's.
+pub fn status_in_text<L: Into<InTextLook>>(
     ui: &Ui,
     text: &str,
-    status: Option<(&str, Color32)>,
+    status: Option<(&str, L)>,
     width: f32,
 ) -> Arc<egui::Galley> {
     let mut job = LayoutJob::default();
     job.wrap.max_width = width;
-    let (before, word, after, color) = status
-        .and_then(|(word, color)| {
+    let muted = colors().muted;
+    let (before, word, after, look) = status
+        .and_then(|(word, look)| {
             text.split_once(word)
-                .map(|(before, after)| (before, word, after, color))
+                .map(|(before, after)| (before, word, after, look.into()))
         })
-        .unwrap_or((text, "", "", colors().muted));
+        .unwrap_or((text, "", "", InTextLook::One(muted)));
+    let (icon, word, icon_color, word_color) = match look {
+        InTextLook::One(color) => ("", word, color, color),
+        InTextLook::Kind(kind) => {
+            let at = word
+                .find(kind.icon())
+                .map_or(0, |at| at + kind.icon().len());
+            (
+                &word[..at],
+                &word[at..],
+                kind.icon_color(),
+                kind.word_color(),
+            )
+        }
+    };
     for (text, color) in [
-        (before, colors().muted),
-        (word, color),
-        (after, colors().muted),
+        (before, muted),
+        (icon, icon_color),
+        (word, word_color),
+        (after, muted),
     ] {
         job.append(
             text,
@@ -4148,12 +4190,96 @@ pub fn grouped_draft_comparison(
     draft_comparison_styled(ui, draft, disk, id, face, line_height);
 }
 
-pub fn folder_group_heading(ui: &mut Ui, path: &str, count: usize) {
+/// The folder a group of notes is in: the campaign folder itself (the root), or a folder inside
+/// it. Its form is private: build it with [`FolderGroup::of_path`], which decides the root.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FolderGroup<'a>(Folder<'a>);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Folder<'a> {
+    /// Notes directly in the campaign folder. No folder of that name exists, so the heading
+    /// names the place, [`FolderGroup::ROOT_NAME`], with no `/`.
+    Root,
+    /// A folder inside the campaign folder, by its path from there, with no `/` at either end
+    /// and no `./` before it. The heading shows the path with one `/` after it.
+    Inside(&'a str),
+}
+
+impl<'a> FolderGroup<'a> {
+    /// The root group's name: the campaign's folder (CONTEXT.md: a campaign has a folder for its
+    /// files).
+    pub const ROOT_NAME: &'static str = "Campaign folder";
+
+    /// The group of a folder path relative to the campaign folder, as `/`-separated names
+    /// (`Places`, `Lore/Old`). `/` at either end and `./` before it are dropped; what is left
+    /// empty, or `.`, is the root.
+    pub fn of_path(path: &'a str) -> Self {
+        let mut path = path.trim_matches('/');
+        while let Some(rest) = path.strip_prefix("./") {
+            path = rest.trim_start_matches('/');
+        }
+        if path.is_empty() || path == "." {
+            Self(Folder::Root)
+        } else {
+            Self(Folder::Inside(path))
+        }
+    }
+
+    /// Whether this is the campaign folder itself.
+    pub fn is_root(self) -> bool {
+        self.0 == Folder::Root
+    }
+
+    /// The words of its heading, without the count.
+    pub fn words(self) -> String {
+        match self.0 {
+            Folder::Root => Self::ROOT_NAME.to_owned(),
+            Folder::Inside(path) => format!("{path}/"),
+        }
+    }
+}
+
+/// A folder's heading in a list of notes: the folder icon, the folder's words, the count. The
+/// root has its own name in one place ([`FolderGroup::ROOT_NAME`]); only a folder ends in `/`.
+///
+/// ```
+/// use splat::layout::doc_parts::FolderGroup;
+/// let words = |path| FolderGroup::of_path(path).words();
+/// for root in ["", ".", "/", "./", "//"] {
+///     assert!(FolderGroup::of_path(root).is_root(), "{root:?}");
+///     assert_eq!(words(root), "Campaign folder");
+/// }
+/// assert_eq!(words("Lore/Old"), "Lore/Old/");
+/// assert_eq!(words("Notes/"), "Notes/");
+/// assert_eq!(words("./Notes"), "Notes/");
+/// // A real folder that has the root's name stays a folder.
+/// assert!(!FolderGroup::of_path("Campaign folder").is_root());
+/// assert_eq!(words("Campaign folder"), "Campaign folder/");
+/// ```
+///
+/// The form is private: a folder cannot be made by hand, so an empty one cannot be shown as `/`.
+///
+/// ```compile_fail,E0423
+/// let _ = splat::layout::doc_parts::FolderGroup("");
+/// ```
+///
+/// The heading takes a `FolderGroup`, never a path string that it would edit:
+///
+/// ```compile_fail,E0308
+/// # fn draw(ui: &mut eframe::egui::Ui) {
+/// splat::layout::doc_parts::folder_group_heading(ui, "Places", 3);
+/// # }
+/// ```
+pub fn folder_group_heading(ui: &mut Ui, folder: FolderGroup<'_>, count: usize) {
     ui.label(
         Type::Small
             .rich(
                 ui,
-                format!("{} {path}/  {count}", egui_phosphor::regular::FOLDER),
+                format!(
+                    "{} {}  {count}",
+                    egui_phosphor::regular::FOLDER,
+                    folder.words()
+                ),
             )
             .color(colors().muted),
     );

@@ -12,7 +12,7 @@ use super::{
 use crate::{
     credentials::{self, KeySlot},
     design::{
-        self, Action, Density, Status, Tone, Type, colors, icons,
+        self, Action, CreateReasons, Density, Status, Tone, Type, colors, icons,
         outcome::{
             Choice, Fault, FaultMessage, KeptOutcome, Lost, MessageChoice, Messages, Notice,
             PaneFrame, Press, Said, Sentence, Severity, UndoStep, Verb,
@@ -66,6 +66,45 @@ const TEMPLATE_NAME: design::FieldId =
     crate::field_id!("template_name").once(design::Once::CreateForm);
 const SESSION_FOLDER: design::FieldName = crate::field_id!("session_folder");
 const SESSION_TEMPLATE: design::FieldName = crate::field_id!("session_template");
+const CREATE_SESSION: design::Word = crate::word!("Create session");
+const SAVE_DETAILS: design::Word = crate::word!("Save details");
+const CANCEL: design::Word = crate::word!("Cancel");
+
+crate::create_reasons! {
+    /// Why the New session form's Create (or the details form's Save details) waits.
+    enum FormReason {
+        Number => "Enter the session number as a whole number.",
+        Date => "Enter the date as YYYY-MM-DD.",
+        TemplateGone => "The chosen template is gone from the folder. Choose another.",
+    }
+}
+
+/// Why `form` cannot be made now, judged on its words and on the templates the page lists.
+fn form_reason(form: &Form, templates: &[Template]) -> Option<FormReason> {
+    if form.number.trim().parse::<u32>().is_err() {
+        return Some(FormReason::Number);
+    }
+    // A date's order is how Splat tells an old session from tonight's.
+    let date = form.date.trim().as_bytes();
+    if date.len() != 10
+        || date.iter().enumerate().any(|(at, c)| {
+            if at == 4 || at == 7 {
+                *c != b'-'
+            } else {
+                !c.is_ascii_digit()
+            }
+        })
+    {
+        return Some(FormReason::Date);
+    }
+    // A new session starts from a template the folder still holds.
+    (form.editing.is_none()
+        && !templates.is_empty()
+        && !templates
+            .iter()
+            .any(|template| template.name == form.template))
+    .then_some(FormReason::TemplateGone)
+}
 const RECORDING_VIEW: design::FieldName = crate::field_id!("recording_view");
 const RECORDING_PART: design::FieldName = crate::field_id!("recording_part");
 
@@ -174,8 +213,8 @@ impl FolderFooter {
                 design::message(ui, *tone, words);
             });
         }
-        // Kept on the old call: the typed footer has no warning that is not a fault or a
-        // refusal (`Notice` is info). Package C's typed footer shows it as a `Notice`.
+        // Kept on the old call while the Link and folder page uses this untyped footer; the
+        // typed footer (`folder_messages`) shows it as `Notice::warning`, in the same tone.
         if let Some(words) = &self.keeps {
             footer.notice(words.as_str(), move |ui| {
                 design::message(ui, Tone::Warning, words);
@@ -628,8 +667,10 @@ pub struct Sessions {
     move_run_here: Option<(Uuid, String)>,
     /// The open run moved to another session, with `Undo move`.
     moves: design::Results<kept::Page, kept::Moved>,
-    /// When a recording last stopped, so the rail can say it was kept.
-    saved_at: Option<Instant>,
+    /// When a recording last stopped, and the campaign it was recorded in: the owner, so the
+    /// rail says it was kept only while that campaign is open (another campaign's rail never
+    /// says it). It ends after `SAVED_WORD_FOR`.
+    saved_at: Option<(Option<Uuid>, Instant)>,
     note_had_focus: bool,
     /// The caret to bring into view, on the frame after the editor has laid out.
     caret_to_show: Option<usize>,
@@ -812,6 +853,75 @@ pub fn processed_warning() -> Status<'static> {
         icon: icons::WARN,
         word: "Processed, with a warning",
         color: colors().result.warning,
+    }
+}
+
+/// R5: what a recording, its processing or its result shows now. One producer makes it
+/// (`Sessions::recording_status`, and `Sessions::rail_recording_status` for the rail), and every
+/// place that shows it (the rail, the list row, the Record line, the Recordings tab, the banner)
+/// takes its colours from it: no screen picks the colour of a live recording. Red is a fault: a
+/// live recording paints only its record icon in the `recording` token, its words in the text
+/// colour (`StatusKind::Recording`).
+#[derive(Clone, Copy, Debug)]
+pub struct RecordingStatus {
+    pub icon: &'static str,
+    pub word: &'static str,
+    look: RecordingLook,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RecordingLook {
+    /// A status whose kind decides its icon's and its words' colours.
+    Kind(design::StatusKind),
+    /// The icon and the words in one colour: a fault, a warning, a result.
+    One(Color32),
+}
+
+impl RecordingStatus {
+    /// A live recording that saves audio.
+    fn live() -> Self {
+        let kind = design::StatusKind::Recording;
+        Self {
+            icon: kind.icon(),
+            word: "Recording",
+            look: RecordingLook::Kind(kind),
+        }
+    }
+
+    fn one(status: Status<'static>) -> Self {
+        Self {
+            icon: status.icon,
+            word: status.word,
+            look: RecordingLook::One(status.color),
+        }
+    }
+
+    pub fn icon_color(self) -> Color32 {
+        match self.look {
+            RecordingLook::Kind(kind) => kind.icon_color(),
+            RecordingLook::One(color) => color,
+        }
+    }
+
+    pub fn word_color(self) -> Color32 {
+        match self.look {
+            RecordingLook::Kind(kind) => kind.word_color(),
+            RecordingLook::One(color) => color,
+        }
+    }
+
+    /// What a status painter paints: this status's icon and colours, with `words` (its word, or
+    /// its word and time) in place of its word.
+    pub fn tinted(self, words: &str) -> design::Tinted<'_> {
+        match self.look {
+            RecordingLook::Kind(kind) => design::KindStatus::new(kind, words).into(),
+            RecordingLook::One(color) => Status {
+                icon: self.icon,
+                word: words,
+                color,
+            }
+            .into(),
+        }
     }
 }
 
@@ -1179,7 +1289,7 @@ fn session_row(
     detail: &str,
     // The detail in full words, when the drawn one is short.
     spoken: Option<&str>,
-    state: Option<Status<'_>>,
+    state: Option<RecordingStatus>,
 ) -> egui::Response {
     let c = colors();
     let width = ui.available_width() - 2.0 * design::S;
@@ -1214,7 +1324,7 @@ fn session_detail(
     ui: &egui::Ui,
     file: Option<&str>,
     detail: &str,
-    state: Option<Status<'_>>,
+    state: Option<RecordingStatus>,
     width: f32,
 ) -> std::sync::Arc<egui::Galley> {
     // Summary parts stay whole. A file name is words: it wraps at a space, and its next line
@@ -1225,16 +1335,22 @@ fn session_detail(
         .chain(detail.lines().map(plan_summary))
         .collect::<Vec<_>>()
         .join("\n");
+    // The status's own look: one colour, or a kind's (R5: a live recording's icon alone is red,
+    // its word in the text colour).
     let word = state.map(|state| {
+        let look = match state.look {
+            RecordingLook::One(color) => design::InTextLook::One(color),
+            RecordingLook::Kind(kind) => design::InTextLook::Kind(kind),
+        };
         (
             plan_summary(&format!("{} {}", state.icon, state.word)),
-            state.color,
+            look,
         )
     });
     design::status_in_text(
         ui,
         &detail,
-        word.as_ref().map(|(word, color)| (word.as_str(), *color)),
+        word.as_ref().map(|(word, look)| (word.as_str(), *look)),
         width,
     )
 }
@@ -1640,7 +1756,6 @@ impl Sessions {
     )]
     fn banner_notices(&mut self, ui: &mut egui::Ui) {
         let notes = self.on_page && self.view == View::Notes && self.form.is_none();
-        let width = ui.available_width().min(design::LIST_MEASURE);
         if notes && self.other_recording_shown() {
             self.other_recording_line(ui);
         }
@@ -1650,18 +1765,14 @@ impl Sessions {
             && (self.notice_session.is_none() || self.notice_session == self.selected)
             && let Some((tone, words)) = self.notice.clone()
         {
-            ui.horizontal_top(|ui| {
-                let room = width - Density::Read.control() - design::S;
-                ui.allocate_ui_with_layout(
-                    egui::vec2(room, 0.0),
-                    egui::Layout::top_down(egui::Align::Min),
-                    |ui| design::message(ui, tone, &words),
-                );
-                if design::icon_button(ui, icons::CLOSE, "Dismiss").clicked() {
-                    self.notice = None;
-                    self.notice_session = None;
-                }
+            // N6: the close icon on the words' first line, placed by the message part.
+            let close = design::outcome::dismiss_on_first_line(ui, |ui| {
+                design::message(ui, tone, &words);
             });
+            if close.clicked() {
+                self.notice = None;
+                self.notice_session = None;
+            }
         }
         if notes
             && let Some(note) = self
@@ -1850,98 +1961,85 @@ impl Sessions {
                             let has_choices =
                                 missing_input || alert.retry.is_some() || can_record || !here;
                             let message_width = ui.available_width().min(design::LIST_MEASURE);
-                            ui.horizontal_top(|ui| {
-                                let room = message_width - Density::Read.control() - design::S;
-                                ui.allocate_ui_with_layout(
-                                    egui::vec2(room, 0.0),
-                                    egui::Layout::top_down(egui::Align::Min),
-                                    |ui| {
-                                        if !has_choices {
-                                            design::message(ui, Tone::Error, &words);
-                                            words_end = ui.min_rect().bottom();
-                                            return;
-                                        }
-                                        design::message_with_actions(
-                                            ui,
-                                            Tone::Error,
-                                            &words,
-                                            |ui| {
-                                                words_end = ui.min_rect().top()
-                                                    - ui.spacing().item_spacing.y;
-                                                ui.horizontal_wrapped(|ui| {
-                                                    if missing_input
-                                                        && (if banner_primary {
-                                                            Action::primary("Choose an input")
-                                                        } else {
-                                                            Action::secondary("Choose an input")
-                                                        })
-                                                        .show(ui)
-                                                        .clicked()
-                                                    {
-                                                        self.wants_recording_input = true;
-                                                    }
-                                                    if let Some(path) = &alert.retry
-                                                        && (if banner_primary {
-                                                            Action::primary("Continue processing")
-                                                        } else {
-                                                            Action::secondary("Continue processing")
-                                                        })
-                                                        .blocked(retry_blocked)
-                                                        .show(ui)
-                                                        .clicked()
-                                                    {
-                                                        retry = Some((alert.session, path.clone()));
-                                                    }
-                                                    // One blocked control says why beside it, then `L` to the next.
-                                                    let mut gap = false;
-                                                    if alert.retry.is_some()
-                                                        && retry_blocked.is_some()
-                                                    {
-                                                        design::blocked_reason(ui, retry_blocked);
-                                                        gap = true;
-                                                    }
-                                                    let mut gap_before = |ui: &mut egui::Ui| {
-                                                        if std::mem::take(&mut gap) {
-                                                            ui.add_space(
-                                                                design::L
-                                                                    - ui.spacing().item_spacing.x,
-                                                            );
-                                                        }
-                                                    };
-                                                    if can_record {
-                                                        gap_before(ui);
-                                                        // With no input, Choose an input is the one primary.
-                                                        if (if banner_primary && !missing_input {
-                                                            Action::primary("Record again")
-                                                        } else {
-                                                            Action::secondary("Record again")
-                                                        })
-                                                        .show(ui)
-                                                        .clicked()
-                                                        {
-                                                            record_again = Some(alert.session);
-                                                        }
-                                                    }
-                                                    if !here {
-                                                        gap_before(ui);
-                                                        if Action::secondary("Open the session")
-                                                            .show(ui)
-                                                            .clicked()
-                                                        {
-                                                            open = Some(alert.session);
-                                                        }
-                                                    }
-                                                });
-                                            },
-                                        );
-                                    },
-                                );
-                                if design::icon_button(ui, icons::CLOSE, "Dismiss this error")
-                                    .clicked()
-                                {
-                                    dismiss = Some(index);
-                                }
+                            // N6: the close icon on the words' first line, placed by the message
+                            // part, as a footer's `Dismiss` is.
+                            let close = design::outcome::dismiss_on_first_line(ui, |ui| {
+                                ui.vertical(|ui| {
+                                    if !has_choices {
+                                        design::message(ui, Tone::Error, &words);
+                                        words_end = ui.min_rect().bottom();
+                                        return;
+                                    }
+                                    design::message_with_actions(ui, Tone::Error, &words, |ui| {
+                                        words_end =
+                                            ui.min_rect().top() - ui.spacing().item_spacing.y;
+                                        ui.horizontal_wrapped(|ui| {
+                                            if missing_input
+                                                && (if banner_primary {
+                                                    Action::primary("Choose an input")
+                                                } else {
+                                                    Action::secondary("Choose an input")
+                                                })
+                                                .show(ui)
+                                                .clicked()
+                                            {
+                                                self.wants_recording_input = true;
+                                            }
+                                            if let Some(path) = &alert.retry
+                                                && (if banner_primary {
+                                                    Action::primary("Continue processing")
+                                                } else {
+                                                    Action::secondary("Continue processing")
+                                                })
+                                                .blocked(retry_blocked)
+                                                .show(ui)
+                                                .clicked()
+                                            {
+                                                retry = Some((alert.session, path.clone()));
+                                            }
+                                            // One blocked control says why beside it, then `L` to the next.
+                                            let mut gap = false;
+                                            if alert.retry.is_some() && retry_blocked.is_some() {
+                                                design::blocked_reason(ui, retry_blocked);
+                                                gap = true;
+                                            }
+                                            let mut gap_before = |ui: &mut egui::Ui| {
+                                                if std::mem::take(&mut gap) {
+                                                    ui.add_space(
+                                                        design::L - ui.spacing().item_spacing.x,
+                                                    );
+                                                }
+                                            };
+                                            if can_record {
+                                                gap_before(ui);
+                                                // With no input, Choose an input is the one primary.
+                                                if (if banner_primary && !missing_input {
+                                                    Action::primary("Record again")
+                                                } else {
+                                                    Action::secondary("Record again")
+                                                })
+                                                .show(ui)
+                                                .clicked()
+                                                {
+                                                    record_again = Some(alert.session);
+                                                }
+                                            }
+                                            if !here {
+                                                gap_before(ui);
+                                                if Action::secondary("Open the session")
+                                                    .show(ui)
+                                                    .clicked()
+                                                {
+                                                    open = Some(alert.session);
+                                                }
+                                            }
+                                        });
+                                    });
+                                });
                             });
+                            if close.clicked() {
+                                dismiss = Some(index);
+                            }
                             if let Some(said) = &alert.said {
                                 let width = message_width - Density::Read.control() - design::S;
                                 let words_rect = egui::Rect::from_min_max(
@@ -2016,6 +2114,11 @@ impl Sessions {
         // form and its unsent words are not refreshed.
         self.end_folder_listing();
         if self.form.is_some() {
+            // The form's choices follow the folder, so a template removed outside shows its
+            // reason before the press; the form's own words stay.
+            if let Some(folder) = &self.folder {
+                self.templates = list_templates(folder);
+            }
             return;
         }
         self.refresh();
@@ -2223,11 +2326,12 @@ impl Sessions {
         self.folder_error = None;
         let notes = list_notes(folder);
         // A new, renamed or removed note: the campaign's content holds session notes too, so
-        // Lookup and Read's links find it.
-        let place = |notes: &[Note]| -> Vec<(Uuid, PathBuf)> {
+        // Lookup and Read's links find it. A new number or title too: Lookup and World name a
+        // session by its label (round 28 FC8).
+        let place = |notes: &[Note]| -> Vec<(Uuid, PathBuf, String)> {
             notes
                 .iter()
-                .map(|note| (note.id, note.path.clone()))
+                .map(|note| (note.id, note.path.clone(), note.label()))
                 .collect()
         };
         self.wants_index_refresh |= place(&notes) != place(&self.notes);
@@ -2877,20 +2981,21 @@ impl Sessions {
         self.live.is_some()
     }
 
-    pub fn rail_recording_status(&self) -> Option<Status<'static>> {
+    /// The rail's recording status: the live state, else processing, a failure or a result.
+    pub fn rail_recording_status(&self) -> Option<RecordingStatus> {
         let c = colors();
-        if let Some((icon, word, color)) = self.recording_status() {
-            return Some(Status { icon, word, color });
+        if let Some(status) = self.recording_status() {
+            return Some(status);
         }
         if self.processing() {
-            return Some(Status {
+            return Some(RecordingStatus::one(Status {
                 icon: icons::AUDIO,
                 word: "Processing",
                 color: c.connection.busy,
-            });
+            }));
         }
         if let Some(word) = self.alert_words().last() {
-            return Some(Status {
+            return Some(RecordingStatus::one(Status {
                 icon: if word == PROCESSING_CANCELLED {
                     icons::WARN
                 } else {
@@ -2902,22 +3007,22 @@ impl Sessions {
                 } else {
                     c.result.error
                 },
-            });
+            }));
         }
         if self.job_warned() {
-            return Some(Status {
+            return Some(RecordingStatus::one(Status {
                 word: "Processed",
                 ..processed_warning()
-            });
+            }));
         }
         if self.processed_session.is_some() {
-            return Some(processed_clean());
+            return Some(RecordingStatus::one(processed_clean()));
         }
-        self.just_saved().then_some(Status {
+        self.just_saved().then_some(RecordingStatus::one(Status {
             icon: icons::OK,
             word: "Recording saved",
             color: c.document.saved,
-        })
+        }))
     }
 
     /// The same timed recording words on the rail and the session page.
@@ -2927,7 +3032,7 @@ impl Sessions {
                 .rail_recording_status()
                 .map(|status| status.word.to_owned());
         };
-        let (_, word, _) = self.recording_status()?;
+        let word = self.recording_status()?.word;
         Some(
             if matches!(word, "Not saving audio" | "Recording silence") {
                 word.to_owned()
@@ -2953,14 +3058,21 @@ impl Sessions {
     }
 
     /// The word the rail keeps in view. A failed recording cannot look like a live one.
-    pub fn recording_status(&self) -> Option<(&'static str, &'static str, Color32)> {
+    /// The live recording's state: the one producer of what every screen shows of it (R5).
+    pub fn recording_status(&self) -> Option<RecordingStatus> {
         let c = colors();
         self.live.as_ref().map(|live| match live.recorder.health() {
-            Health::Stalled | Health::Stopped(_) => {
-                (icons::ERROR, "Not saving audio", c.result.error)
-            }
-            Health::Silent => (icons::WARN, "Recording silence", c.result.warning),
-            Health::Starting | Health::Hearing => (icons::RECORD, "Recording", c.recording),
+            Health::Stalled | Health::Stopped(_) => RecordingStatus::one(Status {
+                icon: icons::ERROR,
+                word: "Not saving audio",
+                color: c.result.error,
+            }),
+            Health::Silent => RecordingStatus::one(Status {
+                icon: icons::WARN,
+                word: "Recording silence",
+                color: c.result.warning,
+            }),
+            Health::Starting | Health::Hearing => RecordingStatus::live(),
         })
     }
 
@@ -2974,8 +3086,10 @@ impl Sessions {
 
     /// A recording stopped a moment ago, and its file is kept.
     pub fn just_saved(&self) -> bool {
-        self.saved_at
-            .is_some_and(|at| at.elapsed() < SAVED_WORD_FOR)
+        self.saved_at.is_some_and(|(campaign, at)| {
+            campaign == self.campaign.as_ref().map(|campaign| campaign.id)
+                && at.elapsed() < SAVED_WORD_FOR
+        })
     }
 
     /// A job finished, and the DM has not looked at it yet.
@@ -3079,7 +3193,10 @@ impl Sessions {
             self.notice = new_notice(
                 &mut self.notice_order,
                 if has_audio {
-                    self.saved_at = Some(Instant::now());
+                    self.saved_at = Some((
+                        self.campaign.as_ref().map(|campaign| campaign.id),
+                        Instant::now(),
+                    ));
                     (
                         Tone::Success,
                         format!("Recording saved: {}.", recording_title(&path)),
@@ -3351,26 +3468,31 @@ impl Sessions {
 
     /// Another session's recording: its state, time and session, in the bottom banner, so it
     /// never moves the title line, the tabs or the plan (round 26 FD3). As on the recording
-    /// row, the state's colour is only on its icon and word (round 24 FC7). It stays out of the
-    /// typed message footer until that footer's notice can colour a state word (a gap of the
-    /// message part, sent to its owner).
+    /// row, the state's colours are only on its icon and word (round 24 FC7), and they are the
+    /// status's own: a live recording's icon in the `recording` token, its word in the text
+    /// colour (R5). It stays out of the typed message footer until that footer's notice can
+    /// colour a state word (a gap of the message part, sent to its owner).
     fn other_recording_line(&self, ui: &mut egui::Ui) {
-        let (Some(live), Some((icon, word, color))) = (&self.live, self.recording_status()) else {
+        let (Some(live), Some(status)) = (&self.live, self.recording_status()) else {
             return;
         };
-        let detail = format!(" {} in {}", clock(live.recorder.seconds()), live.label);
+        let word = status.word;
+        // The time is the state's (R5: in the word's colour); the session it is in is detail.
+        let time = format!(" {}", clock(live.recorder.seconds()));
+        let detail = format!(" in {}", live.label);
         let format = |color| egui::TextFormat {
             font_id: Type::Small.font(ui),
             color,
             ..Default::default()
         };
         let mut job = egui::text::LayoutJob::default();
-        job.append(icon, 0.0, format(color));
-        job.append(" ", 0.0, format(color));
-        job.append(word, 0.0, format(color));
+        job.append(status.icon, 0.0, format(status.icon_color()));
+        job.append(" ", 0.0, format(status.word_color()));
+        job.append(word, 0.0, format(status.word_color()));
+        job.append(&time, 0.0, format(status.word_color()));
         job.append(&detail, 0.0, format(colors().muted));
         ui.add(egui::Label::new(job).wrap())
-            .on_hover_text(format!("{word}{detail}"));
+            .on_hover_text(format!("{word}{time}{detail}"));
     }
 
     fn record_line_body(&mut self, ui: &mut egui::Ui, settings: &ProcessingSettings) {
@@ -3381,9 +3503,10 @@ impl Sessions {
             .filter(|live| Some(live.session) == self.selected)
         {
             let time = clock(live.recorder.seconds());
-            match live.recorder.health() {
-                Health::Stalled | Health::Stopped(_) => {}
-                health => {
+            let status = self.recording_status();
+            match (live.recorder.health(), status) {
+                (Health::Stalled | Health::Stopped(_), _) | (_, None) => {}
+                (health, Some(status)) => {
                     let (word, color) = match health {
                         Health::Starting => ("Waiting for sound", c.muted),
                         Health::Silent => ("Silent for over a minute", c.muted),
@@ -3392,31 +3515,27 @@ impl Sessions {
                         _ => ("Quiet", c.muted),
                     };
                     ui.horizontal_wrapped(|ui| {
-                        // The first thing this page must say, large enough for a glance.
-                        ui.label(
-                            Type::Strong
-                                .rich(
-                                    ui,
-                                    format!(
-                                        "{} {}",
-                                        if *health == Health::Silent {
-                                            icons::WARN
-                                        } else {
-                                            icons::RECORD
-                                        },
-                                        if *health == Health::Silent {
-                                            "Recording silence".to_owned()
-                                        } else {
-                                            format!("Recording {time}")
-                                        }
-                                    ),
-                                )
-                                .color(if *health == Health::Silent {
-                                    c.result.warning
-                                } else {
-                                    c.recording
-                                }),
-                        );
+                        // The first thing this page must say, large enough for a glance. Its
+                        // colours are the status's (R5): a live recording's icon only is red.
+                        let words = if *health == Health::Silent {
+                            status.word.to_owned()
+                        } else {
+                            format!("{} {time}", status.word)
+                        };
+                        let mut job = egui::text::LayoutJob::default();
+                        for (part, color) in [
+                            (status.icon, status.icon_color()),
+                            (" ", status.word_color()),
+                            (words.as_str(), status.word_color()),
+                        ] {
+                            Type::Strong.rich(ui, part).color(color).append_to(
+                                &mut job,
+                                ui.style(),
+                                egui::FontSelection::Default,
+                                egui::Align::Center,
+                            );
+                        }
+                        ui.label(job);
                         let detail = if *health == Health::Silent {
                             format!("{word} · {time} recorded")
                         } else {
@@ -3724,7 +3843,6 @@ impl Sessions {
         } else {
             "New session"
         };
-        let c = colors();
         design::heading(
             ui,
             design::Heading::Group {
@@ -3742,77 +3860,89 @@ impl Sessions {
                 Density::Read.control(),
             );
         });
-        let title = design::labelled_field(
-            ui,
-            SESSION_TITLE.of(form.editing),
-            "Session title",
-            &mut form.title,
-            Some("Optional. You can name it after you play."),
-            None,
-        );
-        // The one field a DM usually types, often with people waiting.
-        if std::mem::take(&mut self.focus_form_title) {
-            title.request_focus();
+        let reason = form_reason(&form, &self.templates);
+        // The file the form makes, on the kept line once nothing blocks Create.
+        let preview = match (&form.editing, &self.folder) {
+            (None, Some(folder)) => {
+                let path = super::note_path(folder, form.number.parse().unwrap_or(1), &form.title);
+                let shown = path.strip_prefix(folder).unwrap_or(&path);
+                Some(format!("File: {}", shown.display()))
+            }
+            _ => None,
+        };
+        // Round 28 K4a: the one inline creation form. The title, the date and, for a new
+        // session, the Template drop-down; Create and Cancel on the action line after it; the
+        // reason or the file on the kept line under them. Enter in a field creates, Escape
+        // cancels.
+        let word = if form.editing.is_some() {
+            SAVE_DETAILS
+        } else {
+            CREATE_SESSION
+        };
+        let create = if self.open_run.is_some() {
+            design::Create::secondary(word)
+        } else {
+            design::Create::primary(word)
         }
-        let title_entered = title.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-        design::labelled_field(
-            ui,
-            SESSION_DATE.of(form.editing),
-            "Date",
-            &mut form.date,
-            Some("As YYYY-MM-DD."),
-            None,
-        );
-        if form.editing.is_none() {
-            design::field(ui, "Template", None, None, |ui| {
-                let mut names = self
-                    .templates
-                    .iter()
-                    .map(|template| (template.name.clone(), template.name.as_str()));
-                if let Some((first, label)) = names.next() {
-                    let _ = design::Dropdown::new(
+        .blocked(reason);
+        let focus = std::mem::take(&mut self.focus_form_title);
+        let fields = design::InlineCreate::new()
+            .field(
+                design::CreateField::new(
+                    SESSION_TITLE.of(form.editing),
+                    "Session title",
+                    &mut form.title,
+                )
+                .help("Optional. You can name it after you play.")
+                // The one field a DM usually types, often with people waiting.
+                .focus(focus),
+            )
+            .field(
+                design::CreateField::new(SESSION_DATE.of(form.editing), "Date", &mut form.date)
+                    .help("As YYYY-MM-DD."),
+            );
+        let kept = design::KeptLine::new()
+            .cancel(CANCEL, true)
+            .preview(preview.as_deref());
+        let mut names = self
+            .templates
+            .iter()
+            .map(|template| (template.name.clone(), template.name.as_str()));
+        let first = names.next().filter(|_| form.editing.is_none());
+        let shown = match first {
+            Some((first, label)) => fields
+                .dropdown(design::CreateDropdown::new(
+                    "Template",
+                    design::layout::Selection::new(
                         SESSION_TEMPLATE.once(design::Once::CreateForm),
                         "Session template",
+                        first,
+                        label,
                     )
-                    .choice(first, label)
-                    .choices(names)
-                    .show(ui, &mut form.template);
-                }
-            });
+                    .choices(names),
+                    &mut form.template,
+                ))
+                .create(create),
+            None => fields.create(create),
         }
-        if form.editing.is_none()
-            && let Some(folder) = &self.folder
-        {
-            let path = super::note_path(folder, form.number.parse().unwrap_or(1), &form.title);
-            let shown = path.strip_prefix(folder).unwrap_or(&path);
-            wrapped_words(
-                ui,
-                Type::Small,
-                format!("File: {}", shown.display()),
-                c.muted,
-            );
-        }
+        .kept_line(kept)
+        .show(ui);
+        // A fault of the act itself, under the form, so it moves nothing above it.
         if let Some(error) = &form.error {
             design::message(ui, Tone::Error, error);
         }
-        let mut done = title_entered;
-        let mut cancel = false;
-        ui.horizontal(|ui| {
-            let label = if form.editing.is_some() {
-                "Save details"
-            } else {
-                "Create session"
-            };
-            done |= if self.open_run.is_some() {
-                Action::secondary(label)
-            } else {
-                Action::primary(label)
-            }
-            .show(ui)
-            .clicked();
-            cancel = Action::quiet("Cancel").show(ui).clicked();
-        });
-        if cancel {
+        // A press reads the templates as the folder holds them now: one changed or removed
+        // outside Splat since the form opened is never made from the listing's copy. The press
+        // is judged on that and on the form after this frame's typing; a refused press leaves
+        // the reason on the kept line.
+        if shown.create
+            && form.editing.is_none()
+            && let Some(folder) = &self.folder
+        {
+            self.templates = list_templates(folder);
+        }
+        let done = shown.create && form_reason(&form, &self.templates).is_none();
+        if shown.cancel {
             return;
         }
         if done {
@@ -3828,7 +3958,11 @@ impl Sessions {
                     self.focus_notes = form.editing.is_none();
                     return;
                 }
-                Err(error) => form.error = Some(error),
+                Err(error) => {
+                    form.error = Some(error);
+                    // The act failed and the form stays: the keyboard goes back to it.
+                    self.focus_form_title = true;
+                }
             }
         }
         self.form = Some(form);
@@ -3948,19 +4082,9 @@ impl Sessions {
             .number
             .trim()
             .parse()
-            .map_err(|_| "The number must be a whole number.".to_owned())?;
-        // A date's order is how Splat tells an old session from tonight's.
-        let date = form.date.trim().as_bytes();
-        if date.len() != 10
-            || date.iter().enumerate().any(|(at, c)| {
-                if at == 4 || at == 7 {
-                    *c != b'-'
-                } else {
-                    !c.is_ascii_digit()
-                }
-            })
-        {
-            return Err("Enter the date as YYYY-MM-DD.".to_owned());
+            .map_err(|_| FormReason::Number.words().to_owned())?;
+        if let Some(reason) = form_reason(form, &self.templates) {
+            return Err(reason.words().to_owned());
         }
         if let Some(id) = form.editing {
             let note = self
@@ -4025,7 +4149,7 @@ impl Sessions {
                                 .find(|alert| alert.session == note.id)
                                 .map(|alert| {
                                     let cancelled = alert.word == PROCESSING_CANCELLED;
-                                    Status {
+                                    RecordingStatus::one(Status {
                                         icon: if cancelled { icons::WARN } else { icons::ERROR },
                                         word: if cancelled {
                                             "Cancelled"
@@ -4039,7 +4163,7 @@ impl Sessions {
                                         } else {
                                             colors().result.error
                                         },
-                                    }
+                                    })
                                 })
                         };
                         // A warned result is a status like its siblings: icon, word and colour.
@@ -4048,12 +4172,12 @@ impl Sessions {
                         let warned = state.is_none() && result == Some(note.id) && self.job_warned;
                         let clean = state.is_none() && result == Some(note.id) && !warned;
                         let state = if warned {
-                            Some(Status {
+                            Some(RecordingStatus::one(Status {
                                 word: "Processed",
                                 ..processed_warning()
-                            })
+                            }))
                         } else if clean {
-                            Some(processed_clean())
+                            Some(RecordingStatus::one(processed_clean()))
                         } else {
                             state
                         };
@@ -5026,11 +5150,12 @@ impl Sessions {
             || stored
                 .as_ref()
                 .is_some_and(|words| words.to_lowercase().contains(MISSING_INPUT_ERROR));
-        let (icon, word, color) = if live {
+        let one = |icon, word, color| RecordingStatus::one(Status { icon, word, color });
+        let status = if live {
             self.recording_status()
-                .unwrap_or((icons::RECORD, "Recording", c.recording))
+                .unwrap_or_else(RecordingStatus::live)
         } else if processing {
-            (icons::BUSY, "Processing", c.connection.busy)
+            one(icons::BUSY, "Processing", c.connection.busy)
         } else if let Some(words) = stored.as_deref() {
             let state = if words.starts_with("Failed") {
                 "Failed"
@@ -5040,29 +5165,25 @@ impl Sessions {
                 "Stopped"
             };
             if state == "Cancelled" {
-                (icons::WARN, state, c.result.warning)
+                one(icons::WARN, state, c.result.warning)
             } else {
-                (icons::ERROR, state, c.result.error)
+                one(icons::ERROR, state, c.result.error)
             }
         } else if recording.warning.is_some() {
-            {
-                let status = processed_warning();
-                (status.icon, status.word, status.color)
-            }
+            RecordingStatus::one(processed_warning())
         } else if recording.summary {
-            let status = processed_clean();
-            (status.icon, status.word, status.color)
+            RecordingStatus::one(processed_clean())
         } else if recording.transcript {
-            (icons::DRAFT, "Partly processed", c.muted)
+            one(icons::DRAFT, "Partly processed", c.muted)
         } else {
-            (icons::DOCUMENT, "Not processed", c.muted)
+            one(icons::DOCUMENT, "Not processed", c.muted)
         };
         if processing {
             // Round 28 FM10: the spinner line takes the status line's place, so every state keeps
             // one order: size, status, detail, result links, actions.
             self.processing_lines(ui);
         } else {
-            design::status(ui, Status { icon, word, color }).on_hover_text(word);
+            design::status(ui, status.tinted(status.word)).on_hover_text(status.word);
         }
         let stalled = live
             && self.live.as_ref().is_some_and(|live| {
@@ -5099,14 +5220,20 @@ impl Sessions {
             } else {
                 "Quiet"
             };
-            ui.label(
-                Type::Small
-                    .rich(
-                        ui,
-                        format!("{} recorded · {sound}", clock(live.recorder.seconds())),
-                    )
-                    .color(c.muted),
-            );
+            // R5: the live time is the state's, in its word's colour; the sound is detail.
+            let mut job = egui::text::LayoutJob::default();
+            for (part, color) in [
+                (clock(live.recorder.seconds()), status.word_color()),
+                (format!(" recorded · {sound}"), c.muted),
+            ] {
+                Type::Small.rich(ui, part).color(color).append_to(
+                    &mut job,
+                    ui.style(),
+                    egui::FontSelection::Default,
+                    egui::Align::Center,
+                );
+            }
+            ui.label(job);
         }
         if stalled && let Some(live) = &self.live {
             let words = format!(
@@ -5689,6 +5816,13 @@ impl Sessions {
         let block = ui
             .available_width()
             .min(design::READER_MEASURE.max(segments_width + design::XS));
+        // The back link's word lines up with the view choices below it: their words, or the
+        // drop-down's edge (the same choice as below).
+        let back_edge = if segments_width + design::XS <= ui.available_width() {
+            design::BackEdge::Segments
+        } else {
+            design::BackEdge::Text
+        };
         ui.horizontal(|ui| {
             ui.set_max_width(block);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -5712,13 +5846,10 @@ impl Sessions {
                     }
                 }
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                    back = Action::quiet("Recordings")
-                        .icon(icons::BACK)
-                        .name("Back to recordings")
-                        .density(Density::Read)
+                    back = design::TitleLine::back(crate::word!("Back to recordings"), back_edge)
+                        .context(&reading.name)
                         .show(ui)
                         .clicked();
-                    ui.label(Type::Small.rich(ui, &reading.name).color(c.muted));
                 });
             });
         });
@@ -6671,7 +6802,7 @@ impl Sessions {
             } else {
                 if self.form.is_none()
                     && Action::quiet("All sessions")
-                        .icon(icons::BACK)
+                        .icon(icons::LEGACY_BACK)
                         .density(Density::Read)
                         .show(ui)
                         .clicked()
@@ -6753,7 +6884,7 @@ impl Sessions {
             }
         } else if narrow {
             if Action::quiet("All templates")
-                .icon(icons::BACK)
+                .icon(icons::LEGACY_BACK)
                 .density(Density::Read)
                 .show(ui)
                 .clicked()
@@ -6842,7 +6973,7 @@ impl Sessions {
     /// The template list's head: the way back to the sessions. It never scrolls.
     fn template_list_head(&mut self, ui: &mut egui::Ui) {
         if Action::quiet("Sessions")
-            .icon(icons::BACK)
+            .icon(icons::LEGACY_BACK)
             .show(ui)
             .clicked()
         {
@@ -7407,7 +7538,8 @@ impl Sessions {
             messages.outcome(FaultMessage::new(fault));
         }
         if let Some(counts) = self.folder_move_counts(book, &files) {
-            messages.outcome(Notice::new(folder_keeps(&counts)));
+            // A warning before the act, in the warning tone, as the untyped footer draws it.
+            messages.outcome(Notice::warning(folder_keeps(&counts)));
         }
         if let Some(shown) = self.folder_link().and_then(|link| {
             self.folder_moves
@@ -8009,12 +8141,14 @@ mod tests {
         // One status, one icon: the rail uses the list's and the row's clean status.
         assert_eq!(clean.icon, processed_clean().icon);
         assert_eq!(clean.icon, icons::OK);
-        assert_eq!(clean.color, processed_clean().color);
+        assert_eq!(clean.icon_color(), processed_clean().color);
+        assert_eq!(clean.word_color(), processed_clean().color);
         page.job_warned = true;
         let status = page.rail_recording_status().unwrap();
         assert_eq!(status.word, "Processed");
         assert_eq!(status.icon, icons::WARN);
-        assert_eq!(status.color, colors().result.warning);
+        assert_eq!(status.icon_color(), colors().result.warning);
+        assert_eq!(status.word_color(), colors().result.warning);
     }
 
     #[test]
@@ -8940,6 +9074,38 @@ mod tests {
         const A_MOVED: &str = "Moved 1 note and 1 template to Moved A.";
         const B_MOVED: &str = "Moved 1 note to Moved B.";
         const MISSING: &str = "Splat cannot find the session folder ";
+        // The rail's `Recording saved` is its campaign's (row 100 review, point 5): a recording
+        // stopped in A says so in A; B's rail says nothing of it; back in A it says so again,
+        // until `SAVED_WORD_FOR` ends it.
+        let saved = |harness: &egui_kittest::Harness<'_, State>| {
+            harness
+                .state()
+                .0
+                .rail_recording_status()
+                .map(|status| status.word)
+        };
+        let audio = tempfile::tempdir().unwrap();
+        harness.state_mut().0.live = Some(Live {
+            session: Uuid::nil(),
+            label: "Session 1".to_owned(),
+            recorder: crate::recording::Recorder::start(
+                crate::recording::Tool::Simulated,
+                None,
+                audio.path().join("live.wav"),
+            )
+            .unwrap(),
+        });
+        harness.state_mut().0.finish_recording();
+        harness.run_steps(2);
+        assert_eq!(saved(&harness), Some("Recording saved"), "A's own rail");
+        switch(&mut harness, &b);
+        assert_eq!(
+            saved(&harness),
+            None,
+            "B's rail says nothing of A's recording"
+        );
+        switch(&mut harness, &a);
+        assert_eq!(saved(&harness), Some("Recording saved"), "back in A");
         // Review of PR 346, item 1: the form shows two templates; one is deleted outside Splat
         // before the next scan, and the move's result says what it moved, not what was drawn.
         harness.state_mut().0.folder_text = "Moved A".to_owned();
@@ -8948,6 +9114,37 @@ mod tests {
             &harness,
             "The current folder keeps 1 note and 2 templates."
         ));
+        // The warning before the move is a warning (`Notice::warning`, PR 350), as the untyped
+        // footer draws it: the part registers it in the warning tone, and paints the warning's
+        // tone bar inside it, as tall as a line of its words (the driver's `has_tone_bar` rule).
+        fn has_tone_bar(shape: &egui::Shape, message: egui::Rect, color: Color32) -> bool {
+            match shape {
+                egui::Shape::Vec(shapes) => shapes
+                    .iter()
+                    .any(|shape| has_tone_bar(shape, message, color)),
+                egui::Shape::Rect(bar) => {
+                    bar.fill == color
+                        && bar.rect.width() <= design::XS
+                        && message.expand(1.0).contains_rect(bar.rect)
+                        && bar.rect.height() >= Type::Body.line() - 1.0
+                }
+                _ => false,
+            }
+        }
+        let warnings: Vec<egui::Rect> = design::outcome::message_rects(&harness.ctx)
+            .into_iter()
+            .filter(|(_, _, tone)| *tone == Tone::Warning)
+            .map(|(rect, _, _)| rect)
+            .collect();
+        assert!(
+            warnings.len() == 1
+                && harness.output().shapes.iter().any(|clipped| has_tone_bar(
+                    &clipped.shape,
+                    warnings[0],
+                    colors().result.warning
+                )),
+            "the folder warning has the warning tone and its bar: {warnings:?}"
+        );
         let templates_a = a.path.join("Sessions").join(super::super::TEMPLATES);
         fs::remove_file(templates_a.join("Two.md")).unwrap();
         move_to(&mut harness, "Moved A");
@@ -9069,6 +9266,145 @@ mod tests {
                 .map(|form| form.title.as_str()),
             Some("Unsent words"),
             "the form keeps its unsent words"
+        );
+    }
+
+    /// Round 28 K4a, the New session form's facts: the chosen template is read from the folder
+    /// at the press (changed or removed outside Splat since the form opened), a refused press
+    /// keeps the form and its words, and the form belongs to its campaign (a switch ends it, and
+    /// B's form never offers A's template).
+    #[test]
+    fn the_new_session_form_reads_its_template_at_the_press_and_keeps_to_its_campaign() {
+        use egui_kittest::kittest::Queryable;
+        let dirs = [tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap()];
+        let [a, b] = [0, 1].map(|at| {
+            let campaign = Campaign {
+                id: Uuid::from_u128(at + 1),
+                name: format!("Campaign {at}"),
+                path: dirs[at as usize].path().into(),
+                dndbeyond_campaign_id: None,
+                dndbeyond_campaign_name: None,
+            };
+            crate::content_workspace::CampaignDocument::new(&campaign)
+                .unwrap()
+                .save()
+                .unwrap();
+            let folder = super::super::open_folder(&campaign).unwrap();
+            if at == 0 {
+                fs::create_dir_all(folder.join(super::super::TEMPLATES)).unwrap();
+                fs::write(folder.join(super::super::TEMPLATES).join("Mine.md"), "Mine").unwrap();
+            }
+            create_note(
+                &folder,
+                &NewNote {
+                    number: 1,
+                    title: "One",
+                    date: "2026-11-01",
+                    campaign: &campaign.name,
+                    template: "",
+                },
+            )
+            .unwrap();
+            campaign
+        });
+        let mine = a
+            .path
+            .join("Sessions")
+            .join(super::super::TEMPLATES)
+            .join("Mine.md");
+        type State = (Sessions, Book, Campaign);
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(900.0, 700.0))
+            .build_state(
+                |ctx, (sessions, book, campaign): &mut State| {
+                    sessions.poll(ctx, Some(campaign), book);
+                    egui::CentralPanel::default().show(ctx, |ui| sessions.show_form(ui));
+                },
+                (Sessions::default(), Book::default(), a.clone()),
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let shows = |harness: &egui_kittest::Harness<'_, State>, words: &str| {
+            harness.query_all_by_label_contains(words).next().is_some()
+        };
+        let open = |harness: &mut egui_kittest::Harness<'_, State>, title: &str| {
+            let sessions = &mut harness.state_mut().0;
+            sessions.open_form();
+            let form = sessions.form.as_mut().unwrap();
+            form.template = "Mine".to_owned();
+            form.title = title.to_owned();
+            harness.run_steps(2);
+        };
+        let notes = |harness: &egui_kittest::Harness<'_, State>| harness.state().0.notes.len();
+        // Changed outside before Create: the note holds the template as the folder has it.
+        open(&mut harness, "Unsent");
+        assert!(shows(&harness, "Session template: Mine"));
+        fs::write(&mine, "Changed outside").unwrap();
+        harness.get_by_label("Create session").click();
+        harness.run_steps(3);
+        assert!(harness.state().0.form.is_none(), "the session is made");
+        let made = harness
+            .state()
+            .0
+            .notes
+            .iter()
+            .find(|note| note.title == "Unsent")
+            .map(|note| fs::read_to_string(&note.path).unwrap())
+            .unwrap_or_default();
+        assert!(
+            made.contains("Changed outside"),
+            "made from the folder's template: {made:?}"
+        );
+        // Removed outside before Create: the press is refused, the reason shows on the kept
+        // line once, and the form keeps its words.
+        open(&mut harness, "Second");
+        let before = notes(&harness);
+        fs::remove_file(&mine).unwrap();
+        harness.get_by_label("Create session").click();
+        harness.run_steps(3);
+        assert_eq!(
+            notes(&harness),
+            before,
+            "no session from a template that is gone"
+        );
+        assert_eq!(
+            harness
+                .state()
+                .0
+                .form
+                .as_ref()
+                .map(|form| form.title.as_str()),
+            Some("Second"),
+            "the form keeps its words"
+        );
+        assert_eq!(
+            harness
+                .query_all_by_label_contains(FormReason::TemplateGone.words())
+                .count(),
+            1,
+            "the reason shows once"
+        );
+        // Another campaign and back: the switch ends A's form; B's form offers B's templates.
+        harness.state_mut().2 = b.clone();
+        harness.run_steps(3);
+        assert!(harness.state().0.form.is_none(), "a switch ends the form");
+        harness.state_mut().0.open_form();
+        harness.run_steps(2);
+        assert_eq!(
+            harness
+                .state()
+                .0
+                .form
+                .as_ref()
+                .map(|form| form.template.as_str()),
+            Some(super::super::BUILT_IN_TEMPLATES[0].0)
+        );
+        assert!(!shows(&harness, "Mine") && !shows(&harness, "Second"));
+        harness.state_mut().2 = a.clone();
+        harness.run_steps(3);
+        assert!(
+            harness.state().0.form.is_none(),
+            "back in A, the form is not B's"
         );
     }
 }

@@ -2438,7 +2438,7 @@ impl Encounters {
         .min_width(save_width)
         .blocked(state.save_blocked());
         ui.horizontal(|ui| {
-            back = Action::quiet(icons::BACK)
+            back = Action::quiet(icons::LEGACY_BACK)
                 .name(back_name)
                 .hint(back_word)
                 .blocked_if(dirty, "Save or discard this group first.")

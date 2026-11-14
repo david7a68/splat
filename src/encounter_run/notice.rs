@@ -106,24 +106,22 @@ impl Run {
             Layout::right_to_left(Align::Center),
             |ui| {
                 ui.set_min_height(height);
-                let next = || {
-                    Action::primary("Next turn")
-                        .icon(icons::NEXT)
-                        .density(Density::Glance)
-                };
-                // FK8: with Lookup open the key letter hides (the keys do not work then), but its
-                // room stays, so `Add to fight` keeps its x when Lookup opens and closes.
-                // Only on a roster wide enough for every word, so the room does not come and go
-                // with the turn's name (a pressed Next turn would move).
-                let kept = (self.lookup_open && words).then(|| next().key("N").natural_width(ui));
-                let action = next().key(if next_key { "N" } else { "" });
-                let action = match kept {
-                    Some(width) => action.min_width(width),
-                    None => action,
-                };
-                next_turn = action
-                    .blocked(nobody_present.then_some(NOBODY_PRESENT))
-                    .show(ui)
+                // FK8, row 62: the key letter hides with Lookup open (the keys do not work then)
+                // or for the turn's name (X49), and its room always stays, so `Add to fight`
+                // never moves when the letter comes and goes.
+                let next = Action::primary("Next turn")
+                    .icon(icons::NEXT)
+                    .density(Density::Glance)
+                    .blocked(nobody_present.then_some(NOBODY_PRESENT));
+                next_turn = design::KeySlot::new(next, crate::key!("N"))
+                    .show(
+                        ui,
+                        if next_key {
+                            design::KeyLetter::Shown
+                        } else {
+                            design::KeyLetter::Hidden
+                        },
+                    )
                     .clicked();
                 // As the strip pairs Back to run with Next turn: one height, one small gap.
                 design::gap(ui, design::Gap::S);

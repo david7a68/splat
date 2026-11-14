@@ -986,20 +986,13 @@ impl Splat {
                     egui::pos2(rail_rect.right(), lower_top.max(slot_top)),
                 )),
                 |ui| {
-                    if let (Some((icon, state, color)), Some(word)) = (
-                        self.sessions
-                            .rail_recording_status()
-                            .map(|status| (status.icon, status.word, status.color)),
+                    // R5: the status's kind gives its colours; the rail picks none.
+                    if let (Some(status), Some(word)) = (
+                        self.sessions.rail_recording_status(),
                         self.sessions.recording_detail(),
                     ) {
-                        let response = design::status_link(
-                            ui,
-                            Status {
-                                icon,
-                                word: &word,
-                                color,
-                            },
-                        );
+                        let state = status.word;
+                        let response = design::status_link(ui, status.tinted(&word));
                         let full = if state == "Processed" && self.sessions.job_warned() {
                             sessions::page::processed_warning().word.to_owned()
                         } else {
@@ -1441,18 +1434,23 @@ impl Splat {
         // The run's own add: one creature joins, and the run header's Undo takes it away. A
         // refusal waits in the asking reader's footer, owned by this campaign and run; a join
         // ends the entry's refusal in both readers.
-        if let Some((at, fight)) = add_to_fight
-            && let Some(id) = fight.creature
+        // An NPC joins under their own name with their stat block (round 28 FJ7).
+        if let Some((at, add)) = add_to_fight
             && let Some(index) = self.lookup.index()
-            && let Some(entry) = index
-                .position(id)
+            && let Some(stat_block) = index
+                .position(add.stat_block)
                 .map(|position| std::sync::Arc::new(index.items[position].entry.clone()))
             && let Some(run) = self.encounters.run_mut()
         {
-            match run.add_entry_to_fight(entry, None) {
+            let npc = add
+                .npc
+                .then(|| index.position(add.entry))
+                .flatten()
+                .map(|position| &index.items[position].entry);
+            match run.add_entry_to_fight(stat_block, npc) {
                 Ok(()) => {
-                    self.world_page.reader.added_to_fight(id);
-                    self.lookup.reader.added_to_fight(id);
+                    self.world_page.reader.added_to_fight(add.entry);
+                    self.lookup.reader.added_to_fight(add.entry);
                 }
                 Err(reason) => {
                     let reader = if at == 0 {
@@ -1460,7 +1458,7 @@ impl Splat {
                     } else {
                         &mut self.lookup.reader
                     };
-                    reader.refuse(id, reason);
+                    reader.refuse(add.entry, reason);
                 }
             }
         }
