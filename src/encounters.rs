@@ -1296,7 +1296,6 @@ pub(super) fn body_above(ui: &mut egui::Ui, bottom: f32) -> egui::Ui {
     )
 }
 
-
 fn editor_save_state(
     ui: &mut egui::Ui,
     state: Status<'_>,
