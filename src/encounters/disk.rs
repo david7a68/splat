@@ -428,7 +428,7 @@ impl super::Encounters {
                             }
                             draft.new_results.push(super::DraftUndo::RemovedGroup {
                                 index,
-                                group,
+                                group: Box::new(group),
                                 delete: false,
                             });
                         }

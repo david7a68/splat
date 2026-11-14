@@ -70,7 +70,7 @@ impl PartialEq for MemberId {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-struct MemberDraft {
+pub(super) struct MemberDraft {
     #[serde(skip)]
     id: MemberId,
     creature: EntryRef,
@@ -1456,7 +1456,7 @@ pub(super) fn of_encounter(
         }
         new_results.push(super::DraftUndo::RemovedGroup {
             index,
-            group: gone,
+            group: Box::new(gone),
             delete,
         });
     }

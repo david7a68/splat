@@ -2564,7 +2564,7 @@ enum DraftUndo {
     /// whether it is deleted (a move keeps it in the draft, owned by no encounter).
     RemovedGroup {
         index: usize,
-        group: GroupDraft,
+        group: Box<GroupDraft>,
         delete: bool,
     },
     /// The replacement of missing roster rows (FA2): the roster before and after, and its words.
@@ -10396,9 +10396,7 @@ mod tests {
         design::theme::install(&harness.ctx);
         harness.run_steps(4);
         let page = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(960.0, 640.0));
-        let whole = |harness: &egui_kittest::Harness<'_, Encounters>, rect: egui::Rect| {
-            page.contains_rect(rect) && rect.is_positive()
-        };
+        let whole = |rect: egui::Rect| page.contains_rect(rect) && rect.is_positive();
         use egui_kittest::kittest::By;
         // The roster's first row, by its own action.
         let first_row = harness
@@ -10418,8 +10416,8 @@ mod tests {
             .filter(|rect| page.intersects(**rect))
             .fold(egui::Rect::NOTHING, |a, b| a.union(*b));
         assert!(
-            first_row.is_some_and(|rect| whole(&harness, rect))
-                && search.is_some_and(|rect| whole(&harness, rect))
+            first_row.is_some_and(&whole)
+                && search.is_some_and(&whole)
                 && warnings.len() >= 30
                 && region.height() <= 640.0 / 3.0 + 1.0
                 && first_row.is_some_and(|row| row.bottom() <= region.top()),
@@ -10438,7 +10436,7 @@ mod tests {
         harness.run_steps(4);
         let link = harness.get_by_label("Show file").rect();
         assert!(
-            whole(&harness, link),
+            whole(link),
             "the file line’s Show file is reached by the footer’s scroll: {link:?}"
         );
         // A warning that comes and goes, at 960 and in the narrow layout (880).
