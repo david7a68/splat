@@ -38,6 +38,10 @@ pub(crate) enum Ban {
     /// (the pane's one named escape), and the room-centred layouts; the number of calls in the
     /// item, counted in its tokens as `Layout` is.
     Pane(u16),
+    /// Package M: `Results::undo` and `Results::use_press`, a footer press by owner instead of by
+    /// its ticket; the number of calls in the item, counted in its tokens as `Layout` is, also in
+    /// an item allowed for another ban.
+    ByOwner(u16),
 }
 
 impl Ban {
@@ -55,7 +59,11 @@ impl Ban {
             Self::Order => &["outcome_at"],
             Self::Body => &["banner", "row_fault", ".show("],
             // Counted in the item's tokens instead (`check`).
-            Self::Layout(_) | Self::RowKey(_) | Self::Extras(_) | Self::Pane(_) => &[],
+            Self::Layout(_)
+            | Self::RowKey(_)
+            | Self::Extras(_)
+            | Self::Pane(_)
+            | Self::ByOwner(_) => &[],
         }
     }
 }
@@ -254,14 +262,21 @@ pub(crate) fn check(files: &[(String, String)], table: &[(&str, &str, &[Ban])]) 
                         .any(|ban| ban.calls().iter().any(|call| suppression.body.contains(call)));
                     // Packages K and X: the row's number of calls is the item's, exactly.
                     use crate::design::layout::bans::{Group, count};
-                    for group in [Group::Layout, Group::RowKey, Group::Extras, Group::Pane] {
+                    for group in [
+                        Group::Layout,
+                        Group::RowKey,
+                        Group::Extras,
+                        Group::Pane,
+                        Group::ByOwner,
+                    ] {
                         let listed = bans
                             .iter()
                             .find_map(|ban| match (ban, group) {
                                 (Ban::Layout(n), Group::Layout)
                                 | (Ban::RowKey(n), Group::RowKey)
                                 | (Ban::Extras(n), Group::Extras)
-                                | (Ban::Pane(n), Group::Pane) => Some(usize::from(*n)),
+                                | (Ban::Pane(n), Group::Pane)
+                                | (Ban::ByOwner(n), Group::ByOwner) => Some(usize::from(*n)),
                                 _ => None,
                             })
                             .unwrap_or(0);
@@ -397,6 +412,44 @@ mod tests {
         assert!(check(&file(order), &[("src/new.rs", "draw", &[Ban::Order])]).is_empty());
         let words = "#[allow(clippy::disallowed_methods)]\nfn cause() {\n    let f = Sentence::outside;\n}\n";
         assert!(check(&file(words), &[("src/new.rs", "cause", &[Ban::Words])]).is_empty());
+        // Review of PR 308: a by-owner Undo added to an item already allowed for another ban
+        // (its order issued by hand keeps the row) is counted; its row lists none.
+        let by_owner = format!(
+            "#[allow(clippy::disallowed_methods)]\nfn stamp_kept() {{\n{call}    store.undo(owner, |_| Ok::<_, ()>(()));\n}}\n"
+        );
+        let faults = check(&file(&by_owner), &[("src/new.rs", "stamp_kept", STAGED)]);
+        assert!(
+            faults.len() == 1 && faults[0].contains("holds 1 ByOwner calls; its row lists 0"),
+            "{faults:?}"
+        );
+        assert!(
+            check(
+                &file(&by_owner),
+                &[("src/new.rs", "stamp_kept", &[Ban::Results, Ban::ByOwner(1)])]
+            )
+            .is_empty()
+        );
+        // By its path, and `use_press`: two calls, a row of one fails.
+        let both = "#[allow(clippy::disallowed_methods)]\nfn press() {\n    Results::undo(&mut store, owner, run);\n    store.use_press(owner);\n}\n";
+        // Review 4: generic arguments before the call's arguments count too, on a method and on
+        // a path: two calls.
+        let generic = "#[allow(clippy::disallowed_methods)]\nfn press() {\n    store.undo::<(), ()>(owner, |_| Ok(()));\n    Results::<O, T>::undo(&mut store, owner, run);\n}\n";
+        let faults = check(
+            &file(generic),
+            &[("src/new.rs", "press", &[Ban::ByOwner(1)])],
+        );
+        assert!(
+            faults.len() == 1 && faults[0].contains("holds 2 ByOwner calls; its row lists 1"),
+            "{faults:?}"
+        );
+        // The same reader serves the other counted bans: a raw egui call by a generic path.
+        let raw = "#[allow(clippy::disallowed_methods)]\nfn draw() {\n    let _ = egui::ScrollArea::<>::vertical();\n}\n";
+        assert!(check(&file(raw), &[("src/new.rs", "draw", &[Ban::Layout(1)])]).is_empty());
+        let faults = check(&file(both), &[("src/new.rs", "press", &[Ban::ByOwner(1)])]);
+        assert!(
+            faults.len() == 1 && faults[0].contains("holds 2 ByOwner calls; its row lists 1"),
+            "{faults:?}"
+        );
     }
 
     /// Package K's rows: the number of raw egui calls (and row keys) in a row is the item's,

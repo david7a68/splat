@@ -2278,6 +2278,12 @@ pub struct MenuPopup<'a> {
 }
 
 impl MenuPopup<'_> {
+    /// When a click closes the menu (egui's `PopupCloseBehavior`).
+    pub fn close_behavior(mut self, behavior: egui::PopupCloseBehavior) -> Self {
+        self.popup = self.popup.close_behavior(behavior);
+        self
+    }
+
     /// Draw the menu while it is open.
     pub fn show<R>(self, content: impl FnOnce(&mut Ui) -> R) -> Option<egui::InnerResponse<R>> {
         let Self { popup, id, room } = self;
