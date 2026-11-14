@@ -1988,8 +1988,11 @@ pub struct CreateDropdown<'a> {
     help: Option<&'a str>,
     /// The typed drop-down and its value, erased only here, so a caller gives data, not a
     /// drawing closure.
-    draw: Box<dyn FnOnce(&mut Ui, f32) -> Response + 'a>,
+    draw: DrawDropdown<'a>,
 }
+
+/// A [`CreateDropdown`]'s typed drop-down, drawn at the form's width.
+type DrawDropdown<'a> = Box<dyn FnOnce(&mut Ui, f32) -> Response + 'a>;
 
 impl<'a> CreateDropdown<'a> {
     pub fn new<T: PartialEq + Clone + 'a>(
@@ -2304,8 +2307,7 @@ pub const CREATE_FIELD_MIN: f32 = 120.0;
 fn form_room(ui: &Ui) -> f32 {
     ui.available_width()
         .min(ui.clip_rect().right() - ui.cursor().left())
-        .min(FORM_WIDTH)
-        .max(1.0)
+        .clamp(1.0, FORM_WIDTH)
 }
 
 /// The height of `words` in `Small` type, wrapped at `width`.
@@ -2396,7 +2398,11 @@ fn field_line<R: CreateReasons>(
             );
         };
         if beside {
-            let width = if actions { beside_width } else { room - 2.0 * S };
+            let width = if actions {
+                beside_width
+            } else {
+                room - 2.0 * S
+            };
             row(ui, &mut |ui| {
                 line.response = form_field(ui, part.id, part.label, part.text, width);
                 draw_actions(ui, &mut line);

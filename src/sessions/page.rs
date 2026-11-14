@@ -100,7 +100,9 @@ fn form_reason(form: &Form, templates: &[Template]) -> Option<FormReason> {
     // A new session starts from a template the folder still holds.
     (form.editing.is_none()
         && !templates.is_empty()
-        && !templates.iter().any(|template| template.name == form.template))
+        && !templates
+            .iter()
+            .any(|template| template.name == form.template))
     .then_some(FormReason::TemplateGone)
 }
 const RECORDING_VIEW: design::FieldName = crate::field_id!("recording_view");
@@ -9156,7 +9158,11 @@ mod tests {
             .unwrap();
             campaign
         });
-        let mine = a.path.join("Sessions").join(super::super::TEMPLATES).join("Mine.md");
+        let mine = a
+            .path
+            .join("Sessions")
+            .join(super::super::TEMPLATES)
+            .join("Mine.md");
         type State = (Sessions, Book, Campaign);
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(900.0, 700.0))
@@ -9196,7 +9202,10 @@ mod tests {
             .find(|note| note.title == "Unsent")
             .map(|note| fs::read_to_string(&note.path).unwrap())
             .unwrap_or_default();
-        assert!(made.contains("Changed outside"), "made from the folder's template: {made:?}");
+        assert!(
+            made.contains("Changed outside"),
+            "made from the folder's template: {made:?}"
+        );
         // Removed outside before Create: the press is refused, the reason shows on the kept
         // line once, and the form keeps its words.
         open(&mut harness, "Second");
@@ -9204,9 +9213,18 @@ mod tests {
         fs::remove_file(&mine).unwrap();
         harness.get_by_label("Create session").click();
         harness.run_steps(3);
-        assert_eq!(notes(&harness), before, "no session from a template that is gone");
         assert_eq!(
-            harness.state().0.form.as_ref().map(|form| form.title.as_str()),
+            notes(&harness),
+            before,
+            "no session from a template that is gone"
+        );
+        assert_eq!(
+            harness
+                .state()
+                .0
+                .form
+                .as_ref()
+                .map(|form| form.title.as_str()),
             Some("Second"),
             "the form keeps its words"
         );
@@ -9224,12 +9242,20 @@ mod tests {
         harness.state_mut().0.open_form();
         harness.run_steps(2);
         assert_eq!(
-            harness.state().0.form.as_ref().map(|form| form.template.as_str()),
+            harness
+                .state()
+                .0
+                .form
+                .as_ref()
+                .map(|form| form.template.as_str()),
             Some(super::super::BUILT_IN_TEMPLATES[0].0)
         );
         assert!(!shows(&harness, "Mine") && !shows(&harness, "Second"));
         harness.state_mut().2 = a.clone();
         harness.run_steps(3);
-        assert!(harness.state().0.form.is_none(), "back in A, the form is not B's");
+        assert!(
+            harness.state().0.form.is_none(),
+            "back in A, the form is not B's"
+        );
     }
 }
