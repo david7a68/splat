@@ -9783,12 +9783,13 @@ pub mod run_edge_states {
         // iter-29 G131 (R25, FK2): the notice cannot be dismissed. It keeps its lines and its
         // choices, the roster's scroll body ends above it at a whole row (FI2 above: no row
         // moved), and every roster row is reached by scrolling: at 1200, Ember Cultist, the row
-        // behind the notice, comes into view with the wheel.
+        // behind the notice, is not wholly in view before and comes wholly into view with the
+        // wheel (Astra, PR 371: a partly visible row or a missing scroll must not pass).
         let shown = |d: &Driver<'_>| {
             d.nodes().into_iter().any(|node| {
                 node.name.starts_with("Ember Cultist, ")
                     && node.name.contains(", HP ")
-                    && node.in_view()
+                    && node.fully_in_view()
             })
         };
         // A proof that ends where it started (scrolled back): no step of the DM's task.

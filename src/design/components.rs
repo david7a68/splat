@@ -3639,13 +3639,17 @@ fn keep_focus_inside(ui: &Ui) {
         return;
     }
     let focused = ctx.memory(|memory| memory.focused());
-    let inside = focused
+    let focused_layer = focused
         .and_then(|focused| ctx.read_response(focused))
-        .is_some_and(|response| response.layer_id == layer);
-    if inside {
+        .map(|response| response.layer_id);
+    if focused_layer == Some(layer) {
         return;
     }
-    if let Some(focused) = focused {
+    // Only a control of the page under the dialogs is the place to give the focus back to,
+    // never one of another dialog (a prompt that was open over this one).
+    if let Some(focused) = focused
+        && focused_layer.is_some_and(|other| other.order != egui::Order::Foreground)
+    {
         ctx.data_mut(|data| data.insert_temp(before_key(owner), focused));
     }
     ctx.memory_mut(|memory| memory.request_focus(default));
