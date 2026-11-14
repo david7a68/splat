@@ -710,45 +710,60 @@ pub(super) fn tones_beside(d: &Driver<'_>, words: &str) -> Vec<&'static str> {
     tones_where(d, |text| text.contains(words))
 }
 
-/// iter-29 G122, lead ruling (source verdict on 77b5da22): a group editor whose encounter is
-/// gone, with a changed name. On the compact `Add creatures` tab, Belongs to is not on screen:
-/// the cause is said once, beside Save, as a warning, also after a press of the blocked Save
-/// group and after Ctrl+S. Back on `Members`, it is said once, under Belongs to only.
-pub(super) fn gone_encounter_said_once(d: &mut Driver<'_>) -> (bool, String) {
-    const BESIDE: &str = "Its encounter was deleted. Choose another under Belongs to.";
-    const FIELD: &str = "Its encounter was deleted, so no fight offers this group.";
+/// iter-29 G122, lead ruling (source verdict on 77b5da22): a changed group draft that Save
+/// refuses for a fault the editor says in its place (`field`: the line under Belongs to, or a
+/// member's row). On the compact `Add creatures` tab that place is not on screen: the fault is
+/// said once, beside Save, in its `tone`, also after a press of the blocked Save group and after
+/// Ctrl+S. Back on `Members`, it is said once, in its place only. `about` are the words of any
+/// painted text that speaks of the fault.
+pub(super) fn said_once(
+    d: &mut Driver<'_>,
+    about: &[&str],
+    beside: &str,
+    field: &str,
+    tone: &str,
+) -> (bool, String) {
     let said = |d: &Driver<'_>| {
         let mut count = 0;
         d.each_painted_text(|text, _| {
             let words = text.galley.job.text.as_str();
-            count += usize::from(
-                words.contains("encounter was deleted")
-                    || words.contains("no longer has the encounter")
-                    || words.contains("No fight offers"),
-            );
+            count += usize::from(about.iter().any(|about| words.contains(about)));
         });
         count
     };
     // The driver's window is 960 between states: the compact editor, with its tabs.
-    {
-        d.click_starting("Add creatures");
-        let tab = (said(d), d.visible_text(BESIDE), tones_beside(d, BESIDE));
-        if let Some(save) = d.place_of("Save group") {
-            d.click_rect(save, "Click: Save group, blocked");
-        }
-        let button = (said(d), d.visible_text(BESIDE), tones_beside(d, BESIDE));
-        d.press_ctrl(Key::S);
-        let key = (said(d), d.visible_text(BESIDE), tones_beside(d, BESIDE));
-        d.click_starting("Members");
-        let field = (said(d), d.visible_text(FIELD), d.visible_text(BESIDE));
-        let beside = (1, true, vec!["warning"]);
-        (
-            tab == beside && button == beside && key == beside && field == (1, true, false),
-            format!(
-                "Add creatures tab {tab:?}; after Save group {button:?}; after Ctrl+S {key:?}; Members {field:?}"
-            ),
-        )
+    d.click_starting("Add creatures");
+    let tab = (said(d), d.visible_text(beside), tones_beside(d, beside));
+    if let Some(save) = d.place_of("Save group") {
+        d.click_rect(save, "Click: Save group, blocked");
     }
+    let button = (said(d), d.visible_text(beside), tones_beside(d, beside));
+    d.press_ctrl(Key::S);
+    let key = (said(d), d.visible_text(beside), tones_beside(d, beside));
+    d.click_starting("Members");
+    let place = (said(d), d.visible_text(field), d.visible_text(beside));
+    let once = (1, true, vec![tone]);
+    (
+        tab == once && button == once && key == once && place == (1, true, false),
+        format!(
+            "Add creatures tab {tab:?}; after Save group {button:?}; after Ctrl+S {key:?}; Members {place:?}"
+        ),
+    )
+}
+
+/// `said_once` for a group whose encounter is gone.
+pub(super) fn gone_encounter_said_once(d: &mut Driver<'_>) -> (bool, String) {
+    said_once(
+        d,
+        &[
+            "encounter was deleted",
+            "no longer has the encounter",
+            "No fight offers",
+        ],
+        "Its encounter was deleted. Choose another under Belongs to.",
+        "Its encounter was deleted, so no fight offers this group.",
+        "warning",
+    )
 }
 
 /// iter-29 G135 (AN1): Rival Captain's whole change link and all its stats are on screen. The
@@ -19538,14 +19553,37 @@ pub mod encounter_owned_groups {
         });
         // iter-29 G122: with Belongs to off screen, the save row says the cause once, by the
         // mouse and the keyboard (Encounters page).
-        let (once, detail) = d.aside(|d| {
+        // The same for a member whose creature is gone: the group goes to Any encounter, and
+        // its Cinder Wolf's package entry is deleted, then put back; Discard ends the edit.
+        let (once, detail, member, member_detail) = d.aside(|d| {
             d.type_into(&format!("Group name: {GROUP_ORPHAN}"), " 2");
-            let once = gone_encounter_said_once(d);
-            d.replace_text_in(&format!("Group name: {GROUP_ORPHAN} 2"), GROUP_ORPHAN);
-            d.expect("No changes");
-            once
+            let (once, detail) = gone_encounter_said_once(d);
+            d.click("Belongs to: Deleted encounter");
+            d.click("Any encounter");
+            let wolf = d
+                .root
+                .join("modules/ashen-marches/Creatures/Cinder Wolf.md");
+            let text = std::fs::read_to_string(&wolf).unwrap();
+            std::fs::remove_file(&wolf).unwrap();
+            d.focus_window(false);
+            d.focus_window(true);
+            d.wait_for_text("not in this campaign’s packages");
+            let (member, member_detail) = said_once(
+                d,
+                &["not in this campaign’s packages"],
+                "Cinder Wolf: not in this campaign’s packages.",
+                "not in this campaign’s packages",
+                "warning",
+            );
+            std::fs::write(&wolf, text).unwrap();
+            d.focus_window(false);
+            d.focus_window(true);
+            d.click("Discard");
+            d.expect("Deleted encounter");
+            (once, detail, member, member_detail)
         });
         d.observe("iter-29-BC5-G122-off-screen", once, detail);
+        d.observe("iter-29-BC5-G122-member-off-screen", member, member_detail);
         let inset = notes_inset(
             d,
             &format!("Group notes for {GROUP_ORPHAN}"),
@@ -21594,7 +21632,7 @@ pub mod session_plan_groups {
         // iter-29 G122 on the Sessions page: the plan's group comes to belong to an encounter
         // that is then deleted. With Belongs to off screen, the save row says the cause once,
         // by the mouse and the keyboard. The file and the group are put back after.
-        let (once, detail) = d.aside(|d| {
+        let (gone, member) = d.aside(|d| {
             let arena = d.root.join(format!(
                 "Encounters/{}.md",
                 crate::visual_tests::fixture::RUN_ARENA
@@ -21612,9 +21650,38 @@ pub mod session_plan_groups {
             d.focus_window(true);
             d.click("Discard");
             d.expect("Belongs to: Any encounter");
-            once
+            // A member whose creature is gone, with a changed name: its Cinder Wolf's package
+            // entry is deleted, then put back.
+            d.type_into(&format!("Group name: {GROUP_RIVALS}"), " 2");
+            let wolf = d
+                .root
+                .join("modules/ashen-marches/Creatures/Cinder Wolf.md");
+            let text = std::fs::read_to_string(&wolf).unwrap();
+            std::fs::remove_file(&wolf).unwrap();
+            d.focus_window(false);
+            d.focus_window(true);
+            d.wait_for_text("not in this campaign’s packages");
+            let member = said_once(
+                d,
+                &["not in this campaign’s packages"],
+                "Cinder Wolf: not in this campaign’s packages.",
+                "not in this campaign’s packages",
+                "warning",
+            );
+            std::fs::write(&wolf, text).unwrap();
+            d.focus_window(false);
+            d.focus_window(true);
+            d.click("Discard");
+            d.expect(&format!("Group name: {GROUP_RIVALS}"));
+            (once, member)
         });
+        let ((once, detail), (member, member_detail)) = (gone, member);
         d.observe("iter-29-BC5-G122-off-screen-plan", once, detail);
+        d.observe(
+            "iter-29-BC5-G122-member-off-screen-plan",
+            member,
+            member_detail,
+        );
         d.click("Back to the plan");
         d.expect(&format!("Edit group {GROUP_RIVALS}"));
 
