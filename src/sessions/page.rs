@@ -100,6 +100,18 @@ enum SessionAct {
     NewSession,
 }
 
+/// What the session page's pane shows, as its header worked it out.
+enum SessionView {
+    /// The note's editor, to choose between the draft and the file.
+    Conflict,
+    Tab {
+        shown: Tab,
+        beside: bool,
+        editing_group_here: bool,
+        toolbar_width: f32,
+    },
+}
+
 #[derive(Clone, Copy, Default, PartialEq)]
 enum Tab {
     #[default]
@@ -2285,28 +2297,21 @@ impl Sessions {
         Some(words)
     }
 
-    /// The session page's body kind. The Recordings tab is rows, a reader or a form: the pane's
-    /// scroll column, so its footer follows short content. The note's editor and the plan
-    /// manage their own room (the plan's own footer and its scroll, until the plan moves to
-    /// this footer).
-    fn session_body_kind(&self, ui: &egui::Ui, plan: &Plan<'_>) -> design::pane::Body {
-        let conflict = self
-            .draft
-            .as_ref()
-            .is_some_and(|draft| draft.state == DraftState::Conflict);
-        let editing_group_here = plan.group_open && self.group_session == self.selected;
-        let beside_from = if editing_group_here {
-            design::LIST_MEASURE + design::L + design::READER_MEASURE
-        } else {
-            PLAN_BESIDE_NOTE_FROM
-        };
-        let beside = ui.available_width() >= beside_from;
+    /// The pane's body kind. The Recordings tab is rows, a reader or a form: the pane's scroll
+    /// column, so its footer follows short content. The note's editor fills its room (lead,
+    /// P2), and the plan keeps its own footer and scroll until it moves to this footer.
+    fn session_body_kind(view: &SessionView) -> design::pane::Body {
         use design::pane::{Body, FillsReason};
-        match self.tab {
-            _ if conflict => fills(FillsReason::NoteEditor),
-            Tab::Recordings => Body::Content,
-            Tab::Note if !beside => fills(FillsReason::NoteEditor),
-            _ => fills(FillsReason::Columns),
+        match view {
+            SessionView::Conflict => fills(FillsReason::NoteEditor),
+            SessionView::Tab {
+                shown: Tab::Recordings,
+                ..
+            } => Body::Content,
+            SessionView::Tab {
+                shown: Tab::Note, ..
+            } => fills(FillsReason::NoteEditor),
+            SessionView::Tab { .. } => fills(FillsReason::Columns),
         }
     }
 
@@ -5554,15 +5559,8 @@ impl Sessions {
             });
         }
         design::gap(ui, design::Gap::XS);
-        // In the session page's pane: the text flows in its scroll column, and the footer
-        // follows a short part.
-        design::ScrollColumn::new((
-            "recording_text",
-            &reading.recording,
-            reading.made.word(),
-            reading.part,
-        ))
-        .show(ui, |ui| {
+        // The text is the session page's pane content: the pane is its scroll column.
+        ui.scope(|ui| {
             note_width(ui, |ui| {
                 let body = &reading.parts[reading.part].1;
                 let body = body.replace(
@@ -5713,7 +5711,8 @@ impl Sessions {
         // The rows leave the scroll bar's lane free whether or not the bar shows, so a row's menu
         // keeps its x when the list grows long enough to scroll.
         let lane_width = ui.available_width() - ui.spacing().scroll.allocated_width();
-        design::ScrollColumn::new(("session_recordings", self.selected)).show(ui, |ui| {
+        // The rows are the session page's pane content: the pane is their scroll column.
+        ui.scope(|ui| {
             ui.set_max_width(
                 lane_width
                     .min(ui.available_width())
@@ -6147,28 +6146,29 @@ impl Sessions {
         self.record_line(ui, settings);
         // The body (Last time, the tabs and their pane) is the pane's; the part places the
         // footer below it.
+        let view = self.session_header(ui, book, plan, &note, title_on_own_line);
         let frame = PaneFrame::new(ui);
         let messages =
             self.session_messages(&frame, settings, book, plan, &note, ui.available_width());
-        let body = self.session_body_kind(ui, plan);
+        let body = Self::session_body_kind(&view);
         let paned = messages.pane(ui, body, |ui| {
-            self.session_body(ui, settings, book, plan, &note, title_on_own_line);
+            self.session_content(ui, settings, book, plan, view);
         });
         if let Some(press) = paned.pressed {
             self.session_press(press, book, plan);
         }
     }
 
-    /// The session page below its title and state line, above its message footer.
-    fn session_body(
+    /// The session page below its title and state line, above its pane: Last time, the tabs
+    /// and the toolbar. They never scroll. Returns what the pane shows.
+    fn session_header(
         &mut self,
         ui: &mut egui::Ui,
-        settings: &ProcessingSettings,
         book: &mut Book,
         plan: &Plan<'_>,
         note: &Note,
         title_on_own_line: bool,
-    ) {
+    ) -> SessionView {
         // A group being assembled needs the height, and last time can wait for it.
         if !(plan.group_open && self.group_session == self.selected) {
             self.last_time_block(ui, book, plan);
@@ -6178,8 +6178,7 @@ impl Sessions {
             .as_ref()
             .is_some_and(|draft| draft.state == DraftState::Conflict)
         {
-            self.note_editor(ui, false);
-            return;
+            return SessionView::Conflict;
         }
         let editing_group_here = plan.group_open && self.group_session == self.selected;
         let beside_from = if editing_group_here {
@@ -6258,6 +6257,33 @@ impl Sessions {
             });
         });
         design::gap(ui, design::Gap::XS);
+        SessionView::Tab {
+            shown,
+            beside,
+            editing_group_here,
+            toolbar_width,
+        }
+    }
+
+    /// What the pane shows: the note's editor in a conflict, or the shown tab.
+    fn session_content(
+        &mut self,
+        ui: &mut egui::Ui,
+        settings: &ProcessingSettings,
+        book: &mut Book,
+        plan: &Plan<'_>,
+        view: SessionView,
+    ) {
+        let SessionView::Tab {
+            shown,
+            beside,
+            editing_group_here,
+            toolbar_width,
+        } = view
+        else {
+            self.note_editor(ui, false);
+            return;
+        };
         match shown {
             Tab::Plan if beside => {
                 let height = ui.available_height();
