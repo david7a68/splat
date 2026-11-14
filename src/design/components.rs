@@ -1819,9 +1819,16 @@ impl<T> AddFieldForm<'_, T, WithActions> {
             });
         }
         // R30: when the field takes the keyboard (it opens, or the caller gives it back after
-        // an act), the least scroll that shows the field, its actions and the result's room.
-        // Already in view, nothing moves; only the DM's own scrolling can have hidden them.
-        if focus {
+        // an act), and when its view changes size while it is open (a resize is not the DM's
+        // own scrolling), the least scroll that shows the field, its actions and the result's
+        // room. Already in view, nothing moves; only the DM's own scrolling can hide them.
+        let view = self.id.named_id(self.name).with("add_field_view");
+        let size = ui.clip_rect().size();
+        let resized = ui
+            .data(|data| data.get_temp::<Vec2>(view))
+            .is_some_and(|last| last != size);
+        ui.data_mut(|data| data.insert_temp(view, size));
+        if focus || resized {
             let shown = Rect::from_x_y_ranges(field.rect.x_range(), top..=ui.cursor().top());
             ui.scroll_to_rect(shown, None);
         }
