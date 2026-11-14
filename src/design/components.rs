@@ -574,6 +574,14 @@ pub struct Action<'a> {
     wraps: bool,
 }
 
+/// How far a quiet `line_start` action hangs left of the text edge: its padding.
+pub const LINE_START_HANG: f32 = S;
+
+/// The most a `line_start` action hangs left of the text edge: its padding and its icon slot (as
+/// `Action::paint` lays it out). A pane's body clip reaches this far into the margin left of
+/// the pane, inside the parent's clip (`pane::body_clip`).
+pub const LINE_START_REACH: f32 = LINE_START_HANG + super::tokens::ICON_SLOT;
+
 impl<'a> Action<'a> {
     fn new(kind: Kind, label: &'a str) -> Self {
         Self {
@@ -723,7 +731,11 @@ impl<'a> Action<'a> {
     }
 
     fn padding(&self) -> f32 {
-        if self.kind == Kind::Quiet { S } else { M }
+        if self.kind == Kind::Quiet {
+            LINE_START_HANG
+        } else {
+            M
+        }
     }
 
     fn icon_width(&self) -> f32 {

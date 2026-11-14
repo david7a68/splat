@@ -283,21 +283,6 @@ impl<'a> LiveUndos<'a> {
     }
 }
 
-/// A pane's body between the cursor and `bottom`, the top of its message footer: an editor or
-/// a list that fills its height stops above the footer.
-pub(crate) fn body_above<R>(
-    ui: &mut egui::Ui,
-    bottom: f32,
-    add: impl FnOnce(&mut egui::Ui) -> R,
-) -> R {
-    let body = egui::Rect::from_min_max(
-        ui.cursor().min,
-        egui::pos2(ui.max_rect().right(), bottom.max(ui.cursor().top())),
-    );
-    ui.scope_builder(egui::UiBuilder::new().max_rect(body), add)
-        .inner
-}
-
 /// What the DM chose in the Timeline list's message footer, done after the footer is drawn.
 #[derive(Clone, Debug, PartialEq)]
 enum ListAct {
