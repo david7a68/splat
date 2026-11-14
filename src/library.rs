@@ -6069,7 +6069,7 @@ impl Library {
                                 {
                                     self.copy_name_open = false;
                                 }
-                                ui.add_space(design::L - ui.spacing().item_spacing.x);
+                                design::gap(ui, design::Gap::S); // With the line's item gap (`S`): `L`.
                                 design::blocked_reason(ui, reason);
                             });
                             clicked
@@ -6209,7 +6209,7 @@ impl Library {
                             self.package_folder_changed = false;
                         }
                         if !self.name.is_empty() || self.package_folder_changed {
-                            ui.add_space(design::L - ui.spacing().item_spacing.x);
+                            design::gap(ui, design::Gap::S); // With the line's item gap (`S`): `L`.
                         }
                         match (&root, reason) {
                             (_, Some(reason)) => design::blocked_reason(ui, Some(reason)),
@@ -6475,7 +6475,7 @@ impl Library {
                         self.new_form = false;
                         self.new_error = None;
                     }
-                    ui.add_space(design::L - ui.spacing().item_spacing.x);
+                    design::gap(ui, design::Gap::S); // With the line's item gap (`S`): `L`.
                     if blocked.is_some() {
                         design::blocked_reason(ui, blocked);
                     } else if !self.new_name.trim().is_empty() {
@@ -8024,7 +8024,7 @@ impl Library {
                             .density(Density::Read)
                             .show(ui)
                             .clicked();
-                        ui.add_space(design::L - ui.spacing().item_spacing.x);
+                        design::gap(ui, design::Gap::S); // With the line's item gap (`S`): `L`.
                         let reload = Action::destructive("Reload and lose my draft")
                             .density(Density::Read)
                             .show(ui)
@@ -8080,8 +8080,8 @@ impl Library {
                         .density(Density::Read)
                         .show(ui)
                         .clicked();
-                    // The layout adds its own item gap after each control; together they make `L`.
-                    ui.add_space(design::L - ui.spacing().item_spacing.x);
+                    // With the line's item gap (`S`), `L` before the destructive choice.
+                    design::gap(ui, design::Gap::S);
                     let reload = Action::destructive(if change.text.is_none() {
                         "Remove entry and lose draft"
                     } else {

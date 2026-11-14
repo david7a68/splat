@@ -31,6 +31,9 @@ struct Look {
     markup: bool,
     link: bool,
     struck: bool,
+    /// Part of a `<!-- splat:… -->` mark that Splat wrote (a travel check). It folds to one muted
+    /// mark unless the caret is on its line (closure FE9).
+    folded: bool,
 }
 
 type Runs = Arc<Vec<(Range<usize>, Look)>>;
@@ -144,6 +147,9 @@ fn looks(text: &str) -> Runs {
             .iter_mut()
             .for_each(|look| look.markup = true);
     }
+    for fold in splat_marks(text) {
+        bytes[fold].iter_mut().for_each(|look| look.folded = true);
+    }
     let mut runs = Vec::new();
     let mut start = 0;
     for at in 1..=bytes.len() {
@@ -157,6 +163,25 @@ fn looks(text: &str) -> Runs {
         runs.push((0..0, Look::default()));
     }
     Arc::new(runs)
+}
+
+/// Where each whole `<!-- splat:… -->` mark is, in bytes. An unclosed one is not a mark: the DM
+/// is writing it, and it stays in view.
+fn splat_marks(text: &str) -> Vec<Range<usize>> {
+    const OPEN: &str = "<!-- splat:";
+    let mut marks = Vec::new();
+    let mut rest = 0;
+    while let Some(start) = text[rest..].find(OPEN) {
+        let start = rest + start;
+        let line_end = text[start..].find('\n').map_or(text.len(), |end| start + end);
+        let Some(end) = text[start..line_end].find("-->") else {
+            rest = line_end;
+            continue;
+        };
+        rest = start + end + 3;
+        marks.push(start..rest);
+    }
+    marks
 }
 
 type Links = Arc<Vec<(Range<usize>, LinkTarget)>>;
@@ -200,6 +225,8 @@ impl ComputerMut<&str, Links> for Linker {
 struct Styled {
     runs: Runs,
     section_ends: Vec<usize>,
+    /// The `splat:` marks, in bytes, each with the character it starts at.
+    folds: Vec<(Range<usize>, usize)>,
 }
 
 #[derive(Default)]
@@ -219,7 +246,17 @@ impl ComputerMut<&str, Arc<Styled>> for Styler {
             })
             .map(|(_, (range, _))| text[..range.end].chars().count())
             .collect();
-        Arc::new(Styled { runs, section_ends })
+        Arc::new(Styled {
+            runs,
+            section_ends,
+            folds: splat_marks(text)
+                .into_iter()
+                .map(|fold| {
+                    let char = text[..fold.start].chars().count();
+                    (fold, char)
+                })
+                .collect(),
+        })
     }
 }
 
@@ -281,20 +318,72 @@ fn format(ui: &egui::Ui, prose: Type, look: Look) -> TextFormat {
     }
 }
 
-/// A `TextEdit` layouter. The text is parsed again only when it changes.
+/// A folded mark's letters: this small, and clear. They stay in the text, so the file keeps every
+/// byte and the caret can still pass through them.
+const FOLDED_SIZE: f32 = 0.05;
+
+/// The mark that stands for a folded `splat:` comment.
+const FOLD_MARK: char = '⋯';
+
+/// The lines that hold the caret or the selection of the editor being laid out, in bytes. The
+/// editor is the focused field whose rect (from the last frame) holds this layout's place: egui
+/// lays the text out at the `Ui`'s cursor, before it gives the field its rect.
+fn caret_lines(ui: &egui::Ui, text: &str) -> Option<Range<usize>> {
+    let focused = ui.memory(|memory| memory.focused())?;
+    let field = ui.ctx().read_response(focused)?;
+    if !field.rect.contains(ui.cursor().min) {
+        return None;
+    }
+    let range = egui::TextEdit::load_state(ui.ctx(), focused)?
+        .cursor
+        .char_range()?;
+    let byte = |at: usize| text.char_indices().nth(at).map_or(text.len(), |(at, _)| at);
+    let (first, last) = (range.primary.index, range.secondary.index);
+    let (start, end) = (byte(first.min(last)), byte(first.max(last)));
+    let start = text[..start].rfind('\n').map_or(0, |at| at + 1);
+    let end = text[end..].find('\n').map_or(text.len(), |at| end + at);
+    Some(start..end)
+}
+
+/// A `TextEdit` layouter. The text is parsed again only when it changes. A `splat:` mark folds
+/// to one muted mark (`⋯`, painted by [`paint_section_rules`]) unless the caret or the selection
+/// is on its line; its letters stay in the text, so the file keeps every byte (closure FE9).
 pub fn layouter(ui: &egui::Ui, text: &dyn TextBuffer, wrap_width: f32) -> Arc<egui::Galley> {
     let text = text.as_str();
     let styled = styled_text(ui, text);
     let prose = design::reader::prose_type(ui);
+    let open = (!styled.folds.is_empty())
+        .then(|| caret_lines(ui, text))
+        .flatten();
+    let mark_room = ui.fonts_mut(|fonts| fonts.glyph_width(&prose.font(ui), FOLD_MARK)) + design::XS;
     let mut job = LayoutJob {
         text: text.to_owned(),
         sections: styled
             .runs
             .iter()
-            .map(|(range, look)| egui::text::LayoutSection {
-                leading_space: 0.0,
-                byte_range: range.clone(),
-                format: format(ui, prose, *look),
+            .map(|(range, look)| {
+                let shut = look.folded
+                    && open
+                        .as_ref()
+                        .is_none_or(|open| range.end < open.start || range.start > open.end);
+                let mut format = format(ui, prose, *look);
+                if shut {
+                    format.font_id.size = FOLDED_SIZE;
+                    format.color = egui::Color32::TRANSPARENT;
+                    format.background = egui::Color32::TRANSPARENT;
+                    format.strikethrough = Stroke::NONE;
+                }
+                egui::text::LayoutSection {
+                    leading_space: if shut
+                        && styled.folds.iter().any(|(fold, _)| fold.start == range.start)
+                    {
+                        mark_room
+                    } else {
+                        0.0
+                    },
+                    byte_range: range.clone(),
+                    format,
+                }
             })
             .collect(),
         ..Default::default()
@@ -305,31 +394,106 @@ pub fn layouter(ui: &egui::Ui, text: &dyn TextBuffer, wrap_width: f32) -> Arc<eg
 
 const RULE_GAP: f32 = 3.0;
 
-/// The rule under a section heading, as in the Reader. A layouter cannot draw one.
-pub fn paint_section_rules(ui: &egui::Ui, output: &egui::text_edit::TextEditOutput) {
-    let galley = &output.galley;
-    let painter = ui.painter().with_clip_rect(output.text_clip_rect);
-    let left = output.galley_pos.x;
-    for end in &styled_text(ui, &galley.job.text).section_ends {
+/// An editor's laid-out text: egui's `TextEditOutput` (a staged raw editor) or the field part's
+/// [`Editor`](design::Editor).
+pub trait Laid {
+    fn response(&self) -> &egui::Response;
+    fn galley(&self) -> &Arc<egui::Galley>;
+    fn galley_pos(&self) -> egui::Pos2;
+    fn text_clip_rect(&self) -> egui::Rect;
+}
+
+impl Laid for egui::text_edit::TextEditOutput {
+    fn response(&self) -> &egui::Response {
+        &self.response
+    }
+    fn galley(&self) -> &Arc<egui::Galley> {
+        &self.galley
+    }
+    fn galley_pos(&self) -> egui::Pos2 {
+        self.galley_pos
+    }
+    fn text_clip_rect(&self) -> egui::Rect {
+        self.text_clip_rect
+    }
+}
+
+impl Laid for design::Editor {
+    fn response(&self) -> &egui::Response {
+        &self.response
+    }
+    fn galley(&self) -> &Arc<egui::Galley> {
+        &self.galley
+    }
+    fn galley_pos(&self) -> egui::Pos2 {
+        self.galley_pos
+    }
+    fn text_clip_rect(&self) -> egui::Rect {
+        self.text_clip_rect
+    }
+}
+
+/// The rule under a section heading, as in the Reader, and the mark of each folded `splat:`
+/// comment. A layouter cannot draw either.
+pub fn paint_section_rules(ui: &egui::Ui, output: &impl Laid) {
+    let galley = output.galley();
+    let galley_pos = output.galley_pos();
+    let painter = ui.painter().with_clip_rect(output.text_clip_rect());
+    let left = galley_pos.x;
+    let styled = styled_text(ui, &galley.job.text);
+    for end in &styled.section_ends {
         let row = galley.pos_from_cursor(egui::text::CCursor::new(*end));
         painter.hline(
             left..=left + galley.job.wrap.max_width,
-            output.galley_pos.y + row.bottom() + RULE_GAP,
+            galley_pos.y + row.bottom() + RULE_GAP,
             Stroke::new(design::HAIRLINE_WIDTH, colors().rule),
+        );
+    }
+    for at in folded_marks(galley, &styled) {
+        let glyph = galley
+            .pos_from_cursor(egui::text::CCursor::new(at.char))
+            .translate(galley_pos.to_vec2());
+        painter.text(
+            egui::pos2(glyph.left() - at.room / 2.0, glyph.center().y),
+            egui::Align2::CENTER_CENTER,
+            FOLD_MARK,
+            design::reader::prose_type(ui).font(ui),
+            colors().faint,
         );
     }
 }
 
+/// A folded mark in a laid-out text: the character it starts at and the room left for its `⋯`.
+struct Folded {
+    char: usize,
+    room: f32,
+}
+
+/// The folded marks of a galley laid out by [`layouter`]: no scan of the text, which can be long.
+fn folded_marks(galley: &egui::Galley, styled: &Styled) -> Vec<Folded> {
+    styled
+        .folds
+        .iter()
+        .filter_map(|(fold, char)| {
+            let section = galley
+                .job
+                .sections
+                .iter()
+                .find(|section| section.byte_range.start == fold.start)?;
+            (section.format.font_id.size == FOLDED_SIZE).then_some(Folded {
+                char: *char,
+                room: section.leading_space,
+            })
+        })
+        .collect()
+}
+
 /// The link under the pointer, if the pointer is on its characters and not only near them.
-fn link_at(
-    ui: &egui::Ui,
-    output: &egui::text_edit::TextEditOutput,
-    pointer: egui::Pos2,
-) -> Option<LinkTarget> {
-    if !output.text_clip_rect.contains(pointer) {
+fn link_at(ui: &egui::Ui, output: &impl Laid, pointer: egui::Pos2) -> Option<LinkTarget> {
+    if !output.text_clip_rect().contains(pointer) {
         return None;
     }
-    let galley = &output.galley;
+    let galley = output.galley();
     let text = &galley.job.text;
     // Read first, so that the cache stays while the pointer crosses the gaps between words.
     let links = ui.ctx().memory_mut(|memory| {
@@ -338,7 +502,7 @@ fn link_at(
             .cache::<FrameCache<Links, Linker>>()
             .get(text.as_str())
     });
-    let local = (pointer - output.galley_pos).to_pos2();
+    let local = (pointer - output.galley_pos()).to_pos2();
     let mut at = 0;
     let mut rows = galley.rows.iter();
     let row = loop {
@@ -374,10 +538,10 @@ fn names_nothing(ui: &egui::Ui, note: &str, from: Option<uuid::Uuid>) -> bool {
 /// where its notes open. `from` is the note being edited.
 pub fn pressed_note_link(
     ui: &egui::Ui,
-    output: &egui::text_edit::TextEditOutput,
+    output: &impl Laid,
     from: Option<uuid::Uuid>,
 ) -> Option<String> {
-    let response = &output.response;
+    let response = output.response();
     // Ctrl+click is a right click on a Mac. There, Cmd is the key.
     if !response.sense.senses_click() || !ui.input(|input| input.modifiers.command) {
         return None;
@@ -572,11 +736,18 @@ mod tests {
         );
     }
 
+    const TEST_NOTE: design::FieldName = crate::field_id!("markdown_source_test");
+
+    /// A styled Markdown editor of `body`, through the field part, as the app's editors draw it.
+    fn styled_editor(ui: &mut egui::Ui, body: &mut String, width: f32) -> design::Editor {
+        TEST_NOTE.once(design::Once::Example).editor(ui, body, |edit| {
+            // The layouter is a function item: leaking its box allocates nothing.
+            edit.layouter(Box::leak(Box::new(layouter)))
+                .desired_width(width)
+        })
+    }
+
     /// Press on these words in an editor of `text`, with or without Ctrl.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn press_in_editor(text: &str, words: &str, ctrl: bool) -> (Option<String>, Vec<String>) {
         let context = egui::Context::default();
         design::theme::install(&context);
@@ -587,12 +758,8 @@ mod tests {
         let mut noted = None;
         let mut draw = |ctx: &egui::Context| {
             egui::CentralPanel::default().show(ctx, |ui| {
-                let mut layouter = layouter;
                 // One row, so that no word is split between two.
-                let output = egui::TextEdit::multiline(&mut body)
-                    .layouter(&mut layouter)
-                    .desired_width(1000.0)
-                    .show(ui);
+                let output = styled_editor(ui, &mut body, 1000.0);
                 noted = noted.take().or(pressed_note_link(ui, &output, None));
                 let cursor = |at| {
                     output
@@ -653,10 +820,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn the_first_letter_of_a_wrapped_row_is_part_of_its_link() {
         let text = format!("[[Hobb|{}]]\n", "the miller ".repeat(20));
         let context = egui::Context::default();
@@ -664,11 +827,7 @@ mod tests {
         let _ = context.run(egui::RawInput::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
                 let mut body = text.clone();
-                let mut layouter = layouter;
-                let output = egui::TextEdit::multiline(&mut body)
-                    .layouter(&mut layouter)
-                    .desired_width(200.0)
-                    .show(ui);
+                let output = styled_editor(ui, &mut body, 200.0);
                 let row = &output.galley.rows[1];
                 let glyph = &row.glyphs[0];
                 let pointer = output.galley_pos
@@ -680,6 +839,101 @@ mod tests {
                 );
             });
         });
+    }
+
+    /// Closure FE9 (rows 118, 119a): a `splat:` mark that Splat wrote folds to one muted `⋯`
+    /// unless the caret is on its line; the text keeps every byte. Must stay true: a comment the
+    /// DM wrote, and a mark the DM is still typing (no `-->`), stay in view.
+    #[test]
+    fn a_splat_mark_folds_unless_the_caret_is_on_its_line() {
+        let text = "## Plan for tonight\n- [[Bridge Ambush]] <!-- splat:check journey=t-road at=24 sum=12345678 --> Bring silver.\n- Wolves <!-- my note -->\n- <!-- splat:check journey=t\n";
+        assert_eq!(
+            splat_marks(text)
+                .into_iter()
+                .map(|mark| &text[mark])
+                .collect::<Vec<_>>(),
+            vec!["<!-- splat:check journey=t-road at=24 sum=12345678 -->"]
+        );
+        let mark = text.find("<!-- splat").unwrap();
+        let char_of = |words: &str| text[..text.find(words).unwrap()].chars().count();
+        let context = egui::Context::default();
+        design::theme::install(&context);
+        let id = TEST_NOTE.once(design::Once::Example).id();
+        let mut body = text.to_owned();
+        // Whether the mark is folded, how many `⋯` were painted, and whether a repaint follows.
+        let mut frame = |events: Vec<egui::Event>| {
+            let mut folded = None;
+            let output = context.run(
+                egui::RawInput {
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let output = styled_editor(ui, &mut body, 1000.0);
+                        paint_section_rules(ui, &output);
+                        let section = |at: usize| {
+                            output
+                                .galley
+                                .job
+                                .sections
+                                .iter()
+                                .find(|section| section.byte_range.contains(&at))
+                                .map(|section| section.format.font_id.size)
+                        };
+                        folded = Some(section(mark) == Some(FOLDED_SIZE));
+                        assert_ne!(
+                            section(text.find("my note").unwrap()),
+                            Some(FOLDED_SIZE),
+                            "fe9-own-comment: the DM's own comment stays in view"
+                        );
+                    });
+                },
+            );
+            let marks = output
+                .shapes
+                .iter()
+                .filter(|shape| {
+                    matches!(&shape.shape, egui::Shape::Text(text)
+                        if text.galley.job.text == FOLD_MARK.to_string())
+                })
+                .count();
+            let repaint = output.viewport_output.values().any(|viewport| {
+                viewport.repaint_delay == std::time::Duration::ZERO
+            });
+            (folded.unwrap(), marks, repaint)
+        };
+        let place_caret = |at: usize| {
+            let mut state = egui::TextEdit::load_state(&context, id).unwrap_or_default();
+            state
+                .cursor
+                .set_char_range(Some(egui::text::CCursorRange::one(egui::text::CCursor::new(at))));
+            state.store(&context, id);
+            context.memory_mut(|memory| memory.request_focus(id));
+        };
+        let (folded, marks, _) = frame(Vec::new());
+        assert!(folded && marks == 1, "fe9-fold: no focus, one mark ({marks})");
+        place_caret(char_of("Bridge"));
+        frame(Vec::new());
+        let (folded, marks, _) = frame(Vec::new());
+        assert!(!folded && marks == 0, "fe9-open: the caret's line shows the whole mark");
+        place_caret(char_of("Wolves"));
+        frame(Vec::new());
+        let (folded, marks, _) = frame(Vec::new());
+        assert!(folded && marks == 1, "fe9-other-line: the caret on another line folds it");
+        // The keyboard moves the caret after the text is laid out; egui's next frame (it asks for
+        // one after a key press) opens it. Must stay true: the fold never waits for other input.
+        let (_, _, repaint) = frame(vec![egui::Event::Key {
+            key: egui::Key::ArrowUp,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        }]);
+        assert!(repaint, "fe9-key: egui asks for the frame that opens the mark");
+        let (folded, _, _) = frame(Vec::new());
+        assert!(!folded, "fe9-key: the caret moved up onto the mark's line");
+        assert_eq!(body, text, "fe9-bytes: the text keeps every byte");
     }
 
     #[test]

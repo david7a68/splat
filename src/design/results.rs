@@ -602,7 +602,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[
                 Ban::Results,
                 Ban::Layout(4),
-                Ban::Extras(3),
+                Ban::Extras(1),
                 Ban::Pane(3),
                 Ban::RowKey(1),
             ],
@@ -822,12 +822,12 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/library.rs",
             "new_entry",
-            &[Ban::Layout(1), Ban::Extras(2)],
+            &[Ban::Layout(1), Ban::Extras(1)],
         ),
         (
             "src/library.rs",
             "package_form",
-            &[Ban::Layout(5), Ban::Extras(5)],
+            &[Ban::Layout(5), Ban::Extras(3)],
         ),
         ("src/library.rs", "show", &[Ban::Layout(5)]),
         ("src/lookup.rs", "panel", &[Ban::Layout(2)]),
@@ -842,16 +842,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Layout(1), Ban::Extras(1)],
         ),
         ("src/loot_editor.rs", "table_menu", &[Ban::Layout(1)]),
-        (
-            "src/markdown_source.rs",
-            "press_in_editor",
-            &[Ban::Layout(1)],
-        ),
-        (
-            "src/markdown_source.rs",
-            "the_first_letter_of_a_wrapped_row_is_part_of_its_link",
-            &[Ban::Layout(1)],
-        ),
         (
             "src/markdown_view.rs",
             "reader_table",

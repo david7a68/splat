@@ -1853,7 +1853,9 @@ The Read/Write switch sits at the right end of the note frame’s top edge at ev
 ### Notes and templates
 
 Notes are Markdown in the campaign folder. Write styles source in Reader faces: large ruled headings, italic
-emphasis, and visible markup in the plain face and faint colour. Store exactly what was typed so Obsidian
+emphasis, and visible markup in the plain face and faint colour. A whole `<!-- splat:… -->` mark that Splat
+wrote (a travel check) folds to one faint `⋯` unless the caret or the selection is on its line; the DM's own
+comments and a mark still being typed stay in view. Store exactly what was typed so Obsidian
 reads the same text. Read uses the one Reader, anchored left, at no more than READER_MEASURE
 (at most 75 characters per line).
 Write keeps the same left-aligned READER_MEASURE as Read (at most 75 characters per line), inside a
