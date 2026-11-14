@@ -2100,6 +2100,9 @@ pub(super) fn overrides_form(
         }
     }
     if !linked || !overrides.conditions.is_empty() {
+        // FI8: the heading is drawn in the form's column, so the part puts its `L` above it (as
+        // the first thing in the width scope below, it had none).
+        design::heading(ui, design::Heading::Label("Starting conditions"));
         // The run's condition form width: the grid, the effects and Add stay within it.
         ui.scope(|ui| {
             ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
@@ -2142,7 +2145,6 @@ pub(super) fn overrides_form(
     reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
 )]
 fn conditions_row(ui: &mut egui::Ui, id: &str, conditions: &mut Vec<String>) {
-    design::heading(ui, design::Heading::Label("Starting conditions"));
     // The run's grid: fixed columns, `S` apart.
     if let Some(name) =
         crate::encounter_run::view::conditions_grid(ui, "starting_conditions", |name| {
@@ -3113,8 +3115,9 @@ fn members(
                 design::named(ui, &response, &detail);
             } else if word.is_some() {
                 ui.horizontal_wrapped(|ui| {
-                    // The line keeps the text's pitch; the link's target reaches into the gap.
-                    ui.spacing_mut().interact_size.y = 0.0;
+                    // One row as tall as the link's target, so the detail and the link share
+                    // their centre line.
+                    ui.set_row_height(design::XL);
                     ui.spacing_mut().item_spacing.x = 0.0;
                     if !detail.is_empty() {
                         let response = ui.add(

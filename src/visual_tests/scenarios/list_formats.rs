@@ -644,13 +644,13 @@ pub fn run(d: &mut Driver<'_>) {
                 let words = &text.galley.job.text;
                 if words.starts_with(crate::design::icons::CHANGED)
                     && rect.right() <= link.left() + 0.5
-                    && (rect.center().y - link.center().y).abs() < 4.0
+                    && (rect.center().y - link.center().y).abs() <= 1.0
                 {
                     pencil = Some(rect);
                 }
+                // One centre line for the detail and the link.
                 if words.replace('\u{a0}', " ").contains("CR ")
-                    && rect.top() <= link.center().y
-                    && rect.bottom() >= link.center().y
+                    && (rect.center().y - link.center().y).abs() <= 1.0
                 {
                     detail = Some(rect);
                 }

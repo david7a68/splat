@@ -16417,6 +16417,43 @@ pub mod encounter_groups {
             condition_columns_close(&columns),
             format!("At 1920 the starting-condition columns (left, right, count): {columns:?}"),
         );
+        // iter-28-B FI8: each heading of the member's changes form belongs to what follows it:
+        // `L` above it, less below it, at every size.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let gaps = d.at_size(size, |d| {
+                let nodes = d.nodes();
+                ["STARTING CONDITIONS", "OTHER EFFECTS", "LOOT"].map(|heading| {
+                    let label = nodes
+                        .iter()
+                        .find(|node| node.name == heading && node.in_view())?
+                        .rect;
+                    let column = |rect: &egui::Rect| {
+                        rect.left() < label.right() + 400.0 && rect.right() > label.left()
+                    };
+                    let above = nodes
+                        .iter()
+                        .filter(|node| node.rect.bottom() <= label.top() + 0.5 && column(&node.rect))
+                        .map(|node| node.rect.bottom())
+                        .fold(f32::MIN, f32::max);
+                    let below = nodes
+                        .iter()
+                        .filter(|node| node.rect.top() >= label.bottom() - 0.5 && column(&node.rect))
+                        .map(|node| node.rect.top())
+                        .fold(f32::MAX, f32::min);
+                    Some((label.top() - above, below - label.bottom()))
+                })
+            });
+            d.observe(
+                "iter-28-B-FI8",
+                // At 1920 all three are in view; at the smaller sizes, those in view (one at least).
+                (size != LARGE || gaps.iter().all(Option::is_some))
+                    && gaps.iter().any(Option::is_some)
+                    && gaps.iter().flatten().all(|(above, below)| {
+                        *above >= crate::design::L - 1.0 && above > below
+                    }),
+                format!("At {size:?}, the changes form's headings (above, below): {gaps:?}"),
+            );
+        }
         d.check_tab_order("group editor, changes open");
         d.click("Done with changes");
         d.observe(
