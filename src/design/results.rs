@@ -690,26 +690,31 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/encounters.rs", "save_draft", &[Ban::Results]),
         ("src/encounters.rs", "stamp_kept", &[Ban::Results]),
         ("src/library.rs", "add_reader_result", &[Ban::Results]),
-        ("src/library.rs", "apply_page_press", &[Ban::Results]),
+        // A by-owner Undo and `use_press` of Library's page lines (Wave 2 moves them to tickets).
+        (
+            "src/library.rs",
+            "apply_page_press",
+            &[Ban::Results, Ban::ByOwner(2)],
+        ),
         (
             "src/design/results.rs",
             "a_failed_undo_keeps_its_entry_and_its_order",
-            &[Ban::Results],
+            &[Ban::ByOwner(3)],
         ),
         (
             "src/design/results.rs",
             "end_events_do_what_the_kind_says",
-            &[Ban::Results],
+            &[Ban::ByOwner(1)],
         ),
         (
             "src/design/results.rs",
             "a_result_shows_only_in_its_own_scope statement",
-            &[Ban::Results],
+            &[Ban::ByOwner(1)],
         ),
         (
             "src/design/results.rs",
             "a_result_shows_only_in_its_own_scope statement",
-            &[Ban::Results],
+            &[Ban::ByOwner(1)],
         ),
         (
             "src/library.rs",
@@ -768,7 +773,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/sessions/plan.rs",
             "plan_pane",
-            &[Ban::Results, Ban::Layout(2), Ban::Pane(1)],
+            // `ByOwner`: `checks::Results::undo(id, book)`, not the footer store's; counted by name.
+            &[Ban::Results, Ban::Layout(2), Ban::Pane(1), Ban::ByOwner(1)],
         ),
         (
             "src/sessions/plan.rs",
@@ -1036,7 +1042,8 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/timeline/page.rs",
             "detail",
-            &[Ban::Layout(7), Ban::RowKey(1)],
+            // `ByOwner`: `checks::Results::undo(id, book)`, not the footer store's; counted by name.
+            &[Ban::Layout(7), Ban::RowKey(1), Ban::ByOwner(1)],
         ),
         ("src/timeline/page.rs", "filters", &[Ban::Layout(1)]),
         ("src/timeline/page.rs", "list", &[Ban::Layout(1)]),

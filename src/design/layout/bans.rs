@@ -30,6 +30,11 @@ pub(crate) enum Group {
     /// Package X: raw space, raw selectable choices, a search field without `Clear`, a heading
     /// that does not add its own space (`clippy.toml`, section "Package X").
     Extras,
+    /// Package M: a footer press undone or used by owner (`Results::undo`, `Results::use_press`),
+    /// which could reach a newer result of that owner. Counted by method name and at least its
+    /// number of arguments (`.undo(owner, run)`, `.use_press(owner)`), so a message's
+    /// `.undo(step)` does not count.
+    ByOwner,
 }
 
 /// The `clippy.toml` lines of one package's section: from its `# Package <letter>` line to the
@@ -57,6 +62,8 @@ enum Shape {
     /// `Owner::ctor(…)` then `.x(…)` calls up to `.name(…)`: a builder method of a type that is
     /// not a `RECEIVERS` value (`egui::Button::new(…).selected(…)`).
     Chain(String, String),
+    /// `.name(…)` with at least this many arguments (a turbofish's comma can count as one more).
+    Arity(String, usize),
 }
 
 /// Builder types whose banned methods are counted in a constructor's chain.
@@ -97,6 +104,13 @@ fn patterns() -> Vec<(Group, Shape)> {
         ('P', section('P')),
     ] {
         shapes(letter, lines, &mut out);
+    }
+    for (name, args) in [("undo", 2), ("use_press", 1)] {
+        out.push((Group::ByOwner, Shape::Arity(name.to_owned(), args)));
+        out.push((
+            Group::ByOwner,
+            Shape::Assoc("Results".to_owned(), name.to_owned()),
+        ));
     }
     out
 }
@@ -229,6 +243,31 @@ fn chain_hits(tokens: &[Token], at: usize, owner: &str, name: &str) -> bool {
     false
 }
 
+/// The number of arguments of the call whose parentheses open at `at`: its commas at the top
+/// level, outside a closure's `|…|`, and one more unless it is empty or ends in a comma.
+fn arguments(tokens: &[Token], at: usize) -> Option<usize> {
+    if tokens.get(at) != Some(&Token::Open(Delimiter::Parenthesis)) {
+        return None;
+    }
+    let end = after_group(tokens, at)? - 1;
+    let (mut depth, mut pipes, mut commas) = (0usize, 0usize, 0usize);
+    for token in &tokens[at + 1..end] {
+        match token {
+            Token::Open(_) => depth += 1,
+            Token::Close => depth -= 1,
+            Token::Punct('|') if depth == 0 => pipes += 1,
+            Token::Punct(',') if depth == 0 && pipes % 2 == 0 => commas += 1,
+            _ => {}
+        }
+    }
+    let inner = &tokens[at + 1..end];
+    Some(match inner.last() {
+        None => 0,
+        Some(Token::Punct(',')) => commas,
+        Some(_) => commas + 1,
+    })
+}
+
 /// How many calls of `group`'s paths `source` holds. `Err` when it does not lex.
 pub(crate) fn count(source: &str, group: Group) -> Result<usize, String> {
     let stream = TokenStream::from_str(source).map_err(|error| error.to_string())?;
@@ -260,6 +299,11 @@ pub(crate) fn count(source: &str, group: Group) -> Result<usize, String> {
                         && ident(tokens.get(at + 3)) == Some(name)
                 }
                 Shape::Chain(owner, name) => chain_hits(&tokens, at, owner, name),
+                Shape::Arity(name, args) => {
+                    tokens.get(at) == Some(&Token::Punct('.'))
+                        && ident(tokens.get(at + 1)) == Some(name)
+                        && arguments(&tokens, at + 2).is_some_and(|found| found >= *args)
+                }
                 Shape::Free(None, name) => {
                     ident(tokens.get(at)) == Some(name)
                         && tokens.get(at + 1) == Some(&Token::Open(Delimiter::Parenthesis))
