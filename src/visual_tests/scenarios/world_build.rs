@@ -5935,19 +5935,23 @@ pub fn package_rename(d: &mut Driver<'_>) {
     assert!(!d.has_containing("Splat cannot find Ashen Marches"));
     assert!(!d.has_containing("Ashen Marches is now in"));
     d.state_prepared("package-folder-moved-on-disk", Sizes::All, |d| {
-        let warning = d.place_of("Ashen Marches moved from modules/ashen-marches/ to modules/watch-package/.");
+        // Wave 2 d (C): the warning's words go on with the encounters that use its creatures
+        // (`… Bridge Ambush and Shrine of Cinders use its creatures.`), and each encounter is a
+        // choice; `check_link_spaces` holds the names' phrase.
+        let warning = d
+            .nodes()
+            .into_iter()
+            .find(|node| {
+                node.name
+                    .starts_with("Ashen Marches moved from modules/ashen-marches/ to modules/watch-package/.")
+            })
+            .map(|node| node.rect);
         let action = d.place_of("Use this folder");
-        let first = d.place_of("Bridge Ambush");
-        let second = d.place_of("Shrine of Cinders");
-        let and = d.nodes().into_iter().find(|node| node.name == "and");
         check_link_spaces(d);
         let aligned = warning.zip(action).is_some_and(|(text, action)| {
             (text.left() - action.left()).abs() < 1.0 && action.top() > text.bottom()
         });
-        let spaced = first.zip(second).zip(and).is_some_and(|((first, second), and)| {
-            (and.rect.left() - first.right() - (second.left() - and.rect.right())).abs() < 1.0
-                && and.rect.left() - first.right() < crate::design::S
-        });
+        let spaced = d.has("Open Bridge Ambush") && d.has("Open Shrine of Cinders");
         d.observe("iter-4-C-FD1-FD14", aligned && spaced,
             "One moved-folder warning aligns its recovery action and uses word spaces between affected links");
         // Round 25 family: every action on the message has the secondary border.

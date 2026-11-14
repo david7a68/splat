@@ -3051,6 +3051,12 @@ pub mod campaign_content {
                 })
             },
         );
+        // Wave 2 d (C): a body fault puts its repair on its own line under its words, so two
+        // open repairs are taller and the upper editor is partly below the fold at 960. Focusing
+        // it (`type_into` above) scrolls its caret into view, as egui does for a focused field.
+        d.expect_moves(
+            "Focusing a repair editor partly below the fold scrolls its caret into view",
+        );
         d.state("missing-campaign-manifest-needs-explicit-write", Sizes::All);
         d.click("Write Campaign.md again");
         d.wait_for_text("Undo write Campaign.md");
@@ -23847,10 +23853,18 @@ pub mod remove_package_in_use {
                 }),
                 format!("Result {done:?}, its Undo {undo:?}, the warning's first link {first:?}"),
             );
+            // The missing-creatures warning (now its words, then one `Open` choice per encounter)
+            // keeps the shared warning bar and icon.
+            let warning = d.painted_rect_in(
+                "Bridge Ambush and Shrine of Cinders now have creatures Splat cannot find.",
+                egui::Rect::EVERYTHING,
+            );
             d.observe(
                 "iter-6-C-FD3",
-                d.has_message_bar(first, crate::design::colors().result.warning),
-                "The linked missing-creatures warning keeps the shared warning bar and icon",
+                warning.is_some_and(|warning| {
+                    d.has_message_bar(warning, crate::design::colors().result.warning)
+                }),
+                format!("The missing-creatures warning keeps the shared warning bar and icon: {warning:?}"),
             );
             // Round 23 FF4 (the icon centred on a first line of links) is gone with the links:
             // the warning's first line is words now, and the gate's N2 invariant holds every
