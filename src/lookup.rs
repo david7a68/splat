@@ -2177,17 +2177,20 @@ impl Lookup {
 
     /// The best match of the words being typed. The first one leaves what was on screen on
     /// Back's trail; the next keys only change the match, so one search is one step.
+    /// The grouping starts only once a match has replaced what was on screen, so the trail
+    /// holds the place the search started from (a first match that is already on screen
+    /// records nothing and starts nothing).
     fn show_typed(&mut self, landing: Landing) {
         if self.typed_shown {
             self.land(landing);
         } else {
-            self.show_now(landing);
+            self.typed_shown = self.show_now(landing);
         }
-        self.typed_shown = true;
     }
 
     /// Show `landing` and leave what was on screen on Back's trail, unless it is the same.
-    fn show_now(&mut self, landing: Landing) {
+    /// Whether it was not the same.
+    fn show_now(&mut self, landing: Landing) -> bool {
         self.typed_shown = false;
         let here = self.shown();
         let next = match &landing {
@@ -2202,10 +2205,12 @@ impl Lookup {
                 .map(|note| Shown::Written(note.place.clone(), note.title.clone())),
             Landing::Card => Some(Shown::Card),
         };
-        if here != next {
+        let changed = here != next;
+        if changed {
             self.trail.leave(here);
         }
         self.land(landing);
+        changed
     }
 
     /// Back and Forward. Beside the Library page, a key acts here only with focus here,
@@ -2630,7 +2635,9 @@ impl Lookup {
             }
             match hit {
                 Hit::Entry(position) => self.open_result(&index, position),
-                Hit::Written(at) => self.show_now(Landing::Written(at)),
+                Hit::Written(at) => {
+                    self.show_now(Landing::Written(at));
+                }
             }
             // Arrow keys walk the list. A click on a row means read it.
             if !response.has_focus() {
@@ -3671,6 +3678,48 @@ mod tests {
             lookup.on_screen(),
             OnScreen::Entry(7),
             "Back from the typed match returns to B, once for the whole search"
+        );
+        lookup.step(Step::Forward);
+        assert_eq!(lookup.on_screen(), OnScreen::Written(0));
+
+        // Review of 8560c943: the first match is the entry already on screen. Open A, then the
+        // World note B `Qorvax`; type `qorvax` (B stays), then ` landing`: the found note
+        // `Qorvax Landing` opens, and Back returns to B, not A.
+        let b_id = Uuid::from_u128(77);
+        let (_dir, campaign) =
+            campaign_with(&[("NPCs/Qorvax.md", &entry_note(b_id, "Qorvax", "  type: npc"))]);
+        let index = Arc::new(ContentIndex::load(&[], Some(&campaign)).unwrap());
+        let b = index.position(b_id).unwrap();
+        let a = (0..index.items.len()).find(|&at| at != b).unwrap();
+        let lookup = harness.state_mut();
+        lookup.index = Some(index);
+        lookup.query.clear();
+        lookup.matches = None;
+        lookup.navigate(a);
+        lookup.navigate(b);
+        harness.run_steps(2);
+        harness.get_by_label(SEARCH_NAME).focus();
+        harness.run_steps(1);
+        harness.get_by_label(SEARCH_NAME).type_text("qorvax");
+        harness.run_steps(2);
+        assert_eq!(
+            harness.state().on_screen(),
+            OnScreen::Entry(b),
+            "B is the best match of `qorvax` and stays on screen"
+        );
+        harness.get_by_label(SEARCH_NAME).type_text(" landing");
+        harness.run_steps(2);
+        let lookup = harness.state_mut();
+        assert_eq!(
+            lookup.on_screen(),
+            OnScreen::Written(0),
+            "the found note opened"
+        );
+        lookup.step(Step::Back);
+        assert_eq!(
+            lookup.on_screen(),
+            OnScreen::Entry(b),
+            "Back returns to B, not A"
         );
         lookup.step(Step::Forward);
         assert_eq!(lookup.on_screen(), OnScreen::Written(0));
