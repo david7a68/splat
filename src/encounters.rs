@@ -1663,6 +1663,7 @@ fn campaign_party(
 fn roster_difficulty(
     setup: &Setup,
     catalogue: &Catalogue,
+    known: &BTreeMap<String, String>,
     scale: &crate::difficulty::Scale,
 ) -> crate::difficulty::Difficulty {
     let (mut party, mut party_names) = (Vec::new(), Vec::new());
@@ -1703,8 +1704,7 @@ fn roster_difficulty(
             }
         } else {
             foes.push(entry.and_then(crate::difficulty::creature_xp));
-            let name = entry.map_or_else(|| "Unknown creature".to_owned(), |e| e.name.clone());
-            foe_names.push(groups::shown_name(&slot.overrides, name));
+            foe_names.push(roster_name(slot, entry, known));
         }
     }
     let roster_party = !party.is_empty();
@@ -1727,7 +1727,7 @@ fn roster_difficulty(
     })
 }
 
-fn roster_summary(setup: &Setup, catalogue: &Catalogue) -> String {
+fn roster_summary(setup: &Setup, catalogue: &Catalogue, known: &BTreeMap<String, String>) -> String {
     let mut party = 0;
     let mut creatures = std::collections::BTreeMap::<String, usize>::new();
     for slot in &setup.roster {
@@ -1739,15 +1739,16 @@ fn roster_summary(setup: &Setup, catalogue: &Catalogue) -> String {
         if side.trim() == "party" {
             party += 1;
         } else {
-            let name = slot
-                .creature
-                .as_ref()
-                .and_then(|reference| catalogue.resolve_ref(reference).ok())
-                .and_then(|id| catalogue.entries.get(&id))
-                .map_or_else(
-                    || "Unknown creature".to_owned(),
-                    |entry| entry.entry.name.clone(),
-                );
+            // FC3: a creature whose entry is gone keeps the name its row shows.
+            let name = roster_base_name(
+                slot,
+                slot.creature
+                    .as_ref()
+                    .and_then(|reference| catalogue.resolve_ref(reference).ok())
+                    .and_then(|id| catalogue.entries.get(&id))
+                    .map(|entry| &entry.entry),
+                known,
+            );
             // FL2: a renamed creature names its base, as a group's member summary does.
             let shown = groups::shown_name(&slot.overrides, name.clone());
             let shown = if shown == name {
@@ -1941,12 +1942,24 @@ fn notes_field(text: &mut String, rows: usize) -> egui::TextEdit<'_> {
         .margin(egui::vec2(design::S, design::S))
 }
 
+/// A roster row's shown name: its creature's, the last name Splat knew for an entry that is
+/// gone, or `Missing creature`. The roster's rows, its summary and its difficulty reason (FC3)
+/// all name a row by this one function.
 fn roster_name(
     slot: &Slot,
     definition: Option<&Entry>,
     known: &BTreeMap<String, String>,
 ) -> String {
-    let name = definition
+    groups::shown_name(&slot.overrides, roster_base_name(slot, definition, known))
+}
+
+/// The creature's own name under a row's shown name (see `roster_name`).
+fn roster_base_name(
+    slot: &Slot,
+    definition: Option<&Entry>,
+    known: &BTreeMap<String, String>,
+) -> String {
+    definition
         .map(|entry| entry.name.clone())
         .or_else(|| {
             slot.creature
@@ -1954,8 +1967,7 @@ fn roster_name(
                 .and_then(|reference| known.get(&reference.label()))
                 .cloned()
         })
-        .unwrap_or_else(|| "Missing creature".into());
-    groups::shown_name(&slot.overrides, name)
+        .unwrap_or_else(|| "Missing creature".into())
 }
 
 /// A roster row as the DM sees it in a message: its place in the roster and its shown name, never
@@ -2529,6 +2541,17 @@ impl Snapshot {
             budgets: crate::encounter_settings::xp_budgets(campaign, &catalogue, &document),
             party: campaign_party(campaign, &catalogue, &creatures),
         };
+        let mut known_creature_names = BTreeMap::new();
+        for creature in &creatures {
+            known_creature_names.insert(creature.id.to_string(), creature.name.clone());
+            if let Some(key) = catalogue
+                .entries
+                .get(&creature.id)
+                .and_then(|e| e.entry.key.as_ref())
+            {
+                known_creature_names.insert(key.clone(), creature.name.clone());
+            }
+        }
         let mut templates: Vec<_> = catalogue
             .entries
             .values()
@@ -2545,10 +2568,12 @@ impl Snapshot {
                     name: e.entry.name.clone(),
                     summary: setup
                         .as_ref()
-                        .map(|setup| roster_summary(setup, &catalogue)),
+                        .map(|setup| roster_summary(setup, &catalogue, &known_creature_names)),
                     difficulty: setup
                         .as_ref()
-                        .map(|setup| roster_difficulty(setup, &catalogue, &scale))
+                        .map(|setup| {
+                            roster_difficulty(setup, &catalogue, &known_creature_names, &scale)
+                        })
                         .unwrap_or_default(),
                     repeatable: setup.is_some_and(|setup| setup.repeatable),
                 }
@@ -2593,17 +2618,6 @@ impl Snapshot {
                 })
                 .collect(),
         );
-        let mut known_creature_names = BTreeMap::new();
-        for creature in &creatures {
-            known_creature_names.insert(creature.id.to_string(), creature.name.clone());
-            if let Some(key) = catalogue
-                .entries
-                .get(&creature.id)
-                .and_then(|e| e.entry.key.as_ref())
-            {
-                known_creature_names.insert(key.clone(), creature.name.clone());
-            }
-        }
         let mut snapshot = Self {
             revision: Uuid::new_v4(),
             campaign_root: campaign.path.clone(),
@@ -3148,7 +3162,12 @@ impl Encounters {
             {
                 self.difficulty_counts.1 += 1;
             }
-            let difficulty = roster_difficulty(&draft.setup, &snapshot.catalogue, &snapshot.scale);
+            let difficulty = roster_difficulty(
+                &draft.setup,
+                &snapshot.catalogue,
+                &snapshot.known_creature_names,
+                &snapshot.scale,
+            );
             self.difficulty = Some((key, Arc::new(difficulty)));
         }
         self.difficulty
@@ -3891,8 +3910,17 @@ impl Encounters {
                         path: draft.path.clone(),
                         id: entry.id,
                         name: draft.name.clone(),
-                        summary: Some(roster_summary(&draft.setup, &s.catalogue)),
-                        difficulty: roster_difficulty(&draft.setup, &s.catalogue, &s.scale),
+                        summary: Some(roster_summary(
+                            &draft.setup,
+                            &s.catalogue,
+                            &s.known_creature_names,
+                        )),
+                        difficulty: roster_difficulty(
+                            &draft.setup,
+                            &s.catalogue,
+                            &s.known_creature_names,
+                            &s.scale,
+                        ),
                         repeatable: draft.setup.repeatable,
                     });
                     s.templates
@@ -9785,13 +9813,17 @@ mod tests {
         d.add(id, false);
         slot_override(&mut d, 0, "{side: party}");
         d.save(&campaign, &[]).unwrap();
+        let summary = |d: &Draft| {
+            let snapshot = Snapshot::load(&campaign, &[]).unwrap();
+            roster_summary(&d.setup, &snapshot.catalogue, &snapshot.known_creature_names)
+        };
         assert_eq!(
-            roster_summary(&d.setup, &Snapshot::load(&campaign, &[]).unwrap().catalogue),
+            summary(&d),
             "1 party · Changed"
         );
         slot_override(&mut d, 0, "{side: ' party '}");
         assert_eq!(
-            roster_summary(&d.setup, &Snapshot::load(&campaign, &[]).unwrap().catalogue),
+            summary(&d),
             "1 party · Changed"
         );
         // iter-26-B FL2: the members in a group's form: each with its count, also one, joined
@@ -9803,7 +9835,7 @@ mod tests {
         d.add(wolf, false);
         slot_override(&mut d, 4, "{name: Alpha}");
         assert_eq!(
-            roster_summary(&d.setup, &Snapshot::load(&campaign, &[]).unwrap().catalogue),
+            summary(&d),
             "1 party · 1 × Alpha (as Wolf), 1 × Rival, 2 × Wolf · Changed"
         );
         d.setup.roster.truncate(1);
