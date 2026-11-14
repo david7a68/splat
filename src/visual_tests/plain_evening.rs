@@ -963,6 +963,40 @@ fn play(d: &mut Driver<'_>) -> (Evening, Bytes, Bytes) {
         "G7: the fight that was played last offers no Continue fight"
     );
     ev.page(d, "run-ended: played last");
+    // iter-28-B FH4: the open run ends with a gap: the next row starts at least `L` below the
+    // log's last line, so it does not read as a line of the log.
+    // The nodes hold the whole rects, also below the view (R2 brings only Final state in).
+    let texts: Vec<(String, egui::Rect)> = d
+        .nodes()
+        .into_iter()
+        .filter(|node| node.role == egui::accesskit::Role::Label)
+        .map(|node| (node.name, node.rect))
+        .collect();
+    let gap = texts
+        .iter()
+        .find(|(words, _)| words.eq_ignore_ascii_case("Combat log"))
+        .and_then(|(_, label)| {
+            let next = texts
+                .iter()
+                .filter(|(_, rect)| rect.top() > label.bottom() && rect.left() < label.left() - 1.0)
+                .map(|(_, rect)| rect.top())
+                .fold(f32::MAX, f32::min);
+            let log = texts
+                .iter()
+                .filter(|(_, rect)| {
+                    rect.top() > label.bottom()
+                        && rect.top() < next
+                        && rect.left() >= label.left() - 0.5
+                })
+                .map(|(_, rect)| rect.bottom())
+                .fold(f32::MIN, f32::max);
+            (next < f32::MAX && log > f32::MIN).then_some(next - log)
+        });
+    d.observe(
+        "iter-28-B-FH4",
+        gap.is_some_and(|gap| gap >= crate::design::L),
+        format!("The next row starts {gap:?} below the open run's last log line"),
+    );
     ev.hovers(d, "run-ended: played last");
     ev.act(d, "close the ended run", |d| {
         d.click_starting(&format!("Close the run of {PLAIN_PLAYED}"));

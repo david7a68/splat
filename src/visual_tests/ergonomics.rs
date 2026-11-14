@@ -162,6 +162,8 @@ pub struct Control {
     pub popup: Option<u64>,
     /// An open modal dialog lies over this control's layer and takes its presses.
     pub blocked: bool,
+    /// The field whose part draws this button inside it (`design::register_field_action`).
+    pub action_of: Option<u64>,
 }
 
 fn rect_of(node: &AccessKitNode<'_>) -> Option<egui::Rect> {
@@ -509,6 +511,7 @@ pub fn controls(harness: &Harness<'_, Splat>) -> Vec<Control> {
                 .memory(|memory| memory.allows_interaction(*layer))
         })
     };
+    let actions = crate::design::components::field_actions(&harness.ctx);
     walk(&root, id, None, 0, &mut |node, scope, clip, _, surfaces| {
         let access = node.accesskit_node();
         if access.role() == Role::Label
@@ -537,6 +540,7 @@ pub fn controls(harness: &Harness<'_, Splat>) -> Vec<Control> {
                 chrome: false,
                 popup: popup_of(node),
                 blocked: false,
+                action_of: None,
             });
             return;
         }
@@ -564,6 +568,10 @@ pub fn controls(harness: &Harness<'_, Splat>) -> Vec<Control> {
                 || popups.contains(&access.id().0),
             popup: popup_of(node),
             blocked: blocked(&access),
+            action_of: actions
+                .iter()
+                .find(|(_, action)| *action == access.id().0)
+                .map(|(field, _)| *field),
         });
     });
     out
@@ -1030,9 +1038,13 @@ pub fn inspect(
                 continue;
             }
             let overlap = first_shown.intersect(shown(second));
-            // A link or a mark inside a row is the row's second target, meant to be on top.
+            // A link or a mark inside a row is the row's second target, meant to be on top. A
+            // button that a field's part registered as that field's own action (the search
+            // field's `Clear`, X2) lies over the field's kept place and takes its own presses;
+            // any other button over a field is a fault.
             let nested = |inner: &Control, outer: &Control| {
-                matches!(inner.role, Role::Link | Role::CheckBox)
+                (matches!(inner.role, Role::Link | Role::CheckBox)
+                    || inner.action_of == Some(outer.id))
                     && outer.rect.contains_rect(inner.rect)
             };
             // A row can own real status widgets. Its own child labels are its content;
@@ -1497,6 +1509,7 @@ mod tests {
             chrome: false,
             popup: None,
             blocked: false,
+            action_of: None,
         }
     }
 
@@ -1688,6 +1701,20 @@ mod tests {
         let a = control("Save", at(10.0, 10.0, 80.0, 30.0));
         let b = control("Send", at(20.0, 10.0, 80.0, 30.0));
         assert!(checks_for(&[a, b]).contains(&"no-overlap".to_owned()));
+        // X2: the button a field's part registered as that field's own action (the search
+        // field's `Clear`) passes wholly inside it. An unregistered button wholly inside a field
+        // fails, and so does a registered one that crosses the field's edge.
+        let mut field = control("Search", at(10.0, 60.0, 200.0, 30.0));
+        field.role = Role::TextInput;
+        let mut clear = control("Clear", at(160.0, 60.0, 50.0, 30.0));
+        clear.action_of = Some(field.id);
+        assert!(overlap_checks(&[field.clone(), clear.clone()]).is_empty());
+        let mut stray = clear.clone();
+        stray.action_of = None;
+        assert!(!overlap_checks(&[field.clone(), stray]).is_empty());
+        let mut across = clear;
+        across.rect = at(180.0, 60.0, 50.0, 30.0);
+        assert!(!overlap_checks(&[field, across]).is_empty());
     }
 
     fn overlap_checks(controls: &[Control]) -> Vec<String> {

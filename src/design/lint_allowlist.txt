@@ -21,14 +21,12 @@ src/library.rs allow-deprecated 1
 src/library/view.rs allow-deprecated 1
 src/lookup.rs allow-deprecated 1
 src/loot_editor.rs allow-deprecated 1
-src/processing/settings.rs allow-deprecated 1
 src/roll_table.rs allow-deprecated 1
 src/sessions/carry.rs allow-deprecated 1
 src/sessions/page.rs allow-deprecated 1
 src/sessions/plan.rs allow-deprecated 1
 src/sessions/slash.rs allow-deprecated 1
 src/settings.rs allow-deprecated 1
-src/timeline/checks.rs allow-deprecated 1
 src/timeline/page.rs allow-deprecated 1
 src/world.rs allow-deprecated 1
 src/world/page.rs allow-deprecated 1

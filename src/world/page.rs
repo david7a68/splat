@@ -593,7 +593,7 @@ impl WorldPage {
                             color: colors().result.warning,
                         },
                     );
-                    design::layout::menu_popup(&response).show(|ui| {
+                    design::layout::menu_popup(ui, &response).show(|ui| {
                         if let Some(index) = index {
                             for &(at, _) in index.world_groups("").values().flatten() {
                                 let item = &index.items[at];
@@ -1813,7 +1813,7 @@ fn new_menu(ui: &mut egui::Ui) -> Option<&'static str> {
         .name("New ▾")
         .icon(icons::ADD)
         .show(ui);
-    design::layout::menu_popup(&response).show(|ui| {
+    design::layout::menu_popup(ui, &response).show(|ui| {
         for (word, kind) in [
             // `…` marks a choice that asks for a name first. Generate NPC makes its card at once.
             ("Note…", "note"),

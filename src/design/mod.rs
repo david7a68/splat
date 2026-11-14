@@ -28,7 +28,9 @@ pub use column::*;
 pub use components::*;
 // Wave 2 callers name the extras through `design`, as they name the components.
 #[allow(unused_imports)]
-pub use extras::{Gap, Heading, choice, choice_value, gap, heading};
+pub use extras::{
+    Gap, Heading, choice, choice_value, choice_wrapped, choice_wrapped_value, gap, heading,
+};
 // Wave 2 callers name the layout parts through `design`, as they name the components.
 #[allow(unused_imports)]
 pub use layout::{
@@ -36,11 +38,12 @@ pub use layout::{
     InlineCreate, KeptLine, MAX_WORD_CHARS, NARROWEST_PANE, NoReason, Once, RowIndex, RowKey,
     ScrollColumn, Slot, SlotType, TextKey, TextOwner, TitleAction, TitleActionRow, TitleLine,
     TitlePlacement, TitleType, Word, labelled_field, lane_width, line_field, menu_popup,
-    register_title_row, sideways_scroll, status_slot, title_lead_in, title_placement,
+    register_title_row, search_min_row, sideways_scroll, status_slot, title_lead_in,
+    title_placement,
 };
 // Wave 2 callers name the pane's escape through `design`.
 #[allow(unused_imports)]
-pub use pane::{Body, Fills, FillsReason, Placement};
+pub use pane::{Body, EditorRegion, Fills, FillsReason, Placement};
 // Wave 2 callers name the popup parts through `design`, as they name the components.
 #[allow(unused_imports)]
 pub use popups::{Dropdown, DropdownResponse, Ghost, ImageSize, TipLine, drag_source, rich_tip};

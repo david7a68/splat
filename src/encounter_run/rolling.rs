@@ -583,19 +583,21 @@ impl Run {
         rolls::keep_menu_owner(response);
         let mut chosen = None;
         if let Some(asking) = self.asking.as_ref().filter(|asking| asking.row == row) {
-            let shown = crate::design::menu_popup(response).open(true).show(|ui| {
-                ui.set_width(320.0);
-                rolls::menu_text(ui, &asking.question, crate::design::colors().text);
-                // The choices start at the question's words.
-                for (index, (words, _)) in asking.choices.iter().enumerate() {
-                    if rolls::menu_choice(ui, words) {
-                        chosen = Some(RowChoice::Damage(index));
+            let shown = crate::design::menu_popup(&response.ctx, response)
+                .open(true)
+                .show(|ui| {
+                    ui.set_width(320.0);
+                    rolls::menu_text(ui, &asking.question, crate::design::colors().text);
+                    // The choices start at the question's words.
+                    for (index, (words, _)) in asking.choices.iter().enumerate() {
+                        if rolls::menu_choice(ui, words) {
+                            chosen = Some(RowChoice::Damage(index));
+                        }
                     }
-                }
-                if rolls::menu_choice(ui, "Cancel") {
-                    chosen = Some(RowChoice::Cancel);
-                }
-            });
+                    if rolls::menu_choice(ui, "Cancel") {
+                        chosen = Some(RowChoice::Cancel);
+                    }
+                });
             if chosen.is_none() && shown.is_some_and(|shown| shown.response.clicked_elsewhere()) {
                 chosen = Some(RowChoice::Cancel);
             }
@@ -608,7 +610,7 @@ impl Run {
         // Under the row, so the row it is about stays in view. Shift+F10 on the focused row
         // opens it too.
         let open = rolls::menu_open_command(response);
-        crate::design::menu_popup(response)
+        crate::design::menu_popup(&response.ctx, response)
             .open_memory(open)
             .show(|ui| {
                 for (heading, items) in &sections {

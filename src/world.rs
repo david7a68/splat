@@ -784,13 +784,10 @@ pub fn status(entry: &Entry) -> &str {
         .unwrap_or("")
 }
 
+/// A World note's aliases, or another entry's top-level `aliases` (round 28 row 144: a renamed
+/// built-in keeps its old name). One reader for both: `formats::aliases`.
 pub fn aliases(entry: &Entry) -> Vec<&str> {
-    world_field(entry, "aliases")
-        .and_then(Value::as_sequence)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .collect()
+    splat::content::formats::aliases(entry)
 }
 
 /// What this entry belongs to, as its file wrote each group.
