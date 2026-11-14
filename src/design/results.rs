@@ -797,11 +797,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/sessions/plan.rs", "travel_act", &[Ban::Results]),
         ("src/timeline/page.rs", "into_footer", &[Ban::Results]),
-        (
-            "src/timeline/page.rs",
-            "list_footer",
-            &[Ban::Results, Ban::Pane(1)],
-        ),
+        ("src/timeline/page.rs", "list_pane", &[Ban::Results]),
         ("src/timeline/page.rs", "show", &[Ban::Results]),
         ("src/timeline.rs", "next_result_order", &[Ban::Results]),
         ("src/timeline.rs", "remove", &[Ban::Results]),
@@ -1018,7 +1014,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             // `ByOwner`: `checks::Results::undo(id, book)`, not the footer store's; counted by name.
             &[Ban::Layout(1), Ban::ByOwner(1)],
         ),
-        ("src/timeline/page.rs", "list", &[Ban::Layout(1)]),
         ("src/timeline/page.rs", "new_events_line", &[Ban::Layout(1)]),
         (
             "src/trackers.rs",

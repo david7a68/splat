@@ -905,21 +905,24 @@ impl TimelinePage {
         changed
     }
 
-    /// Round 26: the list column's results, reasons and notices sit in its message footer,
-    /// pinned below the rows, so a result never moves a row: the link update after a rename and
-    /// its Undo, the open event's rest ruling, the file's notices, a removal and an add. Each
-    /// keeps its owner and end event; the footer only places them. Returns where the rows end.
+    /// Round 26: the list column's results, reasons and notices sit in its message footer, so a
+    /// result never moves a row: the link update after a rename and its Undo, the open event's
+    /// rest ruling, the file's notices, a removal and an add. Each keeps its owner and end event;
+    /// the footer only places them. Round 28 (AL1, FL1, AM1): the column is one pane, so the
+    /// footer comes `S` below the last row, pinned only when the rows fill the column. `body`
+    /// draws the rows, or the empty state, as the pane's content.
     #[allow(
         clippy::disallowed_methods,
         reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
     )]
-    fn list_footer(
+    fn list_pane<R>(
         &mut self,
         ui: &mut egui::Ui,
         book: &mut Book,
         notes: &mut crate::sessions::page::Sessions,
         open: Option<&str>,
-    ) -> f32 {
+        body: impl FnOnce(&mut Self, &mut egui::Ui, &mut Book) -> R,
+    ) -> R {
         let act = std::cell::Cell::new(None);
         let file = std::cell::Cell::new(None);
         let mut footer = design::Footer::new("timeline_list_footer", ui.available_width());
@@ -1028,7 +1031,7 @@ impl TimelinePage {
             });
         }
         undos.into_footer(&mut footer);
-        let bottom = footer.show_by_hand(ui);
+        let drawn = footer.pane(ui, design::Body::Content, |ui| body(self, ui, book));
         file_act(book, file.take());
         match act.take() {
             Some(ListAct::UndoLinks) => notes.undo_event_link_update(),
@@ -1053,7 +1056,7 @@ impl TimelinePage {
             }
             None => {}
         }
-        bottom
+        drawn
     }
 
     /// The open event's results stay in the list column with the other results, so they never
@@ -1087,10 +1090,8 @@ impl TimelinePage {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
+    /// The rows, in the list pane's scroll column. The column is as tall as every row, and only
+    /// the rows in view draw, so a long timeline costs no more per frame than a short one.
     fn list(&mut self, ui: &mut egui::Ui, book: &mut Book, sessions: &[SessionLink]) {
         let flagged: std::collections::HashMap<String, u32> = book
             .baseline
@@ -1134,23 +1135,37 @@ impl TimelinePage {
             }
             return;
         }
-        let step = ROW + ui.spacing().item_spacing.y;
-        let mut area = egui::ScrollArea::vertical()
-            .id_salt("timeline_list")
-            .auto_shrink([false, false]);
+        let gap = ui.spacing().item_spacing.y;
+        let step = ROW + gap;
+        let width = ui.available_width();
+        let (column, _) = ui.allocate_exact_size(
+            egui::vec2(width, rows.len() as f32 * step - gap),
+            egui::Sense::hover(),
+        );
+        let place = |row: usize| {
+            egui::Rect::from_min_size(
+                egui::pos2(column.left(), column.top() + row as f32 * step),
+                egui::vec2(width, ROW),
+            )
+        };
+        // The row before the target comes to the top, as the list opened before.
         if let Some(target) = self.scroll_to.take()
             && let Some(row) = rows.iter().position(|&index| index == target)
         {
-            area = area.vertical_scroll_offset((row as f32 * step - step).max(0.0));
+            ui.scroll_to_rect(place(row.saturating_sub(1)), Some(egui::Align::Min));
         }
-        area.show_rows(ui, ROW, rows.len(), |ui, range| {
-            for &index in &rows[range] {
-                let event = &book.events[index];
-                let session = event
-                    .session
-                    .and_then(|id| sessions.iter().find(|session| session.id == id))
-                    .map(|session| short_session(&session.label));
-                let on_road = road.as_ref().and_then(|road| road.get(&event.id));
+        let view = ui.clip_rect();
+        let first = ((view.top() - column.top()) / step).floor().max(0.0) as usize;
+        let last =
+            (((view.bottom() - column.top()) / step).ceil().max(0.0) as usize + 1).min(rows.len());
+        for (row, &index) in rows.iter().enumerate().take(last).skip(first) {
+            let event = &book.events[index];
+            let session = event
+                .session
+                .and_then(|id| sessions.iter().find(|session| session.id == id))
+                .map(|session| short_session(&session.label));
+            let on_road = road.as_ref().and_then(|road| road.get(&event.id));
+            ui.scope_builder(egui::UiBuilder::new().max_rect(place(row)), |ui| {
                 self.row(
                     ui,
                     event,
@@ -1159,8 +1174,8 @@ impl TimelinePage {
                     flagged.get(&event.id).copied(),
                     on_road.map(String::as_str),
                 );
-            }
-        });
+            });
+        }
     }
 
     #[allow(
@@ -1724,10 +1739,9 @@ impl TimelinePage {
         }
         design::gap(ui, design::Gap::XS);
         if book.events.is_empty() && book.unreadable.is_none() {
-            let bottom = self.list_footer(ui, book, notes, None);
-            let mut first = false;
             let open_run = self.open_run.is_some();
-            body_above(ui, bottom, |ui| {
+            let first = self.list_pane(ui, book, notes, None, |_, ui, _| {
+                let mut first = false;
                 design::empty_state(
                     ui,
                     icons::TIMELINE,
@@ -1743,6 +1757,7 @@ impl TimelinePage {
                         .clicked();
                     },
                 );
+                first
             });
             if first {
                 let id = book.add(Kind::Day, current);
@@ -1780,14 +1795,16 @@ impl TimelinePage {
                 self.detail(ui, book, sessions, notes);
             } else {
                 notes.expire_event_link_undo(true, book);
-                let bottom = self.list_footer(ui, book, notes, None);
-                body_above(ui, bottom, |ui| self.list(ui, book, sessions));
+                self.list_pane(ui, book, notes, None, |page, ui, book| {
+                    page.list(ui, book, sessions);
+                });
             }
             return;
         }
         if !event_open {
-            let bottom = self.list_footer(ui, book, notes, None);
-            body_above(ui, bottom, |ui| self.list(ui, book, sessions));
+            self.list_pane(ui, book, notes, None, |page, ui, book| {
+                page.list(ui, book, sessions);
+            });
             return;
         }
         let width = design::side_panel_width(ui.available_width());
@@ -1811,8 +1828,9 @@ impl TimelinePage {
                     .show_inside(ui, |ui| {
                         notes.expire_event_link_undo(true, book);
                         let open = self.selected.clone();
-                        let bottom = self.list_footer(ui, book, notes, open.as_deref());
-                        body_above(ui, bottom, |ui| self.list(ui, book, sessions));
+                        self.list_pane(ui, book, notes, open.as_deref(), |page, ui, book| {
+                            page.list(ui, book, sessions);
+                        });
                     });
             },
         );
