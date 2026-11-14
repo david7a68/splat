@@ -1129,13 +1129,19 @@ impl Footer<'_> {
         let body_room = Rect::from_min_max(room.min, pos2(room.right(), limit.max(room.top())));
 
         // The body, in the part's own `Ui`; one id in every state, so its scroll and focus stay.
-        // The content starts `LINE_START_REACH` inside the pane: the gutter a quiet `line_start`
+        // A `Content` body starts `LINE_START_REACH` inside the pane: the gutter a quiet `line_start`
         // action (with or without its icon) hangs into stays inside the pane's rect, so its
         // target never reaches past the pane toward a splitter at its left.
         // Also clear of a splitter's grab band, which reaches this far into a column beside it
         // (egui's own resize radius).
-        let gutter =
-            super::components::LINE_START_REACH + ui.style().interaction.resize_grab_radius_side;
+        // A `Fills` body places its own columns (each with its own room), so only a `Content`
+        // body gets the gutter: its column takes the width it is given.
+        let gutter = match body {
+            Body::Content => {
+                super::components::LINE_START_REACH + ui.style().interaction.resize_grab_radius_side
+            }
+            Body::Fills(_) => 0.0,
+        };
         let content_rect = body_room.with_min_x((body_room.left() + gutter).min(body_room.right()));
         let mut body_ui = ui.new_child(
             egui::UiBuilder::new()
