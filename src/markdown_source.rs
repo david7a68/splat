@@ -168,18 +168,23 @@ fn looks(text: &str) -> Runs {
 /// The marks Splat writes itself, and only those, fold (closure FE9; P2 of the PR 331 review): a
 /// closed list, each kind by its command word and the exact shape its writer gives. A mark the DM
 /// types (`splat:rolls`), an unknown command and a malformed mark stay in view.
-const GENERATED_MARKS: &[(&str, fn(&[&str]) -> bool)] = &[(
+/// A generated mark's command word, and whether its terms have the shape its writer gives.
+type MarkKind = (&'static str, fn(&[&str]) -> bool);
+
+const GENERATED_MARKS: &[MarkKind] = &[(
     // `timeline::checks::RoadMark::comment`: `journey=<id> at=<offset> sum=<hex>`.
     "check",
     |terms| match terms {
         [journey, at, sum] => {
-            journey.strip_prefix("journey=").is_some_and(|id| !id.is_empty())
+            journey
+                .strip_prefix("journey=")
+                .is_some_and(|id| !id.is_empty())
                 && at
                     .strip_prefix("at=")
                     .is_some_and(|at| !at.is_empty() && at.bytes().all(|b| b.is_ascii_digit()))
-                && sum
-                    .strip_prefix("sum=")
-                    .is_some_and(|sum| !sum.is_empty() && sum.bytes().all(|b| b.is_ascii_hexdigit()))
+                && sum.strip_prefix("sum=").is_some_and(|sum| {
+                    !sum.is_empty() && sum.bytes().all(|b| b.is_ascii_hexdigit())
+                })
         }
         _ => false,
     },
@@ -394,7 +399,11 @@ fn caret_lines(ui: &egui::Ui, text: &str, lines: &[(usize, usize)]) -> Option<Ra
         .char_range()?;
     let (first, last) = (range.primary.index, range.secondary.index);
     // The line that holds a character: the last line that starts at or before it.
-    let line = |at: usize| lines.partition_point(|&(char, _)| char <= at).saturating_sub(1);
+    let line = |at: usize| {
+        lines
+            .partition_point(|&(char, _)| char <= at)
+            .saturating_sub(1)
+    };
     let start = lines.get(line(first.min(last)))?.1;
     let end = lines
         .get(line(first.max(last)) + 1)
@@ -1075,16 +1084,50 @@ mod tests {
         };
         // Each gesture: where the caret or selection is, and the events.
         let gestures: Vec<(&str, (usize, usize), Vec<egui::Event>)> = vec![
-            ("copy across the mark", (at("[[Bridge"), end + 1), vec![egui::Event::Copy]),
-            ("backspace at its start", (start, start), vec![key(egui::Key::Backspace, egui::Modifiers::NONE)]),
-            ("delete at its end", (end - 1, end - 1), vec![key(egui::Key::Delete, egui::Modifiers::NONE)]),
-            ("delete at its start", (start - 1, start - 1), vec![key(egui::Key::Delete, egui::Modifiers::NONE)]),
-            ("backspace at its end", (end - 2, end - 2), vec![key(egui::Key::Backspace, egui::Modifiers::NONE)]),
-            ("select across and type", (at("Bridge"), end), vec![egui::Event::Text("x".into())]),
+            (
+                "copy across the mark",
+                (at("[[Bridge"), end + 1),
+                vec![egui::Event::Copy],
+            ),
+            (
+                "backspace at its start",
+                (start, start),
+                vec![key(egui::Key::Backspace, egui::Modifiers::NONE)],
+            ),
+            (
+                "delete at its end",
+                (end - 1, end - 1),
+                vec![key(egui::Key::Delete, egui::Modifiers::NONE)],
+            ),
+            (
+                "delete at its start",
+                (start - 1, start - 1),
+                vec![key(egui::Key::Delete, egui::Modifiers::NONE)],
+            ),
+            (
+                "backspace at its end",
+                (end - 2, end - 2),
+                vec![key(egui::Key::Backspace, egui::Modifiers::NONE)],
+            ),
+            (
+                "select across and type",
+                (at("Bridge"), end),
+                vec![egui::Event::Text("x".into())],
+            ),
             ("cut", (2, 12), vec![egui::Event::Cut]),
-            ("paste", (3, 3), vec![egui::Event::Paste("<!-- splat:check journey=a at=1 sum=ff -->".into())]),
+            (
+                "paste",
+                (3, 3),
+                vec![egui::Event::Paste(
+                    "<!-- splat:check journey=a at=1 sum=ff -->".into(),
+                )],
+            ),
             ("undo", (3, 3), vec![key(egui::Key::Z, command)]),
-            ("redo", (3, 3), vec![key(egui::Key::Z, command | egui::Modifiers::SHIFT)]),
+            (
+                "redo",
+                (3, 3),
+                vec![key(egui::Key::Z, command | egui::Modifiers::SHIFT)],
+            ),
         ];
         // The buffer and the clipboard after each gesture, in an editor with or without the fold.
         let run = |styled: bool| {
@@ -1094,7 +1137,7 @@ mod tests {
             let mut body = text.to_owned();
             let mut after = Vec::new();
             let mut time = 0.0;
-            let mut frame = |body: &mut String, events: Vec<egui::Event>, time: f64| {
+            let frame = |body: &mut String, events: Vec<egui::Event>, time: f64| {
                 let output = context.run(
                     egui::RawInput {
                         events,
@@ -1107,25 +1150,33 @@ mod tests {
                             if styled {
                                 let _ = styled_editor(ui, body, 1000.0);
                             } else {
-                                let _ = TEST_NOTE
-                                    .once(design::Once::Example)
-                                    .editor(ui, body, |edit| edit.desired_width(1000.0));
+                                let _ = TEST_NOTE.once(design::Once::Example).editor(
+                                    ui,
+                                    body,
+                                    |edit| edit.desired_width(1000.0),
+                                );
                             }
                         });
                     },
                 );
-                output.platform_output.commands.into_iter().find_map(|command| match command {
-                    egui::OutputCommand::CopyText(text) => Some(text),
-                    _ => None,
-                })
+                output
+                    .platform_output
+                    .commands
+                    .into_iter()
+                    .find_map(|command| match command {
+                        egui::OutputCommand::CopyText(text) => Some(text),
+                        _ => None,
+                    })
             };
             frame(&mut body, Vec::new(), time);
             for (name, (from, to), events) in &gestures {
                 let mut state = egui::TextEdit::load_state(&context, id).unwrap_or_default();
-                state.cursor.set_char_range(Some(egui::text::CCursorRange::two(
-                    egui::text::CCursor::new(*from),
-                    egui::text::CCursor::new(*to),
-                )));
+                state
+                    .cursor
+                    .set_char_range(Some(egui::text::CCursorRange::two(
+                        egui::text::CCursor::new(*from),
+                        egui::text::CCursor::new(*to),
+                    )));
                 state.store(&context, id);
                 time += 2.0;
                 frame(&mut body, Vec::new(), time);
@@ -1145,8 +1196,15 @@ mod tests {
         // The gestures did something: the copy holds real bytes, and the text changed.
         let copied = &folded[0].2;
         let whole = format!("[[Bridge Ambush]] {mark} ");
-        assert_eq!(copied.as_deref(), Some(whole.as_str()), "fe9-copy: the real bytes");
-        assert_ne!(folded[5].1, folded[4].1, "fe9-edit: typing over the selection changed the text");
+        assert_eq!(
+            copied.as_deref(),
+            Some(whole.as_str()),
+            "fe9-copy: the real bytes"
+        );
+        assert_ne!(
+            folded[5].1, folded[4].1,
+            "fe9-edit: typing over the selection changed the text"
+        );
     }
 
     /// P2 cost: a note of 100 000 characters with 500 generated marks. One layout and one paint

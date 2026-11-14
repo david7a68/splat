@@ -10879,7 +10879,9 @@ mod tests {
             assert_eq!(index.items[at].entry.name, new, "row-144-link");
             let found = index.search(old);
             assert!(
-                found.first().is_some_and(|&at| index.items[at].entry.name == new),
+                found
+                    .first()
+                    .is_some_and(|&at| index.items[at].entry.name == new),
                 "row-144-search: {old} finds {:?}",
                 found
                     .iter()
