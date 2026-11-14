@@ -537,12 +537,12 @@ fn table_line(ui: &mut egui::Ui, view: &View<'_>, table: Option<&Table>, act: &m
         _ => "Choose a table",
     };
     let button = design::menu_button(ui, word, false);
-    design::menu_popup(&button).show(|ui| {
+    design::menu_popup(ui, &button).show(|ui| {
         let mut names: Vec<&Table> = view.tables.iter().collect();
         names.sort_by(|a, b| a.name().cmp(b.name()).then(a.key.cmp(&b.key)));
         for option in names {
             let selected = table.is_some_and(|table| table.key == option.key);
-            if design::choice(ui, selected, option.name()).clicked() {
+            if design::choice_wrapped(ui, selected, option.name(), None).clicked() {
                 *act = Some(Act::Choose(Some(option.key.clone())));
                 ui.close();
             }

@@ -91,6 +91,19 @@
 //! }
 //! ```
 //!
+//! Nor change a kept value in place (round 28, M3); the action does, with `&mut`:
+//!
+//! ```compile_fail
+//! # use splat::ownership::{DiskChanged, Ends, Kept, Owner, OwnerChanged, Press, Results};
+//! # #[derive(Clone, PartialEq, Eq)] struct Entry { id: u32, root: String }
+//! # impl Owner for Entry { type Scope = str; fn scope(&self) -> &str { &self.root } }
+//! # struct Done { entry: Entry, words: String }
+//! # impl Kept for Done { type Owner = Entry; const ENDS: Ends = Ends { owner_changed: OwnerChanged::Ends, disk_changed: DiskChanged::Checked, press: Press::Undo }; fn owner(&self) -> Entry { self.entry.clone() } }
+//! fn draw(results: &Results<Entry, Done>, a: &Entry) {
+//!     let _ = results.revise(a, |done| done.words.clear()); // <- changes a result while drawing
+//! }
+//! ```
+//!
 //! Orders kept by kind (the fault of PR 298): a caller cannot take a bare order out of the
 //! store, so it cannot keep one per kind and give A's result B's order:
 //!
@@ -304,6 +317,11 @@ pub enum ByTicket<E> {
     /// The entry is there, and its action failed: it stays.
     Failed(E),
 }
+
+/// A revision in place found no entry: the one it named was replaced or ended, and nothing
+/// changed.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Gone;
 
 /// One kept result's words and its order, bound together. It is not `Clone`, and its order is
 /// private: [`Footer::kept_line`] is the only way to give it to the footer.
@@ -532,6 +550,57 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
         Some(self.entries.remove(at).value)
     }
 
+    /// Change the value of the entry `ticket` names, in place: the same entry, so the same
+    /// ticket, the same order and place among the others, the same owner (the store keys by the
+    /// owner it read at `record`, which `change` cannot reach), and every end event of its kind.
+    /// Only the value changes. A press made on a line before the revision still reaches it, and
+    /// the press's action gets the revised value. An entry replaced or ended since is [`Gone`],
+    /// and `change` does not run. It issues no order: a revision is not a new action.
+    pub fn revise_by<R>(
+        &mut self,
+        ticket: &Ticket,
+        change: impl FnOnce(&mut T) -> R,
+    ) -> Result<R, Gone> {
+        let entry = self
+            .entries
+            .iter_mut()
+            .find(|entry| entry.order == ticket.order)
+            .ok_or(Gone)?;
+        Ok(change(&mut entry.value))
+    }
+
+    /// `revise_by` for the owner's entry, whichever it is now. [`Gone`] when the owner has none.
+    /// Banned outside `src/design/` and counted (`Ban::ByOwner(n)`), as `undo` is: late work
+    /// that revises by owner changes a newer result of that owner. Use it only for a check made
+    /// in the same frame as the read it follows (Sessions' `end_what_changed` holds only the
+    /// session, not a ticket).
+    pub fn revise<R>(&mut self, owner: &O, change: impl FnOnce(&mut T) -> R) -> Result<R, Gone> {
+        let entry = self
+            .entries
+            .iter_mut()
+            .find(|entry| entry.is(owner))
+            .ok_or(Gone)?;
+        Ok(change(&mut entry.value))
+    }
+
+    /// `revise_by` for every entry whose value `holds` (a note file moved, and each Undo that
+    /// names it follows it), in every scope; how many were revised. Banned and counted as
+    /// `revise` is (Sessions' `Carries::moved` holds paths, not tickets).
+    pub fn revise_where(
+        &mut self,
+        mut holds: impl FnMut(&T) -> bool,
+        mut change: impl FnMut(&mut T),
+    ) -> usize {
+        let mut revised = 0;
+        for entry in &mut self.entries {
+            if holds(&entry.value) {
+                change(&mut entry.value);
+                revised += 1;
+            }
+        }
+        revised
+    }
+
     /// The owner changed by its own later action (a saved edit, a rename, a removal).
     pub fn owner_changed(&mut self, owner: &O) {
         match T::ENDS.owner_changed {
@@ -583,11 +652,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Results],
         ),
         ("src/campaign_content.rs", "page_footer", &[Ban::Results]),
-        (
-            "src/campaign_content.rs",
-            "packages_content",
-            &[Ban::Extras(2)],
-        ),
         (
             "src/campaign_content.rs",
             "repair_section_content",
@@ -705,6 +769,13 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "end_events_do_what_the_kind_says",
             &[Ban::ByOwner(1)],
         ),
+        // The part's own tests of the by-owner revisions (M3), and the pilot fixture's.
+        (
+            "src/design/results.rs",
+            "a_ticket_reaches_only_its_own_entry",
+            &[Ban::ByOwner(4)],
+        ),
+        ("src/design/outcome.rs", "show_active", &[Ban::ByOwner(1)]),
         (
             "src/design/results.rs",
             "a_result_shows_only_in_its_own_scope statement",
@@ -718,14 +789,9 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/library.rs",
             "editor_pane",
-            &[
-                Ban::Results,
-                Ban::Layout(4),
-                Ban::Extras(3),
-                Ban::Pane(3),
-                Ban::RowKey(1),
-            ],
+            &[Ban::Results, Ban::Layout(3), Ban::Extras(1), Ban::Pane(3)],
         ),
+        ("src/library.rs", "field_key", &[Ban::RowKey(1)]),
         ("src/library.rs", "give_new_identity", &[Ban::Results]),
         (
             "src/library.rs",
@@ -737,7 +803,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/library.rs", "register_copy", &[Ban::Results]),
         ("src/library.rs", "reload_note_from_disk", &[Ban::Results]),
         ("src/library.rs", "unregister_dialog", &[Ban::Results]),
-        ("src/party.rs", "sheet_view", &[Ban::Extras(1), Ban::Body]),
+        ("src/party.rs", "sheet_view", &[Ban::Body]),
         ("src/sessions/carry.rs", "carry_in_footer", &[Ban::Results]),
         ("src/sessions/carry.rs", "record", &[Ban::Results]),
         (
@@ -837,13 +903,13 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "selector",
             &[Ban::Layout(1), Ban::Extras(2)],
         ),
-        ("src/copy_dialog.rs", "show", &[Ban::Layout(3)]),
+        ("src/copy_dialog.rs", "show", &[Ban::Layout(2)]),
         ("src/creature_filter.rs", "filter_bar", &[Ban::Layout(1)]),
         ("src/creature_filter.rs", "menu", &[Ban::Layout(2)]),
         (
             "src/encounter_run/ad_hoc.rs",
             "add_creature_form",
-            &[Ban::Layout(1), Ban::Extras(1)],
+            &[Ban::Layout(1)],
         ),
         (
             "src/encounter_run/view.rs",
@@ -887,7 +953,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters.rs",
             "creature_search_with_summary",
-            &[Ban::Layout(1), Ban::Extras(1)],
+            &[Ban::Layout(1)],
         ),
         (
             "src/encounters.rs",
@@ -916,19 +982,18 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/encounters/list.rs", "row_menu", &[Ban::Layout(1)]),
         ("src/encounters/list.rs", "side_control", &[Ban::Layout(2)]),
         ("src/library.rs", "above_footer", &[Ban::Layout(1)]),
-        ("src/library.rs", "folder_field", &[Ban::Layout(1)]),
         (
             "src/library.rs",
             "new_entry",
-            &[Ban::Layout(3), Ban::Extras(2)],
+            &[Ban::Layout(1), Ban::Extras(1)],
         ),
         (
             "src/library.rs",
             "package_form",
-            &[Ban::Layout(5), Ban::Extras(5)],
+            &[Ban::Layout(5), Ban::Extras(3)],
         ),
         ("src/library.rs", "scope_menu", &[Ban::Layout(1)]),
-        ("src/library.rs", "show", &[Ban::Layout(6)]),
+        ("src/library.rs", "show", &[Ban::Layout(4)]),
         ("src/lookup.rs", "panel", &[Ban::Layout(2)]),
         (
             "src/lookup.rs",
@@ -939,16 +1004,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "src/loot_editor.rs",
             "line_row",
             &[Ban::Extras(1), Ban::RowKey(1)],
-        ),
-        (
-            "src/markdown_source.rs",
-            "press_in_editor",
-            &[Ban::Layout(1)],
-        ),
-        (
-            "src/markdown_source.rs",
-            "the_first_letter_of_a_wrapped_row_is_part_of_its_link",
-            &[Ban::Layout(1)],
         ),
         (
             "src/markdown_view.rs",
@@ -1007,6 +1062,16 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "sentence! statement",
             &[Ban::Sentence],
         ),
+        (
+            "src/design/outcome.rs",
+            "choice! statement",
+            &[Ban::Sentence],
+        ),
+        (
+            "src/design/outcome.rs",
+            "choice! statement",
+            &[Ban::Sentence],
+        ),
         ("src/design/outcome.rs", "rejected", &[Ban::Sentence]),
         (
             "src/design/outcome.rs",
@@ -1021,6 +1086,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/design/outcome.rs",
             "one_fault_has_one_tone_in_every_place",
+            &[Ban::Body],
+        ),
+        (
+            "src/design/outcome.rs",
+            "a_body_fault_gives_its_repairs_back_by_id",
             &[Ban::Body],
         ),
         ("src/processing/settings.rs", "cause", &[Ban::Words]),
@@ -1067,11 +1137,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/encounter_run/view.rs", "log_link", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "word_link", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "plan_row_with", &[Ban::Extras(1)]),
-        (
-            "src/encounters.rs",
-            "replace_missing_creature",
-            &[Ban::Extras(1)],
-        ),
         ("src/encounters.rs", "add_pane", &[Ban::Extras(1)]),
         ("src/encounters.rs", "loot_field", &[Ban::Extras(1)]),
         ("src/encounters/list.rs", "heading", &[Ban::Extras(1)]),
@@ -1112,8 +1177,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/library.rs", "recovery_action", &[Ban::Extras(2)]),
         ("src/library.rs", "repair_notice", &[Ban::Extras(1)]),
         ("src/library.rs", "use_checkbox", &[Ban::Extras(1)]),
-        ("src/library/creature.rs", "show", &[Ban::Extras(1)]),
-        ("src/library/reader.rs", "show", &[Ban::Extras(1)]),
         ("src/markdown_view.rs", "flush", &[Ban::Extras(1)]),
         ("src/rolls.rs", "armed_hint", &[Ban::Extras(2)]),
         ("src/sessions/carry.rs", "last_time_line", &[Ban::Extras(1)]),
@@ -1256,7 +1319,7 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "field_id! statement",
             &[Ban::Layout(1)],
         ),
-        ("src/design/layout.rs", "menu_popup", &[Ban::Layout(1)]),
+        ("src/design/layout.rs", "menu_popup_raw", &[Ban::Layout(1)]),
         ("src/design/layout.rs", "multi_line", &[Ban::Layout(1)]),
         ("src/design/layout.rs", "sideways_scroll", &[Ban::Layout(1)]),
         ("src/design/layout.rs", "single_line", &[Ban::Layout(1)]),
@@ -1665,6 +1728,10 @@ mod tests {
     /// A ticket names one entry: after its owner's later action replaced it, or an end event
     /// ended it, the ticket's Undo is `Gone` and changes nothing; the other entries stay.
     #[test]
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "the test of the by-owner revisions against the ticket's"
+    )]
     fn a_ticket_reaches_only_its_own_entry() {
         let mut results = Results::<Note, Done>::new();
         let (a, b) = (A, B);
@@ -1700,6 +1767,53 @@ mod tests {
                 .undo_by(b_ticket, |_| Ok::<_, ()>(()))
                 .map(|(done, ())| done.words),
             Ok("B")
+        );
+
+        // M3 gap 3: a kept entry changes in place. Revise A (by its ticket, then by its owner):
+        // the unrelated B stays, A keeps its order and its place, its old ticket still acts and
+        // the action gets the revised value; a revised entry keeps its kind's end events; an
+        // ended entry is `Gone`.
+        let mut results = Results::<Note, Done>::new();
+        results.record(done(A, "A"));
+        results.record(done(B, "B"));
+        let order = results.get(&a).unwrap().order();
+        let before = ticket(&results, &a);
+        assert_eq!(results.revise_by(&before, |v| v.words = "A moved"), Ok(()));
+        assert_eq!(results.revise(&a, |v| v.words), Ok("A moved"));
+        assert_eq!(words(&results, "Tidewater"), ["B", "A moved"]);
+        assert_eq!(results.get(&a).unwrap().order(), order);
+        assert_eq!(results.get(&b).map(|shown| shown.value().words), Some("B"));
+        assert_eq!(results.revise(&OTHER, |_| ()), Err(Gone), "another scope");
+        assert_eq!(
+            results.revise_where(|v| v.note == b, |v| v.words = "B moved"),
+            1
+        );
+        assert_eq!(words(&results, "Tidewater"), ["B moved", "A moved"]);
+        assert_eq!(
+            results
+                .undo_by(before, |v| Ok::<_, ()>(v.words))
+                .map(|(_, seen)| seen),
+            Ok("A moved"),
+            "the ticket made before the revision acts, on the revised value"
+        );
+        let b_ticket = ticket(&results, &b);
+        results.owner_changed(&b);
+        assert_eq!(results.revise_by(&b_ticket, |_| ()), Err(Gone));
+        assert_eq!(results.revise(&b, |_| ()), Err(Gone));
+        assert!(
+            results.is_empty(),
+            "the revised B ended at its owner's change"
+        );
+        // Review of PR 332, 1: A's late work ends after B replaced A for the same owner. Its
+        // revision by A's ticket is `Gone`, and B is unchanged.
+        let mut results = Results::<Note, Done>::new();
+        results.record(done(A, "A"));
+        let stale = ticket(&results, &a);
+        results.record(done(A, "B for the same note"));
+        assert_eq!(results.revise_by(&stale, |v| v.words = "late"), Err(Gone));
+        assert_eq!(
+            results.get(&a).map(|shown| shown.value().words),
+            Some("B for the same note")
         );
     }
 

@@ -679,7 +679,7 @@ impl TimelinePage {
             .show_ui(ui, |ui| {
                 design::choice_value(ui, &mut chosen, None, "No session");
                 for session in sessions {
-                    design::choice_value(ui, &mut chosen, Some(session.id), &session.label);
+                    design::choice_wrapped_value(ui, &mut chosen, Some(session.id), &session.label);
                 }
             });
         design::named(ui, &inner.response, "Session for new events");
@@ -1366,7 +1366,7 @@ impl TimelinePage {
                 icons::EXPAND,
                 &format!("More actions for {}", event.label(days[index])),
             );
-            design::menu_popup(&more).show(|ui| {
+            design::menu_popup(ui, &more).show(|ui| {
                 if checks::offered(event, tables)
                     && Action::quiet("Roll for encounters").show(ui).clicked()
                 {

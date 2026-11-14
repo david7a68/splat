@@ -3,7 +3,7 @@
 use super::presentation;
 use crate::design::{
     self, Type, colors,
-    reader::{self as reader_style, heavy_rule, section_heading},
+    reader::{self as reader_style, heavy_rule},
 };
 use eframe::egui;
 use pulldown_cmark::{Event, Options, Parser, Tag};
@@ -762,14 +762,9 @@ pub(super) fn stat_head(ui: &mut egui::Ui, entry: &Entry, values: Option<&super:
     }
     design::gap(ui, design::Gap::XS);
     heavy_rule(ui);
-    design::gap(ui, design::Gap::S);
     ui.spacing_mut().item_spacing.y = design::XS;
 }
 
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub(super) fn show(
     ui: &mut egui::Ui,
     entry: &Entry,
@@ -778,6 +773,8 @@ pub(super) fn show(
     mut spell_links: impl FnMut(&mut egui::Ui, &str),
 ) {
     stat_head(ui, entry, values);
+    // A styled stat block's first heading is Markdown's (`L` above it) after this gap.
+    design::gap(ui, design::Gap::S);
     for section in sections {
         if section.title == "Source text" {
             prose(
@@ -798,7 +795,7 @@ pub(super) fn show(
                 continue;
             }
             if section.title != "Overview" {
-                section_heading(ui, &section.title);
+                design::heading(ui, design::Heading::Section(&section.title));
             }
             prose(
                 ui,

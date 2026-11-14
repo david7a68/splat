@@ -423,7 +423,7 @@ fn table_menu(
     let response = design::menu_button(ui, word, false);
     design::named(ui, &response, name);
     let mut chosen = None;
-    crate::design::menu_popup(&response).show(|ui| {
+    crate::design::menu_popup(&*ui, &response).show(|ui| {
         let tables = sources.map_or(&[][..], |sources| &sources.tables[..]);
         if tables.is_empty() {
             ui.add(egui::Label::new(Type::Small.rich(ui, NO_TABLES).color(colors().muted)).wrap());
