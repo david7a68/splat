@@ -11777,6 +11777,16 @@ pub mod world {
             d.has("NPC · Campaign") && !d.has("NPC · alive · Campaign") && d.visible_text("alive"),
             "Lookup's reader shows the NPC's status in its Status row only, not on the kind line",
         );
+        // Round 28 FF4: `Nothing written yet.` stands where prose starts, `L` below the row
+        // above it, so it does not read as that row's reason.
+        let gap = d.place_of("Change Status").zip(
+            d.painted_rect_in("Nothing written yet.", egui::Rect::EVERYTHING),
+        );
+        d.observe(
+            "iter-28-D-FF4",
+            gap.is_some_and(|(row, words)| words.top() - row.bottom() >= crate::design::L - 1.0),
+            format!("Status row, then the words: {gap:?}"),
+        );
         d.state("world-new-npc", Sizes::Default);
         d.click("Add to fight");
         d.type_into("Stat block", "Guard");

@@ -3081,6 +3081,9 @@ impl Reader {
             !crate::library::presentation::reading_sections(&item.entry.body, &item.entry.name)
                 .is_empty();
         if (item.entry.kind == "world" || item.is_world_note()) && !has_prose {
+            // These words stand where the note's first paragraph would: the reader's gap before
+            // prose (`L`) sets them apart from the values or the action above (FF4).
+            design::gap(ui, design::Gap::L);
             ui.label(
                 Type::Small
                     .rich(ui, "Nothing written yet.")
