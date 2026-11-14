@@ -1076,6 +1076,12 @@ pub(crate) fn needs_fixing(item: &Item, index: &ContentIndex) -> bool {
         || renamed_file(item, index).is_some()
 }
 
+/// The save row's one reason while a Log field of the note waits for a changed form: the
+/// campaign switch and the Log line have one cause (ruling Q-t).
+pub(crate) const LOG_WAITS_FOR_SAVE: &str = "Save or discard to add a Log line or switch campaign.";
+/// The same, for a form with no changes: Cancel closes it and opens the field.
+pub(crate) const LOG_WAITS_FOR_CANCEL: &str = "Cancel to add a Log line.";
+
 /// The links on this note that need fixing, in the order the reader shows them.
 pub(crate) fn broken_links(item: &Item, index: &ContentIndex) -> Vec<LinkProblem> {
     let mut problems = Vec::new();
@@ -1327,7 +1333,7 @@ fn set_world_field(
 /// also shows on their pages.
 fn log_words(index: &ContentIndex, key: &str, before: Option<&Value>, after: &Value) -> String {
     let label = match key {
-        "in" => "In",
+        "in" => "Place",
         "part_of" => "Part of",
         _ => "Status",
     };
@@ -1419,6 +1425,33 @@ pub(crate) fn file_actions(ui: &mut egui::Ui, campaign: &Campaign, relative: &st
 /// A file line under a title that is the entry's name: the file's path, then the links. Under a
 /// title that is the file's name, use `folder_file_line`.
 pub(crate) fn entry_file_actions(ui: &mut egui::Ui, root: &Path, relative: &str, obsidian: bool) {
+    entry_file_line(ui, root, relative, obsidian, false);
+}
+
+/// `entry_file_actions`, for a note whose name another note shares (`keep_folder`): its folder
+/// is the part that tells the two apart, so it is never cut. A path too wide for the line beside
+/// the links takes its own row and wraps whole (ruling Q-l: in a duplicate, the part that
+/// differs is cut last).
+fn entry_file_line(
+    ui: &mut egui::Ui,
+    root: &Path,
+    relative: &str,
+    obsidian: bool,
+    keep_folder: bool,
+) {
+    let font = Type::Small.font(ui);
+    if keep_folder
+        && design::number_width(ui, relative, &font)
+            > ui.available_width() - entry_file_links_width(ui, obsidian) - design::L
+    {
+        let path = root.join(relative);
+        let response =
+            ui.add(egui::Label::new(Type::Small.rich(ui, relative).color(colors().muted)).wrap());
+        design::named(ui, &response, &path.display().to_string());
+        response.on_hover_text(path.display().to_string());
+        ui.horizontal(|ui| entry_file_links(ui, &path, obsidian));
+        return;
+    }
     // When even `…/<file name>` does not fit beside the links, the path takes its own row and
     // the links the row below, as in Library: the file name is never cut (FA4).
     let budget = ui.available_width() - entry_file_links_width(ui, obsidian) - design::L;
@@ -1628,15 +1661,16 @@ impl ChangeKind {
     /// Its Undo (ruling R16): when one field changed, its object is that field's name on
     /// screen, the name the result's words use (`Part of set to …` has `Undo change to Part
     /// of`); when the edit form saved several fields, the note's name (`Undo change to Ashfall
-    /// Faction`). A separate note: `Undo separate note`. `note` is the note's name.
-    fn undo_step(self, note: &str) -> UndoStep {
+    /// Faction`). A separate note names the copy's file, as the encounter editor's does
+    /// (`Undo separate Rook copy.md`, FG5). `note` is the note's name, `file` its file's.
+    fn undo_step(self, note: &str, file: &str) -> UndoStep {
         match self {
             Self::Place => UndoStep::of(Verb::Change, "Place"),
             Self::PartOf => UndoStep::of(Verb::Change, "Part of"),
             Self::Status => UndoStep::of(Verb::Change, "Status"),
             Self::StatBlock => UndoStep::of(Verb::Change, "Stat block"),
             Self::Name => UndoStep::of(Verb::Change, "Name"),
-            Self::Identity(noun) => UndoStep::of(Verb::Separate, noun.act()),
+            Self::Identity(_) => UndoStep::of(Verb::Separate, file),
             Self::Edit => UndoStep::of(Verb::Change, note),
             Self::Log => UndoStep::of(Verb::Add, "Log line"),
         }
@@ -1646,7 +1680,8 @@ impl ChangeKind {
 impl Change {
     /// Its Undo step: the kind's, with the name of the note it changed (`ChangeKind::undo_step`).
     pub(crate) fn undo_step(&self, note: &str) -> UndoStep {
-        self.kind.undo_step(note)
+        self.kind
+            .undo_step(note, self.path.rsplit('/').next().unwrap_or(&self.path))
     }
 
     pub(crate) fn message(&self) -> &str {
@@ -1862,14 +1897,6 @@ impl IdentityNoun {
 
     fn result(self, filename: &str) -> String {
         format!("{filename} is now a separate {}.", self.word())
-    }
-
-    /// What a separate note's Undo names after its verb: `Undo separate note`.
-    fn act(self) -> &'static str {
-        match self {
-            Self::Note => "note",
-            Self::Entry => "entry",
-        }
     }
 }
 
@@ -3018,7 +3045,12 @@ impl Reader {
         if file_line && let Some(campaign) = campaign {
             // A note that a Part of change found unreadable gets no editor link here either.
             let editor = !(self.group_error && self.group_error_unread_file);
-            entry_file_actions(ui, &campaign.path, &item.entry.path, editor);
+            let shared_name = index.items.iter().any(|other| {
+                other.entry.id != item.entry.id
+                    && other.entry.kind == "world"
+                    && other.entry.name.eq_ignore_ascii_case(&item.entry.name)
+            });
+            entry_file_line(ui, &campaign.path, &item.entry.path, editor, shared_name);
         }
         // Every warning sits below the file line, so the file line keeps its place. Each wraps
         // at the reader measure, the right edge of the rows below.
@@ -3339,7 +3371,8 @@ impl Reader {
             // Help under a section keeps the reader measure (round 25 FG1, AG1).
             design::help(ui, TYPE_HELP);
             ui.horizontal_wrapped(|ui| {
-                for (at, (label, kind)) in [("NPC", "npc"), ("Location", "location")]
+                // Each choice says what it does, as the typed one's `Make <type>` does (FG4).
+                for (at, (label, kind)) in [("Make NPC", "npc"), ("Make location", "location")]
                     .into_iter()
                     .enumerate()
                 {
@@ -3484,7 +3517,7 @@ impl Reader {
             value
         };
         let label = match key {
-            "in" => "In",
+            "in" => "Place",
             "part_of" => "Part of",
             "status" => "Status",
             _ => "Stat block",
@@ -3522,10 +3555,9 @@ impl Reader {
             self.place_choices_open = false;
             return None;
         }
-        // The result names the place as the Undo (`Undo place change`) and the list (`Place not
-        // found`) do; the field's label `In` is not a noun (round 27 FA5).
+        // The row, the result and the Undo say one name, `Place` (ruling Q-p, R16).
         let words = change_words(
-            if key == "in" { "Place" } else { label },
+            label,
             world_field(current_entry, key).and_then(name).as_deref(),
             name(&value).as_deref(),
         );
@@ -3789,7 +3821,7 @@ impl Reader {
         let mut values = Vec::new();
         // Missing links, measured as `missing_link` draws them.
         let mut missing = Vec::new();
-        for (key, label) in [("creature", "Stat block"), ("in", "In")] {
+        for (key, label) in [("creature", "Stat block"), ("in", "Place")] {
             if key == "creature" && !fights(&item.entry) {
                 continue;
             }
@@ -3908,11 +3940,9 @@ impl Reader {
     ) -> (Option<Go>, Option<usize>) {
         let mut go = None;
         let mut chosen = None;
-        let indent = if self.compact {
-            design::number_width(ui, "In", &Type::Small.font(ui)) + ui.spacing().item_spacing.x
-        } else {
-            Self::chooser_indent(ui)
-        };
+        // The value column's offset, in both readers: the choices start where the value they
+        // resolve starts (AI2, FI3).
+        let indent = Self::chooser_indent(ui);
         egui::Frame::new()
             .inner_margin(egui::Margin {
                 left: indent as i8,
@@ -3986,7 +4016,7 @@ impl Reader {
         let mut go = None;
         let rows: Vec<_> = [
             ("creature", "Stat block"),
-            ("in", "In"),
+            ("in", "Place"),
             ("status", "Status"),
         ]
         .into_iter()
@@ -4199,10 +4229,13 @@ impl Reader {
         // An open `Add to Log` field waits while an edit form of its entry is open, here or in
         // the other reader. It ends when the form closes (Save, Discard) or the reader shows
         // another entry.
+        // An edit form in THIS reader says it at its save row (ruling Q-t); the footer says it
+        // only when the form is in the other reader, which has the save row.
         if let Some(campaign) = campaign
             && takes_log(item, index)
             && self.held.log_fields.contains_key(&(campaign.id, id))
-            && (self.editing(id, campaign) || self.edited_elsewhere.contains(&id))
+            && !self.editing(id, campaign)
+            && self.edited_elsewhere.contains(&id)
         {
             messages.outcome(Notice::new(crate::sentence!(
                 "Save or discard your edit to add a Log line."
@@ -4412,7 +4445,7 @@ impl Reader {
         let mut go = None;
         let value_width = self.relationship_value_width(ui, item, index);
         let stacked = Self::stacked(ui);
-        for (key, label) in [("creature", "Stat block"), ("in", "In")] {
+        for (key, label) in [("creature", "Stat block"), ("in", "Place")] {
             if key == "creature" && !fights(&item.entry) {
                 continue;
             }
@@ -4669,7 +4702,7 @@ impl Reader {
         if self.compact {
             let mut targets = vec![
                 ("Stat block", index.world_target(&item.entry, "creature")),
-                ("In", index.place_of(item.entry.id)),
+                ("Place", index.place_of(item.entry.id)),
             ];
             targets.extend(
                 index
@@ -4759,7 +4792,7 @@ impl Reader {
                 let mut open = false;
                 Self::value_row(
                     ui,
-                    "In",
+                    "Place",
                     width,
                     |ui| {
                         open =
@@ -4791,7 +4824,7 @@ impl Reader {
             {
                 let name = place.trim_matches(['[', ']']);
                 let room = width.max(missing_width(ui, name, false));
-                Self::value_row(ui, "In", room, |ui| missing_link(ui, name, false), None);
+                Self::value_row(ui, "Place", room, |ui| missing_link(ui, name, false), None);
             }
             if go.is_some() {
                 return go;
@@ -5630,11 +5663,11 @@ mod tests {
     fn i19_h1_world_notice_names_the_change_and_undo() {
         // A place change's Undo names its verb and its object, as the result's words do.
         assert_eq!(
-            ChangeKind::Place.undo_step("Rook").label(),
+            ChangeKind::Place.undo_step("Rook", "Rook.md").label(),
             "Undo change to Place"
         );
         assert_eq!(
-            ChangeKind::PartOf.undo_step("Rook").label(),
+            ChangeKind::PartOf.undo_step("Rook", "Rook.md").label(),
             "Undo change to Part of"
         );
     }
@@ -5697,7 +5730,11 @@ mod tests {
             before
         );
         assert_eq!(undo.message(), "Rook copy.md is now a separate note.");
-        assert_eq!(undo.undo_step("Rook copy").label(), "Undo separate note");
+        // Round 29 FG5: the Undo names the copy, as the encounter editor's does.
+        assert_eq!(
+            undo.undo_step("Rook copy").label(),
+            "Undo separate Rook copy.md"
+        );
         assert_eq!(Entry::parse("copy.md", &undo.after).unwrap().id, id);
         let repaired = Entry::parse("copy.md", &undo.after).unwrap();
         assert_eq!(repaired.name, "Rook copy");
@@ -5971,7 +6008,7 @@ mod tests {
                                 .min(Reader::relationship_width(ui));
                             for (label, value) in [
                                 ("Stat block", "Goblin Warrior"),
-                                ("In", "North Gate"),
+                                ("Place", "North Gate"),
                                 ("Status", "not read"),
                             ] {
                                 Reader::relationship_row(
@@ -6102,7 +6139,7 @@ mod tests {
         let text = fs::read_to_string(&path).unwrap();
         assert!(
             text.ends_with(
-                "## Log\n\n- [[Session 1]], Day 2: Status alive → dead.\n- [[Session 1]], Day 2: In not set → [[The Arena]].\n- [[Session 1]], Day 2: Part of not set → [[Harvest Cart]].\n"
+                "## Log\n\n- [[Session 1]], Day 2: Status alive → dead.\n- [[Session 1]], Day 2: Place not set → [[The Arena]].\n- [[Session 1]], Day 2: Part of not set → [[Harvest Cart]].\n"
             ),
             "{text}"
         );
@@ -6122,7 +6159,7 @@ mod tests {
                 .all(|(source, _)| index.items[*source].entry.id == hob)
         );
         for (id, words) in [
-            (arena, "In not set → The Arena."),
+            (arena, "Place not set → The Arena."),
             (cart, "Part of not set → Harvest Cart."),
         ] {
             let about = index.lines_about(id);
@@ -6169,7 +6206,7 @@ mod tests {
         group.undo(&campaign).unwrap();
         let text = fs::read_to_string(&path).unwrap();
         assert!(!text.contains("splat_part_of") && !text.contains("Harvest Cart"));
-        assert!(text.ends_with("In not set → [[The Arena]].\n"));
+        assert!(text.ends_with("Place not set → [[The Arena]].\n"));
 
         // Choosing the value that is already there writes nothing.
         let index = ContentIndex::load(&[], Some(&campaign)).unwrap();

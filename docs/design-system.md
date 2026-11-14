@@ -991,8 +991,8 @@ and `Discard draft`, and then its `<name> draft discarded.` with `Undo discard`,
 campaign that owns the draft, whatever note is open, also above an edit form.
 A finished change has the success tone, as Library's results have: `Changes saved.`, a value change
 (`Stat block set to Guard.`, `Place set to North Gate. It was Watch House.`, `Place cleared. It was Ashfall Keep.`: the
-place is named as its Undo, `Undo place change`, names it, not by the label `In`; Status and
-Part of alike), `Name changed to <name>.`, `Note repaired.` and
+row's label, the result and its Undo, `Undo change to Place`, say one name, `Place`, as Status and Part of do; a Log
+line says it too), `Name changed to <name>.`, `Note repaired.` and
 `<file> is now a separate note.` (`world::CHANGED`). Encounters' finished changes have it too: a replacement
 (`Replaced Unknown creature with Ember Cultist.`, `2 Cinder Wolf rows replaced with Guard.`), a removed member or
 group, a group moved or deleted on save, a removed encounter (`Removed encounter <name>.`), and a deleted run. A result that wrote nothing keeps the info tone:
@@ -1003,7 +1003,7 @@ reader with no file line.
 Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. Status shows once (`ReaderStatus`): when the reader draws a campaign entry's Status row, World's and Lookup's kind line has no status (`NPC · Campaign`); an entry with no Status row (a package entry, a built-in creature) keeps its status on the kind line. Lookup shows a campaign entry's Status row with its Change below it, so the DM changes a status where the entry is read, with the same write, Log line and `Undo status change` in Lookup's footer. `Change` puts the keyboard in the field with its words selected, in both readers. A compact reader has no file line: while a duplicate-note repair message shows, its kind line drops the fault and names the open file instead (`NPC · Campaign · NPCs/Rook Ambry copy.md`). The result rows keep the fault. Use a fixed label column, aligned
 values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
 gap, capped at the value measure. Values wrap within their column, with Change level with the value's first line (a missing link's name line, not
-`Not found` below it). Read mode hides empty relationship and status values. An NPC keeps its empty Stat block row and Change action, so assigning its first stat block still takes three interactions from the reader. This row says `not set`. A set value is `Body` in the text colour, as a set link is, so a value and its absence differ at a glance; only `not set` (muted) and `not read` (warning) stay `Small`. The edit form draws its values the same way, groups included. Edit on the title line opens all fields, including empty ones. A typed page with no set values shows its prose directly, except for this NPC Stat block row: with no row, the value block adds no gap, so the prose starts as far below the file line as a plain note's does. Missing links retain names and keep `Not found` on one line beside a label column. A missing link's icon and name
+`Not found` below it). Read mode hides empty relationship and status values. An NPC keeps its empty Stat block row and Change action, in World's reader and in Lookup's, so assigning its first stat block still takes three interactions from the reader. This row says `not set`. A set value is `Body` in the text colour, as a set link is, so a value and its absence differ at a glance; only `not set` (muted) and `not read` (warning) stay `Small`. The edit form draws its values the same way, groups included. Edit on the title line opens all fields, including empty ones. A typed page with no set values shows its prose directly, except for this NPC Stat block row: with no row, the value block adds no gap, so the prose starts as far below the file line as a plain note's does. Missing links retain names and keep `Not found` on one line beside a label column. A missing link's icon and name
 are in `Body` in the warning tone, as large as a set link; only ` · Not found` is `Small`. In a narrow pane (Lookup beside World), each label stands
 above its value with an `S` gap above the label. The value then keeps the label column's room, and only Change and its
 `L` gap come off its width; there a missing link's name keeps its line, wrapping by whole words only when it must, and
@@ -1013,7 +1013,9 @@ and a group is measured by the name its link shows, not the words in the file. E
 warning icon, list warning and count in the header. A Part of target that is not found is a broken link
 (`Group not found`); the header counts its note once, and the count's menu opens it. A place link that
 matches more than one note also needs fixing: its list row says `Place has 2 matches`, and the header
-count and its menu include the note until `Always use this one` picks one. A note whose `In` chain leads back to it is in a place loop: each note in the
+count and its menu include the note until `Always use this one` picks one. A note whose file name is not its name
+(`The file is Mara Vell.md, but the name is Rook Ambry.`) says `File name differs` on its list row, and the header
+count and its menu include it. A note whose `Place` chain leads back to it is in a place loop: each note in the
 loop says `Place loop` on its list row, the header count and its menu include it, and its reader says
 `Loop One is in Loop Two, and Loop Two is in Loop One. Change one of them.` A row with more than one link
 problem says `2 broken links` only when every target is missing; when one of them waits for a choice or is in
@@ -1057,9 +1059,9 @@ files safely in this folder, so nothing was moved.`; its result `The file is now
 while the note's edit form is open, or when the name cannot be a file name. World's New note, New NPC and New
 location are inline creation forms: the named Create action follows the last field on its line, and the kept line
 below holds quiet `Cancel`, then `Type a name first.` or, for an NPC, its future path (`Will create
-NPCs/Watchkeeper.md`), so typing moves nothing. A compact NPC reader puts Fights as and In on one read-only line; both open
+NPCs/Watchkeeper.md`), so typing moves nothing. A compact NPC reader puts Fights as and Place on one read-only line; both open
 Lookup. A missing link there reads as its other values: the muted label, then `⚠ <name> · Not found` in the warning
-tone (`In` `⚠ Watch House · Not found`).
+tone (`Place` `⚠ Watch House · Not found`).
 
 A campaign world entry has a quiet Edit action, with a pencil icon and the word Edit, on its title line in Lookup and World. Its icon sits one `L` after the measured title at every title width, so a kind line wider than a short title does not push it away; beside a portrait, the actions stay left of it. With no run open, a creature's or an NPC's reader (a campaign
 entry, or a package creature, whose header has no Edit) has a quiet `Start fight` with the run icon after Edit,
@@ -1104,8 +1106,10 @@ campaign change, and the campaign switch's guard and the close warning count the
 `“<name>” was deleted. The Log line was not added: “<words>”` with `Copy text` and, an `L` gap after it, `Dismiss`
 (the choices of a lost draft), whatever the reader shows and also while Lookup shows no entry, until the DM copies
 or dismisses it. While the entry's edit form is open, here or in the other reader, the field waits with its words
-and takes no room; the reason `Save or discard your edit to add a Log line.` is in the pane's footer, so the form never moves. A package's entry has no `Add to Log`. Edit replaces the rows and
-the text with one form. Read and Edit show Stat block, In, Part of, then Status, so a value keeps its place when the DM
+and takes no room. One cause is said once (ruling Q-t): with the form in this reader, its save row says it in its one
+sentence, `Save or discard to add a Log line or switch campaign.` (`Cancel to add a Log line.` with no changes); with the
+form in the other reader, this pane's footer says `Save or discard your edit to add a Log line.`. The form never moves. A package's entry has no `Add to Log`. Edit replaces the rows and
+the text with one form. Read and Edit show Stat block, Place, Part of, then Status, so a value keeps its place when the DM
 presses Edit; conflict lines after Overwrite use the same order. Text follows in the reader's prose type,
 without the title line. The Text field ends at the same `FORM_WIDTH` edge as Status. One frame holds
 the editor and its scrollbar, so scrolling does not shorten the field. Stat block, In and Part of share one Change

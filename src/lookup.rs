@@ -1648,6 +1648,17 @@ impl view::Links for ContentIndex {
     }
 }
 
+/// Whether an entry's name is the typed words: the whole name, or the name without its kind
+/// tag (`Frightened [Condition]` for `frightened`). Such a typed word names that entry, so
+/// Lookup offers no `New NPC` or `New location` of it (FK9).
+fn names_the_query(name: &str, query: &str) -> bool {
+    let bare = match name.trim_end().strip_suffix(']') {
+        Some(rest) => rest.rsplit_once(" [").map_or(name, |(bare, _)| bare),
+        None => name,
+    };
+    name.eq_ignore_ascii_case(query) || bare.trim().eq_ignore_ascii_case(query)
+}
+
 /// What Lookup's reader shows, in the order the body decides it: the held NPC's card, a found
 /// note, an entry, or nothing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -2221,16 +2232,23 @@ impl Lookup {
                             self.library_draft
                                 .then_some("Save or discard the Library draft first."),
                             |ui| {
-                                design::icon_button(
-                                    ui,
-                                    icons::OPEN_OUT,
+                                let words =
                                     if current.entry.kind == "world" || current.is_world_note() {
                                         "Open in World"
                                     } else {
                                         "Open in Library"
-                                    },
-                                )
-                                .clicked()
+                                    };
+                                // The press changes the page beside Lookup, so its words say
+                                // where whenever the title line has room for them (FP4); only
+                                // a line too narrow keeps the icon alone, named by its words.
+                                let action = Action::quiet(words)
+                                    .icon(icons::OPEN_OUT)
+                                    .density(Density::Read);
+                                if action.natural_width(ui) + design::L <= ui.available_width() {
+                                    action.show(ui).clicked()
+                                } else {
+                                    design::icon_button(ui, icons::OPEN_OUT, words).clicked()
+                                }
                             },
                         )
                     {
@@ -2524,7 +2542,7 @@ impl Lookup {
                 && !index
                     .items
                     .iter()
-                    .any(|item| item.entry.name.eq_ignore_ascii_case(&query))
+                    .any(|item| names_the_query(&item.entry.name, &query))
                 && !self
                     .written
                     .iter()
@@ -4159,6 +4177,21 @@ mod tests {
             ("   ", ""),
         ] {
             assert_eq!(typed_name(typed), name, "typed {typed:?}");
+        }
+        // Round 29 FK9: a typed word that is an entry's name without its kind tag names that
+        // entry, so it is no new name.
+        for (name, typed, names) in [
+            ("Frightened [Condition]", "frightened", true),
+            ("Frightened [Condition]", "frightened [condition]", true),
+            ("Guard", "guard", true),
+            ("Frightened [Condition]", "fright", false),
+            ("[Condition]", "condition", false),
+        ] {
+            assert_eq!(
+                names_the_query(name, typed),
+                names,
+                "{name:?} for {typed:?}"
+            );
         }
         // The file name, the saved name and the heading are the name the action shows.
         let (_dir, campaign) = campaign_with(&[]);

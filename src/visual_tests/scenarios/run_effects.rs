@@ -221,6 +221,13 @@ pub fn run(d: &mut Driver<'_>) {
     // the Conditions tab's field, as F2 says: select, Conditions, the field, the words, Enter.
     // Conditions closes Lookup, as a run task does, and Ctrl+K shows it again.
     look_up(d, "frightened");
+    // Round 29 FK9: `frightened` names the rule `Frightened [Condition]`, so Lookup offers no
+    // new note of that name.
+    d.observe(
+        "iter-29-D-FK9",
+        !d.has_containing("New NPC “") && !d.has_containing("New location “"),
+        "Lookup on frightened offers no New NPC or New location",
+    );
     d.observe(
         "T20.1",
         !d.has(EFFECT),

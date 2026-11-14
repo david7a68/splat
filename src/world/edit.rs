@@ -391,7 +391,7 @@ impl EditDraft {
                 &self.now.creature,
                 &theirs.creature,
             ),
-            ("In", changed.place, &self.now.place, &theirs.place),
+            ("Place", changed.place, &self.now.place, &theirs.place),
         ] {
             if now != disk {
                 effects.push((
@@ -1014,7 +1014,7 @@ impl Reader {
         };
         let words = [
             npc.then(|| slot_words(&draft.now.creature, "Stat block")),
-            Some(slot_words(&draft.now.place, "In")),
+            Some(slot_words(&draft.now.place, "Place")),
             Some(group_words.clone()),
         ];
         // One Change column for Stat block, In and Part of (AI1): an `L` gap after the widest
@@ -1055,7 +1055,7 @@ impl Reader {
                 npc.then_some(&mut draft.now.creature),
                 words[0].clone(),
             ),
-            ("in", "In", Some(&mut draft.now.place), words[1].clone()),
+            ("in", "Place", Some(&mut draft.now.place), words[1].clone()),
         ] {
             let (Some(slot), Some(words)) = (slot, words) else {
                 continue;
@@ -1136,7 +1136,16 @@ impl Reader {
             response
         })
         .has_focus();
-        let switch = crate::encounters::draft_switch_reason();
+        // A Log field of this note waits for this form. The save row says so in its one
+        // sentence, so one cause is said once (ruling Q-t, FC10); a clean form says Cancel.
+        let log_waits =
+            super::takes_log(item, index) && self.held.log_fields.contains_key(&(campaign.id, id));
+        let switch = if log_waits {
+            super::LOG_WAITS_FOR_SAVE
+        } else {
+            crate::encounters::draft_switch_reason()
+        };
+        let clean_reason = log_waits.then_some(super::LOG_WAITS_FOR_CANCEL);
         let narrow = switch_reason_below(ui, switch);
         let text = design::field(ui, "Text", None, None, |ui| {
             let font = style::prose_type(ui).font(ui);
@@ -1243,7 +1252,11 @@ impl Reader {
                         discard
                     } else {
                         design::status(ui, state);
-                        Action::quiet("Cancel").show(ui).clicked()
+                        let cancel = Action::quiet("Cancel").show(ui).clicked();
+                        if !narrow {
+                            design::blocked_reason(ui, clean_reason);
+                        }
+                        cancel
                     };
                 });
             });
@@ -1251,6 +1264,8 @@ impl Reader {
         if narrow {
             if dirty {
                 design::blocked_reason(ui, Some(switch));
+            } else if clean_reason.is_some() {
+                design::blocked_reason(ui, clean_reason);
             } else {
                 ui.add_space(reason_line(ui));
             }

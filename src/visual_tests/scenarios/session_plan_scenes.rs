@@ -1062,23 +1062,27 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     d.click("Close Lookup");
     d.click(&long_menu);
     d.click(&long);
+    let both = crate::world::LOG_WAITS_FOR_SAVE;
     d.observe(
         "T18.2",
-        d.visible_text("Save or discard your edit to add a Log line.") && !d.has(&field),
+        d.visible_text(both) && !d.has(&field),
         "While the entry has an edit form, the Log field waits",
     );
-    // Round 27 FC2: the reason is in Lookup's footer, so the form the DM types in keeps its
-    // place when the waiting field comes.
+    // Round 27 FC2: the form the DM types in keeps its place when the waiting field comes.
+    // Round 29 FC10 (ruling Q-t): the one cause is said once, at the save row, in one sentence
+    // with the campaign switch; the footer does not say it again.
     let waiting = d.place_of("Discard");
-    let footer = d.painted_rect_in(
-        "Save or discard your edit to add a Log line.",
-        egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(f32::MAX, f32::MAX)),
-    );
+    let reason = d.painted_rect_in(both, egui::Rect::EVERYTHING);
     d.observe(
         "iter-27-D-FC2",
         discard.zip(waiting).is_some_and(|(a, b)| (a.top() - b.top()).abs() <= 0.5)
-            && footer.zip(waiting).is_some_and(|(reason, discard)| reason.top() > discard.bottom()),
-        format!("Discard stays at {discard:?} → {waiting:?}; the reason {footer:?} sits below the form, in the footer"),
+            && reason.zip(waiting).is_some_and(|(reason, discard)| {
+                reason.center().y >= discard.top() - 0.5
+                    && reason.center().y <= discard.bottom() + 0.5 + crate::design::L * 2.0
+            })
+            && !d.visible_text("Save or discard your edit to add a Log line.")
+            && !d.visible_text("Save or discard to switch campaign."),
+        format!("Discard stays at {discard:?} → {waiting:?}; the one reason {reason:?} is at the save row"),
     );
     d.state("log-field-blocked-by-edit", Sizes::Default);
     d.click("Discard");

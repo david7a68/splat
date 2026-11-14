@@ -6388,6 +6388,16 @@ pub mod run_lookup {
             !d.visible_text("%% splat") && !d.visible_text("Field"),
             "The character-copy spell reads without machine lines or an empty field table",
         );
+        // Round 29 FP4: the press changes the page under the run strip, so the header's open
+        // action shows its words when the title line has room (here at 960, 1200 and 1920).
+        for size in [SMALL, DEFAULT, LARGE] {
+            let shown = d.at_size(size, |d| d.visible_text("Open in Library"));
+            d.observe(
+                "iter-29-D-FP4",
+                shown,
+                format!("At {size:?}, Lookup's header shows the words Open in Library"),
+            );
+        }
         d.state("reading-spell-beside-run", Sizes::All);
         d.goal_within("T2.1", "read a spell from a run", 3);
         // The top match opens with the other results still visible.
