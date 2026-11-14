@@ -3520,72 +3520,34 @@ impl Reader {
             )
             .inner
         };
-        let response = match &stamp {
-            None => draw(ui, field),
-            Some(stamp) => {
-                let size = ui
-                    .painter()
-                    .layout_no_wrap(stamp.clone(), Type::Small.font(ui), colors().muted)
-                    .size();
-                let width = size.x;
-                let words = Type::Small.rich(ui, stamp).color(colors().muted);
-                // The stamp shares the field's line while the field keeps room for a sentence.
-                // One layout for both, so the field keeps its ID, and the keyboard, when the
-                // window changes size.
-                let room = ui.available_width() - width - design::S;
-                let typed = ui
-                    .painter()
-                    .layout_no_wrap(
-                        field.words.clone(),
-                        egui::TextStyle::Body.resolve(ui.style()),
-                        colors().text,
-                    )
-                    .size()
-                    .x;
-                let beside = room >= LOG_FIELD_BESIDE.max(typed + 3.0 * design::S);
-                ui.horizontal_wrapped(|ui| {
-                    if !beside {
-                        ui.label(words);
-                        ui.end_row();
-                        return draw(ui, field);
-                    }
-                    // Beside the field, the stamp keeps its room before it and is put centred on
-                    // the field's line, so it reads as the start of the line it dates (AC3, FA6,
-                    // AA4), not 12 px above it.
-                    let (slot, _) =
-                        ui.allocate_exact_size(egui::vec2(width, 0.0), egui::Sense::hover());
-                    let response = draw(ui, field);
-                    ui.put(
-                        egui::Rect::from_center_size(
-                            egui::pos2(slot.center().x, response.rect.center().y),
-                            size,
-                        ),
-                        egui::Label::new(words).extend(),
-                    );
-                    response
-                })
-                .inner
-            }
-        };
+        // Spike K4a (a): the Log field as the one inline creation form, in the reader's measure.
+        let _ = &draw;
+        crate::create_reasons! {
+            enum LogReason { Empty => "Type what happened first." }
+        }
+        const SPIKE_LOG: design::FieldName = crate::field_id!("spike_log_line");
+        let reason = field.words.trim().is_empty().then_some(LogReason::Empty);
+        let help = stamp.clone().unwrap_or_default();
+        let form = design::InlineCreate::new()
+            .field(
+                design::CreateField::new(SPIKE_LOG.of(item.entry.id), &name, &mut field.words)
+                    .help(&help),
+            )
+            .create(design::Create::primary(crate::word!("Add to Log")).blocked(reason))
+            .kept_line(design::KeptLine::new().cancel(crate::word!("Cancel"), true))
+            .show(ui);
+        let response = form.fields[0].clone();
         if select {
             design::focus_and_select(ui, response.id, &field.words);
         }
-        // While the field has the keyboard, Escape is the field's, not Lookup's.
         if response.has_focus() || response.lost_focus() {
             self.form_focused = true;
         }
-        let enter = response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
-        if ui.input(|input| input.key_pressed(egui::Key::Escape))
-            && (response.has_focus() || response.lost_focus())
-        {
+        if form.cancel {
             self.held.log_fields.remove(&key);
-        } else if enter {
+        } else if form.create {
             let words = field.words.trim().to_owned();
-            if words.is_empty() {
-                self.held.log_fields.remove(&key);
-            } else {
-                return self.add_log_line(campaign, item, &words);
-            }
+            return self.add_log_line(campaign, item, &words);
         }
         None
     }

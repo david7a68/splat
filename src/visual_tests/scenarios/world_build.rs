@@ -12052,6 +12052,23 @@ pub fn campaign_copy_registered(d: &mut Driver<'_>) {
     if !d.has("Campaign name") {
         d.click("Add campaign");
     }
+    // Spike K4a (c): a long name and a blocked reason (no folder) at 960 px: every target of
+    // the form is whole in view.
+    d.type_into(
+        "Campaign name",
+        "The Copper Coast and the Salt Road: a very long campaign name the DM typed to see what the form does with it",
+    );
+    for name in ["Browse…", "Add campaign", "Cancel"] {
+        let whole = d
+            .nodes()
+            .into_iter()
+            .filter(|node| node.name == name)
+            .map(|node| (node.rect, node.fully_in_view()))
+            .collect::<Vec<_>>();
+        eprintln!("SPIKE-K4a-c {name}: {whole:?}");
+    }
+    d.state("spike-k4a-long-name", Sizes::Default);
+    d.replace_text_in("Campaign name", "");
     d.type_into("Campaign name", NAME);
     d.type_into("Folder", &copy.display().to_string());
     // Wave 2 d (C), from the review of PR 320: with no account at 960, the import hint follows

@@ -5974,7 +5974,11 @@ impl Library {
                 let form = design::InlineCreate::new()
                     .field(
                         design::CreateField::new(PACKAGE_FOLDER, "Package folder", &mut self.path)
-                            .side_action(BROWSE),
+                            // Spike K4a (b): Browse locks with the form's lock, and says why.
+                            .side_action(design::SideAction::new(BROWSE).locked_when(
+                                lock.is_some(),
+                                crate::sentence!("Browse waits until Manage packages is free."),
+                            )),
                     )
                     .create(design::Create::secondary(ADD_FOLDER).blocked(add_reason))
                     .kept_line(design::KeptLine::new())
