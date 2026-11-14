@@ -1076,28 +1076,17 @@ fn check_start(
 
 /// Each affected encounter remains a separate link with a word space on both sides of `and`.
 fn check_link_spaces(d: &mut Driver<'_>) {
-    let first = d
-        .place_of("Bridge Ambush")
-        .expect("First affected encounter link");
-    let second = d
-        .place_of("Shrine of Cinders")
-        .expect("Second affected encounter link");
-    let area = first.union(second).expand(crate::design::XS);
-    let conjunction = d
-        .painted_word_rect("and", area)
-        .expect("The conjunction is painted");
-    let first = d
-        .painted_word_rect("Bridge Ambush", area)
-        .expect("First link is painted");
-    let second = d
-        .painted_word_rect("Shrine of Cinders", area)
-        .expect("Second link is painted");
-    let before = conjunction.left() - first.right();
-    let after = second.left() - conjunction.right();
+    // Round 6 SD4 was about the space around `and` between two encounter links. Wave 2 d (C):
+    // the encounters are named in the message's words (`A and B …`), each with its own `Open`
+    // choice, so the check holds that the two names read as one phrase with `and`.
+    let named = d.painted_rect_in(
+        "Bridge Ambush and Shrine of Cinders",
+        egui::Rect::EVERYTHING,
+    );
     d.observe(
         "iter-6-C-SD4",
-        before > 1.0 && after > 1.0 && (before - after).abs() <= 1.0,
-        format!("Affected encounter links have word spaces: {before}, {after}"),
+        named.is_some() && d.has("Open Bridge Ambush") && d.has("Open Shrine of Cinders"),
+        format!("The affected encounters are named together: {named:?}"),
     );
 }
 
@@ -3469,9 +3458,11 @@ pub mod campaign_content {
         let a_back = draft(d, "Notes/Broken.md").contains("First draft.")
             && !d.has("Undo discard of Broken.md");
         let b_kept = draft(d, "Notes/Cracked.md").contains("Kept B line.");
-        // The displayed words too: each editor scrolled into view shows its own draft.
+        // The displayed words too: each editor scrolled into view shows its own draft. Wave 2 d
+        // (C) review: a click into an editor no longer scrolls the page (the DM clicked what was
+        // in view), so screen-reader focus brings each editor into view, as it must.
         let shown = |d: &mut Driver<'_>, editor: &str, words: &str| {
-            d.type_into(editor, "");
+            assert!(d.reader_focus(editor), "{editor} takes screen-reader focus");
             d.settle();
             let shown = d.visible_passage(words);
             d.press(Key::Escape);
@@ -13253,19 +13244,51 @@ pub mod session_notes {
         });
         d.replace_text_in("Folder", "30 Sessions");
         d.expect("Save without moving");
-        // Review of PR 274, item 3: the footer and the form share one scan of the current folder,
-        // so an unchanged frame lists its files at most once, as before the footer. The count is
-        // kept inside `storage_files`.
+        // Review of PR 274, item 3: the footer and the form share one listing of the current
+        // folder. Wave 2 d (S): the listing is kept until the next disk scan (`refresh`), so
+        // unchanged frames list the folder at most once per scan, not once a frame. The counts
+        // are kept inside `storage_files` and `refresh`.
         let scans = || crate::sessions::storage_scans();
-        let (passes, before) = (d.passes(), scans());
+        let ends = || crate::sessions::page::folder_scan_ends();
+        let (passes, before, ended) = (d.passes(), scans(), ends());
         for size in [SMALL, DEFAULT, LARGE] {
             d.at_size(size, |_| ());
         }
-        let (frames, done) = (d.passes() - passes, scans() - before);
+        let (frames, done, ended) = (d.passes() - passes, scans() - before, ends() - ended);
         d.observe(
             "review-274-3",
-            frames > 0 && done > 0 && done <= frames,
-            format!("{frames} unchanged frames scanned the session folder {done} times"),
+            frames > ended + 1 && done <= ended + 1,
+            format!(
+                "{frames} unchanged frames listed the session folder {done} times, with {ended} disk scans"
+            ),
+        );
+        // Review of PR 346, item 3: the kept listing ends at the disk scan. A template added
+        // outside Splat shows in the warning after the next scan, and leaves after the one
+        // after its removal.
+        const KEEPS_NOW: &str =
+            "The current folder keeps 1 note, 4 events, 2 templates and 1 recording.";
+        const KEEPS_ADDED: &str =
+            "The current folder keeps 1 note, 4 events, 3 templates and 1 recording.";
+        let campaign = d.app_mut().campaigns.active_campaign().unwrap();
+        let added = crate::sessions::folder(&campaign)
+            .unwrap()
+            .join("Templates")
+            .join("Added outside.md");
+        let before_scan = d.visible_text(KEEPS_NOW);
+        std::fs::write(&added, "Added outside Splat").unwrap();
+        d.app_mut().sessions.simulate_folder_scan();
+        d.settle();
+        let after_scan = d.visible_text(KEEPS_ADDED);
+        std::fs::remove_file(&added).unwrap();
+        d.app_mut().sessions.simulate_folder_scan();
+        d.settle();
+        d.observe(
+            "review-346-3",
+            before_scan && after_scan && d.visible_text(KEEPS_NOW),
+            format!(
+                "The warning follows a template added and removed outside Splat at each scan: \
+                 before {before_scan}, added {after_scan}"
+            ),
         );
         // FT4 (round 16): with no run and no other form, moving the files is the one primary,
         // as Move runs and save is on Rules and runs.
@@ -24033,21 +24056,23 @@ pub mod remove_package_in_use {
         d.click("Technical details");
         d.click("Remove from this campaign");
         d.wait_for_text("now have creatures Splat cannot find.");
-        d.expect("Bridge Ambush");
-        d.expect("Shrine of Cinders");
+        d.expect("Open Bridge Ambush");
+        d.expect("Open Shrine of Cinders");
         d.state_prepared("missing-package-removed-with-undo", Sizes::All, |d| {
             check_link_spaces(d);
-            check_undo_icon(d, "Undo package removal", "iter-6-C-FD3-Undo");
+            check_undo_icon(d, "Undo remove Ashen Marches", "iter-6-C-FD3-Undo");
+            // Wave 2 d (C): each encounter is a choice of the warning (`Open <name>`), under its
+            // words, in the typed footer.
             let first = d
-                .place_of("Bridge Ambush")
-                .expect("First affected encounter link");
+                .place_of("Open Bridge Ambush")
+                .expect("First affected encounter's choice");
             // Round 27 FE5: the result says what was done, in the success tone, before the
             // warning; Undo sits on the result's line.
             let done = d.painted_rect_in(
                 "Ashen Marches removed from this campaign.",
                 egui::Rect::EVERYTHING,
             );
-            let undo = d.place_of("Undo package removal");
+            let undo = d.place_of("Undo remove Ashen Marches");
             d.observe(
                 "iter-27-C-FE5",
                 done.zip(undo).is_some_and(|(done, undo)| {
@@ -24057,23 +24082,49 @@ pub mod remove_package_in_use {
                 }),
                 format!("Result {done:?}, its Undo {undo:?}, the warning's first link {first:?}"),
             );
+            // The missing-creatures warning (now its words, then one `Open` choice per encounter)
+            // keeps the shared warning bar and icon: the part's registry places it in the footer
+            // with the warning tone, and the painted bar runs beside its words.
+            const WARNING: &str =
+                "Bridge Ambush and Shrine of Cinders now have creatures Splat cannot find.";
+            let warning = d.painted_rect_in(WARNING, egui::Rect::EVERYTHING);
+            let tone = crate::design::colors().result.warning;
             d.observe(
                 "iter-6-C-FD3",
-                d.has_message_bar(first, crate::design::colors().result.warning),
-                "The linked missing-creatures warning keeps the shared warning bar and icon",
+                warning.is_some_and(|warning| {
+                    d.has_tone_bar(warning, tone)
+                        && d.typed_messages().iter().any(|(rect, place, kind)| {
+                            *place == crate::design::outcome::MessagePlace::Footer
+                                && *kind == crate::design::Tone::Warning
+                                && rect.expand(0.5).contains_rect(warning)
+                        })
+                }),
+                format!("The missing-creatures warning keeps the shared warning bar and icon: {warning:?}"),
             );
-            // Round 23 FF4: the warning icon centres on the first line, whose words are the
-            // links'. A link's press area is centred on its words.
-            let band = egui::Rect::from_min_max(
-                egui::pos2(first.left() - crate::design::XXL, first.top() - crate::design::S),
-                egui::pos2(first.left(), first.bottom() + crate::design::S),
-            );
-            let icon = d.painted_word_rect(crate::design::icons::WARN, band);
+            // Round 23 FF4: the warning icon centres on the message's first line.
+            let mut first_line = None;
+            d.each_painted_text(|text, _| {
+                if text.galley.job.text.contains(WARNING) {
+                    first_line = text
+                        .galley
+                        .rows
+                        .first()
+                        .map(|row| row.rect().translate(text.pos.to_vec2()));
+                }
+            });
+            let icon = warning.and_then(|warning| {
+                let band = egui::Rect::from_min_max(
+                    egui::pos2(warning.left() - crate::design::XXL, warning.top() - crate::design::S),
+                    egui::pos2(warning.left(), warning.bottom() + crate::design::S),
+                );
+                d.painted_word_rect(crate::design::icons::WARN, band)
+            });
             d.observe(
                 "iter-23-L-FF4",
-                icon.is_some_and(|icon| (icon.center().y - first.center().y).abs() <= 1.0),
+                icon.zip(first_line)
+                    .is_some_and(|(icon, line)| (icon.center().y - line.center().y).abs() <= 1.0),
                 format!(
-                    "The warning icon {icon:?} centres on the first line of the message, beside {first:?}"
+                    "The warning icon {icon:?} centres on the first line of the message {first_line:?}"
                 ),
             );
         });
@@ -24089,7 +24140,7 @@ pub mod remove_package_in_use {
             prepared == 1 && unchanged == prepared,
             format!("Removal words prepared {prepared} times at the removal, {unchanged} after unchanged frames"),
         );
-        d.click("Undo package removal");
+        d.click("Undo remove Ashen Marches");
         d.wait_for_text("Find the folder…");
         d.expect_same("Undo restores the missing-package choice shown before removal.");
         d.assert_state_matches(

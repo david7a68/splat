@@ -2207,6 +2207,9 @@ impl Splat {
                             // messages and the body share the campaigns through one cell.
                             let width = ui.available_width().min(design::LIST_MEASURE);
                             let campaigns = std::cell::RefCell::new(&mut self.campaigns);
+                            // Round 26 FN2, FN5: the session folder form's fault, warning and
+                            // move result share this one footer (owned lines, made before it).
+                            let folder_lines = self.sessions.folder_footer(&self.timeline);
                             let mut footer = design::Footer::new("campaign_link_footer", width);
                             campaigns::Campaigns::footer_messages(
                                 &campaigns,
@@ -2215,10 +2218,7 @@ impl Splat {
                                 blocked,
                             );
                             self.dndbeyond.footer_messages(&mut footer, true);
-                            // Round 26 FN2, FN5: the session folder form's warning, error and
-                            // move result share this one footer; its scan is shared with
-                            // the form below.
-                            self.sessions.folder_messages(&mut footer, &self.timeline);
+                            folder_lines.add_to(&mut footer);
                             // Round 28 (lead ruling): the session folder form's title line and
                             // save row stand above the pane, so Save never scrolls away; its
                             // fields are the pane's content.

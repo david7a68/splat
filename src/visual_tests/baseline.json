@@ -2,7 +2,7 @@
   "violations": {
     "accessible-name/egui-chrome": {
       "book-to-package": 18,
-      "campaign-content": 21,
+      "campaign-content": 22,
       "campaign-copy-registered": 2,
       "column-resize": 30,
       "creature-filter": 5,
@@ -33,7 +33,7 @@
       "package-file-changed": 33,
       "package-folder-copied": 48,
       "package-manifest-broken": 27,
-      "package-rename": 16,
+      "package-rename": 17,
       "package-to-table": 7,
       "party": 16,
       "party-from-run": 10,
@@ -102,7 +102,7 @@
     },
     "target-size/egui-chrome": {
       "book-to-package": 50,
-      "campaign-content": 92,
+      "campaign-content": 93,
       "campaign-copy-registered": 8,
       "column-resize": 129,
       "creature-filter": 15,
@@ -136,7 +136,7 @@
       "package-file-changed": 148,
       "package-folder-copied": 172,
       "package-manifest-broken": 125,
-      "package-rename": 109,
+      "package-rename": 110,
       "package-to-table": 61,
       "party": 67,
       "party-bar-crowded": 1,
