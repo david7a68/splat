@@ -10865,6 +10865,29 @@ mod tests {
             .filter(|name| name.ends_with(':'))
             .collect();
         assert!(loaded.notes.len() > 100 && colons.is_empty(), "{colons:?}");
+        // The old names stay aliases: a saved link `[[Bard Subclass:]]` opens the renamed entry,
+        // which shows its new name, and Lookup's search finds it by the old name too.
+        let index = crate::lookup::ContentIndex::load(&[], None).unwrap();
+        for (old, new) in [
+            ("Barbarian Subclass:", "Barbarian Subclass"),
+            ("Bard Subclass:", "Bard Subclass"),
+            ("Druid Subclass:", "Druid Subclass"),
+        ] {
+            let crate::world::Go::Item(at, _) = index.resolve_link(old, None) else {
+                panic!("row-144-link: [[{old}]] does not resolve");
+            };
+            assert_eq!(index.items[at].entry.name, new, "row-144-link");
+            let found = index.search(old);
+            assert!(
+                found.first().is_some_and(|&at| index.items[at].entry.name == new),
+                "row-144-search: {old} finds {:?}",
+                found
+                    .iter()
+                    .take(3)
+                    .map(|&at| &index.items[at].entry.name)
+                    .collect::<Vec<_>>()
+            );
+        }
         let index = loaded
             .notes
             .iter()
