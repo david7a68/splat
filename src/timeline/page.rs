@@ -14,8 +14,9 @@ const FILTERS_ON_ONE_ROW_FROM: f32 = design::LIST_MEASURE;
 const UNDO_ADD_FOR: Duration = Duration::from_secs(30);
 const COPIED_FOR: Duration = Duration::from_secs(2);
 
-const TIMELINE_SEARCH: design::FieldId = crate::field_id!("timeline_search");
-const EVENT_NOTES: design::FieldId = crate::field_id!("event_notes");
+const TIMELINE_SEARCH: design::FieldId =
+    crate::field_id!("timeline_search").once(design::Once::PageSearch);
+const EVENT_NOTES: design::FieldName = crate::field_id!("event_notes");
 
 #[derive(Clone, Copy, Default, PartialEq)]
 enum Filter {
@@ -1557,7 +1558,7 @@ impl TimelinePage {
             design::gap(ui, design::Gap::M);
             design::field(ui, "Notes", None, None, |ui| {
                 let width = ui.available_width() - 2.0 * design::S;
-                let notes = EVENT_NOTES.with(design::TextKey::from_data(event.id.as_str()));
+                let notes = EVENT_NOTES.of(design::TextKey::of(event));
                 let response = notes.multi_line(ui, &mut event.notes, |edit| {
                     edit.desired_width(width)
                         .desired_rows(3)

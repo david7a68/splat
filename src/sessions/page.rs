@@ -54,10 +54,11 @@ const CHECK_DISK_EVERY: Duration = Duration::from_secs(1);
 const SCAN_EVERY: Duration = Duration::from_secs(5);
 const MISSING_INPUT_ERROR: &str = "no such device";
 const PROCESSING_CANCELLED: &str = "Processing cancelled";
-const SESSION_TITLE: design::FieldId = crate::field_id!("session_title");
-const SESSION_DATE: design::FieldId = crate::field_id!("session_date");
-const TEMPLATE_NAME: design::FieldId = crate::field_id!("template_name");
-const SESSION_FOLDER: design::FieldId = crate::field_id!("session_folder");
+const SESSION_TITLE: design::FieldName = crate::field_id!("session_title");
+const SESSION_DATE: design::FieldName = crate::field_id!("session_date");
+const TEMPLATE_NAME: design::FieldId =
+    crate::field_id!("template_name").once(design::Once::CreateForm);
+const SESSION_FOLDER: design::FieldName = crate::field_id!("session_folder");
 
 #[derive(Clone, Copy, Default, PartialEq)]
 enum View {
@@ -3397,7 +3398,7 @@ impl Sessions {
         });
         let title = design::labelled_field(
             ui,
-            SESSION_TITLE.with(form.editing),
+            SESSION_TITLE.of(form.editing),
             "Session title",
             &mut form.title,
             Some("Optional. You can name it after you play."),
@@ -3410,7 +3411,7 @@ impl Sessions {
         let title_entered = title.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
         design::labelled_field(
             ui,
-            SESSION_DATE.with(form.editing),
+            SESSION_DATE.of(form.editing),
             "Date",
             &mut form.date,
             Some("As YYYY-MM-DD."),
@@ -6688,7 +6689,7 @@ impl Sessions {
                 let campaign = self.campaign.as_ref().map(|campaign| campaign.id);
                 let response =
                     SESSION_FOLDER
-                        .with(campaign)
+                        .of(campaign)
                         .single_line(ui, &mut self.folder_text, |edit| {
                             edit.desired_width(width)
                                 .min_size(egui::vec2(0.0, Density::Read.control()))

@@ -1288,37 +1288,31 @@ pub fn number_field_with_id(
     width: f32,
     height: f32,
 ) -> Response {
-    let response = ui.add(
-        egui::TextEdit::singleline(text)
-            .id(id)
-            .desired_width(width - 2.0 * S)
-            .min_size(vec2(width, height))
-            // The caret stands a little clear of the first digit.
-            .margin(vec2(
-                S + 2.0,
-                (height - Type::Numeral.size() - 6.0).max(4.0) / 2.0,
-            ))
-            .font(Type::Numeral.font(ui))
-            .hint_text(placeholder(ui, hint)),
-    );
-    text.retain(|c| c.is_ascii_digit() || c == '-');
+    // The text Undo guard of the field parts: a number typed for one object never comes back
+    // by Ctrl+Z in another under this id.
+    let response = super::layout::guarded_field(ui, id, text, |ui, text| {
+        let response = ui.add(
+            egui::TextEdit::singleline(text)
+                .id(id)
+                .desired_width(width - 2.0 * S)
+                .min_size(vec2(width, height))
+                // The caret stands a little clear of the first digit.
+                .margin(vec2(
+                    S + 2.0,
+                    (height - Type::Numeral.size() - 6.0).max(4.0) / 2.0,
+                ))
+                .font(Type::Numeral.font(ui))
+                .hint_text(placeholder(ui, hint)),
+        );
+        // Inside the guard: a letter the field drops is not another text.
+        text.retain(|c| c.is_ascii_digit() || c == '-');
+        response
+    });
     named(ui, &response, name);
     response
 }
 
-/// Search with an icon. The hint is what can be searched. Staged: use `FieldId::search`, which
-/// always draws its `Clear` (Clippy refuses this outside `src/design/`).
-pub fn search_field(
-    ui: &mut Ui,
-    name: &str,
-    text: &mut String,
-    hint: &str,
-    width: f32,
-) -> Response {
-    search_box(ui, focus_id(name), name, text, hint, width)
-}
-
-/// The search field of `search_field` and `FieldId::search`, with this id.
+/// The search field of `FieldId::search`, with this id.
 #[allow(
     clippy::disallowed_methods,
     reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"

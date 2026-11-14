@@ -30,7 +30,7 @@ pub(crate) enum Ban {
     /// Package K: `RowIndex::from_data` and `TextKey::from_data`, row keys a reviewer reads; the
     /// number of uses in the item.
     RowKey(u16),
-    /// Package X: raw space, raw selectable choices, `search_field`, and the headings that do not
+    /// Package X: raw space, raw selectable choices, and the headings that do not
     /// add their own space (`clippy.toml`, section "Package X"). The number is how many of those
     /// calls the item holds, counted in its tokens as `Layout` is.
     Extras(u16),

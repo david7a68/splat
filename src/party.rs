@@ -862,7 +862,9 @@ impl Party {
         design::rule(ui);
         if self.page > 0 && sheet_entries(record, self.page).len() > 8 {
             let width = design::search_row_width(ui, 240.0).min(ui.available_width());
-            let _ = crate::field_id!("party_page_filter").search(
+            let _ = crate::field_id!("party_page_filter")
+                .once(crate::design::Once::PageSearch)
+                .search(
                 ui,
                 "Filter this page",
                 &mut self.search,

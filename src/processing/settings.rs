@@ -63,10 +63,11 @@ const SPEECH_CHOICES: [(&str, &str, &str); 3] = [
 ];
 const OTHER_SERVICE: &str = "Another service";
 
-const SPEECH_KEY: design::FieldId = crate::field_id!("speech_api_key");
-const LLM_KEY: design::FieldId = crate::field_id!("llm_api_key");
-const CLEAN_PROMPT: design::FieldId = crate::field_id!("clean_prompt");
-const REVIEW_PROMPT: design::FieldId = crate::field_id!("review_prompt");
+const SPEECH_KEY: design::FieldId = crate::field_id!("speech_api_key").once(design::Once::Settings);
+const LLM_KEY: design::FieldId = crate::field_id!("llm_api_key").once(design::Once::Settings);
+const CLEAN_PROMPT: design::FieldId = crate::field_id!("clean_prompt").once(design::Once::Settings);
+const REVIEW_PROMPT: design::FieldId =
+    crate::field_id!("review_prompt").once(design::Once::Settings);
 
 #[derive(Default)]
 struct Store {

@@ -20,7 +20,7 @@ enum EffectFit {
 
 /// A roll's result has its place before there is one, so that nothing moves when it comes.
 const DICE_RESULT_WIDTH: f32 = 32.0;
-const DICE_FIELD: design::FieldId = crate::field_id!("dock_dice");
+const DICE_FIELD: design::FieldName = crate::field_id!("dock_dice");
 
 impl Run {
     /// The entry controls have one fixed home, labelled with the row they act on, so
@@ -360,7 +360,7 @@ impl Run {
         let width = if narrow { 60.0 } else { 72.0 };
         let field = design::line_field(
             ui,
-            DICE_FIELD.with(self.id),
+            DICE_FIELD.of(self.id),
             "Dice",
             &mut self.dice,
             "1d20",

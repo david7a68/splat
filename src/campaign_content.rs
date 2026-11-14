@@ -2580,12 +2580,13 @@ impl CampaignContent {
                         ui.set_min_height(Density::Read.control());
                         design::group_heading(ui, "Needed by your entries", closure.required.len());
                     });
-                    design::search_field(
+                    let width = ui.available_width();
+                    let _ = crate::field_id!("needed_entry_search").of(active.id).search(
                         ui,
                         "Find a needed entry",
                         &mut self.search,
                         "Find an entry…",
-                        ui.available_width(),
+                        width,
                     );
                     let query = self.search.to_lowercase();
                     let mut required: Vec<_> = closure
@@ -2709,12 +2710,13 @@ impl CampaignContent {
                         document.selections.remove(i);
                     }
                 });
-                design::search_field(
+                let width = ui.available_width();
+                let _ = crate::field_id!("package_entry_search").of(module.id).search(
                     ui,
                     "Find an entry in this package",
                     &mut self.search,
                     "Find an entry…",
-                    ui.available_width(),
+                    width,
                 );
                 let query = self.search.to_lowercase();
                 if self
