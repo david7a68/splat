@@ -681,8 +681,10 @@ fn the_gate_finds_two_live_widgets_with_one_id() {
 }
 
 /// N10: a search field draws its `Clear` while it holds text, inside its width; `Clear` empties
-/// it, gives the field its focus back and says so once. Empty, it has no `Clear` and takes the
-/// whole width.
+/// it, gives the field its focus back and says so once. Empty, it has no `Clear`.
+/// X2: `width` is the whole row, and the field keeps one rect whether or not it holds text:
+/// typing one letter and deleting it moves and resizes nothing, and `Clear` shows in its kept
+/// place inside the row.
 #[test]
 fn a_search_field_always_draws_its_clear() {
     use egui_kittest::kittest::Queryable;
@@ -691,7 +693,7 @@ fn a_search_field_always_draws_its_clear() {
     struct State {
         query: String,
         cleared: usize,
-        width: f32,
+        field: Option<Rect>,
     }
     let mut h = egui_kittest::Harness::builder()
         .with_size(vec2(500.0, 120.0))
@@ -700,7 +702,7 @@ fn a_search_field_always_draws_its_clear() {
                 let search =
                     SEARCH.search(ui, "Search", &mut state.query, "Search by name…", 300.0);
                 state.cleared += usize::from(search.cleared);
-                state.width = search.field.rect.width();
+                state.field = Some(search.field.rect);
             },
             State {
                 query: "Wolf".to_owned(),
@@ -710,10 +712,15 @@ fn a_search_field_always_draws_its_clear() {
     theme::install(&h.ctx);
     h.run_steps(2);
     let clear = h.get_by_label("Clear").rect();
-    let field = h.get_by_label("Search").rect();
+    let field = h.state().field.expect("drawn");
     assert!(
         clear.left() > field.right() && clear.right() <= field.left() + 300.0 + 0.5,
         "n10-place: Clear {clear:?} after the field {field:?}, inside 300 px"
+    );
+    let row = super::search_row(&h.ctx, "Search").expect("the search row");
+    assert!(
+        (row.width() - 300.0).abs() <= 0.5 && row.contains_rect(clear),
+        "x2-row: the row {row:?} is 300 px and holds Clear {clear:?}"
     );
     h.get_by_label("Clear").click();
     h.run_steps(2);
@@ -723,9 +730,18 @@ fn a_search_field_always_draws_its_clear() {
         "n10-focus: the field has its focus back"
     );
     assert!(h.query_by_label("Clear").is_none(), "n10-empty: no Clear");
+    assert_eq!(h.state().field, Some(field), "x2-still: emptied, the field keeps its rect");
+    h.event(egui::Event::Text("W".to_owned()));
+    h.run_steps(2);
+    assert_eq!(h.state().query, "W");
+    assert_eq!(h.state().field, Some(field), "x2-still: one letter typed");
+    let clear = h.get_by_label("Clear").rect();
     assert!(
-        (h.state().width - 300.0).abs() <= 0.5,
-        "n10-width: {}",
-        h.state().width
+        clear.left() > field.right() && clear.right() <= field.left() + 300.0 + 0.5,
+        "x2-place: Clear {clear:?} in its kept place after {field:?}"
     );
+    h.key_press(egui::Key::Backspace);
+    h.run_steps(2);
+    assert!(h.state().query.is_empty());
+    assert_eq!(h.state().field, Some(field), "x2-still: the letter deleted");
 }
