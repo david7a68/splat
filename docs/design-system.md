@@ -1237,7 +1237,9 @@ summary before it, from its end, by whole facts and members (`5 party · 1 × Ci
 the row's hover and its accessible name keep the whole line. A fight with no word because an input is not known says
 `XP not known` in the word's place (`Difficulty::form`). With no table or no party, or nothing against the party,
 the line is as before. A row with an unfinished run shows no word. Arrivals names what the XP is for: a group's
-heading ends `· Fight after: XP 450 · Low`, the fight once the group joins, without the limit. The answer is worked out when the encounter, the saved sheets or the rules
+heading says `Fight after: XP 450 · Low`, the fight once the group joins, without the limit. R1: `Fight after` and
+its word never give way: the member count goes first, then the side, then the XP number, through the one difficulty
+line (`difficulty::Line::fight_after`); the heading never adds a line. The answer is worked out when the encounter, the saved sheets or the rules
 change, and when the editor's draft changes; never on a frame with no change.
 
 A Ready row's menu has `Remove` after Edit encounter, only for an encounter with no saved run (unfinished,
@@ -1534,7 +1536,7 @@ possible; shorten to character name and first changed value, with full text in h
 Undo steps, the notice ends with their count (`Brannoch Vale: HP 49 → 46 · 1 Undo step removed`) in every form, in the
 header and below the roster; the Log names each. Otherwise show
 once below the roster, keeping Undo visible. Sheet-change notices use `small_message`: warning icon and bar,
-text-colour words. A result below the roster (`Brannoch Vale joined at 20 · acts next round.`) uses the same
+text-colour words. A result below the roster (`Brannoch Vale joined at 20. It acts next round.`) uses the same
 `small_message` in the success tone, with the past tense Arrivals uses (`joined at`, `moved to`). Centre compact notices with their Log and Dismiss controls, in the header and below
 the roster. Wrapped notices keep top alignment. Keep an `XS` gap after the icon and an `S` gap before
 the bar. Include those gaps in the header measure. Stat-block errors use `small_message` in the error tone: the fault in
@@ -1740,10 +1742,11 @@ eight rows tall, so the words, the chosen match and the roster stay in view. New
 picker says Side and uses roster words. List encounter groups, tonight's plan groups, then any-encounter
 groups. Empty sections use group headings and one muted line. New group opens Encounters. Each group's first
 line has its draggable name, side, count and XP; then members, Initiative and Add. A blank Initiative field rolls initiative.
-After a group's XP, ` → Moderate` (in `text`) says what the fight becomes when the group joins: the characters who
-are present against every present creature and the group. It shows only where the totals and the status words are
-in the heading and stay there with it; it never widens the group block or adds a line. The drag handle's
-accessible description says `Adds 400 XP; the fight becomes Moderate`, and its hover adds the budget line.
+Then `Fight after: XP 450 · Low` (the word in `text`) says what the fight becomes when the group joins: the characters
+who are present against every present creature and the group. R1: it never gives way; the member count, then the side,
+then its XP number do (`difficulty::Line::fight_after`), and it never widens the group block or adds a line. The drag
+handle's accessible description says the group's totals, `Adds 400 XP. Fight after: Moderate.`, and its hover adds the
+budget line.
 Dragging outlines the roster in accent. Added groups retain Add and name their joining round. Setup additions
 say Added in setup. A status that cannot fit the member slot whole takes a full-width line above the members
 and controls, and wraps there at its spaces, never inside a word. Every row keeps the shape of the widest join status
@@ -1756,7 +1759,7 @@ group and a creature added by hand: `Lost Patrol joined at 9.`, `Ghost of the Mi
 Cultist at 9, placed after.`, `Wolf 1 and Wolf 2 joined at 14.` Every result is a success message, tied or not; the
 `Move … before …` button below a tied one shows that a choice is open. The result and that button sit in a footer pinned to the panel's bottom, below the scrolling list, so a result that comes, grows with a tie or goes moves no group row. That button, the moved result and its Undo
 name the arrival as its message does (`Move Lost Patrol before Ember Cultist`). When the roster has two groups of
-one name, the arrival adds its first member: `Rival Team (Rival Captain 2) moved before Rival Team`. When the Move
+one name, the arrival adds its first member: `Rival Team (Rival Captain 2) moved before Rival Captain at 14.`; the row it passed is named by its own name. When the Move
 button cannot show those words whole, it gives up the whole parenthesis, never only the member's name
 (`Move Shrine Reserve before Brannoch Vale`): it sits under the message that names the arrival whole and moves only
 that arrival. Undo is not beside that message, so a shortened move Undo keeps the copy number and gives up the
