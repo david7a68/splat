@@ -8,7 +8,7 @@ use crate::{
             Fault, FaultMessage, KeptOutcome, Messages, Notice, PaneFrame, Sentence, Severity,
             UndoStep, Verb,
         },
-        pane::{Body, Fills, FillsReason},
+        pane::Body,
         save_row::{DraftState, Primary},
     },
     library::write_note,
@@ -27,12 +27,60 @@ pub(crate) fn editor_name(path: &str) -> String {
 /// does not parse), so its path is its owner: two repairs open at once are two fields.
 const REPAIR_TEXT: design::layout::FieldName = crate::field_id!("world_repair_text");
 
-/// The source editor, with its two events apart: the DM changed the text, and focus moved into
-/// it. A caller that keeps a result for one draft ends it on a change, not on focus.
+/// The source editor itself: the note's text in the editor's face, named for its file, with the
+/// error line marked. Its two events (changed, gained focus) and its id.
 #[allow(
     clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
+    reason = "staged: a path is a broken note's only identity (design::results::STAGED_ALLOWS)"
 )]
+fn source_editor(
+    ui: &mut egui::Ui,
+    path: &str,
+    draft: &mut String,
+    error_line: Option<usize>,
+) -> ((bool, bool), egui::Id) {
+    let field = REPAIR_TEXT.of(design::TextKey::from_data(path));
+    let output = field.editor(ui, draft, |edit| {
+        edit.font(egui::TextStyle::Monospace)
+            .desired_width(f32::INFINITY)
+    });
+    design::named(ui, &output.response, &editor_name(path));
+    let active = (output.response.changed(), output.response.gained_focus());
+    if let Some(line) = error_line {
+        let position = draft
+            .lines()
+            .take(line.saturating_sub(1))
+            .map(|line| line.chars().count() + 1)
+            .sum();
+        let row = output
+            .galley
+            .pos_from_cursor(egui::text::CCursor::new(position));
+        let y = output.galley_pos.y + row.top();
+        let painter = ui.painter().with_clip_rect(output.text_clip_rect);
+        painter.vline(
+            output.response.rect.left() + design::XS,
+            y..=y + row.height(),
+            egui::Stroke::new(design::FOCUS_WIDTH, colors().result.error),
+        );
+    }
+    (active, output.response.id)
+}
+
+/// The same source editor in a pane's scroll column (World's repair pane): it is as tall as its
+/// text, and the pane scrolls it, so it has no scroll of its own (a scroll inside the pane's
+/// scroll is refused). Its two events: the DM changed the text, and focus moved into it.
+fn editor_in_pane(
+    ui: &mut egui::Ui,
+    path: &str,
+    draft: &mut String,
+    error_line: Option<usize>,
+) -> (bool, bool) {
+    source_editor(ui, path, draft, error_line).0
+}
+
+/// The source editor, with its two events apart: the DM changed the text, and focus moved into
+/// it. A caller that keeps a result for one draft ends it on a change, not on focus. Campaign's
+/// repair keeps it in a scroll of its own, up to six rows high.
 pub(crate) fn editor_events(
     ui: &mut egui::Ui,
     path: &str,
@@ -40,36 +88,10 @@ pub(crate) fn editor_events(
     error_line: Option<usize>,
 ) -> (bool, bool) {
     const MAX_HEIGHT: f32 = design::XXL * 6.0 + design::L + design::S + design::XS;
-    let field = REPAIR_TEXT.of(design::TextKey::from_data(path));
     let editor = design::ScrollColumn::new(("repair", path))
         .max_height(MAX_HEIGHT)
         .fit_height()
-        .show(ui, |ui| {
-            let output = field.editor(ui, draft, |edit| {
-                edit.font(egui::TextStyle::Monospace)
-                    .desired_width(f32::INFINITY)
-            });
-            design::named(ui, &output.response, &editor_name(path));
-            let active = (output.response.changed(), output.response.gained_focus());
-            if let Some(line) = error_line {
-                let position = draft
-                    .lines()
-                    .take(line.saturating_sub(1))
-                    .map(|line| line.chars().count() + 1)
-                    .sum();
-                let row = output
-                    .galley
-                    .pos_from_cursor(egui::text::CCursor::new(position));
-                let y = output.galley_pos.y + row.top();
-                let painter = ui.painter().with_clip_rect(output.text_clip_rect);
-                painter.vline(
-                    output.response.rect.left() + design::XS,
-                    y..=y + row.height(),
-                    egui::Stroke::new(design::FOCUS_WIDTH, colors().result.error),
-                );
-            }
-            (active, output.response.id)
-        });
+        .show(ui, |ui| source_editor(ui, path, draft, error_line));
     let (active, id) = editor.inner;
     // The editor's own scroll area takes a scroll target set inside it, so a page that scrolls
     // around the editor never sees it. When the editor gains focus or a screen reader asks to
@@ -219,16 +241,6 @@ impl Fault for RepairFault {
     }
 }
 
-/// The repair's body: its source editor is as tall as its room above the footer, so the footer
-/// is pinned (the named escape `Body::Fills`).
-#[allow(
-    clippy::disallowed_methods,
-    reason = "named escape: the repair's source editor fills its room (design::results::STAGED_ALLOWS)"
-)]
-fn editor_fills() -> Body {
-    Body::Fills(Fills::because(FillsReason::NoteEditor))
-}
-
 /// What the DM can press in the repair's footer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RepairAct {
@@ -364,7 +376,7 @@ impl Repair {
                 messages.outcome(FaultMessage::new(fault));
             }
         }
-        let paned = messages.pane(ui, editor_fills(), |ui| {
+        let paned = messages.pane(ui, Body::Content, |ui| {
             self.body(ui, campaign, run_open, problem, line)
         });
         if let Some(press) = paned.pressed {
@@ -457,8 +469,7 @@ impl Repair {
         }
     }
 
-    /// The editor and its save row. The editor leaves room for the save row at the bottom of the
-    /// body's room, above the footer.
+    /// The editor and its save row; the footer follows the save row (round 27 FE2).
     fn edit(
         &mut self,
         ui: &mut egui::Ui,
@@ -469,14 +480,7 @@ impl Repair {
     ) -> bool {
         // Nothing above the editor comes and goes: its reason and its results are in the pane's
         // footer (round 26), so the editor never moves.
-        let save_row = design::Density::Scan.control() + ui.spacing().item_spacing.y;
-        let (changed, _) = ui
-            .scope(|ui| {
-                let room = ui.max_rect().bottom() - ui.cursor().top();
-                ui.set_max_height((room - save_row).max(design::XXL));
-                editor_events(ui, &self.path, &mut self.draft, line)
-            })
-            .inner;
+        let (changed, _) = editor_in_pane(ui, &self.path, &mut self.draft, line);
         if changed {
             // An edit ends both Undo results: Undo would replace the words just typed.
             self.undos.owner_changed(&self.owner());

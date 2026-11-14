@@ -1043,7 +1043,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Layout(1)],
         ),
         ("src/trackers/view.rs", "amount_field", &[Ban::RowKey(3)]),
-        ("src/world/repair.rs", "editor_events", &[Ban::RowKey(1)]),
+        ("src/world/repair.rs", "source_editor", &[Ban::RowKey(1)]),
         // Package M (round 28): the escapes of `design::outcome`, and its own helpers.
         ("src/design/outcome.rs", "__literal", &[Ban::Sentence]),
         ("src/design/outcome.rs", "check_literal", &[Ban::Sentence]),
@@ -1225,7 +1225,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/library.rs", "form_footer", &[Ban::Pane(1)]),
         ("src/campaign_content.rs", "show", &[Ban::Pane(1)]),
         ("src/party.rs", "show", &[Ban::Pane(1)]),
-        ("src/world/repair.rs", "editor_fills", &[Ban::Pane(1)]),
     ]
 };
 
