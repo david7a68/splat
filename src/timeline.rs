@@ -311,13 +311,22 @@ impl Event {
         self.session == session || (session.is_some() && self.continued_in == session)
     }
 
+    /// The event's own name: its title, unless that is empty or only says its kind (the plan
+    /// gives a new event its kind as its title, `Day` or `Travel`). Every place that shows the
+    /// kind beside the name asks this one question, so no line says the kind twice (round 28
+    /// FL8, FN3, FH7).
+    pub fn own_title(&self) -> Option<&str> {
+        let title = self.title.trim();
+        (!title.is_empty() && !title.eq_ignore_ascii_case(self.kind.word())).then_some(title)
+    }
+
     /// The name people read. A day has its number, and it can also have a name.
     pub fn label(&self, day: u32) -> String {
-        match (self.kind, self.title.trim()) {
-            (Kind::Day, "") => format!("Day {day}"),
-            (Kind::Day, title) => format!("Day {day}: {title}"),
-            (kind, "") => kind.word().to_owned(),
-            (_, title) => title.to_owned(),
+        match (self.kind, self.own_title()) {
+            (Kind::Day, None) => format!("Day {day}"),
+            (Kind::Day, Some(title)) => format!("Day {day}: {title}"),
+            (kind, None) => kind.word().to_owned(),
+            (_, Some(title)) => title.to_owned(),
         }
     }
 
@@ -363,10 +372,7 @@ impl Event {
     fn parts(&self, session: Option<&str>, result: &str, warning: bool) -> String {
         let mut parts = Vec::new();
         // An untitled event already shows its kind as its name.
-        if self.kind != Kind::Day
-            && !self.title.trim().is_empty()
-            && self.title.trim() != self.kind.word()
-        {
+        if self.kind != Kind::Day && self.own_title().is_some() {
             parts.push(self.kind.word().to_owned());
         }
         for part in [self.duration.as_str(), self.place.as_str(), result] {

@@ -12337,7 +12337,7 @@ pub mod session_notes {
         d.type_text("Harvest Eve");
         // A day opens what follows it, so move it to the top.
         d.scroll_until(pos2(850.0, 550.0), "Place this event after", 12);
-        d.click("Place this event after");
+        d.click_starting("Place this event after: ");
         d.click("Start of the timeline");
         d.state("timeline-day-added", Sizes::All);
         // Round 27 FL1: the detail form keeps the scroll bar's lane, so a Day's form (no bar)
@@ -12419,8 +12419,14 @@ pub mod session_notes {
             "Timeline offers the link update in the Library's words",
         );
         // iter-25-S FL3: the offer sits in the list column, so the form keeps its place.
-        let kind_top = |d: &Driver<'_>| d.place_of("Kind of event").map(|rect| rect.top());
-        let detail_left = |d: &Driver<'_>| d.place_of("Kind of event").map(|rect| rect.left());
+        let kind_top = |d: &Driver<'_>| {
+            d.place_of(&d.name_starting("Kind of event: "))
+                .map(|rect| rect.top())
+        };
+        let detail_left = |d: &Driver<'_>| {
+            d.place_of(&d.name_starting("Kind of event: "))
+                .map(|rect| rect.left())
+        };
         let with_offer = [SMALL, DEFAULT, LARGE].map(|size| {
             d.at_size(size, |d| {
                 let offer = d.place_of(LINK_OFFER);
@@ -12486,7 +12492,9 @@ pub mod session_notes {
         d.state("timeline-filtered", Sizes::Default);
         d.observe(
             "S16",
-            !d.has("Move earlier") && !d.has("Move later") && d.has("Place this event after"),
+            !d.has("Move earlier")
+                && !d.has("Move later")
+                && d.has_containing("Place this event after: "),
             "Place after is the one way to change an event's position",
         );
         d.click("All");
@@ -13024,7 +13032,7 @@ pub mod session_notes {
 
         // Reading last week's note does not send tonight's run there.
         d.click(NAV_TIMELINE);
-        d.click("Session for new events");
+        d.click_starting("Session for new events: ");
         d.click("No session");
         d.click(NAV_SESSIONS);
         d.click("New session");
@@ -15047,10 +15055,10 @@ pub mod session_recording {
             "The defaults are Sol through the Codex CLI, after OpenAI's gpt-transcribe",
         );
         d.scroll_until(pos2(600.0, 400.0), "Transcript and summary service", 12);
-        d.click("Transcript and summary service");
+        d.click_starting("Transcript and summary service: ");
         d.state_prepared("processing-llm-choices", Sizes::Default, |d| {
             if !d.has("Anthropic") {
-                d.click("Transcript and summary service");
+                d.click_starting("Transcript and summary service: ");
             }
             d.wait_for_text("Anthropic");
         });
@@ -15085,7 +15093,7 @@ pub mod session_recording {
                 format!("Save key {saves:?} ends at {edge:?}; reasons {reasons:?} sit below"),
             );
         });
-        d.click("Transcript and summary service");
+        d.click_starting("Transcript and summary service: ");
         d.click("Codex CLI, GPT-6.1 Sol");
         d.click("Account and campaigns");
 
@@ -15096,7 +15104,7 @@ pub mod session_recording {
         // A key saved for one service is not sent to another.
         d.click("Recording and processing");
         d.scroll_until(pos2(600.0, 400.0), "Transcript and summary service", 12);
-        d.click("Transcript and summary service");
+        d.click_starting("Transcript and summary service: ");
         d.click("Anthropic");
         d.observe(
             "T11.6",
@@ -15104,6 +15112,14 @@ pub mod session_recording {
                 "The saved key is for OpenAI, so Splat will not send it to Anthropic.",
             ),
             "A saved key does not follow the DM to a different service",
+        );
+        // Round 28 FM9: the warning says why the key is not sent; only the key's own reason
+        // (`Paste a key first.`) and the tab's footer say what to do.
+        d.observe(
+            "iter-28-S2-FM9",
+            d.has_containing("so Splat will not send it to Anthropic.")
+                && !d.has_containing("Save a key for it"),
+            "The key warning does not repeat the footer's instruction",
         );
         d.expect("Remove speech key (OpenAI)");
         d.state_prepared("key-for-another-service", Sizes::All, |d| {
@@ -15125,7 +15141,7 @@ pub mod session_recording {
                 "A saved key says it is saved on this computer",
             );
         });
-        d.click("Transcript and summary service");
+        d.click_starting("Transcript and summary service: ");
         d.click("Codex CLI, GPT-6.1 Sol");
         d.click("Account and campaigns");
         d.click(NAV_SESSIONS);
@@ -15819,7 +15835,7 @@ pub mod session_recording {
         d.observe_both(
             "iter-13-R4",
             "Recording heading and input stay in view",
-            |d| d.visible_text("RECORDING") && d.in_view("Recording input"),
+            |d| d.visible_text("RECORDING") && d.in_view_containing("Recording input: "),
         );
         d.state("input-during-recording", Sizes::Default);
         d.click_containing("Recording 0:");
@@ -16031,7 +16047,7 @@ pub mod session_recording {
         d.click(NAV_SETTINGS);
         d.click("Recording and processing");
         d.scroll_until(pos2(600.0, 400.0), "Speech service", 12);
-        d.click("Speech service");
+        d.click_starting("Speech service: ");
         d.click("Another service");
         d.expect("The custom service must support the OpenAI audio/transcriptions API.");
         // Round 24 FH4, AH1, SH1: after the choice, the notice shows whole, and the field that
@@ -16099,12 +16115,25 @@ pub mod session_recording {
                 "Missing values share one reason form below their field: {forms:?}; Model {model:?}, reason {model_reason:?}, help {model_help:?}"
             ),
         );
-        d.expect("The saved key is for OpenAI, so Splat will not send it to this service. Save a key for it.");
-        // Round 27 FI7: a reason is `XS` below its field and `M` above the next label, and the
-        // notice is in the tab's footer, below the form, so it never moves the form.
+        d.expect("The saved key is for OpenAI, so Splat will not send it to this service.");
+        // Round 27 FI7: a reason is `XS` below its field and, as any field's help, `L` above the
+        // next label (N3: the field part owns that space), and the notice is in the tab's footer,
+        // below the form, so it never moves the form. Round 28 FI7: the custom service's help is
+        // the Service field's own: `XS` below the control and `L` above `Address`.
         for size in [SMALL, DEFAULT, LARGE] {
             let (spaced, detail) = d.at_size(size, |d| {
+                let service = d.place_of(&d.name_starting("Speech service: "));
+                let custom = d.place_of(
+                    "The custom service must support the OpenAI audio/transcriptions API.",
+                );
                 let address = d.place_of("Speech address");
+                let address_label = address.and_then(|address| {
+                    let above = egui::Rect::from_x_y_ranges(
+                        address.left() - 1.0..=address.right(),
+                        address.top() - crate::design::XL..=address.top(),
+                    );
+                    d.painted_word_rect("Address", above)
+                });
                 let reason = d.place_of("Enter the address.");
                 let model = d.place_of("Speech model");
                 let label = model.and_then(|model| {
@@ -16121,20 +16150,24 @@ pub mod session_recording {
                     .map(|node| node.rect);
                 let near = |a: f32, b: f32| (a - b).abs() <= 1.0;
                 (
-                    address.zip(reason).is_some_and(|(address, reason)| {
+                    service.zip(custom).is_some_and(|(service, custom)| {
+                        near(custom.top() - service.bottom(), crate::design::XS)
+                    }) && custom.zip(address_label).is_some_and(|(custom, label)| {
+                        near(label.top() - custom.bottom(), crate::design::L)
+                    }) && address.zip(reason).is_some_and(|(address, reason)| {
                         near(reason.top() - address.bottom(), crate::design::XS)
                     }) && reason.zip(label).is_some_and(|(reason, label)| {
-                        near(label.top() - reason.bottom(), crate::design::M)
+                        near(label.top() - reason.bottom(), crate::design::L)
                     }) && notice
                         .zip(address)
                         .is_some_and(|(notice, address)| notice.top() > address.bottom()),
                     format!(
-                        "Address {address:?}, reason {reason:?}, Model label {label:?}, notice {notice:?}"
+                        "Service {service:?}, its help {custom:?}, Address label {address_label:?}, Address {address:?}, reason {reason:?}, Model label {label:?}, notice {notice:?}"
                     ),
                 )
             });
             d.observe(
-                "iter-27-S-FI7",
+                "iter-28-S2-FI7",
                 spaced,
                 format!("At {size:?}, the reason belongs to its field and the notice is in the footer: {detail}"),
             );
@@ -19153,7 +19186,7 @@ pub mod run_loot {
         new_session(d, "The Vault");
         d.click(NAV_TIMELINE);
         d.click_starting(&format!("{RUN_VAULT} ·"));
-        d.click("Session of this event");
+        d.click_starting("Session of this event: ");
         d.click("Session 1: The Vault");
         d.click("Open this session");
         show_plan(d);
@@ -20746,7 +20779,7 @@ pub mod session_plan {
     /// New events go to this session, by the Timeline page's own control.
     fn go_timeline_choose_session(d: &mut Driver<'_>, session: &str) {
         d.click(NAV_TIMELINE);
-        d.click("Session for new events");
+        d.click_starting("Session for new events: ");
         d.click_starting(session);
     }
 
