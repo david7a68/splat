@@ -46,7 +46,7 @@ pub struct HasChoices;
 /// ```
 /// use splat::layout::Dropdown;
 /// fn pick(ui: &mut eframe::egui::Ui, side: &mut u8) {
-///     let _ = Dropdown::new(splat::field_id!("doc_side"), "Side")
+///     let _ = Dropdown::new(splat::field_id!("doc_side").once(splat::layout::Once::Example), "Side")
 ///         .choice(0, "Allies")
 ///         .blocked_choice(1, "Enemies", "Close the run first.")
 ///         .show(ui, side);
@@ -57,7 +57,7 @@ pub struct HasChoices;
 ///
 /// ```compile_fail,E0599
 /// fn pick(ui: &mut eframe::egui::Ui, side: &mut u8) {
-///     let _ = splat::layout::Dropdown::<u8>::new(splat::field_id!("doc_side"), "Side").show(ui, side);
+///     let _ = splat::layout::Dropdown::<u8>::new(splat::field_id!("doc_side").once(splat::layout::Once::Example), "Side").show(ui, side);
 /// }
 /// ```
 ///
@@ -70,20 +70,20 @@ pub struct HasChoices;
 /// A choice is a value and its words, never a closure that draws:
 ///
 /// ```compile_fail,E0061
-/// let _ = splat::layout::Dropdown::new(splat::field_id!("doc_side"), "Side").choice(0_u8);
+/// let _ = splat::layout::Dropdown::new(splat::field_id!("doc_side").once(splat::layout::Once::Example), "Side").choice(0_u8);
 /// ```
 ///
 /// A blocked choice says why:
 ///
 /// ```compile_fail,E0061
-/// let _ = splat::layout::Dropdown::new(splat::field_id!("doc_side"), "Side").blocked_choice(0_u8, "Allies");
+/// let _ = splat::layout::Dropdown::new(splat::field_id!("doc_side").once(splat::layout::Once::Example), "Side").blocked_choice(0_u8, "Allies");
 /// ```
 ///
 /// The current value is of the choices' type:
 ///
 /// ```compile_fail,E0308
 /// fn pick(ui: &mut eframe::egui::Ui, side: &mut String) {
-///     let _ = splat::layout::Dropdown::new(splat::field_id!("doc_side"), "Side")
+///     let _ = splat::layout::Dropdown::new(splat::field_id!("doc_side").once(splat::layout::Once::Example), "Side")
 ///         .choice(0_u8, "Allies")
 ///         .show(ui, side);
 /// }

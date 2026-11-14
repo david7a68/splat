@@ -1339,8 +1339,8 @@ impl Campaigns {
                 // One id per form: the add form and a campaign's details form never share a
                 // field, and neither loses focus when Settings changes between one and two
                 // columns (the ids do not come from the layout).
-                let name_id = CAMPAIGN_NAME.with(editing_id);
-                let folder_id = CAMPAIGN_FOLDER.with(editing_id);
+                let name_id = CAMPAIGN_NAME.of(editing_id);
+                let folder_id = CAMPAIGN_FOLDER.of(editing_id);
                 let focus = std::mem::take(&mut self.focus_name);
                 let mut commit = false;
                 if !editing {
@@ -1536,8 +1536,8 @@ crate::create_reasons! {
         Unchanged => "No changes to save.",
     }
 }
-const CAMPAIGN_NAME: design::FieldId = crate::field_id!("campaign_name");
-const CAMPAIGN_FOLDER: design::FieldId = crate::field_id!("campaign_folder");
+const CAMPAIGN_NAME: design::FieldName = crate::field_id!("campaign_name");
+const CAMPAIGN_FOLDER: design::FieldName = crate::field_id!("campaign_folder");
 const ADD_CAMPAIGN: design::Word = crate::word!("Add campaign");
 const BROWSE: design::Word = crate::word!("Browse…");
 const CANCEL: design::Word = crate::word!("Cancel");

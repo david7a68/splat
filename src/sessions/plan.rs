@@ -4125,7 +4125,7 @@ impl Sessions {
             new: "New encounter",
             blocked: plan.blocked,
             find: "Find a fight",
-            field: crate::field_id!("find_a_fight"),
+            field: crate::field_id!("find_a_fight").once(design::Once::PageSearch),
             hint: "Find a fight…",
         };
         match plan_menu(
@@ -4155,7 +4155,7 @@ impl Sessions {
             new: "New group",
             blocked: plan.group_blocked,
             find: "Find a group",
-            field: crate::field_id!("find_a_group"),
+            field: crate::field_id!("find_a_group").once(design::Once::PageSearch),
             hint: "Find a group…",
         };
         match plan_menu(

@@ -10,7 +10,7 @@ use splat::content::Entry;
 use std::{path::PathBuf, sync::mpsc};
 use uuid::Uuid;
 
-const COPY_FOLDER: design::FieldId = crate::field_id!("copy_folder");
+const COPY_FOLDER: design::FieldId = crate::field_id!("copy_folder").once(design::Once::CreateForm);
 
 pub struct CopyDialog {
     source: CopySource,

@@ -585,7 +585,7 @@ fn the_lint_finds_what_it_should() {
 
 /// Package K: two fields with one `FieldId` name would share focus and text state; each name is
 /// used once (`field_id!` names, read from the syntax tree, in all of `src/`). A field shown once
-/// per row adds the row's key with `FieldId::with`; two live widgets with one id are the gate's
+/// per object says its owner with `FieldName::of`; two live widgets with one id are the gate's
 /// `widget-id-clash` check.
 #[test]
 fn each_field_id_name_is_used_once() {

@@ -572,7 +572,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters.rs",
             "creature_pane",
-            &[Ban::Results, Ban::Layout(2), Ban::Pane(1)],
+            &[Ban::Results, Ban::Layout(2), Ban::Pane(1), Ban::RowKey(1)],
         ),
         (
             "src/encounters.rs",
@@ -599,7 +599,13 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/library.rs",
             "editor_pane",
-            &[Ban::Results, Ban::Layout(4), Ban::Extras(3), Ban::Pane(3)],
+            &[
+                Ban::Results,
+                Ban::Layout(4),
+                Ban::Extras(3),
+                Ban::Pane(3),
+                Ban::RowKey(1),
+            ],
         ),
         ("src/library.rs", "give_new_identity", &[Ban::Results]),
         (
@@ -907,11 +913,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/slash.rs", "note", &[Ban::Layout(1)]),
         ("src/sessions/slash.rs", "popup_at", &[Ban::Layout(1)]),
         ("src/timeline/checks.rs", "table_line", &[Ban::Layout(1)]),
-        (
-            "src/timeline/page.rs",
-            "detail",
-            &[Ban::Layout(7), Ban::RowKey(1)],
-        ),
+        ("src/timeline/page.rs", "detail", &[Ban::Layout(7)]),
         ("src/timeline/page.rs", "filters", &[Ban::Layout(1)]),
         ("src/timeline/page.rs", "list", &[Ban::Layout(1)]),
         ("src/timeline/page.rs", "new_events_line", &[Ban::Layout(1)]),
@@ -920,7 +922,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "an_open_history_prepares_its_rows_once_and_draws_only_those_in_view",
             &[Ban::Layout(1)],
         ),
-        ("src/timeline/checks.rs", "length_field", &[Ban::RowKey(1)]),
         ("src/trackers/view.rs", "amount_field", &[Ban::RowKey(3)]),
         (
             "src/trackers/view.rs",
@@ -1206,6 +1207,7 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/design/gallery.rs", "markdown", &[Ban::Layout(1)]),
         ("src/design/gallery.rs", "show", &[Ban::Layout(1)]),
         ("src/design/layout.rs", "area", &[Ban::Layout(2)]),
+        ("src/design/layout.rs", "editor", &[Ban::Layout(1)]),
         (
             "src/design/layout.rs",
             "field_id! statement",

@@ -198,18 +198,24 @@ pub fn components(ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         let id = egui::Id::new("gallery_side");
         let mut side = ui.data(|data| data.get_temp::<usize>(id)).unwrap_or(1);
-        let _ = super::Dropdown::new(crate::field_id!("gallery_side"), "Side")
-            .choice(0, "Allies")
-            .choices([(1, "Enemies"), (2, "Neutral")])
-            .width(160.0)
-            .show(ui, &mut side);
+        let _ = super::Dropdown::new(
+            crate::field_id!("gallery_side").once(super::Once::Example),
+            "Side",
+        )
+        .choice(0, "Allies")
+        .choices([(1, "Enemies"), (2, "Neutral")])
+        .width(160.0)
+        .show(ui, &mut side);
         ui.data_mut(|data| data.insert_temp(id, side));
         let mut locked = 0;
-        let _ = super::Dropdown::new(crate::field_id!("gallery_side_locked"), "Locked side")
-            .choice(0, "Allies")
-            .width(160.0)
-            .blocked(Some("Close the run first."))
-            .show(ui, &mut locked);
+        let _ = super::Dropdown::new(
+            crate::field_id!("gallery_side_locked").once(super::Once::Example),
+            "Locked side",
+        )
+        .choice(0, "Allies")
+        .width(160.0)
+        .blocked(Some("Close the run first."))
+        .show(ui, &mut locked);
         let more = Action::quiet("2 more").show(ui);
         let _ = super::rich_tip(
             more,
@@ -253,13 +259,9 @@ pub fn components(ui: &mut egui::Ui) {
         });
         ui.vertical(|ui| {
             let mut query = "Wolf".to_owned();
-            let _ = crate::field_id!("gallery_search").search(
-                ui,
-                "Search",
-                &mut query,
-                "Search…",
-                200.0,
-            );
+            let _ = crate::field_id!("gallery_search")
+                .once(super::Once::Example)
+                .search(ui, "Search", &mut query, "Search…", 200.0);
             number_field(ui, "Amount", &mut amount, "Amount", 64.0, 30.0);
             let mut quantity = 3;
             stepper(ui, "Quantity", &mut quantity, 0..=99);

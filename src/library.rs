@@ -2498,9 +2498,11 @@ pub(crate) const MOVED_ON_DISK: &str =
 
 const ENTRY_ROW_HEIGHT: f32 = 44.0;
 const SEARCH_NAME: &str = "Search the Library";
-const LIBRARY_SEARCH: design::FieldId = crate::field_id!("library_search");
-const NEW_ENTRY_FOLDER: design::FieldId = crate::field_id!("new_entry_folder");
-const DISK_DRAFT: design::FieldId = crate::field_id!("library_disk_draft");
+const LIBRARY_SEARCH: design::FieldId =
+    crate::field_id!("library_search").once(design::Once::PageSearch);
+const NEW_ENTRY_FOLDER: design::FieldId =
+    crate::field_id!("new_entry_folder").once(design::Once::CreateForm);
+const DISK_DRAFT: design::FieldName = crate::field_id!("library_disk_draft");
 /// A row's short cause for an entry whose identity or key another file claims too.
 pub(crate) const SAME_ENTRY: &str = "Same entry in two files";
 /// A row's short cause for a first heading that does not say the entry's name.
@@ -8299,11 +8301,10 @@ impl Library {
                                             );
                                             let mut draft = self.draft.as_str();
                                             // The field belongs to this note: its owner and path key it.
-                                            let field = note
-                                                .owner
-                                                .id()
-                                                .map_or(DISK_DRAFT, |owner| DISK_DRAFT.with(owner));
-                                            let field = field.with(Path::new(&note.path));
+                                            let field = DISK_DRAFT.of(note.owner.id());
+                                            let field = field.with(design::TextKey::from_data(
+                                                note.path.clone(),
+                                            ));
                                             let response =
                                                 field.multi_line(ui, &mut draft, |edit| {
                                                     edit.font(egui::TextStyle::Monospace)
