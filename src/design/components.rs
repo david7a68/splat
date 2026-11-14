@@ -45,7 +45,8 @@ pub fn one_line(
 }
 
 /// Whole words of `text` that fit. A cut ends with an ellipsis, never a joining word.
-/// The first word stays unless it is itself a joining word.
+/// The first word stays unless it is itself a joining word or does not fit: then its start
+/// that fits, with an ellipsis (nothing when not even the ellipsis fits).
 pub fn words_that_fit(ui: &Ui, text: &str, font: &FontId, width: f32) -> String {
     let mut words: Vec<_> = text.split_whitespace().collect();
     let full = words.join(" ");
@@ -58,13 +59,34 @@ pub fn words_that_fit(ui: &Ui, text: &str, font: &FontId, width: f32) -> String 
             .any(|joining| word.eq_ignore_ascii_case(joining));
         if !joining {
             let fitted = format!("{}…", words.join(" "));
-            if words.len() == 1 || number_width(ui, &fitted, font) <= width {
+            if number_width(ui, &fitted, font) <= width {
                 return fitted;
+            }
+            if words.len() == 1 {
+                return start_that_fits(ui, words[0], font, width);
             }
         }
         words.pop();
     }
-    "…".to_owned()
+    start_that_fits(ui, "", font, width)
+}
+
+/// The longest start of `word` that fits in `width` with an ellipsis after it (a word with no
+/// spaces, in any script, is cut between characters); an ellipsis alone when no character fits;
+/// nothing when even the ellipsis does not fit.
+fn start_that_fits(ui: &Ui, word: &str, font: &FontId, width: f32) -> String {
+    let chars: Vec<char> = word.chars().collect();
+    for end in (1..chars.len()).rev() {
+        let start = format!("{}…", chars[..end].iter().collect::<String>());
+        if number_width(ui, &start, font) <= width {
+            return start;
+        }
+    }
+    if number_width(ui, "…", font) <= width {
+        "…".to_owned()
+    } else {
+        String::new()
+    }
 }
 
 /// Temporary HP, with its mark, in every place that shows it.
@@ -1324,25 +1346,34 @@ pub(super) fn search_box(
     text: &mut String,
     hint: &str,
     width: f32,
+    kept: f32,
 ) -> Response {
     let c = colors();
     let height = Density::Scan.control();
-    // The hint keeps whole words inside the field's text room (its margins are 28 and 8): a
-    // narrow field cuts it with an ellipsis, never past its edge. It shows only while the field
-    // is empty, so it is measured only then.
+    // The frame is the whole row. Inside it: the icon's margin at the left, then the text area,
+    // then `kept` px for `Clear` and the frame's own margin at the right. When the row is
+    // narrower than all of that, the text area gives way first, then the right margin: the frame
+    // never leaves the row.
+    let width = width.max(0.0);
+    let left = SEARCH_LEFT.min(width);
+    let text_room = (width - SEARCH_LEFT - SEARCH_RIGHT - kept).max(0.0);
+    let right = (width - left - text_room).max(0.0);
+    // The hint keeps whole words inside the text area: a narrow field cuts it with an
+    // ellipsis, never past the area. It shows only while the field is empty, so it is measured
+    // only then.
     let hint = if text.is_empty() {
-        words_that_fit(ui, hint, &Type::Body.font(ui), width - 36.0)
+        words_that_fit(ui, hint, &Type::Body.font(ui), text_room)
     } else {
         String::new()
     };
     let response = ui.add(
         egui::TextEdit::singleline(text)
             .id(id)
-            .desired_width(width - 36.0)
+            .desired_width(text_room)
             .min_size(vec2(width, height))
             .margin(egui::Margin {
-                left: 28,
-                right: 8,
+                left: left.round() as i8,
+                right: right.round().min(i8::MAX as f32) as i8,
                 top: 6,
                 bottom: 6,
             })
@@ -1358,6 +1389,10 @@ pub(super) fn search_box(
     );
     response
 }
+
+/// A search field's left margin (the icon's place) and right margin, around its text area.
+pub(super) const SEARCH_LEFT: f32 = 28.0;
+pub(super) const SEARCH_RIGHT: f32 = 8.0;
 
 /// The width of a segment's words in its widest state: selected words are `Strong`, the others
 /// `Body`. A segment takes this width in both states, so no word moves when the choice changes

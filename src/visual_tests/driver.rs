@@ -869,12 +869,6 @@ impl<'a> Driver<'a> {
             .map(|node| node.rect)
     }
 
-    /// The row of the search field named `name`: the field and the place it keeps for `Clear`
-    /// (`design::search_row`). Where a search ends is the row's right edge, not the field's.
-    pub fn search_row_of(&self, name: &str) -> Option<egui::Rect> {
-        crate::design::search_row(&self.harness.ctx, name)
-    }
-
     /// What the rail paints. It has its own words, whatever the page says.
     pub fn rail_words(&self) -> String {
         let window = self.harness.ctx.content_rect();

@@ -643,7 +643,7 @@ impl TimelinePage {
                 "Search the timeline",
                 &mut self.search,
                 "Search",
-                design::search_row_width(ui, 160.0),
+                160.0,
             );
             let label = self
                 .session

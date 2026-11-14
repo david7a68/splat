@@ -8857,10 +8857,8 @@ pub mod column_resize {
         d.place_of(NAV_LIBRARY).map_or(0.0, |rect| rect.right() + S)
     }
 
-    /// The Library search's row: it spans the entries column (X2: the field ends at Clear's
-    /// kept place, the row at the column's edge).
     fn search(d: &Driver<'_>) -> egui::Rect {
-        d.search_row_of(SEARCH_LIBRARY).unwrap_or(egui::Rect::ZERO)
+        d.place_of(SEARCH_LIBRARY).unwrap_or(egui::Rect::ZERO)
     }
 
     fn sections_edge(d: &Driver<'_>) -> f32 {
@@ -17071,7 +17069,7 @@ pub mod encounter_groups {
         d.state("invalid-arrival-total", Sizes::All);
         // AH1 at the captured sizes: one Add edge for every group, within the shared block.
         for size in [SMALL, DEFAULT, LARGE] {
-            let (adds, pane, search) = d.at_size(size, |d| {
+            let (adds, pane) = d.at_size(size, |d| {
                 let adds: Vec<_> = d
                     .nodes()
                     .into_iter()
@@ -17083,11 +17081,7 @@ pub mod encounter_groups {
                     })
                     .map(|node| node.rect.right())
                     .collect();
-                (
-                    adds,
-                    d.place_of("Find or name a creature"),
-                    d.search_row_of("Find or name a creature"),
-                )
+                (adds, d.place_of("Find or name a creature"))
             });
             d.observe(
                 "iter-23-R-AH1",
@@ -17100,15 +17094,13 @@ pub mod encounter_groups {
                     }),
                 format!("At {size:?} every group's Add ends at one x inside the block: {adds:?} from {pane:?}"),
             );
-            // FH2: the search is as wide as the group block: one right edge. X2: the search's
-            // row (the field and Clear's kept place) ends there.
+            // FH2: the search field is as wide as the group block: one right edge.
             d.observe(
                 "iter-24-R-FH2",
-                search
-                    .zip(adds.first())
-                    .is_some_and(|(search, add)| (search.right() - add).abs() <= 1.0),
+                pane.zip(adds.first())
+                    .is_some_and(|(pane, add)| (pane.right() - add).abs() <= 1.0),
                 format!(
-                    "At {size:?} the search row ends at the Add column: {search:?} and {adds:?}"
+                    "At {size:?} the search field ends at the Add column: {pane:?} and {adds:?}"
                 ),
             );
         }
@@ -19864,12 +19856,11 @@ pub mod session_plan_groups {
             format!("Find a creature top, empty {empty:?}, with members {assembled:?}"),
         );
         d.state("plan-group-assembled", Sizes::All);
-        // iter-27-B FL3: the search ends where each result's Add ends, at the scroll lane, with
-        // or without the bar. X2: the search's row (the field and Clear's kept place) ends
-        // there; the field ends at Clear's place.
+        // iter-27-B FL3: the search field ends where each result's Add ends, at the scroll
+        // lane, with or without the bar.
         for size in [SMALL, DEFAULT, LARGE] {
             let edges = d.at_size(size, |d| {
-                let search = d.search_row_of(FIND_CREATURE)?;
+                let search = d.place_of(FIND_CREATURE)?;
                 let adds: Vec<f32> = d
                     .nodes()
                     .into_iter()
@@ -19907,7 +19898,7 @@ pub mod session_plan_groups {
             let gap = d
                 .place_of("Group name: Ash Pack")
                 .zip(d.place_of("Save group"))
-                .zip(d.search_row_of(FIND_CREATURE))
+                .zip(d.place_of(FIND_CREATURE))
                 .map(|((name, save), search)| {
                     (
                         save.left() - name.right(),

@@ -530,15 +530,15 @@ impl FieldId {
     }
 
     /// A search field with this id: the search icon, the hint (what can be searched) and, while
-    /// it holds text, a quiet `Clear` after it on its line. `Clear` empties the text and gives
-    /// the field its focus back; `cleared` says so, for a caller that resets more (the selected
-    /// result). A search field has no form without its `Clear` (N10).
+    /// it holds text, a quiet `Clear` inside the field's right end. `Clear` empties the text and
+    /// gives the field its focus back; `cleared` says so, for a caller that resets more (the
+    /// selected result). A search field has no form without its `Clear` (N10).
     ///
-    /// `width` is the whole row: the field and `Clear`'s place. `Clear`'s place is kept from the
-    /// first frame, empty while the field is empty (as a `Slot` keeps a value's widest form), so
-    /// the field's width never changes while the DM types or deletes (X2). The row's rect is
-    /// recorded for the gate ([`search_row`]): a check of "the search ends at the column's edge"
-    /// measures the row, since the field ends at `Clear`'s place.
+    /// The field's frame is exactly `width` (X2). `Clear`'s place is kept inside the frame's
+    /// right end from the first frame (as a `Slot` keeps a value's widest form): the text area is
+    /// the frame less that place, with and without text, so nothing moves or narrows while the
+    /// DM types or deletes, and the hint has the same room in both states. Below
+    /// [`search_min_row`] the frame still keeps to `width`; its text area gives way.
     ///
     /// ```
     /// fn f(ui: &mut eframe::egui::Ui, query: &mut String) {
@@ -568,35 +568,30 @@ impl FieldId {
     ) -> Search {
         let mut cleared = false;
         let id = self.named(name).id();
-        let row = ui.horizontal(|ui| {
-            // Clear's place, kept whether or not Clear shows: its width and the gap before it.
-            let room = search_clear_room(ui);
-            let place = room - ui.spacing().item_spacing.x;
-            let guard = TextGuard::before(ui, id, text);
-            let field = super::components::search_box(
-                ui,
-                id,
-                name,
-                text,
-                hint,
-                (width - room).max(Density::Scan.control()),
+        // Clear's place, kept inside the frame's right end whether or not Clear shows.
+        let place = search_clear().natural_width(ui);
+        let guard = TextGuard::before(ui, id, text);
+        let field = super::components::search_box(ui, id, name, text, hint, width, place);
+        guard.after(ui, text, &field);
+        record_field(ui, &field);
+        if !text.is_empty() {
+            let frame = field.rect;
+            let at = Rect::from_min_max(
+                egui::pos2((frame.right() - place).max(frame.left()), frame.top()),
+                frame.right_bottom(),
             );
-            guard.after(ui, text, &field);
-            record_field(ui, &field);
-            if text.is_empty() {
-                super::extras::space(ui, place);
-            } else if search_clear().show(ui).clicked() {
+            let mut inside = ui.new_child(
+                UiBuilder::new()
+                    .max_rect(at)
+                    .layout(Layout::left_to_right(Align::Center)),
+            );
+            if search_clear().show(&mut inside).clicked() {
                 text.clear();
                 field.request_focus();
                 cleared = true;
             }
-            field
-        });
-        record_search_row(ui, name, row.response.rect);
-        Search {
-            field: row.inner,
-            cleared,
         }
+        Search { field, cleared }
     }
 
     /// A multi-line field with this id that no shared part draws.
@@ -619,15 +614,11 @@ impl FieldId {
     }
 }
 
-/// The row width to give [`FieldId::search`] for a field `field` px wide: the field and the
-/// place it keeps for `Clear`.
-pub fn search_row_width(ui: &Ui, field: f32) -> f32 {
-    field + search_clear_room(ui)
-}
-
-/// The place a search row keeps for `Clear`: its width and the gap before it.
-fn search_clear_room(ui: &Ui) -> f32 {
-    search_clear().natural_width(ui) + ui.spacing().item_spacing.x
+/// The smallest row a search field is usable in: its margins, `Clear`'s place and a 24 px text
+/// area. Below it the field still keeps inside the width it is given: its text area gives way.
+pub fn search_min_row(ui: &Ui) -> f32 {
+    use super::components::{SEARCH_LEFT, SEARCH_RIGHT};
+    SEARCH_LEFT + SEARCH_RIGHT + search_clear().natural_width(ui) + 24.0
 }
 
 /// The search row's `Clear`.
@@ -816,47 +807,6 @@ pub(super) fn guarded_field(
 pub struct Search {
     pub field: Response,
     pub cleared: bool,
-}
-
-/// The search rows the design drew in one pass, by the field's name.
-#[derive(Clone, Default)]
-struct SearchRows {
-    pass: u64,
-    rows: Vec<(String, Rect)>,
-}
-
-fn search_rows_id() -> Id {
-    Id::new("splat_search_rows")
-}
-
-/// Note a search row drawn in this pass, for [`search_row`].
-fn record_search_row(ui: &Ui, name: &str, rect: Rect) {
-    if ui.is_sizing_pass() {
-        return;
-    }
-    let pass = ui.ctx().cumulative_pass_nr();
-    ui.ctx().data_mut(|data| {
-        let drawn = data.get_temp_mut_or_default::<SearchRows>(search_rows_id());
-        if drawn.pass != pass {
-            drawn.pass = pass;
-            drawn.rows.clear();
-        }
-        drawn.rows.push((name.to_owned(), rect));
-    });
-}
-
-/// The row of the last pass's search field named `name`: the field and `Clear`'s kept place.
-/// The field's own rect ends before `Clear`'s place; a check of where the search ends reads this.
-pub fn search_row(ctx: &egui::Context, name: &str) -> Option<Rect> {
-    let drawn = ctx.data(|data| data.get_temp::<SearchRows>(search_rows_id()))?;
-    if drawn.pass + 1 < ctx.cumulative_pass_nr() {
-        return None;
-    }
-    drawn
-        .rows
-        .iter()
-        .find(|(row, _)| row == name)
-        .map(|(_, rect)| *rect)
 }
 
 /// The text fields the design drew in one pass.
