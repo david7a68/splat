@@ -427,6 +427,15 @@ impl ProcessingSettings {
         )
     }
 
+    /// Faults to show, for a test of their places: the keyring's words for each key, and the
+    /// settings file's reader's words. `None` clears one.
+    #[cfg(test)]
+    pub fn simulate_faults(&mut self, speech: Option<&str>, llm: Option<&str>, file: Option<&str>) {
+        self.speech_key.error = speech.map(str::to_owned);
+        self.llm_key.error = llm.map(str::to_owned);
+        self.load_error = file.map(str::to_owned);
+    }
+
     #[cfg(test)]
     pub fn simulate_keys(&mut self) {
         self.speech_key.saved = true;
