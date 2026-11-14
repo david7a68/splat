@@ -1256,6 +1256,18 @@ pub fn start(
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    static LAST_CONTEXT: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
+/// The context words of the last job started on this thread in a test build: what the real
+/// build sends to the model with the transcript.
+#[cfg(test)]
+pub fn last_context() -> Option<String> {
+    LAST_CONTEXT.with(|last| last.borrow().clone())
+}
+
 /// No service in a test build: fixed words, written where the real ones go.
 #[cfg(test)]
 pub fn start(
@@ -1263,6 +1275,7 @@ pub fn start(
     request: Request,
     _: impl FnOnce(&mut Request) -> Result<(), String> + Send + 'static,
 ) -> Job {
+    LAST_CONTEXT.with(|last| *last.borrow_mut() = Some(request.context.clone()));
     let (tx, messages) = mpsc::channel();
     let write = || -> Result<(), String> {
         Transcript {

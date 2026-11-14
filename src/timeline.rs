@@ -310,11 +310,13 @@ impl Check {
 /// [`Event`], so they cannot reach the shown [`Event::label`], which drops a title that only says
 /// the kind (a day titled `Day` must stay `## Day 1: Day` in the file, or the next save would
 /// read it back with no title).
+// Its fields are private: outside `timeline` the only way to get one is `Stored::of(&Event)`, so
+// no caller can build it from a shown label (a doc test cannot name it: `timeline` is private).
 #[derive(Clone, Copy)]
 pub struct Stored<'a> {
-    pub kind: Kind,
-    pub id: &'a str,
-    pub title: &'a str,
+    kind: Kind,
+    id: &'a str,
+    title: &'a str,
 }
 
 impl<'a> Stored<'a> {

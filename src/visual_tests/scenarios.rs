@@ -16030,7 +16030,64 @@ pub mod session_recording {
         d.click("Start recording");
         d.click("Stop recording");
         d.click_starting("Recordings");
+        // Review of PR 322: a day the plan titled `Day` goes to the model as the file stores it,
+        // `- Day N: Day`, not as the screen shows it. The day is put in the session's events
+        // without a save and taken out again before the next state.
+        let plan_day = "s2-plan-titled-day".to_owned();
+        // The session whose recording is processed: the open note's.
+        let recorded = {
+            let open = d
+                .app_mut()
+                .sessions
+                .selected_path()
+                .map(std::path::Path::to_owned);
+            let campaign = d.app_mut().campaigns.active_campaign().unwrap();
+            let folder = crate::sessions::folder(&campaign).unwrap();
+            crate::sessions::list_notes(&folder)
+                .into_iter()
+                .find(|note| Some(&note.path) == open.as_ref())
+                .map(|note| note.id)
+        };
+        assert!(recorded.is_some(), "an open session note to process");
+        d.app_mut().timeline.events.push(crate::timeline::Event {
+            id: plan_day.clone(),
+            kind: crate::timeline::Kind::Day,
+            title: "Day".into(),
+            duration: String::new(),
+            place: String::new(),
+            notes: String::new(),
+            result: String::new(),
+            session: recorded,
+            run: None,
+            marker: String::new(),
+            restores: false,
+            continued_in: None,
+            played_order: 0,
+            checks_table: None,
+            checks: Vec::new(),
+            within: None,
+            extra: Default::default(),
+        });
         d.click_containing("Process:");
+        let day = {
+            let events = &d.app_mut().timeline.events;
+            events
+                .iter()
+                .position(|event| event.id == plan_day)
+                .map(|at| crate::timeline::day_numbers(events)[at])
+        };
+        d.app_mut()
+            .timeline
+            .events
+            .retain(|event| event.id != plan_day);
+        let sent = crate::processing::last_context().unwrap_or_default();
+        let line = day.map(|day| format!("- Day {day}: Day"));
+        d.observe(
+            "iter-28-S2-day-context",
+            line.as_ref()
+                .is_some_and(|line| sent.lines().any(|sent| sent == line)),
+            format!("The model's context names the day as stored ({line:?}): {sent:?}"),
+        );
         d.expect("Summary");
         d.click("Summary");
         d.press_ctrl(Key::K);
