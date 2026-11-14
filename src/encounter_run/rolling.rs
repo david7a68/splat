@@ -123,31 +123,6 @@ const REROLL_CHOICES: usize = 8;
 /// buttons, then an `XS` gap, so the bar sits apart from the dock.
 pub(super) const STRIP_HEIGHT: f32 = rolls::BAR_BUTTONS + crate::design::XS;
 
-/// The panel's scroll area for a stat block or a sheet. It starts `S` into the panel's
-/// gutter, and its margin keeps the text where it was, so a quiet action at the text edge
-/// (`Stop`, `Roll damage`) shows its whole press area.
-pub(super) fn gutter_scroll(
-    ui: &mut egui::Ui,
-    scroll: egui::ScrollArea,
-    add: impl FnOnce(&mut egui::Ui),
-) {
-    let area = ui.available_rect_before_wrap();
-    let gutter = crate::design::S;
-    // A child, so the panel's own width counts only its column, not the gutter.
-    let mut child =
-        ui.new_child(egui::UiBuilder::new().max_rect(area.with_min_x(area.min.x - gutter)));
-    scroll.show(&mut child, |ui| {
-        egui::Frame::new()
-            .inner_margin(egui::Margin {
-                left: gutter as i8,
-                ..egui::Margin::ZERO
-            })
-            .show(ui, add);
-    });
-    let used = child.min_rect().intersect(area);
-    ui.allocate_rect(used, egui::Sense::hover());
-}
-
 /// Why nothing rolls once the encounter has ended.
 const ENDED: &str = "This encounter has ended. Undo the ending to continue.";
 
