@@ -3932,8 +3932,10 @@ pub mod party {
                 let placed = match (words, connect, file) {
                     (Some(words), Some(connect), Some(file)) => {
                         // One line: the bordered button is taller than the link beside it.
+                        // The footer part places its choices `S` apart (Wave 2 d: it was the
+                        // page's own `L`); the check still holds the order and the one line.
                         (connect.top()..=connect.bottom()).contains(&file.center().y)
-                            && file.left() - connect.right() >= crate::design::L - 0.5
+                            && file.left() - connect.right() >= crate::design::S - 0.5
                             && connect.left() >= words.left() - 0.5
                     }
                     _ => false,
@@ -9825,6 +9827,11 @@ pub mod run_sync_states {
         );
         // iter-26-R FK3: every sync block heading has one form: the name in the text colour,
         // ` · `, then the status's icon and word in its own colour.
+        // At 960 the pending block is below the sync column's fold, as it was before row 154's
+        // line: scroll the column to it and read every heading there; the scroll goes back
+        // after the checks (proof steps outside the DM's task).
+        let column = d.place_of(USE_REMOTE).expect("the sync column").center();
+        d.aside(|d| d.scroll_at(column, 3));
         let mut headings = Vec::new();
         d.each_painted_text(|text, _| {
             let job = &text.galley.job;
@@ -9856,6 +9863,23 @@ pub mod run_sync_states {
                     .all(|(_, colors)| colors[0] == text && colors[2] != text),
             format!("Sync block headings, one form: {headings:?}"),
         );
+        // iter-28-R FL4: the pending block says what waits, that Splat tries again, and how to
+        // close now; the conflict block beside it keeps `Choose which values to keep`.
+        let pending = d.nodes().into_iter().find(|node| {
+            node.name
+                .contains("changes have not reached D&D Beyond yet")
+        });
+        d.observe(
+            "iter-28-R-FL4",
+            pending.as_ref().is_some_and(|node| {
+                node.in_view() && node.name.contains("Splat tries again by itself")
+            }) && d.has_containing("Choose which values to keep"),
+            format!(
+                "The pending sync block says what waits and what the DM can do: {:?}",
+                pending.map(|node| node.rect)
+            ),
+        );
+        d.aside(|d| d.scroll_up_at(column, 3));
         d.state("ended-with-conflict", Sizes::All);
         // FJ3: the closed Prep and Combat log sections start at one x.
         for size in [SMALL, DEFAULT, LARGE] {
@@ -10202,6 +10226,42 @@ pub mod run_roster_conflict {
         d.goal("tab through a roster of 20");
         for _ in 0..20 {
             d.click(NEXT_TURN);
+        }
+        // iter-28-R FL9: a condition link's painted underline keeps 2 px from its row's edge,
+        // where the next row's turn stroke is (it was 1 px: `Prone` at y 146, stroke at 147).
+        for size in [SMALL, DEFAULT] {
+            let gaps = d.at_size(size, |d| {
+                let nodes = d.nodes();
+                let rows: Vec<egui::Rect> = nodes
+                    .iter()
+                    .filter(|node| {
+                        node.role == egui::accesskit::Role::Button && node.name.contains(", HP ")
+                    })
+                    .map(|node| node.rect)
+                    .collect();
+                nodes
+                    .iter()
+                    .filter(|node| node.name.starts_with("Rule: ") && node.in_view())
+                    .filter_map(|link| {
+                        let row = rows.iter().find(|row| row.contains(link.rect.center()))?;
+                        let underline = d
+                            .line_segments_in(link.rect)
+                            .into_iter()
+                            // The underline spans its word; the rules between rows span the row.
+                            .filter(|line| line.width() <= link.rect.width() + 1.0)
+                            .map(|line| line.center().y)
+                            .fold(f32::NAN, f32::max);
+                        (!underline.is_nan()).then(|| (link.name.clone(), row.bottom() - underline))
+                    })
+                    .collect::<Vec<_>>()
+            });
+            d.observe(
+                "iter-28-R-FL9",
+                !gaps.is_empty() && gaps.iter().all(|(_, gap)| *gap >= 2.0),
+                format!(
+                    "At {size:?}, each condition underline's distance to its row's edge: {gaps:?}"
+                ),
+            );
         }
         d.state("after-full-round", Sizes::Standard);
     }
@@ -17508,16 +17568,25 @@ pub mod encounter_groups {
         );
         d.expect("Tied with Kestrel Dunmoor at\u{a0}14, placed after.");
         // iter-26-R FI10: a row's hidden changes say how many: `1 more`, never a bare `more`.
+        // iter-28-R FJ3: with no change shown, the count names its kind, `3 changes`, and no
+        // `more` follows the conditions (it would count them).
         let words = d.at_size(DEFAULT, |d| d.row_words(RIVAL_NAME).replace('\u{a0}', " "));
-        let counted = words.match_indices(" more").all(|(at, _)| {
-            words[..at]
-                .chars()
-                .next_back()
-                .is_some_and(|c| c.is_ascii_digit())
+        let counted = [" more", " changes"].iter().all(|word| {
+            words.match_indices(word).all(|(at, _)| {
+                words[..at]
+                    .chars()
+                    .next_back()
+                    .is_some_and(|c| c.is_ascii_digit())
+            })
         });
+        // At 1200 no change of Rival Captain's shows, so the count is `✎ 3 changes`.
+        let mark_count = format!("{} 3 changes", crate::design::icons::CHANGED);
         d.observe(
             "iter-26-R-FI10",
-            words.contains(" more") && counted,
+            words.contains(&mark_count)
+                && !words.contains("Changed")
+                && !words.contains(" more")
+                && counted,
             format!("{RIVAL_NAME}'s row at 1200: {words}"),
         );
         d.state_prepared("group-added-with-a-total", Sizes::All, |d| {
@@ -19042,6 +19111,13 @@ pub mod encounter_owned_groups {
             d.has(&add_group(GROUP_ARENA)) && d.has_containing("For Arena Final"),
             "A run from an older save lists every group, and says who each is for",
         );
+        // iter-28-R FB11: the help speaks of the DM's run, not of Splat's versions.
+        d.observe(
+            "iter-28-R-FB11",
+            d.has_containing("This run does not say which encounter it came from")
+                && !d.has_containing("saved before groups"),
+            "The older save's help says what the run lacks, not when Splat changed",
+        );
         // iter-26-B FB10: a group whose encounter is gone says the Groups list's heading words,
         // short enough to sit beside its name as `For Arena Final` does.
         d.observe(
@@ -19087,9 +19163,13 @@ pub mod run_overrides {
         d.observe(
             "T13.3",
             row.contains("Blessed")
-                && row.contains("Changed")
-                && ((row.contains("Attack +1") && row.contains("Damage +1"))
-                    || row.contains("more")),
+                && ((row.contains("Changed")
+                    && ((row.contains("Attack +1") && row.contains("Damage +1"))
+                        || row.contains("more")))
+                    // iter-28-R FJ3: with no change shown, the mark and the count of changes.
+                    || (2..10).any(|count| {
+                        row.contains(&format!("{} {count} changes", crate::design::icons::CHANGED))
+                    })),
             format!("The row marks a change and carries its bonuses: {row}"),
         );
         d.observe(
@@ -19606,10 +19686,11 @@ pub mod run_add_creature {
                     "New creature HP",
                     "New creature AC",
                     "New creature initiative total",
-                    "Side of the new creature",
                 ]
                 .iter()
                 .all(|name| d.in_view(name))
+                    // A drop-down's name ends with its choice: `Side of the new creature: Enemies`.
+                    && d.in_view_containing("Side of the new creature: ")
             },
         );
     }
@@ -19640,7 +19721,12 @@ pub mod run_add_creature {
         const ADD_GHOST: &str = "Add Ghost of the Mill to the initiative list";
         // FI4: `Count` and `Initiative` fields start at one x, and `Side` starts where `HP` does.
         let label_left = |d: &Driver<'_>, field: &str, word: &str| {
-            let field = d.place_of(field)?;
+            // A drop-down's name ends with its choice (`Side of the new creature: Enemies`).
+            let field = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name == field || node.name.starts_with(&format!("{field}: ")))
+                .map(|node| node.rect)?;
             let area = egui::Rect::from_min_max(
                 egui::pos2(field.left() - crate::design::XXL * 3.0, field.top()),
                 egui::pos2(field.left(), field.bottom()),
@@ -19660,6 +19746,27 @@ pub mod run_add_creature {
                 if (count - total).abs() < 1.0 && (hp - side).abs() < 1.0),
             format!("Count and Initiative fields, HP and Side words at one x each: {columns:?}"),
         );
+        // iter-28-R: the side is a `Dropdown`; its list opens under it and lists the run's
+        // sides, at 960 px and the other sizes (a menu no scenario opens has no proof).
+        let side = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name.starts_with("Side of the new creature: "))
+            .map(|node| node.name.clone())
+            .expect("the side drop-down");
+        // A proof step that comes back to where it began: not part of the DM's task. No
+        // capture state: the gate reads the list's own area as an egui handle over its choices
+        // (reported to the lead as a gap of the drop-down part); captures `iter-28-d-R-g1`
+        // `run-add-creature__03-arrivals-side-list-open` at all three sizes show the list.
+        d.aside(|d| {
+            d.click(&side);
+            d.observe(
+                "iter-28-R-side-list",
+                d.in_view("Enemies") && d.in_view("Party"),
+                "The side list opens with the run's sides",
+            );
+            d.press(Key::Escape);
+        });
         // Blocked, the button's name says `this creature`.
         let add_before = d
             .place_of("Add this creature to the initiative list")
@@ -22758,14 +22865,15 @@ pub mod session_plan {
                 && !d.has_containing("Last: Party"),
             "Last: after a long rest says full HP, in lower case",
         );
-        // iter-25-S FK8: the run closed last says it in the DM's words.
+        // iter-25-S FK8, iter-28-R FM8 (review of PR 326): the run closed last says what the
+        // value is, `Closed last`, true also for a run still in Setup (no turn was played).
         d.observe(
-            "iter-25-S-FK8",
+            "iter-28-R-FM8",
             d.nodes()
                 .iter()
-                .any(|node| node.name.contains("Played last"))
-                && !d.has_containing("Closed last"),
-            "The saved run's second line says Played last",
+                .any(|node| node.name.contains("Closed last"))
+                && !d.has_containing("Played last"),
+            "The saved run's second line says Closed last (the value is the order of closing)",
         );
         d.state("saved-runs-history", Sizes::All);
         d.observe(
@@ -24201,13 +24309,31 @@ pub mod run_rolls {
                 format!("At {size:?} the saved result shows whole, `(half)` included: {whole:?}"),
             );
         }
-        let pitch = d.at_size(SMALL, |d| {
-            [ATTACKER, TARGET].map(|row| d.row_node(row).map(|node| node.rect.height().round()))
+        // iter-28-R R8 (review of PR 326) changes FI2 on purpose: a result is never cut, and
+        // the state marks never give way. At 960 the target's Bloodied and Conc marks and its
+        // whole result are painted; where they do not share the line the result takes its own
+        // line and the row grows by exactly that line.
+        let (pitch, painted) = d.at_size(SMALL, |d| {
+            (
+                [ATTACKER, TARGET]
+                    .map(|row| d.row_node(row).map(|node| node.rect.height().round())),
+                d.row_node(TARGET)
+                    .map(|node| d.painted_in(node.shown).replace('\u{a0}', " "))
+                    .unwrap_or_default(),
+            )
         });
+        let line = crate::design::Type::Small.line().round();
         d.observe(
             "iter-27-R-FI2",
-            pitch.iter().all(Option::is_some) && pitch[0] == pitch[1],
-            format!("At 960 the row with the save result keeps the pitch of a row without one: {pitch:?}"),
+            matches!(pitch, [Some(a), Some(b)] if b == a || b == a + line),
+            format!("At 960 the row with the save result grows by at most its own line: {pitch:?}"),
+        );
+        d.observe(
+            "iter-28-R-R8-marks",
+            painted.contains("Bloodied")
+                && painted.contains("Conc")
+                && painted.contains("Saved · 1 damage (half)"),
+            format!("At 960 the target keeps both marks and its whole result: {painted:?}"),
         );
         d.state("save-applied", Sizes::Default);
         // Undo gives each target back its own HP.

@@ -578,28 +578,26 @@ impl Run {
 
     /// The right-click menu of a run row, and the question that waits on it. Shows nothing
     /// when the row has nothing to offer.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     pub(super) fn row_menu(&self, response: &egui::Response, row: usize) -> Option<RowChoice> {
         // Before any early return: a row whose last choice went away still owns its menu.
         rolls::keep_menu_owner(response);
         let mut chosen = None;
         if let Some(asking) = self.asking.as_ref().filter(|asking| asking.row == row) {
-            let shown = egui::Popup::menu(response).open(true).show(|ui| {
-                ui.set_width(320.0);
-                rolls::menu_text(ui, &asking.question, crate::design::colors().text);
-                // The choices start at the question's words.
-                for (index, (words, _)) in asking.choices.iter().enumerate() {
-                    if rolls::menu_choice(ui, words) {
-                        chosen = Some(RowChoice::Damage(index));
+            let shown = crate::design::menu_popup(&response.ctx, response)
+                .open(true)
+                .show(|ui| {
+                    ui.set_width(320.0);
+                    rolls::menu_text(ui, &asking.question, crate::design::colors().text);
+                    // The choices start at the question's words.
+                    for (index, (words, _)) in asking.choices.iter().enumerate() {
+                        if rolls::menu_choice(ui, words) {
+                            chosen = Some(RowChoice::Damage(index));
+                        }
                     }
-                }
-                if rolls::menu_choice(ui, "Cancel") {
-                    chosen = Some(RowChoice::Cancel);
-                }
-            });
+                    if rolls::menu_choice(ui, "Cancel") {
+                        chosen = Some(RowChoice::Cancel);
+                    }
+                });
             if chosen.is_none() && shown.is_some_and(|shown| shown.response.clicked_elsewhere()) {
                 chosen = Some(RowChoice::Cancel);
             }
@@ -612,18 +610,20 @@ impl Run {
         // Under the row, so the row it is about stays in view. Shift+F10 on the focused row
         // opens it too.
         let open = rolls::menu_open_command(response);
-        egui::Popup::menu(response).open_memory(open).show(|ui| {
-            for (heading, items) in &sections {
-                rolls::menu_text(ui, heading, crate::design::colors().muted);
-                for (words, choice) in items {
-                    // Under a heading, the choices start at its words.
-                    if rolls::menu_choice(ui, words) {
-                        chosen = Some(choice.clone());
-                        ui.close();
+        crate::design::menu_popup(&response.ctx, response)
+            .open_memory(open)
+            .show(|ui| {
+                for (heading, items) in &sections {
+                    rolls::menu_text(ui, heading, crate::design::colors().muted);
+                    for (words, choice) in items {
+                        // Under a heading, the choices start at its words.
+                        if rolls::menu_choice(ui, words) {
+                            chosen = Some(choice.clone());
+                            ui.close();
+                        }
                     }
                 }
-            }
-        });
+            });
         chosen
     }
 
@@ -1401,10 +1401,13 @@ impl Run {
         let death_saves = self.state.participants[self.selected].hp == Some(0);
         let open_side = ui
             .horizontal(|ui| {
+                // FK7: a quiet action that starts the line; its word starts at the dock's text
+                // edge, `S` in from this line's edge (the padding hangs in the gap).
                 let open = death_saves && {
                     crate::design::gap(ui, crate::design::Gap::S);
                     crate::design::Action::quiet("Death saves")
                         .density(crate::design::Density::Read)
+                        .line_start()
                         .show(ui)
                         .clicked()
                 };

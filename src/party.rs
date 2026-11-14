@@ -1,9 +1,8 @@
 //! Character viewer, with combat sync on from the time Splat connects to D&D Beyond.
-#![allow(deprecated)] // Old message functions; Wave 2 moves this file to `design::outcome`.
 use crate::rolls::Chip;
 use crate::{
     auth::Session,
-    design::{self, Action, Density, Status, Tone, Type, colors, icons},
+    design::{self, Action, Density, Status, Type, colors, icons},
     party_sync::{Reader, Stored},
 };
 use eframe::egui;
@@ -393,8 +392,8 @@ impl Party {
         // Round 27 FA4, FH1: the page's notices and results that come and go sit in one footer,
         // below the list and the sheet. So a notice that comes, or its close icon, moves no
         // member row and no sheet. Round 28: the pane places it, `S` below the content or pinned.
-        let presses = PagePresses::default();
-        let footer = self.page_footer(&presses, session.is_some(), linked);
+        let frame = design::outcome::PaneFrame::new(ui);
+        let footer = self.page_footer(&frame, session.is_some(), linked);
         // The list and the sheet are columns that each scroll; the footer is pinned below them.
         // An empty state is short content, and the footer follows it.
         let columns = linked && !self.reader.members.is_empty();
@@ -403,10 +402,10 @@ impl Party {
         } else {
             design::Body::Content
         };
-        footer.pane(ui, body, |ui| {
+        let paned = footer.pane(ui, body, |ui| {
             self.page_body(ui, session, linked);
         });
-        self.page_pressed(presses);
+        self.page_pressed(ui.ctx(), paned.pressed);
     }
 
     /// The page below its header, above its footer: the empty states, or the list and the sheet.
@@ -565,154 +564,134 @@ impl Party {
 
     /// The page's one message footer (round 27 FA4, FH1), below the list and the sheet. Its
     /// order: the errors (the party's read, a character's read beside its kept edits), then the
-    /// replaced-sheet results, the local-edit notices with their actions, the storage warnings
-    /// and the stopped-sync notice. Each keeps its owner and end event: a result or the
-    /// stopped-sync notice ends at its close icon, a local-edit notice when its sheet is
-    /// replaced. The messages own their words, so the body can change the page while the footer
-    /// waits for it; a press is kept in `presses` and done by `page_pressed`.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
-    fn page_footer<'p>(
+    /// moved-aside sheets' results, the local-edit warnings with their actions, the storage
+    /// warnings and the stopped-sync notice. Each keeps its owner and end event: a moved-aside
+    /// sheet's result ends at its own close icon, a local-edit warning when its sheet is
+    /// replaced, the stopped-sync notice at its close icon. The messages own their words, so the
+    /// body can change the page; `page_pressed` does the press after the page is drawn.
+    fn page_footer<'f>(
         &self,
-        presses: &'p PagePresses,
+        frame: &'f design::outcome::PaneFrame,
         connected: bool,
         linked: bool,
-    ) -> design::Footer<'p> {
+    ) -> design::outcome::Messages<'f, PartyPress> {
+        use design::outcome::{Choice, FaultMessage, Lost, MessageChoice, Notice, Said};
         let reader = &self.reader;
-        let mut footer = design::Footer::new("party_page_footer", design::LIST_MEASURE);
+        let mut messages =
+            design::outcome::Messages::new(frame, "party_page_footer", design::LIST_MEASURE);
+        let show_file = |path: &std::path::Path| {
+            Choice::new(
+                MessageChoice::Link {
+                    word: "Show file",
+                    hover: None,
+                },
+                PartyPress::ShowFile(path.to_path_buf()),
+            )
+            .hover(path.display().to_string())
+        };
         if linked {
-            if let Some(error) = reader.error.clone() {
-                footer.reason(error.clone(), move |ui| {
-                    design::message(ui, Tone::Error, &error);
-                });
+            if let Some(error) = &reader.error {
+                messages.outcome(FaultMessage::new(&PartyFault::Read(error)));
             }
             for id in reader.conflicts.keys() {
                 if reader.selected.as_ref() != Some(id)
                     && let Some(error) = reader.errors.get(id)
                 {
-                    let words = format!("{}: {error}", reader.member_name(id));
-                    footer.reason(words.clone(), move |ui| {
-                        design::message(ui, Tone::Error, &words);
-                    });
+                    messages.outcome(FaultMessage::new(&PartyFault::Character {
+                        name: reader.member_name(id),
+                        error,
+                    }));
                 }
             }
             // Round 25 FD3: one dismiss form on the page, the close icon at the message end.
-            for path in &reader.archived {
-                let name = reader
-                    .archived_owners
-                    .get(&**path)
-                    .map(|id| reader.member_name(id))
-                    .unwrap_or("This character");
-                let words =
-                    format!("{name}’s sheet now matches D&D Beyond. Your edited version is kept.");
-                let dismiss = &presses.dismiss_archived;
-                let order = reader
-                    .archived_orders
-                    .get(&**path)
-                    .copied()
-                    .unwrap_or_default();
-                // A shared path: no copy each frame.
-                let path = std::sync::Arc::clone(path);
-                footer.result(order, words.clone(), false, move |ui| {
-                    if dismissable(ui, |ui| {
-                        storage_notice(ui, Tone::Success, &words, &["Show file"], |ui| {
-                            show_file(ui, &path);
-                        });
-                    }) {
-                        dismiss.set(true);
-                    }
+            for shown in reader.archived.newest_first(&()) {
+                let line = shown.outcome(frame, |archived| {
+                    let name = reader.member_name(&archived.owner);
+                    Said::new(crate::sentence!(
+                        "{}’s sheet now matches D&D Beyond. Your edited version is kept.",
+                        name
+                    ))
+                    .choice(show_file(&archived.path))
+                    .choice(Choice::new(
+                        MessageChoice::Dismiss(Lost::Nothing),
+                        PartyPress::DismissArchived,
+                    ))
+                    .into()
                 });
+                messages.kept(line);
             }
             let several = reader.conflicts.len() > 1;
             let waiting = reader.force_waiting();
-            // `at` is the notice's place among the conflicts: its id is looked up at the press.
+            // `at` is the warning's place among the conflicts: its id is looked up at the press.
             for (at, (id, path)) in reader.conflicts.iter().enumerate() {
                 let name = reader.member_name(id);
-                let next = if connected {
-                    "Replacing keeps your version as a copy."
+                let fault = FaultMessage::new(&PartyFault::LocalEdits { name, connected });
+                let fault = if connected {
+                    // Safe first: Show file, then Replace, which changes the active sheet (the
+                    // part puts `L` before it). Its lock keeps its reason's room while the
+                    // forced read waits and after, so nothing in the footer moves.
+                    fault.choice(show_file(path)).choice(
+                        Choice::new(
+                            MessageChoice::Lose("Replace with D&D Beyond sheet"),
+                            PartyPress::Replace(several.then_some(at)),
+                        )
+                        .locked_when(waiting, crate::sentence!("Waiting for D&D Beyond.")),
+                    )
                 } else {
-                    "Connect, then replace it. Replacing keeps your version as a copy."
+                    // The warning asks the DM to connect, so the way to connect is first.
+                    fault
+                        .choice(
+                            Choice::new(MessageChoice::Choice(CONNECT), PartyPress::Connect).hover(
+                                "Opens Settings to connect your D&D Beyond account".to_owned(),
+                            ),
+                        )
+                        .choice(show_file(path))
                 };
-                let words = format!(
-                    "{name}’s sheet file has your own edits, so Splat stopped updating it.\n{next}"
-                );
-                let action = if !connected {
-                    CONNECT
-                } else if waiting {
-                    "Waiting for D&D Beyond."
-                } else {
-                    "Replace with D&D Beyond sheet"
-                };
-                let (settings, replace) = (&presses.wants_settings, &presses.replace);
-                let path = std::sync::Arc::clone(path);
-                footer.notice(words.clone(), move |ui| {
-                    storage_notice(ui, Tone::Warning, &words, &[action, "Show file"], |ui| {
-                        if !connected {
-                            // The message asks the DM to connect, so the way to connect is on
-                            // its line.
-                            if Action::secondary(action)
-                                .density(Density::Read)
-                                .hint("Opens Settings to connect your D&D Beyond account")
-                                .show(ui)
-                                .clicked()
-                            {
-                                settings.set(true);
-                            }
-                        } else if waiting {
-                            ui.label(Type::Small.rich(ui, action).color(colors().muted));
-                        } else if Action::secondary(action)
-                            .density(Density::Read)
-                            .show(ui)
-                            .clicked()
-                        {
-                            replace.set(Some(several.then_some(at)));
-                        }
-                        show_file(ui, &path);
-                    });
-                });
+                messages.outcome(fault);
             }
             let warnings: std::collections::BTreeSet<_> = reader.warnings.values().collect();
             for warning in warnings {
-                let words = format!("Local storage: {warning}");
-                footer.notice(words.clone(), move |ui| {
-                    design::message(ui, Tone::Warning, &words);
-                });
+                messages.outcome(FaultMessage::new(&PartyFault::Storage(warning)));
             }
         }
         if self.sync_stopped {
-            let dismiss = &presses.dismiss_stopped;
-            footer.notice(SYNC_STOPPED, move |ui| {
-                if dismissable(ui, |ui| {
-                    design::message(ui, Tone::Warning, SYNC_STOPPED);
-                }) {
-                    dismiss.set(true);
-                }
-            });
+            messages.outcome(Notice::new(SYNC_STOPPED).choice(Choice::new(
+                MessageChoice::Dismiss(Lost::Nothing),
+                PartyPress::DismissStopped,
+            )));
         }
-        footer
+        messages
     }
 
     /// Do what the DM pressed in the page's footer.
-    fn page_pressed(&mut self, presses: PagePresses) {
-        if presses.dismiss_stopped.get() {
-            self.sync_stopped = false;
-        }
-        if presses.dismiss_archived.get() {
-            self.reader.archived.clear();
-            self.reader.archived_orders.clear();
-            self.reader.archived_owners.clear();
-        }
-        self.wants_settings |= presses.wants_settings.get();
-        match presses.replace.take() {
-            Some(None) => self.reader.force_read(),
-            Some(Some(at)) => {
+    fn page_pressed(
+        &mut self,
+        ctx: &egui::Context,
+        pressed: Option<design::outcome::Press<PartyPress>>,
+    ) {
+        let Some(design::outcome::Press { id, ticket }) = pressed else {
+            return;
+        };
+        match id {
+            PartyPress::DismissStopped => self.sync_stopped = false,
+            // Its own result only: a newer one keeps its line.
+            PartyPress::DismissArchived => {
+                if let Some(ticket) = ticket {
+                    let _ = self.reader.archived.use_press_by(ticket);
+                }
+            }
+            PartyPress::Connect => self.wants_settings = true,
+            PartyPress::Replace(None) => self.reader.force_read(),
+            PartyPress::Replace(Some(at)) => {
                 if let Some(id) = self.reader.conflicts.keys().nth(at).cloned() {
                     self.reader.force_read_character(&id);
                 }
             }
-            None => {}
+            PartyPress::ShowFile(path) => {
+                if let Ok(url) = reqwest::Url::from_file_path(&path) {
+                    ctx.open_url(egui::OpenUrl::new_tab(url.to_string()));
+                }
+            }
         }
     }
 
@@ -774,6 +753,10 @@ impl Party {
         design::rule(ui);
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces; the selected character’s read error at the top of its sheet is a banner (design::results::STAGED_ALLOWS)"
+    )]
     fn sheet_view(&mut self, ui: &mut egui::Ui, session: Option<Session>) {
         let c = colors();
         let Some(id) = &self.reader.selected.clone() else {
@@ -785,7 +768,9 @@ impl Party {
             return;
         };
         if let Some(error) = self.reader.errors.get(id) {
-            design::message(ui, Tone::Error, error);
+            // The selected character's own read error stays at the top of its sheet (the
+            // footer names the others').
+            design::outcome::banner(ui, design::outcome::Banner::Fault(&PartyFault::Read(error)));
         }
         if let Some(record) = newer(self.combat.record(), self.reader.sheets.get(id)) {
             let portrait = self.portrait(Some(record));
@@ -822,18 +807,21 @@ impl Party {
         // Round 26: the sync panel's result sits in the sheet's footer, below the sheet, so what
         // is above stays. It ends at its close icon. Round 28: the sheet's pane is its scroll
         // column, one per page, so each page keeps its own scroll.
-        let dismissed = std::cell::Cell::new(false);
+        let frame = design::outcome::PaneFrame::new(ui);
         let sheet_footer = |page: Option<usize>, combat: &crate::combat_sync::CombatSync| {
-            let mut footer =
-                design::Footer::new(("party_sheet_footer", id, page), design::LIST_MEASURE);
+            let mut messages = design::outcome::Messages::new(
+                &frame,
+                ("party_sheet_footer", id, page),
+                design::LIST_MEASURE,
+            );
             if session.is_some() {
-                combat.footer_messages(&mut footer, &dismissed);
+                combat.footer_messages(&frame, &mut messages);
             }
-            footer
+            messages
         };
         let Some(record) = newer(self.combat.record(), self.reader.sheets.get(id)) else {
             // The panel scrolls above the footer when it needs more room.
-            sheet_footer(None, &self.combat).pane(ui, design::Body::Content, |ui| {
+            let paned = sheet_footer(None, &self.combat).pane(ui, design::Body::Content, |ui| {
                 if session.is_some() && self.sync_heading(ui) {
                     self.sync_panel(ui);
                 }
@@ -845,9 +833,7 @@ impl Party {
                     );
                 }
             });
-            if dismissed.get() {
-                self.combat.end_action_notice();
-            }
+            self.combat.footer_press(paned.pressed);
             return;
         };
         let before = self.page;
@@ -882,158 +868,119 @@ impl Party {
             self.content_entry = Some((record.source.content_hash.clone(), entry));
         }
         // The sheet pane starts below the tabs.
-        sheet_footer(Some(self.page), &self.combat).pane(ui, design::Body::Content, |ui| {
-            {
-                // The heading and its body are one block, below the tabs: the tabs never sit
-                // between them. Both scroll with the sheet, as one scroll is easier at the table
-                // than a scroll inside a scroll.
-                if session.is_some() && self.sync_heading(ui) {
-                    self.sync_panel(ui);
+        let paned =
+            sheet_footer(Some(self.page), &self.combat).pane(ui, design::Body::Content, |ui| {
+                {
+                    // The heading and its body are one block, below the tabs: the tabs never sit
+                    // between them. Both scroll with the sheet, as one scroll is easier at the table
+                    // than a scroll inside a scroll.
+                    if session.is_some() && self.sync_heading(ui) {
+                        self.sync_panel(ui);
+                    }
+                    let Some(record) = newer(self.combat.record(), self.reader.sheets.get(id))
+                    else {
+                        return;
+                    };
+                    // One person has one HP on this page: the list's, while tonight's fights count.
+                    let live = self
+                        .tonight_values(record)
+                        .map(|(hp, temporary_hp)| LiveValues {
+                            hp: Some(hp),
+                            max_hp: record.stat("max_hp"),
+                            temporary_hp,
+                            death_saves: record.initial.death_saves.clone(),
+                            death_saves_shown: false,
+                            conditions: sheet_labels(record),
+                        });
+                    sheet_page(ui, record, self.page, &self.search, live.as_ref());
+                    if self.page == 0 {
+                        design::gap(ui, design::Gap::M);
+                        design::quiet_section(ui, "Technical details", |ui| {
+                            source_and_parity(
+                                ui,
+                                record,
+                                self.content_entry.as_ref().map(|(_, entry)| entry),
+                                self.character_review.as_ref(),
+                                self.reader.campaign_path(),
+                                self.reader.local_scope(),
+                            );
+                        });
+                    }
                 }
-                let Some(record) = newer(self.combat.record(), self.reader.sheets.get(id)) else {
-                    return;
-                };
-                // One person has one HP on this page: the list's, while tonight's fights count.
-                let live = self
-                    .tonight_values(record)
-                    .map(|(hp, temporary_hp)| LiveValues {
-                        hp: Some(hp),
-                        max_hp: record.stat("max_hp"),
-                        temporary_hp,
-                        death_saves: record.initial.death_saves.clone(),
-                        death_saves_shown: false,
-                        conditions: sheet_labels(record),
-                    });
-                sheet_page(ui, record, self.page, &self.search, live.as_ref());
-                if self.page == 0 {
-                    design::gap(ui, design::Gap::M);
-                    design::quiet_section(ui, "Technical details", |ui| {
-                        source_and_parity(
-                            ui,
-                            record,
-                            self.content_entry.as_ref().map(|(_, entry)| entry),
-                            self.character_review.as_ref(),
-                            self.reader.campaign_path(),
-                            self.reader.local_scope(),
-                        );
-                    });
-                }
-            }
-        });
-        if dismissed.get() {
-            self.combat.end_action_notice();
-        }
+            });
+        self.combat.footer_press(paned.pressed);
     }
 }
 
 /// What the DM pressed in the Party page's footer, done after the page is drawn.
-#[derive(Default)]
-struct PagePresses {
-    dismiss_stopped: std::cell::Cell<bool>,
-    dismiss_archived: std::cell::Cell<bool>,
-    wants_settings: std::cell::Cell<bool>,
-    /// The local-edit notice whose Replace the DM pressed: `None` inside replaces every one.
-    /// The notice's place among the conflicts, so no id is copied each frame.
-    replace: std::cell::Cell<Option<Option<usize>>>,
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum PartyPress {
+    DismissStopped,
+    /// The close icon of a moved-aside sheet's result (the press's ticket names which).
+    DismissArchived,
+    Connect,
+    /// The local-edit warning whose Replace the DM pressed: `None` when there is one, which
+    /// replaces every one. The warning's place among the conflicts, looked up at the press.
+    Replace(Option<usize>),
+    ShowFile(std::path::PathBuf),
 }
 
-/// Keep each storage message and its actions together at the list measure.
-fn storage_notice(
-    ui: &mut egui::Ui,
-    tone: Tone,
-    words: &str,
-    actions: &[&str],
-    add: impl FnOnce(&mut egui::Ui),
-) {
-    ui.scope(|ui| {
-        ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
-        let actions_width = actions
-            .iter()
-            // Measure each action as a bordered button: never narrower than it draws.
-            .map(|word| {
-                Action::secondary(word)
-                    .density(Density::Read)
-                    .natural_width(ui)
-            })
-            .sum::<f32>()
-            + design::L * actions.len().saturating_sub(1) as f32;
-        let icon = match tone {
-            Tone::Warning => icons::WARN,
-            Tone::Success => icons::SUCCESS,
-            Tone::Error => icons::ERROR,
-            Tone::Info => icons::INFO,
-        };
-        // `design::message` draws S and the bar, the icon, one L gap, then the text, less XS.
-        let inset = design::S
-            + design::HAIRLINE_WIDTH
-            + design::number_width(ui, icon, &Type::Body.font(ui))
-            + design::L
-            - design::XS;
-        let text_width = words
-            .lines()
-            .map(|line| design::number_width(ui, line, &Type::Body.font(ui)))
-            .fold(0.0_f32, f32::max)
-            + inset;
-        if text_width + design::L + actions_width <= ui.available_width() {
-            ui.horizontal_top(|ui| {
-                ui.spacing_mut().item_spacing.x = design::L;
-                ui.allocate_ui_with_layout(
-                    egui::vec2(text_width, 0.0),
-                    egui::Layout::top_down(egui::Align::Min),
-                    |ui| {
-                        // The text's first line centres on the actions' line:
-                        // (`Read` control 28 − `Body` line 20) / 2 = `XS`.
-                        design::gap(ui, design::Gap::XS);
-                        design::message(ui, tone, words);
-                    },
-                );
-                add(ui);
-            });
-        } else {
-            let text = design::message(ui, tone, words);
-            // The actions start under the text, after the message's bar and icon.
-            let mut room = ui.available_rect_before_wrap();
-            room.min.x = text.rect.left().max(room.min.x);
-            ui.scope_builder(
-                egui::UiBuilder::new()
-                    .max_rect(room)
-                    .layout(egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true)),
-                |ui| {
-                    ui.spacing_mut().item_spacing.x = design::L;
-                    add(ui);
-                },
-            );
+/// What the Party page's footer says is wrong.
+enum PartyFault<'a> {
+    /// The party's read failed (D&D Beyond's or the system's words).
+    Read(&'a str),
+    /// One character's read failed, beside its kept edits.
+    Character { name: &'a str, error: &'a str },
+    /// The character's sheet note has the DM's own edits, so sync stopped writing it.
+    LocalEdits { name: &'a str, connected: bool },
+    /// The local copy could not be stored (the system's words).
+    Storage(&'a str),
+}
+
+impl design::outcome::Fault for PartyFault<'_> {
+    fn severity(&self) -> design::outcome::Severity {
+        match self {
+            Self::Read(_) | Self::Character { .. } => design::outcome::Severity::CannotRead,
+            Self::LocalEdits { .. } | Self::Storage(_) => design::outcome::Severity::NeedsFixing,
         }
-    });
-}
+    }
 
-/// A notice that the DM can dismiss: its words and actions, then the close icon at the right end
-/// of its first line. Every dismissable Party notice uses this one form. Returns whether the DM
-/// dismissed it.
-pub(crate) fn dismissable(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) -> bool {
-    let mut dismiss = false;
-    ui.scope(|ui| {
-        ui.set_max_width(ui.available_width().min(design::LIST_MEASURE));
-        ui.horizontal_top(|ui| {
-            let room = ui.available_width() - Density::Read.control() - design::S;
-            ui.allocate_ui_with_layout(
-                egui::vec2(room, 0.0),
-                egui::Layout::top_down(egui::Align::Min),
-                add,
-            );
-            dismiss = design::icon_button(ui, icons::CLOSE, "Dismiss this message").clicked();
-        });
-    });
-    dismiss
-}
+    fn place(&self) -> Option<design::outcome::FaultPlace<'_>> {
+        match self {
+            Self::Character { name, .. } => Some(design::outcome::FaultPlace {
+                name: (*name).into(),
+                line: None,
+            }),
+            _ => None,
+        }
+    }
 
-fn show_file(ui: &mut egui::Ui, path: &std::path::Path) {
-    if design::link(ui, "Show file")
-        .on_hover_text(path.display().to_string())
-        .clicked()
-        && let Ok(url) = reqwest::Url::from_file_path(path)
-    {
-        ui.ctx().open_url(egui::OpenUrl::new_tab(url.to_string()));
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "a failed read or store says D&D Beyond’s or the system’s own words"
+    )]
+    fn cause(&self) -> design::outcome::Sentence {
+        use design::outcome::Sentence;
+        match self {
+            Self::Read(error) | Self::Character { error, .. } => {
+                Sentence::outside(*error).unwrap_or(crate::sentence!("The read did not finish."))
+            }
+            Self::LocalEdits { name, connected } => {
+                let first = crate::sentence!(
+                    "{}’s sheet file has your own edits, so Splat stopped updating it.",
+                    name
+                );
+                if *connected {
+                    first.then(crate::sentence!("Replacing keeps your version as a copy."))
+                } else {
+                    first.then(crate::sentence!(
+                        "Connect, then replace it. Replacing keeps your version as a copy."
+                    ))
+                }
+            }
+            Self::Storage(warning) => Sentence::outside(format!("Local storage: {warning}"))
+                .unwrap_or(crate::sentence!("Local storage did not save.")),
+        }
     }
 }
 
@@ -1063,7 +1010,9 @@ const ENTRY_ROW: f32 = 40.0;
 /// The way to connect, wherever the party asks the DM to.
 const CONNECT: &str = "Connect D&D Beyond";
 /// Sync stops only when the connection ends, and starts again when it comes back.
-const SYNC_STOPPED: &str = "Combat sync stopped when the connection to D&D Beyond ended. Changes not yet sent did not reach D&D Beyond. Connect in Settings, and sync starts again.";
+const SYNC_STOPPED: design::outcome::Sentence = crate::sentence!(
+    "Combat sync stopped when the connection to D&D Beyond ended. Changes not yet sent did not reach D&D Beyond. Connect in Settings, and sync starts again."
+);
 
 /// What a sheet says a character has left, for a DM who plans an encounter around it.
 #[derive(Default)]
@@ -2694,44 +2643,9 @@ mod sheet_now_tests {
 
     #[test]
     fn iter_3_b_storage_actions_stay_with_their_message() {
-        use crate::design::{self, Action, Density, Tone};
+        use crate::design;
         use eframe::egui;
         use egui_kittest::kittest::Queryable;
-        for width in [440.0, 960.0, 1920.0] {
-            let words = "Sable’s sheet file has your own edits, so Splat stopped updating it.\nReplacing keeps your version as a copy.";
-            let mut harness = egui_kittest::Harness::builder()
-                .with_size(egui::vec2(width, 640.0))
-                .build(|ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        super::storage_notice(
-                            ui,
-                            Tone::Warning,
-                            words,
-                            &["Replace with D&D Beyond sheet", "Show file"],
-                            |ui| {
-                                Action::secondary("Replace with D&D Beyond sheet")
-                                    .density(Density::Read)
-                                    .show(ui);
-                                design::link(ui, "Show file");
-                            },
-                        );
-                    });
-                });
-            design::theme::install(&harness.ctx);
-            harness.run_steps(2);
-            let message = harness.get_by_label(words).rect();
-            let action = harness.get_by_label("Replace with D&D Beyond sheet").rect();
-            assert!(action.right() <= design::LIST_MEASURE + design::L);
-            if action.top() >= message.bottom() {
-                assert!(
-                    (action.left() - message.left()).abs() <= design::XS,
-                    "{width}: {message:?}, {action:?}"
-                );
-            } else {
-                assert!(action.left() >= message.right());
-                assert!(action.left() - message.right() <= design::L + design::XS);
-            }
-        }
         // Two characters with local edits, A and B, in the page's real footer: B's Replace
         // forces a read of B alone, and A stays as it was (the press keeps its notice's place
         // among the conflicts, not a copy of its id).
@@ -2747,39 +2661,164 @@ mod sheet_now_tests {
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(960.0, 640.0))
             .build_ui(move |ui| {
-                let presses = super::PagePresses::default();
-                let footer = drawn.borrow().page_footer(&presses, true, true);
-                footer.pane(ui, design::Body::Content, |_| ());
-                drawn.borrow_mut().page_pressed(presses);
+                let frame = design::outcome::PaneFrame::new(ui);
+                let footer = drawn.borrow().page_footer(&frame, true, true);
+                let paned = footer.pane(ui, design::Body::Content, |_| ());
+                drawn.borrow_mut().page_pressed(ui.ctx(), paned.pressed);
             });
         design::theme::install(&harness.ctx);
         harness.run_steps(3);
+        const REPLACE: &str = "Replace with D&D Beyond sheet";
+        // Every Replace and Show file, top to bottom: the footer's controls.
+        let controls = |harness: &egui_kittest::Harness<'_>| {
+            let mut rects: Vec<egui::Rect> = harness
+                .get_all_by_label(REPLACE)
+                .chain(harness.get_all_by_label("Show file"))
+                .map(|node| node.rect())
+                .collect();
+            rects.sort_by(|x, y| {
+                x.top()
+                    .total_cmp(&y.top())
+                    .then(x.left().total_cmp(&y.left()))
+            });
+            rects
+        };
+        // A press with the pointer, and the URLs that frame asked to open.
+        let click = |harness: &mut egui_kittest::Harness<'_>, at: egui::Pos2| {
+            let mut urls = Vec::new();
+            harness.event(egui::Event::PointerMoved(at));
+            for pressed in [true, false] {
+                harness.event(egui::Event::PointerButton {
+                    pos: at,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers::NONE,
+                });
+                harness.run_steps(1);
+                for command in &harness.output().platform_output.commands {
+                    if let egui::OutputCommand::OpenUrl(url) = command {
+                        urls.push(url.url.clone());
+                    }
+                }
+            }
+            harness.run_steps(2);
+            urls
+        };
         let replaces: Vec<_> = harness
-            .get_all_by_label("Replace with D&D Beyond sheet")
+            .get_all_by_label(REPLACE)
+            .map(|node| node.rect())
+            .collect();
+        let files: Vec<_> = harness
+            .get_all_by_label("Show file")
             .map(|node| node.rect())
             .collect();
         assert_eq!(replaces.len(), 2, "each local-edit notice has its Replace");
+        // Review of PR 330: safe first. Each warning has Show file, then Replace (the
+        // destructive choice) on its line, exactly `L` after it.
+        for replace in &replaces {
+            let file = files
+                .iter()
+                .find(|file| (file.center().y - replace.center().y).abs() <= design::S)
+                .copied();
+            assert!(
+                file.is_some_and(|file| file.right() <= replace.left()
+                    && (replace.left() - file.right() - design::L).abs() <= 0.5),
+                "Show file {file:?} comes first, `L` before Replace {replace:?}"
+            );
+        }
+        let before = controls(&harness);
         let second = replaces
             .iter()
             .max_by(|x, y| x.top().total_cmp(&y.top()))
             .copied()
             .unwrap();
-        harness.event(egui::Event::PointerMoved(second.center()));
-        for pressed in [true, false] {
-            harness.event(egui::Event::PointerButton {
-                pos: second.center(),
-                button: egui::PointerButton::Primary,
-                pressed,
-                modifiers: egui::Modifiers::NONE,
-            });
-            harness.run_steps(1);
-        }
-        harness.run_steps(2);
+        let first = replaces
+            .iter()
+            .min_by(|x, y| x.top().total_cmp(&y.top()))
+            .copied()
+            .unwrap();
+        click(&mut harness, second.center());
         assert_eq!(
             party.borrow().reader.forced(),
             ["b"],
             "Replace on the second notice forces a read of B only; A is unchanged"
         );
+        // While the forced read waits, Replace is locked with its reason, and no control in
+        // the footer moves: the lock's line keeps its room before, during and after.
+        assert!(party.borrow().reader.force_waiting());
+        let during = controls(&harness);
+        assert_eq!(
+            before, during,
+            "the footer’s controls stay while the read waits"
+        );
+        click(&mut harness, first.center());
+        harness
+            .get_all_by_label(REPLACE)
+            .min_by(|x, y| x.rect().top().total_cmp(&y.rect().top()))
+            .unwrap()
+            .focus();
+        harness.run_steps(1);
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(2);
+        assert_eq!(
+            party.borrow().reader.forced(),
+            ["b"],
+            "a locked Replace takes no pointer press and no key"
+        );
+        party.borrow_mut().reader.end_forced_read();
+        harness.run_steps(3);
+        assert_eq!(before, controls(&harness), "and stay after the read");
+        // Wave 2 d (C): two moved-aside sheets, A then B, each a kept result with its own close
+        // icon. They are the page's, not the selected sheet's: they stay when the DM selects
+        // another character, and each acts on its own file. With B selected, A's Show file
+        // opens A's file; B's close icon (the newest, first in the footer) ends B's result only.
+        {
+            let mut party = party.borrow_mut();
+            party.reader.conflicts.clear();
+            party.reader.select("a".into());
+            for (owner, path) in [("a", "/campaign/a-old.md"), ("b", "/campaign/b-old.md")] {
+                party.reader.archived.record(crate::party_sync::Archived {
+                    path: std::path::Path::new(path).into(),
+                    owner: owner.into(),
+                });
+            }
+            party.reader.select("b".into());
+        }
+        harness.run_steps(3);
+        let files: Vec<_> = harness
+            .get_all_by_label("Show file")
+            .map(|node| node.rect())
+            .collect();
+        assert_eq!(files.len(), 2, "both results stay when B is selected");
+        let oldest = files
+            .iter()
+            .max_by(|x, y| x.top().total_cmp(&y.top()))
+            .copied()
+            .unwrap();
+        let urls = click(&mut harness, oldest.center());
+        assert!(
+            urls.len() == 1 && urls[0].ends_with("/campaign/a-old.md"),
+            "A’s Show file opens A’s file only: {urls:?}"
+        );
+        let closes: Vec<_> = harness
+            .get_all_by_label(design::outcome::DISMISS_NAME)
+            .map(|node| node.rect())
+            .collect();
+        assert_eq!(closes.len(), 2, "each moved-aside sheet has its close icon");
+        let newest = closes
+            .iter()
+            .min_by(|x, y| x.top().total_cmp(&y.top()))
+            .copied()
+            .unwrap();
+        click(&mut harness, newest.center());
+        let left: Vec<_> = party
+            .borrow()
+            .reader
+            .archived
+            .newest_first(&())
+            .map(|shown| shown.value().owner.clone())
+            .collect();
+        assert_eq!(left, ["a"], "B’s close icon ends B’s result; A’s stays");
     }
 
     #[test]

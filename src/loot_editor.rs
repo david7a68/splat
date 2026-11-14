@@ -224,6 +224,7 @@ pub fn show(
     for at in 0..lines.len() {
         if let Some(gone) = line_row(
             ui,
+            id,
             name,
             lines,
             at,
@@ -254,13 +255,17 @@ pub fn show(
     *lines != before
 }
 
+const LOOT_LINE: design::FieldName = crate::field_id!("loot_line");
+
 /// One line. Returns its place when the DM removes it.
+#[allow(clippy::too_many_arguments)]
 #[allow(
     clippy::disallowed_methods,
     reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
 )]
 fn line_row(
     ui: &mut egui::Ui,
+    owner: egui::Id,
     name: &str,
     lines: &mut [String],
     at: usize,
@@ -360,8 +365,10 @@ fn line_row(
             _ => {
                 let mut words = line.clone();
                 let width = (ui.available_width() - menu).max(120.0);
-                let response = design::text_input(
+                // The field belongs to this list (its caller's id) and, by its label, to its line.
+                let response = design::line_field(
                     ui,
+                    LOOT_LINE.of(design::TextKey::from_data(format!("{owner:?}"))),
                     &format!("{name} loot line {}", at + 1),
                     &mut words,
                     "What the party finds",
@@ -394,6 +401,8 @@ fn line_row(
             });
         });
     });
+    // N12: a list row, so a footer never cuts through it.
+    design::register_row(ui, row.response.rect);
     // Below the row, under the key it is about, so the row stays one line.
     if let Some(reason) = reason {
         ui.horizontal(|ui| {
@@ -405,10 +414,6 @@ fn line_row(
 }
 
 /// The quiet menu of the campaign's tables, with the caret after the word. Returns a choice.
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 fn table_menu(
     ui: &mut egui::Ui,
     word: &str,
@@ -418,7 +423,7 @@ fn table_menu(
     let response = design::menu_button(ui, word, false);
     design::named(ui, &response, name);
     let mut chosen = None;
-    egui::Popup::menu(&response).show(|ui| {
+    crate::design::menu_popup(&*ui, &response).show(|ui| {
         let tables = sources.map_or(&[][..], |sources| &sources.tables[..]);
         if tables.is_empty() {
             ui.add(egui::Label::new(Type::Small.rich(ui, NO_TABLES).color(colors().muted)).wrap());

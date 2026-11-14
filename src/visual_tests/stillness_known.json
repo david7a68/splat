@@ -609,9 +609,6 @@
     ["N4/quiet-action-line-start","04-new-package-at-the-table","1920x1080","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","04-new-package-at-the-table","960x640","Button \"Filter creatures\"",1]
   ],
-  "party": [
-    ["N2/icon-off-text-centre","14-force-read-replaced","960x640","Button \"Dismiss this message\"",1]
-  ],
   "plain-evening": [
     ["G1b/pressed-control-moved","(after the last state)","1200x800","Button \"Road to the ford · Travel · half a day · Session 8\"",1],
     ["G6/footer-far-below-body","04-session-last: played fight open","1200x800","Button \"More actions for Ask about the toll\"",1],
@@ -671,9 +668,7 @@
     ["G3/far-action","16-history-not-the-last-fight","1920x1080","Button \"Close the run of Sunken Vault, Fled · Ended · Round 2 · Saved just now\"",1],
     ["G3/far-action","17-history-not-the-last-fight-beside-lookup","1920x1080","Button \"Close the run of Sunken Vault, Fled · Ended · Round 2 · Saved just now\"",1],
     ["G6/footer-far-below-body","14-undo-steps-unread","1920x1080","Button \"Ember Cultist, enemies, HP 33/33, Temp 0, AC 12, Initiative 9\"",1],
-    ["G6/footer-far-below-body","15-undo-steps-unread-beside-lookup","1920x1080","Button \"Ember Cultist, enemies, HP 33/33, Temp 0, AC 12, Initiative 9\"",1],
-    ["N4/quiet-action-line-start","09-fight-continued-beside-lookup","1200x800","Button \"Death saves\"",1],
-    ["N4/quiet-action-line-start","09-fight-continued-beside-lookup","960x640","Button \"Death saves\"",1]
+    ["G6/footer-far-below-body","15-undo-steps-unread-beside-lookup","1920x1080","Button \"Ember Cultist, enemies, HP 33/33, Temp 0, AC 12, Initiative 9\"",1]
   ],
   "run-edge-states": [
     ["G1b/pressed-control-moved","01-long-effect-text","960x640","Button \"Add\"",1],
@@ -710,6 +705,7 @@
   "run-loot": [
     ["G1b/pressed-control-moved","07-rewards-for-loot","960x640","Button \"Save encounter\"",2],
     ["G1b/pressed-control-moved","07-rewards-for-loot","960x640","Button \"Sunken Vault · Fight · Undecided · Ended · Round 2\"",1],
+    ["G3/far-action","05-loot-in-the-editor","1920x1080","Button \"More actions for the encounter loot line 4\"",1],
     ["G3/far-action","07-rewards-for-loot","1920x1080","Button \"Add rewards: Sunken Vault\"",1],
     ["G6/footer-far-below-body","09-rewards-with-loot-added","1200x800","Label \"Undecided ·\\u{a0}Ended\\u{a0}·\\u{a0}Round\\u{a0}2\"",1],
     ["G6/footer-far-below-body","09-rewards-with-loot-added","1920x1080","Label \"Undecided ·\\u{a0}Ended\\u{a0}·\\u{a0}Round\\u{a0}2\"",1],
@@ -766,7 +762,8 @@
     ["N5/icon-starts-wrapping-text","08-undo-boundary-for-one-character","960x640","Text \"\\u{e1b0} Connected · Sync reads this sheet · HP from this run\"",1]
   ],
   "run-sync-states": [
-    ["G1b/pressed-control-moved","04-conflict-on-strip","960x640","Button \"Keep Splat values and retry\"",1]
+    ["G1b/pressed-control-moved","04-conflict-on-strip","960x640","Button \"Keep Splat values and retry\"",1],
+    ["N4/quiet-action-line-start","03-ended-with-conflict","960x640","Button \"Stop sync for Iselle Marrowind\"",1]
   ],
   "session-carry-over": [
     ["G3/far-action","03-carried-over","1920x1080","Button \"More actions for Talk to Hobb the miller about the ropes\"",1],
@@ -992,9 +989,6 @@
   "settings": [
     ["G1b/pressed-control-moved","09-edit-campaign","960x640","Button \"Edit details\"",1],
     ["G1b/pressed-control-moved","11-campaign-details-discarded","960x640","Button \"Edit details\"",1],
-    ["N2/icon-off-text-centre","15-sync-stopped-recovery","1200x800","Button \"Dismiss this message\"",1],
-    ["N2/icon-off-text-centre","15-sync-stopped-recovery","1920x1080","Button \"Dismiss this message\"",1],
-    ["N2/icon-off-text-centre","15-sync-stopped-recovery","960x640","Button \"Dismiss this message\"",1],
     ["N4/quiet-action-line-start","05-account-connecting","960x640","Button \"Cancel\"",1]
   ],
   "share-to-package": [

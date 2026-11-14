@@ -2242,22 +2242,58 @@ fn preview_line(ui: &mut Ui, preview: &str) {
 /// How a caller moves a raw `egui::Popup::menu` of choices here: replace
 /// `egui::Popup::menu(&button).show(|ui| …)` with `design::menu_popup(ui, &button).show(|ui| …)`,
 /// keep the same `choice`/`choice_wrapped` rows inside, and remove the row's `Ban::Layout` count.
-pub fn menu_popup<'a>(ui: &Ui, response: &'a Response) -> MenuPopup<'a> {
-    let pane = ui.clip_rect();
-    let clear = lane_width().max(S);
-    let rightward = pane.right() - clear - response.rect.left();
-    let leftward = response.rect.right() - (pane.left() + clear);
+pub fn menu_popup<'a, P: MenuPane + ?Sized>(pane: &P, response: &'a Response) -> MenuPopup<'a> {
+    let pane = pane.pane();
+    let rightward = menu_room(pane, response.rect, egui::RectAlign::BOTTOM_START);
+    let leftward = menu_room(pane, response.rect, egui::RectAlign::BOTTOM_END);
     let (align, room) = if rightward >= leftward {
         (egui::RectAlign::BOTTOM_START, rightward)
     } else {
         (egui::RectAlign::BOTTOM_END, leftward)
     };
-    let room = room.max(Density::Read.control());
     MenuPopup {
         id: egui::Popup::default_response_id(response),
         popup: menu_popup_raw(response).align(align).width(room),
         room,
+        pane,
+        control: response.rect,
     }
+}
+
+/// Where a menu's room comes from: the `Ui` its control is drawn in (that pane's clip), or,
+/// for a caller with no `Ui`, the `Context` (the screen).
+pub trait MenuPane: menu_pane::Sealed {
+    fn pane(&self) -> Rect;
+}
+
+mod menu_pane {
+    pub trait Sealed {}
+    impl Sealed for eframe::egui::Ui {}
+    impl Sealed for eframe::egui::Context {}
+}
+
+impl MenuPane for Ui {
+    fn pane(&self) -> Rect {
+        self.clip_rect()
+    }
+}
+
+impl MenuPane for egui::Context {
+    fn pane(&self) -> Rect {
+        self.content_rect()
+    }
+}
+
+/// A menu's room in `pane` beside `control` for `align`: from the control's left edge to the
+/// pane's inner right edge (or from its right edge leftward), one lane clear of the edges.
+fn menu_room(pane: Rect, control: Rect, align: egui::RectAlign) -> f32 {
+    let clear = lane_width().max(S);
+    let room = if align.parent().x() == egui::Align::Max {
+        control.right() - (pane.left() + clear)
+    } else {
+        pane.right() - clear - control.left()
+    };
+    room.max(Density::Read.control())
 }
 
 #[allow(
@@ -2275,9 +2311,42 @@ pub struct MenuPopup<'a> {
     id: Id,
     /// The menu's largest outer width: its room in the pane.
     room: f32,
+    pane: Rect,
+    control: Rect,
 }
 
 impl MenuPopup<'_> {
+    /// Open it at a side of its control; its room is measured again for that side.
+    pub fn align(mut self, align: egui::RectAlign) -> Self {
+        self.room = menu_room(self.pane, self.control, align);
+        self.popup = self.popup.align(align).width(self.room);
+        self
+    }
+
+    /// Open or close it by the caller's flag (egui's `Popup::open`).
+    pub fn open(mut self, open: bool) -> Self {
+        self.popup = self.popup.open(open);
+        self
+    }
+
+    /// Open, close or toggle it by a command (egui's `Popup::open_memory`).
+    pub fn open_memory(mut self, command: Option<egui::SetOpenCommand>) -> Self {
+        self.popup = self.popup.open_memory(command);
+        self
+    }
+
+    /// The width egui first measures the menu in (egui's `Popup::width`); at most its room. The
+    /// part still decides the width it draws at.
+    pub fn width(mut self, width: f32) -> Self {
+        self.popup = self.popup.width(width.min(self.room));
+        self
+    }
+
+    /// The menu's size when it last drew, if it did.
+    pub fn get_expected_size(&self) -> Option<egui::Vec2> {
+        self.popup.get_expected_size()
+    }
+
     /// When a click closes the menu (egui's `PopupCloseBehavior`).
     pub fn close_behavior(mut self, behavior: egui::PopupCloseBehavior) -> Self {
         self.popup = self.popup.close_behavior(behavior);
@@ -2286,7 +2355,9 @@ impl MenuPopup<'_> {
 
     /// Draw the menu while it is open.
     pub fn show<R>(self, content: impl FnOnce(&mut Ui) -> R) -> Option<egui::InnerResponse<R>> {
-        let Self { popup, id, room } = self;
+        let Self {
+            popup, id, room, ..
+        } = self;
         let ctx = popup.ctx().clone();
         let key = id.with("splat_menu_width");
         let shown = popup.show(|ui| {
