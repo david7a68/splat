@@ -2108,6 +2108,8 @@ impl JourneyPlan {
 /// wrote (its session and file) and that note's Undo. It lasts while the note's words are what
 /// the act left, as every note act's Undo does.
 struct PlannedLine {
+    /// This result among the plan lines this page made: what its validity is cached by.
+    id: u64,
     /// The owner: the campaign the act was made in. The result ends when the campaign changes
     /// or the session's note leaves the folder (`Sessions::planned`).
     campaign: Option<Uuid>,
@@ -2291,6 +2293,12 @@ pub(super) struct Travel {
     generation: u64,
     /// Row 123: the plan's `Undo add plan line` failed while its journey's block was closed.
     undo_fault: Option<checks::UndoFault>,
+    /// Row 123, final review point 4: whether `planned` holds, by its id and the source of its
+    /// note's words (the draft's revision or the disk generation), so a quiet frame checks no
+    /// words.
+    live: Option<((u64, NoteSource), bool)>,
+    /// The id the last plan line got.
+    planned_ids: u64,
 }
 
 /// What Timeline's view of a session plan is read from: the campaign, the session and its file,
@@ -2882,13 +2890,20 @@ impl Sessions {
     /// result first, for the block of that journey (row 123, point 5).
     pub fn undo_plan_line(&mut self) -> Option<(String, checks::Act, String)> {
         self.planned()?;
-        let planned = self.travel.planned.take()?;
+        let mut planned = self.travel.planned.take()?;
+        // Final review point 1: a line whose own save failed and that a later save of its
+        // note wrote is taken back from the file, by the checked path: the Undo learns that from
+        // the note's draft (the open one, or one read now) before it runs.
         let result = if let Some(draft) = self.session_draft(planned.note) {
             // A draft that waits for a move or a choice refuses through `undo` itself.
+            planned.undo.follow_save(draft);
             planned.undo.undo(draft)
         } else {
             let result = match crate::sessions::Draft::open(&planned.path) {
-                Ok(mut other) => planned.undo.undo(&mut other),
+                Ok(mut other) => {
+                    planned.undo.follow_save(&other);
+                    planned.undo.undo(&mut other)
+                }
                 Err(_) => Err(ActFault::Missing),
             };
             // What the file holds now: a draft that could not save is dropped unpublished.
@@ -3035,7 +3050,15 @@ impl Sessions {
         let Some(planned) = &self.travel.planned else {
             return false;
         };
-        match source {
+        let key = (planned.id, source);
+        if let Some((known, live)) = self.travel.live
+            && known == key
+        {
+            return live;
+        }
+        #[cfg(test)]
+        timeline::page::PLAN_LINE_CHECKS.with(|checks| checks.set(checks.get() + 1));
+        let live = match source {
             NoteSource::Draft(_) => self
                 .draft
                 .as_ref()
@@ -3045,7 +3068,9 @@ impl Sessions {
                 .watched
                 .get(&note)
                 .is_some_and(|watched| watched.body.as_deref() == Some(planned.undo.after())),
-        }
+        };
+        self.travel.live = Some((key, live));
+        live
     }
 
     /// Row 123: Timeline's view of the plan of `journey`'s session, for its check results'
@@ -3193,7 +3218,9 @@ impl Sessions {
         undo: NoteUndo,
     ) {
         self.travel.planned_order = design::ResultOrder::issue();
+        self.travel.planned_ids += 1;
         self.travel.planned = Some(PlannedLine {
+            id: self.travel.planned_ids,
             campaign: self.campaign.as_ref().map(|campaign| campaign.id),
             journey: journey.to_owned(),
             chosen: chosen.clone(),
@@ -3616,12 +3643,11 @@ impl Sessions {
         // Round 27 FE7: `Plan “<name>”`'s result and `Undo plan line`, in the plan of its
         // journey's session, while the note is as the act left it.
         let live = self.planned_live();
+        // Final review point 2: the result is its note's: only that session's plan shows it,
+        // wherever its journey is now.
         if let Some(planned) = &self.travel.planned
             && live
-            && book
-                .events
-                .iter()
-                .any(|event| event.id == planned.journey && event.is_in(session))
+            && Some(planned.note) == session
         {
             kept_at(
                 &mut messages,

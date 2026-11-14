@@ -2263,6 +2263,9 @@ impl Sessions {
         self.removed_fight = None;
         self.scenes = plan::Scenes::default();
         self.rewards = plan::Rewards::default();
+        // Row 123: a journey's acts, results and plan line are the campaign's: the change ends
+        // them here, as it happens.
+        self.travel = plan::Travel::default();
         self.campaign = active.cloned();
         self.folder_error = None;
         match active {
