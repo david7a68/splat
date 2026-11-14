@@ -1481,6 +1481,8 @@ impl CampaignContent {
                 let _ = results.undo_by(ticket, |kept| self.undo_result(&kept.payload));
                 self.results = results;
             }
+            // An encounter opens in Lookup by its id, whatever the page holds now.
+            (ContentPress::OpenEntry(id), _) => self.open_lookup = Some(id),
             (ContentPress::Undo, None) | (ContentPress::WriteCampaign, _) => {}
             (press, _) => self.package_press(ctx, campaigns, press),
         }
@@ -2268,10 +2270,6 @@ impl CampaignContent {
                     }
                     Err(error) => self.error = Some(error),
                 }
-                return;
-            }
-            ContentPress::OpenEntry(id) => {
-                self.open_lookup = Some(id);
                 return;
             }
             _ => {}
