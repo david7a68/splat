@@ -5845,7 +5845,31 @@ impl Encounters {
         // not after a refused Save. It is the frame's own state, read without parsing.
         let empty_group = self.draft.as_ref().and_then(Draft::empty_group_reason);
         let refusal = roster_reason.clone().or(empty_group.clone()).or(refusal);
-        self.save_refused = dirty && refusal.is_some();
+        // One `DraftState` decides the save row's word, Save's weight and reason, Discard and
+        // the campaign lock (migrate:O, rows 42 and 51). The encounter draft says `Invalid`
+        // only while it has changes; its rows name the faults of a clean one.
+        let state = {
+            let changed = if dirty {
+                design::memo::Changed::Yes
+            } else {
+                design::memo::Changed::No
+            };
+            // An open run's `Next turn` owns the one primary action.
+            let primary = if has_run {
+                design::save_row::Primary::Elsewhere
+            } else {
+                design::save_row::Primary::Draft
+            };
+            let mut state = design::DraftState::new(changed, primary).locks_campaign();
+            if let Some(refusal) = &refusal {
+                state = state.refused_when_changed(refusal.clone());
+            }
+            if saved_note.is_some() {
+                state = state.just_saved();
+            }
+            state
+        };
+        self.save_refused = dirty && !state.can_save();
         let draft_ref = self.draft.as_mut().expect("the editor has a draft");
         let focus_name = &mut self.focus_name;
         let focus_search_after_name = &mut self.focus_search;
@@ -5995,16 +6019,13 @@ impl Encounters {
                         blocked_reason(ui, Some(BLOCKED_BY_RUN));
                         design::gap(ui, design::Gap::L);
                     }
-                    save = if dirty && !has_run && refusal.is_none() {
-                        Action::primary("Save encounter")
-                    } else {
-                        Action::secondary("Save encounter")
+                    save = match state.save_weight() {
+                        design::save_row::SaveWeight::Primary => Action::primary("Save encounter"),
+                        design::save_row::SaveWeight::Secondary => {
+                            Action::secondary("Save encounter")
+                        }
                     }
-                    .blocked(if dirty {
-                        refusal.as_deref()
-                    } else {
-                        Some("No changes to save.")
-                    })
+                    .blocked(state.save_blocked())
                     .show(ui)
                     .clicked();
                 },
@@ -6012,57 +6033,46 @@ impl Encounters {
         });
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Read.control());
-            let (icon, word, color) = if dirty && refusal.is_some() {
-                // The message above names the cause, as Library's and World's do.
-                (icons::ERROR, "Invalid", colors().document.invalid)
-            } else if dirty {
-                (icons::DRAFT, "Unsaved", colors().document.unsaved)
-            } else if saved_note.is_some() {
-                (icons::OK, "Saved", colors().document.saved)
+            // FB9, FC13: the unfinished run's state ends the row, apart from the save state,
+            // Discard and their reasons, so it reads as the run's and no reason that comes or
+            // goes moves it (FB5).
+            if let Some(run) = &unfinished {
+                let words = run_state_word(
+                    run,
+                    self.run
+                        .as_ref()
+                        .and_then(|open| open.path())
+                        .is_none_or(|path| path != run.path),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    design::status(
+                        ui,
+                        Status {
+                            icon: icons::RUN,
+                            word: &words,
+                            color: colors().muted,
+                        },
+                    );
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                        discard = editor_save_state(
+                            ui,
+                            state.word().status(),
+                            state.discard_shown(),
+                            creature_dirty.then_some(BLOCKED_BY_CREATURE),
+                        );
+                        // FB6: while Save is blocked, Discard is the one way out.
+                        blocked_reason(ui, state.lock_reason());
+                    });
+                });
             } else {
-                (icons::OK, "No changes", colors().muted)
-            };
-            let slot_end = ui.cursor().left() + save_state_slot(ui) + ui.spacing().item_spacing.x;
-            {
                 discard = editor_save_state(
                     ui,
-                    Status { icon, word, color },
-                    dirty,
+                    state.word().status(),
+                    state.discard_shown(),
                     creature_dirty.then_some(BLOCKED_BY_CREATURE),
                 );
-            }
-            if let Some(run) = &unfinished {
-                // FB5: the run state follows the state's slot, so the first edit (a new word,
-                // Discard and the reason) does not move it.
-                let gap = slot_end - ui.cursor().left();
-                if gap > 0.0 {
-                    ui.add_space(gap);
-                }
-                design::status(
-                    ui,
-                    Status {
-                        icon: icons::RUN,
-                        word: &run_state_word(
-                            run,
-                            self.run
-                                .as_ref()
-                                .and_then(|open| open.path())
-                                .is_none_or(|path| path != run.path),
-                        ),
-                        color: colors().muted,
-                    },
-                );
-            }
-            // FB6: while Save is blocked, Discard is the one way out.
-            if dirty {
-                blocked_reason(
-                    ui,
-                    Some(if refusal.is_some() {
-                        blocked_draft_switch_reason()
-                    } else {
-                        draft_switch_reason()
-                    }),
-                );
+                // FB6: while Save is blocked, Discard is the one way out.
+                blocked_reason(ui, state.lock_reason());
             }
             blocked_reason(
                 ui,
