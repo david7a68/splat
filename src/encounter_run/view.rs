@@ -2357,7 +2357,7 @@ impl Run {
             if menu_needed && !end_menu {
                 let menu = design::menu_button(ui, "Close", false);
                 design::named(ui, &menu, "Close menu");
-                design::menu_popup(&menu).show(|ui| controls(ui));
+                design::menu_popup(&*ui, &menu).show(|ui| controls(ui));
             } else {
                 controls(ui);
             }
@@ -2938,7 +2938,7 @@ impl Run {
                         .find(|(panel, _)| *panel == self.panel)
                         .map(|(_, label)| *label);
                     let button = design::menu_button(ui, "Fight", false);
-                    design::menu_popup(&button).show(|ui| {
+                    design::menu_popup(&*ui, &button).show(|ui| {
                         for (panel, label) in fight {
                             if design::choice(ui, self.panel == panel, label).clicked() {
                                 self.panel = panel;

@@ -654,11 +654,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/campaign_content.rs", "page_footer", &[Ban::Results]),
         (
             "src/campaign_content.rs",
-            "packages_content",
-            &[Ban::Extras(2)],
-        ),
-        (
-            "src/campaign_content.rs",
             "repair_section_content",
             &[Ban::Results, Ban::Extras(1)],
         ),
@@ -808,7 +803,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/library.rs", "register_copy", &[Ban::Results]),
         ("src/library.rs", "reload_note_from_disk", &[Ban::Results]),
         ("src/library.rs", "unregister_dialog", &[Ban::Results]),
-        ("src/party.rs", "sheet_view", &[Ban::Extras(1), Ban::Body]),
+        ("src/party.rs", "sheet_view", &[Ban::Body]),
         ("src/sessions/carry.rs", "carry_in_footer", &[Ban::Results]),
         ("src/sessions/carry.rs", "record", &[Ban::Results]),
         (
@@ -918,7 +913,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounter_run/ad_hoc.rs",
             "add_creature_form",
-            &[Ban::Layout(1), Ban::Extras(1)],
+            &[Ban::Layout(1)],
         ),
         (
             "src/encounter_run/view.rs",
@@ -962,7 +957,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters.rs",
             "creature_search_with_summary",
-            &[Ban::Layout(1), Ban::Extras(1)],
+            &[Ban::Layout(1)],
         ),
         (
             "src/encounters.rs",
@@ -1142,11 +1137,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/encounter_run/view.rs", "log_link", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "word_link", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "plan_row_with", &[Ban::Extras(1)]),
-        (
-            "src/encounters.rs",
-            "replace_missing_creature",
-            &[Ban::Extras(1)],
-        ),
         ("src/encounters.rs", "add_pane", &[Ban::Extras(1)]),
         ("src/encounters.rs", "loot_field", &[Ban::Extras(1)]),
         ("src/encounters/list.rs", "heading", &[Ban::Extras(1)]),
@@ -1329,7 +1319,7 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "field_id! statement",
             &[Ban::Layout(1)],
         ),
-        ("src/design/layout.rs", "menu_popup", &[Ban::Layout(1)]),
+        ("src/design/layout.rs", "menu_popup_raw", &[Ban::Layout(1)]),
         ("src/design/layout.rs", "multi_line", &[Ban::Layout(1)]),
         ("src/design/layout.rs", "sideways_scroll", &[Ban::Layout(1)]),
         ("src/design/layout.rs", "single_line", &[Ban::Layout(1)]),

@@ -171,8 +171,6 @@ disallowed-methods = [
     { path = "egui::Button::selectable", reason = "use design::choice, which marks the selected choice with its check", allow-invalid = true },
     { path = "egui::Button::selected", reason = "use design::choice for a selected choice; a toggle, a tab, a radio or a checkbox has its own part", allow-invalid = true },
     { path = "egui::SelectableLabel::new", reason = "use design::choice, which marks the selected choice with its check", allow-invalid = true },
-    # N10: a search field always draws its `Clear`.
-    { path = "splat::design::components::search_field", reason = "use FieldId::search, which always draws its Clear" },
     # N3: a heading adds its own space above it.
     { path = "splat::design::components::group_heading", reason = "use design::heading(ui, Heading::Group { … }), which adds the space above it" },
     { path = "splat::design::components::group_label", reason = "use design::heading(ui, Heading::Label(…)), which adds the space above it" },
