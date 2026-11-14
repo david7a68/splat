@@ -3783,6 +3783,17 @@ impl Reader {
         let select = std::mem::take(&mut open.select);
         let field = &mut open.field;
         let name = format!("Log line for {}", item.entry.name);
+        // One draft for each reader (World's page, Lookup), campaign and entry: the same entry
+        // can be open in both readers, each with its own Log field.
+        const LOG_LINE: ReaderField = ReaderField {
+            page: crate::field_id!("world_log_line"),
+            compact: crate::field_id!("lookup_log_line"),
+        };
+        let id = LOG_LINE.id(self.compact, item.entry.id).with(campaign.id);
+        let form = || {
+            design::add_field::<()>(id, &name, "What happened?")
+                .actions(crate::word!("Add"), crate::word!("Cancel"))
+        };
         // The field ends at the reader's measure, also when the stamp shares its line: a row of
         // a wrapping layout does not hold a nested row to its parent's width (round 27 AF2, FF1).
         let edge = ui.max_rect().right();
@@ -3793,21 +3804,12 @@ impl Reader {
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| {
                     ui.set_max_width(width);
-                    design::add_field(
-                        ui,
-                        field,
-                        &name,
-                        "What happened?",
-                        0.0,
-                        |_| None::<()>,
-                        |_| Vec::new(),
-                    )
-                    .field
+                    form().show(ui, field)
                 },
             )
             .inner
         };
-        let response = match &stamp {
+        let result = match &stamp {
             None => draw(ui, field),
             Some(stamp) => {
                 let size = ui
@@ -3816,10 +3818,11 @@ impl Reader {
                     .size();
                 let width = size.x;
                 let words = Type::Small.rich(ui, stamp).color(colors().muted);
-                // The stamp shares the field's line while the field keeps room for a sentence.
-                // One layout for both, so the field keeps its ID, and the keyboard, when the
-                // window changes size.
-                let room = ui.available_width() - width - design::S;
+                // The stamp shares the field's line while the field keeps room for a sentence,
+                // beside `Add` as the form places it (the form measures its own actions). One
+                // layout for both, so the field keeps its ID, and the keyboard, when the window
+                // changes size.
+                let room = form().field_width(ui, ui.available_width() - width - design::S);
                 let typed = ui
                     .painter()
                     .layout_no_wrap(
@@ -3844,7 +3847,7 @@ impl Reader {
                     let response = draw(ui, field);
                     ui.put(
                         egui::Rect::from_center_size(
-                            egui::pos2(slot.center().x, response.rect.center().y),
+                            egui::pos2(slot.center().x, response.field.rect.center().y),
                             size,
                         ),
                         egui::Label::new(words).extend(),
@@ -3854,6 +3857,7 @@ impl Reader {
                 .inner
             }
         };
+        let response = &result.field;
         if select {
             design::focus_and_select(ui, response.id, &field.words);
         }
@@ -3861,12 +3865,9 @@ impl Reader {
         if response.has_focus() || response.lost_focus() {
             self.form_focused = true;
         }
-        let enter = response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
-        if ui.input(|input| input.key_pressed(egui::Key::Escape))
-            && (response.has_focus() || response.lost_focus())
-        {
+        if result.cancel {
             self.held.log_fields.remove(&key);
-        } else if enter {
+        } else if result.enter {
             let words = field.words.trim().to_owned();
             if words.is_empty() {
                 self.held.log_fields.remove(&key);
@@ -6702,6 +6703,98 @@ mod tests {
                 .any(|(_, node)| node.label() == Some("Log line for Hob")),
             "the guarded words have a field after the session is renamed"
         );
+
+        // Round 29 P-1 review: the same entry open in World's page and in Lookup, each with its
+        // own Log draft. Two fields with their own ids; typing, Add and Cancel change only the
+        // chosen draft.
+        {
+            use egui_kittest::kittest::Queryable;
+            let name = "Log line for Hob";
+            let page = Reader {
+                played: Some("[[Session 1]]".into()),
+                ..Default::default()
+            };
+            let compact = Reader {
+                played: Some("[[Session 1]]".into()),
+                compact: true,
+                ..Default::default()
+            };
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(egui::vec2(560.0, 1200.0))
+                .build_ui_state(
+                    |ui, (page, compact): &mut (Reader, Reader)| {
+                        page.played = Some("[[Session 1]]".into());
+                        compact.played = Some("[[Session 1]]".into());
+                        page.read(ui, item, &index, Some(&campaign));
+                        compact.read(ui, item, &index, Some(&campaign));
+                    },
+                    (page, compact),
+                );
+            crate::design::theme::install(&harness.ctx);
+            harness.state_mut().0.open_log(campaign.id, hob, "Hob", "");
+            harness.state_mut().1.open_log(campaign.id, hob, "Hob", "");
+            harness.run_steps(2);
+            assert!(
+                crate::design::layout::field_id_clashes(&harness.ctx).is_empty(),
+                "the two readers' Log fields have their own ids"
+            );
+            assert_eq!(
+                harness.query_all_by_label(name).count(),
+                2,
+                "two Log fields"
+            );
+            let words = |harness: &egui_kittest::Harness<'_, (Reader, Reader)>| {
+                let state = harness.state();
+                [&state.0, &state.1].map(|reader| {
+                    reader
+                        .held
+                        .log_fields
+                        .get(&key)
+                        .map(|open| open.field.words.clone())
+                })
+            };
+            harness.query_all_by_label(name).nth(1).unwrap().focus();
+            harness.run_steps(1);
+            harness
+                .query_all_by_label(name)
+                .nth(1)
+                .unwrap()
+                .type_text("Paid the ferryman.");
+            harness.run_steps(1);
+            assert_eq!(
+                words(&harness),
+                [Some(String::new()), Some("Paid the ferryman.".into())],
+                "typing changes Lookup's draft only"
+            );
+            harness.query_all_by_label(name).next().unwrap().focus();
+            harness.run_steps(1);
+            harness
+                .query_all_by_label(name)
+                .next()
+                .unwrap()
+                .type_text("Lost the map.");
+            harness.run_steps(1);
+            harness.query_all_by_label("Add").nth(1).unwrap().click();
+            harness.run_steps(2);
+            let text = fs::read_to_string(&path).unwrap();
+            assert!(
+                text.contains("Paid the ferryman.") && !text.contains("Lost the map."),
+                "Lookup's Add writes Lookup's words only: {text}"
+            );
+            assert_eq!(
+                words(&harness),
+                [Some("Lost the map.".into()), None],
+                "Add closes Lookup's draft only"
+            );
+            harness.query_all_by_label("Cancel").next().unwrap().click();
+            harness.run_steps(2);
+            assert_eq!(
+                words(&harness),
+                [None, None],
+                "Cancel closes the page's draft"
+            );
+            assert!(!fs::read_to_string(&path).unwrap().contains("Lost the map."));
+        }
 
         // An entry that is gone: its draft waits for no guard, and the pane's footer says the
         // words, so nothing is lost without a word.

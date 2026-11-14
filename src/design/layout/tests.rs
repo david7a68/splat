@@ -1105,7 +1105,7 @@ fn inline_create_moves_nothing_while_the_dm_types() {
                         )
                     })
                 });
-                let response = form_field(ui, alone_id, "Alone", &mut alone, 300.0);
+                let response = form_field(ui, alone_id, "Alone", &mut alone, None, 300.0);
                 if focus {
                     response.request_focus();
                 }

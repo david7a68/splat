@@ -884,6 +884,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Layout(1)],
         ),
         (
+            "src/encounter_run/dock.rs",
+            "effect_line",
+            &[Ban::Extras(1)],
+        ),
+        (
             "src/encounter_run/view.rs",
             "conditions_tab",
             &[Ban::Layout(1), Ban::RowKey(1)],
@@ -951,6 +956,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/library.rs", "scope_menu", &[Ban::Layout(1)]),
         ("src/library.rs", "show", &[Ban::Layout(2)]),
         ("src/lookup.rs", "written_reader", &[Ban::Extras(1)]),
+        ("src/loot_editor.rs", "add_row", &[Ban::Extras(1)]),
         (
             "src/loot_editor.rs",
             "line_row",
@@ -1176,8 +1182,13 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         (
             "src/design/components.rs",
-            "add_field",
-            &[Ban::Layout(1), Ban::Extras(1)],
+            "add_field_keys",
+            &[Ban::Layout(1)],
+        ),
+        (
+            "src/design/components.rs",
+            "suggestion_rows",
+            &[Ban::Extras(1)],
         ),
         (
             "src/design/components.rs",
