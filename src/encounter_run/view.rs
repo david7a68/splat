@@ -8720,7 +8720,12 @@ fn badge_place(layout: &RowLayout, x: f32) -> (f32, f32, f32) {
         .as_ref()
         .and_then(|line| line.rows.last())
         .map_or((0.0, 0.0), |row| {
-            (row.rect().right() + design::S, row.rect().top())
+            // R8: an empty line (every word gave way to the result) starts at its edge.
+            if row.glyphs.is_empty() {
+                (0.0, row.rect().top())
+            } else {
+                (row.rect().right() + design::S, row.rect().top())
+            }
         });
     let left = x + layout.second_left + after;
     (left, top, x + layout.temp_right - left - design::S)

@@ -17215,16 +17215,22 @@ pub mod encounter_groups {
         );
         d.expect("Tied with Kestrel Dunmoor at\u{a0}14, placed after.");
         // iter-26-R FI10: a row's hidden changes say how many: `1 more`, never a bare `more`.
+        // iter-28-R FJ3: with no change shown, the count names its kind, `3 changes`, and no
+        // `more` follows the conditions (it would count them).
         let words = d.at_size(DEFAULT, |d| d.row_words(RIVAL_NAME).replace('\u{a0}', " "));
-        let counted = words.match_indices(" more").all(|(at, _)| {
-            words[..at]
-                .chars()
-                .next_back()
-                .is_some_and(|c| c.is_ascii_digit())
+        let counted = [" more", " changes"].iter().all(|word| {
+            words.match_indices(word).all(|(at, _)| {
+                words[..at]
+                    .chars()
+                    .next_back()
+                    .is_some_and(|c| c.is_ascii_digit())
+            })
         });
         d.observe(
             "iter-26-R-FI10",
-            words.contains(" more") && counted,
+            (words.contains(" changes") && !words.contains("Changed") && !words.contains(" more")
+                || words.contains("Changed") && words.contains(" more"))
+                && counted,
             format!("{RIVAL_NAME}'s row at 1200: {words}"),
         );
         d.state_prepared("group-added-with-a-total", Sizes::All, |d| {
@@ -18801,9 +18807,11 @@ pub mod run_overrides {
         d.observe(
             "T13.3",
             row.contains("Blessed")
-                && row.contains("Changed")
-                && ((row.contains("Attack +1") && row.contains("Damage +1"))
-                    || row.contains("more")),
+                && ((row.contains("Changed")
+                    && ((row.contains("Attack +1") && row.contains("Damage +1"))
+                        || row.contains("more")))
+                    // iter-28-R FJ3: with no change shown, `✎ 2 changes`.
+                    || row.contains(" changes")),
             format!("The row marks a change and carries its bonuses: {row}"),
         );
         d.observe(
