@@ -299,8 +299,7 @@ pub(super) fn list_row(
                         // number. Hover and the accessible name keep the whole line (V7).
                         let font = Type::Small.font(ui);
                         let fitted = difficulty.and_then(|difficulty| {
-                            crate::difficulty::Line::new(difficulty)
-                                .summary(detail)
+                            crate::difficulty::Line::roster(difficulty, detail)
                                 .fit(|text| design::number_width(ui, text, &font) <= room)
                         });
                         let form = difficulty.and_then(crate::difficulty::Difficulty::form);

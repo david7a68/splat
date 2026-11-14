@@ -16364,6 +16364,35 @@ pub mod encounter_groups {
         d.click(CHANGES);
         d.expect("Maximum HP: how it changes");
         d.state("group-member-changes", Sizes::All);
+        // Review of PR 327: a member's form and fields key by its identity. Type in its Display
+        // name, move it: its form stays open on it and the field keeps its text Undo. Then the
+        // member moves back, so the editor is as it was.
+        let identity = d.aside(|d| {
+            // A click into the field (no words yet), then its end.
+            d.type_into("Display name", "");
+            d.press(Key::End);
+            d.type_text("x");
+            let typed = d.visible_text("Rival Captainx");
+            let (step, back) = if d.is_disabled("Move down") {
+                ("Move up", "Move down")
+            } else {
+                ("Move down", "Move up")
+            };
+            d.click("More actions for Rival Captainx");
+            d.click(step);
+            let open = d.has("Maximum HP: how it changes");
+            d.type_into("Display name", "");
+            d.press_ctrl(Key::Z);
+            let undone = d.visible_text("Rival Captain") && !d.visible_text("Rival Captainx");
+            d.click("More actions for Rival Captain");
+            d.click(back);
+            (typed, open, undone)
+        });
+        d.observe(
+            "iter-28-B-member-identity",
+            identity == (true, true, true),
+            format!("Typed, moved: form still open, text Undo kept: {identity:?}"),
+        );
         // The change form lists other effects as the run's Conditions tab does: one label, Body
         // text in the text colour, and one placeholder.
         let (label, color, placeholder) = d.at_size(LARGE, |d| {
@@ -16728,22 +16757,34 @@ pub mod encounter_groups {
         // search field's right edge. (iter-24-B AK1 put it at the members column's edge; the
         // round 27 contract, one place in both editors, replaces that.)
         for size in [SMALL, DEFAULT, LARGE] {
-            let (save, search, name, unsaved) = d.at_size(size, |d| {
+            let (save, edge, name, unsaved) = d.at_size(size, |d| {
+                let save = d.place_of(SAVE_GROUP);
+                // The editor's content edge: the right end of the header's rule, the widest
+                // hairline under the save row.
+                let edge = save.and_then(|save| {
+                    let (width, _) = d.window_size();
+                    let band = egui::Rect::from_min_max(
+                        egui::pos2(0.0, save.bottom()),
+                        egui::pos2(width, save.bottom() + 3.0 * crate::design::XL),
+                    );
+                    d.hairlines_in(band)
+                        .into_iter()
+                        .max_by(|a, b| a.width().total_cmp(&b.width()))
+                        .map(|rule| rule.right())
+                });
                 (
-                    d.place_of(SAVE_GROUP),
-                    d.place_of(FIND),
+                    save,
+                    edge,
                     d.place_of(&d.name_starting("Group name: ")),
                     d.painted_rect_in("Unsaved", egui::Rect::EVERYTHING),
                 )
             });
-            // Above the Add creatures column (the search starts at its left), and at or past
-            // the search's right edge, as Save encounter ends above its Add pane.
+            // At the editor's content edge, within 0.5 px, as Save encounter ends there.
             d.observe(
                 "iter-28-B-FB7",
-                save.zip(search).is_some_and(|(save, search)| {
-                    save.left() > search.left() && save.right() >= search.right() - 0.5
-                }),
-                format!("At {size:?}: Save group {save:?}, the Add creatures search {search:?}"),
+                save.zip(edge)
+                    .is_some_and(|(save, edge)| (save.right() - edge).abs() <= 0.5),
+                format!("At {size:?}: Save group {save:?}, the editor's content edge {edge:?}"),
             );
             d.observe(
                 "iter-27-B-FB7",

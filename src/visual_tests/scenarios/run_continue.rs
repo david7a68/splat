@@ -858,38 +858,56 @@ pub fn run(d: &mut Driver<'_>) {
     }
     // iter-28-B FK5: a Final state row at 0 HP says so in the run's form: its icon and word in
     // the zero-HP colour, on its HP's line.
-    let zero = format!("{}\u{a0}0 HP", crate::design::icons::ZERO_HP);
+    // Review of PR 327: the Bloodied rows too. Each row's word comes from the run's own
+    // `hp_word`; at least one row at 0 HP and one Bloodied must show it.
     let stated = d.at_size(DEFAULT, |d| {
-        let (mut hp, mut words) = (Vec::new(), Vec::new());
+        let (mut rows, mut words) = (Vec::new(), Vec::new());
         d.each_painted_text(|text, clip| {
             let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
             if !clip.intersects(rect) {
                 return;
             }
             let job = &text.galley.job;
-            if job.text.starts_with("HP 0/") {
-                hp.push(rect);
+            if let Some((hp, max)) = job
+                .text
+                .strip_prefix("HP ")
+                .and_then(|rest| rest.split_once('/'))
+                .and_then(|(hp, max)| Some((hp.parse::<i64>().ok()?, max.parse::<i64>().ok()?)))
+            {
+                rows.push((rect, crate::design::hp_word(Some(hp), Some(max))));
             }
-            if job.sections.iter().any(|section| {
-                job.text[section.byte_range.clone()] == zero
-                    && section.format.color == crate::design::colors().hp.zero
-            }) {
-                words.push(rect);
+            for section in &job.sections {
+                words.push((
+                    rect,
+                    job.text[section.byte_range.clone()].to_owned(),
+                    section.format.color,
+                ));
             }
         });
-        (!hp.is_empty()
-            && hp.iter().all(|hp| {
-                words.iter().any(|word| {
-                    word.left() > hp.right() && (word.top() - hp.top()).abs() < hp.height() / 2.0
-                })
-            }))
-        .then_some(())
-        .ok_or((hp, words))
+        let shown = |rect: egui::Rect, (icon, word, color): (&str, &str, egui::Color32)| {
+            let wanted = format!("{icon}\u{a0}{word}");
+            words.iter().any(|(at, words, painted)| {
+                *words == wanted
+                    && *painted == color
+                    && at.left() > rect.right()
+                    && (at.top() - rect.top()).abs() < rect.height() / 2.0
+            })
+        };
+        let stated: Vec<&str> = rows
+            .iter()
+            .filter_map(|(rect, word)| word.filter(|word| shown(*rect, *word)).map(|word| word.1))
+            .collect();
+        let all = rows
+            .iter()
+            .all(|(rect, word)| word.is_none_or(|word| shown(*rect, word)));
+        (all && stated.contains(&"0 HP") && stated.contains(&"Bloodied"))
+            .then_some(stated.clone())
+            .ok_or(stated)
     });
     d.observe(
         "iter-28-B-FK5",
         stated.is_ok(),
-        format!("Each Final state row at 0 HP says {zero:?} in the zero colour: {stated:?}"),
+        format!("Each Final state row at 0 HP or Bloodied says so in its colour: {stated:?}"),
     );
     // AI1: Final state keeps one HP column: every row's HP starts at one x, at every size.
     // iter-26-B AI1, FI6, SI1: temporary HP has a column of its own, the conditions start after

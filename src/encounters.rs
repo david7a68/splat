@@ -1490,149 +1490,86 @@ fn slot_sheet<'a>(
     party.sheet(creature.character.as_deref()?)
 }
 /// `ROSTER 8 · XP 1,050 · Moderate (up to 1,125)`: the editor's roster heading, with the
-/// difficulty in its one form at its end (F1, FB6). With no room for the limit, the XP and the
-/// word stay. A fight with no word because an input is not known says whose (X2, FB4).
+/// difficulty in its one form at its end (F1, FB6). `difficulty::Line` decides what gives way
+/// (N7): the limit, then the XP number; a fight with no word says whose input is not known (X2,
+/// FB4). Hover and the accessible name keep what was cut.
 fn roster_heading(
     ui: &mut egui::Ui,
     count: usize,
     difficulty: Option<&crate::difficulty::Difficulty>,
 ) {
     let mut job = design::group_heading_text(ui, "Roster", count);
-    let Some(rating) = difficulty.and_then(|difficulty| difficulty.rating.as_ref()) else {
-        match difficulty.and_then(|difficulty| difficulty.missing.as_ref()) {
-            Some(missing) => heading_reason(ui, job, missing),
-            None => {
-                ui.label(job);
-            }
-        }
-        return;
+    let heading = job.text.clone();
+    let room = ui.available_width();
+    let lead = {
+        let mut lead = job.clone();
+        crate::difficulty::append(&mut lead, ui, Type::Label, " · ", colors().muted);
+        crate::difficulty::width(ui, &lead)
     };
-    crate::difficulty::append(&mut job, ui, Type::Label, " · ", colors().muted);
-    let whole = {
-        let mut whole = job.clone();
-        crate::difficulty::append_form(&mut whole, ui, Type::Label, &rating.parts(true));
-        whole
-    };
-    if crate::difficulty::width(ui, &whole) <= ui.available_width() {
-        job = whole;
-    } else {
-        crate::difficulty::append_form(&mut job, ui, Type::Label, &rating.parts(false));
-    }
-    let response = ui.label(job);
-    crate::difficulty::describe(ui, response, rating);
-}
-
-/// `XP 1,050 · Moderate (up to 1,125)` at the right of the narrow editor's tab row, in the one
-/// form (F1, FB6); with less room, `XP 1,050 · Moderate`. A fight with no word because an input
-/// is not known says whose (X2).
-fn narrow_difficulty(ui: &mut egui::Ui, difficulty: &crate::difficulty::Difficulty) {
-    let Some(rating) = &difficulty.rating else {
-        if let Some(missing) = &difficulty.missing {
-            narrow_reason(ui, missing);
-        }
-        return;
-    };
-    let form = |limit: bool| {
-        let mut job = egui::text::LayoutJob::default();
-        crate::difficulty::append_form(&mut job, ui, Type::Small, &rating.parts(limit));
-        job
-    };
-    let fits = |job: &egui::text::LayoutJob| {
-        crate::difficulty::width(ui, job) + design::L <= ui.available_width()
-    };
-    let job = [form(true), form(false)].into_iter().find(fits);
-    let Some(job) = job else {
-        return;
-    };
-    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        let response = ui.label(job);
-        crate::difficulty::describe(ui, response, rating);
+    let fitted = difficulty.and_then(|difficulty| {
+        crate::difficulty::Line::roster(difficulty, "")
+            .fit(|text| lead + design::number_width(ui, text, &Type::Label.font(ui)) <= room)
     });
-}
-
-/// X2: `ROSTER 6 · XP not known: Nameless Thing`, the heading of a fight with no word because
-/// an input is not known. The editor is where the DM can repair it.
-fn heading_reason(
-    ui: &mut egui::Ui,
-    mut job: egui::text::LayoutJob,
-    missing: &crate::difficulty::Missing,
-) {
-    let muted = colors().muted;
-    let mut lead = job.clone();
-    crate::difficulty::append(&mut lead, ui, Type::Label, " · ", muted);
-    let room = ui.available_width() - crate::difficulty::width(ui, &lead);
-    let Some((words, cut)) = reason_that_fits(ui, missing, Type::Label, room) else {
+    let Some(fitted) = fitted else {
         ui.label(job);
         return;
     };
-    let heading = job.text.clone();
-    job = lead;
-    crate::difficulty::append(&mut job, ui, Type::Label, &words, muted);
+    crate::difficulty::append(&mut job, ui, Type::Label, " · ", colors().muted);
+    crate::difficulty::append_form(&mut job, ui, Type::Label, &fitted.form);
     let response = ui.label(job);
-    if cut && let Some(whole) = missing.words() {
-        design::named(ui, &response, &format!("{heading} · {whole}"));
-        response.on_hover_text(whole);
+    describe_line(ui, response, difficulty, &fitted, &heading);
+}
+
+/// The hover and accessible description of a difficulty line: the party's budgets with a word;
+/// else, when the reason was cut, its whole words.
+fn describe_line(
+    ui: &egui::Ui,
+    response: egui::Response,
+    difficulty: Option<&crate::difficulty::Difficulty>,
+    fitted: &crate::difficulty::Fitted,
+    lead: &str,
+) {
+    match difficulty {
+        Some(crate::difficulty::Difficulty {
+            rating: Some(rating),
+            ..
+        }) => {
+            crate::difficulty::describe(ui, response, rating);
+        }
+        Some(crate::difficulty::Difficulty {
+            missing: Some(missing),
+            ..
+        }) if fitted.cut => {
+            if let Some(whole) = missing.words() {
+                let named = if lead.is_empty() {
+                    whole.clone()
+                } else {
+                    format!("{lead} · {whole}")
+                };
+                design::named(ui, &response, &named);
+                response.on_hover_text(whole);
+            }
+        }
+        _ => {}
     }
 }
 
-/// X2: `XP not known: Nameless Thing` at the right of the narrow editor's tab row, as the word
-/// would be.
-fn narrow_reason(ui: &mut egui::Ui, missing: &crate::difficulty::Missing) {
+/// `XP 1,050 · Moderate (up to 1,125)` at the right of the narrow editor's tab row, in the one
+/// form (F1, FB6), through `difficulty::Line` (N7): with less room, `XP 1,050 · Moderate`; a
+/// fight with no word says whose input is not known (X2).
+fn narrow_difficulty(ui: &mut egui::Ui, difficulty: &crate::difficulty::Difficulty) {
     let room = ui.available_width() - design::L;
-    let Some((words, cut)) = reason_that_fits(ui, missing, Type::Small, room) else {
+    let Some(fitted) = crate::difficulty::Line::roster(difficulty, "")
+        .fit(|text| design::number_width(ui, text, &Type::Small.font(ui)) <= room)
+    else {
         return;
     };
+    let mut job = egui::text::LayoutJob::default();
+    crate::difficulty::append_form(&mut job, ui, Type::Small, &fitted.form);
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        let response = ui.label(Type::Small.rich(ui, &words).color(colors().muted));
-        if cut && let Some(whole) = missing.words() {
-            design::named(ui, &response, &whole);
-            response.on_hover_text(whole);
-        }
+        let response = ui.label(job);
+        describe_line(ui, response, Some(difficulty), &fitted, "");
     });
-}
-
-/// Why a fight has no word, in `room`, and whether it was cut: `XP not known: Nameless Thing`.
-/// The names shorten from their end, to `XP not known: Nameless Th…`; with no room for one of
-/// their letters, or with no name known, they go, and `XP not known` stays while it fits.
-fn reason_that_fits(
-    ui: &egui::Ui,
-    missing: &crate::difficulty::Missing,
-    kind: Type,
-    room: f32,
-) -> Option<(String, bool)> {
-    let width = |words: &str| {
-        let mut job = egui::text::LayoutJob::default();
-        crate::difficulty::append(&mut job, ui, kind, words, colors().muted);
-        crate::difficulty::width(ui, &job)
-    };
-    let short = missing.short();
-    // With no name known, the reason still says what is not known.
-    let Some(whole) = missing.words() else {
-        return (width(short) <= room).then(|| (short.to_owned(), false));
-    };
-    if width(&whole) <= room {
-        return Some((whole, false));
-    }
-    let lead = format!("{}: ", missing.short());
-    let names: Vec<char> = whole.strip_prefix(&lead)?.chars().collect();
-    let cut = |count: usize| {
-        let kept: String = names[..count].iter().collect();
-        format!("{lead}{}…", kept.trim_end())
-    };
-    // The most letters that fit, by halves, so a long name costs a few layouts.
-    let (mut fits, mut over) = (0, names.len());
-    while over - fits > 1 {
-        let middle = (fits + over) / 2;
-        if width(&cut(middle)) <= room {
-            fits = middle;
-        } else {
-            over = middle;
-        }
-    }
-    if names[..fits].iter().any(|c| c.is_alphanumeric()) {
-        return Some((cut(fits), true));
-    }
-    (width(short) <= room).then(|| (short.to_owned(), true))
 }
 
 /// The campaign's party for F1, by the ID of each copy's note, with its level from the saved
@@ -8688,9 +8625,15 @@ mod tests {
                     at: vec![0],
                     names: Vec::new(),
                 };
-                let shown = reason_that_fits(ui, &missing, Type::Label, 400.0);
+                let difficulty = crate::difficulty::Difficulty {
+                    missing: Some(missing),
+                    ..Default::default()
+                };
+                let shown = crate::difficulty::Line::roster(&difficulty, "")
+                    .fit(|text| design::number_width(ui, text, &Type::Label.font(ui)) <= 400.0)
+                    .map(|fitted| fitted.text());
                 assert_eq!(
-                    shown.as_ref().map(|(words, _)| words.as_str()),
+                    shown.as_deref(),
                     Some("Level not known"),
                     "A typed missing-level result must not disappear when its name is unavailable"
                 );
