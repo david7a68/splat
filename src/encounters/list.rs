@@ -55,22 +55,18 @@ pub(super) fn row_menu(ui: &mut egui::Ui, name: &str, add: impl FnOnce(&mut egui
     }
     let size = egui::AreaState::load(ui.ctx(), popup.get_id()).and_then(|state| state.size);
     let aligns = menu_aligns(button.interact_rect, size, inside);
-    // FM1: a choice with an icon marks the menu (`menu_slot_icon`). When a later choice marks it
-    // during this pass, the choices before it had no icon slot: the pass is drawn again, so no
-    // choice is cut to the width of the pass that lacked the slot (`Edit encounter` above
-    // `Remove`, R12).
-    let mark = popup.get_id().with("menu has icons");
-    let marked = |ui: &egui::Ui| ui.data(|data| data.get_temp::<bool>(mark)).unwrap_or(false);
-    let before = marked(ui);
-    let shown = popup
+    popup
         .align(aligns[0])
         .align_alternatives(&aligns[1..])
         .show(add);
-    if shown.is_some() && marked(ui) != before {
-        // egui keeps a popup's first size: the remembered sizes go, as for FB8.
-        ui.ctx().memory_mut(egui::Memory::reset_areas);
-        ui.ctx().request_discard("the icon slot of a menu choice");
-    }
+}
+
+/// FM1: a menu whose first choice has no icon, but a later one has, says so before its first
+/// choice: egui sizes a menu on its first pass, so a slot that came later would cut the choices
+/// before it (`Edit encounter` above `Remove`, R12).
+fn menu_has_icons(ui: &egui::Ui) {
+    let mark = ui.layer_id().id.with("menu has icons");
+    ui.data_mut(|data| data.insert_temp(mark, true));
 }
 
 /// Where a row menu may open: below or above its button, ending at the button's right edge, or
@@ -697,10 +693,14 @@ pub(super) fn ready_list(
             Some(&template.difficulty).filter(|_| !row.unfinished_run),
             |ui| {
                 row_menu(ui, &template.name, |ui| {
+                    let remove = !has_saved_run(page, row);
+                    if remove {
+                        menu_has_icons(ui);
+                    }
                     if menu_action(ui, "Edit encounter", None) {
                         *action = Some(ListAction::Edit(template.path.clone()));
                     }
-                    if !has_saved_run(page, row) && menu_action(ui, "Remove", None) {
+                    if remove && menu_action(ui, "Remove", None) {
                         *action = Some(ListAction::RemoveEncounter(template.path.clone()));
                     }
                 });
