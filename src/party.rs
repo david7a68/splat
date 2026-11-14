@@ -749,7 +749,7 @@ impl Party {
 
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces; the selected character's read error at the top of its sheet is a banner (design::results::STAGED_ALLOWS)"
+        reason = "staged: raw space, choices, search fields or headings that a design part replaces; the selected character’s read error at the top of its sheet is a banner (design::results::STAGED_ALLOWS)"
     )]
     fn sheet_view(&mut self, ui: &mut egui::Ui, session: Option<Session>) {
         let c = colors();

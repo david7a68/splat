@@ -1241,7 +1241,7 @@ mod tests {
             .newest_first(&())
             .map(|shown| shown.value().path.to_path_buf())
             .collect();
-        assert_eq!(archived, [path.clone()]);
+        assert_eq!(archived, std::slice::from_ref(&path));
         assert_eq!(
             reader.warnings.keys().collect::<Vec<_>>(),
             [&Stored::Roster]
