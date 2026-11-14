@@ -105,6 +105,43 @@ impl<'a> From<KindStatus<'a>> for Tinted<'a> {
     }
 }
 
+/// Each section's colour as painted, in the order of its job's sections. A painter's opacity
+/// (a disabled parent) changes the galley's vertex colours, not its sections' formats, so this
+/// reads the first drawn glyph's vertex in each section. Glyphs follow the job's characters in
+/// order (a line break draws none). A section with no drawn glyph keeps its format's colour.
+#[cfg(test)]
+pub(crate) fn painted_section_colours(text: &eframe::egui::epaint::TextShape) -> Vec<Color32> {
+    let job = &text.galley.job;
+    let mut chars = job.sections.iter().enumerate().flat_map(|(at, section)| {
+        job.text[section.byte_range.clone()]
+            .chars()
+            .map(move |chr| (at, chr))
+    });
+    let mut colours: Vec<Option<Color32>> = vec![None; job.sections.len()];
+    for placed in &text.galley.rows {
+        let row = &placed.row;
+        for glyph in &row.glyphs {
+            let Some((at, _)) = chars.by_ref().find(|(_, chr)| *chr == glyph.chr) else {
+                break;
+            };
+            if !glyph.uv_rect.is_nothing()
+                && let Some(vertex) = row.visuals.mesh.vertices.get(glyph.first_vertex as usize)
+            {
+                colours[at] = colours[at].or(Some(vertex.color));
+            }
+        }
+    }
+    colours
+        .into_iter()
+        .zip(&job.sections)
+        .map(|(painted, section)| {
+            painted
+                .unwrap_or(section.format.color)
+                .gamma_multiply(text.opacity_factor)
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use eframe::egui::{self, Pos2, Rect, vec2};
@@ -118,9 +155,10 @@ mod tests {
         for clipped in &output.shapes {
             if let egui::Shape::Text(text) = &clipped.shape {
                 let job = &text.galley.job;
-                for section in &job.sections {
+                // The colour as painted: a dimmed painter fades the whole text.
+                for (section, color) in job.sections.iter().zip(painted_section_colours(text)) {
                     if job.text[section.byte_range.clone()].trim() == part {
-                        found.push(section.format.color);
+                        found.push(color);
                     }
                 }
             }
@@ -168,25 +206,53 @@ mod tests {
                     ),
                 ] {
                     let word = text.split(" · ").nth(1).unwrap().to_owned();
-                    let galley = crate::design::status_in_text(
-                        ui,
-                        &text,
-                        Some((word.as_str(), look)),
-                        400.0,
-                    );
-                    ui.painter().galley(ui.cursor().min, galley, colors().muted);
+                    crate::design::status_in_text(ui, &text, Some((word.as_str(), look)), 400.0)
+                        .paint(ui, ui.cursor().min);
                 }
+                // Under a disabled parent (a list's lock, G116) and the typed paint: the words
+                // around a status and a one-colour status dim once; a kind keeps its colours.
+                ui.add_enabled_ui(false, |ui| {
+                    for (text, word, look) in [
+                        (
+                            format!("May 5 · {} Recording 0:01 · Playing", icons::RECORD),
+                            format!("{} Recording 0:01", icons::RECORD),
+                            crate::design::InTextLook::from(StatusKind::Recording),
+                        ),
+                        (
+                            format!("May 6 · {} Halted", icons::ERROR),
+                            format!("{} Halted", icons::ERROR),
+                            colors().result.error.into(),
+                        ),
+                    ] {
+                        crate::design::status_in_text(
+                            ui,
+                            &text,
+                            Some((word.as_str(), look)),
+                            400.0,
+                        )
+                        .paint(ui, ui.cursor().min);
+                    }
+                });
             });
         });
+        let alpha = ctx.style().visuals.disabled_alpha();
+        let dim = colors().muted.gamma_multiply(alpha);
         let c = colors();
-        assert_eq!(colours(&output, icons::RECORD), [c.recording; 3]);
+        assert_eq!(colours(&output, icons::RECORD), [c.recording; 4]);
+        assert_eq!(colours(&output, "Recording 0:01"), [c.text]);
+        assert_eq!(colours(&output, "May 5 ·"), [dim]);
+        assert_eq!(
+            colours(&output, &format!("{} Halted", icons::ERROR)),
+            [c.result.error.gamma_multiply(alpha)]
+        );
+        assert_ne!(dim, c.muted);
         assert_eq!(colours(&output, "Recording 12:03"), [c.text]);
         assert_eq!(colours(&output, "Recording 12:04"), [c.text]);
         assert_eq!(colours(&output, icons::OK), [c.muted]);
         assert_eq!(colours(&output, "Saved"), [c.muted]);
         assert_eq!(colours(&output, "May 3 ·"), [c.muted]);
         assert_eq!(colours(&output, "Recording"), [c.text]);
-        assert_eq!(colours(&output, "· Playing"), [c.muted]);
+        assert_eq!(colours(&output, "· Playing"), [c.muted, dim]);
         assert_eq!(
             colours(&output, &format!("{} Stopped", icons::ERROR)),
             [c.result.error]
