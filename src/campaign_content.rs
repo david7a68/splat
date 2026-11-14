@@ -3392,6 +3392,48 @@ mod tests {
             ],
             ..Default::default()
         };
+        // Wave 2 d (C): each discard is a kept result with its own Undo, in the store's order.
+        // A (note.md), then B (other.md); Undo of A in the real footer restores A only: B's
+        // result and its Undo stay.
+        new_result!(content, PageResult::RepairDiscard(0));
+        new_result!(content, PageResult::RepairDiscard(1));
+        {
+            use egui_kittest::kittest::Queryable;
+            let active = first.clone();
+            let campaigns = Campaigns::at(temp.path().join("settings.json"));
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(egui::vec2(960.0, 640.0))
+                .build_ui_state(
+                    move |ui, content: &mut CampaignContent| {
+                        let frame = design::outcome::PaneFrame::new(ui);
+                        let messages = content.page_footer(&frame, ui, &campaigns, &active, 600.0);
+                        let paned = messages.pane(ui, design::Body::Content, |_| ());
+                        content.press_result(ui.ctx(), &campaigns, &active, paned.pressed);
+                    },
+                    content,
+                );
+            harness.run_steps(2);
+            assert!(harness.query_by_label("Undo discard of other.md").is_some());
+            harness.get_by_label("Undo discard of note.md").click();
+            harness.run_steps(3);
+            let kept: Vec<_> = harness
+                .state()
+                .discarded_repairs
+                .iter()
+                .map(|(path, ..)| path.clone())
+                .collect();
+            assert_eq!(kept, ["other.md"], "Undo of A ends A only");
+            assert!(
+                harness.query_by_label("Undo discard of note.md").is_none()
+                    && harness.query_by_label("Undo discard of other.md").is_some(),
+                "B keeps its result and its Undo"
+            );
+            content = std::mem::take(harness.state_mut());
+        }
+        content.discarded_repairs = vec![
+            ("note.md".into(), "words".into(), 0),
+            ("other.md".into(), "more".into(), 1),
+        ];
         content.reload(&ctx, &campaigns, first);
         assert!(content.discarded_selections.is_some(), "a refresh keeps it");
         assert_eq!(content.discarded_repairs.len(), 2, "a refresh keeps both");

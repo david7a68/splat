@@ -631,8 +631,6 @@
     ["N2/icon-off-text-centre","03-blocked-banner-retry","960x640","Button \"Dismiss this error\"",1]
   ],
   "remove-package-in-use": [
-    ["G1b/pressed-control-moved","04-missing-package-technical-details","960x640","Button \"Technical details\"",1],
-    ["G1b/pressed-control-moved","05-missing-package-removed-with-undo","960x640","Button \"Technical details\"",1],
     ["G6/footer-far-below-body","02-package-unregistered-with-undo","1200x800","Label \"None yet.\"",1],
     ["G6/footer-far-below-body","02-package-unregistered-with-undo","1920x1080","Label \"None yet.\"",1],
     ["G6/footer-far-below-body","07-paused-run-after-package-removal","1200x800","Button \"Source and identifiers\"",1],
