@@ -2755,6 +2755,7 @@ impl Sessions {
             length: &length,
             tables: plan.tables,
             planned,
+            reveal: None,
         };
         let mut act = checks::header(ui, &view, &mut travel.block);
         let done = travel.done.get(&event.id);

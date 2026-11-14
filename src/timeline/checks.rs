@@ -484,6 +484,9 @@ pub struct View<'a> {
     /// For a name that a result links: nothing when it is not an encounter or a group, else
     /// whether the plan has a row still to come for it.
     pub planned: &'a dyn Fn(&str) -> Option<bool>,
+    /// Round 29 G142: the check just rolled, by its offset: its row (the result and its offer
+    /// lines) scrolls least into view, once.
+    pub reveal: Option<u64>,
 }
 
 /// What the DM typed in one block: a roll for each line, and the last line's fault.
@@ -758,7 +761,14 @@ pub fn lines(ui: &mut egui::Ui, view: &View<'_>, state: &mut State) -> Option<Ac
         act
     };
     for (label, check, at) in &rows {
+        let top = ui.cursor().top();
         act = line(ui, label, *check, Some(*at)).or(act);
+        // The affected check alone, not the block: a block taller than the view would ask for
+        // no scroll at all.
+        if check.is_some() && view.reveal == Some(*at) {
+            let row = egui::Rect::from_x_y_ranges(ui.max_rect().x_range(), top..=ui.cursor().top());
+            ui.scroll_to_rect(row, None);
+        }
     }
     if table.is_none() {
         design::blocked_reason(ui, blocked);
@@ -1269,6 +1279,7 @@ mod tests {
                         length: "",
                         tables: &tables,
                         planned: &|_| None,
+                        reveal: None,
                     };
                     header(ui, &view, &mut State::default());
                 });

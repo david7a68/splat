@@ -226,9 +226,10 @@ pub struct TimelinePage {
     /// in view. The next act on checks or the next Undo ends it.
     plan_fault: Option<checks::UndoFault>,
     focus_length: bool,
-    /// Round 29 G142: a roll was made; the next draw scrolls least so that its result and the
-    /// lines under it (with their plan offers) are in view, once.
-    reveal_checks: bool,
+    /// Round 29 G142: a roll was made in this journey (its id) at this check (its offset): the
+    /// journey's next draw scrolls least so that the check's result and its offer lines are in
+    /// view, once. Another selection, another journey's draw or a reopened page drops it.
+    reveal_checks: Option<(String, u64)>,
     /// What the DM typed in a journey's checks, and each journey's last result with its Undo.
     checks: checks::State,
     checks_done: checks::Results,
@@ -756,8 +757,16 @@ impl TimelinePage {
         }
     }
 
+    /// Tests: a reveal left pending by a roll in `journey` at `at`, as when the DM leaves that
+    /// journey before its next draw.
+    #[cfg(test)]
+    pub fn simulate_pending_reveal(&mut self, journey: &str, at: u64) {
+        self.reveal_checks = Some((journey.to_owned(), at));
+    }
+
     pub fn reopen(&mut self) {
         self.reset_detail = true;
+        self.reveal_checks = None;
         // The journeys' results and their Undo end when the DM leaves the page.
         self.checks_done.clear();
     }
@@ -1474,6 +1483,12 @@ impl TimelinePage {
         // Round 27 FL1: the form leaves the scroll bar's lane free whether or not the bar shows,
         // so its fields and the header's `⋯` end at one x for every event.
         let lane_width = ui.available_width() - ui.spacing().scroll.allocated_width();
+        // This journey's pending reveal, used once; another journey's is dropped.
+        let reveal = self
+            .reveal_checks
+            .take()
+            .filter(|(journey, _)| *journey == id)
+            .map(|(_, at)| at);
         // Row 123: a check result's offer asks the plan of the journey's session.
         let journey_plan = checks::shown(&book.events[index])
             .then(|| notes.journey_plan(book, &id, &self.plan_names));
@@ -1567,21 +1582,14 @@ impl TimelinePage {
                     length: &length,
                     tables,
                     planned: &|name| journey_plan.as_ref().and_then(|plan| plan.get(name)),
+                    reveal,
                 };
                 checks_act = checks::header(ui, &view, &mut self.checks).or(checks_act.take());
                 // The act's result keeps its line under the table, so it moves no field.
                 let done = self.checks_done.get(&id);
                 let result = done.map(|done| (done.words.as_str(), done.undo));
-                let top = ui.cursor().top();
                 undo_checks |= design::undo_line(ui, Tone::Success, result);
                 checks_act = checks::lines(ui, &view, &mut self.checks).or(checks_act.take());
-                if std::mem::take(&mut self.reveal_checks) {
-                    let block = egui::Rect::from_x_y_ranges(
-                        ui.max_rect().x_range(),
-                        top..=ui.cursor().top(),
-                    );
-                    ui.scroll_to_rect(block, None);
-                }
             }
             design::gap(ui, design::Gap::M);
             let place = EVENT_PLACE.of(design::TextKey::of(&*event));
@@ -1703,8 +1711,12 @@ impl TimelinePage {
                 match checks::apply(book, &id, &act, tables) {
                     Ok(Some(done)) => {
                         self.checks_done.keep(done);
-                        self.reveal_checks =
-                            matches!(act, checks::Act::Roll(_) | checks::Act::Enter(..));
+                        self.reveal_checks = match &act {
+                            checks::Act::Roll(offsets) => offsets.iter().min().copied(),
+                            checks::Act::Enter(at, _) => Some(*at),
+                            _ => None,
+                        }
+                        .map(|at| (id.clone(), at));
                     }
                     Ok(None) => {}
                     Err(error) => self.checks.failed(&act, error),
@@ -1755,6 +1767,14 @@ impl TimelinePage {
             };
         }
         self.campaign = Some(campaign_id);
+        // A pending reveal is its journey's: a changed selection drops it before any draw.
+        if self
+            .reveal_checks
+            .as_ref()
+            .is_some_and(|(journey, _)| self.selected.as_deref() != Some(journey.as_str()))
+        {
+            self.reveal_checks = None;
+        }
         design::page_header(
             ui,
             "Timeline",
