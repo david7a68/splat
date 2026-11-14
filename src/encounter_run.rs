@@ -885,6 +885,8 @@ pub(crate) struct Run {
     /// Arrivals' difficulty lines, fitted and kept by group (point 1 of the round 29 review):
     /// this run's own, so they die with it and no other run reads them.
     arrival_lines: crate::difficulty::Kept<Uuid>,
+    /// The groups' revision that `arrival_lines` was last trimmed to.
+    arrival_lines_seen: Option<u64>,
     /// How often frames asked for the Arrivals words, and how often they were worked out.
     #[cfg(test)]
     pub(crate) arrival_counts: (usize, usize),
@@ -1416,6 +1418,7 @@ impl Run {
             loot_copied: None,
             arrival_words: None,
             arrival_lines: crate::difficulty::Kept::default(),
+            arrival_lines_seen: None,
             #[cfg(test)]
             arrival_counts: (0, 0),
             arrival_summaries: None,
@@ -4745,6 +4748,7 @@ impl Run {
             loot_copied: None,
             arrival_words: None,
             arrival_lines: crate::difficulty::Kept::default(),
+            arrival_lines_seen: None,
             #[cfg(test)]
             arrival_counts: (0, 0),
             arrival_summaries: None,
@@ -10997,8 +11001,7 @@ mod tests {
         run.groups = Some(Arc::new(vec![group.clone(), elsewhere.clone()]));
         run.arrival_lines.seed(group.id);
         run.arrival_lines.seed(elsewhere.id);
-        run.revision += 1;
-        run.arrival_words();
+        run.keep_offered_lines();
         assert!(
             run.arrival_lines.holds(&group.id) && !run.arrival_lines.holds(&elsewhere.id),
             "iter-29-R1 point 1: only offered groups keep their lines"

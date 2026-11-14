@@ -331,6 +331,17 @@ fn arrival_total(text: &str) -> Result<Option<i64>, &'static str> {
     }
 }
 
+/// Every smallest `Fight after: …` an Arrivals heading can show: each difficulty word and
+/// each reason. The heading reserves the widest of them (point 3 of the fourth review).
+const WIDEST_ANSWERS: [&str; 6] = [
+    "Fight after: Low",
+    "Fight after: Moderate",
+    "Fight after: High",
+    "Fight after: Above High",
+    "Fight after: XP not known",
+    "Fight after: Level not known",
+];
+
 /// How one Arrivals heading shares its width (points 2 and 3 of the round 29 reviews).
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct HeadingSplit {
@@ -3462,17 +3473,6 @@ impl Run {
                     Some((group.id, (fight, adds)))
                 })
                 .collect();
-            // A group that is no longer offered here (`OfferedGroups::of`, as the list shows
-            // them) drops its kept line.
-            let shown = super::OfferedGroups::of(groups, self.source);
-            let offered: std::collections::BTreeSet<Uuid> = shown
-                .own
-                .iter()
-                .chain(&shown.any)
-                .chain(&shown.other)
-                .map(|group| group.id)
-                .collect();
-            self.arrival_lines.retain(|id| offered.contains(id));
             self.arrival_words = Some((key, words));
         }
         self.arrival_words.as_ref().map(|(_, words)| words)
@@ -3650,7 +3650,19 @@ impl Run {
         let block = all
             .iter()
             .map(|group| {
+                // FI5 and the fourth review of PR 371: the block is as wide as the widest status
+                // each group can show, so joining (`Added in setup`) widens nothing and no Add
+                // moves under the DM's pointer.
                 let status = self.group_status(group, self.group_joined(group));
+                let widest = self.widest_status(group);
+                let small = Type::Small.font(ui);
+                let status = if design::number_width(ui, &status, &small)
+                    > design::number_width(ui, &widest, &small)
+                {
+                    status
+                } else {
+                    widest
+                };
                 let totals = group.facts(true);
                 let heading = design::number_width(
                     ui,
@@ -3678,8 +3690,52 @@ impl Run {
         Some((add_width, block))
     }
 
+    /// Point 1 of the fourth review: a group that is no longer offered here
+    /// (`OfferedGroups::of`, as this list shows them) drops its kept Arrivals line. It runs where
+    /// the list is built, also when the list is empty, once for each read of the groups.
+    pub(super) fn keep_offered_lines(&mut self) {
+        let revision = self.groups_revision();
+        if self.arrival_lines_seen == Some(revision) {
+            return;
+        }
+        self.arrival_lines_seen = Some(revision);
+        let offered: std::collections::BTreeSet<Uuid> = self
+            .groups
+            .as_ref()
+            .map(|groups| {
+                let shown = super::OfferedGroups::of(groups, self.source);
+                shown
+                    .own
+                    .iter()
+                    .chain(&shown.any)
+                    .chain(&shown.other)
+                    .map(|group| group.id)
+                    .collect()
+            })
+            .unwrap_or_default();
+        self.arrival_lines.retain(|id| offered.contains(id));
+    }
+
+    /// The widest join status a group can show (FI5): `Added in round NN`, with `Changed`.
+    fn widest_status(&self, group: &super::RunGroup) -> String {
+        let changed = group
+            .members
+            .iter()
+            .any(|member| member.overrides.changes_creature());
+        format!(
+            "Added in round {}{}",
+            self.state.round.max(10),
+            if changed {
+                format!(" · {} Changed", icons::CHANGED)
+            } else {
+                String::new()
+            }
+        )
+    }
+
     /// Returns the group the DM chooses to add. Those in tonight's plan come first.
     fn group_list(&mut self, ui: &mut egui::Ui, arrival: Option<(f32, f32)>) -> Option<Uuid> {
+        self.keep_offered_lines();
         let c = colors();
         let Some(groups) = self.groups.clone() else {
             design::heading(
@@ -3936,12 +3992,19 @@ impl Run {
             &format!("{} {first_word}…", icons::DRAG),
             &Type::Strong.font(ui),
         ));
+        // Point 3 of the fourth review: beside the title or on its own line is decided by the
+        // WIDEST answer this row can show (the longest word and the reasons), never by the
+        // current one, so a change of difficulty moves neither the answer nor Add.
+        let widest = WIDEST_ANSWERS
+            .iter()
+            .map(|answer| design::number_width(ui, answer, &font))
+            .fold(shortest, f32::max);
         let split = heading_split(
             grip.rect.width(),
             heading_width,
             floor,
             if status.is_empty() { 0.0 } else { status_room },
-            shortest,
+            widest,
         );
         let (status_in_heading, title_width, room) = (split.status, split.title, split.room);
         let status_room = if status_in_heading { status_room } else { 0.0 };
@@ -4105,15 +4168,7 @@ impl Run {
         // decides by its widest join status too, so a second join that changes the words never
         // changes the row's shape.
         // A group that joined can show `Added in round N` again; its row keeps that room.
-        let widest = format!(
-            "Added in round {}{}",
-            self.state.round.max(10),
-            if changed {
-                format!(" · {} Changed", icons::CHANGED)
-            } else {
-                String::new()
-            }
-        );
+        let widest = self.widest_status(group);
         // A heading with no form says only the group's facts; it may hold the status too.
         let widest_in_heading = fitted.as_ref().is_some_and(|fitted| fitted.form.is_empty())
             && heading_width
@@ -10095,6 +10150,140 @@ mod tests {
         }
     }
 
+    /// Fourth review of PR 371, through `group_list` (as the app draws Arrivals):
+    /// point 3: pressing Add across a difficulty boundary (Low to Moderate) moves no Add, at
+    /// any width, because the heading reserves the widest answer, not the current one;
+    /// point 1: when the last offered group goes to another encounter, the list is empty and
+    /// its kept line is dropped.
+    #[test]
+    fn iter_29_r1_arrivals_add_stays_across_a_difficulty_boundary() {
+        use egui_kittest::kittest::Queryable;
+        use std::{cell::RefCell, rc::Rc};
+        let base = super::super::tests::run().state.participants[0]
+            .definition
+            .clone();
+        let with = |field: &str, value: &str| {
+            let mut entry = (*base).clone();
+            entry.id = Uuid::new_v4();
+            entry
+                .fields
+                .insert(field.into(), serde_yaml_ng::from_str(value).unwrap());
+            entry
+        };
+        let name = "Watchers of the Long Southern Road";
+        let label = format!("Add {name} to the initiative list");
+        let mut moved = Vec::new();
+        for width in (300..=640).step_by(8) {
+            let heroes: Vec<_> = (0..5)
+                .map(|_| with("splat_character", "{level: 3}"))
+                .collect();
+            let mut participants: Vec<_> = heroes
+                .iter()
+                .enumerate()
+                .map(|(i, hero)| {
+                    Participant::new(
+                        format!("hero{i}"),
+                        "party".into(),
+                        hero.clone(),
+                        &serde_yaml_ng::Mapping::new(),
+                        true,
+                    )
+                    .unwrap()
+                })
+                .collect();
+            participants.push(
+                Participant::new(
+                    "foe".into(),
+                    "enemies".into(),
+                    with("splat_creature", "{type: humanoid, cr_text: '1/8'}"),
+                    &serde_yaml_ng::Mapping::new(),
+                    true,
+                )
+                .unwrap(),
+            );
+            let mut run =
+                super::super::Run::new("Road".into(), participants, String::new()).unwrap();
+            run.scale = Some(Arc::new(crate::difficulty::Scale {
+                budgets: Some(crate::difficulty::builtin_budgets()),
+                party: heroes.iter().map(|hero| (hero.id, Some(3))).collect(),
+            }));
+            // 25 XP now; the group adds 450: Low (475), then Moderate (925) after one Add.
+            let group = Arc::new(super::super::RunGroup {
+                id: Uuid::new_v4(),
+                path: "Watchers.md".into(),
+                name: name.into(),
+                side: "enemies".into(),
+                encounter: None,
+                encounter_name: None,
+                members: vec![super::super::GroupMember {
+                    entry: Arc::new(with("splat_creature", "{type: humanoid, cr_text: '2'}")),
+                    count: 1,
+                    overrides: Default::default(),
+                }],
+                notes: String::new(),
+                xp: 450,
+                xp_unknown: vec![],
+                unavailable: 0,
+                unavailable_members: vec![],
+                problem: None,
+                warnings: vec![],
+            });
+            run.groups = Some(Arc::new(vec![group.clone()]));
+            let run = Rc::new(RefCell::new(run));
+            let shown = run.clone();
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(width as f32, 800.0))
+                .build(move |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let mut run = shown.borrow_mut();
+                        let arrival = run.arrival_block(ui);
+                        if let Some(id) = run.group_list(ui, arrival) {
+                            run.add_group_from_panel(id);
+                        }
+                    });
+                });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(3);
+            let before = harness.get_by_label(&label).rect();
+            harness.get_by_label(&label).click();
+            harness.run_steps(3);
+            let words = |run: &super::super::Run| {
+                run.arrival_words
+                    .as_ref()
+                    .and_then(|(_, words)| words.get(&group.id))
+                    .and_then(|(fight, _)| fight.rating.as_ref().map(|rating| rating.word))
+            };
+            assert_eq!(
+                words(&run.borrow()),
+                Some(crate::difficulty::Word::Moderate),
+                "the press crossed the boundary at {width}"
+            );
+            let after = harness.get_by_label(&label).rect();
+            if (after.top() - before.top()).abs() > 0.5
+                || (after.left() - before.left()).abs() > 0.5
+            {
+                moved.push((width, before, after));
+            }
+            // Point 1: the last offered group goes to another encounter; the list is empty and
+            // drops the group's kept line.
+            assert!(run.borrow().arrival_lines.holds(&group.id));
+            {
+                let mut run = run.borrow_mut();
+                let mut elsewhere = (*group).clone();
+                elsewhere.encounter = Some(Uuid::new_v4());
+                run.source = Some(Uuid::new_v4());
+                run.groups = Some(Arc::new(vec![Arc::new(elsewhere)]));
+            }
+            harness.run_steps(2);
+            assert!(harness.query_by_label(&label).is_none());
+            assert!(
+                !run.borrow().arrival_lines.holds(&group.id),
+                "iter-29-R1 point 1 at {width}: the empty list dropped the kept line"
+            );
+        }
+        assert!(moved.is_empty(), "iter-29-R1 point 3: Add moved: {moved:?}");
+    }
+
     #[test]
     fn iter10_b_arrival_controls_share_one_edge_and_bad_totals_warn_once() {
         use egui_kittest::kittest::Queryable;
@@ -13652,12 +13841,7 @@ mod tests {
                         .density(Density::Read)
                         .natural_width(ui);
                 let smallest = controls.min(design::PANEL_MIN_WIDTH - 2.0 * design::L);
-                for answer in [
-                    "Fight after: Above High",
-                    "Fight after: Moderate",
-                    "Fight after: XP not known",
-                    "Fight after: Level not known",
-                ] {
+                for answer in WIDEST_ANSWERS {
                     let width = design::number_width(ui, answer, &font);
                     assert!(width <= smallest, "{answer}: {width} in {smallest}");
                 }
