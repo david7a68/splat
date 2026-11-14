@@ -917,7 +917,12 @@ pub fn log_from_play(d: &mut Driver<'_>) {
             .into_iter()
             .any(|node| node.role == egui::accesskit::Role::Link && node.name == label);
         (
-            pane.is_some() && !words.contains(&session) && words.contains(&label) && link,
+            // The label's own line, whole (review of 7914a560): at 960 the entry's second line
+            // is cut at the bottom of Lookup's scroll area, so the block as a whole is not.
+            pane.is_some()
+                && !words.contains(&session)
+                && pane.is_some_and(|pane| d.painted_line_with(&label, pane))
+                && link,
             format!("link {link}, painted {words:?}"),
         )
     };
