@@ -5439,7 +5439,8 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     d.type_into("Stat block", "Guard");
     d.click("Guard");
     let one_save = !d.has("Save this as their stat block");
-    d.click("Add to fight");
+    // The form's own button, not the run header's.
+    d.click_below("Leave empty to roll it.", "Add to fight");
     d.settle();
     let joined = roster_places(d)
         .iter()

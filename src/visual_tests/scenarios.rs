@@ -12083,7 +12083,13 @@ pub mod world {
         let painted = lookup
             .map(|lookup| d.painted_in(lookup).matches("Add to fight").count())
             .unwrap_or(0);
-        let one_way = !d.has(&add) && painted == 1;
+        // The form's heading has the same words as a label: only a button counts.
+        let title_action = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .any(|node| node.name == add && node.role == Role::Button)
+        };
+        let one_way = !title_action(d) && painted == 1;
         d.click("Cancel");
         let back = d.place_of(&add);
         d.click(&add);
@@ -12092,8 +12098,7 @@ pub mod world {
             "iter-28-D-FF1-form",
             one_way && title_place.is_some() && back == title_place,
             format!(
-                "With the form open: title action shown {}, painted Add to fight in Lookup {painted}; after Cancel it is at {back:?}, before {title_place:?}",
-                d.has(&add)
+                "With the form open: one way {one_way}, painted Add to fight in Lookup {painted}; after Cancel it is at {back:?}, before {title_place:?}"
             ),
         );
         d.type_into("Stat block", "Guard");
