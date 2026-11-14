@@ -201,10 +201,16 @@ struct Held {
     keep: Option<Keep>,
     /// Blank room after the content, for the hold.
     room: f32,
+    /// The correction measured in a pass, as the scroll offset to apply before the next body.
+    pending: Option<f32>,
+    /// The content's height (without the blank room) in the last pass.
+    content: f32,
+    /// The frame the pane last drew in.
+    drawn: u64,
 }
 
-/// The pressed control, its top at the press and now, the content's height at the press, and
-/// the frame of the press.
+/// The pressed control, its top at the press and in this pass (cleared before each body pass),
+/// the content's height at the press, and the frame of the press.
 #[derive(Clone, Copy, Debug)]
 struct Keep {
     control: Id,
@@ -212,6 +218,27 @@ struct Keep {
     now: Option<f32>,
     content: Option<f32>,
     frame: u64,
+}
+
+/// Before a body pass: an expired hold ends (more than `CHANGE_FRAMES` since the press, or the
+/// pane did not draw in the frame before), before any change can count; the sighting of the
+/// control is cleared, so only this pass's counts. The pending correction's offset, if any.
+fn hold_before_body(ui: &Ui, held: &mut Held) -> Option<f32> {
+    let frame = ui.ctx().cumulative_frame_nr();
+    let away = held.drawn + 1 < frame;
+    if away {
+        held.pending = None;
+    }
+    if let Some(keep) = held.keep.as_mut() {
+        if away || frame > keep.frame + CHANGE_FRAMES {
+            held.keep = None;
+            hold_ended(ui, "expired");
+        } else {
+            keep.now = None;
+        }
+    }
+    held.drawn = frame;
+    held.pending.take()
 }
 
 /// How many frames after its press a change may come and still be the press's own (the shell
@@ -418,35 +445,31 @@ struct ColumnFacts {
     state: egui::scroll_area::State,
     content_size: egui::Vec2,
     inner_rect: Rect,
-    id: Id,
 }
 
-/// The one correction of a held press (see `ContentScroll::holds_presses`): when the content's
-/// height first differs from the press's, the column scrolls by as much as the control moved,
-/// so it stays under the pointer, and the hold ends. The blank room after the content is only
-/// what the scroll needs. It runs after the footer has measured, and corrects only in a pass
-/// that egui keeps: the press's result can change the footer's height in the same pass as its
-/// change to the content, and the room of that pass is not the one shown.
+/// After a body pass, once the footer has measured (see `ContentScroll::holds_presses`): when
+/// the content's height first differs from the press's, the control's move in this pass is kept
+/// as the pending correction, and the hold ends. The correction is applied before the next
+/// body pass (`hold_before_body`), so that pass draws with it and the scroll area clamps it
+/// with that pass's room; another pass is asked for. A control not drawn in this pass ends the
+/// hold with no correction. The blank room after the content is only what the scroll needs.
 fn hold_place(ui: &Ui, mut held: Held, output: ColumnFacts) -> Held {
-    let mut state = output.state;
+    let state = output.state;
     let content = output.content_size.y - held.room;
+    held.content = content;
     let scrolled = ui.input(|i| {
         i.raw_scroll_delta != egui::Vec2::ZERO
             || i.smooth_scroll_delta != egui::Vec2::ZERO
             || i.pointer.is_decidedly_dragging()
     });
-    let frame = ui.ctx().cumulative_frame_nr();
     if let Some(keep) = held.keep.as_mut() {
         let changed = (*keep.content.get_or_insert(content) - content).abs() > 0.5;
         let end = if scrolled {
             Some("scrolled")
-        } else if changed && ui.ctx().will_discard() {
-            // This pass is drawn again (the footer or a row cut measured): correct in that one.
-            return held;
+        } else if changed && keep.now.is_none() {
+            Some("gone")
         } else if changed {
             Some("corrected")
-        } else if frame > keep.frame + CHANGE_FRAMES {
-            Some("no change")
         } else {
             None
         };
@@ -457,11 +480,7 @@ fn hold_place(ui: &Ui, mut held: Held, output: ColumnFacts) -> Held {
                 && let Some(now) = keep.now
                 && (now - keep.top).abs() > 0.5
             {
-                let offset = (state.offset.y + now - keep.top).max(0.0);
-                let end = output.content_size.y - output.inner_rect.height();
-                held.room += (offset - end).max(0.0);
-                state.offset.y = offset;
-                state.store(ui.ctx(), output.id);
+                held.pending = Some((state.offset.y + now - keep.top).max(0.0));
                 ui.ctx()
                     .request_discard("a press moved the content above its control");
                 return held;
@@ -810,6 +829,14 @@ impl Footer<'_> {
                 if options.from_top {
                     column = column.vertical_scroll_offset(0.0);
                 }
+                if options.holds
+                    && let Some(offset) = hold_before_body(ui, &mut held)
+                {
+                    // The correction measured in the last pass, with the blank room it needs
+                    // in this pass's room.
+                    held.room = (offset + room_height - held.content).max(0.0);
+                    column = column.vertical_scroll_offset(offset);
+                }
                 if options.holds {
                     ui.ctx().data_mut(|data| {
                         data.insert_temp(held_key, held);
@@ -837,7 +864,6 @@ impl Footer<'_> {
                             state: output.state,
                             content_size: output.content_size,
                             inner_rect: output.inner_rect,
-                            id: output.id,
                         },
                     ));
                     ui.ctx()
@@ -965,44 +991,85 @@ mod hold_tests {
     use super::*;
     use egui_kittest::{Harness, kittest::Queryable};
 
-    #[derive(Default)]
     struct State {
         holds: bool,
         rows_above: usize,
         /// The press's rows, until the test applies them (an act applied in a later frame).
         later: Option<usize>,
         from_top: bool,
+        /// Rows between the pressed control and the far control.
+        below: usize,
+        /// The footer holds a reason.
+        message: bool,
+        /// The pane is not drawn (closed).
+        hidden: bool,
+        /// The pressed control is gone.
+        gone: bool,
+    }
+
+    impl State {
+        fn new(holds: bool, later: bool) -> Self {
+            Self {
+                holds,
+                rows_above: 2,
+                later: later.then_some(0),
+                from_top: false,
+                below: 60,
+                message: false,
+                hidden: false,
+                gone: false,
+            }
+        }
     }
 
     /// A list with rows above a button and many below, then a control far below; the button's
     /// press adds rows above it (or keeps them in `later`).
     fn list(ui: &mut Ui, state: &mut State) {
-        use crate::design::outcome::{Messages, NoPress, PaneFrame};
+        use crate::design::outcome::{Messages, NoPress, Outcome, PaneFrame};
+        if state.hidden {
+            return;
+        }
         let mut scroll = ContentScroll::default().from_top(std::mem::take(&mut state.from_top));
         if state.holds {
             scroll = scroll.holds_presses();
         }
         let frame = PaneFrame::new(ui);
-        let messages = Messages::<NoPress>::new(&frame, "held", ui.available_width());
+        let mut messages = Messages::<NoPress>::new(&frame, "held", ui.available_width());
+        if state.message {
+            messages.outcome(Outcome::Refused(crate::sentence!(
+                "Save the draft first. The other changes wait until it is saved."
+            )));
+        }
         let _ = messages.pane_content(ui, scroll, |ui| {
             for row in 0..state.rows_above {
                 ui.label(format!("Row above {row}"));
             }
-            let response = ui.button("Add a row above");
-            let _ = ui.button("Next control");
-            held_seen(ui, "add", response.rect.top());
-            if response.clicked() {
-                hold_press(ui, "add", &response);
-                match state.later.as_mut() {
-                    Some(rows) => *rows += 3,
-                    None => state.rows_above += 3,
+            if !state.gone {
+                let response = ui.button("Add a row above");
+                held_seen(ui, "add", response.rect.top());
+                if response.clicked() {
+                    hold_press(ui, "add", &response);
+                    match state.later.as_mut() {
+                        Some(rows) => *rows += 3,
+                        None => state.rows_above += 3,
+                    }
                 }
             }
-            for row in 0..60 {
+            let _ = ui.button("Next control");
+            for row in 0..state.below {
                 ui.label(format!("Row below {row}"));
             }
             let _ = ui.button("Far control");
         });
+    }
+
+    fn harness(state: State) -> Harness<'static, State> {
+        let mut h = Harness::builder()
+            .with_size(egui::vec2(400.0, 300.0))
+            .build_ui_state(list, state);
+        crate::design::theme::install(&h.ctx);
+        h.run_steps(4);
+        h
     }
 
     fn ended(h: &Harness<'_, State>) -> Option<&'static str> {
@@ -1010,24 +1077,54 @@ mod hold_tests {
             .data(|data| data.get_temp::<&'static str>(Id::new("design_pane_hold_ended")))
     }
 
+    fn top(h: &Harness<'_, State>, label: &str) -> f32 {
+        h.get_by_label(label).rect().top()
+    }
+
+    /// The press's rows, applied now.
+    fn apply_later(h: &mut Harness<'_, State>) {
+        if let Some(rows) = h.state_mut().later.take() {
+            h.state_mut().rows_above += rows;
+        }
+    }
+
+    /// The pane's rule, not the hold's: focus moves to the control at the list's end, and it
+    /// comes whole into view; then a footer comes with no change of focus, and the focused
+    /// control comes whole above it.
+    #[test]
+    fn a_focused_control_comes_whole_above_the_footer() {
+        let mut h = harness(State::new(true, false));
+        h.get_by_label("Far control").focus();
+        h.run_steps(4);
+        let focused = h.ctx.memory(|memory| memory.focused());
+        assert!(focused.is_some(), "Tab gave a control focus");
+        h.state_mut().message = true;
+        h.run_steps(4);
+        assert_eq!(h.ctx.memory(|memory| memory.focused()), focused);
+        let far = h
+            .ctx
+            .viewport(|viewport| {
+                viewport
+                    .prev_pass
+                    .widgets
+                    .get(focused.unwrap())
+                    .map(|w| w.rect)
+            })
+            .expect("the focused control is drawn");
+        let record = pane_records(&h.ctx).into_iter().next().unwrap();
+        let (viewport, footer) = (record.viewport().unwrap(), record.footer().unwrap());
+        assert!(
+            far.top() >= viewport.top() - 0.5 && far.bottom() <= footer.top() + 0.5,
+            "the focused control is whole above the footer: {far:?}, footer {footer:?}"
+        );
+    }
+
     /// The DM's own wheel ends a waiting hold, and so does `from_top`: the change that comes
     /// after either is not corrected (the control moves by the rows added).
     #[test]
     fn the_wheel_or_from_top_ends_a_waiting_hold() {
         for by in ["scrolled", "from top"] {
-            let mut h = Harness::builder()
-                .with_size(egui::vec2(400.0, 300.0))
-                .build_ui_state(
-                    list,
-                    State {
-                        holds: true,
-                        rows_above: 2,
-                        later: Some(0),
-                        from_top: false,
-                    },
-                );
-            crate::design::theme::install(&h.ctx);
-            h.run_steps(4);
+            let mut h = harness(State::new(true, true));
             h.get_by_label("Add a row above").click();
             h.step();
             if by == "scrolled" {
@@ -1041,11 +1138,10 @@ mod hold_tests {
             }
             h.step();
             assert_eq!(ended(&h), Some(by));
-            let before = h.get_by_label("Add a row above").rect().top();
-            let rows = h.state_mut().later.take().unwrap();
-            h.state_mut().rows_above += rows;
+            let before = top(&h, "Add a row above");
+            apply_later(&mut h);
             h.run_steps(4);
-            let after = h.get_by_label("Add a row above").rect().top();
+            let after = top(&h, "Add a row above");
             assert!(
                 after - before > 20.0,
                 "{by}: not held: {before} then {after}"
@@ -1053,34 +1149,89 @@ mod hold_tests {
         }
     }
 
+    /// Review 4, D1: a hold that expired does not scroll. A change in the fourth frame after
+    /// the press, or after the pane was closed for a frame, is not the press's: the control
+    /// moves by the rows added.
+    #[test]
+    fn an_expired_hold_does_not_scroll() {
+        for closed in [false, true] {
+            let mut h = harness(State::new(true, true));
+            let before = top(&h, "Add a row above");
+            h.get_by_label("Add a row above").click();
+            // The press's frame F.
+            h.step();
+            if closed {
+                h.state_mut().hidden = true;
+                h.step();
+                h.state_mut().hidden = false;
+            } else {
+                // F+1 to F+3 with no change.
+                h.run_steps(3);
+            }
+            apply_later(&mut h);
+            h.step();
+            h.run_steps(4);
+            let after = top(&h, "Add a row above");
+            assert_eq!(ended(&h), Some("expired"), "closed {closed}");
+            assert!(
+                after - before > 20.0,
+                "closed {closed}: not held: {before} then {after}"
+            );
+        }
+    }
+
+    /// Review 4, D2: rows reorder above the pressed control (the same height), then the control
+    /// goes and the height changes: no sighting in that pass, so the hold ends with no scroll.
+    #[test]
+    fn a_control_that_is_gone_is_not_held() {
+        let mut h = harness(State::new(true, true));
+        h.get_by_label("Add a row above").click();
+        h.step();
+        // Reorder: three rows move from below the control to above it.
+        h.state_mut().rows_above += 3;
+        h.state_mut().below -= 3;
+        h.step();
+        let row = top(&h, "Row above 0");
+        h.state_mut().gone = true;
+        h.step();
+        h.run_steps(4);
+        assert_eq!(ended(&h), Some("gone"));
+        assert!(
+            (top(&h, "Row above 0") - row).abs() < 0.5,
+            "nothing scrolled: {row} then {}",
+            top(&h, "Row above 0")
+        );
+    }
+
     /// `ContentScroll::holds_presses`: a press that adds rows above its control keeps the
     /// control under the pointer, so a second press of a still pointer presses it again, also
-    /// when the act comes a frame after the press. The one correction ends the hold. Without the
-    /// option, the control moves down by the rows added.
+    /// when the act comes a frame after the press, and (review 4, D3) when the footer changes
+    /// height in the same frame: the first frame shown has the control in place. The one
+    /// correction ends the hold. Without the option, the control moves down by the rows added.
     #[test]
     fn a_held_press_keeps_its_control_under_the_pointer() {
-        for (holds, later) in [(true, false), (true, true), (false, false)] {
-            let mut h = Harness::builder()
-                .with_size(egui::vec2(400.0, 300.0))
-                .build_ui_state(
-                    list,
-                    State {
-                        holds,
-                        rows_above: 2,
-                        later: later.then_some(0),
-                        from_top: false,
-                    },
-                );
-            crate::design::theme::install(&h.ctx);
-            h.run_steps(4);
-            let before = h.get_by_label("Add a row above").rect().top();
+        for (holds, later, footer) in [
+            (true, false, false),
+            (true, true, false),
+            (true, true, true),
+            (false, false, false),
+        ] {
+            let mut h = harness(State::new(holds, later));
+            let before = top(&h, "Add a row above");
             h.get_by_label("Add a row above").click();
             h.step();
-            if let Some(rows) = h.state_mut().later.take() {
-                h.state_mut().rows_above += rows;
+            if later {
+                apply_later(&mut h);
+                h.state_mut().message = footer;
+                h.step();
+                let first = top(&h, "Add a row above");
+                assert!(
+                    (first - before).abs() < 0.5,
+                    "footer {footer}: the first frame shown: {before} then {first}"
+                );
             }
             h.run_steps(8);
-            let after = h.get_by_label("Add a row above").rect().top();
+            let after = top(&h, "Add a row above");
             assert_eq!(h.state().rows_above, 5);
             if holds {
                 assert!((after - before).abs() < 0.5, "held: {before} then {after}");
