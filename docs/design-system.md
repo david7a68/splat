@@ -885,8 +885,8 @@ offers Undo unregister in its success result, which sits in the pane's message f
 reader's place), so the scope, the search and the list never move; Campaign offers Register it again.
 
 Missing-package recovery searches beside known package folders. A unique match gets bordered secondary Use
-this folder before Find the folder…; every action on the message, Remove from this campaign too, is bordered
-secondary. Each package fault is one typed message in the page's footer (`FaultMessage`), so the package
+this folder before Find the folder…; these repairs are bordered secondary. Remove from this campaign is a red
+choice that loses something: it comes last (ruling R21), with the destructive-choice gap of the message rule before it: `L` when it shares the line, `M` above it when it starts its own line. Each package fault is one typed message in the page's footer (`FaultMessage`), so the package
 list keeps one place. Show one warning naming the old and new folders, `It was in <folder>/.`, and the
 encounters that use its creatures in its words (`Bridge Ambush and Shrine of Cinders use its creatures.`); each
 encounter is a safe choice of the message, `Open <name>`, which opens it in Lookup. After `Remove from this
@@ -894,8 +894,8 @@ campaign`, the result says what was done first, a success with its Undo (`Ashen 
 campaign.` with `Undo remove Ashen Marches`); the warning about the encounters it leaves without creatures
 follows it (`Bridge Ambush and Shrine of Cinders now have creatures Splat cannot find.`), with one `Open <name>`
 choice per encounter. A recovery's result names the folder (`Ashen Marches found in <folder>/.` with
-`Undo recover <folder>`). The choices (Use this folder, Find the folder…, Remove from this campaign, the
-`Open <name>` choices, Technical details) start at the warning text, below its words. Say Splat cannot find the
+`Undo recover <folder>`). The choices start at the warning text, below its words, in this order: the repairs
+(Use this folder, Find the folder…), the `Open <name>` choices, Technical details, then Remove from this campaign. Say Splat cannot find the
 package only when there is no match. Use Body text throughout the missing-package sentence. The picker
 starts beside the old folder and checks identity before restoring registration. A folder that holds another
 package says the fault first and names both: `The folder <folder>/ holds a different package. Choose the folder
