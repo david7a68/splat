@@ -13057,7 +13057,9 @@ pub mod session_notes {
         // A long title wraps, and the controls stay where they are.
         d.click("Edit session details");
         d.replace_text_in("Date", "Nov 2");
-        d.click("Save details");
+        // Round 28 K4a: a date in another form locks Save details, with the reason on the
+        // form's kept line.
+        assert!(d.is_disabled("Save details"));
         d.expect("Enter the date as YYYY-MM-DD.");
         d.replace_text_in("Date", crate::hermetic::today().as_str());
         d.replace_text_in("Session title", LONG_TITLE);

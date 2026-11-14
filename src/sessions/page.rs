@@ -874,6 +874,10 @@ fn recordings_tab(ui: &mut egui::Ui, shown: &mut Tab, count: usize) -> bool {
     )
 }
 
+fn wrapped_words(ui: &mut egui::Ui, kind: Type, words: impl Into<String>, color: Color32) {
+    ui.add(egui::Label::new(kind.rich(ui, words).color(color)).wrap());
+}
+
 /// A title and its date wrap together, and expose the full title to assistive tools.
 fn note_title(ui: &mut egui::Ui, title: &str, date: &str) {
     let mut job = egui::text::LayoutJob::default();
