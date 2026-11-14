@@ -394,12 +394,14 @@ pub fn lines(body: &str, title: &str, names: &HashMap<String, String>) -> Vec<Li
         names: &HashMap<String, String>,
     ) {
         if let Some((kind, raw, first)) = open.take() {
-            found.extend(line(kind, heading, log.is_some(), &raw, names).map(|mut line| {
-                if line.task == Some(false) {
-                    line.open_box = first;
-                }
-                line
-            }));
+            found.extend(
+                line(kind, heading, log.is_some(), &raw, names).map(|mut line| {
+                    if line.task == Some(false) {
+                        line.open_box = first;
+                    }
+                    line
+                }),
+            );
         }
     }
     let mut found = Vec::new();
@@ -441,7 +443,13 @@ pub fn lines(body: &str, title: &str, names: &HashMap<String, String>) -> Vec<Li
             }
             heading.0 = (!is_title).then_some(name);
             if heading.0.is_some() {
-                found.extend(line(Kind::Heading, &heading.0, heading.1.is_some(), words, names));
+                found.extend(line(
+                    Kind::Heading,
+                    &heading.0,
+                    heading.1.is_some(),
+                    words,
+                    names,
+                ));
             }
             header_row = false;
             continue;
@@ -456,7 +464,13 @@ pub fn lines(body: &str, title: &str, names: &HashMap<String, String>) -> Vec<Li
                 header_row = false;
             } else {
                 let before = found.len();
-                found.extend(line(Kind::Row, &heading.0, heading.1.is_some(), text, names));
+                found.extend(line(
+                    Kind::Row,
+                    &heading.0,
+                    heading.1.is_some(),
+                    text,
+                    names,
+                ));
                 header_row = found.len() > before;
             }
             continue;
@@ -608,7 +622,10 @@ mod tests {
         // page gives it, and still links the file; a link with its own words keeps them.
         let names = HashMap::from([("session 1".to_owned(), "Session 1: The Crossing".to_owned())]);
         let named = super::lines(ZAREL, "Zarel Second", &names);
-        assert_eq!(named[7].words(), "Session 1: The Crossing, Day 1: Met the party.");
+        assert_eq!(
+            named[7].words(),
+            "Session 1: The Crossing, Day 1: Met the party."
+        );
         assert!(named[7].links_to(&["session 1".into()]));
         assert_eq!(named[1].words(), words[1]);
     }

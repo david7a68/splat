@@ -12061,8 +12061,7 @@ pub mod world {
         // one, and while the form is open it says that the form adds them.
         let add = format!("Add {NPC} to the fight");
         for size in [SMALL, DEFAULT, LARGE] {
-            let (placed, detail) =
-                d.at_size(size, |d| world_build::npc_add_on_title_line(d, NPC));
+            let (placed, detail) = d.at_size(size, |d| world_build::npc_add_on_title_line(d, NPC));
             d.observe(
                 "iter-28-D-FF1",
                 placed,
