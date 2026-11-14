@@ -1475,7 +1475,6 @@ pub(super) fn of_encounter(
                         snapshot,
                         expanded,
                         Some((this.0, &this.1)),
-                        false,
                         name_right,
                         None,
                     );
@@ -2574,7 +2573,10 @@ impl Encounters {
         // reason that comes or goes moves no field.
         // Each reason: the words its place is measured by (the longest form), and the words it
         // shows now, if any.
-        let mut below: Vec<(&'static str, Option<&'static str>)> = Vec::new();
+        // Each line below the row: the words it is measured by, the words it shows now, and
+        // whether it is the place kept for a refusal said elsewhere (G122, below).
+        let mut below: Vec<(std::borrow::Cow<'static, str>, Option<&'static str>, bool)> =
+            Vec::new();
         // G122, lead ruling: while Save refuses a fault that the body says in its place (under
         // Belongs to, or in a member's row), the save row keeps a place for it, beside Save or
         // on its own line under the row. The body draws first: the fault shows there only when
@@ -2600,7 +2602,6 @@ impl Encounters {
                 }
             });
         let mut gone_place: Option<egui::Rect> = None;
-        let mut gone_below = false;
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Scan.control());
             discard =
@@ -2618,7 +2619,7 @@ impl Encounters {
                         egui::pos2(block_right, row.top() + Density::Scan.control()),
                     ));
                 } else {
-                    gone_below = true;
+                    below.push((gone_words.clone().into(), None, true));
                 }
             }
             // Save's own reason first: it stays at the row's end, under Save, while there is
@@ -2630,7 +2631,7 @@ impl Encounters {
                     room -= width;
                     shown
                 } else {
-                    below.push((measure, shown));
+                    below.push((measure.into(), shown, false));
                     None
                 }
             };
@@ -2651,39 +2652,28 @@ impl Encounters {
                 |ui| super::blocked_reason(ui, empty_reason),
             );
         });
-        for (reason, shown) in below {
+        for (reason, shown, kept) in below {
             let top = ui.cursor().top();
             let height = ui
                 .painter()
                 .layout(
-                    reason.to_owned(),
+                    reason.into_owned(),
                     Type::Small.font(ui),
                     colors().muted,
                     ui.available_width(),
                 )
                 .size()
                 .y;
+            if kept {
+                // The refusal said elsewhere is drawn here after the body, if at all.
+                gone_place = Some(egui::Rect::from_min_size(
+                    egui::pos2(ui.cursor().left(), top),
+                    egui::vec2(ui.available_width(), height),
+                ));
+            }
             super::blocked_reason(ui, shown);
             let used = ui.cursor().top() - top;
             ui.add_space((height + ui.spacing().item_spacing.y - used).max(0.0));
-        }
-        if gone_below {
-            let top = ui.cursor().top();
-            let height = ui
-                .painter()
-                .layout(
-                    gone_words.clone(),
-                    Type::Small.font(ui),
-                    colors().muted,
-                    ui.available_width(),
-                )
-                .size()
-                .y;
-            gone_place = Some(egui::Rect::from_min_size(
-                egui::pos2(ui.cursor().left(), top),
-                egui::vec2(ui.available_width(), height),
-            ));
-            ui.add_space(height + ui.spacing().item_spacing.y);
         }
         design::rule(ui);
         // The file's warnings that no member row states; they go in the footer below.
@@ -2875,7 +2865,7 @@ impl Encounters {
         if compact {
             match pane {
                 EditorPane::Roster => {
-                    return members_pane(ui, draft, snapshot, expanded, true, name_right, refused);
+                    return members_pane(ui, draft, snapshot, expanded, name_right, refused);
                 }
                 EditorPane::Add => {
                     // No members column is drawn, so the name keeps no edge from an older one.
@@ -2932,7 +2922,7 @@ impl Encounters {
             .show_inside(ui, |ui| {
                 ui.set_max_width(ui.available_width().min(ROSTER_MAX_WIDTH));
                 keep_hang_room(ui, outer);
-                members_pane(ui, draft, snapshot, expanded, false, name_right, refused)
+                members_pane(ui, draft, snapshot, expanded, name_right, refused)
             })
             .inner
     }
@@ -3044,7 +3034,6 @@ fn members_pane(
     draft: &mut GroupDraft,
     snapshot: &Snapshot,
     expanded: &mut Option<String>,
-    tabbed: bool,
     name_right: f32,
     refused: Option<RefusalPlace>,
 ) -> bool {
@@ -3065,9 +3054,7 @@ fn members_pane(
             keep_hang_room(ui, outer);
             let column = ui.scope(|ui| {
                 ui.set_width(width.min(ui.available_width()));
-                gone_shown = group_fields(
-                    ui, draft, snapshot, expanded, None, tabbed, name_right, refused,
-                );
+                gone_shown = group_fields(ui, draft, snapshot, expanded, None, name_right, refused);
             });
             // The name field is drawn before this column; when the column moves (a resize, a
             // scroll bar), draw the pass again so that both end at the same edge.
@@ -3166,7 +3153,6 @@ fn group_fields(
     snapshot: &Snapshot,
     expanded: &mut Option<String>,
     open: Option<(Uuid, &str)>,
-    _tabbed: bool,
     name_right: f32,
     refused: Option<RefusalPlace>,
 ) -> bool {
