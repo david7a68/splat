@@ -1917,18 +1917,8 @@ impl Splat {
                     viewport.min.x -= design::S;
                     ui.scope_builder(egui::UiBuilder::new().max_rect(viewport), |ui| {
                         // Round 27 FI7: the tab's notices sit in its message footer, which the
-                        // pane places after the fields (round 28).
-                        let width = ui.available_width().min(design::LIST_MEASURE);
-                        let mut footer = design::Footer::new("recording_settings_footer", width);
-                        self.processing.footer_messages(&mut footer);
-                        footer.pane(ui, design::Body::Content, |ui| {
-                            let mut fields = ui.available_rect_before_wrap();
-                            fields.min.x += design::S;
-                            ui.scope_builder(egui::UiBuilder::new().max_rect(fields), |ui| {
-                                ui.set_max_width(design::FORM_WIDTH + design::XXL);
-                                self.processing.show(ui);
-                            });
-                        });
+                        // pane places after the fields (round 28: `ProcessingSettings::pane`).
+                        self.processing.pane(ui);
                     });
                     return;
                 }
