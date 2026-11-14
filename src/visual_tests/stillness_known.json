@@ -36,9 +36,6 @@
     ["G3/far-action","06-run-folder-gone","1920x1080","Button \"Start fight\"",2]
   ],
   "dialogs": [
-    ["G6/footer-far-below-body","06-unsaved-changes-on-close","1200x800","Button \"Keep editing\"",1],
-    ["G6/footer-far-below-body","06-unsaved-changes-on-close","1920x1080","Button \"Keep editing\"",1],
-    ["G6/footer-far-below-body","06-unsaved-changes-on-close","960x640","Button \"Keep editing\"",1],
     ["N4/quiet-action-line-start","05-edit-the-copy","1200x800","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","05-edit-the-copy","1920x1080","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","05-edit-the-copy","960x640","Button \"Filter creatures\"",1]

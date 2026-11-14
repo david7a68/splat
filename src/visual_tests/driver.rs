@@ -1183,6 +1183,59 @@ impl<'a> Driver<'a> {
         }
     }
 
+    /// Click the control named `name` and run `look` on the first frame shown after the click,
+    /// before the app settles; then settle.
+    pub fn first_frame_after_click<T>(&mut self, name: &str, look: impl FnOnce(&Self) -> T) -> T {
+        let rect = self.aim(&format!("control {name:?}"), |node| {
+            node.name == name && Self::is_control(node)
+        });
+        let pos = rect.center();
+        self.harness.hover_at(pos);
+        self.harness.step();
+        for pressed in [true, false] {
+            self.harness.event(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            });
+        }
+        self.harness.step();
+        self.harness.remove_cursor();
+        self.interactions += 1;
+        let seen = look(self);
+        self.settle();
+        seen
+    }
+
+    /// Text typed into the focused field and a click on the control named `name`, delivered in
+    /// one frame: the field draws before the control, so it takes the text first. (A screen
+    /// reader's activation reaches a control one pass later, so it cannot meet the text.)
+    pub fn type_and_click(&mut self, text: &str, name: &str) {
+        let rect = self.aim(&format!("control {name:?}"), |node| {
+            node.name == name && Self::is_control(node)
+        });
+        let pos = rect.center();
+        self.harness.hover_at(pos);
+        self.harness.step();
+        // The press first; the click comes with the release, in the frame of the text.
+        for (pressed, typed) in [(true, None), (false, Some(text))] {
+            if let Some(typed) = typed {
+                self.harness.event(egui::Event::Text(typed.to_owned()));
+            }
+            self.harness.event(egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            });
+            self.harness.step();
+        }
+        self.harness.remove_cursor();
+        self.interactions += 2;
+        self.settle();
+    }
+
     pub(super) fn click_rect(&mut self, rect: egui::Rect, caption: &str) {
         let target = self.press_target(rect);
         let pos = rect.center();
