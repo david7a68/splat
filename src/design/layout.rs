@@ -1330,23 +1330,88 @@ pub enum KeyLetter {
     Hidden,
 }
 
+/// A key letter shown on a control (`N`, `U`, `Ctrl+G`): a non-empty literal of the keys list,
+/// checked when the program compiles. Make one with [`key!`](crate::key), which takes a string
+/// literal; there is no other way, so a key cannot be an empty string chosen at run time.
+///
+/// ```
+/// const NEXT: splat::layout::KeyName = splat::key!("N");
+/// assert_eq!(NEXT.as_str(), "N");
+/// ```
+///
+/// ```compile_fail,E0080
+/// let _ = splat::key!("");
+/// ```
+///
+/// ```compile_fail,E0080
+/// let _ = splat::key!(" N");
+/// ```
+///
+/// A key chosen at run time is not a literal, so the macro does not take it:
+///
+/// ```compile_fail
+/// let hide = true;
+/// let _ = splat::key!(if hide { "" } else { "N" });
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct KeyName(&'static str);
+
+impl KeyName {
+    /// Use [`key!`](crate::key). Clippy disallows this call outside `src/design/`.
+    #[doc(hidden)]
+    pub const fn checked(key: &'static str) -> Self {
+        let bytes = key.as_bytes();
+        assert!(!bytes.is_empty(), "A key letter is not empty.");
+        assert!(
+            !bytes[0].is_ascii_whitespace() && !bytes[bytes.len() - 1].is_ascii_whitespace(),
+            "A key letter has no space at its ends."
+        );
+        Self(key)
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        self.0
+    }
+}
+
+/// A [`KeyName`] from a string literal, checked when the program compiles.
+#[macro_export]
+macro_rules! key {
+    ($key:literal) => {
+        const {
+            #[allow(clippy::disallowed_methods, reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)")]
+            let key = $crate::layout::KeyName::checked($key);
+            key
+        }
+    };
+}
+
 /// Fixed room for a control whose key letter comes and goes: as wide as the control with its
 /// key letter, so a control beside it never moves when the letter hides or shows (F8; Run's
 /// `Next turn` with `N`, routing row 62). The width is the control's own measure
-/// (`Action::natural_width` of the same action with the key), so it cannot drift from the
-/// paint; no caller gives a width.
+/// (`Action::natural_width` of the same action with the key, or the action's own `min_width`
+/// when that is wider), so it cannot drift from the paint; no caller gives a width.
 ///
 /// ```
 /// # use splat::layout::doc_parts::{Action, Density};
 /// # use splat::layout::{KeyLetter, KeySlot};
 /// # fn draw(ui: &mut eframe::egui::Ui) {
 /// let next = Action::primary("Next turn").density(Density::Glance);
-/// let _ = KeySlot::new(next, "N").show(ui, KeyLetter::Hidden);
+/// let _ = KeySlot::new(next, splat::key!("N")).show(ui, KeyLetter::Hidden);
 /// # }
 /// ```
 ///
-/// The key letter is a `&'static str` literal of the keys list, never an empty string chosen at
-/// run time: hiding is [`KeyLetter::Hidden`], which keeps the room.
+/// The key is a checked [`KeyName`], never a string, so hiding it by an empty string does not
+/// compile; hiding is [`KeyLetter::Hidden`], which keeps the room:
+///
+/// ```compile_fail,E0308
+/// # use splat::layout::doc_parts::Action;
+/// # use splat::layout::{KeyLetter, KeySlot};
+/// # fn draw(ui: &mut eframe::egui::Ui, hide: bool) {
+/// let _ = KeySlot::new(Action::primary("Next turn"), if hide { "" } else { "N" })
+///     .show(ui, KeyLetter::Shown);
+/// # }
+/// ```
 #[must_use = "call show"]
 pub struct KeySlot<'a> {
     /// The control with its key letter: its widest form.
@@ -1354,15 +1419,19 @@ pub struct KeySlot<'a> {
 }
 
 impl<'a> KeySlot<'a> {
-    pub fn new(action: Action<'a>, key: &'static str) -> Self {
+    pub fn new(action: Action<'a>, key: KeyName) -> Self {
         Self {
-            widest: action.key(key),
+            widest: action.key(key.as_str()),
         }
     }
 
-    /// The slot's width: the control's with its key letter.
+    /// The slot's width: the control's with its key letter, or the action's own least width
+    /// when that is wider.
     pub fn width(&self, ui: &Ui) -> f32 {
-        self.widest.natural_width(ui).ceil()
+        self.widest
+            .natural_width(ui)
+            .max(self.widest.least_width())
+            .ceil()
     }
 
     /// Draw the control in the slot's room, with or without its key letter.
@@ -1831,7 +1900,7 @@ pub enum BackEdge {
 ///
 /// ```compile_fail,E0308
 /// # use splat::layout::{BackEdge, TitleLine};
-/// let _ = TitleLine::back(splat::layout::doc_parts::icons::BACK, BackEdge::Text);
+/// let _ = TitleLine::back("←", BackEdge::Text);
 /// ```
 #[must_use = "call show"]
 pub struct BackLink<'a> {

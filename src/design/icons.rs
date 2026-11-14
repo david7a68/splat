@@ -18,11 +18,13 @@ pub use egui_phosphor::regular::{
     WARNING_OCTAGON as ERROR, WAVEFORM as AUDIO, X as CLOSE,
 };
 
-/// A left arrow for a back action. A back link that starts a line is
-/// `design::TitleLine::back`: its word at the text edge, its own icon after the word (FL7). A
-/// bare arrow with its word on hover only is the form that it replaces. Staged: the files that
-/// still use this keep a counted `allow(deprecated)` (`lint_allowlist.txt`).
+/// A left arrow for a back action, kept only for the callers not yet moved. A back link that
+/// starts a line is `design::TitleLine::back`: its word at the text edge, its own icon after
+/// the word (FL7). A bare arrow with its word on hover only is the form that it replaces.
+/// Staged: `design::results::STAGED` counts its uses per file (its name must be spelled at each
+/// use, also in an alias or a grouped import), and the deprecation fails a file without a
+/// counted `allow(deprecated)`.
 #[deprecated(
     note = "a back link that starts a line is `design::TitleLine::back` (its word is always shown); a history step (`Back`, Alt+Left) keeps its word"
 )]
-pub const BACK: &str = egui_phosphor::regular::ARROW_LEFT;
+pub const LEGACY_BACK: &str = egui_phosphor::regular::ARROW_LEFT;

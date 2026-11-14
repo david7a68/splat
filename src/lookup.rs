@@ -2066,7 +2066,7 @@ impl Lookup {
                 ui.label(Type::Heading.rich(ui, "Trackers"));
                 back = self.holds_something()
                     && Action::quiet("Back")
-                        .icon(icons::BACK)
+                        .icon(icons::LEGACY_BACK)
                         .key("Alt+Left")
                         .density(Density::Read)
                         .show(ui)
@@ -2085,7 +2085,7 @@ impl Lookup {
                 // The icon buttons' density, so the title line keeps one height with or without
                 // Back, and the search field below never moves.
                 && Action::quiet("Back")
-                    .icon(icons::BACK)
+                    .icon(icons::LEGACY_BACK)
                     .key("Alt+Left")
                     .density(Density::Read)
                     .show(ui)

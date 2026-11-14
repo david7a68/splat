@@ -113,7 +113,7 @@ impl Run {
                     .icon(icons::NEXT)
                     .density(Density::Glance)
                     .blocked(nobody_present.then_some(NOBODY_PRESENT));
-                next_turn = design::KeySlot::new(next, "N")
+                next_turn = design::KeySlot::new(next, crate::key!("N"))
                     .show(
                         ui,
                         if next_key {

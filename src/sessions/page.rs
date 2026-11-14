@@ -6675,7 +6675,7 @@ impl Sessions {
             } else {
                 if self.form.is_none()
                     && Action::quiet("All sessions")
-                        .icon(icons::BACK)
+                        .icon(icons::LEGACY_BACK)
                         .density(Density::Read)
                         .show(ui)
                         .clicked()
@@ -6757,7 +6757,7 @@ impl Sessions {
             }
         } else if narrow {
             if Action::quiet("All templates")
-                .icon(icons::BACK)
+                .icon(icons::LEGACY_BACK)
                 .density(Density::Read)
                 .show(ui)
                 .clicked()
@@ -6846,7 +6846,7 @@ impl Sessions {
     /// The template list's head: the way back to the sessions. It never scrolls.
     fn template_list_head(&mut self, ui: &mut egui::Ui) {
         if Action::quiet("Sessions")
-            .icon(icons::BACK)
+            .icon(icons::LEGACY_BACK)
             .show(ui)
             .clicked()
         {

@@ -45,6 +45,7 @@ disallowed-methods = [
     # `field_id!`, which take a literal and check it in a `const` block.
     { path = "splat::design::layout::Word::checked", reason = "use word!(\"…\")", allow-invalid = true },
     { path = "splat::design::layout::FieldName::checked", reason = "use field_id!(\"…\")", allow-invalid = true },
+    { path = "splat::design::layout::KeyName::checked", reason = "use key!(\"…\")", allow-invalid = true },
     # The image viewer says its size, known or not (package K2).
     # Row keys that take any number or text: each use is a counted row a reviewer reads.
     { path = "splat::design::layout::RowIndex::from_data", reason = "a row key from the row's data: one row in design::results::STAGED_ALLOWS (Ban::RowKey)", allow-invalid = true },
