@@ -5546,10 +5546,7 @@ mod tests {
             before
         );
         assert_eq!(undo.message(), "Rook copy.md is now a separate note.");
-        assert_eq!(
-            undo.undo_step("Rook copy").label(),
-            "Undo separate note"
-        );
+        assert_eq!(undo.undo_step("Rook copy").label(), "Undo separate note");
         assert_eq!(Entry::parse("copy.md", &undo.after).unwrap().id, id);
         let repaired = Entry::parse("copy.md", &undo.after).unwrap();
         assert_eq!(repaired.name, "Rook copy");
