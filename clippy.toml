@@ -45,7 +45,6 @@ disallowed-methods = [
     { path = "splat::design::layout::Word::checked", reason = "use word!(\"…\")", allow-invalid = true },
     { path = "splat::design::layout::FieldName::checked", reason = "use field_id!(\"…\")", allow-invalid = true },
     # The image viewer says its size, known or not (package K2).
-    { path = "splat::design::components::image_viewer", reason = "use design::popups::image_viewer with an ImageSize, known when the file's header gives it", allow-invalid = true },
     # Row keys that take any number or text: each use is a counted row a reviewer reads.
     { path = "splat::design::layout::RowIndex::from_data", reason = "a row key from the row's data: one row in design::results::STAGED_ALLOWS (Ban::RowKey)", allow-invalid = true },
     { path = "splat::design::layout::TextKey::from_data", reason = "a row key from the row's data: one row in design::results::STAGED_ALLOWS (Ban::RowKey)", allow-invalid = true },
