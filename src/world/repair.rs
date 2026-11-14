@@ -1,4 +1,5 @@
 //! The same source editor for broken notes in Campaign and World.
+#![warn(deprecated)] // Its old message functions are gone; the parent file still allows them.
 use super::file_fault::FileFault;
 use crate::design::memo::Changed;
 use crate::{
@@ -31,7 +32,7 @@ const REPAIR_TEXT: design::layout::FieldName = crate::field_id!("world_repair_te
 /// error line marked. Its two events (changed, gained focus) and its id.
 #[allow(
     clippy::disallowed_methods,
-    reason = "staged: a path is a broken note's only identity (design::results::STAGED_ALLOWS)"
+    reason = "staged: a path is a broken note’s only identity (design::results::STAGED_ALLOWS)"
 )]
 fn source_editor(
     ui: &mut egui::Ui,
@@ -229,7 +230,7 @@ impl Fault for RepairFault {
 
     #[allow(
         clippy::disallowed_methods,
-        reason = "Save's check and the disk give the parser's and the system's words"
+        reason = "Save’s check and the disk give the parser’s and the system’s words"
     )]
     fn cause(&self) -> Sentence {
         match self {
