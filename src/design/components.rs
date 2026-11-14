@@ -1777,6 +1777,9 @@ impl<T> AddFieldForm<'_, T, WithActions> {
         let (_, cancel) = self.actions.expect("WithActions holds its actions");
         let focus = std::mem::take(&mut state.focus);
         let top = ui.cursor().top();
+        // The layout room the part is given: its width and the window's size. The paint clip
+        // changes when the DM scrolls (a pane's whole-row cut), so it is not the room.
+        let room_now = (ui.available_width(), ui.ctx().content_rect().size());
         // A chosen suggestion is a layer above the form: Escape lets go of it first, through
         // the form's input-method guard.
         let out = InlineCreate::<_, NoReason>::new()
@@ -1802,29 +1805,34 @@ impl<T> AddFieldForm<'_, T, WithActions> {
         if cancel {
             state.clear();
         }
+        // The bottom of what the form drew: its room (with the result in it), else its actions.
+        let mut bottom = ui.min_rect().bottom();
         if let Some(draw) = self.result {
             let width = ui.available_width();
-            ui.allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
-                ui.set_min_height(result_room());
-                draw(ui);
-            });
+            let room =
+                ui.allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(Align::Min), |ui| {
+                    ui.set_min_height(result_room());
+                    draw(ui);
+                });
+            // A trailing extent to the result's bottom rounded up to a whole physical pixel: the
+            // scroll area clamps its offset to the content and places the content on physical
+            // pixels, so the least whole-pixel scroll that holds the result needs this room.
+            let ppp = ui.ctx().pixels_per_point();
+            let end = (room.response.rect.bottom() * ppp).ceil() / ppp;
+            super::extras::space(ui, (end - ui.min_rect().bottom()).max(0.0));
+            bottom = end;
         }
         // R30: when the field takes the keyboard (it opens, or the caller gives it back after
         // an act), and when its view changes size while it is open (a resize is not the DM's
         // own scrolling), the least scroll that shows the field, its actions and the result's
         // room. Already in view, nothing moves; only the DM's own scrolling can hide them.
-        let view = self.id.named_id(self.name).with("add_field_view");
-        let size = ui.clip_rect().size();
+        let view = self.id.named_id(self.name).with("add_field_room");
         let resized = ui
-            .data(|data| data.get_temp::<Vec2>(view))
-            .is_some_and(|last| last != size);
-        ui.data_mut(|data| data.insert_temp(view, size));
+            .data(|data| data.get_temp::<(f32, Vec2)>(view))
+            .is_some_and(|last| last != room_now);
+        ui.data_mut(|data| data.insert_temp(view, room_now));
         if focus || resized {
-            // To the bottom of what was drawn (the room, else the actions), not the cursor: the
-            // spacing after it is no part of the form, and a scroll for it moves the plan.
-            let bottom = ui.min_rect().bottom();
-            let shown = Rect::from_x_y_ranges(field.rect.x_range(), top..=bottom);
-            ui.scroll_to_rect(shown, None);
+            reveal_least(ui, top..=bottom);
         }
         let chosen = suggestion_rows(ui, state, &field, enter, self.suggest);
         AddFieldResult {
@@ -1833,6 +1841,28 @@ impl<T> AddFieldForm<'_, T, WithActions> {
             enter,
             cancel,
         }
+    }
+}
+
+/// R30: the least scroll, in whole physical pixels rounded up, that puts `block` (the field's top to the
+/// bottom of its result's room) inside the view. Its bottom wins when the block is taller than
+/// the view: the result is the answer to the act, and cut feedback is the worse fault. Already
+/// in view, nothing moves. The scroll is the block's own: no spacing is added to it.
+fn reveal_least(ui: &Ui, block: std::ops::RangeInclusive<f32>) {
+    let view = ui.clip_rect();
+    let (top, bottom) = (*block.start(), *block.end());
+    let ppp = ui.ctx().pixels_per_point();
+    let whole = |points: f32| (points * ppp).ceil() / ppp;
+    let down = if bottom > view.bottom() || bottom - top > view.height() {
+        whole((bottom - view.bottom()).max(0.0))
+    } else if top < view.top() {
+        -whole(view.top() - top)
+    } else {
+        0.0
+    };
+    if down != 0.0 {
+        // A positive delta moves the content down: the view goes down by `down`.
+        ui.scroll_with_delta(vec2(0.0, -down));
     }
 }
 
@@ -7574,6 +7604,70 @@ mod tests {
         assert!(
             harness.get_by_label(NAME).is_focused(),
             "the field keeps the keyboard"
+        );
+
+        // R30 review: the reveal follows the part's layout room, not its paint clip. A pane's
+        // whole-row cut changes the clip as the DM scrolls; here the clip's bottom moves by 6 px
+        // on every other frame. After the field opened (and revealed itself), the DM's wheel
+        // scroll stays where the wheel put it.
+        struct Scrolled {
+            field: AddField,
+            frame: u32,
+            offset: f32,
+        }
+        let mut wheel = egui_kittest::Harness::builder()
+            .with_size(vec2(480.0, 300.0))
+            .build_ui_state(
+                |ui, state: &mut Scrolled| {
+                    state.frame += 1;
+                    let cut = state.frame % 2 == 0;
+                    let field = &mut state.field;
+                    let output = super::super::layout::ScrollColumn::new("iter29_p1_wheel")
+                        .max_height(240.0)
+                        .show(ui, |ui| {
+                            let mut clip = ui.clip_rect();
+                            if cut {
+                                clip.max.y -= 6.0;
+                            }
+                            ui.set_clip_rect(clip);
+                            space(ui, 400.0);
+                            let id = crate::field_id!("test_add_field_wheel")
+                                .once(super::super::layout::Once::Example);
+                            let _ = add_field::<()>(id, "Plan a scene", "Plan a scene")
+                                .actions(crate::word!("Add"), crate::word!("Cancel"))
+                                .result_room(|_| {})
+                                .show(ui, field);
+                        });
+                    state.offset = output.state.offset.y;
+                },
+                Scrolled {
+                    field: AddField {
+                        focus: true,
+                        ..AddField::default()
+                    },
+                    frame: 0,
+                    offset: 0.0,
+                },
+            );
+        super::super::theme::install(&wheel.ctx);
+        wheel.run_steps(6);
+        let opened = wheel.state().offset;
+        assert!(
+            opened > 100.0,
+            "the open field revealed itself: offset {opened}"
+        );
+        wheel.hover_at(egui::pos2(240.0, 120.0));
+        wheel.event(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: vec2(0.0, 60.0),
+            modifiers: egui::Modifiers::NONE,
+        });
+        wheel.run_steps(10);
+        let now = wheel.state().offset;
+        assert!(
+            (now - (opened - 60.0)).abs() <= 1.0,
+            "the DM's scroll stays: offset {opened} then {now}, the wheel put it at {}",
+            opened - 60.0
         );
     }
 }
