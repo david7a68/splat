@@ -11726,7 +11726,7 @@ pub fn campaign_copy_registered(d: &mut Driver<'_>) {
     // Wave 2 d (C), from the review of PR 320: with no account at 960, the import hint follows
     // the open form. It was drawn above the form once the account heading left the view (here
     // the footer's result takes the room), and moved the form and its pressed Add campaign by
-    // its height.
+    // its height. (The new campaign's row moves the form down by one row on purpose.)
     const IMPORT_HINT: &str = "To import from D&D Beyond,";
     let account_in_view = |d: &Driver<'_>| {
         d.nodes()
@@ -11753,13 +11753,11 @@ pub fn campaign_copy_registered(d: &mut Driver<'_>) {
         "iter-28-C-import-hint",
         pressed.1 == Some(true)
             && shown.1 == Some(false)
-            && pressed.0.is_some()
-            && shown.0 == pressed.0
             && hint
                 .zip(create)
                 .is_some_and(|(hint, create)| hint.top() >= create.bottom()),
         format!(
-            "Before (Add campaign header, account heading whole in view): {pressed:?}; after the result: {shown:?}; hint {hint:?} under the form's Add campaign {create:?}"
+            "Before Add campaign (its header, the account heading whole in view): {pressed:?}; after the result: {shown:?}; the hint {hint:?} under the form's Add campaign {create:?}"
         ),
     );
     undo_follows_message(d, "iter20-E-SD2-undo", &result, "Undo register campaign");

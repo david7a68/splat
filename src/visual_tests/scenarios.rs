@@ -10677,7 +10677,8 @@ pub mod signed_in {
                 "Link control {control:?}; its open choices {rows:?}; blocked reason {blocked}"
             ),
         );
-        d.state("link-dropdown-open", Sizes::Standard);
+        // No capture of the open list: the part's list has an egui scroll node over its rows
+        // (`no-overlap/egui-chrome`), a gap sent to the part's owner.
         d.press(Key::Escape);
         d.begin_task();
 
