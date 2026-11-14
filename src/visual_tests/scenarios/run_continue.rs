@@ -1079,6 +1079,26 @@ pub fn run(d: &mut Driver<'_>) {
         short,
         "While the warning shows, Undo's reason says only Nothing to undo",
     );
+    // iter-28-R R6 (FK1): the roster keeps the footer's room while every row keeps its scale
+    // height: with the unread-steps message, all 8 rows show at 1200, none is counted below.
+    let rows = d.at_size(DEFAULT, |d| {
+        (
+            d.nodes()
+                .iter()
+                .filter(|node| {
+                    node.name.contains(", HP ")
+                        && node.name.contains(", AC ")
+                        && node.fully_in_view()
+                })
+                .count(),
+            d.nodes().iter().any(|node| node.name.ends_with(" below")),
+        )
+    });
+    d.observe(
+        "iter-28-R-R6",
+        rows == (8, false),
+        format!("At 1200 with the message, rows in view and a below count: {rows:?}"),
+    );
     d.state("undo-steps-unread", Sizes::All);
     let add_at = |d: &mut Driver<'_>| d.at_size(DEFAULT, |d| d.place_of("Add to fight"));
     let before = add_at(d);
