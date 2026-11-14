@@ -1243,6 +1243,7 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/design/layout.rs", "sideways_scroll", &[Ban::Layout(1)]),
         ("src/design/layout.rs", "single_line", &[Ban::Layout(1)]),
         ("src/design/layout.rs", "word! statement", &[Ban::Layout(1)]),
+        ("src/design/layout.rs", "key! statement", &[Ban::Layout(1)]),
         (
             "src/design/layout/tests.rs",
             "a_field_id_keeps_focus_across_a_layout_branch",
@@ -1324,6 +1325,9 @@ mod suppressions;
 ///   (`design::save_row` decides them from a `DraftState`).
 /// - `ptr_eq(`: a cache keyed by a pointer address. Key it by a `Revision` in a
 ///   `design::memo::Memo`, which takes no other key.
+/// - `LEGACY_BACK`: the bare back arrow (`design::icons`). A back link that starts a line is
+///   `design::TitleLine::back`, whose word is always shown (K4b, FL7). The name is spelled at
+///   each use, also in an alias or a grouped import, so the text count sees every one.
 #[cfg(test)]
 pub(crate) type Staged = (&'static str, &'static str, &'static [(&'static str, usize)]);
 
@@ -1371,6 +1375,18 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/markdown_view.rs", 3),
             ("src/rolls.rs", 1),
             ("src/trackers.rs", 1),
+        ],
+    ),
+    (
+        "LEGACY_BACK",
+        "A back link that starts a line is `design::TitleLine::back(word!(…), BackEdge)`.",
+        &[
+            ("src/design/icons.rs", 1),
+            ("src/encounters.rs", 1),
+            ("src/encounters/groups.rs", 1),
+            ("src/library.rs", 1),
+            ("src/lookup.rs", 2),
+            ("src/sessions/page.rs", 3),
         ],
     ),
 ];

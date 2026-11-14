@@ -1314,6 +1314,137 @@ pub fn status_slot<K: Copy>(
     .inner
 }
 
+/// The parts that the doc tests of [`KeySlot`], [`BackLink`] and `folder_group_heading` name.
+/// Public only for those tests; the app uses them through `design`.
+#[doc(hidden)]
+pub mod doc_parts {
+    pub use crate::design::{Action, Density, FolderGroup, folder_group_heading, icons};
+}
+
+/// Whether a [`KeySlot`]'s key letter shows this frame.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KeyLetter {
+    Shown,
+    /// The keys do not work here (Lookup has the keyboard), or the letter gives its place to
+    /// other words. Its room stays.
+    Hidden,
+}
+
+/// A key letter shown on a control (`N`, `U`, `Ctrl+G`): a non-empty literal of the keys list,
+/// checked when the program compiles. Make one with [`key!`](crate::key), which takes a string
+/// literal; there is no other way, so a key cannot be an empty string chosen at run time.
+///
+/// ```
+/// const NEXT: splat::layout::KeyName = splat::key!("N");
+/// assert_eq!(NEXT.as_str(), "N");
+/// ```
+///
+/// ```compile_fail,E0080
+/// let _ = splat::key!("");
+/// ```
+///
+/// ```compile_fail,E0080
+/// let _ = splat::key!(" N");
+/// ```
+///
+/// A key chosen at run time is not a literal, so the macro does not take it:
+///
+/// ```compile_fail
+/// let hide = true;
+/// let _ = splat::key!(if hide { "" } else { "N" });
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct KeyName(&'static str);
+
+impl KeyName {
+    /// Use [`key!`](crate::key). Clippy disallows this call outside `src/design/`.
+    #[doc(hidden)]
+    pub const fn checked(key: &'static str) -> Self {
+        let bytes = key.as_bytes();
+        assert!(!bytes.is_empty(), "A key letter is not empty.");
+        assert!(
+            !bytes[0].is_ascii_whitespace() && !bytes[bytes.len() - 1].is_ascii_whitespace(),
+            "A key letter has no space at its ends."
+        );
+        Self(key)
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        self.0
+    }
+}
+
+/// A [`KeyName`] from a string literal, checked when the program compiles.
+#[macro_export]
+macro_rules! key {
+    ($key:literal) => {
+        const {
+            #[allow(clippy::disallowed_methods, reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)")]
+            let key = $crate::layout::KeyName::checked($key);
+            key
+        }
+    };
+}
+
+/// Fixed room for a control whose key letter comes and goes: as wide as the control with its
+/// key letter, so a control beside it never moves when the letter hides or shows (F8; Run's
+/// `Next turn` with `N`, routing row 62). The width is the control's own measure
+/// (`Action::natural_width` of the same action with the key, or the action's own `min_width`
+/// when that is wider), so it cannot drift from the paint; no caller gives a width.
+///
+/// ```
+/// # use splat::layout::doc_parts::{Action, Density};
+/// # use splat::layout::{KeyLetter, KeySlot};
+/// # fn draw(ui: &mut eframe::egui::Ui) {
+/// let next = Action::primary("Next turn").density(Density::Glance);
+/// let _ = KeySlot::new(next, splat::key!("N")).show(ui, KeyLetter::Hidden);
+/// # }
+/// ```
+///
+/// The key is a checked [`KeyName`], never a string, so hiding it by an empty string does not
+/// compile; hiding is [`KeyLetter::Hidden`], which keeps the room:
+///
+/// ```compile_fail,E0308
+/// # use splat::layout::doc_parts::Action;
+/// # use splat::layout::{KeyLetter, KeySlot};
+/// # fn draw(ui: &mut eframe::egui::Ui, hide: bool) {
+/// let _ = KeySlot::new(Action::primary("Next turn"), if hide { "" } else { "N" })
+///     .show(ui, KeyLetter::Shown);
+/// # }
+/// ```
+#[must_use = "call show"]
+pub struct KeySlot<'a> {
+    /// The control with its key letter: its widest form.
+    widest: Action<'a>,
+}
+
+impl<'a> KeySlot<'a> {
+    pub fn new(action: Action<'a>, key: KeyName) -> Self {
+        Self {
+            widest: action.key(key.as_str()),
+        }
+    }
+
+    /// The slot's width: the control's with its key letter, or the action's own least width
+    /// when that is wider.
+    pub fn width(&self, ui: &Ui) -> f32 {
+        self.widest
+            .natural_width(ui)
+            .max(self.widest.least_width())
+            .ceil()
+    }
+
+    /// Draw the control in the slot's room, with or without its key letter.
+    pub fn show(self, ui: &mut Ui, letter: KeyLetter) -> Response {
+        let width = self.width(ui);
+        let action = match letter {
+            KeyLetter::Shown => self.widest,
+            KeyLetter::Hidden => self.widest.key(""),
+        };
+        action.min_width(width).show(ui)
+    }
+}
+
 /// How a title-line action looks. There is no form without its word.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum TitleWeight {
@@ -1719,6 +1850,120 @@ impl<'a> TitleLine<'a> {
             below: rows > 0,
             rows,
         }
+    }
+
+    /// A back link that starts a line: its word at the text edge, then its icon. See
+    /// [`BackLink`].
+    pub fn back(word: Word, edge: BackEdge) -> BackLink<'a> {
+        BackLink {
+            word,
+            edge,
+            context: None,
+            blocked: None,
+        }
+    }
+}
+
+/// The icon of a back link: a return arrow, after the word.
+const BACK_LINK_ICON: &str = egui_phosphor::regular::ARROW_U_UP_LEFT;
+
+/// What a back link's word lines up with: the text edge of the lines above and below it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BackEdge {
+    /// Text that starts at the column's edge (a title, a label, a field). The word starts at the
+    /// edge, and the target's padding hangs `S` into the gutter, as `Action::line_start`.
+    Text,
+    /// A `segmented` row, whose words start `S` inside its edge. The word starts there too, and
+    /// the target at the edge.
+    Segments,
+}
+
+/// A back link at the start of a line (FL7; Session's `Back to recordings`, Timeline's
+/// `All events`): one quiet target that holds its [`Word`] and then its icon, centred on the
+/// word's line; an optional muted context follows. The word is always shown, and it is the
+/// accessible name. The icon never hangs left of the word: the room left of a column's text
+/// edge is the gutter (`L` or less, a splitter beyond it), narrower than an icon, so the icon has
+/// its place inside the target, after the word. The target is a `Read` control (28 px).
+///
+/// Duty left to the caller: say what the word lines up with ([`BackEdge`]); the gate's N4 check
+/// finds a wrong choice. Handle the press.
+///
+/// ```
+/// # use splat::layout::{BackEdge, TitleLine};
+/// # fn draw(ui: &mut eframe::egui::Ui) {
+/// let back = TitleLine::back(splat::word!("All events"), BackEdge::Text).show(ui);
+/// # let _ = back;
+/// # }
+/// ```
+///
+/// A back link has no form without its word: a plain string or a bare icon does not compile.
+///
+/// ```compile_fail,E0308
+/// # use splat::layout::{BackEdge, TitleLine};
+/// let _ = TitleLine::back("←", BackEdge::Text);
+/// ```
+#[must_use = "call show"]
+pub struct BackLink<'a> {
+    word: Word,
+    edge: BackEdge,
+    context: Option<&'a str>,
+    blocked: Option<&'a str>,
+}
+
+impl<'a> BackLink<'a> {
+    /// One muted `Small` context after the link (the open recording's name).
+    pub fn context(mut self, context: &'a str) -> Self {
+        self.context = Some(context);
+        self
+    }
+
+    /// The link cannot be followed now, and why. The word stays.
+    pub fn blocked(mut self, reason: Option<&'a str>) -> Self {
+        self.blocked = reason;
+        self
+    }
+
+    /// Draw the link (and its context) on one line. The response is the link's. In a
+    /// left-to-right row it draws in that row, so it shares the row's centre with the row's
+    /// other controls; elsewhere it makes its own line.
+    pub fn show(self, ui: &mut Ui) -> Response {
+        if ui.layout().main_dir() == egui::Direction::LeftToRight {
+            self.draw(ui)
+        } else {
+            ui.horizontal(|ui| self.draw(ui)).inner
+        }
+    }
+
+    fn draw(self, ui: &mut Ui) -> Response {
+        let icon_font = Type::Body.font(ui);
+        let icon = number_width(ui, BACK_LINK_ICON, &icon_font).ceil();
+        let action = Action::quiet(self.word.as_str())
+            .density(Density::Read)
+            .blocked(self.blocked);
+        let action = match self.edge {
+            BackEdge::Text => action.line_start(),
+            BackEdge::Segments => action,
+        };
+        // The word's target, and room for the icon `XS` after the word.
+        let width = action.natural_width(ui).ceil() + XS + icon;
+        let response = action.min_width(width).show(ui);
+        if ui.is_rect_visible(response.rect) {
+            let mut painter = ui.painter().clone();
+            if self.blocked.is_some() {
+                painter.multiply_opacity(ui.visuals().disabled_alpha());
+            }
+            painter.text(
+                egui::pos2(response.rect.right() - S - icon, response.rect.center().y),
+                egui::Align2::LEFT_CENTER,
+                BACK_LINK_ICON,
+                icon_font,
+                colors().text,
+            );
+        }
+        if let Some(context) = self.context {
+            ui.label(Type::Small.rich(ui, context).color(colors().muted));
+        }
+        response
     }
 }
 

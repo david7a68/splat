@@ -1770,9 +1770,7 @@ impl TimelinePage {
         // Beside Lookup or Notes at a small window, two columns would crush the list.
         if narrow {
             if event_open {
-                if Action::quiet("All events")
-                    .icon(icons::BACK)
-                    .density(Density::Read)
+                if design::TitleLine::back(crate::word!("All events"), design::BackEdge::Text)
                     .show(ui)
                     .clicked()
                 {

@@ -22,7 +22,6 @@
     ["G1b/pressed-control-moved","17-campaign-manifest-write-undone","960x640","Button \"Undo write Campaign.md\"",1]
   ],
   "column-resize": [
-    ["G1b/pressed-control-moved","06-run-rail-keeps-roster-room","1200x800","Button \"Next turn\"",1],
     ["G3/far-action","13-session-events-fill-their-column","1920x1080","Button \"Add to notes: Major event\"",1],
     ["N4/quiet-action-line-start","09-roster-follows-add-panel","1200x800","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","09-roster-follows-add-panel","1920x1080","Button \"Filter creatures\"",1],
@@ -47,7 +46,6 @@
     ["G1b/pressed-control-moved","07-campaign-added","960x640","Button \"Add campaign\"",1]
   ],
   "encounter-build": [
-    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Next turn\"",1],
     ["G1b/pressed-control-moved","05-saved","960x640","Button \"Save encounter\"",1],
     ["G3/far-action","01-encounter-list","1920x1080","Button \"Resume\"",1],
     ["G3/far-action","01-encounter-list","1920x1080","Button \"Start fight\"",1],
@@ -91,7 +89,6 @@
     ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Changes for Cinder Wolf\"",1],
     ["G1b/pressed-control-moved","03-group-member-changes","960x640","Button \"Changes for Ember Cultist\"",1],
     ["G1b/pressed-control-moved","06-group-invalid-change","960x640","Button \"Changes for Cinder Wolf\"",1],
-    ["G1b/pressed-control-moved","24-a-named-side-on-its-turn","960x640","Button \"Next turn\"",2],
     ["G1c/content-moved-with-bar","25-tied-arrival-moved-before","960x640","Button \"Brannoch Vale, party, HP 58/62, Temp 5, AC 19, Initiative 18\"",1],
     ["G3/far-action","01-groups-in-the-list","1920x1080","Button \"Edit group Goblin Wave\"",1],
     ["G3/far-action","01-groups-in-the-list","1920x1080","Button \"Edit group Lost Patrol\"",1],
@@ -191,7 +188,6 @@
     ["N4/quiet-action-line-start","11-belongs-to-open","960x640","Button \"Filter creatures\"",1]
   ],
   "encounter-run": [
-    ["G1b/pressed-control-moved","03-next-turn","960x640","Button \"Next turn\"",1]
   ],
   "gallery": [
     ["N4/quiet-action-line-start","02-components","1200x800","Button \"Quiet\"",1],
@@ -216,8 +212,7 @@
     ["G1b/pressed-control-moved","(after the last state)","1200x800","Button \"Add to Log: Warden Ostrel\"",1]
   ],
   "journey-j3": [
-    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Conditions for this participant\"",1],
-    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Next turn\"",8]
+    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Conditions for this participant\"",1]
   ],
   "journey-j4": [
     ["G1b/pressed-control-moved","(after the last state)","1200x800","Button \"Add Old Guard, 1-2 seals to the initiative list\"",1]
@@ -572,8 +567,6 @@
     ["N5/icon-starts-wrapping-text","04-arrivals-made-up-added","960x640","Text \"\\u{e3b2}\\u{a0}Changed\\n1\\u{a0}×\\u{a0}Rival\\u{a0}Captain (as\\u{a0}Ember\\u{a0}Cultist), 2\\u{a0}×\\u{a0}Cinder\\u{a0}Wolf\"",1]
   ],
   "run-continue": [
-    ["G1b/pressed-control-moved","14-undo-steps-unread","960x640","Button \"Next turn\"",1],
-    ["G1b/pressed-control-moved","16-history-not-the-last-fight","960x640","Button \"Next turn\"",1],
     ["G1c/content-moved-with-bar","04-ended-with-loot-beside-lookup","1200x800","Button \"Brannoch Vale, party, HP 58/62, Temp 5, AC 19, Initiative 18\"",1],
     ["G1c/content-moved-with-bar","04-ended-with-loot-beside-lookup","1200x800","Button \"Cinder Wolf, enemies, HP 22/22, Temp 0, AC 13, Initiative 9\"",1],
     ["G1c/content-moved-with-bar","04-ended-with-loot-beside-lookup","1200x800","Button \"Copy loot\"",1],
@@ -614,7 +607,6 @@
     ["G6/footer-far-below-body","01-run-folder-edited","960x640","Button \"Save without moving\"",1]
   ],
   "run-large-roster": [
-    ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Next turn\"",4],
     ["G1c/content-moved-with-bar","02-roster-of-20","960x640","Button \"Brannoch Vale, party, HP 58/62, Temp 5, AC 19, Initiative 18\"",1]
   ],
   "run-long-names": [
@@ -646,7 +638,6 @@
     ["N4/quiet-action-line-start","03-slot-changes-open","960x640","Button \"Filter creatures\"",1]
   ],
   "run-restart": [
-    ["G1b/pressed-control-moved","01-before-restart","960x640","Button \"Next turn\"",1],
     ["G3/far-action","04-run-closed-in-one-step","1920x1080","Button \"Resume\"",1],
     ["G3/far-action","04-run-closed-in-one-step","1920x1080","Button \"Start fight\"",1]
   ],
@@ -670,7 +661,6 @@
     ["N4/quiet-action-line-start","05-row-menu","960x640","Button \"Stop\"",1]
   ],
   "run-roster-conflict": [
-    ["G1b/pressed-control-moved","05-after-full-round","960x640","Button \"Next turn\"",4],
     ["N2/icon-off-text-centre","04-loaded-roster-of-12","1200x800","Button \"Dismiss this message\"",1]
   ],
   "run-sync-conflict": [
@@ -696,8 +686,6 @@
     ["G1b/pressed-control-moved","39-sessions-with-notes","960x640","Button \"Conditions for this participant\"",1],
     ["G3/far-action","28-session-long-title","1920x1080","Button \"Add to notes: Major event\"",1],
     ["G3/far-action","39-sessions-with-notes","1920x1080","Button \"More actions for Bridge Ambush\"",1],
-    ["N4/quiet-action-line-start","42-timeline-beside-lookup","1200x800","Button \"All events\"",1],
-    ["N4/quiet-action-line-start","42-timeline-beside-lookup","960x640","Button \"All events\"",1],
     ["N4/quiet-action-line-start","43-session-beside-lookup","960x640","Button \"All sessions\"",1],
     ["N4/quiet-action-line-start","50-lookup-written-card-link","960x640","Button \"All sessions\"",1]
   ],
@@ -799,26 +787,14 @@
     ["N4/quiet-action-line-start","15-key-for-another-service","1200x800","Button \"Remove transcript and summary key (OpenAI): Transcript and summary API key\"",1],
     ["N4/quiet-action-line-start","15-key-for-another-service","1920x1080","Button \"Remove transcript and summary key (OpenAI): Transcript and summary API key\"",1],
     ["N4/quiet-action-line-start","15-key-for-another-service","960x640","Button \"Remove transcript and summary key (OpenAI): Transcript and summary API key\"",1],
-    ["N4/quiet-action-line-start","25-marked-transcript","1200x800","Button \"Back to recordings\"",1],
     ["N4/quiet-action-line-start","25-marked-transcript","1200x800","Button \"Earlier part\"",1],
-    ["N4/quiet-action-line-start","25-marked-transcript","1920x1080","Button \"Back to recordings\"",1],
     ["N4/quiet-action-line-start","25-marked-transcript","1920x1080","Button \"Earlier part\"",1],
-    ["N4/quiet-action-line-start","25-marked-transcript","960x640","Button \"Back to recordings\"",1],
     ["N4/quiet-action-line-start","25-marked-transcript","960x640","Button \"Earlier part\"",1],
-    ["N4/quiet-action-line-start","27-recording-part-open","1200x800","Button \"Back to recordings\"",1],
     ["N4/quiet-action-line-start","27-recording-part-open","1200x800","Button \"Earlier part\"",1],
-    ["N4/quiet-action-line-start","27-recording-part-open","960x640","Button \"Back to recordings\"",1],
     ["N4/quiet-action-line-start","27-recording-part-open","960x640","Button \"Earlier part\"",1],
-    ["N4/quiet-action-line-start","28-second-pass-review","960x640","Button \"Back to recordings\"",1],
-    ["N4/quiet-action-line-start","29-recording-summary","1200x800","Button \"Back to recordings\"",1],
-    ["N4/quiet-action-line-start","29-recording-summary","1920x1080","Button \"Back to recordings\"",1],
-    ["N4/quiet-action-line-start","29-recording-summary","960x640","Button \"Back to recordings\"",1],
     ["N4/quiet-action-line-start","38-input-during-recording","960x640","Button \"Remove speech key (OpenAI): Speech API key\"",1],
     ["N4/quiet-action-line-start","41-recording-summary-narrow","1200x800","Button \"All sessions\"",1],
-    ["N4/quiet-action-line-start","41-recording-summary-narrow","1200x800","Button \"Back to recordings\"",1],
-    ["N4/quiet-action-line-start","41-recording-summary-narrow","1920x1080","Button \"Back to recordings\"",1],
-    ["N4/quiet-action-line-start","41-recording-summary-narrow","960x640","Button \"All sessions\"",1],
-    ["N4/quiet-action-line-start","41-recording-summary-narrow","960x640","Button \"Back to recordings\"",1]
+    ["N4/quiet-action-line-start","41-recording-summary-narrow","960x640","Button \"All sessions\"",1]
   ],
   "settings": [
     ["G1b/pressed-control-moved","09-edit-campaign","960x640","Button \"Edit details\"",1],
@@ -875,7 +851,6 @@
     ["N4/quiet-action-line-start","04-travel-checks-planned-lookup","960x640","Button \"On the road\"",1],
     ["N4/quiet-action-line-start","05-travel-checks-outside","960x640","Button \"On the road\"",1],
     ["N4/quiet-action-line-start","06-travel-checks-timeline","960x640","Button \"On the road\"",1],
-    ["N4/quiet-action-line-start","07-travel-checks-timeline-lookup","960x640","Button \"All events\"",1],
     ["N4/quiet-action-line-start","07-travel-checks-timeline-lookup","960x640","Button \"On the road\"",1],
     ["N4/quiet-action-line-start","09-travel-checks-road-day-lookup","1200x800","Button \"All sessions\"",1],
     ["N4/quiet-action-line-start","09-travel-checks-road-day-lookup","960x640","Button \"All sessions\"",1]
