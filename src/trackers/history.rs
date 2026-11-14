@@ -509,25 +509,25 @@ fn rows_in_view(
     }
 }
 
-/// A row, laid out from its right end: for another session's entry its menu with `Remove`, else
-/// the menu's place, so the values stand in one column; the value it left; then its words, cut
-/// with `…` when they do not fit, whole on hover.
+/// Why `Remove` is off on a row of the session being played: its own Undo takes it back.
+pub(crate) const REMOVE_PLAYED: &str = "Use Undo in Trackers for a change of this session.";
+
+/// A row, laid out from its right end: its menu with `Remove` (off, with its reason, on a row of
+/// the session being played), so every row looks alike and the values stand in one column; the
+/// value it left; then its words, cut with `…` when they do not fit, whole on hover.
 fn history_row(ui: &mut egui::Ui, row: &Row, removable: bool, pressed: &mut Option<Entry>) {
     let menu = Density::Read.control();
-    if removable {
-        design::row_menu(ui, &row.words, |ui| {
-            if Action::quiet("Remove")
-                .density(Density::Read)
-                .show(ui)
-                .clicked()
-            {
-                *pressed = Some(row.entry.clone());
-                ui.close();
-            }
-        });
-    } else {
-        ui.allocate_exact_size(egui::vec2(menu, menu), egui::Sense::hover());
-    }
+    design::row_menu(ui, &row.words, |ui| {
+        if Action::quiet("Remove")
+            .density(Density::Read)
+            .blocked_if(!removable, REMOVE_PLAYED)
+            .show(ui)
+            .clicked()
+        {
+            *pressed = Some(row.entry.clone());
+            ui.close();
+        }
+    });
     if let Some(value) = row.value {
         let value = value.to_string();
         let font = Type::Numeral.font(ui);

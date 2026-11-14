@@ -1044,11 +1044,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/timeline/page.rs", "filters", &[Ban::Layout(1)]),
         ("src/timeline/page.rs", "list", &[Ban::Layout(1)]),
         ("src/timeline/page.rs", "new_events_line", &[Ban::Layout(1)]),
-        (
-            "src/trackers.rs",
-            "an_open_history_prepares_its_rows_once_and_draws_only_those_in_view",
-            &[Ban::Layout(1)],
-        ),
         ("src/trackers/view.rs", "amount_field", &[Ban::RowKey(3)]),
         ("src/world.rs", "add_form", &[Ban::Layout(1)]),
         ("src/world/page.rs", "new_menu", &[Ban::Layout(1)]),

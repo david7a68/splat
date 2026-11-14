@@ -170,6 +170,41 @@ fn same_edges(now: &[f32], before: &[f32]) -> bool {
         && now.iter().zip(before).all(|(a, b)| (a - b).abs() <= 1.0)
 }
 
+/// FA2: each line of Seals keeps its actions with it. `Lose seal` starts at or after its line's
+/// first action, never left of the line's name, and a line whose `Lose seal` wrapped stands
+/// closer to it than the next line does. Returns the check, how many lines wrapped, and where.
+fn seal_actions_with_their_line(d: &Driver<'_>) -> (bool, usize, String) {
+    let places: Vec<_> = ["Party", "Old Guard", "Keyring", "Convicts"]
+        .iter()
+        .map(|line| {
+            (
+                d.place_of(&format!("Take seal: {line}")),
+                d.place_of(&format!("Lose seal: {line}")),
+            )
+        })
+        .collect();
+    let mut held = places.iter().all(|p| matches!(p, (Some(_), Some(_))));
+    let mut wrapped = 0;
+    for (at, place) in places.iter().enumerate() {
+        let (Some(take), Some(lose)) = place else {
+            continue;
+        };
+        held &= lose.left() >= take.left() - 0.5;
+        if lose.top() > take.bottom() {
+            wrapped += 1;
+            let inside = lose.top() - take.bottom();
+            if let Some((Some(next), _)) = places.get(at + 1) {
+                held &= next.top() - lose.bottom() > inside + 0.5;
+            }
+        }
+    }
+    let shown: Vec<_> = places
+        .iter()
+        .map(|(take, lose)| (take.map(|r| r.min), lose.map(|r| r.min)))
+        .collect();
+    (held, wrapped, format!("Take and Lose seal at {shown:?}"))
+}
+
 /// The panel's columns hold: every value ends at one edge, and the first actions either all
 /// follow the values at one edge (`beside`) or each starts at its own line's name, under it.
 fn columns_hold(lines: &Lines, beside: bool) -> bool {
@@ -573,6 +608,18 @@ pub fn run(d: &mut Driver<'_>) {
             small.values, small.actions, small.names, wide.values, wide.actions, big.values, big.actions
         ),
     );
+    // FA2: at 1200x800 beside Lookup `Lose seal` wraps; it stays right of its line's name, at
+    // the first action's edge, and closer to its own line than to the next.
+    let (wide_held, wraps, wide_where) = d.at_size(DEFAULT, seal_actions_with_their_line);
+    let (big_held, _, big_where) = d.at_size(LARGE, seal_actions_with_their_line);
+    let (small_held, _, small_where) = seal_actions_with_their_line(d);
+    d.observe(
+        "T19.2",
+        wide_held && wraps > 0 && big_held && small_held,
+        format!(
+            "A wrapped action stays with its line: {wraps} wrapped at 1200x800, {wide_where}; at 1920x1080 {big_where}; at 960x640 {small_where}"
+        ),
+    );
     d.state("trackers-beside-the-plan", Sizes::All);
 
     // T19.2: a quick action is one press; a press that passes a mark raises a Due row. The
@@ -903,11 +950,29 @@ pub fn run(d: &mut Driver<'_>) {
         d.has_label("Start 0")
             && d.has(keyring)
             && d.has_containing("Take seal: Old Guard +1")
-            && !d.has("More actions for Take seal: Old Guard +1")
             && d.has_containing("3 notices are due"),
-        "The history opens under its tracker with the start values; only another session's row has Remove",
+        "The history opens under its tracker with the start values",
     );
     d.state("tracker-history-in-the-reader", Sizes::All);
+    // FE9: every row has its menu, so two rows look alike; on a row of the session being
+    // played, Remove is off and says that Undo in Trackers takes it back.
+    let played = "More actions for Take seal: Old Guard +1";
+    d.click(played);
+    let off = d.is_disabled("Remove");
+    let why = d.tooltip_contains("Remove", crate::trackers::history::REMOVE_PLAYED);
+    d.observe(
+        "T19.6",
+        off && why,
+        format!("A row of the session being played has its menu, with Remove off ({off}) and its reason ({why})"),
+    );
+    d.press(Key::Escape);
+    d.click(keyring);
+    d.observe(
+        "T19.6",
+        d.has("Remove") && !d.is_disabled("Remove"),
+        "Another session's row has Remove on",
+    );
+    d.press(Key::Escape);
     d.click(keyring);
     d.click("Remove");
     // AE1, FE11: of two rows named `Take seal`, the result names the one that went.
@@ -1006,8 +1071,38 @@ pub fn run(d: &mut Driver<'_>) {
 
     // An amount field takes exactly its action's column at a target's height, so no action
     // moves; Enter is the press, and the action keeps its place when that raises a Due row.
+    // Two lines with one name, or two actions with one label, would give two amount fields one
+    // id and one draft: the definition cannot be used, and its problem names the word.
     let note = root(d).join("Tournament.md");
     let text = fs::read_to_string(&note).unwrap();
+    let mut refused = Vec::new();
+    for (purses, why) in [
+        (
+            PURSES.replace("[Ann, Bo]", "[Ann, Ann]"),
+            "per names “Ann” twice. Give each line its own name.",
+        ),
+        (
+            PURSES.replace("{label: Tip, add: 1}", "{label: Pay, add: 1}"),
+            "quick has two actions named “Pay”. Give each action its own label.",
+        ),
+    ] {
+        fs::write(&note, text.replacen("> trackers:\n", &purses, 1)).unwrap();
+        d.app_mut().lookup.refresh();
+        d.app_mut().lookup.files_changed = true;
+        d.settle();
+        if !d.has_containing("Elapsed race time") {
+            d.press_ctrl(Key::T);
+        }
+        refused.push((
+            d.has_containing(why),
+            d.has_containing("Elapsed race time") && !d.has("Pay: Ann"),
+        ));
+    }
+    d.observe(
+        "T19.2",
+        refused == [(true, true), (true, true)],
+        format!("A repeated per name or quick label is a problem that names it, and no line of Purses shows: {refused:?}"),
+    );
     fs::write(&note, text.replacen("> trackers:\n", PURSES, 1)).unwrap();
     d.app_mut().lookup.refresh();
     d.app_mut().lookup.files_changed = true;

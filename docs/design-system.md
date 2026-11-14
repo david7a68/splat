@@ -643,8 +643,10 @@ the line, and a longer name ends at a whole word with `…` (or is `…` alone w
 whole on hover; every value ends at one edge. The value column holds the widest value slot of the panel: a value's
 digits and its goal's, at least three, so a value that gains a digit moves no action. When every line's first action
 fits after the value column (measured, not a fixed width), each line's actions follow its value from one edge and
-the ones that do not fit wrap to the line's start; else every line has its actions on the rows under it, from its
-name's edge. The columns are measured again only when a value, a definition or the panel's width changes. A press that raises or ends a Due row scrolls the view by the row's height, so the pressed action stays under
+the ones that do not fit wrap to that edge, never left of the line's name; else every line has its actions on the rows
+under it, from its name's edge. The rows of one line stand `XS` apart, closer than two lines (the panel's item
+spacing), so each action reads with its own line. A tracker's `per` names each line once and its quick actions each have their own label; a
+definition that repeats one is a problem that names the word, and none of its lines shows. The columns are measured again only when a value, a definition or the panel's width changes. A press that raises or ends a Due row scrolls the view by the row's height, so the pressed action stays under
 the pointer and a second press of a still pointer presses it again. It acts only in the few frames after the
 press and only while the content's height changed; the DM's own wheel or drag, or the view opened again, ends it.
 The scroll area keeps blank room after the trackers only while that needs it. `add: ask` puts a
@@ -680,8 +682,9 @@ tracker and each day mark of the note, a collapsed section `<NAME> HISTORY N` (`
 `group_heading_text`, N entries). Open, a tracker's shows `Start <value>` (or each name's start value) in `Small`
 muted; then each section has one row for each entry in the ledger's order, one control high: its words (`Take
 seal: Keyring +1`, `Bell is done.`, `End of month, Day 32 is done.`), cut with `…` when they do not fit and whole on hover,
-the value it left as a right-aligned `Numeral` (`number`), and the row's menu (`row_menu`) with a quiet `Remove`
-only on an entry with another session's stamp; every row keeps the menu's place, so the values stand in one column.
+the value it left as a right-aligned `Numeral` (`number`), and the row's menu (`row_menu`) with a quiet `Remove`.
+Every row has the menu, so two rows look alike and the values stand in one column; on an entry of the session being
+played, `Remove` is off and says `Use Undo in Trackers for a change of this session.`
 Only the rows inside the reader's clip are laid out and drawn. `Remove` takes the entry, the others of its press, and the entries of the notices
 it raised, and the reader's footer names the line and the change that went, so two rows with one label differ:
 `Removed Take seal: Keyring +1.` (a tracker without lines gives its name, a notice's press its label, `Removed End

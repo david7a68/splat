@@ -641,8 +641,19 @@ fn check_says(rules: &Rules, own: Option<&Definition>, says: Says<'_>) -> Result
     Ok(())
 }
 
-/// Every word of a definition resolves: trackers, tables, instances and amounts.
+/// Every word of a definition resolves: trackers, tables, instances and amounts. Each line and
+/// each quick action has its own name, so a line's action and its amount field have one owner.
 fn check(def: &Definition, rules: &Rules) -> Result<(), String> {
+    if let Some(word) = repeated(def.per.iter()) {
+        return Err(format!(
+            "per names “{word}” twice. Give each line its own name."
+        ));
+    }
+    if let Some(label) = repeated(def.quick.iter().map(|quick| &quick.label)) {
+        return Err(format!(
+            "quick has two actions named “{label}”. Give each action its own label."
+        ));
+    }
     if let Start::Per(values) = &def.start
         && let Some(word) = values.keys().find(|word| !def.per.contains(word))
     {
@@ -676,6 +687,12 @@ fn check(def: &Definition, rules: &Rules) -> Result<(), String> {
         check_says(rules, Some(def), mark.says())?;
     }
     Ok(())
+}
+
+/// The first word that comes a second time.
+fn repeated<'a>(words: impl Iterator<Item = &'a String>) -> Option<&'a String> {
+    let mut seen = std::collections::HashSet::new();
+    words.into_iter().find(|word| !seen.insert(*word))
 }
 
 /// A day mark has `at` or `every`, a day of 1 or more, `from` only with `every`, and words that
@@ -2810,6 +2827,29 @@ mod tests {
             check(teams, &rules),
             Err("Score: rivals has no line for Party.".into())
         );
+        // Two lines with one name, or two actions with one label, would share one amount
+        // field: the definition cannot be used. One name on two trackers is two owners.
+        for (yaml, why) in [
+            (
+                "name: Purses\nper: [Ann, Ann]",
+                "per names “Ann” twice. Give each line its own name.",
+            ),
+            (
+                "name: Purses\nquick: [{label: Pay, add: ask}, {label: Pay, add: 1}]",
+                "quick has two actions named “Pay”. Give each action its own label.",
+            ),
+        ] {
+            assert_eq!(check(&def(yaml), &rules), Err(why.into()), "{yaml}");
+        }
+        assert_eq!(
+            check(
+                &def(
+                    "name: Purses\nper: [Ann, Bo]\nquick: [{label: Pay, add: ask}, {label: Tip, add: 1}]"
+                ),
+                &rules
+            ),
+            Ok(())
+        );
         let state = replay(&rules, &Ledger::default(), &Today::default());
         assert_eq!(
             press_op(&rules, &state, "teams", Some("Party"), "Score", None, None),
@@ -3539,10 +3579,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn an_open_history_prepares_its_rows_once_and_draws_only_those_in_view() {
         use crate::test_support::{CachedWork, Counts};
         use egui_kittest::{Harness, kittest::Queryable};
@@ -3570,7 +3606,8 @@ mod tests {
             .with_size(eframe::egui::vec2(346.0, 640.0))
             .build_ui_state(
                 move |ui, t: &mut Trackers| {
-                    eframe::egui::ScrollArea::vertical().show(ui, |ui| history::show(ui, t, &note));
+                    crate::design::ScrollColumn::new("tracker history")
+                        .show(ui, |ui| history::show(ui, t, &note));
                 },
                 t,
             );

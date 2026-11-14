@@ -685,6 +685,9 @@ fn tracker_lines(
     // first actions start at one edge. A long name is cut at a whole word, and its hover keeps it.
     let name_width = (columns.name - indent).max(0.0);
     let top = egui::Layout::left_to_right(egui::Align::Min);
+    // The rows of one line stand `XS` apart, closer than two lines (the panel's spacing), so a
+    // wrapped action reads with its own line (FA2).
+    let one_line = |ui: &mut egui::Ui| ui.spacing_mut().item_spacing.y = design::XS;
     for instance in def.instances() {
         let line_top = ui.cursor().top();
         let head = |ui: &mut egui::Ui, view: &mut ViewState| {
@@ -707,25 +710,34 @@ fn tracker_lines(
             );
         };
         if columns.beside {
-            // The actions follow the value, and the ones that do not fit wrap to the line's
-            // start, so a wrapped row holds as many as the panel's width allows.
-            ui.horizontal_wrapped(|ui| {
+            // The actions follow the value, and the ones that do not fit wrap to the first
+            // action's edge, never left of the line's name.
+            ui.with_layout(top, |ui| {
                 head(ui, view);
                 design::gap(ui, Gap::S);
-                quick_actions(ui, view, key, def, instance, act);
+                ui.horizontal_wrapped(|ui| {
+                    one_line(ui);
+                    quick_actions(ui, view, key, def, instance, act);
+                });
             });
         } else {
             // A first action does not fit after the values: every line has its actions on the
             // rows under it, from its name's edge.
-            ui.with_layout(top, |ui| head(ui, view));
-            if !def.quick.is_empty() {
-                ui.with_layout(top, |ui| {
-                    if indented {
-                        design::gap(ui, Gap::L);
-                    }
-                    ui.horizontal_wrapped(|ui| quick_actions(ui, view, key, def, instance, act));
-                });
-            }
+            ui.vertical(|ui| {
+                one_line(ui);
+                ui.with_layout(top, |ui| head(ui, view));
+                if !def.quick.is_empty() {
+                    ui.with_layout(top, |ui| {
+                        if indented {
+                            design::gap(ui, Gap::L);
+                        }
+                        ui.horizontal_wrapped(|ui| {
+                            one_line(ui);
+                            quick_actions(ui, view, key, def, instance, act);
+                        });
+                    });
+                }
+            });
         }
         register_block(ui, line_top);
     }
