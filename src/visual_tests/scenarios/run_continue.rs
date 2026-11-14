@@ -172,9 +172,10 @@ fn history_line_gaps(d: &mut Driver<'_>, line: &str) {
         d.observe(
             "V11-history-gaps",
             gaps.is_some_and(|(after, before)| {
-                (after - crate::design::S).abs() <= 0.5 && (before - crate::design::M).abs() <= 0.5
+                // iter-28-B: the heading part owns the space above FINAL STATE: `L` (was `M`).
+                (after - crate::design::S).abs() <= 0.5 && (before - crate::design::L).abs() <= 0.5
             }),
-            format!("At {size:?}, {line:?} is S below Read-only and M above FINAL STATE: {gaps:?}"),
+            format!("At {size:?}, {line:?} is S below Read-only and L above FINAL STATE: {gaps:?}"),
         );
     }
     history_edges(d);
@@ -245,9 +246,10 @@ pub(crate) fn history_edges(d: &mut Driver<'_>) {
         d.observe(
             "X66-combat-log-gap",
             gap.as_ref().map_or(size == SMALL, |(gap, _)| {
-                (gap - crate::design::M).abs() <= 0.5
+                // iter-28-B: the heading part's `L`, as above FINAL STATE (was `M` for both).
+                (gap - crate::design::L).abs() <= 0.5
             }),
-            format!("At {size:?}, COMBAT LOG is M below the last Final state row: {gap:?}"),
+            format!("At {size:?}, COMBAT LOG is L below the last Final state row: {gap:?}"),
         );
     }
 }

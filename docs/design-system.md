@@ -1247,8 +1247,8 @@ the line under Read-only and the whole Final state into view; the log follows. A
 move the list, so `In progress` and `Ready to run` stay in view when they fit. Only a run taller than the list's view
 goes to its top, at a clean edge: the row's top less its own gap, so no letters of the line above show cut. The list
 keeps no room below its end. After the DM scrolls, the DM's scroll wins. The open run ends with an `L` gap before the
-next row, so that row does not read as a line of the log. `COMBAT LOG` is `M` below the last Final state row, as `FINAL STATE` is below the
-line above it. Final state has one name column, as
+next row, so that row does not read as a line of the log. `COMBAT LOG` is `L` below the last Final state row, as `FINAL STATE` is below the
+line above it: the heading part's space. Final state has one name column, as
 wide as the longest name up to half the room, so every HP starts at one x. HP and temporary HP follow in columns of
 their own, each as wide as its widest value, kept where a row has none; Absent, a saved concentration (its icon and
 `Conc` in its colour, the mark of the run's rows) and the conditions start after them and wrap inside the last column. Each row's values sit on its name's baseline. Rows put outcome before ended

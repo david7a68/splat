@@ -1045,11 +1045,10 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Extras(1)],
         ),
         ("src/encounters/list.rs", "choice_note", &[Ban::Extras(2)]),
-        ("src/encounters/list.rs", "history_list", &[Ban::Extras(2)]),
         (
             "src/encounters/list.rs",
             "history_summary",
-            &[Ban::Extras(6)],
+            &[Ban::Extras(2)],
         ),
         ("src/library.rs", "duplicate_choices", &[Ban::Extras(2)]),
         ("src/library.rs", "form_heading", &[Ban::Extras(1)]),

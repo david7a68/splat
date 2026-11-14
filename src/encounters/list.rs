@@ -69,7 +69,7 @@ pub(super) fn row_menu(ui: &mut egui::Ui, name: &str, add: impl FnOnce(&mut egui
     if shown.is_some() && marked(ui) != before {
         // egui keeps a popup's first size: the remembered sizes go, as for FB8.
         ui.ctx().memory_mut(egui::Memory::reset_areas);
-        ui.ctx().request_discard("a menu choice's icon slot");
+        ui.ctx().request_discard("the icon slot of a menu choice");
     }
 }
 
@@ -773,10 +773,6 @@ pub(super) struct Reading<'a> {
 
 /// History. Returns, when a run is open there, the screen span from the opened run's clean top
 /// edge to the end of its Final state: what `Open` brings into view (R2).
-#[allow(
-    clippy::disallowed_methods,
-    reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-)]
 pub(super) fn history_list(
     ui: &mut egui::Ui,
     page: &history::Arranged<'_>,
@@ -806,7 +802,13 @@ pub(super) fn history_list(
         read.as_ref().map(|_| true),
         |ui| {
             for session in &page.history {
-                design::group_heading(ui, session.label, session.runs.len());
+                design::heading(
+                    ui,
+                    design::Heading::Group {
+                        title: session.label,
+                        count: session.runs.len(),
+                    },
+                );
                 for past in &session.runs {
                     let run = past.run;
                     let date = run
@@ -960,8 +962,8 @@ fn history_summary(
                     .clicked();
             }
         }
-        ui.add_space(design::M - spacing);
-        design::group_label(ui, "Final state");
+        // The heading part owns the space above it (`L`, more than the `XS` under it).
+        design::heading(ui, design::Heading::Label("Final state"));
         // AI1, FI6, SI1: shared columns. The name column is as wide as the longest name, up to
         // half the room (a longer name wraps); then HP and temporary HP, each as wide as its
         // widest value, kept where a row has none; then Absent and the conditions, which wrap
@@ -1049,9 +1051,8 @@ fn history_summary(
             });
         }
         final_end = ui.min_rect().bottom();
-        // X66: the log's heading has the gap that Final state's has.
-        ui.add_space(design::M - spacing);
-        design::group_label(ui, "Combat log");
+        // X66: the log's heading has the gap that Final state's has: the heading part's.
+        design::heading(ui, design::Heading::Label("Combat log"));
         for line in &summary.log {
             blocked_reason(ui, Some(line));
         }
