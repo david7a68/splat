@@ -9500,12 +9500,27 @@ pub fn world_note_moved(d: &mut Driver<'_>) {
     }
     // Round 29 FI1 (ruling Q-l): World shows Watch House, one of the two notes the DM chooses
     // between. Its file line keeps the folder, the part that tells them apart, at every size.
+    // The whole path is painted in World's reader (right of its list, left of Lookup), under
+    // the title and no lower than the file line's links, at every size.
     for size in [SMALL, DEFAULT, LARGE] {
-        let cut = d.at_size(size, |d| d.visible_text("…/Watch House.md"));
+        let line = d.at_size(size, |d| {
+            let splitter = d.place_of("Resize World notes column")?;
+            let lookup = d.place_of(SEARCH_LOOKUP)?;
+            let reader = egui::Rect::from_min_max(
+                egui::pos2(splitter.right(), 0.0),
+                egui::pos2(lookup.left() - 1.0, f32::MAX),
+            );
+            let title = d.painted_word_rect("Watch House", reader)?;
+            let path = d.painted_word_rect("Locations/Watch House.md", reader)?;
+            let links = d.place_of("Show file")?;
+            Some((title, path, links))
+        });
         d.observe(
             "iter-29-D-FI1",
-            !cut,
-            format!("At {size:?}, the file line of Watch House keeps its folder"),
+            line.is_some_and(|(title, path, links)| {
+                path.top() >= title.bottom() - 0.5 && path.top() <= links.top() + 0.5
+            }),
+            format!("At {size:?}, World's file line of Watch House (title, path, links): {line:?}"),
         );
     }
     d.state("duplicate-place-chooser-in-lookup", Sizes::All);

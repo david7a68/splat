@@ -903,38 +903,50 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     );
     // Round 28 FC8: Lookup names the session as the Session page beside it does, in the Log
     // line, in `From other notes` and in its row's link, never by its file.
-    for size in [SMALL, DEFAULT, LARGE] {
-        let (named, detail) = d.at_size(size, |d| {
-            let pane = d.place_of(SEARCH_LOOKUP).map(|search| {
-                egui::Rect::from_min_max(
-                    egui::pos2(search.left(), 0.0),
-                    egui::pos2(f32::INFINITY, f32::INFINITY),
-                )
-            });
-            let words = pane.map(|pane| d.painted_in(pane)).unwrap_or_default();
-            // `From other notes` links the session by its name; at 960 it is below the fold.
-            let link = d
-                .nodes()
-                .into_iter()
-                .any(|node| node.role == egui::accesskit::Role::Link && node.name == label);
-            (
-                // Round 29 SF3: Lookup's `Stat block · not set` row puts the Log line below the
-                // fold at 960, as `From other notes` already is: there the link's name is the
-                // check, and no painted words may name the file.
-                pane.is_some()
-                    && !words.contains(&session)
-                    && (words.contains(&label) || size == SMALL)
-                    && link,
-                format!("link {link}, painted {words:?}"),
+    let named = |d: &Driver<'_>| {
+        let pane = d.place_of(SEARCH_LOOKUP).map(|search| {
+            egui::Rect::from_min_max(
+                egui::pos2(search.left(), 0.0),
+                egui::pos2(f32::INFINITY, f32::INFINITY),
             )
         });
+        let words = pane.map(|pane| d.painted_in(pane)).unwrap_or_default();
+        // `From other notes` links the session by its name; at 960 it is below the fold.
+        let link = d
+            .nodes()
+            .into_iter()
+            .any(|node| node.role == egui::accesskit::Role::Link && node.name == label);
+        (
+            pane.is_some() && !words.contains(&session) && words.contains(&label) && link,
+            format!("link {link}, painted {words:?}"),
+        )
+    };
+    for size in [DEFAULT, LARGE] {
+        let (named, detail) = d.at_size(size, named);
         d.observe(
             "iter-28-D-FC8",
             named,
             format!("At {size:?}, Lookup names the session `{label}`, not `{session}`: {detail}"),
         );
     }
-    d.state("status-changed-in-lookup", Sizes::Default);
+    // At 960 the check reads the capture's own settled frame (review of f29ef2c0: a look
+    // straight after a resize read the reader before it settled, with the Log line not yet
+    // painted).
+    // `Sizes::Default` captures 960, then 1200, in that order.
+    let mut at_capture = Vec::new();
+    d.state_prepared("status-changed-in-lookup", Sizes::Default, |d| {
+        d.settle();
+        at_capture.push(named(d));
+    });
+    let (fits, detail) = at_capture
+        .into_iter()
+        .next()
+        .unwrap_or((false, "no capture".into()));
+    d.observe(
+        "iter-28-D-FC8",
+        fits,
+        format!("At {SMALL:?}, Lookup names the session `{label}`, not `{session}`: {detail}"),
+    );
     d.click("Undo change to Status");
     d.observe(
         "T15.4",
