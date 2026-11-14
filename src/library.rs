@@ -2012,25 +2012,16 @@ impl Registration {
     }
 }
 
-/// A campaign file's words without the package list's lines for `package`: its task line (by
-/// its id, or by one of `links`, the names that named it) and the `Only:` line under it. The
-/// lines are the ones the file's reader reads as its package list
-/// (`list_formats::package_section_lines`: the `## Packages` section, code blocks left out), so
-/// Undo changes no line that the reader does not read as a choice.
+/// A campaign file's words without the package list's tasks that name `package`: each one's
+/// lines as the reader gives them (`list_formats::package_tasks`: its task line and its `Only:`
+/// lines), and nothing else, so Undo keeps every other choice and every other word.
 fn without_package_lines(text: &str, package: Uuid, links: &[&str]) -> String {
-    let mut drop = Vec::new();
-    let mut under = false;
-    for cell in content::list_formats::package_section_lines(text) {
-        let words = cell.value.as_str();
-        if task_names_package(words, package, links) {
-            under = true;
-            drop.push(cell.range);
-        } else if under && words.starts_with([' ', '\t']) && !words.trim().is_empty() {
-            drop.push(cell.range);
-        } else {
-            under = false;
-        }
-    }
+    let mut drop: Vec<std::ops::Range<usize>> = content::list_formats::package_tasks(text)
+        .into_iter()
+        .filter(|task| task_names_package(task, package, links))
+        .flat_map(|task| task.lines)
+        .collect();
+    drop.sort_by_key(|range| range.start);
     let mut out = String::with_capacity(text.len());
     let mut at = 0;
     for range in drop {
@@ -2041,20 +2032,17 @@ fn without_package_lines(text: &str, package: Uuid, links: &[&str]) -> String {
     out
 }
 
-/// True when a line of the package list is a task line that names `package`: by its id after
-/// ` ^` (as the reader splits the line; spaces around the id do not hide it) or, with no id, by
-/// one of `links`, the names that named it.
-fn task_names_package(words: &str, package: Uuid, links: &[&str]) -> bool {
-    let task = ["- [", "* [", "+ ["]
-        .iter()
-        .any(|start| words.starts_with(start))
-        && matches!(words.get(2..5), Some("[x]" | "[X]" | "[ ]"));
-    let Some(item) = words.get(6..).filter(|_| task) else {
-        return false;
-    };
-    match item.rsplit_once(" ^") {
-        Some((_, id)) => Uuid::parse_str(id.trim()).is_ok_and(|id| id == package),
-        None => links.contains(&item.trim()),
+/// True when a task of the package list names `package`: by its id after ` ^` (spaces around
+/// the id do not hide it) or, with no id, by one of `links`, the names that named it.
+fn task_names_package(
+    task: &content::list_formats::PackageTask,
+    package: Uuid,
+    links: &[&str],
+) -> bool {
+    if task.id.is_empty() {
+        links.contains(&task.name.as_str())
+    } else {
+        Uuid::parse_str(task.id.trim()).is_ok_and(|id| id == package)
     }
 }
 
@@ -12262,6 +12250,9 @@ mod tests {
         // is unsaved, so no reload can run: the clause ends in the same pass as the write. Point 2 (second pass): an outside edit that names the copy by
         // its key.
         let original_path = &paths[0];
+        // Another package's choice and indented prose, written under the copy's task.
+        let b_id = Uuid::new_v4();
+        let nested = format!("  - [x] Package B ^{b_id}\n  Indented prose stays.\n");
         let errands = |name: &str| {
             format!(
                 "\n## Errands\n\n- [ ] {name}\n  Buy rope.\n\n```markdown\n## Packages\n- [ ] {name}\n  Buy rope.\n```\n"
@@ -12273,6 +12264,8 @@ mod tests {
             "outside edit",
             "outside name link",
             "outside id, trailing spaces",
+            "outside nested choice",
+            "outside indented task",
         ] {
             // The reader does not read a task line whose id has spaces after it (a fault on
             // that line), but Undo still takes that line out: it names the copy's identity.
@@ -12357,6 +12350,26 @@ mod tests {
                 "outside edit" => {
                     choose_by_hand(crate::content_workspace::EntryRef::id(module.id));
                 }
+                "outside nested choice" | "outside indented task" => {
+                    let task = if path == "outside nested choice" {
+                        format!("- [x] {} ^{}\n{nested}", module.name, module.id)
+                    } else {
+                        format!("  - [x] {} ^{}\n", module.name, module.id)
+                    };
+                    let text = fs::read_to_string(&campaign_file).unwrap();
+                    fs::write(
+                        &campaign_file,
+                        text.replacen("## Packages\n", &format!("## Packages\n{task}"), 1),
+                    )
+                    .unwrap();
+                    let chosen = CampaignDocument::load(&campaign).unwrap().selections;
+                    assert!(
+                        chosen.iter().any(|s| s.package.id == Some(module.id))
+                            && (path != "outside nested choice"
+                                || chosen.iter().any(|s| s.package.id == Some(b_id))),
+                        "fixture: the reader reads the choices ({path})"
+                    );
+                }
                 "outside id, trailing spaces" => {
                     choose_by_hand(crate::content_workspace::EntryRef::id(module.id));
                     let mark = format!(" ^{}\n", module.id);
@@ -12434,11 +12447,28 @@ mod tests {
             library
                 .undo_package_registration(&d, &mut app.campaigns)
                 .unwrap();
-            assert_eq!(
-                CampaignDocument::load(&campaign).unwrap().selections,
-                choices_before,
-                "point-3-{path}"
-            );
+            let after: Vec<_> = CampaignDocument::load(&campaign)
+                .unwrap()
+                .selections
+                .into_iter()
+                .filter(|s| s.package.id != Some(b_id))
+                .collect();
+            assert_eq!(after, choices_before, "point-3-{path}");
+            if path == "outside nested choice" {
+                // B's choice and the indented prose stay, byte for byte; only the copy's task
+                // line went.
+                let text = fs::read_to_string(&campaign_file).unwrap();
+                assert!(
+                    text.contains(&format!("## Packages\n{nested}"))
+                        && CampaignDocument::load(&campaign)
+                            .unwrap()
+                            .selections
+                            .iter()
+                            .any(|s| s.package.id == Some(b_id)),
+                    "point-3-nested-b-stays\n{text}"
+                );
+                fs::write(&campaign_file, text.replacen(&nested, "", 1)).unwrap();
+            }
             if path == "outside name link" {
                 let text = fs::read_to_string(&campaign_file).unwrap();
                 // The other heading's item and the fenced example stay, byte for byte.

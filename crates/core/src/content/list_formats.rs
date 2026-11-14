@@ -428,17 +428,17 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
         for source_line in package_section_lines(text) {
             let line = source_line.line - 1;
             let raw = source_line.value.as_str();
-            let trimmed = raw.trim_start();
-            if raw.len() != trimmed.len()
-                && let Some(only) = trimmed
-                    .get(2..)
-                    .filter(|_| {
-                        ["- ", "* ", "+ "]
-                            .iter()
-                            .any(|prefix| trimmed.starts_with(prefix))
-                    })
-                    .and_then(|s| s.strip_prefix("Only:"))
-            {
+            let item = match package_line(raw) {
+                PackageLine::Only(only) => Some(only),
+                PackageLine::Blank => continue,
+                PackageLine::Prose => {
+                    last_enabled = false;
+                    last_task = false;
+                    continue;
+                }
+                PackageLine::Item(_) => None,
+            };
+            if let Some(only) = item {
                 if !last_task {
                     flags.push(Flag::new(
                         line + 1,
@@ -471,26 +471,11 @@ pub fn read(text: &str, fields: &mut Mapping, flags: &mut Vec<Flag>) {
                 }
                 continue;
             }
-            if trimmed.is_empty() || (trimmed.starts_with("%%") && trimmed.ends_with("%%")) {
+            let PackageLine::Item(raw) = package_line(raw) else {
                 continue;
-            }
-            if !["- ", "* ", "+ "]
-                .iter()
-                .any(|prefix| trimmed.starts_with(prefix))
-            {
-                last_enabled = false;
-                last_task = false;
-                continue;
-            }
-            let raw = trimmed;
+            };
             let parsed = (|| {
-                let enabled = match raw.get(2..5) {
-                    Some("[x]" | "[X]") => true,
-                    Some("[ ]") => false,
-                    _ => return Err("Package task not read".to_owned()),
-                };
-                let item = raw.get(6..).ok_or("Package name not found")?;
-                let (name, id) = item.rsplit_once(" ^").unwrap_or((item, ""));
+                let (enabled, name, id) = package_task(raw)?;
                 if id.is_empty() {
                     return Ok((
                         enabled,
@@ -2055,6 +2040,90 @@ pub fn with_prose(text: &str, notes: &str) -> Result<String, String> {
     } else {
         after
     })
+}
+
+/// One line of the package list, as the reader reads it.
+pub enum PackageLine<'a> {
+    /// An indented `- Only: …` line: the references of the task above it.
+    Only(&'a str),
+    /// An empty line or a `%% … %%` comment: it neither ends nor starts a task.
+    Blank,
+    /// A list item (its text from the list mark on): a task when its checkbox reads.
+    Item(&'a str),
+    /// Anything else: it ends the task above it.
+    Prose,
+}
+
+/// How the reader reads one line of the package list.
+pub fn package_line(raw: &str) -> PackageLine<'_> {
+    let trimmed = raw.trim_start();
+    let listed = ["- ", "* ", "+ "]
+        .iter()
+        .any(|prefix| trimmed.starts_with(prefix));
+    if raw.len() != trimmed.len()
+        && listed
+        && let Some(only) = trimmed.get(2..).and_then(|s| s.strip_prefix("Only:"))
+    {
+        return PackageLine::Only(only);
+    }
+    if trimmed.is_empty() || (trimmed.starts_with("%%") && trimmed.ends_with("%%")) {
+        PackageLine::Blank
+    } else if listed {
+        PackageLine::Item(trimmed)
+    } else {
+        PackageLine::Prose
+    }
+}
+
+/// A list item's checkbox, name and id (empty when none), as the reader splits it.
+pub fn package_task(item: &str) -> Result<(bool, &str, &str), String> {
+    let enabled = match item.get(2..5) {
+        Some("[x]" | "[X]") => true,
+        Some("[ ]") => false,
+        _ => return Err("Package task not read".to_owned()),
+    };
+    let item = item.get(6..).ok_or("Package name not found")?;
+    let (name, id) = item.rsplit_once(" ^").unwrap_or((item, ""));
+    Ok((enabled, name.trim(), id))
+}
+
+/// One task of the package list and the exact lines that belong to it: its task line and the
+/// `Only:` lines the reader gives it, nothing else. A change to one task takes these ranges.
+pub struct PackageTask {
+    pub name: String,
+    /// The id after ` ^`, as written (empty when none).
+    pub id: String,
+    pub lines: Vec<std::ops::Range<usize>>,
+}
+
+/// Every task of the package list, read as the reader reads it (`package_section_lines`,
+/// `package_line`, `package_task`), each with its own lines.
+pub fn package_tasks(text: &str) -> Vec<PackageTask> {
+    let mut tasks: Vec<PackageTask> = Vec::new();
+    let mut open = false;
+    for cell in package_section_lines(text) {
+        match package_line(&cell.value) {
+            PackageLine::Only(_) => {
+                if open && let Some(task) = tasks.last_mut() {
+                    task.lines.push(cell.range);
+                }
+            }
+            PackageLine::Blank => {}
+            PackageLine::Prose => open = false,
+            PackageLine::Item(item) => match package_task(item) {
+                Ok((_, name, id)) => {
+                    tasks.push(PackageTask {
+                        name: name.to_owned(),
+                        id: id.to_owned(),
+                        lines: vec![cell.range],
+                    });
+                    open = true;
+                }
+                Err(_) => open = false,
+            },
+        }
+    }
+    tasks
 }
 
 /// Where a new package task line goes: at the end of the real `## Packages` section (the
