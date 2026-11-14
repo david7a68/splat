@@ -2588,14 +2588,22 @@ mod tests {
         assert_eq!(h.state().acted, [Ok("Campaign link moved")]);
         h.run_steps(2);
         assert_eq!(order(h.state(), "newer"), newer, "B keeps its order");
-        assert!(h.query_by_label("Folder saved.").is_some(), "B stays");
+        assert!(
+            h.query_by_role_and_label(egui::accesskit::Role::Label, "Folder saved.")
+                .is_some(),
+            "B stays"
+        );
         // Revised, not pressed: the footer shows the revised words in the same place.
         let mut h = harness(two());
         let top = undo(&h, "older").rect().top();
         h.state_mut().in_body = Some(InBody::Revise("older"));
         h.run_steps(3);
-        assert!(h.query_by_label("Campaign link moved.").is_some());
-        assert!(h.query_by_label("Campaign link saved.").is_none());
+        let label = |h: &Harness<'_, App>, words: &str| {
+            h.query_by_role_and_label(egui::accesskit::Role::Label, words)
+                .is_some()
+        };
+        assert!(label(&h, "Campaign link moved."));
+        assert!(!label(&h, "Campaign link saved."));
         assert_eq!(undo(&h, "older").rect().top(), top, "the same place");
     }
 
@@ -2620,6 +2628,8 @@ mod tests {
         struct State {
             locked: bool,
             pressed: Vec<Fix>,
+            /// The right edge of the fault's 320 px column.
+            right: f32,
         }
         const PATH: &str =
             "Packages/Ravenholm Ironside Wardens/Encounters/Bridge Ambush/manifest.md";
@@ -2633,6 +2643,7 @@ mod tests {
                         egui::vec2(320.0, 600.0),
                         egui::Layout::top_down(egui::Align::Min),
                         |ui| {
+                            state.right = ui.max_rect().right();
                             let pressed = BodyFault::new(&fault)
                                 .repair(Repair::new("Open in Library", Fix::Open))
                                 .repair(
@@ -2654,7 +2665,7 @@ mod tests {
         let name = format!("Replace with a basic {PATH}");
         let replace = h.get_by_label(&name).rect();
         assert!(
-            replace.right() <= 321.0,
+            replace.right() <= h.state().right + 0.5 && replace.width() < 320.0,
             "inside the fault's width: {replace:?}"
         );
         let help = h
