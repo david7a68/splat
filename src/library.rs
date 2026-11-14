@@ -5974,13 +5974,17 @@ impl Library {
                 let form = design::InlineCreate::new()
                     .field(
                         design::CreateField::new(PACKAGE_FOLDER, "Package folder", &mut self.path)
-                            .side_action(BROWSE),
+                            // Round 28 K4a: Browse locks with the form, says why, and its press
+                            // is the part's to refuse.
+                            .side_action(design::SideAction::new(BROWSE).locked_when(
+                                lock.is_some(),
+                                crate::sentence!("Browse waits for the reason below."),
+                            )),
                     )
                     .create(design::Create::secondary(ADD_FOLDER).blocked(add_reason))
                     .kept_line(design::KeptLine::new())
                     .show(ui);
                 if form.side
-                    && lock.is_none()
                     && let Some(path) = crate::hermetic::pick_folder()
                 {
                     self.path = path.display().to_string();
@@ -7247,7 +7251,7 @@ impl Library {
         let mut make_clicked = false;
         let mut choose_clicked = false;
         let back = Action::quiet("Back")
-            .icon(icons::BACK)
+            .icon(icons::LEGACY_BACK)
             .density(Density::Read);
         let edit_label = if editable {
             "Edit Markdown"
@@ -9335,6 +9339,38 @@ mod tests {
                 .is_disabled()
         );
         assert!(harness.state().copied_package.is_none());
+        // Round 28 K4a (the review of PR 341): while the Library loads, Browse is disabled and
+        // its description says why; once it has loaded, Browse is open again.
+        let browse = |harness: &egui_kittest::Harness<'_, Library>| {
+            // The folder form's Browse (the new package form below has its own).
+            let node = harness
+                .query_all_by_label("Browse…")
+                .next()
+                .expect("Browse")
+                .accesskit_node();
+            (
+                node.is_disabled(),
+                node.description().map(|words| words.to_owned()),
+            )
+        };
+        assert_eq!(browse(&harness), (false, None));
+        let (_loading, rx) = mpsc::channel();
+        harness.state_mut().pending = Some(rx);
+        harness.run_steps(2);
+        assert_eq!(
+            browse(&harness),
+            (true, Some("Browse waits for the reason below.".to_owned()))
+        );
+        assert!(
+            harness
+                .query_all_by_label_contains("Wait for the Library to load.")
+                .next()
+                .is_some(),
+            "the reason it points to"
+        );
+        harness.state_mut().pending = None;
+        harness.run_steps(2);
+        assert_eq!(browse(&harness), (false, None));
     }
 
     #[test]

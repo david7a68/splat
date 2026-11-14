@@ -145,7 +145,7 @@ pub fn run(d: &mut Driver<'_>) {
     // Round 22 FD1 family: Campaign's flag keeps its repair choice and file line at its words.
     for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
         let placed = d.at_size(size, |d| {
-            super::file_links_at_message_words(
+            super::file_links_at_message_words_by_hand(
                 d,
                 "Line 23: Combat initiative",
                 &manifest,
@@ -203,16 +203,15 @@ pub fn run(d: &mut Driver<'_>) {
                 .filter(|node| node.name == manifest.display().to_string())
                 .map(|node| node.rect)
                 .collect();
-            super::file_links_at_message_words(d, &last.name, &manifest, "Campaign.md").and_then(
-                |()| {
+            super::file_links_at_message_words_by_hand(d, &last.name, &manifest, "Campaign.md")
+                .and_then(|()| {
                     (files.len() == 1 && first.bottom() <= last.rect.top())
                         .then_some(())
                         .ok_or(format!(
                             "file lines {files:?}; flags {first:?}, {:?}",
                             last.rect
                         ))
-                },
-            )
+                })
         });
         d.observe(
             "iter-22-C-FD1-campaign-two-flags",
@@ -245,7 +244,7 @@ pub fn run(d: &mut Driver<'_>) {
                 .filter(|node| node.name.contains("Combat initiative choice") && node.in_view())
                 .map(|node| node.name)
                 .collect::<Vec<_>>();
-            super::file_links_at_message_words(
+            super::file_links_at_message_words_by_hand(
                 d,
                 "Line 23: Combat initiative",
                 &campaign.path.join("Campaign.md"),
@@ -519,7 +518,7 @@ pub fn run(d: &mut Driver<'_>) {
             let blocked_at = words
                 .zip(blocked.first())
                 .is_some_and(|(words, (left, _, _))| (left - words.left()).abs() <= 1.0);
-            super::file_links_at_message_words(
+            super::file_links_at_message_words_by_hand(
                 d,
                 "Scout (as Goblin Warrior) · line",
                 &campaign.path.join("Encounter Groups/Bridge guards.md"),
@@ -728,7 +727,7 @@ pub fn run(d: &mut Driver<'_>) {
                 .find(|node| node.name.starts_with("Ember Cultist · ") && node.in_view())
                 .map(|node| node.name)
                 .unwrap_or_default();
-            let placed = super::file_links_at_message_words(
+            let placed = super::file_links_at_message_words_by_hand(
                 d,
                 "Ember Cultist · line 20: ",
                 &roster_path,
@@ -841,7 +840,7 @@ pub fn run(d: &mut Driver<'_>) {
                 .map(|node| node.rect);
             let placed = match (warning, file) {
                 (Some(warning), Some(file)) if file.top() >= warning.rect.bottom() - 1.0 => {
-                    super::file_links_at_message_words(
+                    super::file_links_at_message_words_by_hand(
                         d,
                         "Ember Cultist · line 20: the change “HP lots”",
                         &roster_path,
@@ -987,7 +986,7 @@ pub fn run(d: &mut Driver<'_>) {
                 return Err(format!("{} warnings", faults.len()));
             }
             if file.top() >= last.rect.bottom() - 1.0 {
-                super::file_links_at_message_words(
+                super::file_links_at_message_words_by_hand(
                     d,
                     &last.name,
                     &roster_path,
@@ -1051,8 +1050,9 @@ pub fn run(d: &mut Driver<'_>) {
         "i20-S3",
         "A Timeline flag names the file, displayed day, and repair routes",
         |d| {
-            d.has("Edit in Obsidian")
-                && d.has("Show file")
+            // The typed file line names each link with the file.
+            d.has(&format!("Edit in Obsidian: {}", crate::timeline::FILE))
+                && d.has(&format!("Show file: {}", crate::timeline::FILE))
                 && d.visible_text("Line 9: “Day 5”")
                 && d.visible_text("Splat renumbers it when it saves.")
         },

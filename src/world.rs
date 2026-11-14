@@ -377,6 +377,49 @@ pub(crate) fn rename_note_links(text: &str, old: &str, new: &str) -> (String, us
 
 /// Obsidian's links, written as links the Markdown reader understands.
 pub fn with_links(body: &str, images: &HashMap<String, PathBuf>) -> String {
+    with_named_links(body, images, &HashMap::new())
+}
+
+/// The words a link with no words of its own shows: a session note's name as the Sessions page
+/// gives it (`Session 1: The Crossing`, from `names`, `ContentIndex::session_names`), else its
+/// heading or its target. A link to a heading of a session shows that heading.
+pub(crate) fn link_words(target: &str, names: &HashMap<String, String>) -> String {
+    // By the whole link, folder and all: `[[Notes/Session 1]]` is not the session's
+    // `Sessions/Session 1`, and a bare stem is in `names` only when one note has it.
+    if !target.contains('#') {
+        let link = target.trim_start_matches('/').to_lowercase();
+        if let Some(name) = names.get(link.trim_end_matches(".md")) {
+            return name.clone();
+        }
+    }
+    target
+        .rsplit('#')
+        .next()
+        .unwrap_or(target)
+        .trim_start_matches('^')
+        .to_owned()
+}
+
+/// `text` with each `[[link]]` as its words (`link_words`), for a line that shows a link as
+/// plain text, such as the stamp beside `Add to Log`'s field.
+pub(crate) fn plain_named_links(text: &str, names: &HashMap<String, String>) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut copied = 0;
+    for (range, _, target, words) in each_link(text) {
+        out.push_str(&text[copied..range.start]);
+        copied = range.end;
+        out.push_str(&words.unwrap_or_else(|| link_words(&target, names)));
+    }
+    out.push_str(&text[copied..]);
+    out
+}
+
+/// `with_links`, where a link to a session note shows the session's name (`link_words`).
+pub fn with_named_links(
+    body: &str,
+    images: &HashMap<String, PathBuf>,
+    names: &HashMap<String, String>,
+) -> String {
     outside_code(body, |part, output| {
         let mut copied = 0;
         for (range, embed, target, words) in each_link(part) {
@@ -395,14 +438,7 @@ pub fn with_links(body: &str, images: &HashMap<String, PathBuf>) -> String {
                 }
                 continue;
             }
-            let shown = words.unwrap_or_else(|| {
-                target
-                    .rsplit('#')
-                    .next()
-                    .unwrap_or(&target)
-                    .trim_start_matches('^')
-                    .to_owned()
-            });
+            let shown = words.unwrap_or_else(|| link_words(&target, names));
             let shown = shown.replace('[', "\\[").replace(']', "\\]");
             let target = target.replace(['<', '>'], "");
             output.push_str(&format!("[{shown}](<{NOTE_LINK}{target}>)"));
@@ -1915,6 +1951,24 @@ struct Adding {
     initiative: String,
 }
 
+impl Adding {
+    /// The form for an NPC with no stat block to join the run: the enemies' side when the run
+    /// has one or none, else the run's first side.
+    fn new(item: &Item, index: &ContentIndex, sides: Option<&[String]>) -> Self {
+        let sides = sides.unwrap_or_default();
+        Self {
+            stat_block: index.world_target(&item.entry, "creature"),
+            save: true,
+            side: if sides.is_empty() || sides.iter().any(|side| side == "enemies") {
+                "enemies".to_owned()
+            } else {
+                sides[0].clone()
+            },
+            ..Default::default()
+        }
+    }
+}
+
 enum FormEnd {
     Cancel,
     Add,
@@ -2103,9 +2157,10 @@ pub struct Reader {
     pub join: Option<Join>,
     /// `Start fight` in the header, for the app to take after this reader draws.
     pub start_fight: Option<StartFight>,
-    /// `Add to fight` in the header of a creature's reader while a run is open (round 27 FJ5),
-    /// for the app to take after this reader draws, through the run's own add.
-    pub add_to_fight: Option<StartFight>,
+    /// `Add to fight` on the title line of a creature's or an NPC's reader while a run is open
+    /// (round 27 FJ5, round 28 FJ7), for the app to take after this reader draws, through the
+    /// run's own add.
+    pub add_to_fight: Option<AddToFight>,
     /// The campaign and the run that are open now, which the app sets each frame. A refusal
     /// of `Add to fight` belongs to them.
     pub run_owner: Option<(Uuid, Uuid)>,
@@ -2132,6 +2187,18 @@ pub struct Reader {
     /// The entries whose edit form is open in the other reader (Lookup's, or the World
     /// page's). Their Log field waits too, so Splat never makes its own disk conflict.
     pub edited_elsewhere: Vec<Uuid>,
+}
+
+/// A reader's `Add to fight`: what joins the open run, by the run's own add
+/// (`Run::add_entry_to_fight`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AddToFight {
+    /// The entry on show, a creature or an NPC: a refusal is its own.
+    pub entry: Uuid,
+    /// The stat block that joins.
+    pub stat_block: Uuid,
+    /// The entry is an NPC, who joins under their own name with that stat block.
+    pub npc: bool,
 }
 
 /// Why the run refused a reader's `Add to fight`, and whose refusal it is.
@@ -2738,7 +2805,7 @@ impl Reader {
             .reading()
             .ok()
             .flatten()
-            .map_or_else(|| item.entry.name.clone(), |reading| reading.title);
+            .map_or_else(|| index.name_of(item).to_owned(), |reading| reading.title);
         let id = item.entry.id;
         let edit =
             campaign.filter(|campaign| edit::editable(item, index) && !self.editing(id, campaign));
@@ -2752,20 +2819,30 @@ impl Reader {
         } else {
             format!("{kind} · {}", item.owner)
         };
-        // While a run is open, an NPC has Add to fight below, and Arrivals adds a creature.
+        // While a run is open, `Add to fight` takes the place of `Start fight`.
         let start = (self.sides.is_none()
             && !self.beside_editor
             && !campaign.is_some_and(|c| self.editing(id, c)))
         .then(|| start_fight(item, index))
         .flatten();
-        // While a run is open, a creature joins it from its reader in one press (FJ5). An NPC
-        // keeps its own `Add to fight` form below, which asks for its stat block and side.
+        // While a run is open, a creature or an NPC joins it from its reader's title line in
+        // one press (FJ5; round 28 FJ7, FF1: one form for both), through the run's own add. An
+        // NPC already in the fight has its status link instead, and an NPC in its edit form has
+        // none, as `Start fight`. An NPC with no stat block opens the form below that asks for
+        // one (also a package's NPC: the form adds them and writes nothing to the note); while
+        // that form is open it is the one way to add them, and the title line has no
+        // `Add to fight` until the form adds them or Cancel closes it (review of PR 355).
+        let editing_entry = campaign.is_some_and(|c| self.editing(id, c));
         let add = self
             .sides
             .is_some()
             .then(|| start_fight(item, index))
             .flatten()
-            .filter(|fight| !fight.npc);
+            .filter(|fight| {
+                let form_open = fight.creature.is_none() && self.adding.is_some();
+                let elsewhere = self.in_run.contains_key(&id) || editing_entry || form_open;
+                !fight.npc || !elsewhere
+            });
         {
             let width = ui.available_width();
             let cell = ui
@@ -2862,7 +2939,18 @@ impl Reader {
             if let Some(add) = add
                 && pressed.next() == Some(true)
             {
-                self.add_to_fight = Some(add);
+                match add.creature {
+                    Some(stat_block) => {
+                        self.add_to_fight = Some(AddToFight {
+                            entry: id,
+                            stat_block,
+                            npc: add.npc,
+                        });
+                    }
+                    None => {
+                        self.adding = Some(Adding::new(item, index, self.sides.as_deref()));
+                    }
+                }
             }
             if let Some(campaign) = edit
                 && pressed.next() == Some(true)
@@ -2874,7 +2962,7 @@ impl Reader {
         let editing = campaign.is_some_and(|campaign| self.editing(id, campaign));
         if let Some(campaign) = campaign
             && takes_log(item, index)
-            && let Some(go) = self.log_field(ui, item, campaign, editing)
+            && let Some(go) = self.log_field(ui, item, campaign, editing, index.session_names())
         {
             return Some(go);
         }
@@ -3472,6 +3560,7 @@ impl Reader {
         item: &Item,
         campaign: &Campaign,
         editing: bool,
+        sessions: &HashMap<String, String>,
     ) -> Option<Go> {
         // With no field open, or a field that waits for an edit form, no scope: an empty one
         // still takes an item gap, and would move the form (round 27 FC2).
@@ -3484,14 +3573,22 @@ impl Reader {
         {
             return None;
         }
-        design::reader::measure(ui, |ui| self.log_field_in(ui, item, campaign))
+        design::reader::measure(ui, |ui| self.log_field_in(ui, item, campaign, sessions))
     }
 
-    fn log_field_in(&mut self, ui: &mut egui::Ui, item: &Item, campaign: &Campaign) -> Option<Go> {
+    /// `sessions`: the session notes' names (`ContentIndex::session_names`), so the stamp names
+    /// the session as the Sessions page does, while the line it writes links the file.
+    fn log_field_in(
+        &mut self,
+        ui: &mut egui::Ui,
+        item: &Item,
+        campaign: &Campaign,
+        sessions: &HashMap<String, String>,
+    ) -> Option<Go> {
         let key = (campaign.id, item.entry.id);
         let stamp = self
             .line_stamp()
-            .map(|stamp| format!("{}:", sessions::plain_links(&stamp)));
+            .map(|stamp| format!("{}:", plain_named_links(&stamp, sessions)));
         let open = self.held.log_fields.get_mut(&key)?;
         let select = std::mem::take(&mut open.select);
         let field = &mut open.field;
@@ -4546,7 +4643,11 @@ impl Reader {
         index: &ContentIndex,
         campaign: Option<&Campaign>,
     ) -> Option<Go> {
-        let campaign = campaign.filter(|_| item.is_private())?;
+        // A package's NPC has no values to change here, but its join form, from `Add to fight`
+        // on the title line, adds them all the same.
+        let Some(campaign) = campaign.filter(|_| item.is_private()) else {
+            return self.join_form(ui, item, index, None);
+        };
         let mut go = None;
         if self.compact {
             let mut targets = vec![
@@ -4761,28 +4862,36 @@ impl Reader {
             }
             return None;
         }
+        self.join_form(ui, item, index, Some(campaign))
+    }
+
+    /// The form that adds an NPC with no stat block to the run, open from `Add to fight` on the
+    /// title line. `campaign` is the NPC's own campaign when its note is the campaign's: only
+    /// then can the form save the chosen stat block to the note. A package's NPC joins, and its
+    /// note is not written.
+    fn join_form(
+        &mut self,
+        ui: &mut egui::Ui,
+        item: &Item,
+        index: &ContentIndex,
+        campaign: Option<&Campaign>,
+    ) -> Option<Go> {
         let sides = self.sides.as_ref()?;
         let Some(adding) = &mut self.adding else {
-            if Action::secondary("Add to fight")
-                .icon(design::icons::ADD)
-                .density(Density::Read)
-                .show(ui)
-                .clicked()
-            {
-                self.adding = Some(Adding {
-                    stat_block: index.world_target(&item.entry, "creature"),
-                    save: true,
-                    side: if sides.is_empty() || sides.iter().any(|side| side == "enemies") {
-                        "enemies".to_owned()
-                    } else {
-                        sides[0].clone()
-                    },
-                    ..Default::default()
-                });
-            }
             return None;
         };
-        match add_form(ui, item, index, sides, adding, self.compact)? {
+        if campaign.is_none() {
+            adding.save = false;
+        }
+        match add_form(
+            ui,
+            item,
+            index,
+            sides,
+            adding,
+            self.compact,
+            campaign.is_some(),
+        )? {
             FormEnd::Cancel => self.adding = None,
             FormEnd::Add => {
                 let stat_block = &index.items[adding.stat_block?].entry;
@@ -4797,7 +4906,7 @@ impl Reader {
                     },
                 };
                 let saved = adding.save && index.world_target(&item.entry, "creature").is_none();
-                if saved {
+                if saved && let Some(campaign) = campaign {
                     match set_world_field(
                         campaign,
                         &item.entry,
@@ -4833,6 +4942,7 @@ fn add_form(
     sides: &[String],
     adding: &mut Adding,
     compact: bool,
+    can_save: bool,
 ) -> Option<FormEnd> {
     ui.label(Type::Strong.rich(ui, format!("Add {} to the fight", item.entry.name)));
     match adding.stat_block.map(|at| &index.items[at].entry) {
@@ -4866,7 +4976,7 @@ fn add_form(
             }
         }
     }
-    if creature(&item.entry).is_none() {
+    if can_save && creature(&item.entry).is_none() {
         ui.checkbox(&mut adding.save, "Save this as their stat block");
     }
     if let Some((first, rest)) = sides.split_first()
@@ -5453,9 +5563,11 @@ mod tests {
                     .iter()
                     .filter_map(|(_, node)| node.label().or_else(|| node.value()))
                     .collect();
+                // The Status row, the block's last row: `Add to fight` is on the title line
+                // (round 28 FJ7), so it no longer stands for the block.
                 assert!(
-                    labels.contains(&"Add to fight"),
-                    "D2-compact-fixture: compact reader controls must render"
+                    labels.contains(&"Status"),
+                    "D2-compact-fixture: compact reader controls must render: {labels:?}"
                 );
                 actual.push((
                     key,

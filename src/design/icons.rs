@@ -1,7 +1,7 @@
 //! Named icon glyphs. Icons support words. They are in the UI font's fallback chain.
 pub use egui_phosphor::regular::{
     ARROW_CLOCKWISE as REFRESH, ARROW_COUNTER_CLOCKWISE as UNDO, ARROW_DOWN as MOVE_DOWN,
-    ARROW_LEFT as BACK, ARROW_SQUARE_OUT as OPEN_OUT, ARROW_UP as MOVE_UP, BED as LONG_REST, BELL,
+    ARROW_SQUARE_OUT as OPEN_OUT, ARROW_UP as MOVE_UP, BED as LONG_REST, BELL,
     BOOK_OPEN as LIBRARY, CALENDAR_BLANK as DAY, CARET_DOWN as DOWN, CARET_RIGHT as NEXT,
     CARET_UP as UP, CHECK as OK, CHECK_CIRCLE as SUCCESS, CHECK_SQUARE, CLOUD_CHECK as ONLINE,
     CLOUD_SLASH as OFFLINE, COFFEE as SHORT_REST, COINS as LOOT, COPY, CROSSHAIR as ARMED,
@@ -17,3 +17,14 @@ pub use egui_phosphor::regular::{
     SWORD as ATTACK, TRASH as REMOVE, USERS_FOUR as GROUP, USERS_THREE as PARTY, WARNING as WARN,
     WARNING_OCTAGON as ERROR, WAVEFORM as AUDIO, X as CLOSE,
 };
+
+/// A left arrow for a back action, kept only for the callers not yet moved. A back link that
+/// starts a line is `design::TitleLine::back`: its word at the text edge, its own icon after
+/// the word (FL7). A bare arrow with its word on hover only is the form that it replaces.
+/// Staged: `design::results::STAGED` counts its uses per file (its name must be spelled at each
+/// use, also in an alias or a grouped import), and the deprecation fails a file without a
+/// counted `allow(deprecated)`.
+#[deprecated(
+    note = "a back link that starts a line is `design::TitleLine::back` (its word is always shown); a history step (`Back`, Alt+Left) keeps its word"
+)]
+pub const LEGACY_BACK: &str = egui_phosphor::regular::ARROW_LEFT;

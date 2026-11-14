@@ -12,7 +12,7 @@ use super::{
 use crate::{
     credentials::{self, KeySlot},
     design::{
-        self, Action, Density, Status, Tone, Type, colors, icons,
+        self, Action, CreateReasons, Density, Status, Tone, Type, colors, icons,
         outcome::{
             Choice, Fault, FaultMessage, KeptOutcome, Lost, MessageChoice, Messages, Notice,
             PaneFrame, Press, Said, Sentence, Severity, UndoStep, Verb,
@@ -66,6 +66,45 @@ const TEMPLATE_NAME: design::FieldId =
     crate::field_id!("template_name").once(design::Once::CreateForm);
 const SESSION_FOLDER: design::FieldName = crate::field_id!("session_folder");
 const SESSION_TEMPLATE: design::FieldName = crate::field_id!("session_template");
+const CREATE_SESSION: design::Word = crate::word!("Create session");
+const SAVE_DETAILS: design::Word = crate::word!("Save details");
+const CANCEL: design::Word = crate::word!("Cancel");
+
+crate::create_reasons! {
+    /// Why the New session form's Create (or the details form's Save details) waits.
+    enum FormReason {
+        Number => "Enter the session number as a whole number.",
+        Date => "Enter the date as YYYY-MM-DD.",
+        TemplateGone => "The chosen template is gone from the folder. Choose another.",
+    }
+}
+
+/// Why `form` cannot be made now, judged on its words and on the templates the page lists.
+fn form_reason(form: &Form, templates: &[Template]) -> Option<FormReason> {
+    if form.number.trim().parse::<u32>().is_err() {
+        return Some(FormReason::Number);
+    }
+    // A date's order is how Splat tells an old session from tonight's.
+    let date = form.date.trim().as_bytes();
+    if date.len() != 10
+        || date.iter().enumerate().any(|(at, c)| {
+            if at == 4 || at == 7 {
+                *c != b'-'
+            } else {
+                !c.is_ascii_digit()
+            }
+        })
+    {
+        return Some(FormReason::Date);
+    }
+    // A new session starts from a template the folder still holds.
+    (form.editing.is_none()
+        && !templates.is_empty()
+        && !templates
+            .iter()
+            .any(|template| template.name == form.template))
+    .then_some(FormReason::TemplateGone)
+}
 const RECORDING_VIEW: design::FieldName = crate::field_id!("recording_view");
 const RECORDING_PART: design::FieldName = crate::field_id!("recording_part");
 
@@ -2016,6 +2055,11 @@ impl Sessions {
         // form and its unsent words are not refreshed.
         self.end_folder_listing();
         if self.form.is_some() {
+            // The form's choices follow the folder, so a template removed outside shows its
+            // reason before the press; the form's own words stay.
+            if let Some(folder) = &self.folder {
+                self.templates = list_templates(folder);
+            }
             return;
         }
         self.refresh();
@@ -2223,11 +2267,12 @@ impl Sessions {
         self.folder_error = None;
         let notes = list_notes(folder);
         // A new, renamed or removed note: the campaign's content holds session notes too, so
-        // Lookup and Read's links find it.
-        let place = |notes: &[Note]| -> Vec<(Uuid, PathBuf)> {
+        // Lookup and Read's links find it. A new number or title too: Lookup and World name a
+        // session by its label (round 28 FC8).
+        let place = |notes: &[Note]| -> Vec<(Uuid, PathBuf, String)> {
             notes
                 .iter()
-                .map(|note| (note.id, note.path.clone()))
+                .map(|note| (note.id, note.path.clone(), note.label()))
                 .collect()
         };
         self.wants_index_refresh |= place(&notes) != place(&self.notes);
@@ -3724,7 +3769,6 @@ impl Sessions {
         } else {
             "New session"
         };
-        let c = colors();
         design::heading(
             ui,
             design::Heading::Group {
@@ -3742,77 +3786,89 @@ impl Sessions {
                 Density::Read.control(),
             );
         });
-        let title = design::labelled_field(
-            ui,
-            SESSION_TITLE.of(form.editing),
-            "Session title",
-            &mut form.title,
-            Some("Optional. You can name it after you play."),
-            None,
-        );
-        // The one field a DM usually types, often with people waiting.
-        if std::mem::take(&mut self.focus_form_title) {
-            title.request_focus();
+        let reason = form_reason(&form, &self.templates);
+        // The file the form makes, on the kept line once nothing blocks Create.
+        let preview = match (&form.editing, &self.folder) {
+            (None, Some(folder)) => {
+                let path = super::note_path(folder, form.number.parse().unwrap_or(1), &form.title);
+                let shown = path.strip_prefix(folder).unwrap_or(&path);
+                Some(format!("File: {}", shown.display()))
+            }
+            _ => None,
+        };
+        // Round 28 K4a: the one inline creation form. The title, the date and, for a new
+        // session, the Template drop-down; Create and Cancel on the action line after it; the
+        // reason or the file on the kept line under them. Enter in a field creates, Escape
+        // cancels.
+        let word = if form.editing.is_some() {
+            SAVE_DETAILS
+        } else {
+            CREATE_SESSION
+        };
+        let create = if self.open_run.is_some() {
+            design::Create::secondary(word)
+        } else {
+            design::Create::primary(word)
         }
-        let title_entered = title.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-        design::labelled_field(
-            ui,
-            SESSION_DATE.of(form.editing),
-            "Date",
-            &mut form.date,
-            Some("As YYYY-MM-DD."),
-            None,
-        );
-        if form.editing.is_none() {
-            design::field(ui, "Template", None, None, |ui| {
-                let mut names = self
-                    .templates
-                    .iter()
-                    .map(|template| (template.name.clone(), template.name.as_str()));
-                if let Some((first, label)) = names.next() {
-                    let _ = design::Dropdown::new(
+        .blocked(reason);
+        let focus = std::mem::take(&mut self.focus_form_title);
+        let fields = design::InlineCreate::new()
+            .field(
+                design::CreateField::new(
+                    SESSION_TITLE.of(form.editing),
+                    "Session title",
+                    &mut form.title,
+                )
+                .help("Optional. You can name it after you play.")
+                // The one field a DM usually types, often with people waiting.
+                .focus(focus),
+            )
+            .field(
+                design::CreateField::new(SESSION_DATE.of(form.editing), "Date", &mut form.date)
+                    .help("As YYYY-MM-DD."),
+            );
+        let kept = design::KeptLine::new()
+            .cancel(CANCEL, true)
+            .preview(preview.as_deref());
+        let mut names = self
+            .templates
+            .iter()
+            .map(|template| (template.name.clone(), template.name.as_str()));
+        let first = names.next().filter(|_| form.editing.is_none());
+        let shown = match first {
+            Some((first, label)) => fields
+                .dropdown(design::CreateDropdown::new(
+                    "Template",
+                    design::layout::Selection::new(
                         SESSION_TEMPLATE.once(design::Once::CreateForm),
                         "Session template",
+                        first,
+                        label,
                     )
-                    .choice(first, label)
-                    .choices(names)
-                    .show(ui, &mut form.template);
-                }
-            });
+                    .choices(names),
+                    &mut form.template,
+                ))
+                .create(create),
+            None => fields.create(create),
         }
-        if form.editing.is_none()
-            && let Some(folder) = &self.folder
-        {
-            let path = super::note_path(folder, form.number.parse().unwrap_or(1), &form.title);
-            let shown = path.strip_prefix(folder).unwrap_or(&path);
-            wrapped_words(
-                ui,
-                Type::Small,
-                format!("File: {}", shown.display()),
-                c.muted,
-            );
-        }
+        .kept_line(kept)
+        .show(ui);
+        // A fault of the act itself, under the form, so it moves nothing above it.
         if let Some(error) = &form.error {
             design::message(ui, Tone::Error, error);
         }
-        let mut done = title_entered;
-        let mut cancel = false;
-        ui.horizontal(|ui| {
-            let label = if form.editing.is_some() {
-                "Save details"
-            } else {
-                "Create session"
-            };
-            done |= if self.open_run.is_some() {
-                Action::secondary(label)
-            } else {
-                Action::primary(label)
-            }
-            .show(ui)
-            .clicked();
-            cancel = Action::quiet("Cancel").show(ui).clicked();
-        });
-        if cancel {
+        // A press reads the templates as the folder holds them now: one changed or removed
+        // outside Splat since the form opened is never made from the listing's copy. The press
+        // is judged on that and on the form after this frame's typing; a refused press leaves
+        // the reason on the kept line.
+        if shown.create
+            && form.editing.is_none()
+            && let Some(folder) = &self.folder
+        {
+            self.templates = list_templates(folder);
+        }
+        let done = shown.create && form_reason(&form, &self.templates).is_none();
+        if shown.cancel {
             return;
         }
         if done {
@@ -3828,7 +3884,11 @@ impl Sessions {
                     self.focus_notes = form.editing.is_none();
                     return;
                 }
-                Err(error) => form.error = Some(error),
+                Err(error) => {
+                    form.error = Some(error);
+                    // The act failed and the form stays: the keyboard goes back to it.
+                    self.focus_form_title = true;
+                }
             }
         }
         self.form = Some(form);
@@ -3948,19 +4008,9 @@ impl Sessions {
             .number
             .trim()
             .parse()
-            .map_err(|_| "The number must be a whole number.".to_owned())?;
-        // A date's order is how Splat tells an old session from tonight's.
-        let date = form.date.trim().as_bytes();
-        if date.len() != 10
-            || date.iter().enumerate().any(|(at, c)| {
-                if at == 4 || at == 7 {
-                    *c != b'-'
-                } else {
-                    !c.is_ascii_digit()
-                }
-            })
-        {
-            return Err("Enter the date as YYYY-MM-DD.".to_owned());
+            .map_err(|_| FormReason::Number.words().to_owned())?;
+        if let Some(reason) = form_reason(form, &self.templates) {
+            return Err(reason.words().to_owned());
         }
         if let Some(id) = form.editing {
             let note = self
@@ -5689,6 +5739,13 @@ impl Sessions {
         let block = ui
             .available_width()
             .min(design::READER_MEASURE.max(segments_width + design::XS));
+        // The back link's word lines up with the view choices below it: their words, or the
+        // drop-down's edge (the same choice as below).
+        let back_edge = if segments_width + design::XS <= ui.available_width() {
+            design::BackEdge::Segments
+        } else {
+            design::BackEdge::Text
+        };
         ui.horizontal(|ui| {
             ui.set_max_width(block);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -5712,13 +5769,10 @@ impl Sessions {
                     }
                 }
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                    back = Action::quiet("Recordings")
-                        .icon(icons::BACK)
-                        .name("Back to recordings")
-                        .density(Density::Read)
+                    back = design::TitleLine::back(crate::word!("Back to recordings"), back_edge)
+                        .context(&reading.name)
                         .show(ui)
                         .clicked();
-                    ui.label(Type::Small.rich(ui, &reading.name).color(c.muted));
                 });
             });
         });
@@ -6671,7 +6725,7 @@ impl Sessions {
             } else {
                 if self.form.is_none()
                     && Action::quiet("All sessions")
-                        .icon(icons::BACK)
+                        .icon(icons::LEGACY_BACK)
                         .density(Density::Read)
                         .show(ui)
                         .clicked()
@@ -6753,7 +6807,7 @@ impl Sessions {
             }
         } else if narrow {
             if Action::quiet("All templates")
-                .icon(icons::BACK)
+                .icon(icons::LEGACY_BACK)
                 .density(Density::Read)
                 .show(ui)
                 .clicked()
@@ -6842,7 +6896,7 @@ impl Sessions {
     /// The template list's head: the way back to the sessions. It never scrolls.
     fn template_list_head(&mut self, ui: &mut egui::Ui) {
         if Action::quiet("Sessions")
-            .icon(icons::BACK)
+            .icon(icons::LEGACY_BACK)
             .show(ui)
             .clicked()
         {
@@ -9069,6 +9123,145 @@ mod tests {
                 .map(|form| form.title.as_str()),
             Some("Unsent words"),
             "the form keeps its unsent words"
+        );
+    }
+
+    /// Round 28 K4a, the New session form's facts: the chosen template is read from the folder
+    /// at the press (changed or removed outside Splat since the form opened), a refused press
+    /// keeps the form and its words, and the form belongs to its campaign (a switch ends it, and
+    /// B's form never offers A's template).
+    #[test]
+    fn the_new_session_form_reads_its_template_at_the_press_and_keeps_to_its_campaign() {
+        use egui_kittest::kittest::Queryable;
+        let dirs = [tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap()];
+        let [a, b] = [0, 1].map(|at| {
+            let campaign = Campaign {
+                id: Uuid::from_u128(at + 1),
+                name: format!("Campaign {at}"),
+                path: dirs[at as usize].path().into(),
+                dndbeyond_campaign_id: None,
+                dndbeyond_campaign_name: None,
+            };
+            crate::content_workspace::CampaignDocument::new(&campaign)
+                .unwrap()
+                .save()
+                .unwrap();
+            let folder = super::super::open_folder(&campaign).unwrap();
+            if at == 0 {
+                fs::create_dir_all(folder.join(super::super::TEMPLATES)).unwrap();
+                fs::write(folder.join(super::super::TEMPLATES).join("Mine.md"), "Mine").unwrap();
+            }
+            create_note(
+                &folder,
+                &NewNote {
+                    number: 1,
+                    title: "One",
+                    date: "2026-11-01",
+                    campaign: &campaign.name,
+                    template: "",
+                },
+            )
+            .unwrap();
+            campaign
+        });
+        let mine = a
+            .path
+            .join("Sessions")
+            .join(super::super::TEMPLATES)
+            .join("Mine.md");
+        type State = (Sessions, Book, Campaign);
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(900.0, 700.0))
+            .build_state(
+                |ctx, (sessions, book, campaign): &mut State| {
+                    sessions.poll(ctx, Some(campaign), book);
+                    egui::CentralPanel::default().show(ctx, |ui| sessions.show_form(ui));
+                },
+                (Sessions::default(), Book::default(), a.clone()),
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let shows = |harness: &egui_kittest::Harness<'_, State>, words: &str| {
+            harness.query_all_by_label_contains(words).next().is_some()
+        };
+        let open = |harness: &mut egui_kittest::Harness<'_, State>, title: &str| {
+            let sessions = &mut harness.state_mut().0;
+            sessions.open_form();
+            let form = sessions.form.as_mut().unwrap();
+            form.template = "Mine".to_owned();
+            form.title = title.to_owned();
+            harness.run_steps(2);
+        };
+        let notes = |harness: &egui_kittest::Harness<'_, State>| harness.state().0.notes.len();
+        // Changed outside before Create: the note holds the template as the folder has it.
+        open(&mut harness, "Unsent");
+        assert!(shows(&harness, "Session template: Mine"));
+        fs::write(&mine, "Changed outside").unwrap();
+        harness.get_by_label("Create session").click();
+        harness.run_steps(3);
+        assert!(harness.state().0.form.is_none(), "the session is made");
+        let made = harness
+            .state()
+            .0
+            .notes
+            .iter()
+            .find(|note| note.title == "Unsent")
+            .map(|note| fs::read_to_string(&note.path).unwrap())
+            .unwrap_or_default();
+        assert!(
+            made.contains("Changed outside"),
+            "made from the folder's template: {made:?}"
+        );
+        // Removed outside before Create: the press is refused, the reason shows on the kept
+        // line once, and the form keeps its words.
+        open(&mut harness, "Second");
+        let before = notes(&harness);
+        fs::remove_file(&mine).unwrap();
+        harness.get_by_label("Create session").click();
+        harness.run_steps(3);
+        assert_eq!(
+            notes(&harness),
+            before,
+            "no session from a template that is gone"
+        );
+        assert_eq!(
+            harness
+                .state()
+                .0
+                .form
+                .as_ref()
+                .map(|form| form.title.as_str()),
+            Some("Second"),
+            "the form keeps its words"
+        );
+        assert_eq!(
+            harness
+                .query_all_by_label_contains(FormReason::TemplateGone.words())
+                .count(),
+            1,
+            "the reason shows once"
+        );
+        // Another campaign and back: the switch ends A's form; B's form offers B's templates.
+        harness.state_mut().2 = b.clone();
+        harness.run_steps(3);
+        assert!(harness.state().0.form.is_none(), "a switch ends the form");
+        harness.state_mut().0.open_form();
+        harness.run_steps(2);
+        assert_eq!(
+            harness
+                .state()
+                .0
+                .form
+                .as_ref()
+                .map(|form| form.template.as_str()),
+            Some(super::super::BUILT_IN_TEMPLATES[0].0)
+        );
+        assert!(!shows(&harness, "Mine") && !shows(&harness, "Second"));
+        harness.state_mut().2 = a.clone();
+        harness.run_steps(3);
+        assert!(
+            harness.state().0.form.is_none(),
+            "back in A, the form is not B's"
         );
     }
 }

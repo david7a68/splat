@@ -825,18 +825,46 @@ fn submenu_clear_of_chrome(
     Ok(submenu + margin)
 }
 
-/// A warning's file line starts at the message words: the path, whole, then `Edit in Obsidian`
-/// and `Show file`. A link that wraps starts its row at the message words too.
+/// A typed footer file line (`design::outcome::FileLine`, the Timeline's flags) starts at the
+/// message words: the path, whole, then `Edit in Obsidian: <relative>` and `Show file:
+/// <relative>`, named with the file. A link that wraps starts its row at the message words too.
 fn file_links_at_message_words(
     d: &Driver<'_>,
     message: &str,
     path: &std::path::Path,
     relative: &str,
 ) -> Result<(), String> {
+    file_links_at_words(d, message, path, relative, true)
+}
+
+/// The same for a file line still drawn by hand (`encounters::file_line` in
+/// `message_with_actions`: Encounters' unread rows, Campaign's and Rules and runs' flags, run
+/// setup), whose links are named only `Edit in Obsidian` and `Show file`.
+fn file_links_at_message_words_by_hand(
+    d: &Driver<'_>,
+    message: &str,
+    path: &std::path::Path,
+    relative: &str,
+) -> Result<(), String> {
+    file_links_at_words(d, message, path, relative, false)
+}
+
+fn file_links_at_words(
+    d: &Driver<'_>,
+    message: &str,
+    path: &std::path::Path,
+    relative: &str,
+    typed: bool,
+) -> Result<(), String> {
     let nodes = d.nodes();
     let words = nodes
         .iter()
-        .find(|node| node.name.starts_with(message) && node.in_view())
+        // The words' own label, not the footer group that is named with every message.
+        .find(|node| {
+            node.role == egui::accesskit::Role::Label
+                && node.name.starts_with(message)
+                && node.in_view()
+        })
         .ok_or(format!("{message}… is not in view"))?
         .rect;
     let shown = nodes
@@ -856,10 +884,15 @@ fn file_links_at_message_words(
         ));
     }
     for link in ["Edit in Obsidian", "Show file"] {
+        let named = if typed {
+            format!("{link}: {relative}")
+        } else {
+            link.to_owned()
+        };
         let target = nodes
             .iter()
             .filter(|node| {
-                node.name == link && node.in_view() && node.rect.center().y >= shown.top()
+                node.name == named && node.in_view() && node.rect.center().y >= shown.top()
             })
             .min_by(|a, b| a.rect.top().total_cmp(&b.rect.top()))
             .ok_or(format!("{link} is not in view below the message"))?
@@ -12089,7 +12122,8 @@ pub mod world {
             "Lookup's reader shows the NPC's status in its Status row only, not on the kind line",
         );
         // Round 28 FF4: `Nothing written yet.` stands where prose starts, `L` below the control
-        // above it (here the NPC's `Add to fight`), so it does not read as that control's reason.
+        // above it (here the Status row's `Change`), so it does not read as that control's
+        // reason.
         let gap = d
             .painted_rect_in("Nothing written yet.", egui::Rect::EVERYTHING)
             .and_then(|words| {
@@ -12111,8 +12145,51 @@ pub mod world {
                 .is_some_and(|(_, gap)| *gap >= crate::design::L - 1.0),
             format!("The control above the words, and the gap: {gap:?}"),
         );
+        // Round 28 FF1: the NPC's `Add to fight` is on its title line, as a creature's is, not
+        // a bordered button under Status. With no stat block, it opens the form that asks for
+        // one; while the form is open, the form is the one way to add them (review of PR 355),
+        // and Cancel gives the title line its action back in its place.
+        let add = format!("Add {NPC} to the fight");
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (placed, detail) = d.at_size(size, |d| world_build::npc_add_on_title_line(d, NPC));
+            d.observe(
+                "iter-28-D-FF1",
+                placed,
+                format!("At {size:?}, the new NPC's Add to fight is on its title line: {detail}"),
+            );
+        }
         d.state("world-new-npc", Sizes::Default);
-        d.click("Add to fight");
+        let title_place = d.place_of(&add);
+        d.click(&add);
+        d.expect("Stat block");
+        // One way to add: no title action, and one painted `Add to fight` in Lookup, the form's.
+        let lookup = d.place_of(SEARCH_LOOKUP).map(|search| {
+            egui::Rect::from_min_max(
+                egui::pos2(search.left(), 0.0),
+                egui::pos2(f32::INFINITY, f32::INFINITY),
+            )
+        });
+        let painted = lookup
+            .map(|lookup| d.painted_in(lookup).matches("Add to fight").count())
+            .unwrap_or(0);
+        // The form's heading has the same words as a label: only a button counts.
+        let title_action = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .any(|node| node.name == add && node.role == Role::Button)
+        };
+        let one_way = !title_action(d) && painted == 1;
+        d.click("Cancel");
+        let back = d.place_of(&add);
+        d.click(&add);
+        d.expect("Stat block");
+        d.observe(
+            "iter-28-D-FF1-form",
+            one_way && title_place.is_some() && back == title_place,
+            format!(
+                "With the form open: one way {one_way}, painted Add to fight in Lookup {painted}; after Cancel it is at {back:?}, before {title_place:?}"
+            ),
+        );
         d.type_into("Stat block", "Guard");
         d.click("Guard");
         d.type_into("Initiative", "11");
@@ -13104,7 +13181,9 @@ pub mod session_notes {
         // A long title wraps, and the controls stay where they are.
         d.click("Edit session details");
         d.replace_text_in("Date", "Nov 2");
-        d.click("Save details");
+        // Round 28 K4a: a date in another form locks Save details, with the reason on the
+        // form's kept line.
+        assert!(d.is_disabled("Save details"));
         d.expect("Enter the date as YYYY-MM-DD.");
         d.replace_text_in("Date", crate::hermetic::today().as_str());
         d.replace_text_in("Session title", LONG_TITLE);

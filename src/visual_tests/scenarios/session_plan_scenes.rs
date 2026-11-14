@@ -728,6 +728,18 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         Some(day) => format!("{session}, Day {day}"),
         None => session.clone(),
     };
+    // Round 28 FC8: one session, one name. Splat names it as the Sessions page does
+    // (`sessions::Note::label`); the line it writes links the file.
+    let label = {
+        let path = d.app().sessions.selected_path().expect("a session is open");
+        crate::sessions::list_notes(path.parent().unwrap())
+            .into_iter()
+            .find(|note| note.path == path)
+            .expect("the open session's note")
+            .label()
+    };
+    assert_eq!(label, "Session 1: The Crossing");
+    let shown_stamp = stamp.replacen(&session, &label, 1);
 
     let short = format!("Add to Log: {VARRA_BLACK}");
     let done = format!("Done: {VARRA_BLACK}");
@@ -813,7 +825,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     d.expect(&field);
     // The window is 1200x800 here (the base above).
     let beside = d
-        .place_of(&format!("{stamp}:"))
+        .place_of(&format!("{shown_stamp}:"))
         .zip(d.place_of(&field))
         .is_some_and(|(label, place)| {
             label.right() < place.left()
@@ -825,7 +837,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         d.has("Close Lookup")
             && d.focused_name().as_deref() == Some(field.as_str())
             && d.field_text(&field).as_deref() == Some("")
-            && d.visible_text(&format!("{stamp}:"))
+            && d.visible_text(&format!("{shown_stamp}:"))
             && beside,
         "A done scene's Add to Log opens Lookup on its entry with the Log field and the stamp on its line at 1200x800",
     );
@@ -889,6 +901,33 @@ pub fn log_from_play(d: &mut Driver<'_>) {
             && d.has("Close Lookup"),
         format!("Change on Status in Lookup writes the value and its Log line: {changed:?}"),
     );
+    // Round 28 FC8: Lookup names the session as the Session page beside it does, in the Log
+    // line, in `From other notes` and in its row's link, never by its file.
+    for size in [SMALL, DEFAULT, LARGE] {
+        let (named, detail) = d.at_size(size, |d| {
+            let pane = d.place_of(SEARCH_LOOKUP).map(|search| {
+                egui::Rect::from_min_max(
+                    egui::pos2(search.left(), 0.0),
+                    egui::pos2(f32::INFINITY, f32::INFINITY),
+                )
+            });
+            let words = pane.map(|pane| d.painted_in(pane)).unwrap_or_default();
+            // `From other notes` links the session by its name; at 960 it is below the fold.
+            let link = d
+                .nodes()
+                .into_iter()
+                .any(|node| node.role == egui::accesskit::Role::Link && node.name == label);
+            (
+                pane.is_some() && !words.contains(&session) && words.contains(&label) && link,
+                format!("link {link}, painted {words:?}"),
+            )
+        });
+        d.observe(
+            "iter-28-D-FC8",
+            named,
+            format!("At {size:?}, Lookup names the session `{label}`, not `{session}`: {detail}"),
+        );
+    }
     d.state("status-changed-in-lookup", Sizes::Default);
     d.click("Undo change to Status");
     d.observe(
@@ -898,6 +937,34 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     );
     fs::write(&path, &before).unwrap();
     d.app_mut().lookup.refresh();
+    d.settle();
+    // Review of PR 355: a new title in Session details reaches Lookup at once, through the
+    // app's own refresh: its link names the session as the Sessions page now does.
+    let session_links = |d: &Driver<'_>| -> Vec<String> {
+        d.nodes()
+            .into_iter()
+            .filter(|node| {
+                node.role == egui::accesskit::Role::Link && node.name.starts_with("Session 1")
+            })
+            .map(|node| node.name)
+            .collect()
+    };
+    let named_before = session_links(d);
+    d.click("Edit session details");
+    d.replace_text_in("Session title", "The Long Crossing");
+    d.click("Save details");
+    d.settle();
+    let named_after = session_links(d);
+    d.observe(
+        "iter-28-D-FC8-title",
+        named_before == [label.clone()] && named_after == ["Session 1: The Long Crossing"],
+        format!(
+            "Lookup's session link before {named_before:?}, after the new title {named_after:?}"
+        ),
+    );
+    d.click("Edit session details");
+    d.replace_text_in("Session title", "The Crossing");
+    d.click("Save details");
     d.settle();
 
     // From the long scene's menu: the field starts with the scene's words outside its link,
@@ -916,7 +983,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     // would not fit beside it, so no word of the scene is cut; an empty field shares its line
     // (the first check of this scenario's field).
     let (label, place) = d.at_size(DEFAULT, |d| {
-        (d.place_of(&format!("{stamp}:")), d.place_of(&field))
+        (d.place_of(&format!("{shown_stamp}:")), d.place_of(&field))
     });
     d.observe(
         "T18.2",
