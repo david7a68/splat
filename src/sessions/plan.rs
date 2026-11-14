@@ -4904,10 +4904,7 @@ mod tests {
                 }
             });
         });
-        assert!(
-            full > 0 && short > 0,
-            "{full} {short}"
-        );
+        assert!(full > 0 && short > 0, "{full} {short}");
         // Round 28 FE6: where the row is cut, the party's size gives way first, then the
         // roster; the day, which ties the fight to its journey, goes last.
         let mut day_kept_in_a_cut = 0;
