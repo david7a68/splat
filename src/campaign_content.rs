@@ -519,8 +519,11 @@ pub struct CampaignContent {
     /// changed; other changed repairs keep their drafts with a secondary Save.
     active_repair: Option<String>,
 }
-/// The newest failed answer to an act of the DM, in one campaign: the footer's one ordering
-/// rule is that it comes first, before the kept results, which are older answers. A newer act
+/// The rule: the answer is the result of the LAST act; any later act, failed or successful,
+/// replaces or ends it. A failed one is held here; a successful one ends it (its own result, if
+/// it has one, is a kept result). The newest failed answer to an act of the DM, in one campaign:
+/// the footer's one ordering rule is that it comes first, before the kept results, which are
+/// older answers. A newer act
 /// ends or replaces it: a new result (`new_result!`), the next press of a package choice, another
 /// failure (`Self::fail`), the package found again (`package_restored`). A load of the page and a
 /// change of campaign (`forget_discards_of_other_campaigns`, also while the page is hidden) end
@@ -937,6 +940,11 @@ impl CampaignContent {
             .find(|repair| repair.path == path)
             .map(|repair| repair.draft.as_str())
     }
+    /// The words of the newest failed answer the page holds (ruling Q-x), if any.
+    #[cfg(test)]
+    pub fn answer_words(&self) -> Option<&str> {
+        self.answer.as_ref().map(|answer| answer.words.as_str())
+    }
     /// How often a frame checked a repair draft again.
     #[cfg(test)]
     pub fn repair_checks(&self) -> usize {
@@ -995,10 +1003,10 @@ impl CampaignContent {
     }
     /// Runs on every frame, on any page, so the sidebar can say when the DM has moves to review.
     pub fn tick(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
-        self.finish_check();
+        let active = campaigns.active_campaign();
+        self.finish_check(active.as_ref().map(|campaign| campaign.id));
         // Round 26: a campaign change ends the Undos of the campaign that was open, at the
         // change, even while this page is hidden; a page reload is not the only end.
-        let active = campaigns.active_campaign();
         self.forget_discards_of_other_campaigns(active.as_ref());
         if cfg!(test) {
             return;
@@ -1020,7 +1028,11 @@ impl CampaignContent {
         let count = self.reconcile.proposals.len();
         (count > 0).then(|| design::count(count, "to review", "to review"))
     }
-    fn finish_check(&mut self) {
+    /// The check (and its Apply) that `start_check` started, when it completes. It belongs to the
+    /// campaign that started it (`reconcile.campaign`); a completion after the DM opened another
+    /// campaign (`active`) is dropped whole, its proposals, its result and its failure, so it is
+    /// never shown in the other campaign; the next check runs for the campaign open then.
+    fn finish_check(&mut self, active: Option<Uuid>) {
         let Some(rx) = &self.reconcile.pending else {
             return;
         };
@@ -1034,6 +1046,13 @@ impl CampaignContent {
         };
         self.reconcile.pending = None;
         self.reconcile.applying = false;
+        let owner = self.reconcile.campaign;
+        if owner != active {
+            // Not this campaign's: the check is due again for the one open now.
+            self.reconcile.campaign = None;
+            self.reconcile.checked_at = None;
+            return;
+        }
         self.reconcile.checked_at = Some(Instant::now());
         self.reconcile.error = None;
         match checked.proposals {
@@ -1045,8 +1064,15 @@ impl CampaignContent {
                 new_result!(self, Payload::Applied(count));
                 self.refresh_pending = !self.dirty();
             }
-            // The DM's Apply failed: the newest answer (ruling Q-x).
-            Some(Err(error)) => self.fail(Cause::Failed, error),
+            // The DM's Apply failed: the newest answer (ruling Q-x), in the campaign that
+            // started it.
+            Some(Err(error)) => {
+                self.answer = Some(Answer {
+                    campaign: owner.unwrap_or(Uuid::nil()),
+                    cause: Cause::Failed,
+                    words: error,
+                });
+            }
             None => {}
         }
     }
@@ -1770,6 +1796,8 @@ impl CampaignContent {
             .clicked();
         if apply && self.reconcile.pending.is_none() {
             self.end_plain(PageResult::Applied);
+            // A new act: an older failure no longer answers the last act.
+            self.answer = None;
             self.start_check(ui.ctx(), campaigns, active.clone(), Some(keys));
         }
         design::gap(ui, design::Gap::S);
@@ -1793,7 +1821,7 @@ impl CampaignContent {
         active: &Campaign,
     ) {
         let mut repaired = false;
-        let mut not_saved = None;
+        let mut saved: Option<Option<(String, String)>> = None;
         // One primary Save on the screen: the active repair's, else the last open changed one.
         let changed: Vec<&str> = self
             .repairs
@@ -1922,10 +1950,12 @@ impl CampaignContent {
                                 i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)
                             }))
                     {
+                        // The last act's result, failed or successful (see `Answer`).
                         if repair.save(active) {
                             repaired = true;
+                            saved = Some(None);
                         } else if let Some(failure) = &repair.failure {
-                            not_saved = Some((repair.path.clone(), failure.clone()));
+                            saved = Some(Some((repair.path.clone(), failure.clone())));
                         }
                     }
                     // One discard result per repair: its next Discard or edit ends its own
@@ -1963,8 +1993,12 @@ impl CampaignContent {
             // The package list below draws the one rule; a second rule here would separate nothing.
             design::gap(ui, design::Gap::L);
         }
-        if let Some((path, words)) = not_saved {
-            self.fail(Cause::NotSaved { path }, words);
+        match saved {
+            Some(Some((path, words))) => self.fail(Cause::NotSaved { path }, words),
+            // A repair saved: the last act succeeded, so an older failure is no longer its
+            // answer (it stays in its own repair's message).
+            Some(None) => self.answer = None,
+            None => {}
         }
         if repaired && !self.dirty() {
             self.reload(ui.ctx(), campaigns, active.clone());
@@ -3309,10 +3343,16 @@ mod tests {
     }
 
     fn finished(content: &mut CampaignContent, checked: Checked) {
+        let active = content.reconcile.campaign;
+        finished_in(content, checked, active);
+    }
+
+    /// The check completes while `active` is the open campaign.
+    fn finished_in(content: &mut CampaignContent, checked: Checked, active: Option<Uuid>) {
         let (tx, rx) = mpsc::channel();
         content.reconcile.pending = Some(rx);
         tx.send(checked).unwrap();
-        content.finish_check();
+        content.finish_check(active);
     }
 
     #[test]
@@ -3561,6 +3601,29 @@ mod tests {
             content.answer.as_ref().map(|answer| answer.words.as_str()),
             Some("A sheet has local edits.")
         );
+        // An Apply started in campaign A that completes after the DM opened campaign B belongs
+        // to A: its failure and its proposals are dropped, never shown in B, and B's check is
+        // due again.
+        let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
+        content.answer = None;
+        content.reconcile.campaign = Some(a);
+        finished_in(
+            &mut content,
+            Checked {
+                applied: Some(Err("A sheet has local edits.".into())),
+                proposals: Ok(Vec::new()),
+            },
+            Some(b),
+        );
+        assert!(
+            content.answer.is_none(),
+            "A's late failure leads B's footer: {:?}",
+            content
+                .answer
+                .as_ref()
+                .map(|answer| (answer.campaign, &answer.words))
+        );
+        assert_eq!(content.reconcile.campaign, None, "B's check is due");
     }
 
     #[test]

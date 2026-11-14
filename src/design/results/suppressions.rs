@@ -50,6 +50,12 @@ pub(crate) enum Ban {
 }
 
 impl Ban {
+    /// The bans whose call text names nothing else, so a call of one in an item whose row does
+    /// not list it is refused even when the row lists another ban. (`Results`, `Words` and
+    /// `Body` match ordinary calls too: `::issue_count_title`, `outside_after`, `.show(`; they
+    /// need a token-exact match first.)
+    pub(crate) const EXACT: [Ban; 3] = [Ban::Sentence, Ban::Order, Ban::Answer];
+
     /// Text that one of this ban's calls leaves in a function that still needs its allow.
     fn calls(self) -> &'static [&'static str] {
         match self {
@@ -312,6 +318,18 @@ pub(crate) fn check(files: &[(String, String)], table: &[(&str, &str, &[Ban])]) 
                             )),
                         }
                     }
+                    // A call of a ban that the row does not list is not allowed by the row's
+                    // other bans (a `Ban::Order` row does not allow `answer`).
+                    for ban in Ban::EXACT {
+                        if !bans.contains(&ban)
+                            && ban.calls().iter().any(|call| suppression.body.contains(call))
+                        {
+                            faults.push(format!(
+                                "{path}:{}: `{}` calls {ban:?} but its row in `design::results::STAGED_ALLOWS` does not list it.",
+                                suppression.line, suppression.item
+                            ));
+                        }
+                    }
                     if !holds {
                         faults.push(format!(
                             "{path}:{}: the suppression on `{}` has no staged call left. Remove it and its row in `design::results::STAGED_ALLOWS`.",
@@ -420,6 +438,21 @@ mod tests {
         let order = "#[allow(\n    clippy::disallowed_methods,\n    reason = \"staged\"\n)]\nfn draw() {\n    footer.outcome_at(order, done, &mut pressed);\n}\n";
         assert_eq!(check(&file(order), &[]).len(), 1, "{order}");
         assert!(check(&file(order), &[("src/new.rs", "draw", &[Ban::Order])]).is_empty());
+        // Ruling Q-x: an `answer` call needs `Ban::Answer` in its own row; a row for another
+        // ban (a `Ban::Order` row) does not allow it.
+        let answer = "#[allow(clippy::disallowed_methods)]\nfn draw() {\n    footer.outcome_at(order, done, &mut pressed);\n    messages.answer(fault);\n}\n";
+        assert_eq!(
+            check(&file(answer), &[("src/new.rs", "draw", &[Ban::Order])]).len(),
+            1,
+            "{answer}"
+        );
+        assert!(
+            check(
+                &file(answer),
+                &[("src/new.rs", "draw", &[Ban::Order, Ban::Answer])]
+            )
+            .is_empty()
+        );
         let words = "#[allow(clippy::disallowed_methods)]\nfn cause() {\n    let f = Sentence::outside;\n}\n";
         assert!(check(&file(words), &[("src/new.rs", "cause", &[Ban::Words])]).is_empty());
         // Review of PR 308: a by-owner Undo added to an item already allowed for another ban

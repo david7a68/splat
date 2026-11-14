@@ -121,6 +121,9 @@ impl Campaigns {
             self.path = candidate.to_string_lossy().into_owned();
         }
         self.remote = Some((id.into(), name.into()));
+        // The form opens with the name field taking the keyboard, so the form shows whole
+        // (the folder Splat proposes and its preview too).
+        self.focus_name = true;
     }
 
     pub fn cancel_import(&mut self) {

@@ -3027,13 +3027,26 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
 
     pub fn show(self, ui: &mut Ui) -> InlineCreateResponse {
         let room = form_room(ui);
-        ui.scope(|ui| {
+        // R30, as the add field: in the pass in which a field takes the keyboard (the form
+        // opens), the least scroll that shows the whole form: its fields, its actions and its
+        // kept line (Cancel, a reason, the preview).
+        let opening = self
+            .parts
+            .iter()
+            .any(|part| matches!(part, CreatePart::Text(field) if field.focus));
+        let form = ui.scope(|ui| {
             // Nothing in the form is wider than its room: a labelled field takes the
             // available width.
             ui.set_max_width(room);
             self.show_in(ui, room)
-        })
-        .inner
+        });
+        if opening {
+            super::components::reveal_least(
+                ui,
+                form.response.rect.top()..=form.response.rect.bottom(),
+            );
+        }
+        form.inner
     }
 
     fn show_in(self, ui: &mut Ui, room: f32) -> InlineCreateResponse {
