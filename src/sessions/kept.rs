@@ -106,3 +106,25 @@ impl Kept for Moved {
         self.page.clone()
     }
 }
+
+/// `Deleted “<template>”.` and `Undo delete`: the template's name and its words, which the Undo
+/// writes back to a file of that name.
+pub(super) struct DeletedTemplate {
+    pub page: Page,
+    pub name: String,
+    pub body: String,
+}
+
+impl Kept for DeletedTemplate {
+    type Owner = Page;
+    const ENDS: Ends = Ends {
+        // An edit in the template editor ends it.
+        owner_changed: OwnerChanged::Ends,
+        // Its Undo refuses an existing file of that name, and says why.
+        disk_changed: DiskChanged::Stays,
+        press: Press::Undo,
+    };
+    fn owner(&self) -> Page {
+        self.page.clone()
+    }
+}

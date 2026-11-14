@@ -26,10 +26,7 @@ use crate::{
     persistence::Campaign,
     processing::{self, Job, Request, settings::ProcessingSettings},
     recording::{Health, Recorder},
-    timeline::{
-        self, Book,
-        page::{LiveUndos, SessionLink, body_above},
-    },
+    timeline::{self, Book, page::SessionLink},
 };
 use eframe::egui::{self, Color32};
 use std::{
@@ -96,6 +93,11 @@ enum SessionAct {
     UndoMarker,
     /// `Undo reload` or `Undo discard` of the draft's dropped words.
     UndoDrop,
+    /// `Undo delete` of a deleted template.
+    UndoDeleteTemplate,
+    /// The notes panel's `Play it tonight` and `New session`.
+    PlayTonight,
+    NewSession,
 }
 
 #[derive(Clone, Copy, Default, PartialEq)]
@@ -400,9 +402,8 @@ pub struct Sessions {
     template_draft: Option<Draft>,
     new_template: Option<String>,
     template_error: Option<String>,
-    deleted_template: Option<(String, String)>,
-    /// When the template in `deleted_template` was deleted: its result's footer order.
-    deleted_template_order: design::ResultOrder,
+    /// A deleted template's words, for its `Undo delete`.
+    deleted_templates: design::Results<kept::Page, kept::DeletedTemplate>,
     recordings: Vec<Recording>,
     live: Option<Live>,
     confirm_record: bool,
@@ -534,6 +535,48 @@ impl Fault for PageFault {
 )]
 fn notice_sentence(words: &str) -> Sentence {
     Sentence::outside(words).unwrap_or(crate::sentence!("Something went wrong."))
+}
+
+/// A pane body that manages its own room, for one of the pane's closed reasons.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "the one named escape of the pane: `Fills::because` (design::results::STAGED_ALLOWS)"
+)]
+fn fills(reason: design::pane::FillsReason) -> design::pane::Body {
+    design::pane::Body::Fills(design::pane::Fills::because(reason))
+}
+
+/// The words a draft dropped (reloaded from disk, or discarded) and their Undo, in the footer
+/// of the pane that holds the draft. They keep the order the drop took (`Draft::dropped_order`,
+/// staged): the draft issues it.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: the dropped words of a draft keep their own order (`outcome_at`, design::results::STAGED_ALLOWS)"
+)]
+fn add_dropped(messages: &mut Messages<'_, SessionAct>, draft: &Draft) {
+    match draft.dropped {
+        Some(Dropped::Reloaded(_)) => {
+            messages.outcome_at(
+                draft.dropped_order,
+                KeptOutcome::Notice(
+                    Notice::new(crate::sentence!(
+                        "Reloaded from disk. Your previous draft is kept until you edit or the file changes again."
+                    )),
+                    UndoStep::verb(Verb::Reload).pressed_as(SessionAct::UndoDrop),
+                ),
+            );
+        }
+        Some(Dropped::Discarded(_)) => {
+            messages.outcome_at(
+                draft.dropped_order,
+                KeptOutcome::Notice(
+                    Notice::new(crate::sentence!("Draft discarded.")),
+                    UndoStep::verb(Verb::Discard).pressed_as(SessionAct::UndoDrop),
+                ),
+            );
+        }
+        None => {}
+    }
 }
 
 fn processing_llm(settings: &ProcessingSettings) -> String {
@@ -1027,30 +1070,6 @@ fn missing_note_words(moved_to: Option<String>) -> String {
         || "This file is gone from the folder. Your draft is still here. Choose where to save it, or discard it.".to_owned(),
         |path| format!("This note was moved or renamed. It is now {path}. Your draft is still here."),
     )
-}
-
-/// A draft's own result (Discard or Reload, with its Undo) in a pane's message footer. The
-/// draft owns it until an edit or the file's next change; `undo` says the DM pressed its Undo.
-fn draft_result_in<'a>(undos: &mut LiveUndos<'a>, draft: &Draft, undo: &'a std::cell::Cell<bool>) {
-    // The drop's own order, taken when the DM dropped the words, every time.
-    let order = || draft.dropped_order;
-    match draft.dropped {
-        Some(Dropped::Reloaded(_)) => {
-            undos.push(order(), "Reloaded from disk.".to_owned(), move |ui| {
-                if design::reloaded_draft(ui) {
-                    undo.set(true);
-                }
-            });
-        }
-        Some(Dropped::Discarded(_)) => {
-            undos.push(order(), "Draft discarded.".to_owned(), move |ui| {
-                if design::undo_message(ui, Tone::Info, "Draft discarded.", "Undo discard") {
-                    undo.set(true);
-                }
-            });
-        }
-        None => {}
-    }
 }
 
 fn recording_recovery(missing_input: bool) -> &'static str {
@@ -1980,7 +1999,6 @@ impl Sessions {
         self.processed_recording = None;
         self.job_done = false;
         self.job_warned = false;
-        self.deleted_template = None;
         self.folder_notice = None;
         self.notice_session = None;
         self.select(self.current().or(self.notes.first().map(|note| note.id)));
@@ -2271,10 +2289,6 @@ impl Sessions {
     /// scroll column, so its footer follows short content. The note's editor and the plan
     /// manage their own room (the plan's own footer and its scroll, until the plan moves to
     /// this footer).
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "the pane's one named escape: `Fills::because` (design::results::STAGED_ALLOWS)"
-    )]
     fn session_body_kind(&self, ui: &egui::Ui, plan: &Plan<'_>) -> design::pane::Body {
         let conflict = self
             .draft
@@ -2287,12 +2301,12 @@ impl Sessions {
             PLAN_BESIDE_NOTE_FROM
         };
         let beside = ui.available_width() >= beside_from;
-        use design::pane::{Body, Fills, FillsReason};
+        use design::pane::{Body, FillsReason};
         match self.tab {
-            _ if conflict => Body::Fills(Fills::because(FillsReason::NoteEditor)),
+            _ if conflict => fills(FillsReason::NoteEditor),
             Tab::Recordings => Body::Content,
-            Tab::Note if !beside => Body::Fills(Fills::because(FillsReason::NoteEditor)),
-            _ => Body::Fills(Fills::because(FillsReason::Columns)),
+            Tab::Note if !beside => fills(FillsReason::NoteEditor),
+            _ => fills(FillsReason::Columns),
         }
     }
 
@@ -3276,47 +3290,61 @@ impl Sessions {
     /// The message footer of a pane whose body is one draft's editor: the draft's own result
     /// with its Undo, and for a template, the template action's error. Returns where the body
     /// ends.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `Footer::show_by_hand` (design::results::STAGED_ALLOWS)"
-    )]
-    fn draft_footer(&mut self, ui: &mut egui::Ui, id: &str, template: bool) -> f32 {
-        let undo = std::cell::Cell::new(false);
-        let undo_delete = std::cell::Cell::new(false);
-        let mut footer = design::Footer::new((id, self.selected), ui.available_width());
+    fn draft_messages<'f>(
+        &self,
+        frame: &'f PaneFrame,
+        id: &str,
+        template: bool,
+        width: f32,
+    ) -> Messages<'f, SessionAct> {
+        let mut messages = Messages::new(frame, (id, self.selected), width);
         let draft = if template {
             self.template_draft.as_ref()
         } else {
             self.draft.as_ref()
         };
-        let mut undos = LiveUndos::new();
         if let Some(draft) = draft {
-            draft_result_in(&mut undos, draft, &undo);
+            add_dropped(&mut messages, draft);
         }
         if template {
-            self.deleted_template_in(&mut undos, &undo_delete);
+            if let Some(shown) = self.deleted_templates.get(&self.page()) {
+                messages.kept(shown.outcome(frame, |deleted| {
+                    Said::new(crate::sentence!("Deleted “{}”.", deleted.name))
+                        .undo(
+                            UndoStep::verb(Verb::Delete).pressed_as(SessionAct::UndoDeleteTemplate),
+                        )
+                        .into()
+                }));
+            }
+            if let Some(error) = &self.template_error {
+                messages.outcome(FaultMessage::new(&PageFault::Failed(notice_sentence(
+                    error,
+                ))));
+            }
         }
-        undos.into_footer(&mut footer);
-        if template && let Some(error) = self.template_error.clone() {
-            footer.reason(error.clone(), move |ui| {
-                design::message(ui, Tone::Error, &error);
-            });
+        messages
+    }
+
+    /// A press in a draft's footer: the Undo of its dropped words, or of a template's delete.
+    fn draft_press(&mut self, press: Press<SessionAct>, template: bool) {
+        match press.id {
+            SessionAct::UndoDrop => {
+                let draft = if template {
+                    self.template_draft.as_mut()
+                } else {
+                    self.draft.as_mut()
+                };
+                if let Some(draft) = draft {
+                    draft.undo_dropped();
+                }
+            }
+            SessionAct::UndoDeleteTemplate => {
+                if let Some(ticket) = press.ticket {
+                    self.undo_delete_template(ticket);
+                }
+            }
+            _ => {}
         }
-        let bottom = footer.show_by_hand(ui);
-        if undo_delete.get() {
-            self.undo_delete_template();
-        }
-        let draft = if template {
-            self.template_draft.as_mut()
-        } else {
-            self.draft.as_mut()
-        };
-        if undo.get()
-            && let Some(draft) = draft
-        {
-            draft.undo_dropped();
-        }
-        bottom
     }
 
     /// What the file did to a draft: changed on disk, gone or moved, or not saved. It arrives on
@@ -4210,10 +4238,6 @@ impl Sessions {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `Footer::show_by_hand` (design::results::STAGED_ALLOWS)"
-    )]
     pub fn notes_panel(&mut self, ctx: &egui::Context) {
         let width = design::side_panel_width(ctx.content_rect().width());
         design::Column::panel("session_notes", width)
@@ -4261,52 +4285,49 @@ impl Sessions {
                     return;
                 }
                 // Round 26: the panel's notice and its draft's result sit in its message footer,
-                // so the note the DM types in never moves when one comes or goes.
+                // so the note the DM types in never moves when one comes or goes. The editor
+                // fills its room (lead, P2).
                 let today = self.today();
-                let note = self
+                let dated = self
                     .selected
-                    .and_then(|id| self.notes.iter().find(|note| note.id == id));
-                let choice = std::cell::Cell::new((false, false));
-                let undo = std::cell::Cell::new(false);
-                let mut footer = design::Footer::new("notes_panel_footer", ui.available_width());
+                    .and_then(|id| self.notes.iter().find(|note| note.id == id))
+                    .filter(|note| note.date.as_str() < today.as_str())
+                    .map(|note| note.date.clone());
+                let frame = PaneFrame::new(ui);
+                let mut messages =
+                    Messages::new(&frame, "notes_panel_footer", ui.available_width());
                 if let Some(draft) = &self.draft {
-                    let mut undos = LiveUndos::new();
-            draft_result_in(&mut undos, draft, &undo);
-            undos.into_footer(&mut footer);
+                    add_dropped(&mut messages, draft);
                 }
-                if let Some(words) = note.and_then(|note| dated_before_today(note, &today)) {
-                    let choice = &choice;
-                    footer.notice(words.clone(), move |ui| {
-                        // The choices start at the warning's text.
-                        design::message_with_actions(ui, Tone::Warning, &words, |ui| {
-                            ui.horizontal_wrapped(|ui| {
-                                let play = Action::secondary("Play it tonight")
-                                    .density(Density::Read)
-                                    .show(ui)
-                                    .clicked();
-                                let start = Action::secondary("New session")
-                                    .density(Density::Read)
-                                    .show(ui)
-                                    .clicked();
-                                choice.set((play, start));
-                            });
-                        });
-                    });
+                if let Some(date) = dated {
+                    messages.outcome(
+                        Notice::new(crate::sentence!(
+                            "This session is dated {}. Play it tonight, or start a new one.",
+                            date
+                        ))
+                        .choice(Choice::new(
+                            MessageChoice::Choice("Play it tonight"),
+                            SessionAct::PlayTonight,
+                        ))
+                        .choice(Choice::new(
+                            MessageChoice::Choice("New session"),
+                            SessionAct::NewSession,
+                        )),
+                    );
                 }
-                let bottom = footer.show_by_hand(ui);
-                let (play, start) = choice.get();
-                if undo.get()
-                    && let Some(draft) = &mut self.draft
-                {
-                    draft.undo_dropped();
+                let paned = messages.pane(ui, fills(design::pane::FillsReason::NoteEditor), |ui| {
+                    self.note_editor(ui, true);
+                });
+                match paned.pressed.map(|press| press.id) {
+                    Some(SessionAct::UndoDrop) => {
+                        if let Some(draft) = &mut self.draft {
+                            draft.undo_dropped();
+                        }
+                    }
+                    Some(SessionAct::PlayTonight) => self.play_this_one(),
+                    Some(SessionAct::NewSession) => self.start_new_session(),
+                    _ => {}
                 }
-                if play {
-                    self.play_this_one();
-                }
-                if start {
-                    self.start_new_session();
-                }
-                body_above(ui, bottom, |ui| self.note_editor(ui, true));
             });
     }
 
@@ -5820,7 +5841,7 @@ impl Sessions {
     /// the body may change anything; `session_press` acts on the footer's press after it.
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: the dropped words of a draft and the notice slot of the page keep their own orders (`outcome_at`, design::results::STAGED_ALLOWS)"
+        reason = "staged: the notice slot of the page keeps its own order (`outcome_at`, design::results::STAGED_ALLOWS)"
     )]
     fn session_messages<'f>(
         &mut self,
@@ -5839,31 +5860,8 @@ impl Sessions {
         }
         let mut messages = Messages::new(frame, ("session_footer", self.selected), width);
         let dismiss = || Choice::new(MessageChoice::Dismiss(Lost::Nothing), SessionAct::Dismiss);
-        // The draft's dropped words keep the order the drop took (`Draft::dropped_order`).
         if let Some(draft) = &self.draft {
-            match draft.dropped {
-                Some(Dropped::Reloaded(_)) => {
-                    messages.outcome_at(
-                        draft.dropped_order,
-                        KeptOutcome::Notice(
-                            Notice::new(crate::sentence!(
-                                "Reloaded from disk. Your previous draft is kept until you edit or the file changes again."
-                            )),
-                            UndoStep::verb(Verb::Reload).pressed_as(SessionAct::UndoDrop),
-                        ),
-                    );
-                }
-                Some(Dropped::Discarded(_)) => {
-                    messages.outcome_at(
-                        draft.dropped_order,
-                        KeptOutcome::Notice(
-                            Notice::new(crate::sentence!("Draft discarded.")),
-                            UndoStep::verb(Verb::Discard).pressed_as(SessionAct::UndoDrop),
-                        ),
-                    );
-                }
-                None => {}
-            }
+            add_dropped(&mut messages, draft);
         }
         if let Some((tone, words)) = self
             .notice
@@ -6075,6 +6073,10 @@ impl Sessions {
                     draft.undo_dropped();
                 }
             }
+            SessionAct::PlayTonight => self.play_this_one(),
+            SessionAct::NewSession => self.start_new_session(),
+            // The template pane's own press (`draft_press`).
+            SessionAct::UndoDeleteTemplate => {}
         }
     }
 
@@ -6109,8 +6111,16 @@ impl Sessions {
             });
             self.record_line(ui, settings);
             if self.draft.is_some() {
-                let bottom = self.draft_footer(ui, "session_gone_footer", false);
-                body_above(ui, bottom, |ui| self.note_editor(ui, false));
+                // The editor fills its room (lead, P2): its results and notices are the pane's.
+                let frame = PaneFrame::new(ui);
+                let messages =
+                    self.draft_messages(&frame, "session_gone_footer", false, ui.available_width());
+                let paned = messages.pane(ui, fills(design::pane::FillsReason::NoteEditor), |ui| {
+                    self.note_editor(ui, false);
+                });
+                if let Some(press) = paned.pressed {
+                    self.draft_press(press, false);
+                }
             }
             return;
         };
@@ -6409,10 +6419,6 @@ impl Sessions {
             .and_then(|path| Draft::open(path).ok());
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `Footer::show_by_hand` (design::results::STAGED_ALLOWS)"
-    )]
     fn templates_view(&mut self, ui: &mut egui::Ui) {
         if self.template.is_none()
             && let Some(first) = self.templates.first().map(|t| t.name.clone())
@@ -6424,16 +6430,15 @@ impl Sessions {
         let narrow = ui.available_width() < TWO_COLUMNS_FROM;
         if narrow && self.templates_list_only {
             // Round 27 FI4: with the list alone on screen, its footer holds the delete result.
-            let undo_delete = std::cell::Cell::new(false);
-            let mut footer = design::Footer::new("template_list_footer", ui.available_width());
-            let mut undos = LiveUndos::new();
-            self.deleted_template_in(&mut undos, &undo_delete);
-            undos.into_footer(&mut footer);
-            let bottom = footer.show_by_hand(ui);
-            if undo_delete.get() {
-                self.undo_delete_template();
+            // The list is the pane's scroll column: the footer follows a short list.
+            let frame = PaneFrame::new(ui);
+            let messages = self.list_messages(&frame, "template_list_footer", ui.available_width());
+            let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
+                self.template_list(ui, &mut choose);
+            });
+            if let Some(press) = paned.pressed {
+                self.draft_press(press, true);
             }
-            body_above(ui, bottom, |ui| self.template_list(ui, &mut choose));
         } else if narrow {
             if Action::quiet("All templates")
                 .icon(icons::BACK)
@@ -6473,8 +6478,17 @@ impl Sessions {
                 }
                 // Round 26: the template pane's error and its draft's result sit in its message
                 // footer, so the editor never moves when one comes.
-                let bottom = self.draft_footer(ui, "template_footer", true);
-                body_above(ui, bottom, |ui| {
+                // The new template's form is short: the pane's scroll column. The editor fills
+                // its room (lead, P2).
+                let frame = PaneFrame::new(ui);
+                let messages =
+                    self.draft_messages(&frame, "template_footer", true, ui.available_width());
+                let body = if self.new_template.is_some() {
+                    design::pane::Body::Content
+                } else {
+                    fills(design::pane::FillsReason::NoteEditor)
+                };
+                let paned = messages.pane(ui, body, |ui| {
                     // One thing at a time, so that the DM does not type into another template.
                     if self.new_template.is_some() {
                         // Round 27: `Cancel` starts its line, and its target reaches into the
@@ -6489,13 +6503,30 @@ impl Sessions {
                         self.template_editor(ui);
                     }
                 });
+                if let Some(press) = paned.pressed {
+                    self.draft_press(press, true);
+                }
             });
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
+    /// The template list's footer, with the list alone on screen: the delete result.
+    fn list_messages<'f>(
+        &self,
+        frame: &'f PaneFrame,
+        id: &str,
+        width: f32,
+    ) -> Messages<'f, SessionAct> {
+        let mut messages = Messages::new(frame, id, width);
+        if let Some(shown) = self.deleted_templates.get(&self.page()) {
+            messages.kept(shown.outcome(frame, |deleted| {
+                Said::new(crate::sentence!("Deleted “{}”.", deleted.name))
+                    .undo(UndoStep::verb(Verb::Delete).pressed_as(SessionAct::UndoDeleteTemplate))
+                    .into()
+            }));
+        }
+        messages
+    }
+
     fn template_list(&mut self, ui: &mut egui::Ui, choose: &mut Option<String>) {
         if Action::quiet("Sessions")
             .icon(icons::BACK)
@@ -6505,61 +6536,45 @@ impl Sessions {
             self.view = View::Notes;
         }
         design::gap(ui, design::Gap::S);
-        egui::ScrollArea::vertical()
-            .id_salt("template_list")
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                for template in &self.templates {
-                    let kind = if template.path.is_some() {
-                        "Campaign"
-                    } else {
-                        "Built-in"
-                    };
-                    if design::two_line_row(
-                        ui,
-                        Density::Glance.control() + design::S,
-                        self.new_template.is_none()
-                            && self.template.as_deref() == Some(template.name.as_str()),
-                        &template.name,
-                        kind,
-                    )
-                    .clicked()
-                    {
-                        *choose = Some(template.name.clone());
-                    }
+        design::ScrollColumn::new("template_list").show(ui, |ui| {
+            for template in &self.templates {
+                let kind = if template.path.is_some() {
+                    "Campaign"
+                } else {
+                    "Built-in"
+                };
+                if design::two_line_row(
+                    ui,
+                    Density::Glance.control() + design::S,
+                    self.new_template.is_none()
+                        && self.template.as_deref() == Some(template.name.as_str()),
+                    &template.name,
+                    kind,
+                )
+                .clicked()
+                {
+                    *choose = Some(template.name.clone());
                 }
-            });
-    }
-
-    /// Round 27 FI4: `Deleted “<name>”.` with `Undo delete` is a result in the template page's
-    /// message footer, never under the list's last row. It is the campaign's: a campaign change
-    /// or an edit to another template ends it, and a later result with an Undo goes above it.
-    fn deleted_template_in<'a>(&self, undos: &mut LiveUndos<'a>, act: &'a std::cell::Cell<bool>) {
-        if let Some((name, _)) = &self.deleted_template {
-            let words = format!("Deleted “{name}”.");
-            let order = self.deleted_template_order;
-            let drawn = words.clone();
-            undos.push(order, words, move |ui| {
-                if design::undo_message(ui, Tone::Success, &drawn, "Undo delete") {
-                    act.set(true);
-                }
-            });
-        }
+            }
+        });
     }
 
     /// `Undo delete`: the deleted template's file comes back with the words it had.
-    fn undo_delete_template(&mut self) {
-        let Some((name, body)) = self.deleted_template.take() else {
+    fn undo_delete_template(&mut self, ticket: design::results::Ticket) {
+        let Some(folder) = self.folder.clone() else {
             return;
         };
-        if let Some(folder) = &self.folder {
-            match create_template(folder, &name, &body) {
-                Ok(_) => {
-                    self.refresh();
-                    self.select_template(&name);
-                }
-                Err(error) => self.template_error = Some(error),
+        // It leaves the store only when the file is written again; else it stays, with its
+        // Undo, beside the reason.
+        match self.deleted_templates.undo_by(ticket, |deleted| {
+            create_template(&folder, &deleted.name, &deleted.body)
+        }) {
+            Ok((deleted, _)) => {
+                self.refresh();
+                self.select_template(&deleted.name);
             }
+            Err(ByTicket::Failed(error)) => self.template_error = Some(error),
+            Err(ByTicket::Gone) => {}
         }
     }
 
@@ -6722,8 +6737,13 @@ impl Sessions {
                         .template_draft
                         .take()
                         .map_or_else(|| template.body.clone(), |draft| draft.body);
-                    self.deleted_template_order = design::ResultOrder::issue();
-                    self.deleted_template = Some((template.name.clone(), body));
+                    self.deleted_templates.record(kept::DeletedTemplate {
+                        page: kept::Page {
+                            root: self.folder.clone().unwrap_or_default(),
+                        },
+                        name: template.name.clone(),
+                        body,
+                    });
                     self.template = None;
                     self.refresh();
                 }
@@ -6756,7 +6776,9 @@ impl Sessions {
                     design::named(ui, &response, "Template text");
                     if response.changed() {
                         draft.edited();
-                        self.deleted_template = None;
+                        self.deleted_templates.owner_changed(&kept::Page {
+                            root: self.folder.clone().unwrap_or_default(),
+                        });
                     }
                 } else {
                     let mut body = template.body.clone();

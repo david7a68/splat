@@ -760,6 +760,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/page.rs", "new_notice", &[Ban::Results]),
         ("src/sessions/page.rs", "reading_view", &[Ban::Results]),
         ("src/sessions/page.rs", "session_messages", &[Ban::Order]),
+        ("src/sessions/page.rs", "add_dropped", &[Ban::Order]),
         (
             "src/sessions/page.rs",
             "template_editor",
@@ -1009,7 +1010,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/sessions/page.rs", "note_editor", &[Ban::Layout(2)]),
         ("src/sessions/page.rs", "notes_view", &[Ban::Layout(3)]),
         ("src/sessions/page.rs", "read_tab", &[Ban::Layout(1)]),
-        ("src/sessions/page.rs", "template_list", &[Ban::Layout(1)]),
         ("src/sessions/plan.rs", "fight_block", &[Ban::Layout(1)]),
         ("src/sessions/plan.rs", "plan_menu", &[Ban::Layout(1)]),
         ("src/sessions/slash.rs", "note", &[Ban::Layout(1)]),
@@ -1192,10 +1192,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "a_group_changed_on_disk_blocks_the_whole_save_and_keeps_the_draft",
             &[Ban::Pane(1)],
         ),
-        ("src/sessions/page.rs", "session_body_kind", &[Ban::Pane(3)]),
-        ("src/sessions/page.rs", "draft_footer", &[Ban::Pane(1)]),
-        ("src/sessions/page.rs", "notes_panel", &[Ban::Pane(1)]),
-        ("src/sessions/page.rs", "templates_view", &[Ban::Pane(1)]),
+        ("src/sessions/page.rs", "fills", &[Ban::Pane(1)]),
         (
             "src/encounters.rs",
             "integrity_d8_a_changed_encounter_compares_and_keeps_unknown_fields",
