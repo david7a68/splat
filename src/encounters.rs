@@ -2832,7 +2832,12 @@ pub struct Encounters {
     /// The encounter `Remove` last removed, for `Undo remove encounter`.
     removed_encounter: Option<groups::RemovedNote>,
     /// Each kept result's owner and order, recorded when its action is done (`stamp_kept`); the
-    /// footers show them newest first. A result whose data is dropped leaves (`kept_results`).
+    /// footers show them newest first. The store itself lives as long as the page; a result
+    /// leaves it when its data goes (`kept_results`): a full reload (`reload`) keeps the store
+    /// but drops the removal data (a deleted run, a removed group or encounter), so those lines
+    /// end; a campaign change also drops the discarded drafts and settings; an edit of a new
+    /// draft drops the discard of its kind (`expire_discards`); a successful Undo takes its data
+    /// back. A campaign switch hides the other campaign's lines (the owner's scope).
     kept: design::Results<KeptOwner, KeptMark>,
 }
 /// One encounter, as a session's plan offers it.
