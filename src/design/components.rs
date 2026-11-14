@@ -577,6 +577,11 @@ pub struct Action<'a> {
 /// How far a quiet `line_start` action hangs left of the text edge: its padding.
 pub const LINE_START_HANG: f32 = S;
 
+/// The most a `line_start` action hangs left of the text edge: its padding and its icon slot (as
+/// `Action::paint` lays it out). A pane's body clip reaches this far into the margin left of
+/// the pane, inside the parent's clip (`pane::body_clip`).
+pub const LINE_START_REACH: f32 = LINE_START_HANG + super::tokens::ICON_SLOT;
+
 impl<'a> Action<'a> {
     fn new(kind: Kind, label: &'a str) -> Self {
         Self {
@@ -801,10 +806,6 @@ impl<'a> Action<'a> {
             // The words start at the text edge; the padding and any icon hang in the gutter. The
             // row allocates all but the icon, so the next item keeps the same gap after the
             // target as it has after a `line_start` action without an icon.
-            // The pane it stands in keeps this hang inside its own rect, left of its content.
-            if !self.column {
-                super::pane::note_line_start(ui, padding + icon_width);
-            }
             let size = vec2(width - icon_width, self.height);
             let (id, allocated) = ui.allocate_space(size);
             let rect = ui

@@ -918,13 +918,19 @@ pub fn footer_rect(ctx: &egui::Context, local: Id) -> Option<Rect> {
 
 /// The body's clip: what is left of `ui`'s clip above the body's room, and above `row_cut`, the
 /// top of the registered row that the footer or the session banner would cut (N12, ruling R4),
-/// and never left of the pane's own rect.
+/// widened at the left by the most a `line_start` action hangs, inside the parent's clip.
 /// The one place that decides where the body is cut. egui clips paint and presses alike, so a
 /// row under the cut neither shows nor takes a press.
 fn body_clip(ui: &Ui, body_room: Rect, row_cut: Option<f32>) -> Rect {
     let mut clip = ui.clip_rect();
-    // The pane's hard boundary: nothing paints or takes a press left of its own rect.
-    clip.min.x = clip.min.x.max(body_room.left());
+    // A quiet `line_start` action hangs its padding and its icon left of the text edge: the
+    // clip reaches that far into the margin left of the pane, but never past what encloses the
+    // pane (the parent's clip). Where the parent leaves less room, the parent cuts the action as
+    // it cuts any content: a caller's layout fault that the gate reports. No content moves.
+    clip.min.x = clip
+        .min
+        .x
+        .max(body_room.left() - super::components::LINE_START_REACH);
     clip.max.y = clip.max.y.min(body_room.bottom());
     if let Some(cut) = row_cut {
         clip.max.y = clip.max.y.min(cut);
@@ -1031,25 +1037,6 @@ pub(super) fn whole_rows<R>(ui: &mut Ui, column: Id, add: impl FnOnce(&mut Ui) -
     inner
 }
 
-/// A quiet `line_start` action hangs `hang` left of the text edge, in the pane body that `ui` is
-/// drawn in (a `Content` body): the pane keeps that much gutter inside its rect from now on. A
-/// larger hang than the pane kept draws the pass again.
-pub(super) fn note_line_start(ui: &Ui, hang: f32) {
-    let Some(pane) = innermost(ui).filter(|pane| pane.content) else {
-        return;
-    };
-    let key = pane.pane.with("line_start_hang");
-    let kept = ui
-        .ctx()
-        .data(|data| data.get_temp::<f32>(key))
-        .unwrap_or(0.0);
-    if hang > kept + 0.5 {
-        ui.ctx().data_mut(|data| data.insert_temp(key, hang));
-        ui.ctx()
-            .request_discard("a line_start action needs its gutter inside the pane");
-    }
-}
-
 fn banner_id() -> Id {
     Id::new("splat_bottom_banner")
 }
@@ -1148,26 +1135,10 @@ impl Footer<'_> {
         let body_room = Rect::from_min_max(room.min, pos2(room.right(), limit.max(room.top())));
 
         // The body, in the part's own `Ui`; one id in every state, so its scroll and focus stay.
-        // A `Content` body that holds a quiet `line_start` action keeps the action's hang (its
-        // padding, and its icon if it has one) inside the pane's rect, left of its content, and
-        // clear of a splitter's grab band at its left (egui's own resize radius). The pane learns
-        // the hang when the action first draws in it (that pass is drawn again, so no frame shows
-        // the action cut) and keeps it for its life, so the text edge moves at most once. A pane
-        // with no such action keeps its full width. A `Fills` body places its own columns, so it
-        // gets no gutter.
-        let hang = ui
-            .ctx()
-            .data(|data| data.get_temp::<f32>(id.with("line_start_hang")))
-            .unwrap_or(0.0);
-        let gutter = match body {
-            Body::Content if hang > 0.0 => hang + ui.style().interaction.resize_grab_radius_side,
-            _ => 0.0,
-        };
-        let content_rect = body_room.with_min_x((body_room.left() + gutter).min(body_room.right()));
         let mut body_ui = ui.new_child(
             egui::UiBuilder::new()
                 .id_salt(id.with("body"))
-                .max_rect(content_rect)
+                .max_rect(body_room)
                 .layout(*ui.layout()),
         );
         // Last pass's whole-row cut, while the room is the same; a new cut draws the pass again.
@@ -1986,55 +1957,142 @@ mod row_cut_tests {
             );
         }
     }
-    /// Lead note for P2 (package R's counterexample, the stat-block pane's `Stop`), and review of
-    /// PR 337 (E): a pane right of a splitter, flush against it. A quiet `line_start` action, and
-    /// one with an icon, start lines in its body: each target is whole inside the pane's rect and
-    /// right of the splitter, and its words start at a plain label's edge. The pane never paints
-    /// or takes a press left of its own rect: the gutter they hang into is the pane's own.
+    /// Lead note for P2 (package R's counterexample, the stat-block pane's `Stop`), and the
+    /// review of PR 337 (E). The hang of a quiet `line_start` action paints into the margin left
+    /// of the pane, inside the parent's clip; no content moves.
+    /// 1. A pane with a 16 px page margin at its left: `Stop` is whole inside the clip; the clip
+    ///    reaches the icon action's 28 px hang as far as the parent allows; both actions' words
+    ///    start at a plain label's edge.
+    /// 2. A pane flush against a `Column`'s splitter: the parent's clip wins; neither action's
+    ///    paint nor its hit area reaches into the splitter's grab band (they may be cut).
+    /// 3. The text edge of a `Content` pane is the same before and after a `line_start` action
+    ///    first draws in it.
     #[test]
     fn a_line_start_action_keeps_its_gutter_in_a_pane() {
         use crate::design::components::{Action, LINE_START_HANG};
         use egui_kittest::kittest::{NodeT, Queryable};
-        let mut harness = egui_kittest::Harness::builder()
+        struct State {
+            action: bool,
+            stop: Option<(Rect, Rect)>,
+            icon: Option<(Rect, Rect)>,
+            label: Rect,
+            clip: Rect,
+            parent: Rect,
+        }
+        impl Default for State {
+            fn default() -> Self {
+                Self {
+                    action: false,
+                    stop: None,
+                    icon: None,
+                    label: Rect::NOTHING,
+                    clip: Rect::NOTHING,
+                    parent: Rect::NOTHING,
+                }
+            }
+        }
+        // The pane: an optional `Stop` and icon action (their rect and hit rect), then a label.
+        let pane = |ui: &mut Ui, state: &mut State| {
+            let frame = PaneFrame::new(ui);
+            let messages = Messages::<NoPress>::new(&frame, "gutter_test", 400.0);
+            let action = state.action;
+            let drawn = messages
+                .pane(ui, Body::Content, |ui| {
+                    let mut stop = None;
+                    let mut icon = None;
+                    if action {
+                        let shown = Action::quiet("Stop").line_start().show(ui);
+                        stop = Some((shown.rect, shown.interact_rect));
+                        let shown = Action::quiet("Add one")
+                            .icon(crate::design::icons::ERROR)
+                            .line_start()
+                            .show(ui);
+                        icon = Some((shown.rect, shown.interact_rect));
+                    }
+                    let label = ui.label("A plain label").rect;
+                    (stop, icon, label, ui.clip_rect())
+                })
+                .body;
+            (state.stop, state.icon, state.label, state.clip) = drawn;
+        };
+        // 1 and 3: a 16 px page margin at the pane's left.
+        let mut margin = egui_kittest::Harness::builder()
             .with_size(vec2(700.0, 300.0))
-            .build_ui(|ui| {
-                crate::design::Column::left("navigation", 200.0, 150.0..=300.0)
-                    .show_inside(ui, |ui| ui.label("Left"));
-                egui::CentralPanel::default()
-                    .frame(egui::Frame::new())
-                    .show_inside(ui, |ui| {
-                        let frame = PaneFrame::new(ui);
-                        let messages = Messages::<NoPress>::new(&frame, "gutter_test", 400.0);
-                        let (stop, icon, label, clip) = messages
-                            .pane(ui, Body::Content, |ui| {
-                                let stop = Action::quiet("Stop").line_start().show(ui).rect;
-                                let icon = Action::quiet("Add one")
-                                    .icon(crate::design::icons::ERROR)
-                                    .line_start()
-                                    .show(ui)
-                                    .rect;
-                                let label = ui.label("A plain label").rect;
-                                (stop, icon, label, ui.clip_rect())
-                            })
-                            .body;
-                        ui.ctx().data_mut(|data| {
-                            data.insert_temp(
-                                Id::new("gutter_test_rects"),
-                                (stop, icon, label, clip),
-                            );
+            .build_ui_state(
+                move |ui, state: &mut State| {
+                    let room = ui.available_rect_before_wrap();
+                    let inner = room.with_min_x(room.left() + crate::design::tokens::L);
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(inner), |ui| pane(ui, state));
+                },
+                State::default(),
+            );
+        crate::design::theme::install(&margin.ctx);
+        margin.run_steps(3);
+        let before = margin.state().label;
+        margin.state_mut().action = true;
+        margin.run_steps(1);
+        let first = margin.state().label;
+        margin.run_steps(3);
+        let state = margin.state();
+        assert!(
+            (first.left() - before.left()).abs() <= 0.5
+                && (state.label.left() - before.left()).abs() <= 0.5,
+            "gutter-still: the text edge {} stays when a line_start action first draws: {} then {}",
+            before.left(),
+            first.left(),
+            state.label.left()
+        );
+        let (stop, icon) = (
+            state.stop.expect("Stop"),
+            state.icon.expect("the icon action"),
+        );
+        // `Stop` hangs 8 px: whole inside the clip. The icon action hangs 28 px, more than this
+        // margin: the clip reaches as far as the parent lets it (the window), no further.
+        assert!(
+            state.clip.expand(0.5).contains_rect(stop.0),
+            "gutter-inside: Stop {:?} is whole inside the clip {:?}",
+            stop.0,
+            state.clip
+        );
+        let edge = state.label.left();
+        assert!(
+            (state.clip.left() - (edge - crate::design::components::LINE_START_REACH).max(0.0))
+                .abs()
+                <= 0.5,
+            "gutter-reach: the clip {:?} reaches the icon action's hang left of the text edge {edge}, inside the parent",
+            state.clip
+        );
+        assert!(
+            (stop.0.left() + LINE_START_HANG - state.label.left()).abs() <= 0.5
+                && (icon.0.left() + LINE_START_HANG + crate::design::tokens::ICON_SLOT
+                    - state.label.left())
+                .abs()
+                    <= 0.5,
+            "gutter-edge: the words of Stop {stop:?} and of the icon action {icon:?} start at the label's edge {:?}",
+            state.label
+        );
+        // 2: flush against a splitter.
+        let mut flush = egui_kittest::Harness::builder()
+            .with_size(vec2(700.0, 300.0))
+            .build_ui_state(
+                move |ui, state: &mut State| {
+                    crate::design::Column::left("navigation", 200.0, 150.0..=300.0)
+                        .show_inside(ui, |ui| ui.label("Left"));
+                    egui::CentralPanel::default()
+                        .frame(egui::Frame::new())
+                        .show_inside(ui, |ui| {
+                            state.parent = ui.clip_rect();
+                            pane(ui, state);
                         });
-                    });
-            });
-        crate::design::theme::install(&harness.ctx);
-        harness.run_steps(3);
-        let (stop, icon, label, clip) = harness
-            .ctx
-            .data(|data| data.get_temp::<(Rect, Rect, Rect, Rect)>(Id::new("gutter_test_rects")))
-            .expect("the pane drew");
-        let room = pane_record(&harness.ctx, Id::new("gutter_test"))
-            .expect("a record")
-            .room();
-        let splitter = harness
+                },
+                State {
+                    action: true,
+                    ..State::default()
+                },
+            );
+        crate::design::theme::install(&flush.ctx);
+        flush.run_steps(3);
+        let splitter = flush
             .query_all(
                 egui_kittest::kittest::By::new()
                     .predicate(|node| node.role() == egui::accesskit::Role::Splitter),
@@ -2047,27 +2105,22 @@ mod row_cut_tests {
                 ))
             })
             .expect("the column's splitter");
-        assert!(
-            clip.left() >= room.left() - 0.5,
-            "gutter-boundary: the body's clip {clip:?} starts inside the pane {room:?}"
-        );
-        for (name, target) in [("Stop", stop), ("Add one", icon)] {
+        let state = flush.state();
+        // The parent's clip wins: the hang adds nothing left of it. (Here the parent's clip starts
+        // inside the splitter's grab band, so content at the pane's own text edge overlaps the
+        // band too: a caller's layout fault, which the gate reports; the pane does not hide it.)
+        for (name, (_, hit)) in [
+            ("Stop", state.stop.expect("Stop")),
+            ("Add one", state.icon.expect("the icon action")),
+        ] {
             assert!(
-                room.expand(0.5).contains_rect(target) && clip.expand(0.5).contains_rect(target),
-                "gutter-inside: {name} {target:?} is whole inside the pane {room:?} and its clip {clip:?}"
-            );
-            assert!(
-                target.left() >= splitter.right() - 0.5,
-                "gutter-splitter: {name} {target:?} is clear of the splitter {splitter:?}"
+                state.clip.left() >= state.parent.left() - 0.5
+                    && hit.left() >= state.parent.left() - 0.5,
+                "gutter-parent: {name}'s paint clip {:?} and hit area {hit:?} stay inside the parent's clip {:?} (splitter {splitter:?})",
+                state.clip,
+                state.parent
             );
         }
-        assert!(
-            (stop.left() + LINE_START_HANG - label.left()).abs() <= 0.5
-                && (icon.left() + LINE_START_HANG + super::super::tokens::ICON_SLOT - label.left())
-                    .abs()
-                    <= 0.5,
-            "gutter-edge: the words of Stop {stop:?} and of the icon action {icon:?} start at the label's edge {label:?}"
-        );
     }
 }
 
