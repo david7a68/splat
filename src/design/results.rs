@@ -637,7 +637,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/design/results.rs", "record", &[Ban::Results]),
         ("src/dndbeyond.rs", "footer_messages", &[Ban::Results]),
-        ("src/dndbeyond.rs", "show", &[Ban::Results, Ban::Layout(1)]),
+        ("src/dndbeyond.rs", "show", &[Ban::Results]),
         ("src/encounter_run.rs", "keep_step", &[Ban::Results]),
         ("src/encounter_run.rs", "open", &[Ban::Results]),
         (
@@ -828,7 +828,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "creation_form",
             &[Ban::Results, Ban::Layout(1), Ban::Pane(1)],
         ),
-        ("src/world/page.rs", "show", &[Ban::Results, Ban::Layout(4)]),
+        ("src/world/page.rs", "show", &[Ban::Results, Ban::Layout(3)]),
         ("src/world/repair.rs", "choose", &[Ban::Results]),
         ("src/world/repair.rs", "edit", &[Ban::Results]),
         (
@@ -840,7 +840,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/world.rs", "entry_controls", &[Ban::Results]),
         ("src/world.rs", "stamp", &[Ban::Results]),
         // Package K: raw egui calls that a layout part replaces.
-        ("src/art.rs", "show_viewer", &[Ban::Layout(2)]),
         (
             "src/campaigns.rs",
             "selector",
@@ -985,8 +984,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "wide_tables_keep_whole_words_and_can_scroll_to_the_last_column",
             &[Ban::Layout(1)],
         ),
-        ("src/party_bar.rs", "more_players", &[Ban::Layout(2)]),
-        ("src/party_bar.rs", "paint", &[Ban::Layout(1)]),
         ("src/rolls.rs", "mode_menu", &[Ban::Layout(1)]),
         ("src/rolls.rs", "more_actions", &[Ban::Layout(1)]),
         ("src/rolls.rs", "outcome_line", &[Ban::Layout(1)]),
@@ -1029,9 +1026,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Layout(1)],
         ),
         ("src/trackers/view.rs", "amount_field", &[Ban::RowKey(3)]),
-        ("src/world.rs", "add_form", &[Ban::Layout(1)]),
-        ("src/world/page.rs", "new_menu", &[Ban::Layout(1)]),
-        ("src/world/repair.rs", "editor_events", &[Ban::Layout(2)]),
+        ("src/world/repair.rs", "editor_events", &[Ban::RowKey(1)]),
         // Package M (round 28): the escapes of `design::outcome`, and its own helpers.
         ("src/design/outcome.rs", "__literal", &[Ban::Sentence]),
         ("src/design/outcome.rs", "check_literal", &[Ban::Sentence]),
@@ -1071,8 +1066,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/trackers/history.rs", "show", &[Ban::Body]),
         ("src/trackers/view.rs", "body", &[Ban::Body]),
         ("src/trackers/view.rs", "messages", &[Ban::Words]),
-        ("src/combat_sync.rs", "labelled_stepper", &[Ban::Extras(1)]),
-        ("src/dndbeyond.rs", "show_import", &[Ban::Extras(1)]),
         (
             "src/encounter_run/loot.rs",
             "loot_section",
@@ -1101,11 +1094,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Extras(1)],
         ),
         ("src/encounter_run/view.rs", "log_link", &[Ban::Extras(1)]),
-        (
-            "src/party.rs",
-            "wrapped_sheet_cells_keep_the_next_pair_on_one_row",
-            &[Ban::Extras(1)],
-        ),
         ("src/sessions/plan.rs", "word_link", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "plan_row_with", &[Ban::Extras(1)]),
         (
@@ -1157,7 +1145,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/library/creature.rs", "show", &[Ban::Extras(1)]),
         ("src/library/reader.rs", "show", &[Ban::Extras(1)]),
         ("src/markdown_view.rs", "flush", &[Ban::Extras(1)]),
-        ("src/party.rs", "storage_notice", &[Ban::Extras(2)]),
         ("src/rolls.rs", "armed_hint", &[Ban::Extras(2)]),
         ("src/sessions/carry.rs", "last_time_line", &[Ban::Extras(1)]),
         ("src/sessions/page.rs", "draft_warning", &[Ban::Extras(2)]),

@@ -334,7 +334,7 @@ fixed height of two text lines (see Files and recovery), so no reason, result or
 draft's parse error takes the same space. Keeping a draft in the close dialog restores
 its editor focus and cursor.
 
-A changed file stops saving. World uses `disk_conflict_choices` with the noun `note`: “This note changed on disk. Your draft is safe until you choose.” Library uses `entry` in the same choices. Encounters says the same sentence with `encounter`, `group` or `creature` (`This encounter changed on disk. Your draft is safe until you choose.`), and never names the file. When the file is gone, its red choice is `Remove encounter and lose draft` (`group`, `creature`), and the result says `<name> removed. Its draft was discarded.` with `Undo remove`, which gives the draft back. Show secondary `Overwrite with my draft` first, then
+A changed file stops saving. The message names the thing, not the file: “Bridge Ambush changed on disk. Your draft is safe until you choose.” `disk_conflict_choices` takes a `ConflictSubject`: the thing's name, or `This <noun>` only for a thing with no name (a World note's repair editor: “This note changed on disk.”). World's edit form names its entry. Library (`entry`) and Encounters (`encounter`, `group`, `creature`) say the same sentence. When the file is gone, its red choice is `Remove encounter and lose draft` (`group`, `creature`), and the result says `<name> removed. Its draft was discarded.` with `Undo remove`, which gives the draft back. Show secondary `Overwrite with my draft` first, then
 red `Reload and lose my draft`. Neither has accent fill. These messages cannot be dismissed. Library and World
 draw the choices through `message_with_actions`: the row starts at the message text, not at the warning bar, and
 an `L` gap comes before the red choice. Library's note of the entries that need a deleted file sits in the same
@@ -948,7 +948,9 @@ view is open, one row above that view says `Unsaved NPC: <name> · Show`, so the
 and Lookup's link open its card again; Reroll on the card replaces it. Discard says `<name> draft discarded.` with
 `Undo discard`, which brings back the same NPC until another view opens. Closing the app or changing the campaign
 asks about the NPC as it does for other drafts. The rail shows `Unsaved NPC` with the draft icon while the NPC is held;
-it is a link that opens the NPC's card on World from any page.
+it is a link that opens the NPC's card on World from any page. An NPC that Lookup holds (generated there, not saved) is
+named in the rail the same way, also while Lookup is closed; its link opens Lookup, which shows the NPC's card or its
+`Unsaved NPC: <name> · Show` row.
 
 Every World result with an Undo (a value, name, edit, identity or file change, and a discarded edit draft) and every
 edit form with its `Undo reload` belong to the campaign that made them: Lookup keeps its reader across a campaign change, and the result shows, and its Undo acts,
@@ -974,7 +976,7 @@ group, a group moved or deleted on save, a removed encounter (`Removed encounter
 `Edit in Obsidian` with `message_with_actions`, so the link starts at the warning's words, in the edit form and in a
 reader with no file line.
 
-Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. A full NPC reader's kind line shows NPC and its owner; Status stays in its own row. A compact reader (Lookup) keeps status on the kind line, as the plain evening's contract keeps every text of today, and shows a campaign entry's Status row with its Change below it, so the DM changes a status where the entry is read, with the same write, Log line and `Undo status change` in Lookup's footer. `Change` puts the keyboard in the field with its words selected, in both readers. A compact reader has no file line: while a duplicate-note repair message shows, its kind line drops the fault and names the open file instead (`NPC · Campaign · NPCs/Rook Ambry copy.md`). The result rows keep the fault. Use a fixed label column, aligned
+Set values show labelled rows: Stat block, In, Part of and Status. An NPC also shows its empty Stat block row. Status shows once (`ReaderStatus`): when the reader draws a campaign entry's Status row, World's and Lookup's kind line has no status (`NPC · Campaign`); an entry with no Status row (a package entry, a built-in creature) keeps its status on the kind line. Lookup shows a campaign entry's Status row with its Change below it, so the DM changes a status where the entry is read, with the same write, Log line and `Undo status change` in Lookup's footer. `Change` puts the keyboard in the field with its words selected, in both readers. A compact reader has no file line: while a duplicate-note repair message shows, its kind line drops the fault and names the open file instead (`NPC · Campaign · NPCs/Rook Ambry copy.md`). The result rows keep the fault. Use a fixed label column, aligned
 values and a 32 px pitch. Change uses one column at the widest visible value in the block plus an `L`
 gap, capped at the value measure. Values wrap within their column, with Change level with the value's first line (a missing link's name line, not
 `Not found` below it). Read mode hides empty relationship and status values. An NPC keeps its empty Stat block row and Change action, so assigning its first stat block still takes three interactions from the reader. This row says `not set`. A set value is `Body` in the text colour, as a set link is, so a value and its absence differ at a glance; only `not set` (muted) and `not read` (warning) stay `Small`. The edit form draws its values the same way, groups included. Edit on the title line opens all fields, including empty ones. A typed page with no set values shows its prose directly, except for this NPC Stat block row: with no row, the value block adds no gap, so the prose starts as far below the file line as a plain note's does. Missing links retain names and keep `Not found` on one line beside a label column. A missing link's icon and name
@@ -1070,7 +1072,7 @@ campaign change, and the campaign switch's guard and the close warning count the
 `“<name>” was deleted. The Log line was not added: “<words>”` with `Copy text` and, an `L` gap after it, `Dismiss`
 (the choices of a lost draft), whatever the reader shows and also while Lookup shows no entry, until the DM copies
 or dismisses it. While the entry's edit form is open, here or in the other reader, the field waits with its words
-and takes no room; the reason `Save or discard your edit first.` is in the pane's footer, so the form never moves. A package's entry has no `Add to Log`. Edit replaces the rows and
+and takes no room; the reason `Save or discard your edit to add a Log line.` is in the pane's footer, so the form never moves. A package's entry has no `Add to Log`. Edit replaces the rows and
 the text with one form. Read and Edit show Stat block, In, Part of, then Status, so a value keeps its place when the DM
 presses Edit; conflict lines after Overwrite use the same order. Text follows in the reader's prose type,
 without the title line. The Text field ends at the same `FORM_WIDTH` edge as Status. One frame holds
@@ -2424,7 +2426,9 @@ remembered on two lines with full hover and accessible text. Settings states rec
 The campaign list is as wide as its widest name and link block, an `L` gap and one action column that every row
 shares, and never narrower than `FORM_WIDTH`; the account column starts an `XL` gap after it.
 Campaign add forms close on success; messages follow campaign rows below their heading. The add form is an inline
-creation form: Add campaign on the Folder line after Browse…, quiet Cancel and the reason on the line below. The edit form is a save
+creation form: Add campaign on the Folder line after Browse…, quiet Cancel and the reason on the line below. In the narrow
+layout with no account, `To import from D&D Beyond, connect your account first.` follows the open add form; it depends on
+the form, the session and the layout, never on what is in view, so it never moves the form. The edit form is a save
 row, with Cancel or Discard at the left and the commit at the right. An unchanged form blocks Save details with No changes to save.
 Details hides Edit details, uses a plain Details heading, and puts state and Discard at the left, Save details
 at the right. Discard restores saved details with Undo discard; clean forms use Cancel. The tab's messages sit in

@@ -997,14 +997,14 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     d.click(&long);
     d.observe(
         "T18.2",
-        d.visible_text("Save or discard your edit first.") && !d.has(&field),
+        d.visible_text("Save or discard your edit to add a Log line.") && !d.has(&field),
         "While the entry has an edit form, the Log field waits",
     );
     // Round 27 FC2: the reason is in Lookup's footer, so the form the DM types in keeps its
     // place when the waiting field comes.
     let waiting = d.place_of("Discard");
     let footer = d.painted_rect_in(
-        "Save or discard your edit first.",
+        "Save or discard your edit to add a Log line.",
         egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(f32::MAX, f32::MAX)),
     );
     d.observe(
@@ -1036,7 +1036,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     d.click(&long);
     d.observe(
         "T18.2",
-        d.visible_text("Save or discard your edit first.")
+        d.visible_text("Save or discard your edit to add a Log line.")
             && !d.has(&field)
             && fs::read_to_string(&path).unwrap() == before,
         "An edit form on the World page holds back the Log field in Lookup",
