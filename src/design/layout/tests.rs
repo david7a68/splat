@@ -40,7 +40,12 @@ fn frame_with(
                 rect: text.visual_bounding_rect(),
                 clip,
                 elided: text.galley.elided,
-                shown: text.galley.job.sections.iter().any(|section| section.format.color.a() > 0)
+                shown: text
+                    .galley
+                    .job
+                    .sections
+                    .iter()
+                    .any(|section| section.format.color.a() > 0)
                     && text.opacity_factor > 0.0,
             }),
             egui::Shape::Vec(shapes) => {
@@ -1048,7 +1053,7 @@ fn a_search_field_always_draws_its_clear() {
         // width; a part clipped away is not painted.
         let parts: Vec<Rect> = painted
             .iter()
-            .filter(|text| text.shown)
+            .filter(|text| text.shown && !text.text.trim().is_empty())
             .map(|text| text.rect.intersect(text.clip))
             .filter(|rect| rect.is_positive())
             .collect();
