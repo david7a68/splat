@@ -965,16 +965,16 @@ fn play(d: &mut Driver<'_>) -> (Evening, Bytes, Bytes) {
     ev.page(d, "run-ended: played last");
     // iter-28-B FH4: the open run ends with a gap: the next row starts at least `L` below the
     // log's last line, so it does not read as a line of the log.
-    let mut texts = Vec::new();
-    d.each_painted_text(|text, clip| {
-        let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
-        if clip.intersects(rect) {
-            texts.push((text.galley.job.text.clone(), rect));
-        }
-    });
+    // The nodes hold the whole rects, also below the view (R2 brings only Final state in).
+    let texts: Vec<(String, egui::Rect)> = d
+        .nodes()
+        .into_iter()
+        .filter(|node| node.role == egui::accesskit::Role::Label)
+        .map(|node| (node.name, node.rect))
+        .collect();
     let gap = texts
         .iter()
-        .find(|(words, _)| words == "COMBAT LOG")
+        .find(|(words, _)| words.eq_ignore_ascii_case("Combat log"))
         .and_then(|(_, label)| {
             let next = texts
                 .iter()
