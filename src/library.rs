@@ -2940,7 +2940,7 @@ pub(crate) fn folder_field(
                                 ),
                             );
                             design::named(ui, &response, &format!("Suggestions for {label}"));
-                            design::menu_popup(&response).show(|ui| {
+                            design::menu_popup(&*ui, &response).show(|ui| {
                                 if design::extras::choice_wrapped(
                                     ui,
                                     value.is_empty(),
@@ -4674,7 +4674,7 @@ impl Library {
                 }
                 design::locked(ui, locked, |ui| {
                     let response = design::menu_button(ui, "Packages", false);
-                    design::menu_popup(&response).show(|ui| {
+                    design::menu_popup(&*ui, &response).show(|ui| {
                         if Action::quiet("Reload from disk")
                             .icon(icons::REFRESH)
                             .show(ui)
@@ -4732,7 +4732,7 @@ impl Library {
                     // Round 26 FB1: the menu is as wide as its content, up to the reader
                     // measure, and ends at the count's right edge, so it stays clear of the
                     // splitter between the list and the reader.
-                    design::menu_popup(&response)
+                    design::menu_popup(&*ui, &response)
                         .align(egui::RectAlign::BOTTOM_END)
                         .show(|ui| {
                             let link_label = |at: usize, count: usize| {
