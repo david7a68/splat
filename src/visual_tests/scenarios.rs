@@ -23381,13 +23381,16 @@ pub mod run_rolls {
         let after = match condition {
             // iter-25-R SJ1: words whose result cannot fit whole after the conditions take a
             // line of their own under them, at the name's edge.
-            Some(condition) => d
-                .painted_rect_in(condition, node.shown)
-                .is_some_and(|line| {
+            Some(condition) => match d.painted_rect_in(condition, node.shown) {
+                Some(line) => {
                     (words.left() >= line.right() && (words.top() - line.top()).abs() < 2.0)
                         || ((words.left() - name.left()).abs() < 1.0
                             && words.top() >= line.bottom() - 1.0)
-                }),
+                }
+                // iter-28-R R8: the row's words gave way so the result is whole on the
+                // second line; the condition stays in the row's name and hover.
+                None => (words.left() - name.left()).abs() < 1.0 && node.name.contains(condition),
+            },
             None => (words.left() - name.left()).abs() < 1.0,
         };
         let wrong = [
