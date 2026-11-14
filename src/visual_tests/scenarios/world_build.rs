@@ -4100,12 +4100,12 @@ fn fixed_part_scrolls(d: &mut Driver<'_>, message: &str) -> (bool, bool, bool, [
     // PR 343 re-check: the proof starts from a known position, the part's top (wheel up over a
     // point inside the part's visible rect). From there a downward step moves no words anywhere
     // on screen (so neither the part nor a scroll around it had anything to scroll), and the
-    // upward step after it leaves every word where it was. An overflowing part at its top always
-    // moves on the downward step, also when it was wheeled to its bottom before the proof: the
-    // proof must give the same answer from the part's bottom, where a single downward step moves
-    // nothing (the old proof's fault), and the wheel to that bottom must move the part's words
-    // when it overflows (the part receives the wheel at that point). The proof ends at the
-    // part's top; the steps after it start from the top (Page Up).
+    // upward step after it leaves every word where it was. The proof is held to what the part
+    // does: wheeled from its top to its bottom over the same point, an overflowing part's words
+    // move (so the part takes the wheel there), and the proof, run from that bottom where a
+    // single downward step moves nothing (the old proof's fault), must then say it does not fit;
+    // a part whose words did not move must fit. The proof ends at the part's top; the steps after
+    // it start from the top (Page Up).
     fn part_fits(d: &mut Driver<'_>, part: egui::Rect) -> bool {
         let at = part.center();
         let tops = |d: &Driver<'_>| {
@@ -4137,9 +4137,7 @@ fn fixed_part_scrolls(d: &mut Driver<'_>, message: &str) -> (bool, bool, bool, [
                     return false;
                 };
                 let focused = d.focused_name().as_deref() == Some(group.name.as_str());
-                let (fits, from_bottom, wheeled) = d.aside(|d| {
-                    let fits = part_fits(d, group.shown);
-                    // To the bottom: an overflowing part's words move (it took the wheel).
+                let (fits, overflows) = d.aside(|d| {
                     let words = |d: &Driver<'_>| {
                         let mut tops = Vec::new();
                         d.each_painted_text(|text, _| {
@@ -4149,13 +4147,14 @@ fn fixed_part_scrolls(d: &mut Driver<'_>, message: &str) -> (bool, bool, bool, [
                         });
                         tops
                     };
-                    let before = words(d);
+                    d.scroll_up_at(group.shown.center(), 8);
+                    let top = words(d);
                     d.scroll_at(group.shown.center(), 8);
-                    let wheeled = words(d) != before;
-                    (fits, part_fits(d, group.shown), wheeled)
+                    let overflows = words(d) != top;
+                    (part_fits(d, group.shown), overflows)
                 });
-                // The proof is the same from the bottom; an overflowing part took the wheel.
-                let proof = fits == from_bottom && (fits || wheeled);
+                // The proof, run from the part's bottom, agrees with what the wheel did.
+                let proof = fits != overflows;
                 let fits = fits && rings.is_empty() && !focused;
                 proof && fits
                     || proof
