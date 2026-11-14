@@ -1472,7 +1472,9 @@ impl Run {
         // stays free under the rows while every row keeps its scale height, so such a message
         // comes into kept room: no row moves and none hides. A taller footer, or rows at their
         // scale height, keep the old rule: no row moves, and a row it would cut is counted below.
-        let kept = (2.0 * Type::Body.line() + design::S).max(MESSAGE_ROOM);
+        // Measured on the typed footer at 1200: two Body lines, the message's own margin (`XS`)
+        // and the pane's `S` above it.
+        let kept = (2.0 * Type::Body.line() + design::S + design::XS).max(MESSAGE_ROOM);
         let current = self.current();
         let next_up = self.next_up();
         let count = self.state.order.len();
