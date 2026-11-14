@@ -689,6 +689,67 @@ fn inline_create_moves_nothing_while_the_dm_types() {
     );
     let (_, short, _) = in_column_with(100.0, NARROWEST_PANE, 0.0, LONG_SIDE, LONG_CREATE, "/a");
     assert_eq!(long, short, "the rows do not change while the DM types");
+    // Re-check of PR 351, item 4: a form that ends with a drop-down, in the narrowest pane, with
+    // the longest Create. Cancel wraps to a row of its own and starts the line: its words at the
+    // text edge where the clip shows its padding, its target inside the clip where the clip is
+    // the text edge. The rows do not change while the DM types.
+    let dropdown_in_column = |clip_left: f32, text: &str| {
+        let mut title = text.to_owned();
+        let mut template = 0;
+        let column = Rect::from_min_size(pos2(100.0, 20.0), vec2(NARROWEST_PANE, 400.0));
+        let clip = column.with_min_x(clip_left);
+        let (nodes, painted) = frame_with(&ctx, vec2(1000.0, 500.0), Vec::new(), |ui| {
+            ui.scope_builder(egui::UiBuilder::new().max_rect(column), |ui| {
+                ui.set_clip_rect(clip);
+                let _ = InlineCreate::new()
+                    .field(CreateField::new(
+                        crate::field_id!("test_create_wrap_title").once(Once::Example),
+                        "Session title",
+                        &mut title,
+                    ))
+                    .dropdown(CreateDropdown::new(
+                        "Template",
+                        Selection::new(
+                            crate::field_id!("test_create_wrap_template").once(Once::Example),
+                            "Session template",
+                            0,
+                            "Short notes",
+                        ),
+                        &mut template,
+                    ))
+                    .create(Create::primary(LONG_CREATE).blocked(None::<TestReason>))
+                    .kept_line(KeptLine::new().cancel(CANCEL, true))
+                    .show(ui);
+            });
+        });
+        let words = painted
+            .iter()
+            .find(|text| text.text == CANCEL.as_str())
+            .map(|text| text.rect)
+            .expect("Cancel's words are painted");
+        let rects = [LONG_CREATE.as_str(), CANCEL.as_str()].map(|name| bounds(&nodes, name));
+        (clip, rects, words)
+    };
+    let (clip, [create, cancel], words) = dropdown_in_column(0.0, LONG_FOLDER);
+    assert!(
+        cancel.top() >= create.bottom() - 0.5,
+        "the pressure: Cancel wraps under Create: {create:?} {cancel:?}"
+    );
+    assert!(
+        (words.left() - 100.0).abs() < 1.0 && clip.contains_rect(cancel),
+        "Cancel's words start at the text edge: {words:?}, target {cancel:?}"
+    );
+    let (_, same, _) = dropdown_in_column(0.0, "/a");
+    assert_eq!(
+        same,
+        [create, cancel],
+        "the rows do not change while the DM types"
+    );
+    let (clip, [_, cancel], _) = dropdown_in_column(100.0, LONG_FOLDER);
+    assert!(
+        clip.expand(0.5).contains_rect(cancel),
+        "Cancel inside a clip at the text edge: {cancel:?} in {clip:?}"
+    );
     // K4a gap 1: a form that ends with a drop-down. Create, then Cancel, on an action line
     // under the drop-down and its help; the action line keeps its y whatever is chosen,
     // whatever the preview's length and whatever reason shows; the reasons and the preview
@@ -705,6 +766,7 @@ fn inline_create_moves_nothing_while_the_dm_types() {
                      preview: Option<&str>,
                      focus: bool| {
         let mut title = typed.borrow().clone();
+        let mut date = String::from("14 November");
         let mut template = chosen;
         let mut out = InlineCreateResponse::default();
         let (nodes, painted) = frame_with(&ctx, vec2(800.0, 600.0), events, |ui| {
@@ -717,6 +779,11 @@ fn inline_create_moves_nothing_while_the_dm_types() {
                     )
                     .focus(focus),
                 )
+                .field(CreateField::new(
+                    crate::field_id!("test_create_date").once(Once::Example),
+                    "Date",
+                    &mut date,
+                ))
                 .dropdown(
                     CreateDropdown::new(
                         "Template",
@@ -828,7 +895,7 @@ fn inline_create_moves_nothing_while_the_dm_types() {
             }
         }
     }
-    // Keyboard: the title, the drop-down, Create, Cancel.
+    // Keyboard: the title, the date, the drop-down, Create, Cancel.
     let focused = |nodes: &Nodes| {
         let id = ctx.memory(|memory| memory.focused())?;
         nodes
@@ -836,19 +903,23 @@ fn inline_create_moves_nothing_while_the_dm_types() {
             .find(|(node, _)| node.0 == id.value())
             .and_then(|(_, node)| node.label().map(str::to_owned))
     };
+    // Keys go in with their releases: a press with no release is held, and egui marks the next
+    // press of that key a repeat (which egui's text field drops during a composition).
     let key = |key: egui::Key| {
-        vec![egui::Event::Key {
-            key,
-            physical_key: None,
-            pressed: true,
-            repeat: false,
-            modifiers: egui::Modifiers::NONE,
-        }]
+        [true, false]
+            .map(|pressed| egui::Event::Key {
+                key,
+                physical_key: None,
+                pressed,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            })
+            .to_vec()
     };
     let _ = draw_form(Vec::new(), 0, None, None, true);
     let (_, nodes, _) = draw_form(Vec::new(), 0, None, None, false);
     let mut order = vec![focused(&nodes)];
-    for _ in 0..3 {
+    for _ in 0..4 {
         let (_, nodes, _) = draw_form(key(egui::Key::Tab), 0, None, None, false);
         order.push(focused(&nodes));
     }
@@ -856,6 +927,7 @@ fn inline_create_moves_nothing_while_the_dm_types() {
         order,
         [
             "Session title",
+            "Date",
             "Session template: Short notes",
             "Create session",
             "Cancel"
@@ -901,46 +973,140 @@ fn inline_create_moves_nothing_while_the_dm_types() {
         out.create && typed.borrow().ends_with('!'),
         "one pass: the text and Enter both land"
     );
-    *typed.borrow_mut() = "Ash on the Road".to_owned();
     let preedit = || {
         vec![
             ime(egui::ImeEvent::Enabled),
             ime(egui::ImeEvent::Preedit("か".to_owned())),
         ]
     };
-    // A preedit and Enter in one pass, then a preedit before Enter or Escape alone: no Create,
-    // no Cancel, and the words stay.
-    for (events, then) in [
-        (with(preedit(), key(egui::Key::Enter)), None),
-        (with(preedit(), key(egui::Key::Escape)), None),
-        (preedit(), Some(egui::Key::Enter)),
-        (preedit(), Some(egui::Key::Escape)),
-    ] {
-        let _ = draw_form(Vec::new(), 0, None, None, true);
-        let (mut out, _, _) = draw_form(events, 0, None, None, false);
-        if let Some(then) = then {
-            out = draw_form(key(then), 0, None, None, false).0;
-        }
-        // The pressure: the key took the field's keyboard (egui keeps it only for an Enter
-        // after a preedit of an earlier frame).
+    // The commit is other words than the preedit, so a test sees whether it landed.
+    let commit = || {
+        vec![
+            ime(egui::ImeEvent::Commit("火".to_owned())),
+            ime(egui::ImeEvent::Disabled),
+        ]
+    };
+    // Re-check of PR 351, item 3: what egui alone does, with one design text field and no form.
+    // A preedit, then a fresh Enter (pressed and released, so not a repeat) in the next frame:
+    // egui ends the input on that Enter, takes the field's keyboard and ends its composition,
+    // so the commit of the frame after never reaches the field.
+    {
+        let alone_id = crate::field_id!("test_ime_alone").once(Once::Example);
+        let mut alone = String::from("Ash");
+        let mut frame_alone = |events: Vec<egui::Event>, focus: bool| {
+            let mut fresh = false;
+            let _ = frame_with(&ctx, vec2(800.0, 200.0), events, |ui| {
+                fresh = ui.input(|input| {
+                    input.events.iter().any(|event| {
+                        matches!(
+                            event,
+                            egui::Event::Key {
+                                key: egui::Key::Enter,
+                                pressed: true,
+                                repeat: false,
+                                ..
+                            }
+                        )
+                    })
+                });
+                let response = form_field(ui, alone_id, "Alone", &mut alone, 300.0);
+                if focus {
+                    response.request_focus();
+                }
+            });
+            let has = ctx.memory(|memory| memory.has_focus(alone_id.named_id("Alone")));
+            (fresh, has, alone.clone())
+        };
+        let _ = frame_alone(Vec::new(), true);
+        let _ = frame_alone(Vec::new(), false);
+        let (_, has, words) = frame_alone(preedit(), false);
         assert!(
-            out.fields[0].lost_focus() || then == Some(egui::Key::Enter),
-            "the pressure: the key took the field’s keyboard: {then:?} {}",
-            typed.borrow()
+            has && words == "Ashか",
+            "egui alone: the preedit lands: {words}"
         );
+        let (fresh, has, _) = frame_alone(key(egui::Key::Enter), false);
+        assert!(fresh, "the helper's Enter is a fresh press, not a repeat");
         assert!(
-            !out.create && !out.cancel && typed.borrow().starts_with("Ash on the Road"),
-            "no form command during composition: {then:?} {:?}",
-            typed.borrow()
+            !has,
+            "egui alone: a fresh Enter takes the composing field's keyboard"
         );
-        *typed.borrow_mut() = "Ash on the Road".to_owned();
+        let (_, has, words) = frame_alone(commit(), false);
+        assert!(
+            !has && words == "Ashか",
+            "egui alone: the commit after it is lost: {words}"
+        );
     }
-    // A commit with no preedit before it (some input methods send only that) and Enter in one
-    // pass: the commit's frame takes no command.
+    let title = Some("Session title".to_owned());
+    let reset = || *typed.borrow_mut() = "Ash on the Road".to_owned();
+    // Re-check of PR 351, items 1 and 3: a fresh Enter or Escape in a frame of its own during
+    // the composition stays with the input method: no command, the field keeps the keyboard,
+    // and the commit of the next frame lands. After the commit, a fresh Enter creates and a
+    // fresh Escape cancels.
+    for then in [egui::Key::Enter, egui::Key::Escape] {
+        reset();
+        let _ = draw_form(Vec::new(), 0, None, None, true);
+        let (_, nodes, _) = draw_form(preedit(), 0, None, None, false);
+        assert!(
+            focused(&nodes) == title && typed.borrow().ends_with('か'),
+            "the pressure: the title composes ({then:?})"
+        );
+        let (out, nodes, _) = draw_form(key(then), 0, None, None, false);
+        assert!(
+            !out.create && !out.cancel && focused(&nodes) == title,
+            "{then:?} during composition: no command, the title keeps the keyboard: {:?}",
+            focused(&nodes)
+        );
+        let (out, nodes, _) = draw_form(commit(), 0, None, None, false);
+        assert!(
+            !out.create && !out.cancel && focused(&nodes) == title,
+            "the commit's frame ({then:?})"
+        );
+        assert_eq!(*typed.borrow(), "Ash on the Road火", "the commit lands");
+        let (out, nodes, _) = draw_form(key(then), 0, None, None, false);
+        assert!(
+            out.create == (then == egui::Key::Enter)
+                && out.cancel == (then == egui::Key::Escape)
+                && focused(&nodes).is_none(),
+            "after the commit, a fresh {then:?} is the form's"
+        );
+    }
+    // A preedit and Enter in one pass: the same, Enter stays with the input method.
+    reset();
     let _ = draw_form(Vec::new(), 0, None, None, true);
-    let (out, _, _) = draw_form(
+    let (out, nodes, _) = draw_form(with(preedit(), key(egui::Key::Enter)), 0, None, None, false);
+    assert!(
+        !out.create && focused(&nodes) == title && typed.borrow().ends_with('か'),
+        "a preedit and Enter in one pass: {:?}",
+        focused(&nodes)
+    );
+    let _ = draw_form(commit(), 0, None, None, false);
+    assert_eq!(*typed.borrow(), "Ash on the Road火", "its commit lands");
+    // A preedit and Escape in one pass: egui takes the keyboard on Escape before any widget
+    // runs (no composition kept Escape in the field yet), so the preedit is not typed. The
+    // form gives no Cancel in a frame with an IME event.
+    reset();
+    let _ = draw_form(Vec::new(), 0, None, None, true);
+    let (out, nodes, _) = draw_form(
+        with(preedit(), key(egui::Key::Escape)),
+        0,
+        None,
+        None,
+        false,
+    );
+    assert!(
+        !out.create && !out.cancel && focused(&nodes).is_none(),
+        "a preedit and Escape in one pass: {:?}",
+        focused(&nodes)
+    );
+    assert_eq!(*typed.borrow(), "Ash on the Road");
+    // A commit with no preedit before it (some input methods send only that) and Enter in one
+    // pass: the commit lands, no command, the field keeps the keyboard. Commit, then a fresh
+    // Enter in the next frame creates.
+    reset();
+    let _ = draw_form(Vec::new(), 0, None, None, true);
+    let (out, nodes, _) = draw_form(
         with(
-            vec![ime(egui::ImeEvent::Commit("か".to_owned()))],
+            vec![ime(egui::ImeEvent::Commit("火".to_owned()))],
             key(egui::Key::Enter),
         ),
         0,
@@ -949,30 +1115,60 @@ fn inline_create_moves_nothing_while_the_dm_types() {
         false,
     );
     assert!(
-        out.fields[0].lost_focus() && !out.create && typed.borrow().ends_with('か'),
+        !out.create && focused(&nodes) == title && typed.borrow().ends_with('火'),
         "a commit's frame alone takes no command"
     );
-    *typed.borrow_mut() = "Ash on the Road".to_owned();
-    // The commit's own frame takes no command; after it, Enter creates.
-    let _ = draw_form(Vec::new(), 0, None, None, true);
-    let _ = draw_form(preedit(), 0, None, None, false);
-    let (out, _, _) = draw_form(
-        with(
-            vec![ime(egui::ImeEvent::Commit("か".to_owned()))],
-            key(egui::Key::Enter),
-        ),
-        0,
-        None,
-        None,
-        false,
-    );
-    assert!(
-        !out.create && typed.borrow().ends_with('か'),
-        "the commit frame"
-    );
-    let _ = draw_form(Vec::new(), 0, None, None, true);
     let (out, _, _) = draw_form(key(egui::Key::Enter), 0, None, None, false);
-    assert!(out.create, "after the commit, Enter creates");
+    assert!(
+        out.create,
+        "Commit, then a fresh Enter in the next frame creates"
+    );
+    // Re-check of PR 351, item 2: the composition belongs to its field. A press on Date during
+    // it moves the keyboard to Date (egui ends the title's composition and keeps its preedit
+    // as typed words), and Enter in Date creates.
+    reset();
+    let _ = draw_form(Vec::new(), 0, None, None, true);
+    let (_, nodes, _) = draw_form(preedit(), 0, None, None, false);
+    assert!(focused(&nodes) == title, "the pressure: the title composes");
+    let at = bounds(&nodes, "Date").center();
+    let button = |pressed| egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    let _ = draw_form(vec![egui::Event::PointerMoved(at)], 0, None, None, false);
+    let _ = draw_form(vec![button(true)], 0, None, None, false);
+    let (_, nodes, _) = draw_form(vec![button(false)], 0, None, None, false);
+    assert!(
+        focused(&nodes).as_deref() == Some("Date"),
+        "a press on Date takes the keyboard: {:?}",
+        focused(&nodes)
+    );
+    assert_eq!(
+        *typed.borrow(),
+        "Ash on the Roadか",
+        "the preedit stays typed"
+    );
+    let (out, nodes, _) = draw_form(key(egui::Key::Enter), 0, None, None, false);
+    assert!(
+        out.create && focused(&nodes).is_none(),
+        "Enter in Date creates after a composition in the title: {:?}",
+        focused(&nodes)
+    );
+    // The form closed during a composition and opened again: Enter creates.
+    reset();
+    let _ = draw_form(Vec::new(), 0, None, None, true);
+    let (_, nodes, _) = draw_form(preedit(), 0, None, None, false);
+    assert!(focused(&nodes) == title, "the pressure: the title composes");
+    let _ = frame_with(&ctx, vec2(800.0, 600.0), Vec::new(), |ui| {
+        let _ = Action::quiet("Below").show(ui);
+    });
+    let _ = draw_form(Vec::new(), 0, None, None, true);
+    let (_, nodes, _) = draw_form(Vec::new(), 0, None, None, false);
+    assert!(focused(&nodes) == title, "the title has the keyboard again");
+    let (out, _, _) = draw_form(key(egui::Key::Enter), 0, None, None, false);
+    assert!(out.create, "a composition ends with its form");
 }
 
 /// Whether `after` is `before` with `letter` inserted at one place: every letter of `before`

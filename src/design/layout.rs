@@ -2468,11 +2468,39 @@ fn cancel_action(word: Word) -> Action<'static> {
     Action::quiet(word.as_str()).density(Density::Read)
 }
 
+/// Cancel where it starts a line at the form's text edge: its words at the edge, its padding
+/// hanging left of it only where the clip shows it (a reader nested in a pane clips at its own
+/// text edge), so its target is never cut. It allocates the same width either way.
+fn cancel_at_line_start(ui: &Ui, word: Word) -> Action<'static> {
+    if ui.cursor().left() - LINE_START_HANG >= ui.clip_rect().left() - 0.5 {
+        cancel_action(word).line_start()
+    } else {
+        cancel_action(word)
+    }
+}
+
+/// The input method's composition in one form: the text field it types into. It ends when that
+/// field loses the keyboard (a press on another control, the form closed: egui takes the
+/// keyboard from a field that is not drawn), and when a commit or a `Disabled` event arrives.
+/// A field that has not had the keyboard since the frame before never composes.
+#[derive(Clone, Copy)]
+struct Composing(Id);
+
+/// A text field's own key filter (egui's single-line default), with Escape kept in the field:
+/// egui then does not take the keyboard on Escape before the frame's widgets run.
+const COMPOSING_FILTER: egui::EventFilter = egui::EventFilter {
+    horizontal_arrows: true,
+    vertical_arrows: true,
+    tab: false,
+    escape: true,
+};
+
 /// Whole actions, in order, in rows of `room` from the form's text edge: an action that does
 /// not fit after the ones before it starts the next row. No action is split or cut to fit a
 /// row. The rows depend only on the actions' own widths and the room, never on a field's text,
-/// so they do not change while the DM types.
-fn action_rows(ui: &mut Ui, room: f32, widths: &[f32], mut draw: impl FnMut(&mut Ui, usize)) {
+/// so they do not change while the DM types. `draw` is told whether the action starts its row
+/// (at the text edge).
+fn action_rows(ui: &mut Ui, room: f32, widths: &[f32], mut draw: impl FnMut(&mut Ui, usize, bool)) {
     let mut rows: Vec<Vec<usize>> = Vec::new();
     let mut used = 0.0;
     for (at, width) in widths.iter().copied().enumerate() {
@@ -2493,8 +2521,8 @@ fn action_rows(ui: &mut Ui, room: f32, widths: &[f32], mut draw: impl FnMut(&mut
             Layout::left_to_right(Align::Center),
             |ui| {
                 ui.spacing_mut().item_spacing.x = S;
-                for at in row {
-                    draw(ui, at);
+                for (place, at) in row.into_iter().enumerate() {
+                    draw(ui, at, place == 0);
                 }
             },
         );
@@ -2583,7 +2611,9 @@ fn field_line<R: CreateReasons>(
             let widths: Vec<f32> = (0..actions_in_order.len())
                 .map(|at| action_at(at).map_or(0.0, |action| action.natural_width(ui)))
                 .collect();
-            action_rows(ui, room, &widths, |ui, at| draw_action(ui, &mut line, at));
+            action_rows(ui, room, &widths, |ui, at, _| {
+                draw_action(ui, &mut line, at)
+            });
         }
     });
     if part.focus {
@@ -2620,15 +2650,27 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
                 _ => None,
             })
             .collect();
-        // Composition (an input method's text that is not committed yet) is the form's state
-        // from the frame before: during it, and in a frame with any IME event (its commit),
-        // Enter and Escape belong to the input method, never to Create or Cancel.
-        let ime_key = self.parts.iter().find_map(|part| match part {
-            CreatePart::Text(field) => Some(field.id.id().with("inline_create_ime")),
-            _ => None,
-        });
-        let was_composing =
-            ime_key.is_some_and(|key| ui.data(|data| data.get_temp::<bool>(key)).unwrap_or(false));
+        // Composition (an input method's text that is not committed yet) belongs to the one
+        // text field it types into. While that field composes, and in any frame with an IME
+        // event (its commit), Enter and Escape belong to the input method: they leave this
+        // frame's input before any field draws, so egui keeps the field's keyboard (and the
+        // commit that follows reaches it), and they give no Create and no Cancel.
+        let text_ids: Vec<Id> = self
+            .parts
+            .iter()
+            .filter_map(|part| match part {
+                CreatePart::Text(field) => Some(field.id.named_id(field.label)),
+                _ => None,
+            })
+            .collect();
+        let ime_key = text_ids.first().map(|id| id.with("inline_create_ime"));
+        let focused = ui
+            .memory(|memory| memory.focused())
+            .filter(|id| text_ids.contains(id));
+        // The state of the frame before, only while its field still has the keyboard.
+        let was_composing = ime_key
+            .and_then(|key| ui.data(|data| data.get_temp::<Composing>(key)))
+            .is_some_and(|Composing(field)| Some(field) == focused);
         let (ime_event, composing) = ui.input(|input| {
             let ime = || {
                 input.events.iter().filter_map(|event| match event {
@@ -2639,8 +2681,21 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
             let composing = ime().fold(was_composing, |_, ime| {
                 matches!(ime, egui::ImeEvent::Enabled | egui::ImeEvent::Preedit(_))
             });
-            (ime().next().is_some(), composing)
+            (ime().next().is_some(), focused.is_some() && composing)
         });
+        if focused.is_some() && (was_composing || ime_event) {
+            ui.input_mut(|input| {
+                input.events.retain(|event| {
+                    !matches!(
+                        event,
+                        egui::Event::Key {
+                            key: egui::Key::Enter | egui::Key::Escape,
+                            ..
+                        }
+                    )
+                });
+            });
+        }
         let keys_for_the_form = !was_composing && !ime_event;
         let mut last_help = None;
         for (at, part) in self.parts.into_iter().enumerate() {
@@ -2694,11 +2749,17 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
             if let Some((word, true)) = self.kept.cancel {
                 widths.push(cancel_action(word).natural_width(ui));
             }
-            action_rows(ui, room, &widths, |ui, at| {
+            action_rows(ui, room, &widths, |ui, at, starts_row| {
                 if at == 0 {
                     out.create |= create.action().show(ui).clicked();
                 } else if let Some((word, true)) = self.kept.cancel {
-                    out.cancel |= cancel_action(word).show(ui).clicked();
+                    // Cancel that wraps to a row of its own starts the line at the text edge.
+                    let action = if starts_row {
+                        cancel_at_line_start(ui, word)
+                    } else {
+                        cancel_action(word)
+                    };
+                    out.cancel |= action.show(ui).clicked();
                 }
             });
         }
@@ -2717,11 +2778,18 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
         if left && escape && cancel_shown {
             out.cancel = true;
         }
-        // The composition ends with its commit, or when no field of the form has the keyboard
-        // (egui ends it then too).
+        // The composition goes on only in the field that had the keyboard at the frame's start
+        // and still has it (a press on another control ends it, as egui ends it then). While
+        // it goes on, Escape stays in that field in the next pass.
         if let Some(key) = ime_key {
-            let composing = composing && out.fields.iter().any(Response::has_focus);
-            ui.data_mut(|data| data.insert_temp(key, composing));
+            let field = focused.filter(|id| composing && ui.memory(|memory| memory.has_focus(*id)));
+            ui.data_mut(|data| match field {
+                Some(field) => data.insert_temp(key, Composing(field)),
+                None => data.remove::<Composing>(key),
+            });
+            if let Some(field) = field {
+                ui.memory_mut(|memory| memory.set_focus_lock_filter(field, COMPOSING_FILTER));
+            }
         }
         // The kept line: one fixed height for the life of the form, whatever it holds now.
         let kept_cancel = if ends_with_dropdown {
@@ -2740,15 +2808,7 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
         );
         kept.spacing_mut().item_spacing.x = 0.0;
         if let Some((word, true)) = kept_cancel {
-            // Cancel's padding hangs left of the text edge only where the clip shows it (a
-            // reader nested in a pane clips at its own text edge): its target is never cut.
-            let hang = line.left() - LINE_START_HANG >= kept.clip_rect().left() - 0.5;
-            let action = if hang {
-                cancel_action(word).line_start()
-            } else {
-                cancel_action(word)
-            };
-            out.cancel |= action.show(&mut kept).clicked();
+            out.cancel |= cancel_at_line_start(&kept, word).show(&mut kept).clicked();
             space(&mut kept, L);
         }
         let mut reasons: Vec<&str> = sides
