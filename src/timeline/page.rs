@@ -2108,12 +2108,8 @@ mod tests {
 
     /// Row 7 of the plain evening's contract: a line of More alone moves no action of the strip.
     /// A strip that needs no More has none of those lines; one that has More lists them last.
-    /// Review of PR 334: the list draws only the rows in view, and each row's ids come from its
-    /// event. A focused row keeps its event when the list scrolls, and Enter opens that event.
-    /// The list view is worked out once for frames with an unchanged book and filters.
-    #[test]
-    fn a_long_list_keeps_focus_on_its_event_and_works_out_its_view_once() {
-        use egui_kittest::kittest::NodeT;
+    /// A list of 30 events in a scroll column, drawn twice.
+    fn long_list() -> egui_kittest::Harness<'static, (TimelinePage, Book)> {
         let mut book = Book::default();
         for i in 0..30 {
             let id = book.add(Kind::Event, None);
@@ -2132,13 +2128,37 @@ mod tests {
             );
         design::theme::install(&harness.ctx);
         harness.run_steps(2);
+        harness
+    }
+
+    /// Review of PR 334: the list view is worked out once for frames with an unchanged book and
+    /// filters (the count is inside `ListView::make`).
+    #[test]
+    fn a_long_list_works_out_its_view_once() {
         let made = VIEWS_MADE.with(std::cell::Cell::get);
+        let mut harness = long_list();
         harness.run_steps(10);
         assert_eq!(
             VIEWS_MADE.with(std::cell::Cell::get) - made,
-            0,
-            "ten frames with an unchanged book and filters work out no new list view"
+            1,
+            "twelve frames with an unchanged book and filters work out the list view once"
         );
+        // Must stay true: a change of the filters works it out again, once.
+        harness.state_mut().0.filter = Filter::Events;
+        harness.run_steps(10);
+        assert_eq!(
+            VIEWS_MADE.with(std::cell::Cell::get) - made,
+            2,
+            "a new filter, one new view"
+        );
+    }
+
+    /// Review of PR 334: the list draws only the rows in view, and each row's ids come from its
+    /// event. A focused row keeps its event when the list scrolls, and Enter opens that event.
+    #[test]
+    fn a_focused_row_keeps_its_event_when_the_list_scrolls() {
+        use egui_kittest::kittest::NodeT;
+        let mut harness = long_list();
         let focused = |harness: &egui_kittest::Harness<'_, (TimelinePage, Book)>| {
             harness
                 .root()
