@@ -4516,6 +4516,11 @@ impl Run {
                 None => message,
             });
         }
+        // P2: a `line_start` action's hang (`Stop`, `Roll damage`) paints into the margin left
+        // of the pane, inside its parent's clip; the panel's clip ends at its text edge, so it
+        // takes in `S` of the panel's own margin, as the panel's scroll area did before.
+        let clip = ui.clip_rect();
+        ui.set_clip_rect(clip.with_min_x(clip.min.x - design::S));
         let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
             changes_block(ui, p, true);
             let links: &dyn view::Links = match &self.content {
