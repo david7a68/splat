@@ -13842,6 +13842,10 @@ pub mod session_notes {
             d.in_view("Title"),
             "Opening Timeline resets its selected detail to the top",
         );
+        // The earlier `Copy link` check (`timeline-event`) already proves the acknowledgement.
+        // Its two-second real-time expiry must not choose this capture's words (`Copied` or
+        // `Copy link`): wait until it has ended.
+        d.wait_for_text("Copy link");
         d.state("timeline-with-run", Sizes::All);
         d.observe_both(
             "iter-18-B-S2-timeline",
@@ -14415,6 +14419,45 @@ pub mod session_recording {
         );
     }
 
+    /// R5 (routing row 100): red is a fault. Wherever a live recording shows (the rail, the
+    /// session list's row, the Record line, the Recordings tab, the banner), its words
+    /// (`Recording`, `Recording 0:00`) are not in the `recording` or error red, and its record
+    /// icon is in the `recording` token. `places`: how many painted live words must be found.
+    fn check_live_recording_colours(d: &mut Driver<'_>, places: usize) {
+        let c = crate::design::colors();
+        let record = crate::design::icons::RECORD;
+        let (mut words, mut icons) = (Vec::new(), Vec::new());
+        d.each_painted_text(|text, _| {
+            let job = &text.galley.job;
+            for section in &job.sections {
+                let part = &job.text[section.byte_range.clone()];
+                let first = part.split(['·', '\n']).next().unwrap_or_default();
+                let first = first.trim().trim_start_matches(record).trim();
+                let clock = first.strip_prefix("Recording ").is_some_and(|time| {
+                    !time.is_empty() && time.chars().all(|ch| ch.is_ascii_digit() || ch == ':')
+                });
+                if first == "Recording" || clock {
+                    words.push((part.to_owned(), section.format.color));
+                }
+                if part.trim() == record {
+                    icons.push(section.format.color);
+                }
+            }
+        });
+        d.observe(
+            "iter-28-S-FO1",
+            words.len() >= places
+                && words
+                    .iter()
+                    .all(|(_, color)| *color != c.recording && *color != c.result.error)
+                && icons.len() >= places
+                && icons.iter().all(|color| *color == c.recording),
+            format!(
+                "A live recording's words keep the text colours and its record icon alone is red ({places} places): words {words:?}, icons {icons:?}"
+            ),
+        );
+    }
+
     fn check_processing_action(d: &mut Driver<'_>, prefix: &str, primary: bool) {
         let actions: Vec<_> = d
             .nodes()
@@ -14671,8 +14714,9 @@ pub mod session_recording {
             parts
         };
         // Round 24 FC7 (moved by round 27 FE8 to the recording that still saves, where the line
-        // stays): only the icon and the state word have the state's colour; the other
-        // session's time and title are muted.
+        // stays): only the icon and the state word have the state's colours; the other
+        // session's time and title are muted. R5 (row 100): red is a fault, so a live
+        // recording's icon alone is in the `recording` token, its word in the text colour.
         let parts = other_line(d, "Recording");
         let c = crate::design::colors();
         d.observe(
@@ -14680,15 +14724,20 @@ pub mod session_recording {
             parts
                 .iter()
                 .any(|(words, _)| words.contains("in Session 1"))
+                && parts.iter().any(|(words, _)| words == "Recording")
                 && parts.iter().all(|(words, color)| {
                     *color
                         == if words.contains("in Session 1") {
                             c.muted
-                        } else {
+                        } else if words == crate::design::icons::RECORD {
                             c.recording
+                        } else {
+                            c.text
                         }
                 }),
-            format!("Only the state has its colour on the other session's line: {parts:?}"),
+            format!(
+                "Only the state has its colours on the other session's line, the record icon alone red: {parts:?}"
+            ),
         );
         d.app_mut()
             .sessions
@@ -15245,6 +15294,8 @@ pub mod session_recording {
             d.app_mut()
                 .sessions
                 .simulate_recorder_health(Health::Hearing);
+            // R5: the rail and the Record line.
+            check_live_recording_colours(d, 2);
         });
         // Capturing several sizes can outlast the five-second sound indicator.
         d.app_mut()
@@ -15254,6 +15305,8 @@ pub mod session_recording {
         d.expect(&format!("{} Recording", crate::design::icons::RECORD));
         d.expect("0:00 recorded · Hearing sound");
         d.state_prepared("recording-listed", Sizes::Default, |d| {
+            // R5: the rail and the Recordings tab's row.
+            check_live_recording_colours(d, 2);
             // AT1: with no fight open, the party bar keeps every first name at 960. Portraits give
             // way before names; HP and state words stay.
             let (items, painted) = party_bar_items(d);
@@ -15383,6 +15436,8 @@ pub mod session_recording {
             d.has_containing("Recording 0:00") && d.has_containing("Recording"),
             "Recording, with its time, stays in the rail on other pages",
         );
+        // R5 (capture `session-recording__09`): the rail's live status.
+        check_live_recording_colours(d, 1);
         d.state("recording-on-another-page", Sizes::Default);
         // A close does not end it by surprise.
         d.request_close();
