@@ -1565,16 +1565,17 @@ impl ChangeKind {
         }
     }
 
-    /// Its Undo, named by its verb and an object that reads as English: `Undo change place`,
-    /// `Undo change groups` (the Part of field holds the note's groups), `Undo change <note>`
-    /// for the edit form's save, `Undo separate note`. `note` is the note's name.
+    /// Its Undo (ruling R16): when one field changed, its object is that field's name on
+    /// screen, the name the result's words use (`Part of set to …` has `Undo change to Part
+    /// of`); when the edit form saved several fields, the note's name (`Undo change to Ashfall
+    /// Faction`). A separate note: `Undo separate note`. `note` is the note's name.
     fn undo_step(self, note: &str) -> UndoStep {
         match self {
-            Self::Place => UndoStep::of(Verb::Change, "place"),
-            Self::PartOf => UndoStep::of(Verb::Change, "groups"),
-            Self::Status => UndoStep::of(Verb::Change, "status"),
-            Self::StatBlock => UndoStep::of(Verb::Change, "stat block"),
-            Self::Name => UndoStep::of(Verb::Change, "name"),
+            Self::Place => UndoStep::of(Verb::Change, "Place"),
+            Self::PartOf => UndoStep::of(Verb::Change, "Part of"),
+            Self::Status => UndoStep::of(Verb::Change, "Status"),
+            Self::StatBlock => UndoStep::of(Verb::Change, "Stat block"),
+            Self::Name => UndoStep::of(Verb::Change, "Name"),
             Self::Identity(noun) => UndoStep::of(Verb::Separate, noun.act()),
             Self::Edit => UndoStep::of(Verb::Change, note),
             Self::Log => UndoStep::of(Verb::Add, "Log line"),
@@ -5495,11 +5496,11 @@ mod tests {
         // A place change's Undo names its verb and its object, as the result's words do.
         assert_eq!(
             ChangeKind::Place.undo_step("Rook").label(),
-            "Undo change place"
+            "Undo change to Place"
         );
         assert_eq!(
             ChangeKind::PartOf.undo_step("Rook").label(),
-            "Undo change groups"
+            "Undo change to Part of"
         );
     }
 

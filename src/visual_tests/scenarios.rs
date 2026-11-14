@@ -12045,7 +12045,7 @@ pub mod world {
             "A new NPC joins the fight, and the run stays on screen",
         );
         d.expect("Stat block set to Guard.");
-        d.expect("Undo change stat block");
+        d.expect("Undo change to Stat block");
         let (success, detail) = world_build::finished_change_tone(d, "Stat block set to Guard.");
         d.observe("iter-20-D-FD5-stat-block", success, detail);
         // Round 28 FF3: Lookup's values share one value column. The Stat block's value starts

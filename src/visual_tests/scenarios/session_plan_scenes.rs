@@ -879,7 +879,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     );
     d.type_text("missing");
     d.press(Key::Enter);
-    d.expect("Undo change status");
+    d.expect("Undo change to Status");
     let changed = fs::read_to_string(&path).unwrap();
     d.observe(
         "T15.4",
@@ -890,11 +890,11 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         format!("Change on Status in Lookup writes the value and its Log line: {changed:?}"),
     );
     d.state("status-changed-in-lookup", Sizes::Default);
-    d.click("Undo change status");
+    d.click("Undo change to Status");
     d.observe(
         "T15.4",
         fs::read_to_string(&path).unwrap() == away && d.has(&format!("Edit {VARRA_BLACK}")),
-        "Undo change status in Lookup takes back the value and its Log line",
+        "Undo change to Status in Lookup takes back the value and its Log line",
     );
     fs::write(&path, &before).unwrap();
     d.app_mut().lookup.refresh();
