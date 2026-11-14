@@ -928,7 +928,7 @@ impl Draft {
         Ok(())
     }
     /// The names of the roster rows whose package entry was deleted, in roster order, as each
-    /// row names its creature.
+    /// row shows its name: a changed name too (`roster_name`, as the row draws it).
     fn deleted_rows(&self, snapshot: &Snapshot) -> Vec<String> {
         self.setup
             .roster
@@ -939,11 +939,7 @@ impl Draft {
                         && snapshot.catalogue.unreadable_ref(reference).is_none()
                 })
             })
-            .map(|slot| {
-                let mut named = slot.clone();
-                named.overrides.remove("name");
-                roster_name(&named, None, &snapshot.known_creature_names)
-            })
+            .map(|slot| roster_name(slot, None, &snapshot.known_creature_names))
             .collect()
     }
     /// A change to a stat must leave it valid for this slot's creature and starting state.
@@ -3131,17 +3127,27 @@ impl Encounters {
             return;
         }
         self.validated = Some(key);
-        let invalid = if group {
-            self.group_draft
+        let (invalid, shown) = if group {
+            // G122: a group's refusal keeps its place: the footer says it only when no other
+            // place does, as Save's own refusal (`refuse_group_save`).
+            let refusal = self
+                .group_draft
                 .as_ref()
-                .and_then(|draft| draft.validate(snapshot, None).err())
-                .map(Invalid::from)
+                .and_then(|draft| draft.check(snapshot, None).err());
+            let shown = refusal
+                .as_ref()
+                .and_then(groups::Refusal::footer)
+                .map(str::to_owned);
+            (refusal.map(|refusal| Invalid::from(refusal.text)), shown)
         } else {
-            self.draft
+            let invalid = self
+                .draft
                 .as_ref()
-                .and_then(|draft| draft.validate(snapshot).err())
+                .and_then(|draft| draft.validate(snapshot).err());
+            let shown = invalid.as_ref().map(|invalid| invalid.text.clone());
+            (invalid, shown)
         };
-        self.error = invalid.as_ref().map(|invalid| invalid.text.clone());
+        self.error = shown;
         self.validation_error = invalid;
     }
     /// Save or a start checks this draft now. A refusal starts the watch (`refused`). It stays
@@ -8819,6 +8825,13 @@ mod tests {
         assert_eq!(
             mixed.validate(&snapshot).unwrap_err().text,
             "Choose replacements for the 2 Cinder Wolf rows and the Goblin row."
+        );
+        // A row with a changed name is named as the roster shows it, also beside a plain row of
+        // the same creature.
+        mixed.setup.roster[3].overrides = yaml("{name: Ash}").as_mapping().unwrap().clone();
+        assert_eq!(
+            mixed.validate(&snapshot).unwrap_err().text,
+            "Choose replacements for the Cinder Wolf row, the Goblin row and the Ash row."
         );
         let mut draft = Draft::new();
         draft.add(id, false);
