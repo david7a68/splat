@@ -17626,7 +17626,11 @@ pub mod encounter_groups {
         let fight_after = |d: &Driver<'_>| {
             d.nodes()
                 .into_iter()
-                .filter(|node| node.name.starts_with("Drag ") && node.fully_in_view())
+                .filter(|node| {
+                    node.name.starts_with("Drag ")
+                        && node.name.contains(" to the initiative list")
+                        && node.fully_in_view()
+                })
                 .filter_map(|node| {
                     let words = d.painted_in(node.shown).replace('\u{a0}', " ");
                     let at = words.find("Fight after: ")?;
@@ -17663,7 +17667,11 @@ pub mod encounter_groups {
         let headings = |d: &Driver<'_>| {
             d.nodes()
                 .into_iter()
-                .filter(|node| node.name.starts_with("Drag ") && node.fully_in_view())
+                .filter(|node| {
+                    node.name.starts_with("Drag ")
+                        && node.name.contains(" to the initiative list")
+                        && node.fully_in_view()
+                })
                 .filter(|node| {
                     !d.painted_in(node.shown)
                         .replace('\u{a0}', " ")
