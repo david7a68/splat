@@ -45,8 +45,7 @@ pub fn one_line(
 }
 
 /// Whole words of `text` that fit. A cut ends with an ellipsis, never a joining word.
-/// The first word stays unless it is itself a joining word or does not fit: then its start
-/// that fits, with an ellipsis (nothing when not even the ellipsis fits).
+/// The first word stays unless it is itself a joining word.
 pub fn words_that_fit(ui: &Ui, text: &str, font: &FontId, width: f32) -> String {
     let mut words: Vec<_> = text.split_whitespace().collect();
     let full = words.join(" ");
@@ -59,23 +58,25 @@ pub fn words_that_fit(ui: &Ui, text: &str, font: &FontId, width: f32) -> String 
             .any(|joining| word.eq_ignore_ascii_case(joining));
         if !joining {
             let fitted = format!("{}…", words.join(" "));
-            if number_width(ui, &fitted, font) <= width {
+            if words.len() == 1 || number_width(ui, &fitted, font) <= width {
                 return fitted;
-            }
-            if words.len() == 1 {
-                return start_that_fits(ui, words[0], font, width);
             }
         }
         words.pop();
     }
-    start_that_fits(ui, "", font, width)
+    "…".to_owned()
 }
 
-/// The longest start of `word` that fits in `width` with an ellipsis after it (a word with no
-/// spaces, in any script, is cut between characters); an ellipsis alone when no character fits;
-/// nothing when even the ellipsis does not fit.
-fn start_that_fits(ui: &Ui, word: &str, font: &FontId, width: f32) -> String {
-    let chars: Vec<char> = word.chars().collect();
+/// A search hint inside its text area (X2): whole words that fit, as [`words_that_fit`];
+/// when not even the first word fits, its start that fits with an ellipsis (a word with no
+/// spaces, in any script, is cut between characters); nothing when even an ellipsis does not
+/// fit. A hint is never wider than its area.
+fn hint_that_fits(ui: &Ui, hint: &str, font: &FontId, width: f32) -> String {
+    let words = words_that_fit(ui, hint, font, width);
+    if number_width(ui, &words, font) <= width {
+        return words;
+    }
+    let chars: Vec<char> = words.trim_end_matches('…').chars().collect();
     for end in (1..chars.len()).rev() {
         let start = format!("{}…", chars[..end].iter().collect::<String>());
         if number_width(ui, &start, font) <= width {
@@ -1362,7 +1363,7 @@ pub(super) fn search_box(
     // ellipsis, never past the area. It shows only while the field is empty, so it is measured
     // only then.
     let hint = if text.is_empty() {
-        words_that_fit(ui, hint, &Type::Body.font(ui), text_room)
+        hint_that_fits(ui, hint, &Type::Body.font(ui), text_room)
     } else {
         String::new()
     };
