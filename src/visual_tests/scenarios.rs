@@ -12729,7 +12729,7 @@ pub mod session_notes {
         d.state("event-link-update-offered", Sizes::All);
         d.click("Update 1 link");
         d.expect("Links now say “Rest at the mill”.");
-        d.expect("Undo change links");
+        d.expect("Undo change to links");
         assert!(!d.has(LINK_OFFER));
         let without_offer = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, kind_top));
         d.observe(
@@ -12745,7 +12745,7 @@ pub mod session_notes {
             ),
         );
         d.state("event-links-updated", Sizes::Default);
-        d.click("Undo change links");
+        d.click("Undo change to links");
         d.expect("Update 1 link");
         d.click("Update 1 link");
         d.click_starting("Rest at the mill ·");
@@ -12753,7 +12753,7 @@ pub mod session_notes {
         d.settle();
         d.observe(
             "iter-4-S2",
-            !d.has("Undo change links"),
+            !d.has("Undo change to links"),
             "Leaving Timeline clears the link-update Undo",
         );
         read_note(d);
@@ -22805,7 +22805,7 @@ pub mod session_plan {
         let menu_before = d.at_size(SMALL, menu_right);
         d.click("Long rest");
         d.click("Mark not at full");
-        d.expect("Undo change ruling");
+        d.expect("Undo change to ruling");
         let menu_after = d.at_size(SMALL, menu_right);
         d.observe(
             "iter-25-S-plan-lane",
@@ -22879,7 +22879,7 @@ pub mod session_plan {
             "The ruling and its message change words and colour; the open row stays in place.",
         );
         d.state("plan-rest-ruling-on", Sizes::All);
-        d.click("Undo change ruling");
+        d.click("Undo change to ruling");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
         d.click("Mark everyone at full");
         d.click("Long rest");
@@ -23104,7 +23104,7 @@ pub mod session_plan {
         d.click("Mark not at full");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
         // iter-25-S FM2: the ruling's result sits in the list column, so Where keeps its place.
-        d.expect("Undo change ruling");
+        d.expect("Undo change to ruling");
         let where_after = [SMALL, DEFAULT, LARGE].map(|size| d.at_size(size, where_top));
         d.observe(
             "iter-25-S-FM2",
@@ -23141,7 +23141,7 @@ pub mod session_plan {
         );
         d.expect_same("Only the long-rest status, its action and its message change; the wide page stays in place.");
         d.state("timeline-rest-ruling-on", Sizes::All);
-        d.click("Undo change ruling");
+        d.click("Undo change to ruling");
         assert!(!crate::timeline::party_state(&d.app_mut().timeline.events, session).rested);
         d.click("Mark everyone at full");
         d.click(NAV_SESSIONS);

@@ -2655,8 +2655,10 @@ impl Reader {
         self.read_with(ui, item, index, campaign, None)
     }
 
-    /// `read`, with the trackers: a house rule note in play shows its problems and each
-    /// tracker's history after its text.
+    /// `read`, with the trackers, outside any pane (checks): a house rule note in play shows its
+    /// problems and each tracker's history after its text. The app reads in a pane
+    /// (`read_in_pane`).
+    #[cfg(test)]
     pub fn read_with(
         &mut self,
         ui: &mut egui::Ui,

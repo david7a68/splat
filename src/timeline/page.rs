@@ -2050,7 +2050,7 @@ mod tests {
                 .next()
                 .is_some()
         );
-        harness.get_by_label("Undo change ruling").click();
+        harness.get_by_label("Undo change to ruling").click();
         harness.run_steps(2);
         assert!(!harness.state().events[0].restores);
     }
