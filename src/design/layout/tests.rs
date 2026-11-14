@@ -508,7 +508,8 @@ fn inline_create_moves_nothing_while_the_dm_types() {
                      reason: Option<TestReason>,
                      cancel: bool,
                      preview: Option<&'static str>,
-                     lock: Option<bool>| {
+                     lock: Option<bool>,
+                     lead: Option<&'static str>| {
         let (mut name, mut folder) = (String::from("Copper Coast"), String::from("/vault"));
         let side = match lock {
             None => SideAction::new(BROWSE),
@@ -537,7 +538,13 @@ fn inline_create_moves_nothing_while_the_dm_types() {
                     .help("Splat keeps the notes here."),
                 )
                 .create(Create::primary(CREATE).blocked(reason))
-                .kept_line(KeptLine::new().cancel(CANCEL, cancel).preview(preview))
+                .kept_line(match lead {
+                    // The leading words given apart (a path that may hold no separator).
+                    Some(lead) => KeptLine::new()
+                        .cancel(CANCEL, cancel)
+                        .preview_path(lead, preview),
+                    None => KeptLine::new().cancel(CANCEL, cancel).preview(preview),
+                })
                 .show(ui);
             let _ = Action::quiet("Below").show(ui);
         });
@@ -545,7 +552,14 @@ fn inline_create_moves_nothing_while_the_dm_types() {
         (rects, nodes, painted)
     };
     let draw_at = |width, reason, cancel, preview: bool| {
-        draw_with(width, reason, cancel, preview.then_some(PREVIEW), None)
+        draw_with(
+            width,
+            reason,
+            cancel,
+            preview.then_some(PREVIEW),
+            None,
+            None,
+        )
     };
     let draw = |reason, cancel, preview| draw_at(800.0, reason, cancel, preview);
     let (still, _, _) = draw(None, false, false);
@@ -605,7 +619,7 @@ fn inline_create_moves_nothing_while_the_dm_types() {
         (CAMPAIGN, "Will add …", "very long name indeed"),
         (LIBRARY, "Will create …", "/Ash Wolves of the Long Road"),
     ] {
-        let (_, nodes, painted) = draw_with(500.0, None, true, Some(preview), None);
+        let (_, nodes, painted) = draw_with(500.0, None, true, Some(preview), None, None);
         let shown = painted
             .iter()
             .find(|text| text.text.ends_with(end))
@@ -622,6 +636,20 @@ fn inline_create_moves_nothing_while_the_dm_types() {
         );
         let _ = bounds(&nodes, preview);
     }
+    // A long folder name alone (a relative path: no separator), its leading words given apart:
+    // `Will add` stays, the name gives way at its start.
+    const NAME: &str = "A campaign folder named by a DM with no separator and a very long name";
+    let (_, nodes, painted) = draw_with(500.0, None, true, Some(NAME), None, Some("Will add "));
+    let shown = painted
+        .iter()
+        .find(|text| text.text.ends_with("very long name"))
+        .expect("the folder preview is painted");
+    assert!(
+        shown.text.starts_with("Will add …") && shown.rect.height() < 1.5 * Type::Small.line(),
+        "a long folder name alone keeps `Will add`: {}",
+        shown.text
+    );
+    let _ = bounds(&nodes, &format!("Will add {NAME}"));
     let [field, browse, create, _] = still;
     assert!(
         (create.center().y - field.center().y).abs() < 1.0,
@@ -659,7 +687,7 @@ fn inline_create_moves_nothing_while_the_dm_types() {
     // reason as its description and on the kept line; nothing moves when the lock comes and
     // goes (the kept line keeps the reason's room), with any reason of Create's beside it.
     for reason in [None, Some(TestReason::NoFolder), Some(TestReason::Long)] {
-        let (open, nodes, painted) = draw_with(800.0, reason, true, None, Some(false));
+        let (open, nodes, painted) = draw_with(800.0, reason, true, None, Some(false), None);
         let browse = |nodes: &Nodes| {
             nodes
                 .iter()
@@ -669,7 +697,7 @@ fn inline_create_moves_nothing_while_the_dm_types() {
         };
         assert_eq!(browse(&nodes), (false, None), "open: {reason:?}");
         assert!(!painted.iter().any(|text| text.text == LOCKED));
-        let (locked, nodes, painted) = draw_with(800.0, reason, true, None, Some(true));
+        let (locked, nodes, painted) = draw_with(800.0, reason, true, None, Some(true), None);
         assert_eq!(
             open, locked,
             "a lock that comes and goes moves nothing: {reason:?}"

@@ -21,6 +21,10 @@ pub(crate) enum Ban {
     Sentence,
     /// Package M: `Footer::outcome_at`, a result with a hand-issued order (staged).
     Order,
+    /// Ruling Q-x: `Messages::answer`, the answer to the DM's last act that leads the footer. The
+    /// part cannot prove that a fault is the newest answer to an act, so each use is a counted
+    /// review decision.
+    Answer,
     /// Package M: the body places `banner`, `row_fault` and `PagePlaceholder::show`. A named
     /// escape: a body message is a review decision.
     Body,
@@ -62,6 +66,7 @@ impl Ban {
                 "__checked",
             ],
             Self::Order => &["outcome_at"],
+            Self::Answer => &[".answer("],
             Self::Body => &["banner", "row_fault", ".show("],
             // Counted in the item's tokens instead (`check`).
             Self::Layout(_)

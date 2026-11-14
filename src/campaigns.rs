@@ -1384,7 +1384,7 @@ impl Campaigns {
                         .kept_line(
                             design::KeptLine::new()
                                 .cancel(CANCEL, cancel)
-                                .preview(preview.as_deref()),
+                                .preview_path(WILL_ADD, preview.as_deref()),
                         )
                         .show(ui);
                     if form.side
@@ -1566,8 +1566,9 @@ fn links_to(campaign: &Campaign, remote_id: &str) -> bool {
         == Some(remote)
 }
 
-/// What `Add campaign` will add, by the folder's last name (`Will add …/Salt Road`): the end of
-/// the path is what a narrow field cuts, and the part's preview line cuts a long one at its start.
+/// The folder `Add campaign` will add, by its last name (`…/Salt Road`), after the leading words
+/// [`WILL_ADD`]: the end of the path is what a narrow field cuts. A folder name alone (a relative
+/// path) is the name.
 fn folder_preview(path: &str) -> Option<String> {
     let path = std::path::Path::new(path.trim());
     let name = path.file_name()?.to_string_lossy();
@@ -1576,11 +1577,14 @@ fn folder_preview(path: &str) -> Option<String> {
             .parent()
             .filter(|parent| !parent.as_os_str().is_empty())
         {
-            Some(_) => format!("Will add …/{name}"),
-            None => format!("Will add {name}"),
+            Some(_) => format!("…/{name}"),
+            None => name.into_owned(),
         },
     )
 }
+
+/// The leading words of the folder preview; they stay when the path gives way.
+const WILL_ADD: &str = "Will add ";
 
 /// The result of registering a copied campaign folder, named for the new campaign.
 pub(crate) fn copy_registered(name: &str) -> String {

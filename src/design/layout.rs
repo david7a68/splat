@@ -2380,7 +2380,8 @@ impl<'a> CreateDropdown<'a> {
 #[must_use]
 pub struct KeptLine<'a> {
     cancel: Option<(Word, bool)>,
-    preview: Option<&'a str>,
+    /// The preview's leading words and its path.
+    preview: Option<(&'a str, &'a str)>,
 }
 
 impl<'a> KeptLine<'a> {
@@ -2396,10 +2397,29 @@ impl<'a> KeptLine<'a> {
     }
 
     /// What Create will make (`Will create NPCs/Watchkeeper.md`), shown once nothing blocks it.
-    /// It keeps one line: a long one gives way at its start, and its hover and accessible name
-    /// keep it whole.
+    /// It keeps one line: a long one keeps its leading words (those before the first word that
+    /// holds a path separator) and gives way in its path; its hover and accessible name keep it
+    /// whole.
     pub fn preview(mut self, preview: Option<&'a str>) -> Self {
-        self.preview = preview;
+        self.preview = preview.map(|preview| {
+            let path_at = preview
+                .split_inclusive(' ')
+                .scan(0, |at, word| {
+                    let start = *at;
+                    *at += word.len();
+                    Some((start, word))
+                })
+                .find(|(_, word)| word.contains(['/', '\\']))
+                .map_or(0, |(start, _)| start);
+            preview.split_at(path_at)
+        });
+        self
+    }
+
+    /// `preview` with its leading words (`Will add `) and its path given apart, for a path that
+    /// may hold no separator (a folder name alone): the leading words always stay.
+    pub fn preview_path(mut self, lead: &'a str, path: Option<&'a str>) -> Self {
+        self.preview = path.map(|path| (lead, path));
         self
     }
 }
@@ -3113,8 +3133,8 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
                     ui.add(egui::Label::new(words).wrap());
                 }
             });
-        } else if let Some(preview) = self.kept.preview {
-            preview_line(&mut kept, preview);
+        } else if let Some((lead, path)) = self.kept.preview {
+            preview_line(&mut kept, lead, path);
         }
         out
     }
@@ -3125,28 +3145,22 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
 /// final name stays as long as it can; only a final name that alone does not fit is cut at its
 /// start too. Words with no path give way at their start. Its hover and accessible name keep it
 /// whole.
-fn preview_line(ui: &mut Ui, preview: &str) {
+fn preview_line(ui: &mut Ui, lead: &str, path: &str) {
     let font = Type::Small.font(ui);
     let room = ui.available_width();
+    let preview = format!("{lead}{path}");
     // One rendered row: a line break or a tab in the words is a space here (the hover and the
     // accessible name keep the words as given).
-    let one_row: String = preview
-        .chars()
-        .map(|c| if c.is_control() { ' ' } else { c })
-        .collect();
-    let mut shown = one_row.clone();
+    let row = |words: &str| -> String {
+        words
+            .chars()
+            .map(|c| if c.is_control() { ' ' } else { c })
+            .collect()
+    };
+    let (lead, path) = (row(lead), row(path));
+    let mut shown = format!("{lead}{path}");
     if number_width(ui, &shown, &font) > room {
-        // The leading words end where the first word that holds a path separator starts.
-        let path_at = one_row
-            .split_inclusive(' ')
-            .scan(0, |at, word| {
-                let start = *at;
-                *at += word.len();
-                Some((start, word))
-            })
-            .find(|(_, word)| word.contains(['/', '\\']))
-            .map_or(0, |(start, _)| start);
-        let (lead, path) = one_row.split_at(path_at);
+        let (lead, path) = (lead.as_str(), path.as_str());
         // Whole folders go from the path's front first (`…/Copper Coast/Campaign.md`).
         let folders = path
             .char_indices()
@@ -3172,8 +3186,8 @@ fn preview_line(ui: &mut Ui, preview: &str) {
     }
     let response = ui
         .add(egui::Label::new(Type::Small.rich(ui, shown).color(colors().muted)).extend())
-        .on_hover_text(preview);
-    named(ui, &response, preview);
+        .on_hover_text(&preview);
+    named(ui, &response, &preview);
 }
 
 /// A menu that opens under `response`, for a row or a control with more actions. The one place

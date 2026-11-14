@@ -917,6 +917,18 @@ impl CampaignContent {
     fn fail(&mut self, cause: Cause, words: String) {
         self.answer = answer_in(&self.active, cause, words);
     }
+
+    /// A failed act of the page's content (write Campaign.md again, create the campaign folder):
+    /// with no package list, the page's errors are its content (round 27 FB3), so the failure
+    /// takes that place and ends an older answer; else it is the newest answer in the footer.
+    fn fail_or_content(&mut self, words: String) {
+        if self.body_missing() {
+            self.error = Some(words);
+            self.answer = None;
+        } else {
+            self.fail(Cause::Failed, words);
+        }
+    }
     /// A repair's draft, by its path, for checks of who owns a result.
     #[cfg(test)]
     pub fn repair_draft(&self, path: &str) -> Option<&str> {
@@ -1033,7 +1045,8 @@ impl CampaignContent {
                 new_result!(self, Payload::Applied(count));
                 self.refresh_pending = !self.dirty();
             }
-            Some(Err(error)) => self.reconcile.error = Some(error),
+            // The DM's Apply failed: the newest answer (ruling Q-x).
+            Some(Err(error)) => self.fail(Cause::Failed, error),
             None => {}
         }
     }
@@ -1368,7 +1381,7 @@ impl CampaignContent {
         {
             match fs::create_dir_all(&active.path) {
                 Ok(()) => self.reload(ui.ctx(), campaigns, active.clone()),
-                Err(e) => self.error = Some(e.to_string()),
+                Err(e) => self.fail_or_content(e.to_string()),
             }
         }
         if self.pending.is_some() {
@@ -1403,6 +1416,10 @@ impl CampaignContent {
     /// not from an act. Each keeps its owner and end event: a repair's message names its file
     /// and ends with that repair's state; a kept result lives while its state does (`live`) and
     /// in its own campaign only.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "ruling Q-x: the answer to the DM’s last act leads the footer (`Ban::Answer`)"
+    )]
     fn page_footer<'f>(
         &self,
         frame: &'f design::outcome::PaneFrame,
@@ -1649,6 +1666,8 @@ impl CampaignContent {
             }
             Payload::Saved | Payload::Applied(_) => {}
         }
+        // The Undo worked: a newer answer than any failure before it, also its own failed try.
+        self.answer = None;
         Ok(())
     }
 
@@ -1665,7 +1684,7 @@ impl CampaignContent {
                 new_result!(self, Payload::CampaignWrite(write));
                 self.refresh_pending = true;
             }
-            Err(error) => self.error = Some(error),
+            Err(error) => self.fail_or_content(error),
         }
     }
 
@@ -2092,7 +2111,8 @@ impl CampaignContent {
                         new_result!(self, Payload::Saved);
                         self.error = None;
                     }
-                    Err(e) => self.error = Some(e),
+                    // Ruling Q-x: the newest answer, in place of an older one.
+                    Err(e) => self.answer = answer_in(&self.active, Cause::Failed, e),
                 }
             }
         });
@@ -3536,8 +3556,9 @@ mod tests {
                 proposals: Ok(Vec::new()),
             },
         );
+        // Ruling Q-x: the failed Apply is the newest answer, first in the footer.
         assert_eq!(
-            content.reconcile.error.as_deref(),
+            content.answer.as_ref().map(|answer| answer.words.as_str()),
             Some("A sheet has local edits.")
         );
     }
@@ -3948,6 +3969,92 @@ mod tests {
         assert!(
             error.bottom() <= kept.top() && harness.query_by_label(refusal).is_none(),
             "the failed Undo's error {error:?} is not first above {kept:?}, or the refusal stays"
+        );
+        // The campaign file, as the page last read it; a line added outside Splat makes the next
+        // write of it fail, and the file put back lets the same act succeed.
+        let file = {
+            let document = &harness.state().content.snapshot.as_ref().unwrap().document;
+            document.campaign.path.join(&document.path)
+        };
+        let text = fs::read_to_string(&file).unwrap();
+        let outside = format!("{text}\nA line written outside Splat.\n");
+        let answer = |harness: &egui_kittest::Harness<'_, Page>| {
+            harness
+                .state()
+                .content
+                .answer
+                .as_ref()
+                .map(|answer| answer.words.clone())
+        };
+        // A refusal, then a failed `Save selections`: the save's failure replaces the refusal and
+        // leads the footer; its successful retry ends it.
+        pick(&mut harness, "toll-a");
+        assert!(harness.query_by_label(refusal).is_some());
+        harness
+            .state_mut()
+            .content
+            .snapshot
+            .as_mut()
+            .unwrap()
+            .document
+            .selections[1]
+            .name = Some("Toll of the old road".into());
+        fs::write(&file, &outside).unwrap();
+        harness.run_steps(2);
+        harness.get_by_label("Save selections").click();
+        settle(&mut harness);
+        let failed = answer(&harness).expect("the failed save is the newest answer");
+        let error = message(&harness, &failed).expect("the failed save says why");
+        let kept = harness.get_by_label("Undo remove Gone").rect();
+        assert!(
+            harness.query_by_label(refusal).is_none() && error.bottom() <= kept.top(),
+            "the failed save {error:?} does not lead above {kept:?}, or the refusal stays"
+        );
+        fs::write(&file, &text).unwrap();
+        harness.get_by_label("Save selections").click();
+        settle(&mut harness);
+        assert!(
+            answer(&harness).is_none() && message(&harness, &failed).is_none(),
+            "the successful save did not end its failed try"
+        );
+        // A removal's Undo that fails (the file changed outside Splat), then its successful retry
+        // (the file put back): the success ends the failure it stored.
+        let text = fs::read_to_string(&file).unwrap();
+        {
+            let content = &mut harness.state_mut().content;
+            let selections = content
+                .snapshot
+                .as_ref()
+                .unwrap()
+                .document
+                .selections
+                .clone();
+            new_result!(
+                content,
+                Payload::Removed(RemovedPackage {
+                    name: "Gone".into(),
+                    words: removal_words("Gone", &[]).0,
+                    warning: None,
+                    before: selections.clone(),
+                    after: selections,
+                    users: Vec::new(),
+                })
+            );
+        }
+        fs::write(&file, format!("{text}\nA line written outside Splat.\n")).unwrap();
+        harness.run_steps(2);
+        harness.get_by_label("Undo remove Gone").click();
+        settle(&mut harness);
+        let failed = answer(&harness).expect("the failed Undo is the newest answer");
+        assert!(message(&harness, &failed).is_some());
+        fs::write(&file, &text).unwrap();
+        harness.get_by_label("Undo remove Gone").click();
+        settle(&mut harness);
+        assert!(
+            answer(&harness).is_none()
+                && message(&harness, &failed).is_none()
+                && harness.query_by_label("Undo remove Gone").is_none(),
+            "the successful Undo did not end its failed try"
         );
         // A refusal, and a round trip to another campaign while the page is hidden: the change
         // of campaign ends the stored answer, not only its words on screen.
