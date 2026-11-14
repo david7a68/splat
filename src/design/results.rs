@@ -888,7 +888,9 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "creature_search_with_summary",
             &[Ban::Layout(1)],
         ),
-        ("src/encounters.rs", "editor_view", &[Ban::Pane(1)]),
+        // The editor's columns (`Fills::because`) and the unread rows' warning in main's footer
+        // (`show_by_hand`): the typed footer holds no file line with its links.
+        ("src/encounters.rs", "editor_view", &[Ban::Pane(2)]),
         (
             "src/encounters.rs",
             "roster",

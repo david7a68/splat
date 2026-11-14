@@ -5719,7 +5719,7 @@ impl Encounters {
 
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: the editor's two columns fill the page, each with its own scroll (`Fills::because`) (design::results::STAGED_ALLOWS)"
+        reason = "staged: the editor's two columns fill the page, each with its own scroll (`Fills::because`), and the unread rows' footer keeps main's form (`show_by_hand`) (design::results::STAGED_ALLOWS)"
     )]
     fn editor_view(
         &mut self,
@@ -6097,13 +6097,28 @@ impl Encounters {
         self.refresh_validation_error(false, edit_input(ui.ctx()));
         // Shared, so an unchanged frame copies no list of names.
         let difficulty = self.draft_difficulty();
-        // The encounter file's unread rows: a fixed warning whose file line has its links, drawn
-        // above the panes, so it never scrolls and never moves a row.
-        if let Some((notes, faults, path)) =
-            unread_rows.as_ref().filter(|(notes, ..)| !notes.is_empty())
-        {
-            unread_roster_rows(ui, &active.path, path, notes, *faults);
+        // The encounter file's unread rows: a warning whose file line has its path and links.
+        // It keeps main's footer (gap: the typed footer holds no file line with links), placed
+        // at the page's bottom, at most a third of the page and scrolled inside that, so it never
+        // moves a pane heading or a row and never pushes the panes out of reach (review of
+        // PR 347). One counted `Ban::Pane` (`show_by_hand`).
+        let mut unread = design::Footer::new(
+            (
+                "encounter_unread_rows",
+                self.draft.as_ref().map(|draft| draft.results_key),
+            ),
+            ui.available_width(),
+        );
+        if let Some((notes, faults, path)) = unread_rows.filter(|(notes, ..)| !notes.is_empty()) {
+            let root = active.path.clone();
+            let words = notes.join(" ");
+            unread.reason(words, move |ui| {
+                unread_roster_rows(ui, &root, &path, &notes, faults);
+            });
         }
+        let bottom = unread.show_by_hand(ui);
+        let mut body = body_above(ui, bottom);
+        let ui = &mut body;
         // FA2, AB1: the editor's results and Save's reason sit in one footer pinned below the
         // panes, so none of them moves the roster, its rows or the search. Results with a live
         // Undo come first, then reasons. The roster and Add participants are columns, each with
@@ -10329,6 +10344,146 @@ mod tests {
         let saved: serde_json::Value =
             serde_json::from_slice(&fs::read(run.path().unwrap()).unwrap()).unwrap();
         assert_eq!(saved["state"]["participants"].as_array().unwrap().len(), 2);
+
+        // Review of PR 347 (2): the unread rows' warnings sit in the editor's footer region,
+        // which the footer bounds and scrolls, never above the panes. With 30 unread rows at
+        // 960x640, the roster's first row and the search stay in view, the file line and its
+        // links are reached by the footer's scroll, and the region is at most a third of the
+        // page. A warning that comes and goes moves neither pane heading, nor the narrow
+        // layout's tabs.
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let clean = fs::read_to_string(dir.path().join(&path)).unwrap();
+        let row = flagged
+            .lines()
+            .find(|line| line.contains("HP lots"))
+            .unwrap()
+            .to_owned();
+        let many = flagged.replacen(&format!("{row}\n"), &format!("{row}\n").repeat(30), 1);
+        let settings = dir.path().join("settings.json");
+        let mut store = crate::persistence::Store::at(settings.clone());
+        let mut data = store.load().unwrap();
+        data.active_campaign_id = Some(active.id);
+        data.campaigns.push(active.clone());
+        store.save(&data).unwrap();
+        let campaigns = Campaigns::at(settings);
+        let open = |text: &str| {
+            fs::write(dir.path().join(&path), text).unwrap();
+            Encounters {
+                active: Some(active.clone()),
+                snapshot: Some(Snapshot::load(&active, &[]).unwrap()),
+                draft: Some(Draft::open(dir.path(), &path).unwrap()),
+                ..Default::default()
+            }
+        };
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(960.0, 640.0))
+            .build_state(
+                move |ctx, encounters: &mut Encounters| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        encounters.show(
+                            ui,
+                            &campaigns,
+                            &Party::default(),
+                            &Story {
+                                events: &[],
+                                sessions: &[],
+                            },
+                        );
+                    });
+                },
+                open(&many),
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(4);
+        let page = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(960.0, 640.0));
+        let whole = |harness: &egui_kittest::Harness<'_, Encounters>, rect: egui::Rect| {
+            page.contains_rect(rect) && rect.is_positive()
+        };
+        use egui_kittest::kittest::By;
+        // The roster's first row, by its own action.
+        let first_row = harness
+            .query_all_by_label("More actions for Wolf")
+            .map(|node| node.rect())
+            .min_by(|a, b| a.top().total_cmp(&b.top()));
+        let search = harness
+            .query_all_by_label(SEARCH_FIELD)
+            .map(|node| node.rect())
+            .reduce(|a, b| a.union(b));
+        let warnings: Vec<egui::Rect> = harness
+            .query_all(By::new().label_contains("HP lots"))
+            .map(|node| node.rect())
+            .collect();
+        let region = warnings
+            .iter()
+            .filter(|rect| page.intersects(**rect))
+            .fold(egui::Rect::NOTHING, |a, b| a.union(*b));
+        assert!(
+            first_row.is_some_and(|rect| whole(&harness, rect))
+                && search.is_some_and(|rect| whole(&harness, rect))
+                && warnings.len() >= 30
+                && region.height() <= 640.0 / 3.0 + 1.0
+                && first_row.is_some_and(|row| row.bottom() <= region.top()),
+            "30 unread rows: the first roster row {first_row:?} and the search {search:?} in \
+             view above the warnings' region {region:?} ({} warnings)",
+            warnings.len()
+        );
+        let show_file = harness.get_by_label("Show file").accesskit_node().id();
+        harness.event(egui::Event::AccessKitActionRequest(
+            egui::accesskit::ActionRequest {
+                target: show_file,
+                action: egui::accesskit::Action::ScrollIntoView,
+                data: None,
+            },
+        ));
+        harness.run_steps(4);
+        let link = harness.get_by_label("Show file").rect();
+        assert!(
+            whole(&harness, link),
+            "the file line's Show file is reached by the footer's scroll: {link:?}"
+        );
+        // A warning that comes and goes, at 960 and in the narrow layout (880).
+        // Each pane heading or tab by what it names (its count may change), and its top.
+        let headings = |harness: &egui_kittest::Harness<'_, Encounters>| -> Vec<(&str, f32)> {
+            harness
+                .query_all(By::new().predicate(|node| {
+                    node.role() != egui::accesskit::Role::TextRun
+                        && node.label().or(node.value()).is_some_and(|name| {
+                            let name = name.to_lowercase();
+                            name.starts_with("add participants") || name.starts_with("roster")
+                        })
+                }))
+                .map(|node| {
+                    let node = node.accesskit_node();
+                    let name = node.label().or(node.value()).unwrap_or_default();
+                    let kind = if name.to_lowercase().starts_with("roster") {
+                        "roster"
+                    } else {
+                        "add participants"
+                    };
+                    (
+                        kind,
+                        node.bounding_box().map_or(f32::NAN, |rect| rect.y0 as f32),
+                    )
+                })
+                .collect()
+        };
+        for width in [960.0, 880.0] {
+            harness.set_size(egui::vec2(width, 640.0));
+            *harness.state_mut() = open(&clean);
+            harness.run_steps(4);
+            let before = headings(&harness);
+            *harness.state_mut() = open(&flagged);
+            harness.run_steps(4);
+            let with = headings(&harness);
+            *harness.state_mut() = open(&clean);
+            harness.run_steps(4);
+            let after = headings(&harness);
+            assert!(
+                !before.is_empty() && before == with && before == after,
+                "at {width}: the pane headings and tabs before {before:?}, with a warning \
+                 {with:?}, after {after:?}"
+            );
+        }
     }
 
     #[test]
