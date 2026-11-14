@@ -7688,7 +7688,7 @@ mod tests {
             .build_ui_state(
                 |ui, state: &mut Scrolled| {
                     state.frame += 1;
-                    let cut = state.frame % 2 == 0;
+                    let cut = state.frame.is_multiple_of(2);
                     let field = &mut state.field;
                     let output = super::super::layout::ScrollColumn::new("iter29_p1_wheel")
                         .max_height(240.0)
