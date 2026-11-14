@@ -972,17 +972,14 @@ pub(super) fn whole_rows<R>(ui: &mut Ui, column: Id, add: impl FnOnce(&mut Ui) -
         ui.ctx().request_discard("a column's whole-row cut moved");
     }
     if let Some(cut) = cut {
-        ui.ctx()
-            .layer_painter(ui.layer_id())
-            .with_clip_rect(view)
-            .hline(
-                view.x_range(),
-                cut - super::tokens::HAIRLINE_WIDTH / 2.0,
-                egui::Stroke::new(
-                    super::tokens::HAIRLINE_WIDTH,
-                    super::tokens::colors().hairline,
-                ),
-            );
+        ui.painter().with_clip_rect(view).hline(
+            view.x_range(),
+            cut - super::tokens::HAIRLINE_WIDTH / 2.0,
+            egui::Stroke::new(
+                super::tokens::HAIRLINE_WIDTH,
+                super::tokens::colors().hairline,
+            ),
+        );
     }
     inner
 }
@@ -1710,9 +1707,11 @@ mod row_cut_tests {
                         let clip = view.bottom();
                         // The column's own view: a `Content` pane's viewport, or the clip of
                         // a `Fills` column with no cut (the room's bottom bounds it).
+                        let body_bottom = footer_rect(&harness.ctx, Id::new("row_cut_test"))
+                            .map_or(room.bottom(), |footer| footer.top() - S);
                         let viewport = record.viewport().unwrap_or(Rect::from_min_max(
                             view.min,
-                            pos2(view.right(), room.bottom()),
+                            pos2(view.right(), body_bottom),
                         ));
                         // With no footer the column keeps its plain cut (a row may show in part).
                         for row in side.iter().filter(|_| message) {
@@ -1975,7 +1974,15 @@ mod editor_region_tests {
     }
 
     fn footer(harness: &egui_kittest::Harness<'_, State>) -> Option<Rect> {
-        footer_rect(&harness.ctx, Id::new(LOCAL))
+        let at = footer_rect(&harness.ctx, Id::new(LOCAL));
+        if at.is_none() {
+            eprintln!(
+                "no footer: record {:?}, records {}",
+                pane_record(&harness.ctx, Id::new(LOCAL)),
+                pane_records(&harness.ctx).len()
+            );
+        }
+        at
     }
 
     /// The clip of the editor's painted text: the region's view.
