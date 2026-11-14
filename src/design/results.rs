@@ -1128,6 +1128,16 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "sentence! statement",
             &[Ban::Sentence],
         ),
+        (
+            "src/design/outcome.rs",
+            "choice! statement",
+            &[Ban::Sentence],
+        ),
+        (
+            "src/design/outcome.rs",
+            "choice! statement",
+            &[Ban::Sentence],
+        ),
         ("src/design/outcome.rs", "rejected", &[Ban::Sentence]),
         (
             "src/design/outcome.rs",
