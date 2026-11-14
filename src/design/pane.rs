@@ -324,6 +324,7 @@ impl EditorRegion<'_> {
         );
         let key = self.pane.with("editor_region");
         let max = self.max;
+        let top = ui.cursor().top();
         let before = ui.ctx().data(|data| data.get_temp::<f32>(key.with("max")));
         ui.ctx()
             .data_mut(|data| data.insert_temp(key.with("max"), max));
@@ -365,7 +366,9 @@ impl EditorRegion<'_> {
                 editor
             });
         let pass = ui.ctx().cumulative_pass_nr();
-        let height = output.inner_rect.height();
+        // What the region took in the body, as the body laid it out (the scroll output's view
+        // is not always what the body allocated).
+        let height = (ui.cursor().top() - top - ui.spacing().item_spacing.y).max(0.0);
         ui.ctx().data_mut(|data| {
             data.insert_temp(region_drawn_id(self.pane), (pass, height));
         });
