@@ -337,17 +337,22 @@ impl Repair {
                 .unwrap_or(&self.path)
                 .to_owned();
             if let Some(shown) = self.undos.get(&self.owner()) {
-                messages.kept(shown.outcome(&frame, |undo| match undo {
-                    RepairUndo::Discard { .. } => KeptOutcome::Notice(
-                        Notice::new(crate::sentence!("{} draft discarded.", name)),
-                        UndoStep::verb(Verb::Discard).pressed_as(RepairAct::Undo),
-                    ),
-                    RepairUndo::Reload { .. } => KeptOutcome::Notice(
-                        Notice::new(crate::sentence!(
-                            "Reloaded from disk. Your draft is kept until you edit."
-                        )),
-                        UndoStep::verb(Verb::Reload).pressed_as(RepairAct::Undo),
-                    ),
+                messages.kept(shown.outcome(&frame, |undo| {
+                    match undo {
+                        RepairUndo::Discard { .. } => KeptOutcome::Notice(
+                            Notice::new(crate::sentence!("{} draft discarded.", name)),
+                            // `Undo discard of Broken.md`: the name every discarded draft's Undo
+                            // has in the app.
+                            UndoStep::of(Verb::Discard, format!("of {name}"))
+                                .pressed_as(RepairAct::Undo),
+                        ),
+                        RepairUndo::Reload { .. } => KeptOutcome::Notice(
+                            Notice::new(crate::sentence!(
+                                "Reloaded from disk. Your draft is kept until you edit."
+                            )),
+                            UndoStep::verb(Verb::Reload).pressed_as(RepairAct::Undo),
+                        ),
+                    }
                 }));
             }
             let fault = match (&problem, self.failure()) {
