@@ -468,7 +468,7 @@ impl FieldId {
     /// through them, and `number_field`; not the staged raw fields) guard their text history
     /// (`TextGuard`): when the bound text is not the
     /// text the field held when it last had focus (the program or another object replaced it),
-    /// egui's text Undo for this id is dropped before Ctrl+Z can reach it. So another object's
+    /// egui's text Undo for this id is dropped before Ctrl+Z can reach it (the cursor stays). So another object's
     /// words cannot come back through Undo, even when the owner's key is missing. One case stays
     /// with the owner's key: both texts are equal (A's text was emptied, B's is empty too).
     ///
@@ -709,8 +709,9 @@ impl TextGuard {
                         .any(|event| matches!(event, egui::Event::Key { pressed: true, .. }))
             });
         if check && Self::stale(ui, id, text) {
-            // The cursor is stale too: it points into the old text.
-            Self::drop_history(ui.ctx(), id, true);
+            // The cursor stays: a caller may have set it for this text (select all on open), and
+            // egui keeps a cursor inside the text it draws.
+            Self::drop_history(ui.ctx(), id);
             Self::forget(ui.ctx(), id);
         }
         Self { id, focused_before }
@@ -721,9 +722,9 @@ impl TextGuard {
             return;
         }
         // Focus came this frame by a way the check before the draw did not see: egui may have
-        // fed the old history with this text. The cursor is new (from the click), so it stays.
+        // fed the old history with this text.
         if !self.focused_before && Self::stale(ui, self.id, text) {
-            Self::drop_history(ui.ctx(), self.id, false);
+            Self::drop_history(ui.ctx(), self.id);
         }
         let bound = BoundText::of(text);
         let ctx = ui.ctx();
@@ -736,7 +737,7 @@ impl TextGuard {
             (records.len() > BOUND_TEXTS).then(|| records.remove(0).0)
         });
         if let Some(oldest) = oldest {
-            Self::drop_history(ctx, oldest, false);
+            Self::drop_history(ctx, oldest);
         }
     }
 
@@ -765,12 +766,9 @@ impl TextGuard {
         });
     }
 
-    fn drop_history(ctx: &egui::Context, id: Id, cursor: bool) {
+    fn drop_history(ctx: &egui::Context, id: Id) {
         if let Some(mut state) = egui::text_edit::TextEditState::load(ctx, id) {
             state.clear_undoer();
-            if cursor {
-                state.cursor.set_char_range(None);
-            }
             state.store(ctx, id);
         }
     }
