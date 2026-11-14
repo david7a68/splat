@@ -765,14 +765,9 @@ impl ChoiceWords {
 macro_rules! choice {
     ($template:literal, $($value:expr),+ $(,)?) => {{
         #[allow(clippy::disallowed_methods, reason = "the macro's own check of its template")]
-        const CHECKED: $crate::outcome::CheckedChoice =
-            $crate::outcome::check_choice($template, [$(::std::stringify!($value)),+].len());
+        const CHECKED: $crate::outcome::CheckedChoice = $crate::outcome::check_choice($template, [$(::std::stringify!($value)),+].len());
         #[allow(clippy::disallowed_methods, reason = "the template passed `check_choice`")]
-        let words = $crate::outcome::ChoiceWords::__template(
-            CHECKED,
-            $template,
-            ::std::vec![$(::std::string::ToString::to_string(&$value)),+],
-        );
+        let words = $crate::outcome::ChoiceWords::__template(CHECKED, $template, ::std::vec![$(::std::string::ToString::to_string(&$value)),+]);
         words
     }};
 }
@@ -2737,9 +2732,17 @@ mod tests {
         // A footer choice whose words hold two objects from data (package R's counterexample):
         // narrow, each object is cut and the fixed words stay; the name keeps the whole words.
         const MOVE: &str = "Move Ghost of the Mill before Ember Cultist";
-        let mut narrow = two();
-        narrow.moves = true;
-        narrow.narrow = Some(230.0);
+        // One result, so the footer shows the whole line without scrolling.
+        let one = || {
+            let mut app = App::default();
+            app.dndbeyond
+                .results
+                .record(Saved(Campaign("older"), "Campaign link saved"));
+            app.moves = true;
+            app
+        };
+        let mut narrow = one();
+        narrow.narrow = Some(260.0);
         let mut h = harness_sized(narrow, 960.0);
         let (_, shown) = visible(&h, MOVE);
         assert!(
@@ -2756,9 +2759,7 @@ mod tests {
             1,
             "its press comes back as the caller's id"
         );
-        let mut wide = two();
-        wide.moves = true;
-        let h = harness_sized(wide, 960.0);
+        let h = harness_sized(one(), 960.0);
         assert_eq!(visible(&h, MOVE).1, [MOVE], "wide: the whole words");
     }
 
