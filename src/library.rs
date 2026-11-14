@@ -7995,8 +7995,11 @@ impl Library {
         // follows a short body; its presses are read after the pane (round 28, row G6).
         let mut read_footer = None;
         if choices_in_reader && !slot_row {
-            let mut footer =
-                design::Footer::new("library_footer", editor_width.min(design::READER_MEASURE));
+            // Keyed by the entry, as the old body scroll was: each entry keeps its own offset.
+            let mut footer = design::Footer::new(
+                ("library_footer", note.owner.id(), &note.path),
+                editor_width.min(design::READER_MEASURE),
+            );
             reader_messages(
                 &mut footer,
                 Some(&heading),
@@ -8299,7 +8302,10 @@ impl Library {
                 // Read: the pane draws the body, then its message footer `S` below a short body,
                 // or pinned when the body scrolls (round 28 rows 17, 50, 53, 54; G6).
                 let footer = read_footer.take().unwrap_or_else(|| {
-                    design::Footer::new("library_footer", editor_width.min(design::READER_MEASURE))
+                    design::Footer::new(
+                        ("library_footer", note.owner.id(), &note.path),
+                        editor_width.min(design::READER_MEASURE),
+                    )
                 });
                 let body = egui::Rect::from_min_max(
                     ui.cursor().min,

@@ -9741,14 +9741,15 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
                 let register = d.place_of("Register")?;
                 let cancel = d.place_of("Cancel")?;
                 // Round 28 FA7: the kept line is `InlineCreate`'s, as tall as its longest declared
-                // reason wrapped beside Cancel; a short reason starts `L` after Cancel, inside
-                // that line (it was centred on Cancel when the form drew its own line).
+                // reason wrapped beside Cancel; a short reason starts `L` after Cancel and stays
+                // within Cancel's row (top-aligned with it; it was centred on Cancel when the form
+                // drew its own line). A reason below Cancel, however close, is the fault.
                 let reason_ok = reason.is_none_or(|reason| {
                     d.painted_rect_in(reason, egui::Rect::EVERYTHING)
                         .is_some_and(|words| {
                             words.left() >= cancel.right() + design::L - 1.0
-                                && words.top() >= cancel.top() - design::L
-                                && words.bottom() <= cancel.bottom() + design::L
+                                && words.top() >= cancel.top() - 1.0
+                                && words.bottom() <= cancel.bottom() + 1.0
                         })
                 });
                 (choice.bottom() < field.top()

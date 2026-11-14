@@ -11496,6 +11496,8 @@ pub mod nav_table {
     const SECTION: &str = "Creatures";
     const ENTRY_ROW: &str = "Aboleth · ";
     const ENTRY: &str = "Aboleth";
+    const OTHER_ROW: &str = "Adult Black Dragon · ";
+    const OTHER: &str = "Adult Black Dragon";
     const LOOKUP_QUERY: &str = "fireball";
     const LOOKUP_ENTRY: &str = "Fireball";
     const SELECTED: &str = "Cinder Wolf 7";
@@ -11546,6 +11548,7 @@ pub mod nav_table {
         d.click("Section");
         d.click(&format!("Library section: {SECTION}"));
         d.expect(ENTRY_ROW);
+        let entry_top = d.scroll_position_of_reader(ENTRY);
         d.scroll_at(pos2(720.0, 400.0), 2);
         let entry_scroll = d.scroll_position_of_reader(ENTRY);
         d.begin_task();
@@ -11611,6 +11614,26 @@ pub mod nav_table {
             scope && entry && scroll == entry_scroll && entry_scroll.is_some_and(|y| y < 300.0),
             format!(
                 "Library: scope {scope}, entry {entry}, scroll {scroll:?} was {entry_scroll:?}"
+            ),
+        );
+        // Each entry keeps its own scroll (PR 341 review, P2): another long entry opens at its
+        // top, not at Aboleth's offset; back on Aboleth, its offset is as the DM left it, as on
+        // main, where the body scroll was keyed by the entry.
+        let (other, back) = d.aside(|d| {
+            d.click_starting(OTHER_ROW);
+            d.wait_for_text(OTHER);
+            let other = d.scroll_position_of_reader(OTHER);
+            d.click_starting(ENTRY_ROW);
+            d.wait_for_text(ENTRY);
+            (other, d.scroll_position_of_reader(ENTRY))
+        });
+        d.observe(
+            "G2-reader-own-scroll",
+            entry_top.is_some_and(|top| entry_scroll.is_some_and(|y| y < top - 1.0))
+                && other.zip(entry_top).is_some_and(|(y, top)| (y - top).abs() < 1.0)
+                && back == entry_scroll,
+            format!(
+                "Library: {OTHER} opens at its top {other:?} (top {entry_top:?}), and {ENTRY} comes back at {back:?} (left at {entry_scroll:?})"
             ),
         );
         go_party(d);
