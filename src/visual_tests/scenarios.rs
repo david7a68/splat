@@ -1885,6 +1885,29 @@ pub mod library_navigation {
             "The row's broken link also counts in the Library header",
         );
         d.state("homebrew-reference", Sizes::All);
+        // Round 28 (the G6 line that left the list in PR 331): at 960x640 the reader's message
+        // footer follows the short entry by `S`, and G6 finds no footer far below its body.
+        let (follows, gaps, detail) = d.at_size(SMALL, |d| {
+            let gap = d.pane_records().iter().find_map(|record| {
+                let (footer, viewport, height) = (
+                    record.footer()?,
+                    record.viewport()?,
+                    record.content_height()?,
+                );
+                (record.fits() && record.offset() <= 0.5)
+                    .then(|| footer.top() - (viewport.top() + height))
+            });
+            (
+                gap.is_some_and(|gap| (gap - crate::design::S).abs() <= 1.0),
+                d.short_body_gaps(),
+                format!("{gap:?}"),
+            )
+        });
+        d.observe(
+            "iter-28-L-G6",
+            follows && gaps.is_empty(),
+            format!("At 960x640 the reader's footer follows the short entry by S: gap {detail}, G6 {gaps:?}"),
+        );
         // From another entry, the header count's menu opens the entry with the broken link.
         d.click_starting("Ashfall · ");
         d.wait_for_text("Hot ash falls");
