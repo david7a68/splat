@@ -1111,7 +1111,7 @@ impl NoteFault {
             Self::Unread(count) => design::count(*count, "value not read", "values not read"),
             Self::Tables(count) => design::count(*count, "table fault", "table faults"),
             Self::Links(problems) => link_problem_words(problems),
-            Self::Renamed(file) => format!("File name differs: {file}"),
+            Self::Renamed(file) => format!("File: {file}"),
         }
     }
 }
@@ -5570,7 +5570,7 @@ mod tests {
         assert_eq!(fault_of(mara), Some(NoteFault::Renamed("Vell.md".into())));
         assert_eq!(
             NoteFault::Renamed("Vell.md".into()).words(),
-            "File name differs: Vell.md"
+            "File: Vell.md"
         );
         assert_eq!(
             faults.of_note(at_path(&gate_path)).cloned(),

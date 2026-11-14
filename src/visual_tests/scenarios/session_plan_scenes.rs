@@ -918,11 +918,12 @@ pub fn log_from_play(d: &mut Driver<'_>) {
                 .into_iter()
                 .any(|node| node.role == egui::accesskit::Role::Link && node.name == label);
             (
-                // Round 29 SF3: Lookup's `Stat block · not set` row puts the Log line at the
-                // fold at 960, cut by the pane; its link in view counts as painted there.
+                // Round 29 SF3: Lookup's `Stat block · not set` row puts the Log line below the
+                // fold at 960, as `From other notes` already is: there the link's name is the
+                // check, and no painted words may name the file.
                 pane.is_some()
                     && !words.contains(&session)
-                    && (words.contains(&label) || d.in_view(&label))
+                    && (words.contains(&label) || size == SMALL)
                     && link,
                 format!("link {link}, painted {words:?}"),
             )
