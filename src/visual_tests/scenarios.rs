@@ -741,19 +741,22 @@ fn tones_where(d: &Driver<'_>, wanted: impl Fn(&str) -> bool) -> Vec<&'static st
         .collect()
 }
 
-/// A group's `Move to…` submenu and its parent menu stay in the window. The submenu's frame and
+/// A group's `Move to` submenu and its parent menu stay in the window. The submenu's frame and
 /// every choice keep `S` clear of each scroll bar and column splitter beside them; the parent
 /// menu's frame does not overlap one.
 /// Requires every choice of both menus. Returns the submenu's frame.
+/// `menu` is the parent menu's words, its opener first: Encounters' `Move to` (R12: it acts at
+/// once, so no `…`), or the gallery's own words.
 fn submenu_clear_of_chrome(
     d: &Driver<'_>,
+    menu: [&str; 3],
     choices: &[&str],
     beside_a_lane: bool,
 ) -> Result<egui::Rect, String> {
     let nodes = d.nodes();
     let opener = d
-        .place_of("Move to…")
-        .ok_or("Move to… is not in view".to_owned())?;
+        .place_of(menu[0])
+        .ok_or(format!("{} is not in view", menu[0]))?;
     let margin = egui::Frame::menu(&d.app_style()).total_margin();
     // A page can show the same words elsewhere: each choice is the one level with the opener's
     // row or below it, nearest to it.
@@ -771,18 +774,14 @@ fn submenu_clear_of_chrome(
                     .min_by(|a, b| {
                         (a.rect.top() - opener.top()).total_cmp(&(b.rect.top() - opener.top()))
                     })
-                    .ok_or(format!("{name} is not in view beside Move to…"))?
+                    .ok_or(format!("{name} is not in view beside {}", menu[0]))?
                     .rect,
             );
         }
         Ok(frame)
     };
     let submenu = targets_of(choices)?;
-    let menu = targets_of(&[
-        "Move to…",
-        "Make available to any encounter",
-        "Delete group…",
-    ])?;
+    let menu = targets_of(&menu)?;
     let window = d.window_size();
     let lanes = d.chrome_lanes();
     for (what, targets) in [("submenu", submenu), ("menu", menu)] {
@@ -4207,9 +4206,10 @@ pub mod encounter_build {
     const LIVE_ROW: &str = "HP\u{a0}11/41";
     const LOCAL_ONLY: &str = "Nothing in this encounter reaches D&D Beyond";
     const VIRTUALISED_LIMIT: usize = 100;
-    // One disk-change form, as World and Library: it names the encounter, never its file.
+    // One disk-change form: it names the encounter, never its file (iter-28-B R10, FG4: by its
+    // name, not `This encounter`).
     const CHANGED_ON_DISK: &str =
-        "This encounter changed on disk. Your draft is safe until you choose.";
+        "Bridge Ambush changed on disk. Your draft is safe until you choose.";
     const OVERWRITE: &str = "Overwrite with my draft";
     const RELOAD: &str = "Reload and lose my draft";
     const OUTSIDE_WORDS: &str = "\nWritten outside Splat.\n";
@@ -4716,7 +4716,7 @@ pub mod encounter_build {
         );
         d.state("resumed-from-editor", Sizes::All);
 
-        // T12.12: Remove… on a Ready to run row, only for an encounter with no saved run, with
+        // T12.12: Remove on a Ready to run row, only for an encounter with no saved run, with
         // the words and the Undo of a saved group's removal. An unrelated act between them
         // stays.
         go_encounters(d);
@@ -4729,14 +4729,20 @@ pub mod encounter_build {
             .join(format!("campaigns/emberfall/Encounters/{NEW_NAME}.md"));
         let text = std::fs::read_to_string(&file).expect("the new encounter");
         d.click_first(&format!("More actions for {NEW_NAME}"));
-        d.expect("Remove…");
+        d.expect("Remove");
+        // iter-28-B R12 (FB10): `…` only when a form or a dialog follows; Remove acts at once.
+        d.observe(
+            "iter-28-B-R12",
+            !d.has_containing("Remove…"),
+            "The Ready row's menu says Remove, with no …, because it acts at once",
+        );
         d.state("encounter-menu-remove", Sizes::All);
-        d.click("Remove…");
+        d.click("Remove");
         d.expect(&format!("Removed encounter {NEW_NAME}."));
         d.observe(
             "T12.12",
             !file.exists() && !d.has(&format!("More actions for {NEW_NAME}")),
-            "Remove… takes the encounter's file away, and its row goes",
+            "Remove takes the encounter's file away, and its row goes",
         );
         // V6: a finished change has the success tone, as a deleted run's result has.
         let removed = painted_paragraph(d, &format!("Removed encounter {NEW_NAME}."));
@@ -8765,7 +8771,17 @@ pub mod gallery {
         for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
             let placed = d.at_size(size, |d| {
                 let parent = d.place_of("Make available to any encounter");
-                super::submenu_clear_of_chrome(d, &["Bridge Ambush"], false).and_then(|frame| {
+                super::submenu_clear_of_chrome(
+                    d,
+                    [
+                        "Move to…",
+                        "Make available to any encounter",
+                        "Delete group…",
+                    ],
+                    &["Bridge Ambush"],
+                    false,
+                )
+                .and_then(|frame| {
                     // Right beside its menu, where egui puts it: only the menus' frames
                     // and egui's small gap lie between them.
                     parent
@@ -16714,6 +16730,35 @@ pub mod encounter_groups {
         d.click(CHANGES);
         d.expect("Maximum HP: how it changes");
         d.state("group-member-changes", Sizes::All);
+        // Review of PR 327: a member's form and fields key by its identity. Type in its Display
+        // name, move it: its form stays open on it and the field keeps its text Undo. Then the
+        // member moves back, so the editor is as it was.
+        let identity = d.aside(|d| {
+            // A click into the field (no words yet), then its end.
+            d.type_into("Display name", "");
+            d.press(Key::End);
+            d.type_text("x");
+            let typed = d.visible_text("Rival Captainx");
+            let (step, back) = if d.is_disabled("Move down") {
+                ("Move up", "Move down")
+            } else {
+                ("Move down", "Move up")
+            };
+            d.click("More actions for Rival Captainx");
+            d.click(step);
+            let open = d.has("Maximum HP: how it changes");
+            d.type_into("Display name", "");
+            d.press_ctrl(Key::Z);
+            let undone = d.visible_text("Rival Captain") && !d.visible_text("Rival Captainx");
+            d.click("More actions for Rival Captain");
+            d.click(back);
+            (typed, open, undone)
+        });
+        d.observe(
+            "iter-28-B-member-identity",
+            identity == (true, true, true),
+            format!("Typed, moved: form still open, text Undo kept: {identity:?}"),
+        );
         // The change form lists other effects as the run's Conditions tab does: one label, Body
         // text in the text colour, and one placeholder.
         let (label, color, placeholder) = d.at_size(LARGE, |d| {
@@ -16776,6 +16821,48 @@ pub mod encounter_groups {
             condition_columns_close(&columns),
             format!("At 1920 the starting-condition columns (left, right, count): {columns:?}"),
         );
+        // iter-28-B FI8: each heading of the member's changes form belongs to what follows it:
+        // `L` above it, less below it, at every size.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let gaps = d.at_size(size, |d| {
+                let nodes = d.nodes();
+                ["STARTING CONDITIONS", "OTHER EFFECTS", "LOOT"].map(|heading| {
+                    let label = nodes
+                        .iter()
+                        .find(|node| node.name == heading && node.in_view())?
+                        .rect;
+                    let column = |rect: &egui::Rect| {
+                        rect.left() < label.right() + 400.0 && rect.right() > label.left()
+                    };
+                    let above = nodes
+                        .iter()
+                        .filter(|node| {
+                            node.rect.bottom() <= label.top() + 0.5 && column(&node.rect)
+                        })
+                        .map(|node| node.rect.bottom())
+                        .fold(f32::MIN, f32::max);
+                    let below = nodes
+                        .iter()
+                        .filter(|node| {
+                            node.rect.top() >= label.bottom() - 0.5 && column(&node.rect)
+                        })
+                        .map(|node| node.rect.top())
+                        .fold(f32::MAX, f32::min);
+                    Some((label.top() - above, below - label.bottom()))
+                })
+            });
+            d.observe(
+                "iter-28-B-FI8",
+                // At 1920 all three are in view; at the smaller sizes, those in view (one at least).
+                (size != LARGE || gaps.iter().all(Option::is_some))
+                    && gaps.iter().any(Option::is_some)
+                    && gaps
+                        .iter()
+                        .flatten()
+                        .all(|(above, below)| *above >= crate::design::L - 1.0 && above > below),
+                format!("At {size:?}, the changes form's headings (above, below): {gaps:?}"),
+            );
+        }
         d.check_tab_order("group editor, changes open");
         d.click("Done with changes");
         d.observe(
@@ -17030,23 +17117,44 @@ pub mod encounter_groups {
                 format!("At {size:?}, the member menu and the notes field end at {edges:?}"),
             );
         }
-        // iter-24-B AK1, AB2: Save group ends at the members column's right edge (the member
-        // menu's), not across the Add creatures pane. iter-27-B FB7: it is on the title line,
-        // after the name, as Save encounter is; the save row below keeps Unsaved and Discard.
+        // iter-27-B FB7: Save group is on the title line, after the name, as Save encounter is;
+        // the save row below keeps Unsaved and Discard. iter-28-B FB7 (closure): it ends at the
+        // editor's right edge, above the Add creatures column, as Save encounter does: the
+        // search field's right edge. (iter-24-B AK1 put it at the members column's edge; the
+        // round 27 contract, one place in both editors, replaces that.)
         for size in [SMALL, DEFAULT, LARGE] {
-            let (save, column, name, unsaved) = d.at_size(size, |d| {
+            let (save, edge, name, unsaved) = d.at_size(size, |d| {
+                let save = d.place_of(SAVE_GROUP);
+                // The editor's content edge: the right end of the header's rule, the widest
+                // hairline under the save row.
+                let edge = save.and_then(|save| {
+                    let (width, _) = d.window_size();
+                    let band = egui::Rect::from_min_max(
+                        egui::pos2(0.0, save.bottom()),
+                        egui::pos2(width, save.bottom() + 3.0 * crate::design::XL),
+                    );
+                    d.hairlines_in(band)
+                        .into_iter()
+                        .max_by(|a, b| a.width().total_cmp(&b.width()))
+                        .map(|rule| rule.right())
+                });
                 (
-                    d.place_of(SAVE_GROUP),
-                    d.place_of("More actions for Cinder Wolf"),
+                    save,
+                    edge,
                     d.place_of(&d.name_starting("Group name: ")),
                     d.painted_rect_in("Unsaved", egui::Rect::EVERYTHING),
                 )
             });
+            // At the editor's content edge, within 0.5 px, as Save encounter ends there; and
+            // that edge is the page's (the window less its `M` margin), so a Save that pushes
+            // the editor wider fails too.
+            let page = size.0 - crate::design::M;
             d.observe(
-                "iter-24-B-AK1",
-                save.zip(column)
-                    .is_some_and(|(save, column)| (save.right() - column.right()).abs() <= 0.5),
-                format!("At {size:?}: Save group {save:?}, column's menu {column:?}"),
+                "iter-28-B-FB7",
+                save.zip(edge).is_some_and(|(save, edge)| {
+                    (save.right() - edge).abs() <= 0.5 && (edge - page).abs() <= 0.5
+                }),
+                format!("At {size:?}: Save group {save:?}, the editor's content edge {edge:?}"),
             );
             d.observe(
                 "iter-27-B-FB7",
@@ -17174,7 +17282,7 @@ pub mod encounter_groups {
         // Removal and recovery are their own task, outside the build and arrival costs.
         d.begin_task();
         d.click(&format!("More actions for {GROUP_GOBLINS}"));
-        d.click("Remove…");
+        d.click("Remove");
         d.expect("Undo remove group");
         d.expect("Lost Patrol draft discarded.");
         assert!(d.has("Undo discard of Lost Patrol"));
@@ -18004,28 +18112,9 @@ pub mod encounter_history {
                 format!("{what}, opened at {size:?}: the row and Final state in view: {shown:?}"),
             );
         }
-        // X36: opened at 1200x800, then seen at 960x640: the run's row is still at the list's
-        // top, so the party's final HP is still in view.
-        let smaller = d.at_size(SMALL, |d| {
-            opened_run_in_view(d)?;
-            // The row's name, at most the row's own gap and padding below the list's top.
-            let mut below = None;
-            d.each_painted_text(|text, clip| {
-                if text.galley.job.text == "Old Mill Raid"
-                    && clip.intersects(text.visual_bounding_rect())
-                {
-                    below = Some(text.pos.y - clip.top());
-                }
-            });
-            below
-                .filter(|below| (0.0..=crate::design::L).contains(below))
-                .ok_or_else(|| vec![format!("Old Mill Raid's top below the list's: {below:?}")])
-        });
-        d.observe(
-            "X36-history-follows-resize",
-            smaller.is_ok(),
-            format!("{what}, opened at {DEFAULT:?} and seen at {SMALL:?}: {smaller:?}"),
-        );
+        // X36's "the row stays at the list's top through a resize" went with ruling R2 (FJ2):
+        // the list keeps no room below its end and scrolls the least distance; V31 above and
+        // iter-28-B-R2 below hold the new rule.
         // X37: also where little follows the run, its row reaches the top at a clean edge.
         super::run_continue::history_edges(d);
     }
@@ -18044,14 +18133,19 @@ pub mod encounter_history {
             return;
         };
         let before = row(d);
-        // To the list's top, so that no size can hold the DM's offset in a shorter list.
+        // R2: Open scrolls the least distance, so the list may still be at its top. The DM
+        // scrolls it one notch down, then back to the top, so that no size can hold the DM's
+        // offset in a shorter list; a resize then moves nothing.
+        d.scroll_at(at.center(), 1);
+        let down = row(d);
         d.scroll_up_at(at.center(), 10);
         let scrolled = row(d);
         let larger = d.at_size(DEFAULT, row);
         let back = row(d);
         d.observe(
             "X36-scroll-wins",
-            scrolled.zip(before).is_some_and(|(scrolled, before)| scrolled.top() > before.top())
+            down.zip(before).is_some_and(|(down, before)| down.top() < before.top())
+                && scrolled.zip(down).is_some_and(|(scrolled, down)| scrolled.top() > down.top())
                 && back.map(|r| r.top().round()) == scrolled.map(|r| r.top().round()),
             format!("The row before {before:?}, after the DM's scroll {scrolled:?}, at {DEFAULT:?} {larger:?}, back {back:?}"),
         );
@@ -18120,6 +18214,32 @@ pub mod encounter_history {
                     .all(|(with, before)| with[0] == before[0])
                 && undone == no_result,
             format!("Heading tops before {no_result:?}, with the result {with_result:?}, after Undo {undone:?}"),
+        );
+        // iter-28-B R2 (FJ2): at 1920 the opened run fits below the list's rows, so Open moves
+        // nothing: the headings above keep their y, and the run is whole in view.
+        let held = d.act_at_size(LARGE, |d| {
+            let tops = |d: &Driver<'_>| {
+                ["IN PROGRESS", READY_TO_RUN].map(|heading| {
+                    d.nodes()
+                        .into_iter()
+                        .find(|node| node.name.starts_with(heading))
+                        .map(|node| node.rect.top().round())
+                })
+            };
+            let before = tops(d);
+            d.click_starting(OPEN_OLD);
+            d.expect("Read-only");
+            let after = tops(d);
+            let shown = opened_run_in_view(d);
+            d.click_starting(&OPEN_OLD.replace("Open", "Close"));
+            (before, after, shown)
+        });
+        d.observe(
+            "iter-28-B-R2",
+            held.0.iter().all(Option::is_some) && held.0 == held.1 && held.2.is_ok(),
+            format!(
+                "At {LARGE:?}, heading tops before Open and after, and the run in view: {held:?}"
+            ),
         );
         let before = d.app_mut().timeline.events.len();
         d.click_starting(OPEN_OLD);
@@ -18230,14 +18350,13 @@ pub mod encounter_history {
 
 /// iter-19-B FD3, FT9: the right edges of a group editor's name field, `Belongs to` and
 /// `Group notes`, which ends at the members column's right edge.
-/// The title line's end (iter-27-B FB7: Save group, after the name), `Belongs to`'s and the notes
-/// field's right edges.
+/// The name field's end (with Save group after it on its line, iter-27-B FB7), `Belongs to`'s
+/// and the notes field's right edges. iter-28-B FB7: Save group goes on to the editor's edge.
 fn group_field_edges(d: &Driver<'_>, group: &str) -> Option<(f32, f32, f32)> {
     let field = d.place_of(&format!("Group name: {group}"))?;
-    let name = d
-        .place_of("Save group")
-        .filter(|save| save.left() > field.right() && save.top() < field.bottom())?
-        .right();
+    d.place_of("Save group")
+        .filter(|save| save.left() > field.right() && save.top() < field.bottom())?;
+    let name = field.right();
     let belongs = d
         .nodes()
         .into_iter()
@@ -18614,19 +18733,24 @@ pub mod encounter_owned_groups {
         d.goal("build a group in an encounter's editor");
         d.begin_task();
         d.click_first(&format!("More actions for {NEW_NAME}"));
-        d.click_containing("Move to…");
+        d.click_containing("Move to");
         d.expect(RUN_ARENA);
         assert!(!d.has("Any encounter"));
         // SD2/AD1: in each capture, the submenu is clear of the roster's scroll bar and the
         // splitter before Add participants.
         let clear = |d: &mut Driver<'_>| {
             let size = d.window_size();
-            let clear = super::submenu_clear_of_chrome(d, &[RUN_ARENA, RUN], true)
-                .map(|frame| (frame, d.place_of("Move to…")));
+            let clear = super::submenu_clear_of_chrome(
+                d,
+                ["Move to", "Make available to any encounter", "Delete group"],
+                &[RUN_ARENA, RUN],
+                true,
+            )
+            .map(|frame| (frame, d.place_of("Move to")));
             d.observe(
                 "iter-22-B-SD2",
                 clear.is_ok(),
-                format!("At {size:?}, the Move to… submenu and its menu: {clear:?}"),
+                format!("At {size:?}, the Move to submenu and its menu: {clear:?}"),
             );
         };
         d.state_prepared("move-encounter-group-menu", Sizes::All, clear);
