@@ -2850,7 +2850,7 @@ impl Sessions {
         let takes_pane = (plan.group_open && here) || book.conflict;
         if takes_pane {
             let group = plan.group_open && here;
-            let mut draw = |ui: &mut egui::Ui, book: &mut Book| {
+            let draw = |ui: &mut egui::Ui, book: &mut Book| {
                 if group {
                     (plan.group_editor.borrow_mut())(ui);
                 } else {
