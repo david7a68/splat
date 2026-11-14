@@ -16020,6 +16020,26 @@ pub mod session_recording {
             "Recording heading and input stay in view",
             |d| d.visible_text("RECORDING") && d.in_view_containing("Recording input: "),
         );
+        // Round 28 FM11: the notice is in the tab's message footer, not in the form under
+        // Input, so it pushes no field down while a recording runs.
+        let notice = d
+            .nodes()
+            .into_iter()
+            .find(|node| {
+                node.name
+                    .contains("A new input applies to the next recording")
+            })
+            .map(|node| node.rect);
+        let bands = d.footer_bands();
+        d.observe(
+            "iter-28-S2-FM11",
+            notice.is_some_and(|notice| {
+                bands
+                    .iter()
+                    .any(|band| band.expand(0.5).contains_rect(notice))
+            }),
+            format!("The new-input notice {notice:?} is in a footer band {bands:?}"),
+        );
         d.state("input-during-recording", Sizes::Default);
         d.click_containing("Recording 0:");
         d.click("Stop recording");
