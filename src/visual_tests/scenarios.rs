@@ -13569,11 +13569,13 @@ pub mod session_notes {
         );
         d.replace_text_in("Campaign name", &name);
         d.expect("Cancel");
-        d.scroll_until(pos2(600.0, 400.0), "Move files and save", 20);
+        // R24: the session folder's block comes first, above the details form that Edit
+        // details revealed.
+        d.scroll_up_at(pos2(600.0, 400.0), 20);
         let frame = d.control_frame("Move files and save");
         assert!(
             frame.is_some(),
-            "Move files and save is painted below the details form"
+            "Move files and save is painted above the details form"
         );
         d.observe(
             "iter-16-C-FT4-details",
