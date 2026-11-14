@@ -3101,8 +3101,20 @@ fn members(
             let word = entry
                 .filter(|_| !is_open)
                 .and_then(|entry| change_word(ui, &member.overrides, entry, &side));
-            if !detail.is_empty() || word.is_some() {
+            if word.is_none() && !detail.is_empty() {
+                let response = ui.add(
+                    egui::Label::new(super::detail_text(
+                        ui,
+                        &super::stat_line(&detail),
+                        hp_missing,
+                    ))
+                    .wrap(),
+                );
+                design::named(ui, &response, &detail);
+            } else if word.is_some() {
                 ui.horizontal_wrapped(|ui| {
+                    // The line keeps the text's pitch; the link's target reaches into the gap.
+                    ui.spacing_mut().interact_size.y = 0.0;
                     ui.spacing_mut().item_spacing.x = 0.0;
                     if !detail.is_empty() {
                         let response = ui.add(
