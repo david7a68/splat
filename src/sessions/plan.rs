@@ -2289,6 +2289,8 @@ pub(super) struct Travel {
     watched: BTreeMap<Uuid, Watched>,
     /// The last generation a watched note was given.
     generation: u64,
+    /// Row 123: the plan's `Undo add plan line` failed while its journey's block was closed.
+    undo_fault: Option<checks::UndoFault>,
 }
 
 /// What Timeline's view of a session plan is read from: the campaign, the session and its file,
@@ -2902,6 +2904,37 @@ impl Sessions {
         })
     }
 
+    /// The plan's `Undo add plan line`. A failure keeps its journey and act: that journey's open
+    /// block says why, else the plan's footer, while the journey stands (`plan_line_fault`).
+    fn plan_line_undo_pressed(&mut self) {
+        self.travel.undo_fault = None;
+        if let Some((journey, act, words)) = self.undo_plan_line()
+            && !(self.open_event.as_deref() == Some(journey.as_str())
+                && self.travel.block.failed_for(&journey, &act, words.clone()))
+        {
+            self.travel.undo_fault = Some(checks::UndoFault {
+                journey,
+                act,
+                words,
+            });
+        }
+    }
+
+    /// The words of a plan line's failed Undo, while its journey stands; it ends when the
+    /// journey goes.
+    fn plan_line_fault(&mut self, book: &Book) -> Option<String> {
+        let words = self
+            .travel
+            .undo_fault
+            .as_ref()
+            .and_then(|fault| fault.standing(&book.events))
+            .map(str::to_owned);
+        if words.is_none() {
+            self.travel.undo_fault = None;
+        }
+        words
+    }
+
     /// Row 123, review 3, point 1: the plan line's result while its owner holds: made in this
     /// campaign, for a session whose note is still in the folder at the file it wrote. Else the
     /// result ends here, the one place every reader and Undo pass through.
@@ -3217,6 +3250,7 @@ impl Sessions {
         plan: &Plan<'_>,
     ) {
         self.travel.block.clear_problem();
+        self.travel.undo_fault = None;
         if act == checks::Act::Start {
             // The row opens on its checks, with focus where the length goes.
             self.open_event = Some(id.to_owned());
@@ -3573,6 +3607,11 @@ impl Sessions {
         if let (Some(note), Some(draft)) = (session, self.draft.as_ref()) {
             self.rewards
                 .in_footer(&mut messages, note, draft.revision());
+        }
+        // Row 123: a plan line's Undo that failed while its journey's block was closed, while
+        // that journey stands.
+        if let Some(words) = self.plan_line_fault(book) {
+            messages.outcome(FaultMessage::new(&PlanFault::Check(as_sentence(&words))));
         }
         // Round 27 FE7: `Plan “<name>”`'s result and `Undo plan line`, in the plan of its
         // journey's session, while the note is as the act left it.
@@ -4027,17 +4066,7 @@ impl Sessions {
                     }
                     FooterAct::Scene(act) => scene_act = Some(act),
                     FooterAct::Rewards(act) => rewards_act = Some(act),
-                    FooterAct::UndoPlanLine => {
-                        // Row 123, point 5: the fault keeps its journey: that journey's open
-                        // block, else the plan's notice.
-                        if let Some((journey, act, words)) = self.undo_plan_line()
-                            && !(self.open_event.as_deref() == Some(journey.as_str())
-                                && self.travel.block.failed_for(&journey, &act, words.clone()))
-                        {
-                            self.notice = Some((Tone::Warning, words));
-                            self.notice_session = None;
-                        }
-                    }
+                    FooterAct::UndoPlanLine => self.plan_line_undo_pressed(),
                     FooterAct::File(act) => file_act(book, act, press.ticket),
                 },
                 _ => self.session_press(press, book, plan),
@@ -5844,6 +5873,35 @@ mod tests {
                 .get("Shrine of Cinders"),
             Some(true),
             "the line that stays in the file is in the plan"
+        );
+        // Review 4: the plan's own `Undo add plan line`, with the journey's block closed, fails;
+        // the plan's footer says why while the journey stands, and the fault ends with it.
+        fs::write(&b_note.path, &text).unwrap();
+        sessions
+            .plan_from_timeline(&book, &road, &chosen("Shrine of Cinders"), &names)
+            .unwrap();
+        assert_ne!(sessions.open_event.as_deref(), Some(road.as_str()));
+        read_only(true);
+        sessions.plan_line_undo_pressed();
+        read_only(false);
+        let said = sessions.plan_line_fault(&book);
+        assert!(
+            said.as_deref()
+                .is_some_and(|words| words.starts_with("Plan line not removed. ")),
+            "{said:?}"
+        );
+        let mut without = Book::default();
+        without.events = book
+            .events
+            .iter()
+            .filter(|event| event.id != road)
+            .cloned()
+            .collect();
+        assert_eq!(sessions.plan_line_fault(&without), None, "J left");
+        assert_eq!(
+            sessions.plan_line_fault(&book),
+            None,
+            "the fault ended with J"
         );
         // Review 3, point 2: B open with unsaved words, its file renamed outside; the scan
         // finds the new file. The act is refused, and nothing writes either file.
