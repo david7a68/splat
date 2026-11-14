@@ -541,7 +541,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/design/results.rs", "record", &[Ban::Results]),
         ("src/dndbeyond.rs", "footer_messages", &[Ban::Results]),
-        ("src/dndbeyond.rs", "show", &[Ban::Results, Ban::Layout(1)]),
+        ("src/dndbeyond.rs", "show", &[Ban::Results]),
         ("src/encounter_run.rs", "keep_step", &[Ban::Results]),
         ("src/encounter_run.rs", "open", &[Ban::Results]),
         (
@@ -718,15 +718,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/world.rs", "entry_controls", &[Ban::Results]),
         ("src/world.rs", "stamp", &[Ban::Results]),
         // Package K: raw egui calls that a layout part replaces.
-        ("src/art.rs", "show_viewer", &[Ban::Layout(2)]),
-        (
-            "src/campaigns.rs",
-            "selector",
-            &[Ban::Layout(1), Ban::Extras(2)],
-        ),
         ("src/copy_dialog.rs", "show", &[Ban::Layout(3)]),
-        ("src/creature_filter.rs", "filter_bar", &[Ban::Layout(1)]),
-        ("src/creature_filter.rs", "menu", &[Ban::Layout(2)]),
         (
             "src/encounter_run/ad_hoc.rs",
             "add_creature_form",
@@ -863,8 +855,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "wide_tables_keep_whole_words_and_can_scroll_to_the_last_column",
             &[Ban::Layout(1)],
         ),
-        ("src/party_bar.rs", "more_players", &[Ban::Layout(2)]),
-        ("src/party_bar.rs", "paint", &[Ban::Layout(1)]),
         (
             "src/processing/settings.rs",
             "input_section",
@@ -974,8 +964,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "footer",
             &[Ban::Words, Ban::Pane(1)],
         ),
-        ("src/combat_sync.rs", "labelled_stepper", &[Ban::Extras(1)]),
-        ("src/dndbeyond.rs", "show_import", &[Ban::Extras(1)]),
         (
             "src/encounter_run/loot.rs",
             "loot_section",
@@ -1004,11 +992,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Extras(1)],
         ),
         ("src/encounter_run/view.rs", "log_link", &[Ban::Extras(1)]),
-        (
-            "src/party.rs",
-            "wrapped_sheet_cells_keep_the_next_pair_on_one_row",
-            &[Ban::Extras(1)],
-        ),
         ("src/sessions/plan.rs", "word_link", &[Ban::Extras(1)]),
         ("src/sessions/plan.rs", "plan_row_with", &[Ban::Extras(1)]),
         (
@@ -1060,7 +1043,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ("src/library/creature.rs", "show", &[Ban::Extras(1)]),
         ("src/library/reader.rs", "show", &[Ban::Extras(1)]),
         ("src/markdown_view.rs", "flush", &[Ban::Extras(1)]),
-        ("src/party.rs", "storage_notice", &[Ban::Extras(2)]),
         (
             "src/processing/settings.rs",
             "field_reason",

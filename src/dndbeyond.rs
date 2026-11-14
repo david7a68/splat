@@ -252,10 +252,6 @@ impl DndBeyond {
         });
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw space, choices, search fields or headings that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     pub fn show_import(
         &mut self,
         ui: &mut egui::Ui,
@@ -263,14 +259,11 @@ impl DndBeyond {
         local: &mut Campaigns,
     ) {
         if session.is_none() {
-            let heading_visible = ui
-                .ctx()
-                .data(|data| data.get_temp::<f32>(egui::Id::new("account_heading_content_y")))
-                .is_some_and(|y| {
-                    ui.clip_rect()
-                        .contains(egui::pos2(ui.clip_rect().center().x, y))
-                });
-            if ui.ctx().content_rect().width() >= 1000.0 || heading_visible {
+            // In the narrow layout the account section is below the campaigns, often out of
+            // view: the hint says how to import. It depends on the window's width and the
+            // session only, never on what is in view, so it keeps its place while the DM opens
+            // a form above the account (a press never moves the page under the pointer).
+            if ui.ctx().content_rect().width() >= 1000.0 {
                 return;
             }
             ui.horizontal_wrapped(|ui| {
@@ -324,7 +317,7 @@ impl DndBeyond {
                     let added = local.is_added(&remote.id);
                     let row = ui.horizontal(|ui| {
                         use crate::design::{self, Action, L};
-                        let left = ui.cursor().left();
+                        let item_gap = ui.spacing().item_spacing.x;
                         // Round 27 review: the action's room comes first, so Add (or Added) is
                         // always whole inside the column; the name gets what is left, and a name
                         // too long for it ends in `…`, whole on hover.
@@ -345,15 +338,24 @@ impl DndBeyond {
                             name_room,
                         );
                         let cut = words.elided;
-                        let name = ui.add(egui::Label::new(words));
-                        if cut {
-                            name.on_hover_text(&remote.name);
-                        }
-                        // One action column, `L` after the widest name that fits.
-                        let at = left + column.min(name_room) + L;
-                        // The cursor is already one item gap past the name.
-                        ui.add_space((at - ui.cursor().left()).max(0.0));
+                        // One action column, `L` after the widest name that fits: the name
+                        // takes a cell of that width.
+                        ui.spacing_mut().item_spacing.x = L;
+                        let cell = egui::vec2(column.min(name_room), ui.spacing().interact_size.y);
+                        ui.allocate_ui_with_layout(
+                            cell,
+                            egui::Layout::left_to_right(egui::Align::Center),
+                            |ui| {
+                                ui.set_min_size(cell);
+                                ui.set_max_width(cell.x);
+                                let name = ui.add(egui::Label::new(words));
+                                if cut {
+                                    name.on_hover_text(&remote.name);
+                                }
+                            },
+                        );
                         ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                            ui.spacing_mut().item_spacing.x = item_gap;
                             if added {
                                 crate::design::status(
                                     ui,
@@ -403,7 +405,7 @@ impl DndBeyond {
 
     #[allow(
         clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state`, and raw egui calls (design::results::STAGED_ALLOWS)"
+        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
     )]
     pub fn show(
         &mut self,
@@ -469,65 +471,42 @@ impl DndBeyond {
         // Round 26: the link's error and result are in the pane's footer (`footer_messages`).
         let current = campaign.dndbeyond_campaign_id;
         let mut selected = current.clone();
-        let label = current
+        // A link the list does not hold yet (not refreshed, or gone from the account) keeps
+        // its saved name as a choice, so the control still names it.
+        let unlisted = current
             .as_ref()
+            .filter(|id| !self.campaigns.iter().any(|c| &c.id == *id))
             .map(|id| {
-                self.campaigns
-                    .iter()
-                    .find(|c| &c.id == id)
-                    .map(|c| c.name.clone())
-                    .or_else(|| campaign.dndbeyond_campaign_name.clone())
-                    .unwrap_or_else(|| format!("Campaign {id}"))
-            })
-            .unwrap_or_else(|| "Not linked".into());
-        ui.horizontal(|ui| {
-            let dropdown = crate::design::locked(ui, blocked, |ui| {
-                egui::ComboBox::from_id_salt(("ddb_link", campaign.id))
-                    .icon(crate::design::combo_icon)
-                    // Round 26 FN6: one width in every state. A lock keeps the form's width,
-                    // so the picker ends with the Session folder field; its reason is above.
-                    .width(ui.available_width().min(crate::design::FORM_WIDTH))
-                    .selected_text(crate::design::Type::Body.rich(ui, label).color(
-                        if ui.is_enabled() {
-                            crate::design::colors().text
-                        } else {
-                            crate::design::colors().disabled
-                        },
-                    ))
-                    .show_ui(ui, |ui| {
-                        if crate::design::extras::choice_wrapped(
-                            ui,
-                            selected.is_none(),
-                            "Not linked",
-                            None,
-                        )
-                        .clicked()
-                        {
-                            selected = None;
-                        }
-                        for remote in &self.campaigns {
-                            let used = local.linked_elsewhere(&remote.id);
-                            ui.add_enabled_ui(!used, |ui| {
-                                let name = if used {
-                                    format!("{} (already linked)", remote.name)
-                                } else {
-                                    remote.name.clone()
-                                };
-                                if crate::design::extras::choice_wrapped(
-                                    ui,
-                                    selected.as_ref() == Some(&remote.id),
-                                    &name,
-                                    None,
-                                )
-                                .clicked()
-                                {
-                                    selected = Some(remote.id.clone());
-                                }
-                            });
-                        }
-                    })
+                let name = campaign
+                    .dndbeyond_campaign_name
+                    .clone()
+                    .unwrap_or_else(|| format!("Campaign {id}"));
+                (Some(id.clone()), name)
             });
-            crate::design::named(ui, &dropdown.response, "D&D Beyond campaign link");
+        ui.horizontal(|ui| {
+            let mut choices = crate::design::Dropdown::new(
+                crate::field_id!("ddb_link").of(campaign.id),
+                "D&D Beyond campaign link",
+            )
+            .choice(None, "Not linked")
+            .choices(unlisted);
+            for remote in &self.campaigns {
+                choices = if local.linked_elsewhere(&remote.id) {
+                    choices.blocked_choice(
+                        Some(remote.id.clone()),
+                        remote.name.as_str(),
+                        "Already linked to another campaign.",
+                    )
+                } else {
+                    choices.choice(Some(remote.id.clone()), remote.name.as_str())
+                };
+            }
+            // Round 26 FN6: one width in every state. A lock keeps the form's width, so the
+            // picker ends with the Session folder field; its reason is above.
+            let dropdown = choices
+                .width(ui.available_width().min(crate::design::FORM_WIDTH))
+                .blocked(blocked)
+                .show(ui, &mut selected);
             if ui.is_rect_visible(dropdown.response.rect) {
                 self.visible_last_frame = true;
                 let key = current.clone().map(|id| (campaign.id, id));

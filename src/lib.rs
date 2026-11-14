@@ -1192,12 +1192,17 @@ impl Splat {
     /// One status line in the rail. Some lead to where the DM can act on them.
     /// The account line also shows a spinner while the party is read.
     fn rail_status(&mut self, ui: &mut egui::Ui, state: Status<'static>, account: bool) {
-        let held = self.world_page.held_npc().map(|name| {
-            format!(
+        // Round 28 FJ6: World's held NPC, else the one Lookup holds. Each says where its card is.
+        let held = match self.world_page.held_npc() {
+            Some(name) => Some(format!(
                 "{}: {name}. Show its card on World.",
                 world::page::UNSAVED_NPC
-            )
-        });
+            )),
+            None => self
+                .lookup
+                .generated_name()
+                .map(|name| format!("{}: {name}. Show it in Lookup.", world::page::UNSAVED_NPC)),
+        };
         let full = match state.word {
             world::page::UNSAVED_NPC => held.as_deref().unwrap_or(state.word),
             "Signed out" => "Signed out of D&D Beyond",
@@ -1227,11 +1232,15 @@ impl Splat {
                 (response, rect)
             }
         } else if state.word == world::page::UNSAVED_NPC {
-            // The held NPC's card is on World, wherever the DM is now.
+            // The held NPC's card is on World, wherever the DM is now; Lookup's is in Lookup.
             let response = design::status_link(ui, state);
             if response.clicked() {
-                self.world_page.open_held();
-                self.page = Page::World;
+                if self.world_page.has_generated() {
+                    self.world_page.open_held();
+                    self.page = Page::World;
+                } else if !self.lookup.open {
+                    self.toggle_lookup();
+                }
             }
             {
                 let rect = response.rect;
@@ -1541,7 +1550,11 @@ impl Splat {
                 },
             ),
             // A held NPC locks the campaign switcher, so the rail names it like other drafts.
-            (self.world_page.has_generated(), world::page::UNSAVED_NPC),
+            // Round 28 FJ6: the rail names an NPC that Lookup holds too, also when Lookup is closed.
+            (
+                self.world_page.has_generated() || self.lookup.generated_name().is_some(),
+                world::page::UNSAVED_NPC,
+            ),
             (
                 self.encounters.encounter_dirty(),
                 self.encounters.draft_word(),

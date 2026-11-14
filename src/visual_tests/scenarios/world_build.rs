@@ -4849,6 +4849,29 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         d.has(&row) && !d.has("Save NPC"),
         "Back opens the last entry under the NPC's row, and the NPC stays held",
     );
+    // Round 28 FJ6: the rail names the NPC that Lookup holds, also with Lookup closed, and its
+    // status opens Lookup again, where the NPC's row is.
+    let in_rail = format!(
+        "{}: {npc}. Show it in Lookup.",
+        crate::world::page::UNSAVED_NPC
+    );
+    d.observe(
+        "iter-28-C-FJ6",
+        d.has(&in_rail),
+        "With Lookup open, the rail names the NPC it holds",
+    );
+    d.click(NAV_LOOKUP);
+    d.observe(
+        "iter-28-C-FJ6",
+        !d.has(&row) && d.has(&in_rail),
+        "With Lookup closed, the rail still names the NPC that waits to be saved",
+    );
+    d.click(&in_rail);
+    d.observe(
+        "iter-28-C-FJ6",
+        d.has(&row) && d.has(&in_rail),
+        "The rail's status opens Lookup on the NPC's row",
+    );
     // Section 7, recorded as it is: Lookup's place is not kept across a restart, and the held
     // NPC goes with it.
     d.restart();

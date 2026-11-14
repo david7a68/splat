@@ -11150,12 +11150,19 @@ pub mod signed_in {
         );
         // Round 26 FN6: the locked picker keeps the form's width, so it ends with the session
         // folder field, as it does unlocked.
-        let edges = d.place_of("D&D Beyond campaign link").zip(
-            d.nodes()
-                .iter()
-                .find(|node| node.name == "Folder" && node.role == egui::accesskit::Role::TextInput)
-                .map(|node| node.rect),
-        );
+        let edges = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name.starts_with("D&D Beyond campaign link: "))
+            .map(|node| node.rect)
+            .zip(
+                d.nodes()
+                    .iter()
+                    .find(|node| {
+                        node.name == "Folder" && node.role == egui::accesskit::Role::TextInput
+                    })
+                    .map(|node| node.rect),
+            );
         d.observe(
             "iter-26-C-FN6",
             edges.is_some_and(|(picker, folder)| (picker.right() - folder.right()).abs() <= 1.0),
