@@ -842,10 +842,16 @@ impl Reader {
     /// save row is on screen). `pass` is this pass's `cumulative_pass_nr`.
     pub fn share_with(&self, other: &mut super::Reader, pass: u64) {
         self.edit_forms_into(&mut other.edited_elsewhere);
-        other.logs_elsewhere.clear();
-        other
-            .logs_elsewhere
-            .extend(self.held.log_fields.keys().copied());
+        // Copied again only when a field here opened or closed (its stamp), not each pass.
+        if other.logs_elsewhere_from != self.held.log_fields.keys {
+            #[cfg(test)]
+            super::LOG_KEY_SHARES.with(|count| count.set(count.get() + 1));
+            other.logs_elsewhere.clear();
+            other
+                .logs_elsewhere
+                .extend(self.held.log_fields.keys().copied());
+            other.logs_elsewhere_from = self.held.log_fields.keys;
+        }
         other.form_shown_elsewhere = self
             .form_drawn
             .filter(|(id, drawn)| *drawn + 1 >= pass && self.edits.contains_key(id))

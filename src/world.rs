@@ -2227,6 +2227,60 @@ pub(crate) fn next_order() -> u64 {
     ORDER.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1
 }
 
+/// A reader's open `Add to Log` fields, by campaign and note. A change of its keys (a field
+/// opens or closes) takes a new stamp, so the other reader rebuilds its copy of the keys only
+/// then (`Reader::share_with`), not on each pass. Typing in a field keeps the stamp.
+#[derive(Default)]
+struct LogFields {
+    fields: HashMap<LogKey, LogField>,
+    /// 0 for none ever opened; else a stamp from `next_order`, new at each change of the keys.
+    keys: u64,
+}
+
+impl LogFields {
+    /// The field of this note, opened empty when it is not open.
+    fn open(&mut self, key: LogKey) -> &mut LogField {
+        if !self.fields.contains_key(&key) {
+            self.keys = next_order();
+        }
+        self.fields.entry(key).or_default()
+    }
+
+    fn remove(&mut self, key: &LogKey) -> Option<LogField> {
+        let removed = self.fields.remove(key);
+        if removed.is_some() {
+            self.keys = next_order();
+        }
+        removed
+    }
+
+    /// The words and state of an open field; its keys stay.
+    fn get_mut(&mut self, key: &LogKey) -> Option<&mut LogField> {
+        self.fields.get_mut(key)
+    }
+
+    #[cfg(test)]
+    fn clear(&mut self) {
+        if !self.fields.is_empty() {
+            self.keys = next_order();
+        }
+        self.fields.clear();
+    }
+}
+
+impl std::ops::Deref for LogFields {
+    type Target = HashMap<LogKey, LogField>;
+    fn deref(&self) -> &Self::Target {
+        &self.fields
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Rebuilds of a reader's copy of the other reader's Log keys, on this thread.
+    pub(crate) static LOG_KEY_SHARES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Lookup's and the World page's reader, and its controls for the item on show.
 /// What a reader holds for the DM that no reset of the reader may drop: the DM's typed words,
 /// and the results whose end events are their own (`Kept::ENDS`). Lookup's Clear and World's
@@ -2237,7 +2291,7 @@ pub(crate) fn next_order() -> u64 {
 pub(crate) struct Held {
     /// Each open `Add to Log` field, by its entry and the session it was opened in. Its words
     /// wait while the reader shows another entry; a restart loses them, as every held form.
-    log_fields: HashMap<LogKey, LogField>,
+    log_fields: LogFields,
     /// The Log lines whose entry is gone, for the footer, until the DM copies or dismisses each.
     gone_log_lines: Vec<GoneLog>,
     /// Log lines the DM dismissed with their typed words, each with its Undo (ruling R3): the
@@ -2319,7 +2373,9 @@ pub struct Reader {
     pub edited_elsewhere: Vec<Uuid>,
     /// The other reader's open Log fields, by campaign and note. An edit form here holds them
     /// back too, so its save row says so (ruling Q-t): the waiting state is the two readers'.
-    pub logs_elsewhere: Vec<LogKey>,
+    pub logs_elsewhere: std::collections::HashSet<LogKey>,
+    /// The other reader's `LogFields` stamp that `logs_elsewhere` was copied from.
+    logs_elsewhere_from: u64,
     /// The note whose edit form the other reader drew in its last pass. Its save row explains
     /// a waiting Log field, so this reader's footer does not say it again.
     pub form_shown_elsewhere: Option<Uuid>,
@@ -2749,7 +2805,7 @@ impl Reader {
     /// header's do. The field starts with `words`, selected, unless the DM already typed words
     /// there.
     pub fn open_log(&mut self, campaign: Uuid, id: Uuid, name: &str, words: &str) {
-        let open = self.held.log_fields.entry((campaign, id)).or_default();
+        let open = self.held.log_fields.open((campaign, id));
         open.field.focus = true;
         name.clone_into(&mut open.name);
         if open.field.words.trim().is_empty() {
@@ -6498,6 +6554,15 @@ mod tests {
                 form.begin_edit(&campaign, &index.items[at]);
             }
             harness.run_steps(3);
+            // Review of f29ef2c0: unchanged passes copy no Log keys again; a field that opens
+            // or closes in one reader is the only thing that makes the other copy them.
+            let shares = LOG_KEY_SHARES.with(std::cell::Cell::get);
+            harness.run_steps(3);
+            assert_eq!(
+                LOG_KEY_SHARES.with(std::cell::Cell::get),
+                shares,
+                "no copy of the Log keys on an unchanged pass"
+            );
             let rows = harness.query_all_by_label(LOG_WAITS_FOR_CANCEL).count();
             let (world, lookup) = harness.state();
             let (form, other) = if form_in_world {
