@@ -11844,6 +11844,24 @@ pub mod world {
         d.expect("Undo stat block change");
         let (success, detail) = world_build::finished_change_tone(d, "Stat block set to Guard.");
         d.observe("iter-20-D-FD5-stat-block", success, detail);
+        // Round 28 FF3: Lookup's values share one value column. The Stat block's value starts
+        // where the Status row's value starts, each in its own row.
+        let edges = d.place_of("Change Status").map(|change| {
+            let block = egui::Rect::from_min_max(
+                egui::pos2(0.0, change.top() - crate::design::XXL * 3.0),
+                egui::pos2(change.left(), change.bottom()),
+            );
+            (
+                d.painted_word_rect("Guard", block),
+                d.painted_word_rect("alive", block),
+            )
+        });
+        d.observe(
+            "iter-28-D-FF3",
+            matches!(edges, Some((Some(link), Some(value)))
+                if (link.left() - value.left()).abs() <= 0.5 && link.bottom() <= value.top()),
+            format!("Stat block's value and Status's value (left edge, rows): {edges:?}"),
+        );
         d.state("world-npc-in-run", Sizes::All);
         d.observe(
             "NPC arrival",

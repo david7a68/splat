@@ -639,15 +639,6 @@ fn missing_link(ui: &mut egui::Ui, name: &str, stacked: bool) {
     }
 }
 
-/// A compact reader's missing link: its muted `Small` label, then `⚠ <name> · Not found` in the
-/// warning tone, as the place that waits for a choice reads.
-fn compact_missing(ui: &mut egui::Ui, label: &str, name: &str) {
-    ui.horizontal(|ui| {
-        ui.label(Type::Small.rich(ui, label).color(colors().muted));
-        missing_link(ui, name, false);
-    });
-}
-
 /// `line_start` for a quiet action that starts a line: the first in its row, or a later one that
 /// wraps to a line of its own. A later one on the same line keeps its normal target, so the two
 /// targets never overlap.
@@ -4501,43 +4492,72 @@ impl Reader {
                     .iter()
                     .map(|(_, group)| ("Part of", *group)),
             );
-            let targets: Vec<_> = targets
+            // One value per row, in the label column that the Status row below uses (FF3): every
+            // value of the block starts at one edge. A label with several groups (Part of) is
+            // one row whose links wrap. With no target, no row, so no gap.
+            let mut rows: Vec<(&str, Vec<usize>)> = Vec::new();
+            for (label, at) in targets
                 .into_iter()
                 .filter_map(|(label, target)| target.map(|at| (label, at)))
-                .collect();
-            // With no target, the line draws no row, so it adds no gap.
-            if !targets.is_empty() {
-                ui.horizontal_wrapped(|ui| {
-                    for (n, (label, at)) in targets.into_iter().enumerate() {
-                        if n > 0 {
-                            ui.label(Type::Small.rich(ui, "·").color(colors().muted));
-                        }
-                        ui.label(Type::Small.rich(ui, label).color(colors().muted));
-                        if design::link(ui, &index.items[at].entry.name).clicked() {
-                            go = Some(Go::Item(at, None));
-                        }
-                    }
-                });
+            {
+                match rows.last_mut() {
+                    Some((last, ats)) if *last == label => ats.push(at),
+                    _ => rows.push((label, vec![at])),
+                }
             }
-            // A link fault reads as every compact value does (FD6): the muted label, then the
-            // value in the warning tone, `⚠ <name> · Not found`.
+            let width = self.relationship_value_width(ui, item, index);
+            let stacked = Self::stacked(ui);
+            for (label, ats) in rows {
+                Self::value_row(
+                    ui,
+                    label,
+                    width,
+                    |ui| {
+                        for (n, at) in ats.into_iter().enumerate() {
+                            if n > 0 {
+                                ui.label(Type::Small.rich(ui, "·").color(colors().muted));
+                            }
+                            if design::link(ui, &index.items[at].entry.name).clicked() {
+                                go = Some(Go::Item(at, None));
+                            }
+                        }
+                    },
+                    None,
+                );
+            }
+            // A link fault reads as every value does (FD6): the muted label in its column, then
+            // the value in the warning tone, `⚠ <name> · Not found`.
             if broken_links(item, index).contains(&LinkProblem::StatBlockNotFound) {
                 let name = reader_field(&item.entry, "creature")
                     .map(|v| link_name(v, "Stat block"))
                     .unwrap_or_else(|| "Stat block".into());
-                compact_missing(ui, "Stat block", &name);
+                Self::value_row(
+                    ui,
+                    "Stat block",
+                    width,
+                    |ui| missing_link(ui, &name, stacked),
+                    None,
+                );
             }
             let choices = index.place_choices(item.entry.id);
             if !choices.is_empty() {
-                ui.horizontal(|ui| {
-                    ui.label(Type::Small.rich(ui, "In").color(colors().muted));
-                    let name = world_field(&item.entry, "in")
-                        .map(|value| link_name(value, "Place"))
-                        .unwrap_or_default();
-                    if warning_link(ui, &place_choices_words(&name, choices.len())).clicked() {
-                        self.place_choices_open = !self.place_choices_open;
-                    }
-                });
+                let name = world_field(&item.entry, "in")
+                    .map(|value| link_name(value, "Place"))
+                    .unwrap_or_default();
+                let mut open = false;
+                Self::value_row(
+                    ui,
+                    "In",
+                    width,
+                    |ui| {
+                        open = warning_link(ui, &place_choices_words(&name, choices.len()))
+                            .clicked();
+                    },
+                    None,
+                );
+                if open {
+                    self.place_choices_open = !self.place_choices_open;
+                }
                 if self.place_choices_open {
                     let (followed, chosen) = self.place_chooser(ui, item, index, None);
                     go = go.or(followed);
@@ -4557,7 +4577,8 @@ impl Reader {
                 && index.place_choices(item.entry.id).is_empty()
                 && let Some(place) = reader_field(&item.entry, "in").and_then(Value::as_str)
             {
-                compact_missing(ui, "In", place.trim_matches(['[', ']']));
+                let name = place.trim_matches(['[', ']']);
+                Self::value_row(ui, "In", width, |ui| missing_link(ui, name, stacked), None);
             }
             if go.is_some() {
                 return go;
