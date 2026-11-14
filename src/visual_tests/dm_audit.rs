@@ -1478,8 +1478,7 @@ fn dm_audit_stale_library() {
     println!("STALE: roster had the cultist: {before}. Ogre added and saved.");
     // Then the DM adds text from the Library.
     d.click(NAV_LIBRARY);
-    d.click("Section");
-    d.click("Library section: Encounters");
+    d.choose("Section", "Encounters");
     d.click_containing("Bridge Ambush");
     d.click(EDIT_MARKDOWN);
     let draft_has_ogre = d

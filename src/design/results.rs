@@ -724,7 +724,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "selector",
             &[Ban::Layout(1), Ban::Extras(2)],
         ),
-        ("src/copy_dialog.rs", "show", &[Ban::Layout(3)]),
+        ("src/copy_dialog.rs", "show", &[Ban::Layout(2)]),
         ("src/creature_filter.rs", "filter_bar", &[Ban::Layout(1)]),
         ("src/creature_filter.rs", "menu", &[Ban::Layout(2)]),
         (
@@ -822,15 +822,14 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/library.rs",
             "new_entry",
-            &[Ban::Layout(3), Ban::Extras(2)],
+            &[Ban::Layout(1), Ban::Extras(2)],
         ),
         (
             "src/library.rs",
             "package_form",
             &[Ban::Layout(5), Ban::Extras(5)],
         ),
-        ("src/library.rs", "scope_menu", &[Ban::Layout(1)]),
-        ("src/library.rs", "show", &[Ban::Layout(6)]),
+        ("src/library.rs", "show", &[Ban::Layout(5)]),
         ("src/lookup.rs", "panel", &[Ban::Layout(2)]),
         (
             "src/lookup.rs",

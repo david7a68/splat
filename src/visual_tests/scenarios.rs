@@ -1302,8 +1302,7 @@ pub mod library_browse {
             "frame times are not stable while scenarios share the CPU",
         );
 
-        d.click("Section");
-        d.click(&format!("Library section: {CREATURES_SECTION}"));
+        d.choose("Section", CREATURES_SECTION);
         d.expect(CREATURES_COUNT);
         d.state("creature-list", Sizes::Default);
         d.click_containing(NEXT_CREATURE);
@@ -1322,8 +1321,7 @@ pub mod creature_filter {
     const SEARCH_RESULTS: &str = "SEARCH RESULTS";
 
     pub fn run(d: &mut Driver<'_>) {
-        d.click("Section");
-        d.click("Library section: Creatures");
+        d.choose("Section", "Creatures");
         d.expect(CREATURES_COUNT);
         d.begin_task();
 
@@ -2159,7 +2157,7 @@ pub mod reader_tables {
         go_library(d);
         d.click("New entry");
         d.type_into("Entry name", "Spell Progression");
-        d.click("Kind of entry");
+        d.click_starting("Kind of entry");
         d.click("Rule");
         d.click("Create entry");
         assert!(
@@ -5850,12 +5848,13 @@ pub mod dialogs {
     pub fn run(d: &mut Driver<'_>) {
         go_library(d);
         d.begin_task();
-        d.click("Section");
-        d.click(&format!("Library section: {CREATURES_SECTION}"));
+        d.choose("Section", CREATURES_SECTION);
         d.expect(CREATURE);
         d.click(COPY_TO);
         d.expect(COPY_TITLE);
         d.expect("Type a new folder, or choose one. A new folder is made with the file.");
+        // Rows 135 and 137 (FA9, FF6): the dialog says in plain words that nothing else goes.
+        d.expect("Copies no other entry.");
         d.state("copy-dialog", Sizes::All);
         d.goal("open the copy dialog");
 
@@ -5867,7 +5866,20 @@ pub mod dialogs {
             d.visible_text(&format!("Campaign · {CAMPAIGN}")),
             "The dialog starts on the active campaign",
         );
-        d.click("Destination");
+        d.click_starting("Destination");
+        // Row 4 (AF1, SF1): the chosen destination has the check; another row has none.
+        d.observe_both(
+            "iter-28-L-4",
+            "The chosen destination row has a check mark and another row has none",
+            |d| {
+                let check = |name: &str| {
+                    d.place_of(name)
+                        .map(|row| d.painted_in(row).contains(crate::design::icons::OK))
+                };
+                check(&format!("Campaign · {CAMPAIGN}")) == Some(true)
+                    && check(&format!("Package · {MODULE}")) == Some(false)
+            },
+        );
         d.state("copy-destination-menu", Sizes::Default);
         d.click(&format!("Campaign · {CAMPAIGN}"));
         // The copy dialog has fixed bounds; its wide layout is captured before typing.
@@ -11348,8 +11360,7 @@ pub mod nav_table {
         go_library(d);
         d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
         d.click(EVERYTHING);
-        d.click("Section");
-        d.click(&format!("Library section: {SECTION}"));
+        d.choose("Section", SECTION);
         d.expect(ENTRY_ROW);
         d.scroll_at(pos2(720.0, 400.0), 2);
         let entry_scroll = d.scroll_position_of_reader(ENTRY);
@@ -22637,8 +22648,7 @@ pub mod session_plan {
 
         // A save on Encounters reaches the Library, so its next save is not a false conflict.
         go_library(d);
-        d.click("Section");
-        d.click("Library section: Encounters");
+        d.choose("Section", "Encounters");
         d.click_containing("Ford of Ash");
         d.click(EDIT_MARKDOWN);
         d.type_into_editor("More tactics.\n");
@@ -22854,7 +22864,7 @@ pub mod package_to_table {
         d.state("new-creature-read", Sizes::All);
         d.click("New entry");
         d.type_into("Entry name", "Copper Spark");
-        d.click("Kind of entry");
+        d.click_starting("Kind of entry");
         d.click("Spell");
         d.click("Create entry");
         let spell = d.editor_text().expect("new spell table");
@@ -22974,7 +22984,7 @@ pub mod share_to_package {
         d.type_into(SEARCH_LIBRARY, "Watch Orders");
         d.click_starting("Watch Orders · ");
         d.click(COPY_TO);
-        d.click("Destination");
+        d.click_starting("Destination");
         d.click(&format!("Package · {MODULE}"));
         d.wait_for_text("Ashen Marches/Captain Varra.md");
         d.expect("Also copies Captain Varra, because Watch Orders links to it.");

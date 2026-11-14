@@ -8305,7 +8305,7 @@ pub fn book_to_package(d: &mut Driver<'_>) {
     search_library(d, "Aboleth");
     d.click_starting("Aboleth · ");
     d.click(COPY_TO);
-    d.click("Destination");
+    d.click_starting("Destination");
     d.click(&format!("Package · {MODULE}"));
     d.replace_text_in("Copy name", "Watch Aboleth");
     d.type_into("Folder", "Creatures");

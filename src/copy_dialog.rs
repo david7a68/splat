@@ -11,6 +11,8 @@ use std::{path::PathBuf, sync::mpsc};
 use uuid::Uuid;
 
 const COPY_FOLDER: design::FieldId = crate::field_id!("copy_folder").once(design::Once::CreateForm);
+const COPY_DESTINATION: design::FieldId =
+    crate::field_id!("copy_destination").once(design::Once::CreateForm);
 
 pub struct CopyDialog {
     source: CopySource,
@@ -191,28 +193,18 @@ impl CopyDialog {
                 .collect();
             let old = self.destination;
             design::field(ui, "Destination", None, None, |ui| {
-                let combo = crate::library::form_control(ui, |ui| {
-                    egui::ComboBox::from_id_salt("copy_destination")
-                        .icon(design::combo_icon)
+                // Row 4 (AF1, SF1): the drop-down part marks the chosen destination with its
+                // check and keeps every other row's words at one x.
+                let mut rows = destinations
+                    .iter()
+                    .map(|(campaign, id, label, ..)| (Some((*campaign, *id)), label.as_str()));
+                if let Some((value, label)) = rows.next() {
+                    design::Dropdown::new(COPY_DESTINATION, "Destination")
+                        .choice(value, label)
+                        .choices(rows)
                         .width(ui.available_width())
-                        .selected_text(
-                            destinations
-                                .iter()
-                                .find(|(c, id, ..)| Some((*c, *id)) == self.destination)
-                                .map_or("Choose destination", |d| d.2.as_str()),
-                        )
-                        .show_ui(ui, |ui| {
-                            for (campaign, id, label, ..) in &destinations {
-                                design::choice_value(
-                                    ui,
-                                    &mut self.destination,
-                                    Some((*campaign, *id)),
-                                    label,
-                                );
-                            }
-                        })
-                });
-                design::named(ui, &combo.response, "Destination");
+                        .show(ui, &mut self.destination);
+                }
             });
             let response = design::text_field(ui, "Copy name", &mut self.name, None, None);
             if std::mem::take(&mut self.focus_name) {

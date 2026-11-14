@@ -2110,6 +2110,24 @@ impl<'a> Driver<'a> {
         self.click_rect(rect, "Click: dropdown");
     }
 
+    /// Open the drop-down named `name` (its accessible name is `name` or `name: <chosen>`) and
+    /// click its row `choice`: the row in its list, which is as wide as the control and starts at
+    /// its left edge, never another control with the same words (a navigation button).
+    pub fn choose(&mut self, name: &str, choice: &str) {
+        let prefix = format!("{name}: ");
+        let control = self.aim(&format!("drop-down {name:?}"), |node| {
+            node.role == Role::ComboBox && (node.name == name || node.name.starts_with(&prefix))
+        });
+        self.click_rect(control, &format!("Click: {name}"));
+        let row = self.aim(&format!("{choice:?} in drop-down {name:?}"), |node| {
+            node.name == choice
+                && Self::is_control(node)
+                && (node.rect.left() - control.left()).abs() <= 1.0
+                && node.rect.width() <= control.width() + 1.0
+        });
+        self.click_rect(row, &format!("Click: {choice}"));
+    }
+
     fn is_text_input(role: Role) -> bool {
         matches!(
             role,
