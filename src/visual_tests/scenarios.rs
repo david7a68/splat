@@ -6952,7 +6952,9 @@ pub mod run_long_names {
             });
             d.observe(
                 "iter-28-P3a",
-                gap.is_some_and(|(gap, fits)| fits && gap > 0.0 && (gap - crate::design::S).abs() <= 1.0),
+                gap.is_some_and(|(gap, fits)| {
+                    fits && gap > 0.0 && (gap - crate::design::S).abs() <= 1.0
+                }),
                 format!("At {size:?} the notice is S below the stat block: (gap, fits) {gap:?}"),
             );
         }

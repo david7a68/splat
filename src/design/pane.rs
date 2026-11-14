@@ -1090,7 +1090,9 @@ fn body_column_id() -> Id {
 /// text edge (`hang_left`); `None` outside a pane, where nothing changes.
 pub(super) fn column_reach(ui: &Ui, lane: f32) -> Option<f32> {
     let pass = ui.ctx().cumulative_pass_nr();
-    let body = ui.ctx().data(|data| data.get_temp::<(u64, Id)>(body_column_id()))
+    let body = ui
+        .ctx()
+        .data(|data| data.get_temp::<(u64, Id)>(body_column_id()))
         == Some((pass, ui.id()));
     if !body && innermost(ui).is_none() {
         return None;
@@ -1119,22 +1121,68 @@ pub(super) fn reaching<R>(ui: &mut Ui, reach: f32, area: impl FnOnce(&mut Ui) ->
     inner
 }
 
-/// For `ScrollColumn::show`, inside its scroll area: the content's clip starts at the area's
-/// own left (its surface), so paint, presses and the surface agree, and the content starts
-/// `reach` in from it, at the text edge.
+/// For `ScrollColumn::show`, inside its scroll area: the content starts `reach` in from the
+/// area's own left (its surface), at the text edge, and a `line_start` action in it hangs no
+/// further left than that surface (`hang_limit`), so its paint, its presses and the surface
+/// agree. Other content keeps the column's clip (a row's divider still meets its splitter).
 pub(super) fn inset<R>(ui: &mut Ui, reach: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
-    let mut clip = ui.clip_rect();
-    clip.min.x = clip.min.x.max(ui.max_rect().left());
-    ui.set_clip_rect(clip);
-    let inside = ui.max_rect().with_min_x(ui.max_rect().left() + reach);
+    let limit = ui.max_rect().left();
+    let inside = ui.max_rect().with_min_x(limit + reach);
     ui.scope_builder(
         egui::UiBuilder::new()
             .id_salt("hang_inset")
             .max_rect(inside)
             .layout(*ui.layout()),
-        add,
+        |ui| {
+            // egui's stack names each `Ui` by its unique id.
+            let (id, pass) = (ui.stack().id, ui.ctx().cumulative_pass_nr());
+            ui.ctx().data_mut(|data| {
+                let limits = data.get_temp_mut_or_default::<Limits>(limits_id());
+                if limits.pass != pass {
+                    *limits = Limits {
+                        pass,
+                        columns: Vec::new(),
+                    };
+                }
+                limits.columns.push((id, limit));
+            });
+            add(ui)
+        },
     )
     .inner
+}
+
+/// The hang limit of each pane column drawn in this pass, by its content `Ui`'s id.
+#[derive(Clone, Default)]
+struct Limits {
+    pass: u64,
+    columns: Vec<(Id, f32)>,
+}
+
+fn limits_id() -> Id {
+    Id::new("design_pane_hang_limits")
+}
+
+/// The leftmost x a `line_start` action drawn in `ui` may paint or take a press at: `ui`'s clip,
+/// and inside a pane's column no further left than the column's surface (`inset`), the nearest
+/// such column up `ui`'s stack.
+pub(crate) fn hang_limit(ui: &Ui) -> f32 {
+    let clip = ui.clip_rect().left();
+    let pass = ui.ctx().cumulative_pass_nr();
+    let column = ui.ctx().data(|data| {
+        let limits = data
+            .get_temp::<Limits>(limits_id())
+            .filter(|limits| limits.pass == pass)?;
+        let mut at = Some(ui.stack().clone());
+        while let Some(frame) = at {
+            if let Some((_, limit)) = limits.columns.iter().find(|(id, _)| *id == frame.id) {
+                return Some(*limit);
+            }
+            at = frame.parent.clone();
+        }
+        None
+    });
+    column.map_or(clip, |limit| clip.max(limit))
 }
 
 /// The top of the lowest registered row that the viewport's bottom edge cuts (its top above the
@@ -2358,8 +2406,7 @@ mod row_cut_tests {
             let band = splitter + grab;
             let edge = state.label.left();
             assert!(
-                (edge - splitter - S).abs() <= 0.5
-                    && edge - LINE_START_HANG < band - 0.5,
+                (edge - splitter - S).abs() <= 0.5 && edge - LINE_START_HANG < band - 0.5,
                 "gutter-first-pressure ({right_column}): the text edge {edge} is S from the splitter {splitter}, so Stop's hang reaches into its band (to {band})"
             );
             let surface = pane_records(&first.ctx)
@@ -2450,7 +2497,14 @@ mod row_cut_tests {
                                                 .icon(crate::design::icons::ERROR)
                                                 .line_start()
                                                 .show(ui);
-                                            (shown.rect, shown.interact_rect, ui.clip_rect())
+                                            // The column's hang limit (its content keeps
+                                            // the column's clip).
+                                            let clip = ui.clip_rect();
+                                            let limit = Rect::from_min_max(
+                                                pos2(hang_limit(ui), clip.top()),
+                                                clip.max,
+                                            );
+                                            (shown.rect, shown.interact_rect, limit)
                                         })
                                     })
                                     .inner;
@@ -2460,7 +2514,13 @@ mod row_cut_tests {
                         )
                         .body;
                 },
-                (Rect::NOTHING, Rect::NOTHING, Rect::NOTHING, Rect::NOTHING, Rect::NOTHING),
+                (
+                    Rect::NOTHING,
+                    Rect::NOTHING,
+                    Rect::NOTHING,
+                    Rect::NOTHING,
+                    Rect::NOTHING,
+                ),
             );
         crate::design::theme::install(&columns.ctx);
         columns.run_steps(4);

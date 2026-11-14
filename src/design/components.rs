@@ -815,8 +815,8 @@ impl<'a> Action<'a> {
             // fill), so its words stay at the text edge (a menu's choices under its heading);
             // only an icon that still does not fit moves the words, by what is missing.
             let hang = padding + icon_width;
-            let clip = ui.clip_rect();
-            let short = (clip.left() - (ui.cursor().min.x - hang)).clamp(0.0, hang);
+            let limit = super::pane::hang_limit(ui);
+            let short = (limit - (ui.cursor().min.x - hang)).clamp(0.0, hang);
             let given = short.min(padding);
             let shift = short - given;
             let size = vec2(width - icon_width + shift, self.height);
@@ -839,10 +839,10 @@ impl<'a> Action<'a> {
             // starts that far inside the clip, so a press outside the clip never reaches it
             // (a press on the action's own left pixels still does, as the nearest target).
             let radius = ui.style().interaction.interact_radius;
-            let target = target.with_min_x(target.min.x.max(clip.left() + radius));
-            let mut response = ui.interact(target, id, Sense::click());
-            // The response (and its accessible bounds) is the whole painted action.
-            response.rect = rect;
+            let press = target.with_min_x(target.min.x.max(limit + radius));
+            let mut response = ui.interact(press, id, Sense::click());
+            // The response (and its accessible bounds) keeps the whole target.
+            response.rect = target;
             (rect, response)
         } else {
             ui.allocate_exact_size(vec2(width, height), Sense::click())
