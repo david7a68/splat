@@ -4094,9 +4094,38 @@ fn fixed_part_scrolls(d: &mut Driver<'_>, message: &str) -> (bool, bool, bool, [
     // Astra re-check 3: the part's focus ring keeps clear of its own scroll bar at each size.
     // Round 28 P2: where the footer follows a short draft (1920 here), its part may hold every
     // message whole. Then, and only when the group does not have focus, no ring is allowed, after
-    // a proof that the content fits: a wheel step over the part moves none of its words (the
-    // group's accessible name is the whole message even when its words need a scroll, and egui
-    // paints no label outside the part's clip). A focused group always needs its ring.
+    // a proof that the content fits (the group's accessible name is the whole message even when
+    // its words need a scroll, and egui paints no label outside the part's clip). A focused group
+    // always needs its ring.
+    // PR 343 re-check: the proof starts from a known position, the part's top (wheel up over a
+    // point inside the part's visible rect). From there a downward step moves no words anywhere
+    // on screen (so neither the part nor a scroll around it had anything to scroll), and the
+    // upward step after it leaves every word where it was. An overflowing part at its top always
+    // moves on the downward step, also when it was wheeled to its bottom before the proof: the
+    // proof must give the same answer from the part's bottom, where a single downward step moves
+    // nothing (the old proof's fault), and the wheel to that bottom must move the part's words
+    // when it overflows (the part receives the wheel at that point). The proof ends at the
+    // part's top; the steps after it start from the top (Page Up).
+    fn part_fits(d: &mut Driver<'_>, part: egui::Rect) -> bool {
+        let at = part.center();
+        let tops = |d: &Driver<'_>| {
+            let (mut inside, mut all) = (Vec::new(), Vec::new());
+            d.each_painted_text(|text, _| {
+                all.push((text.pos.x, text.pos.y));
+                if text.visual_bounding_rect().intersects(part) {
+                    inside.push(text.pos.y);
+                }
+            });
+            (inside, all)
+        };
+        d.scroll_up_at(at, 8);
+        let top = tops(d);
+        d.scroll_at(at, 1);
+        let down = tops(d);
+        d.scroll_up_at(at, 1);
+        let back = tops(d);
+        !top.0.is_empty() && down == top && back == top
+    }
     let ring_clear =
         [SMALL, DEFAULT, LARGE].map(|size| {
             d.act_at_size(size, |d| {
@@ -4108,33 +4137,37 @@ fn fixed_part_scrolls(d: &mut Driver<'_>, message: &str) -> (bool, bool, bool, [
                     return false;
                 };
                 let focused = d.focused_name().as_deref() == Some(group.name.as_str());
-                let fits = rings.is_empty()
-                    && !focused
-                    && d.aside(|d| {
-                        let tops = |d: &Driver<'_>| {
-                            let mut tops = Vec::new();
-                            d.each_painted_text(|text, _| {
-                                if text.visual_bounding_rect().intersects(group.rect) {
-                                    tops.push(text.pos.y);
-                                }
-                            });
-                            tops
-                        };
-                        let before = tops(d);
-                        d.scroll_at(group.rect.center(), 1);
-                        let after = tops(d);
-                        d.scroll_up_at(group.rect.center(), 1);
-                        !before.is_empty() && before == after
-                    });
-                fits || !rings.is_empty()
-                    && rings
-                        .iter()
-                        // Painted over: an overlap with area, not a shared edge.
-                        .all(|(ring, _)| {
-                            lanes
-                                .iter()
-                                .all(|lane| !lane.intersect(*ring).is_positive())
-                        })
+                let (fits, from_bottom, wheeled) = d.aside(|d| {
+                    let fits = part_fits(d, group.shown);
+                    // To the bottom: an overflowing part's words move (it took the wheel).
+                    let words = |d: &Driver<'_>| {
+                        let mut tops = Vec::new();
+                        d.each_painted_text(|text, _| {
+                            if text.visual_bounding_rect().intersects(group.shown) {
+                                tops.push(text.pos.y);
+                            }
+                        });
+                        tops
+                    };
+                    let before = words(d);
+                    d.scroll_at(group.shown.center(), 8);
+                    let wheeled = words(d) != before;
+                    (fits, part_fits(d, group.shown), wheeled)
+                });
+                // The proof is the same from the bottom; an overflowing part took the wheel.
+                let proof = fits == from_bottom && (fits || wheeled);
+                let fits = fits && rings.is_empty() && !focused;
+                proof && fits
+                    || proof
+                        && !rings.is_empty()
+                        && rings
+                            .iter()
+                            // Painted over: an overlap with area, not a shared edge.
+                            .all(|(ring, _)| {
+                                lanes
+                                    .iter()
+                                    .all(|lane| !lane.intersect(*ring).is_positive())
+                            })
             })
         });
     // Tab passes the part's own Undo first, and egui scrolls the part to show it: start from the
