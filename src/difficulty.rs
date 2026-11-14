@@ -462,13 +462,6 @@ impl<'a> Line<'a> {
 
     /// Arrivals' line (R1): `Lost Patrol · 3 members · Enemies · Fight after: XP 450 · Low`.
     /// The label is part of this form; a caller cannot leave it out.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "N7: Arrivals (package R) draws its headings with it"
-        )
-    )]
     pub fn fight_after(difficulty: &'a Difficulty, parts: FightAfter<'a>) -> Self {
         let fact = |words, gives| Unit {
             before: " · ",
