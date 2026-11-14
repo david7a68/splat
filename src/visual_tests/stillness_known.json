@@ -218,12 +218,6 @@
     ["N4/quiet-action-line-start","11-empty-state","960x640","Button \"Group actions\"",1]
   ],
   "generator-tables": [
-    ["G1a/message-moved-content","06-generator-world-keeps-its-npc","960x640","Button \"Copy the marker\"",1],
-    ["G1a/message-moved-content","06-generator-world-keeps-its-npc","960x640","Button \"Discard\"",1],
-    ["G1a/message-moved-content","06-generator-world-keeps-its-npc","960x640","Button \"Reroll\"",1],
-    ["G1a/message-moved-content","06-generator-world-keeps-its-npc","960x640","Button \"Save NPC\"",1],
-    ["G1a/message-moved-content","06-generator-world-keeps-its-npc","960x640","Label \"Built-in names. To use your own, add a table of names to a note. Paste the marker on the line above the table.\"",1],
-    ["G1a/message-moved-content","06-generator-world-keeps-its-npc","960x640","Label \"GENERATED NPC\"",1],
     ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Reroll\"",1],
     ["G1b/pressed-control-moved","03-generator-built-in-names-in-lookup","960x640","Button \"Open Names.md\"",1]
   ],
