@@ -21285,14 +21285,82 @@ pub mod encounter_owned_groups {
                         steps += usize::from(text.galley.job.text.contains(&step));
                     }
                 });
-                (d.is_disabled(SAVE_ENCOUNTER), steps, d.visible_text(FULL))
+                (
+                    d.is_disabled(SAVE_ENCOUNTER),
+                    steps,
+                    d.visible_text(&step),
+                    d.visible_text(FULL),
+                )
             })
+        });
+        // B3d: the packet's hidden-Roster case. At a compact width the editor's panes take
+        // turns; with Add participants chosen, the group's row and its cause are hidden, and the
+        // footer still says the next step, whole, once.
+        let hidden = d.act_at_size((860.0, 640.0), |d| {
+            d.click("Add participants");
+            d.settle();
+            let mut steps = 0;
+            d.each_painted_text(|text, clip| {
+                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                if clip.intersects(rect) {
+                    steps += usize::from(text.galley.job.text.contains(&step));
+                }
+            });
+            let roster_hidden = !d.visible_text("GROUPS FOR THIS ENCOUNTER")
+                && !d.visible_text("Not in this campaign’s packages");
+            let shown = (
+                d.is_disabled(SAVE_ENCOUNTER),
+                roster_hidden,
+                steps,
+                d.visible_text(&step),
+                d.visible_text(FULL),
+            );
+            d.click("Roster");
+            shown
         });
         d.observe(
             "s30-B3b-N4-error-and-step",
-            failed && both.iter().all(|(blocked, steps, error)| *blocked && *steps == 1 && *error),
+            failed
+                && both
+                    .iter()
+                    .all(|(blocked, steps, whole, error)| *blocked && *steps == 1 && *whole && *error)
+                && hidden == (true, true, 1, true, true),
             format!(
-                "After a failed write ({failed}) and a group edit: (Save blocked, next-step lines, write error painted) at 960, 1200, 1920: {both:?}"
+                "After a failed write ({failed}) and a group edit: (Save blocked, next-step lines, step whole, write error painted) at 960, 1200, 1920: {both:?}; compact with Add participants (Save blocked, Roster hidden, next-step lines, step whole, error): {hidden:?}"
+            ),
+        );
+
+        // B3d: an old error EQUAL to the selected cause is not painted again: the cause is said
+        // once (on its row), and the footer gives only the next step.
+        d.click("Discard");
+        d.expect(&format!("Group name: {GROUP_GOBLINS}"));
+        d.type_into(&format!("Encounter name: {SHRINE}"), " ");
+        d.press_ctrl(Key::A);
+        d.type_text(&format!("{SHRINE} at night"));
+        let cause =
+            format!("Group {GROUP_GOBLINS}: Unknown creature: Not in this campaign’s packages.");
+        crate::encounters::fail_next_encounter_write(&cause);
+        d.click(SAVE_ENCOUNTER);
+        d.settle();
+        let stored = d.visible_text(&cause);
+        d.type_into(&format!("Group notes for {GROUP_GOBLINS}"), "Hungry.");
+        let equal = d.at_size(DEFAULT, |d| {
+            let (mut causes, mut steps) = (0, 0);
+            d.each_painted_text(|text, clip| {
+                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                let words = text.galley.job.text.as_str();
+                if clip.intersects(rect) {
+                    causes += usize::from(words.contains("Not in this campaign’s packages"));
+                    steps += usize::from(words.contains(&step));
+                }
+            });
+            (d.visible_text(&cause), causes, steps, d.visible_text(&step))
+        });
+        d.observe(
+            "s30-B3d-N4-equal-cause",
+            stored && equal == (false, 1, 1, true),
+            format!(
+                "Old error equal to the cause shown before the edit ({stored}); after it: (old error painted, cause lines, step lines, step whole) {equal:?}"
             ),
         );
         std::fs::write(&file, &text).unwrap();
