@@ -39,7 +39,8 @@ pub mod ownership {
     pub use crate::design::components::{Footer, ResultOrder};
     pub use crate::design::memo::{Changed, Key, Memo, Revised, Revision};
     pub use crate::design::results::{
-        DiskChanged, Ends, FooterResult, Gone, Kept, Owner, OwnerChanged, Press, Results, Shown,
+        Cause, Change, DiskChanged, Ends, FailedAct, Fallback, File, FooterResult, Gone, Kept,
+        Kind, Name, Owner, OwnerChanged, Press, Recovery, Refusal, Results, Shown, Thing,
     };
     pub use crate::design::save_row::{
         Diagnosis, DraftOrigin, DraftState, Primary, SaveWeight, SaveWord,
@@ -52,6 +53,7 @@ mod encounter_settings;
 mod encounters;
 mod file_batch;
 mod folder_check;
+mod frame_clock;
 mod hermetic;
 mod history;
 mod library;
@@ -1609,18 +1611,12 @@ impl Splat {
             .as_ref()
             .is_some_and(|fact| !matches!(fact.state, timeline::RunState::Ended(_)));
         if filing && self.old_session {
-            statuses.push(Status {
-                icon: icons::WARN,
-                word: "Old session",
-                color: c.result.warning,
-            });
+            // R41: the tone that the Session and Notes footers say it in.
+            statuses.push(sessions::page::NotTonight::rail());
         }
         if self.party.sync_stopped {
-            statuses.push(Status {
-                icon: icons::SYNC_OFF,
-                word: "Sync stopped",
-                color: c.sync.pending,
-            });
+            // R41: the tone of the Party footer's notice.
+            statuses.push(party::SyncStopped::rail());
         }
         if self.party.sync_conflict() {
             statuses.push(Status {
@@ -1727,14 +1723,7 @@ impl Splat {
                         // Round 28 FO2: the rail says `Sync stopped` on every page, as a link
                         // to Party; the strip does not say it again.
                         if strip.sync_stopped && !self.party.sync_stopped {
-                            design::status(
-                                ui,
-                                Status {
-                                    icon: icons::SYNC_OFF,
-                                    word: "Sync stopped",
-                                    color: c.sync.pending,
-                                },
-                            );
+                            design::status(ui, party::SyncStopped::rail());
                         }
                         if let Some(name) = strip
                             .sync_error
@@ -2425,12 +2414,35 @@ impl Splat {
                 self.page = Page::Library;
             }
         }
-        if let Some(path) =
-            ctx.data_mut(|data| data.remove_temp::<String>(egui::Id::new("edit_run_encounter")))
+        // Prep's `Edit encounter` names the run's encounter by its ID; the Encounters page finds
+        // it in its own list. When it cannot open, the reason goes back to the run's Prep.
+        if let Some(id) =
+            ctx.data_mut(|data| data.remove_temp::<uuid::Uuid>(egui::Id::new("edit_run_encounter")))
             && let Some(campaign) = self.campaigns.active_campaign()
         {
-            self.encounters.edit_path(&path, &campaign);
-            self.page = Page::Encounters;
+            match self.encounters.edit_from_plan(id, None, &campaign) {
+                Ok(()) => self.page = Page::Encounters,
+                Err(reason) => {
+                    // The draft that refused it, by kind, so its words never go stale.
+                    let refusal = match crate::design::first_unsaved(&self.encounters) {
+                        Some(draft) => encounter_run::PrepRefusal::Draft(draft),
+                        None => encounter_run::PrepRefusal::Other(reason),
+                    };
+                    if let Some(run) = self.encounters.run_mut() {
+                        run.prep_refusal = Some(refusal);
+                    }
+                }
+            }
+        }
+        // Round 30 review F3: a draft refusal ends when no draft blocks (saved, discarded, the
+        // editor closed); it follows the draft that blocks now. Only while one is stored.
+        if self.encounters.run().is_some_and(|run| {
+            matches!(run.prep_refusal, Some(encounter_run::PrepRefusal::Draft(_)))
+        }) {
+            let now = crate::design::first_unsaved(&self.encounters);
+            if let Some(run) = self.encounters.run_mut() {
+                run.prep_refusal = now.map(encounter_run::PrepRefusal::Draft);
+            }
         }
         if ctx
             .data_mut(|data| data.remove_temp::<bool>(egui::Id::new("open_campaign_packages")))
@@ -2489,22 +2501,28 @@ impl Splat {
                 encounters::PlanOpen::Opened => {}
                 // B4 review F1: the plan paints why under the group's line.
                 encounters::PlanOpen::Refused(_) => {
-                    self.sessions.plan_group_refused = Some((self.sessions.selected_id(), path));
+                    self.sessions.plan_group_refused = self
+                        .encounters
+                        .plan_group_id(&path)
+                        .map(|id| (self.sessions.selected_id(), id));
                 }
                 encounters::PlanOpen::Failed => self.page = Page::Encounters,
             }
         }
-        // The end events of the plan's refusal, delivered every frame on any page: nothing
-        // unsaved refuses any more (saved, discarded, campaign changed), or another session is
-        // selected.
-        if self.encounters.plan_group_blocked().is_none()
-            || self
-                .sessions
-                .plan_group_refused
-                .as_ref()
-                .is_some_and(|(session, _)| *session != self.sessions.selected_id())
-        {
-            self.sessions.plan_group_refused = None;
+        // The end events of the plan's refusal, on any page, read only while one is stored
+        // (B4b N1): another session is selected; nothing unsaved refuses any more (saved,
+        // discarded, campaign changed); or a new read of the campaign lost the group (B4c F2,
+        // also while the plan is not drawn). B4c F1: an unchanged frame compares no draft.
+        match self.sessions.plan_group_refused {
+            Some((session, group))
+                if session != self.sessions.selected_id()
+                    || !self.encounters.plan_refusal_stands(ctx, group) =>
+            {
+                self.sessions.plan_group_refused = None;
+                self.encounters.forget_plan_refusal();
+            }
+            Some(_) => {}
+            None => self.encounters.forget_plan_refusal(),
         }
         self.encounters.planned_groups = self.sessions.tonight_links();
         // The editor's way back belongs to its route: leaving the editor another way ends it.
@@ -2723,6 +2741,7 @@ impl eframe::App for Splat {
     }
 
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
+        crate::frame_clock::tick(ctx);
         if !self.started {
             self.start(ctx);
         }

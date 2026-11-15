@@ -4,6 +4,7 @@ pub mod column;
 mod comparison;
 pub mod components;
 pub mod extras;
+pub(crate) mod fitting;
 pub mod icons;
 pub mod layout;
 pub mod memo;
@@ -17,6 +18,7 @@ pub mod save_row;
 pub mod status;
 pub mod theme;
 pub mod tokens;
+pub mod turn_heading;
 pub mod value_block;
 
 #[cfg(test)]
@@ -38,12 +40,11 @@ pub use extras::{
 pub use layout::{
     ACTION_GAP, BackEdge, BackLink, BackTo, CREATE_FIELD_MIN, Create, CreateChoice, CreateDropdown,
     CreateField, CreateReasons, DraftOwner, Editor, EditorHead, EditorKind, FieldId, FieldName,
-    InlineCreate, KeptLine, KeyLetter, KeyName, KeySlot, MAX_WORD_CHARS, NARROWEST_PANE, NoReason,
-    Once, RowIndex, RowKey, ScrollColumn, Selection, SideAction, Slot, SlotType, TextKey,
-    TextOwner, TitleAction, TitleActionRow, TitleLine, TitlePlacement, TitleType, Unsaved, Word,
-    first_unsaved, labelled_field, lane_width, line_field, menu_popup, path_help,
-    register_title_row, search_min_row, sideways_scroll, status_slot, title_lead_in,
-    title_placement,
+    InlineCreate, KeptLine, KeyName, MAX_WORD_CHARS, NARROWEST_PANE, NoReason, Once, RowIndex,
+    RowKey, ScrollColumn, Selection, SideAction, Slot, SlotType, TextKey, TextOwner, TitleAction,
+    TitleActionRow, TitleLine, TitlePlacement, TitleType, Unsaved, Word, first_unsaved,
+    labelled_field, lane_width, line_field, menu_popup, path_help, register_title_row,
+    search_min_row, sideways_scroll, status_slot, title_lead_in, title_placement,
 };
 // Wave 2 callers name the pane's escape through `design`.
 #[allow(unused_imports)]
@@ -56,5 +57,7 @@ pub use save_row::{DraftState, save_row};
 #[allow(unused_imports)]
 pub use status::{KindStatus, StatusKind, Tinted};
 pub use tokens::*;
+// M5, ruling R22: the run's turn heading, one closed part.
+pub use turn_heading::{KeptTurnHeading, TurnHeading, TurnKeys, TurnName};
 // Ruling R24: one block per value of a settings pane.
 pub use value_block::{HeadingNote, HeadingRow, ValueBlock};

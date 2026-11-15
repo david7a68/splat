@@ -1218,14 +1218,22 @@ impl Campaigns {
                 // another choice: it starts below, at the message words. Only Undo is quiet.
                 // Review round 26: Undo changes the registration and can change the active
                 // campaign, so it waits for what blocks a campaign change, with the reason.
-                if crate::library::kept_undo_message(
-                    ui,
-                    Tone::Success,
-                    &added,
-                    "Undo register campaign",
-                    locked,
-                    true,
-                ) {
+                // `Undo register campaign`: one step for the drawing and for the count.
+                let step =
+                    design::outcome::UndoStep::of(design::outcome::Verb::Register, "campaign");
+                let group = design::outcome::KeptGroup::of([&step]);
+                let undo = step.pressed_as(());
+                // The page's lock comes and goes (a run, a recording, a draft): `locked_when`, so
+                // its line keeps its room while it is open and nothing below moves. Its words
+                // come from `blocked_switch` in `src/lib.rs` as app-owned `&str` (the counted
+                // `Ban::Words` allowance of this function); while open, the room is the draft's.
+                let reason = locked
+                    .and_then(design::outcome::Sentence::outside)
+                    .unwrap_or(splat::sentence!(
+                        "Save or discard your changes to change campaigns."
+                    ));
+                let undo = undo.locked_when(locked.is_some(), reason);
+                if design::outcome::kept_result(ui, &group, &added, undo, Vec::new()).is_some() {
                     let mut this = me.borrow_mut();
                     if let Err(error) = this.undo_campaign_copy() {
                         this.error = Some(error);
@@ -1411,7 +1419,7 @@ impl Campaigns {
                     };
                     let cancel = !missing || self.remote.is_some();
                     // G137, G138: the field cuts a long folder's end, the part Splat proposes.
-                    // The kept line names it whole (`Will add …/Salt Road`).
+                    // The kept line names it whole (`Will create …/Salt Road`).
                     let preview = folder_preview(&self.path);
                     let form = design::InlineCreate::new()
                         .field(
@@ -1427,7 +1435,7 @@ impl Campaigns {
                         .kept_line(
                             design::KeptLine::new()
                                 .cancel(CANCEL, cancel)
-                                .preview_path(WILL_ADD, preview.as_deref()),
+                                .preview_path(WILL_CREATE, preview.as_deref()),
                         )
                         .show(ui);
                     if form.side
@@ -1610,7 +1618,7 @@ fn links_to(campaign: &Campaign, remote_id: &str) -> bool {
 }
 
 /// The folder `Add campaign` will add, by its last name (`…/Salt Road`), after the leading words
-/// [`WILL_ADD`]: the end of the path is what a narrow field cuts. A folder name alone (a relative
+/// [`WILL_CREATE`]: the end of the path is what a narrow field cuts. A folder name alone (a relative
 /// path) is the name.
 fn folder_preview(path: &str) -> Option<String> {
     let path = std::path::Path::new(path.trim());
@@ -1637,7 +1645,7 @@ struct ImportForm {
 const IMPORT_FORM: &str = "import form";
 
 /// The leading words of the folder preview; they stay when the path gives way.
-const WILL_ADD: &str = "Will add ";
+const WILL_CREATE: &str = "Will create ";
 
 /// The result of registering a copied campaign folder, named for the new campaign.
 pub(crate) fn copy_registered(name: &str) -> String {
@@ -2142,7 +2150,7 @@ mod tests {
     }
 
     /// G137, G138: at 960 px Settings gives the add form about 544 px, and the Folder field cuts
-    /// the folder Splat proposes. The kept line names it whole, `Will add …/<name>`.
+    /// the folder Splat proposes. The kept line names it whole, `Will create …/<name>`.
     #[test]
     fn import_form_names_the_proposed_folder_whole() {
         use egui_kittest::kittest::Queryable;
@@ -2158,7 +2166,7 @@ mod tests {
         );
         assert!(campaigns.path.ends_with("Salt Road"));
         const WIDTH: f32 = 544.0;
-        let words = "Will add …/Salt Road";
+        let words = "Will create …/Salt Road";
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(WIDTH, 400.0))
             .build_ui_state(

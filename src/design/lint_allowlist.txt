@@ -44,3 +44,12 @@ src/encounter_run/notice.rs phrase-owner 1
 src/encounter_run/view.rs phrase-owner 1
 # A layer built by hand (`LayerId { order: … }`, `Order::…`), which Clippy's method list cannot see
 # (package K). Wave 2 moves the drag ghost to a design part.
+# M5 (round 30, lead's ruling 3 on B5): the run's old ways to cut words, `.truncate()`, the old
+# fitting primitives and `dock_name`, which the turn heading no longer uses. Each migration to a
+# design part lowers its file's count. `heading-owner`: the run makes its one kept turn heading
+# (two constructors), and the live header makes its one `TurnName` from the participant's name.
+src/encounter_run/dock.rs fitting-escape 2
+src/encounter_run/notice.rs fitting-escape 4
+src/encounter_run/view.rs fitting-escape 8
+src/encounter_run.rs heading-owner 2
+src/encounter_run/notice.rs heading-owner 1

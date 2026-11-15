@@ -740,7 +740,7 @@ fn act(
     let mutation = if remote.can_edit {
         action.mutation(&remote)
     } else {
-        Err("This session cannot edit this character on D&D Beyond.".into())
+        Err("This sign-in cannot edit this character on D&D Beyond.".into())
     };
     let mutation = match mutation {
         Ok(m) => m,
@@ -784,7 +784,7 @@ pub enum SyncState {
     NotSent,
 }
 
-const SESSION_LOST: &str = "The D&D Beyond session ended, so this sync stopped. Changes since then are kept in Splat and have not been sent. Connect in Settings. Sync party then starts again, if it was on. Splat reads the sheet first, and asks before it replaces a value you changed.";
+const SESSION_LOST: &str = "The D&D Beyond sign-in ended, so this sync stopped. Changes since then are kept in Splat and have not been sent. Connect in Settings. Sync party then starts again, if it was on. Splat reads the sheet first, and asks before it replaces a value you changed.";
 /// Groups the run holds as its own values, so a saved run keeps them.
 const KEPT_BY_THE_RUN: [&str; 3] = ["hp", "death", "conditions"];
 const DIFFER_AFTER_READ: &str =
@@ -1009,7 +1009,7 @@ impl CombatSync {
         if !self.ready() {
             Some("Wait for the first sheet read.")
         } else if self.read_only() {
-            Some("This session cannot edit this character on D&D Beyond.")
+            Some("This sign-in cannot edit this character on D&D Beyond.")
         } else if self.busy() || self.action.is_some() {
             Some("Wait for the current sheet read.")
         } else if !self.blocked.is_empty() {
@@ -1555,7 +1555,7 @@ impl CombatSync {
                         .density(Density::Read)
                         .blocked(busy.or(
                             (!writable).then_some(
-                                "This session cannot edit this character on D&D Beyond.",
+                                "This sign-in cannot edit this character on D&D Beyond.",
                             ),
                         ))
                         .show(ui)
@@ -1658,7 +1658,7 @@ impl CombatSync {
                 (
                     icons::READ_ONLY,
                     colors().sync.read_only,
-                    "Read only: D&D Beyond reports that this session cannot edit this character. Nothing here can change.",
+                    "Read only: D&D Beyond reports that this sign-in cannot edit this character. Nothing here can change.",
                 )
             };
             ui.label(Type::Small.rich(ui, icon).color(color));
@@ -2375,14 +2375,20 @@ fn step_field(group: &mut Value, field: &str, edit: impl FnOnce(&mut i64) -> boo
 fn current_hp(hp: &Value, max_hp: i64) -> i64 {
     (max_hp - hp["removedHitPoints"].as_i64().unwrap_or(0)).max(0)
 }
+/// A displayed current/maximum fraction. Presentation only: stored values and service
+/// payloads keep their existing representation. Callers supply their own unknown-value words.
+pub(crate) fn fraction(current: impl std::fmt::Display, maximum: impl std::fmt::Display) -> String {
+    format!("{current}/{maximum}")
+}
+
 fn describe(key: &str, value: Option<&Value>, max_hp: i64) -> String {
     let Some(value) = value else {
         return "Unavailable".into();
     };
     match key {
         "hp" => format!(
-            "{} / {max_hp} HP, {} temporary HP",
-            (max_hp - value["removedHitPoints"].as_i64().unwrap_or(0)).max(0),
+            "{} HP, {} temporary HP",
+            fraction(current_hp(value, max_hp), max_hp),
             value["temporaryHitPoints"]
         ),
         "death" => format!(
@@ -2458,10 +2464,7 @@ fn signed(n: i64) -> String {
 /// A value on a button: the number, for HP, and otherwise which side's values.
 fn short_value(key: &str, value: Option<&Value>, max_hp: i64) -> String {
     match (key, value) {
-        ("hp", Some(hp)) => format!(
-            "{}/{max_hp} HP",
-            (max_hp - hp["removedHitPoints"].as_i64().unwrap_or(0)).max(0)
-        ),
+        ("hp", Some(hp)) => format!("{} HP", fraction(current_hp(hp, max_hp), max_hp)),
         _ => "these values".to_owned(),
     }
 }
@@ -2579,6 +2582,18 @@ mod tests {
             }
         }
     }
+    #[test]
+    fn displayed_fractions_use_one_compact_form() {
+        for (current, maximum, expected) in [(62, 62, "62/62"), (58, 62, "58/62"), (0, 0, "0/0")] {
+            assert_eq!(fraction(current, maximum), expected);
+        }
+        assert_eq!(fraction("?", 62), "?/62");
+        assert_eq!(fraction("Unknown", "Unknown"), "Unknown/Unknown");
+        let hp = serde_json::json!({"removedHitPoints": 8, "temporaryHitPoints": 3});
+        assert_eq!(describe("hp", Some(&hp), 62), "54/62 HP, 3 temporary HP");
+        assert_eq!(short_value("hp", Some(&hp), 62), "54/62 HP");
+    }
+
     #[test]
     fn a_sheet_this_session_cannot_edit_keeps_the_runs_value_and_holds_nothing_up() {
         let mut read_only = remote();

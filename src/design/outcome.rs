@@ -555,6 +555,9 @@ enum Step {
     Verb(Verb, Option<String>),
     /// An act the DM named: `Undo: Take seal`.
     Act(String),
+    /// The app's own fixed words for a step that is not a verb and an object:
+    /// `Undo package registration`. Never cut.
+    Words(&'static str),
 }
 
 /// What an Undo takes back, typed: a verb, an optional object, and the joining word the verb's
@@ -606,6 +609,36 @@ impl UndoStep {
         }
     }
 
+    /// The app's own fixed words for a step that is not a verb and an object
+    /// (`Undo package registration`), made once as a `const` step that each place showing it
+    /// uses: its visible form, its short form and its accessible name are these words, whole at
+    /// every width. A literal that does not start with `Undo ` and a word does not compile in a
+    /// `const`.
+    ///
+    /// ```
+    /// const STEP: splat::outcome::UndoStep = splat::outcome::UndoStep::words("Undo source change");
+    /// ```
+    /// ```compile_fail
+    /// const STEP: splat::outcome::UndoStep = splat::outcome::UndoStep::words("Source change");
+    /// ```
+    pub const fn words(label: &'static str) -> Self {
+        let b = label.as_bytes();
+        assert!(
+            b.len() > 5
+                && b[0] == b'U'
+                && b[1] == b'n'
+                && b[2] == b'd'
+                && b[3] == b'o'
+                && b[4] == b' '
+                && b[5].is_ascii_lowercase(),
+            "an Undo's words start with `Undo ` and a word"
+        );
+        Self {
+            step: Step::Words(label),
+            tell_apart: None,
+        }
+    }
+
     /// The part that tells this step from another of the same words: `2`, `in Ruins`. A fit
     /// never drops it.
     pub fn tell_apart(mut self, part: impl Into<String>) -> Self {
@@ -640,7 +673,8 @@ impl UndoStep {
     fn counted(&self) -> Option<Verb> {
         match &self.step {
             Step::Verb(verb, _) => Some(*verb),
-            Step::Act(_) => None,
+            // The app's fixed words are whole in every footer: no short form to count.
+            Step::Act(_) | Step::Words(_) => None,
         }
     }
 
@@ -668,6 +702,7 @@ impl UndoStep {
                 }),
             ),
             Step::Act(label) => ("Undo:".to_owned(), Some(label.clone())),
+            Step::Words(label) => ((*label).to_owned(), None),
         }
     }
 
@@ -679,7 +714,7 @@ impl UndoStep {
     pub fn fit(&self, ui: &Ui, width: f32) -> String {
         let font = Type::Strong.font(ui);
         let whole = self.label();
-        if number_width(ui, &whole, &font) <= width {
+        if matches!(self.step, Step::Words(_)) || number_width(ui, &whole, &font) <= width {
             return whole;
         }
         if let Step::Verb(verb, Some(_)) = &self.step
@@ -1882,6 +1917,58 @@ impl<A> From<Said<A>> for KeptOutcome<A> {
     }
 }
 
+/// M2's typed adapter for a kept result that a legacy `Footer::result` closure still draws
+/// (Library's reader results, Campaign's copy result): the result's words in the success tone
+/// and its typed [`Undo`] (with its lock: `blocked` or `locked_when`) and choices, drawn by the same code as a `Messages` footer's kept line. Its
+/// lock's reason is painted under it, at the message words, whenever the lock holds, and its
+/// room is kept while it is open (ruling R29); no flag can hide it (rulings R35, Q-u). The id of
+/// what the DM pressed.
+///
+/// The words are the caller's: this is the staged path for callers whose results are not yet
+/// in a `Results` store. It is named debt: Library's and Campaign's calls are counted exactly
+/// (`library::tests::m2_legacy_reason_paths_are_counted`).
+pub fn kept_result<A>(
+    ui: &mut Ui,
+    group: &KeptGroup,
+    words: &str,
+    undo: Undo<A>,
+    choices: Vec<Choice<A>>,
+) -> Option<A> {
+    let mut typed = Typed::new(
+        Tone::Success,
+        Sentence(Cow::Owned(words.to_owned())),
+        Some(undo),
+        choices,
+    );
+    // The footer's one short-Undo rule (`undo_alone`), counted by the part over the group.
+    let counted = typed.body.undo.as_ref().and_then(UndoStep::counted);
+    debug_assert!(
+        counted.is_none_or(|verb| group.verbs.contains(&verb)),
+        "a kept result's Undo is one of its footer's group"
+    );
+    typed.body.undo_alone = undo_alone(&group.verbs, typed.body.undo.as_ref());
+    let pressed = typed.body.draw(ui, MessagePlace::Footer);
+    typed.id(pressed?)
+}
+
+/// The kept results that one legacy footer shows in this pass, for the footer's one short-Undo
+/// rule: the part counts their Undos' verbs, and a lone Undo of its verb paints its short form
+/// (`Undo write`) while two of one verb paint their whole words; the accessible name is always
+/// whole. Made from every step that footer draws (`of`), in the pass that draws them; it holds
+/// no app state and ends with that pass.
+pub struct KeptGroup {
+    verbs: Vec<Verb>,
+}
+
+impl KeptGroup {
+    /// The group of `steps`: each kept result's Undo that the footer shows now.
+    pub fn of<'s>(steps: impl IntoIterator<Item = &'s UndoStep>) -> Self {
+        Self {
+            verbs: steps.into_iter().filter_map(UndoStep::counted).collect(),
+        }
+    }
+}
+
 /// A message as drawn: tone, words, Undo and choices, each with its lock. Owned: it holds no
 /// borrow, so a footer of them can sit beside a body that changes the app.
 struct Body {
@@ -2145,21 +2232,103 @@ impl PaneFrame {
 pub struct KeptLine<'f, A> {
     ticket: Ticket,
     typed: Typed<A>,
+    /// The order of the entry's refused attempt, while its refusal stands: the line ranks by it
+    /// ([`kept_rank`]), and keeps the entry's ticket for its ids and presses.
+    refused: Option<ResultOrder>,
     frame: std::marker::PhantomData<&'f PaneFrame>,
 }
 
 impl<'f, A> KeptLine<'f, A> {
-    /// For `Shown::outcome` (in `results`), which holds the entry's ticket.
+    /// For `Shown::outcome` (in `results`), which holds the entry's ticket and the refusal of
+    /// its last attempt. A refused attempt's line is one answer: the refusal's words first, in
+    /// the tone of its diagnosis (`Refusal::tone`, R41); the result's own words follow only while its Undo is live (the caller
+    /// gives the Undo only then), because only then does the file still hold what it says; then
+    /// the Undo, once.
     pub(in crate::design) fn new(
         _frame: &'f PaneFrame,
         ticket: Ticket,
         outcome: KeptOutcome<A>,
+        refused: Option<(ResultOrder, Sentence, Tone)>,
     ) -> Self {
+        let mut typed = outcome.typed();
+        let refused = refused.map(|(order, words, tone)| {
+            typed.body.tone = tone;
+            let result = std::mem::replace(&mut typed.body.words, words);
+            if typed.body.undo.is_some() {
+                typed.body.words = typed.body.words.clone().then(result);
+            }
+            order
+        });
         Self {
             ticket,
-            typed: outcome.typed(),
+            typed,
+            refused,
             frame: std::marker::PhantomData,
         }
+    }
+}
+
+/// A footer line as the one footer order sees it ([`footer_order`]).
+pub(in crate::design) trait Ranked {
+    /// Its place, and its act's order (a kept line's; `None` for a standing line).
+    fn key(&self) -> (FooterRank, Option<ResultOrder>);
+}
+
+/// The one order of a pane's footer ([`Messages`], `Footer::draw_messages`) and of a save row's
+/// messages ([`RowMessages`]). Standing lines (faults, warnings, reasons, notices with no act
+/// order) keep their places; answers (lines with an act order) stand newest first inside the
+/// group of results with a live Undo and inside the group without one: results with a live
+/// Undo, then reasons, then notices and results with no Undo. The one line above them all is
+/// the footer's newest answer when it is a refusal ([`refusal_rank`]); `Messages::answer`
+/// (Campaign) comes before even that.
+pub(in crate::design) fn footer_order<T: Ranked>(items: &mut [T]) {
+    items.sort_by_key(|item| {
+        let (rank, order) = item.key();
+        (rank, order.map(std::cmp::Reverse))
+    });
+}
+
+/// Where a refused attempt's line stands (ruling R42 as amended, Q-x): first in its footer while
+/// its attempt is the newest answer there (`newest`: the newest act order of the footer's lines,
+/// its own included); else in the group of results with no Undo, by its attempt's order, whether
+/// or not its Undo is live, so every newer answer stands above it. It never ends here.
+pub(in crate::design) fn refusal_rank(
+    attempt: ResultOrder,
+    newest: Option<ResultOrder>,
+) -> FooterRank {
+    if newest.is_none_or(|newest| attempt >= newest) {
+        FooterRank::Answer
+    } else {
+        FooterRank::Notice
+    }
+}
+
+/// A kept line that is not a refusal: a live Undo before reasons, no Undo after the notices.
+fn kept_place(has_undo: bool) -> FooterRank {
+    if has_undo {
+        FooterRank::Undo
+    } else {
+        FooterRank::Notice
+    }
+}
+
+/// A pane footer's message (`Footer`'s own list).
+impl<'a> Ranked
+    for (
+        FooterRank,
+        Option<ResultOrder>,
+        Cow<'a, str>,
+        Box<dyn FnOnce(&mut Ui) + 'a>,
+    )
+{
+    fn key(&self) -> (FooterRank, Option<ResultOrder>) {
+        (self.0, self.1)
+    }
+}
+
+impl<A> Ranked for RowEntry<A> {
+    fn key(&self) -> (FooterRank, Option<ResultOrder>) {
+        (self.0, self.1)
     }
 }
 
@@ -2251,9 +2420,20 @@ pub struct Messages<'f, A: 'static> {
     frame: std::marker::PhantomData<&'f PaneFrame>,
     /// Whether this frame's footer has its one `answer` (ruling Q-x).
     answered: bool,
+    /// The newest act order of this footer's kept lines ([`refusal_rank`]).
+    newest: Option<ResultOrder>,
+    /// The refused attempts' lines, placed when the pane is drawn, after every line is in.
+    refusals: Vec<PendingRefusal>,
     /// The verbs of this footer's kept Undos, for `undo_alone`.
     kept_verbs: std::rc::Rc<std::cell::RefCell<Vec<Verb>>>,
 }
+
+/// A refused attempt's line, waiting for the footer's newest act order.
+type PendingRefusal = (
+    ResultOrder,
+    Cow<'static, str>,
+    Box<dyn FnOnce(&mut Ui) + 'static>,
+);
 
 impl<'f, A: 'static> Messages<'f, A> {
     /// No messages yet, for this frame's pane, with a footer `width` wide. `id` keeps its
@@ -2265,7 +2445,18 @@ impl<'f, A: 'static> Messages<'f, A> {
             sink: PressSink(std::rc::Rc::default()),
             frame: std::marker::PhantomData,
             answered: false,
+            newest: None,
+            refusals: Vec::new(),
             kept_verbs: std::rc::Rc::default(),
+        }
+    }
+
+    /// Place the refused attempts' lines, now that every line is in.
+    fn place_refusals(&mut self) {
+        let newest = self.newest;
+        for (attempt, words, draw) in self.refusals.drain(..) {
+            self.footer
+                .push(refusal_rank(attempt, newest), Some(attempt), words, draw);
         }
     }
 
@@ -2330,18 +2521,28 @@ impl<'f, A: 'static> Messages<'f, A> {
 
     /// A kept result of this frame, newest first by the order its store issued.
     pub fn kept(&mut self, line: KeptLine<'f, A>) -> &mut Self {
-        self.kept_at(line.ticket, line.typed)
+        self.kept_at(line.ticket, line.typed, line.refused)
     }
 
-    fn kept_at(&mut self, ticket: Ticket, typed: Typed<A>) -> &mut Self {
-        let has_undo = typed.body.undo.is_some();
+    fn kept_at(
+        &mut self,
+        ticket: Ticket,
+        typed: Typed<A>,
+        refused: Option<ResultOrder>,
+    ) -> &mut Self {
+        let order = refused.unwrap_or(ticket.order());
+        self.newest = self.newest.max(Some(order));
+        let rank = kept_place(typed.body.undo.is_some());
         self.kept_verbs
             .borrow_mut()
             .extend(typed.body.undo.as_ref().and_then(UndoStep::counted));
         let words = Cow::Owned(typed.body.words.as_str().to_owned());
-        let order = ticket.order();
         let draw = self.draw(typed, Some(ticket));
-        self.footer.add_kept(order, words, has_undo, draw);
+        if refused.is_some() {
+            self.refusals.push((order, words, Box::new(draw)));
+        } else {
+            self.footer.push(rank, Some(order), words, draw);
+        }
         self
     }
 
@@ -2352,7 +2553,7 @@ impl<'f, A: 'static> Messages<'f, A> {
         order: ResultOrder,
         outcome: impl Into<KeptOutcome<A>>,
     ) -> &mut Self {
-        self.kept_at(Ticket::of(order), outcome.into().typed())
+        self.kept_at(Ticket::of(order), outcome.into().typed(), None)
     }
 
     /// The pane: the body (`add`, which may change any of the app), then the footer, placed by
@@ -2363,7 +2564,9 @@ impl<'f, A: 'static> Messages<'f, A> {
         body: super::pane::Body,
         add: impl FnOnce(&mut Ui) -> R,
     ) -> Paned<R, A> {
-        let Self { footer, sink, .. } = self;
+        let mut this = self;
+        this.place_refusals();
+        let Self { footer, sink, .. } = this;
         let body = footer.pane(ui, body, add);
         Paned {
             body,
@@ -2379,7 +2582,9 @@ impl<'f, A: 'static> Messages<'f, A> {
         scroll: super::pane::ContentScroll,
         add: impl FnOnce(&mut Ui) -> R,
     ) -> Paned<R, A> {
-        let Self { footer, sink, .. } = self;
+        let mut this = self;
+        this.place_refusals();
+        let Self { footer, sink, .. } = this;
         let body = footer.pane_content(ui, scroll, add);
         Paned {
             body,
@@ -2394,7 +2599,9 @@ impl<'f, A: 'static> Messages<'f, A> {
         ui: &mut Ui,
         add: impl for<'r> FnOnce(&mut Ui, super::pane::EditorRegion<'r>) -> R,
     ) -> Paned<R, A> {
-        let Self { footer, sink, .. } = self;
+        let mut this = self;
+        this.place_refusals();
+        let Self { footer, sink, .. } = this;
         let body = footer.pane_editor(ui, add);
         Paned {
             body,
@@ -2411,7 +2618,14 @@ impl<'f, A: 'static> Messages<'f, A> {
 /// [`Messages`] footer's are, and a kept line still borrows this frame's [`PaneFrame`].
 /// One entry of [`RowMessages`]: its rank and order in the footer's order, what it draws, and
 /// a kept result's ticket.
-type RowEntry<A> = (FooterRank, Option<ResultOrder>, Typed<A>, Option<Ticket>);
+type RowEntry<A> = (
+    FooterRank,
+    Option<ResultOrder>,
+    Typed<A>,
+    Option<Ticket>,
+    // Whether it is a refused attempt: its place waits for every line (`refusal_rank`).
+    bool,
+);
 
 #[must_use = "give it to `ValueBlock::messages`"]
 pub struct RowMessages<'f, A: 'static> {
@@ -2431,20 +2645,17 @@ impl<'f, A: 'static> RowMessages<'f, A> {
     /// A reason or a notice, at the place its variant gives it.
     pub fn outcome(&mut self, outcome: impl Into<Outcome<A>>) -> &mut Self {
         let (rank, typed) = outcome.into().parts();
-        self.items.push((rank, None, typed, None));
+        self.items.push((rank, None, typed, None, false));
         self
     }
 
     /// A kept result of this frame, newest first by the order its store issued.
     pub fn kept(&mut self, line: KeptLine<'f, A>) -> &mut Self {
-        let rank = if line.typed.body.undo.is_some() {
-            FooterRank::Undo
-        } else {
-            FooterRank::Notice
-        };
-        let order = line.ticket.order();
+        let order = line.refused.unwrap_or(line.ticket.order());
+        let rank = kept_place(line.typed.body.undo.is_some());
+        let refused = line.refused.is_some();
         self.items
-            .push((rank, Some(order), line.typed, Some(line.ticket)));
+            .push((rank, Some(order), line.typed, Some(line.ticket), refused));
         self
     }
 
@@ -2454,16 +2665,21 @@ impl<'f, A: 'static> RowMessages<'f, A> {
 
     /// Draw them at the cursor, top down; the first press, as the caller's id.
     pub(in crate::design) fn show(mut self, ui: &mut Ui) -> Option<Press<A>> {
-        self.items
-            .sort_by_key(|(rank, order, ..)| (*rank, order.map(std::cmp::Reverse)));
+        let newest = self.items.iter().filter_map(|item| item.1).max();
+        for (rank, order, _, _, refused) in &mut self.items {
+            if let (true, Some(attempt)) = (*refused, *order) {
+                *rank = refusal_rank(attempt, newest);
+            }
+        }
+        footer_order(&mut self.items);
         let mut first = None;
         let kept: Vec<Verb> = self
             .items
             .iter()
-            .filter(|(.., ticket)| ticket.is_some())
-            .filter_map(|(_, _, typed, _)| typed.body.undo.as_ref().and_then(UndoStep::counted))
+            .filter(|(_, _, _, ticket, _)| ticket.is_some())
+            .filter_map(|(_, _, typed, _, _)| typed.body.undo.as_ref().and_then(UndoStep::counted))
             .collect();
-        for (_, _, mut typed, ticket) in self.items {
+        for (_, _, mut typed, ticket, _) in self.items {
             typed.body.undo_alone = undo_alone(&kept, typed.body.undo.as_ref());
             let pressed = match &ticket {
                 // A kept line's ids come from its ticket, as in a footer.
@@ -3281,6 +3497,39 @@ mod tests {
     use super::*;
     use eframe::egui;
     use egui_kittest::{Harness, kittest::Queryable};
+
+    /// M2's staged adapter is named debt: no file outside `src/design/` uses it but the two
+    /// that `library::tests::m2_legacy_reason_paths_are_counted` counts exactly.
+    #[test]
+    fn kept_result_is_used_only_where_counted() {
+        let mut found = Vec::new();
+        let mut stack = vec![std::path::PathBuf::from("src")];
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    if !path.ends_with("design") {
+                        stack.push(path);
+                    }
+                } else if path.extension().is_some_and(|ext| ext == "rs")
+                    && whole_word(&std::fs::read_to_string(&path).unwrap(), "kept_result")
+                {
+                    found.push(path.to_string_lossy().replace('\\', "/"));
+                }
+            }
+        }
+        found.sort();
+        assert_eq!(found, ["src/campaigns.rs", "src/library.rs"]);
+    }
+
+    /// Whether `text` holds `word` as a whole identifier (not `kept_results`).
+    fn whole_word(text: &str, word: &str) -> bool {
+        let ident = |c: char| c.is_alphanumeric() || c == '_';
+        text.match_indices(word).any(|(at, _)| {
+            !text[..at].chars().next_back().is_some_and(ident)
+                && !text[at + word.len()..].chars().next().is_some_and(ident)
+        })
+    }
 
     #[allow(
         clippy::disallowed_methods,
@@ -5107,6 +5356,124 @@ mod tests {
         h.run_steps(2);
         assert_eq!(h.state().acted, [Ok("Folder saved")]);
         assert_eq!(h.state().presses.first().map(|press| press.0), Some(1));
+    }
+
+    /// M2 (packet 2, the cut of ruling 3): through the staged adapter, each locked Undo says its
+    /// own reason under its words, and its room is kept while it is open, so the control after
+    /// its results never moves when the lock comes or goes. Two panes each say it for their
+    /// Undos; two independent locks with equal words keep their own explanations. A cause shared
+    /// by several Undos is said once per Undo: that repetition is open debt (no group-owned line).
+    #[test]
+    fn a_lock_reason_through_the_adapter_moves_nothing() {
+        use egui_kittest::kittest::Queryable;
+        const DRAFT: Sentence = crate::sentence!("Save or discard this draft to undo.");
+        const ENDED: Sentence = crate::sentence!("A file changed on disk after this change.");
+        let mut h = Harness::new_ui_state(
+            |ui, locked: &mut bool| {
+                for pane in ["left", "right"] {
+                    ui.push_id(pane, |ui| {
+                        for (words, step) in [
+                            ("First change.", "Undo first"),
+                            ("Second change.", "Undo second"),
+                        ] {
+                            let undo = UndoStep::act(step)
+                                .pressed_as(())
+                                .locked_when(*locked, DRAFT);
+                            let _ = kept_result(ui, &KeptGroup::of([]), words, undo, Vec::new());
+                        }
+                        let _ = ui.button(format!("After {pane}"));
+                    });
+                }
+                for words in ["Third change.", "Fourth change."] {
+                    let undo = UndoStep::act(words).pressed_as(()).blocked(ENDED);
+                    let _ = kept_result(ui, &KeptGroup::of([]), words, undo, Vec::new());
+                }
+            },
+            false,
+        );
+        h.set_size(egui::vec2(600.0, 900.0));
+        h.run_steps(3);
+        let after = |h: &Harness<'_, bool>| {
+            ["After left", "After right"].map(|name| h.get_by_label(name).rect().top())
+        };
+        let open = after(&h);
+        *h.state_mut() = true;
+        h.run_steps(3);
+        assert_eq!(
+            after(&h),
+            open,
+            "a lock that comes moves no control after its results"
+        );
+        assert_eq!(
+            h.query_all_by_label(DRAFT.as_str()).count(),
+            4,
+            "each locked Undo says its reason"
+        );
+        assert_eq!(
+            h.query_all_by_label(ENDED.as_str()).count(),
+            2,
+            "equal words of independent causes are two explanations"
+        );
+        *h.state_mut() = false;
+        h.run_steps(3);
+        assert_eq!(
+            after(&h),
+            open,
+            "a lock that goes moves no control after its results"
+        );
+    }
+
+    /// The join with PR 402: a kept result drawn by the adapter follows the footer's one
+    /// short-Undo rule. A lone `Undo write …` paints `Undo write`; two writes paint their whole
+    /// words; a fixed-word step stays whole either way; every accessible name is whole.
+    #[test]
+    fn a_kept_result_follows_the_footer_short_undo_rule() {
+        const FIXED: UndoStep = UndoStep::words("Undo package registration");
+        for writes in [1, 2] {
+            let ctx = egui::Context::default();
+            crate::design::theme::install(&ctx);
+            let mut painted = Vec::new();
+            for _ in 0..3 {
+                let output = ctx.run(egui::RawInput::default(), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let steps: Vec<UndoStep> = (0..writes)
+                            .map(|at| UndoStep::of(Verb::Write, format!("File {at}.md")))
+                            .chain([FIXED])
+                            .collect();
+                        let group = KeptGroup::of(&steps);
+                        for (at, step) in steps.into_iter().enumerate() {
+                            let words = format!("Change {at}.");
+                            let _ =
+                                kept_result(ui, &group, &words, step.pressed_as(()), Vec::new());
+                        }
+                    });
+                });
+                painted = output
+                    .shapes
+                    .into_iter()
+                    .filter_map(|shape| match shape.shape {
+                        egui::Shape::Text(text) => Some(text.galley.job.text.clone()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+            }
+            let has = |words: &str| painted.iter().any(|text| text.as_str() == words);
+            if writes == 1 {
+                assert!(
+                    has("Undo write") && !has("Undo write File 0.md"),
+                    "{painted:?}"
+                );
+            } else {
+                assert!(
+                    has("Undo write File 0.md") && has("Undo write File 1.md"),
+                    "{painted:?}"
+                );
+            }
+            assert!(
+                has("Undo package registration"),
+                "fixed words stay whole: {painted:?}"
+            );
+        }
     }
 
     /// At 960 in a narrow pane the lock's reason wraps at whole words under the message words;

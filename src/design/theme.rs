@@ -174,10 +174,27 @@ pub fn scroll_style() -> ScrollStyle {
     }
 }
 
+/// Where `install` keeps the font generation in the context's memory.
+fn font_generation_id() -> egui::Id {
+    egui::Id::new("design_theme_font_generation")
+}
+
+/// The generation of the fonts that `install` put in this context: it changes at every
+/// installation, so a kept galley whose key holds it is laid out again when the font data
+/// changes under the same `FontId` (M5's kept heading). 0 before any installation.
+pub(crate) fn font_generation(ctx: &egui::Context) -> u64 {
+    ctx.data(|data| data.get_temp::<u64>(font_generation_id()))
+        .unwrap_or_default()
+}
+
 pub fn install(ctx: &egui::Context) {
     // The app reads focused widgets' roles, and assistive technology can attach at any time.
     ctx.enable_accesskit();
     ctx.set_fonts(fonts());
+    ctx.data_mut(|data| {
+        let generation = data.get_temp_mut_or_default::<u64>(font_generation_id());
+        *generation += 1;
+    });
     ctx.set_theme(ThemePreference::Dark);
     let mut style = (*ctx.style_of(Theme::Dark)).clone();
     apply_colors(&mut style, colors());

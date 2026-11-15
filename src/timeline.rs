@@ -26,7 +26,7 @@ pub fn fights_that_keep_hp(
 ) -> Vec<String> {
     let runs: Vec<_> = saved_runs
         .iter()
-        .filter(|run| run.standing == Standing::Unfinished && !run.label.starts_with("Setup"))
+        .filter(|run| run.standing == Standing::Unfinished && !run.setup)
         .filter_map(|run| run.id)
         .collect();
     events
@@ -2639,6 +2639,8 @@ mod tests {
             encounter: fight.title.clone(),
             label: label.into(),
             standing,
+            // The fixture's phase, as `Run::info` sets it from the run's state.
+            setup: label.split(" · ").any(|part| part == "Setup"),
             saved_at: None,
             unsent: Vec::new(),
         };
@@ -2653,10 +2655,19 @@ mod tests {
 
     #[test]
     fn fights_that_keep_hp_excludes_setup() {
-        let (fight, run) = hp_fight("Setup · Paused", Standing::Unfinished);
-        assert!(
-            fights_that_keep_hp(std::slice::from_ref(&fight), fight.session, &[run]).is_empty()
-        );
+        // A recovery copy's or a changed run's label starts with its mark, not its state: the
+        // filter reads the typed phase, never the label's first word.
+        for label in [
+            "Setup · Paused",
+            "Copy 2 · Setup · Paused",
+            "Changed on disk · Setup · Paused",
+        ] {
+            let (fight, run) = hp_fight(label, Standing::Unfinished);
+            assert!(
+                fights_that_keep_hp(std::slice::from_ref(&fight), fight.session, &[run]).is_empty(),
+                "{label}"
+            );
+        }
     }
 
     #[test]

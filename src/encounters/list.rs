@@ -209,6 +209,18 @@ fn heading(ui: &mut egui::Ui, word: &str, count: usize) {
     design::group_heading(ui, word, count);
 }
 
+/// Q-o: the In progress heading says the rows' order after its count, in the count's muted
+/// form, from `Arranged::in_progress_order` (the rows as arranged, the open run first).
+fn in_progress_heading(ui: &mut egui::Ui, page: &history::Arranged<'_>) {
+    let mut job = design::group_heading_text(ui, "IN PROGRESS", page.in_progress.len());
+    if let Some(order) = page.in_progress_order()
+        && let Some(format) = job.sections.last().map(|section| section.format.clone())
+    {
+        job.append(&format!(" · {order}"), 0.0, format);
+    }
+    ui.label(job);
+}
+
 fn section(
     ui: &mut egui::Ui,
     id: &str,
@@ -557,13 +569,6 @@ fn paused_run_detail(
     parts.join(" · ")
 }
 
-/// AB1: what In progress and History say while the run list cannot be read. The warning above
-/// the lists names the folder and offers Choose folder.
-pub(crate) const UNFINISHED_UNREAD: &str =
-    "Splat cannot read the run folder, so it cannot show unfinished runs.";
-pub(crate) const ENDED_UNREAD: &str =
-    "Splat cannot read the run folder, so it cannot show ended fights.";
-
 pub(super) fn in_progress_list(
     ui: &mut egui::Ui,
     page: &history::Arranged<'_>,
@@ -574,9 +579,11 @@ pub(super) fn in_progress_list(
     action: &mut Option<ListAction>,
 ) {
     let (blocked, loading) = availability;
-    heading(ui, "IN PROGRESS", page.in_progress.len());
-    if page.runs_unread {
-        blocked_reason(ui, Some(UNFINISHED_UNREAD));
+    in_progress_heading(ui, page);
+    // AB1, R41: while the run list cannot be read, the list says why in the fault's words
+    // (`cannot find` against `cannot read`); the footer names the folder and offers Choose folder.
+    if let Some(fault) = page.runs_unread {
+        blocked_reason(ui, Some(fault.list_words(false)));
     } else if page.in_progress.is_empty() {
         blocked_reason(
             ui,
@@ -821,9 +828,9 @@ pub(super) fn history_list(
     action: &mut Option<ListAction>,
 ) -> Option<egui::Rangef> {
     design::gap(ui, design::Gap::L);
-    if page.runs_unread {
+    if let Some(fault) = page.runs_unread {
         heading(ui, "HISTORY", 0);
-        blocked_reason(ui, Some(ENDED_UNREAD));
+        blocked_reason(ui, Some(fault.list_words(true)));
         return None;
     }
     if page.ended_count() == 0 && page.unreadable.is_empty() {
@@ -1021,7 +1028,7 @@ fn history_summary(
             let max = row
                 .max_hp
                 .map_or_else(|| "?".to_owned(), |hp| hp.to_string());
-            format!("HP {hp}/{max}")
+            format!("HP {}", crate::combat_sync::fraction(hp, max))
         };
         let temp_words = |row: &crate::encounter_run::FightRow| {
             (row.temporary_hp > 0).then(|| format!("{} +{}", icons::TEMP_HP, row.temporary_hp))
@@ -1428,6 +1435,7 @@ mod iter_2_c_tests {
             encounter: templates[at].name.clone(),
             label: String::new(),
             standing,
+            setup: false,
             saved_at: None,
             unsent: vec![],
         };
@@ -1457,6 +1465,7 @@ mod iter_2_c_tests {
             encounter: "Bridge Ambush".into(),
             label: "Setup · Paused · Last: Added a wolf · Saved just now".into(),
             standing: crate::encounter_run::Standing::Unfinished,
+            setup: true,
             saved_at: Some(1_767_229_200 + n as u64 * 60),
             unsent: vec![],
         });
@@ -1532,17 +1541,18 @@ mod iter_2_c_tests {
             let font = Type::Small.font(ui);
             let width = |text: &str| design::number_width(ui, text, &font);
             assert!(width("Last: 1") > 0.0, "the test measures text");
-            let detail = "Copy 2 · Closed last · Round 2 · Paused · Last: 1 damage to Kestrel Dunmoor (6 HP left) · 2026-01-01 03:00";
+            let detail = "Copy 2 · Round 2 · Paused · Last: 1 damage to Kestrel Dunmoor (6 HP left) · 2026-01-01 03:00";
             // It fits: nothing changes.
             assert_eq!(fit_detail(ui, detail, &font, width(detail)), detail);
             // Room for some of the last change: it loses whole words, and the time stays whole.
-            let shortened = "Copy 2 · Closed last · Round 2 · Paused · Last: 1 damage to Kestrel… · 2026-01-01 03:00";
+            let shortened =
+                "Copy 2 · Round 2 · Paused · Last: 1 damage to Kestrel… · 2026-01-01 03:00";
             let fitted = fit_detail(ui, detail, &font, width(shortened));
             assert!(fitted.ends_with(" · 2026-01-01 03:00"), "{fitted}");
             assert!(fitted.contains(" · Last: 1 damage to Kestrel…"), "{fitted}");
             assert!(width(&fitted) <= width(shortened));
             // Room for no word of it: the last change goes, and the time stays whole.
-            let without = "Copy 2 · Closed last · Round 2 · Paused · 2026-01-01 03:00";
+            let without = "Copy 2 · Round 2 · Paused · 2026-01-01 03:00";
             let fitted = fit_detail(
                 ui,
                 detail,

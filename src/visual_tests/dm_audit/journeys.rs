@@ -1732,10 +1732,7 @@ fn week_between(a: &mut Audit<'_, '_>) {
         let mut words = Vec::new();
         d.each_painted_text(|text, _| {
             let line = text.galley.job.text.replace('\u{a0}', " ");
-            if let Some(word) = ["Above High", "Moderate", "High", "Low"]
-                .into_iter()
-                .find(|word| line.ends_with(&format!(" · {word}")))
-            {
+            if let Some(word) = super::plan_word(&line) {
                 words.push(word);
             }
         });

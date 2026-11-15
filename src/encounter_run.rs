@@ -173,16 +173,19 @@ pub(crate) enum FaultKind {
     NotInPackages,
     /// The member's changes make a creature that cannot be, such as a maximum HP below 1.
     InvalidChange,
-    /// The member can be read but not run: a D&D Beyond sheet, no maximum HP, an unread row.
+    /// The member can be read but not run: a D&D Beyond sheet, no maximum HP.
     CannotJoin,
+    /// The member's row, or its creature's file, is there and cannot be read (R41, lead ruling
+    /// s30 B11): an error wherever it shows.
+    Unreadable,
 }
 
 impl FaultKind {
-    /// An invalid value is an error wherever it shows. A member that is only left out is a
-    /// warning: the group still loads, and its other members can join.
+    /// An invalid value and unreadable data are errors wherever they show (R41). A member that is
+    /// only left out is a warning: the group still loads, and its other members can join.
     pub(crate) fn tone(self) -> crate::design::Tone {
         match self {
-            Self::InvalidChange => crate::design::Tone::Error,
+            Self::InvalidChange | Self::Unreadable => crate::design::Tone::Error,
             Self::NotInPackages | Self::CannotJoin => crate::design::Tone::Warning,
         }
     }
@@ -871,6 +874,9 @@ pub(crate) struct Run {
     /// Arrivals' difficulty lines, fitted and kept by group (point 1 of the round 29 review):
     /// this run's own, so they die with it and no other run reads them.
     arrival_lines: crate::difficulty::Kept<Uuid>,
+    /// The turn heading's one kept candidate (M5): this run's own, so it ends with the run.
+    /// The part chooses again when the heading's data or metrics change.
+    turn_heading: crate::design::KeptTurnHeading,
     /// The groups' revision that `arrival_lines` was last trimmed to.
     arrival_lines_seen: Option<u64>,
     /// Each pending sync's line in the ended view, by row, with the sync values' revision it
@@ -979,6 +985,11 @@ pub(crate) struct Run {
     no_saved_undo: Option<&'static str>,
     /// The file's Undo steps could not be read. The run says so until the DM dismisses it.
     undo_unread: bool,
+    /// Why Prep's `Edit encounter` did not open this run's encounter. This run owns it: the
+    /// next press of `Edit encounter` ends it, and it ends with the run (closing it, another
+    /// run, a campaign change). A draft refusal also ends when no draft blocks any more (the
+    /// app checks it while one is stored).
+    pub(crate) prep_refusal: Option<PrepRefusal>,
     pub content: Option<Arc<crate::lookup::ContentIndex>>,
     /// A link the DM followed in the side panel.
     pub lookup_request: Option<usize>,
@@ -1407,6 +1418,7 @@ impl Run {
             loot_copied: None,
             arrival_words: None,
             arrival_lines: crate::difficulty::Kept::default(),
+            turn_heading: crate::design::KeptTurnHeading::new(),
             arrival_lines_seen: None,
             pending_lines: BTreeMap::new(),
             #[cfg(test)]
@@ -1468,6 +1480,7 @@ impl Run {
             reopened: false,
             no_saved_undo: None,
             undo_unread: false,
+            prep_refusal: None,
             content: None,
             lookup_request: None,
             close_lookup: false,
@@ -4235,9 +4248,31 @@ struct Storage {
 }
 
 pub fn find_run(directory: &Path, campaign: Uuid, id: Uuid) -> Result<PathBuf, String> {
+    find_run_typed(directory, campaign, id).map_err(|fault| match fault {
+        FindRunFault::Folder(folder) => folder.message(),
+        FindRunFault::File(words) => words,
+    })
+}
+
+/// Why a run's file was not found: its folder (R41: missing or unreadable), or the folder
+/// holds no single file for it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum FindRunFault {
+    Folder(RunFolderFault),
+    File(String),
+}
+
+/// `find_run`, keeping the folder's cause typed, so a page says it as Encounters does.
+pub(crate) fn find_run_typed(
+    directory: &Path,
+    campaign: Uuid,
+    id: Uuid,
+) -> Result<PathBuf, FindRunFault> {
+    let folder = |fault| FindRunFault::Folder(fault);
+    let unreadable = |error: std::io::Error| folder(RunFolderFault::unreadable(directory, &error));
     let mut found = Vec::new();
-    for file in fs::read_dir(directory).map_err(|e| format!("{}: {e}", directory.display()))? {
-        let path = file.map_err(|e| e.to_string())?.path();
+    for file in RunFolderFault::read(directory).map_err(folder)? {
+        let path = file.map_err(unreadable)?.path();
         if path.extension().is_some_and(|ext| ext == "json")
             && read_saved(&path, campaign).is_ok_and(|run| run.id == id)
         {
@@ -4246,18 +4281,18 @@ pub fn find_run(directory: &Path, campaign: Uuid, id: Uuid) -> Result<PathBuf, S
     }
     match found.as_slice() {
         [path] => Ok(path.clone()),
-        [] => Err(format!(
+        [] => Err(FindRunFault::File(format!(
             "Run {id} was not found in {}.",
             directory.display()
-        )),
-        _ => Err(format!(
+        ))),
+        _ => Err(FindRunFault::File(format!(
             "Several files use run {id}: {}. Keep one identity before carrying HP.",
             found
                 .iter()
                 .map(|path| path.display().to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
-        )),
+        ))),
     }
 }
 impl Run {
@@ -4742,6 +4777,7 @@ impl Run {
             loot_copied: None,
             arrival_words: None,
             arrival_lines: crate::difficulty::Kept::default(),
+            turn_heading: crate::design::KeptTurnHeading::new(),
             arrival_lines_seen: None,
             pending_lines: BTreeMap::new(),
             #[cfg(test)]
@@ -4802,6 +4838,7 @@ impl Run {
             reopened: true,
             no_saved_undo: None,
             undo_unread: false,
+            prep_refusal: None,
             content: None,
             lookup_request: None,
             close_lookup: false,
@@ -4829,16 +4866,17 @@ impl Run {
         };
         Ok((run, saved_undo))
     }
-    pub fn list(directory: &Path, campaign: Uuid) -> Result<Vec<SavedRunInfo>, String> {
-        if !directory.exists() {
-            return Err(crate::sessions::missing_folder("Run", directory));
-        }
+    /// The campaign's saved runs, or why the folder cannot be listed (R41: a folder that is not
+    /// there against one that is there and cannot be read).
+    pub fn list(directory: &Path, campaign: Uuid) -> Result<Vec<SavedRunInfo>, RunFolderFault> {
+        let unreadable = |error: std::io::Error| RunFolderFault::unreadable(directory, &error);
+        let entries = RunFolderFault::read(directory)?;
         let mut runs = Vec::new();
         let mut close_order = BTreeMap::new();
         let mut copy_numbers = BTreeMap::new();
         let mut changed_elsewhere = BTreeSet::new();
-        for file in fs::read_dir(directory).map_err(|e| e.to_string())? {
-            let path = file.map_err(|e| e.to_string())?.path();
+        for file in entries {
+            let path = file.map_err(unreadable)?.path();
             if path.extension().is_some_and(|e| e == "json") {
                 let modified = crate::hermetic::file_time(&path);
                 // A row needs no Undo steps, so the list does not rebuild them.
@@ -4859,6 +4897,7 @@ impl Run {
                             source: None,
                             encounter: String::new(),
                             standing: Standing::Unreadable,
+                            setup: false,
                             saved_at: modified,
                             unsent: Vec::new(),
                             path,
@@ -4901,7 +4940,8 @@ impl Run {
                 );
             }
         }
-        // The run closed last owns Resume, including recovery copies.
+        // The run closed last owns Resume, including recovery copies. Q-o: the list's heading
+        // says the order (`Arranged::in_progress_order`); no row carries an order word.
         runs.sort_by(|a, b| {
             close_order
                 .get(&b.path)
@@ -4911,18 +4951,6 @@ impl Run {
                 .then_with(|| a.label.cmp(&b.label))
                 .then_with(|| a.path.cmp(&b.path))
         });
-        if let Some(run) = runs
-            .iter_mut()
-            .find(|run| run.standing == Standing::Unfinished)
-            && close_order.get(&run.path).is_some_and(|order| *order > 0)
-        {
-            let duplicate = run
-                .id
-                .and_then(|id| identities.get(&id))
-                .is_some_and(|paths| paths.len() > 1);
-            let at = if duplicate { 0 } else { after_copy(run) };
-            run.label.insert_str(at, "Closed last · ");
-        }
         let all_recent = runs
             .iter()
             .filter(|run| run.standing == Standing::Unfinished)
@@ -4992,6 +5020,7 @@ impl Run {
                 .to_owned(),
             label,
             standing,
+            setup: matches!(self.state.phase, Phase::Setup),
             saved_at,
             unsent: self.unsent_in_save(),
             path,
@@ -5033,6 +5062,125 @@ pub enum Standing {
     Unreadable,
 }
 
+/// Why Prep's `Edit encounter` did not open the run's encounter.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum PrepRefusal {
+    /// An unsaved draft holds the editor (the shared recipe's kind, so the words are always
+    /// that draft's). It ends when no draft blocks.
+    Draft(crate::design::Unsaved),
+    /// Another cause, such as an encounter that is gone: its words.
+    Other(String),
+}
+
+impl PrepRefusal {
+    pub(crate) fn reason(&self) -> &str {
+        match self {
+            Self::Draft(draft) => draft.reason(),
+            Self::Other(words) => words,
+        }
+    }
+}
+
+/// R41: why the campaign's run folder cannot be listed. This one value gives the footer
+/// sentence, its tone, and what In progress and History say in place of their rows. The
+/// Encounters snapshot holds it; the next list read that succeeds ends it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum RunFolderFault {
+    /// The folder is not there: it may have been moved or renamed. A warning.
+    Missing(PathBuf),
+    /// The folder is there, and Splat cannot list it. An error. `cause` is plain words.
+    Unreadable {
+        folder: PathBuf,
+        cause: &'static str,
+    },
+    /// The run folder setting names no folder Splat can use: its own complete sentence.
+    Setting(String),
+}
+
+impl RunFolderFault {
+    /// The one read of a run folder's files: a folder that is not there is `Missing`, any
+    /// other failure `Unreadable`. `Run::list` and `find_run` both read through it.
+    fn read(folder: &Path) -> Result<fs::ReadDir, Self> {
+        match fs::metadata(folder) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                Err(Self::Missing(folder.to_path_buf()))
+            }
+            Err(error) => Err(Self::unreadable(folder, &error)),
+            Ok(_) => fs::read_dir(folder).map_err(|error| Self::unreadable(folder, &error)),
+        }
+    }
+
+    fn unreadable(folder: &Path, error: &std::io::Error) -> Self {
+        let cause = match error.kind() {
+            std::io::ErrorKind::PermissionDenied => "Splat has no permission to open it",
+            std::io::ErrorKind::NotADirectory => "it, or a folder above it, is a file",
+            _ => "the system did not let Splat list its files",
+        };
+        Self::Unreadable {
+            folder: folder.to_path_buf(),
+            cause,
+        }
+    }
+
+    /// The footer's sentence: what is wrong, with the folder, and what the DM can do. The
+    /// footer offers Choose folder beside it.
+    pub(crate) fn message(&self) -> String {
+        match self {
+            Self::Missing(folder) => format!(
+                "Splat cannot find the run folder {}. It may have been moved or renamed. Choose its new place, or put it back.",
+                folder.display()
+            ),
+            Self::Unreadable { folder, cause } => format!(
+                "Splat cannot read the run folder {}: {cause}. Fix it outside Splat, or choose another folder.",
+                folder.display()
+            ),
+            Self::Setting(words) => words.clone(),
+        }
+    }
+
+    /// The tone of `message`: a folder that is not there, or a setting, is a warning; a folder
+    /// that cannot be read is an error.
+    pub(crate) fn severity(&self) -> crate::design::outcome::Severity {
+        match self {
+            Self::Missing(_) | Self::Setting(_) => crate::design::outcome::Severity::NeedsFixing,
+            Self::Unreadable { .. } => crate::design::outcome::Severity::CannotRead,
+        }
+    }
+
+    /// The tone of `message` where a page paints it as a message: the tone of `severity`.
+    pub(crate) fn tone(&self) -> crate::design::Tone {
+        match self.severity() {
+            crate::design::outcome::Severity::NeedsFixing => crate::design::Tone::Warning,
+            crate::design::outcome::Severity::CannotRead
+            | crate::design::outcome::Severity::NotSaved => crate::design::Tone::Error,
+        }
+    }
+
+    /// What In progress (`ended` false) or History (`ended` true) says in place of its rows.
+    pub(crate) fn list_words(&self, ended: bool) -> &'static str {
+        match (self, ended) {
+            (Self::Missing(_), false) => {
+                "Splat cannot find the run folder, so it cannot show unfinished runs."
+            }
+            (Self::Missing(_), true) => {
+                "Splat cannot find the run folder, so it cannot show ended fights."
+            }
+            (Self::Unreadable { .. }, false) => {
+                "Splat cannot read the run folder, so it cannot show unfinished runs."
+            }
+            (Self::Unreadable { .. }, true) => {
+                "Splat cannot read the run folder, so it cannot show ended fights."
+            }
+            (Self::Setting(_), false) => {
+                "Splat has no run folder to read, so it cannot show unfinished runs."
+            }
+            (Self::Setting(_), true) => {
+                "Splat has no run folder to read, so it cannot show ended fights."
+            }
+        }
+    }
+}
+
 /// One saved run, as the Encounters page lists it.
 #[derive(Clone)]
 pub struct SavedRunInfo {
@@ -5043,6 +5191,9 @@ pub struct SavedRunInfo {
     pub encounter: String,
     pub label: String,
     pub standing: Standing,
+    /// The run is still in Setup: combat has not begun. A typed fact, so no decision reads
+    /// the label's words (`Copy 2 · ` and `Changed on disk · ` come before the state).
+    pub setup: bool,
     pub saved_at: Option<u64>,
     /// Who holds values not sent to D&D Beyond.
     pub unsent: Vec<String>,
@@ -5638,17 +5789,59 @@ mod tests {
     #[test]
     fn integrity_d11_a_missing_run_folder_is_reported() {
         let dir = tempfile::tempdir().unwrap();
-        let error = Run::list(&dir.path().join("gone"), Uuid::nil())
-            .err()
-            .unwrap();
-        // FB6: the run says what the session says for the same fault.
+        let gone = dir.path().join("gone");
+        let error = Run::list(&gone, Uuid::nil()).err().unwrap();
+        // R41 (round 30 G157): a folder that is not there is a warning, in a sentence that
+        // names it and what the DM can do; the lists say "cannot find", not "cannot read".
+        assert_eq!(error, RunFolderFault::Missing(gone.clone()));
         assert_eq!(
-            error,
+            error.message(),
             format!(
-                "Run folder not found: {}. It may have been moved or renamed.",
-                dir.path().join("gone").display()
+                "Splat cannot find the run folder {}. It may have been moved or renamed. Choose its new place, or put it back.",
+                gone.display()
             )
         );
+        assert_eq!(
+            error.severity(),
+            crate::design::outcome::Severity::NeedsFixing
+        );
+        assert!(
+            error
+                .list_words(false)
+                .starts_with("Splat cannot find the run folder")
+        );
+        assert!(
+            error
+                .list_words(true)
+                .starts_with("Splat cannot find the run folder")
+        );
+        // A path whose parent is a file cannot be read: an error, with plain words for its
+        // cause and no system text.
+        #[cfg(unix)]
+        {
+            let file = dir.path().join("a file");
+            fs::write(&file, "").unwrap();
+            let error = Run::list(&file.join("runs"), Uuid::nil()).err().unwrap();
+            assert!(
+                matches!(error, RunFolderFault::Unreadable { .. }),
+                "{error:?}"
+            );
+            assert_eq!(
+                error.severity(),
+                crate::design::outcome::Severity::CannotRead
+            );
+            assert!(
+                error
+                    .message()
+                    .starts_with("Splat cannot read the run folder ")
+            );
+            assert!(!error.message().contains("os error"), "{}", error.message());
+            assert!(
+                error
+                    .list_words(false)
+                    .starts_with("Splat cannot read the run folder")
+            );
+        }
     }
 
     #[test]
@@ -7079,7 +7272,7 @@ mod tests {
         let copies = Run::list(dir.path(), campaign).unwrap();
         assert_eq!(copies[0].id, Some(latest));
         assert_eq!(copies[0].encounter, "Ambush");
-        assert!(copies[0].label.starts_with("Copy 1 · Closed last · "));
+        assert!(copies[0].label.starts_with("Copy 1 · Round "));
         assert!(copies[0].label.contains(" · Last: "));
         let old = copies
             .iter()
@@ -7090,22 +7283,19 @@ mod tests {
             fs::read(&original).unwrap(),
             [bytes.as_slice(), b"\n"].concat()
         );
-        // FM8 (review of PR 326): the label says what the value is, the run closed last. A
-        // run opened and not closed (B) does not take it from A, which was closed last.
+        // FM8 (review of PR 326), Q-o (round 30 G181): a run opened and not closed (B) does not
+        // take first place in the list on disk from A, which was closed last. The heading says
+        // the order of the rows as the page arranges them (`Arranged::in_progress_order`); no
+        // row's label carries an order word.
         {
             let _opened = Run::open(&original, campaign).unwrap();
             let rows = Run::list(dir.path(), campaign).unwrap();
-            let a = rows.iter().find(|row| row.id == Some(latest)).unwrap();
-            let b = rows.iter().find(|row| row.id == Some(original_id)).unwrap();
+            assert_eq!(rows[0].id, Some(latest), "iter-28-R-FM8: A first");
             assert!(
-                a.label.contains("Closed last · "),
-                "iter-28-R-FM8: {}",
-                a.label
-            );
-            assert!(
-                !b.label.contains("Closed last"),
-                "iter-28-R-FM8: {}",
-                b.label
+                rows.iter()
+                    .all(|row| !row.label.to_lowercase().contains("closed")),
+                "Q-o: no row carries an order word: {:?}",
+                rows.iter().map(|row| &row.label).collect::<Vec<_>>()
             );
         }
         let mut old = Run::open(&original, campaign).unwrap();

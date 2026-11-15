@@ -1389,22 +1389,13 @@ pub fn status_slot<K: Copy>(
     .inner
 }
 
-/// The parts that the doc tests of [`KeySlot`], [`BackLink`] and `folder_group_heading` name.
+/// The parts that the doc tests of [`BackLink`] and `folder_group_heading` name.
 /// Public only for those tests; the app uses them through `design`.
 #[doc(hidden)]
 pub mod doc_parts {
     pub use crate::design::{
         Action, AddField, Density, FolderGroup, add_field, folder_group_heading, icons,
     };
-}
-
-/// Whether a [`KeySlot`]'s key letter shows this frame.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum KeyLetter {
-    Shown,
-    /// The keys do not work here (Lookup has the keyboard), or the letter gives its place to
-    /// other words. Its room stays.
-    Hidden,
 }
 
 /// A key letter shown on a control (`N`, `U`, `Ctrl+G`): a non-empty literal of the keys list,
@@ -1461,65 +1452,6 @@ macro_rules! key {
             key
         }
     };
-}
-
-/// Fixed room for a control whose key letter comes and goes: as wide as the control with its
-/// key letter, so a control beside it never moves when the letter hides or shows (F8; Run's
-/// `Next turn` with `N`, routing row 62). The width is the control's own measure
-/// (`Action::natural_width` of the same action with the key, or the action's own `min_width`
-/// when that is wider), so it cannot drift from the paint; no caller gives a width.
-///
-/// ```
-/// # use splat::layout::doc_parts::{Action, Density};
-/// # use splat::layout::{KeyLetter, KeySlot};
-/// # fn draw(ui: &mut eframe::egui::Ui) {
-/// let next = Action::primary("Next turn").density(Density::Glance);
-/// let _ = KeySlot::new(next, splat::key!("N")).show(ui, KeyLetter::Hidden);
-/// # }
-/// ```
-///
-/// The key is a checked [`KeyName`], never a string, so hiding it by an empty string does not
-/// compile; hiding is [`KeyLetter::Hidden`], which keeps the room:
-///
-/// ```compile_fail,E0308
-/// # use splat::layout::doc_parts::Action;
-/// # use splat::layout::{KeyLetter, KeySlot};
-/// # fn draw(ui: &mut eframe::egui::Ui, hide: bool) {
-/// let _ = KeySlot::new(Action::primary("Next turn"), if hide { "" } else { "N" })
-///     .show(ui, KeyLetter::Shown);
-/// # }
-/// ```
-#[must_use = "call show"]
-pub struct KeySlot<'a> {
-    /// The control with its key letter: its widest form.
-    widest: Action<'a>,
-}
-
-impl<'a> KeySlot<'a> {
-    pub fn new(action: Action<'a>, key: KeyName) -> Self {
-        Self {
-            widest: action.key(key.as_str()),
-        }
-    }
-
-    /// The slot's width: the control's with its key letter, or the action's own least width
-    /// when that is wider.
-    pub fn width(&self, ui: &Ui) -> f32 {
-        self.widest
-            .natural_width(ui)
-            .max(self.widest.least_width())
-            .ceil()
-    }
-
-    /// Draw the control in the slot's room, with or without its key letter.
-    pub fn show(self, ui: &mut Ui, letter: KeyLetter) -> Response {
-        let width = self.width(ui);
-        let action = match letter {
-            KeyLetter::Shown => self.widest,
-            KeyLetter::Hidden => self.widest.key(""),
-        };
-        action.min_width(width).show(ui)
-    }
 }
 
 /// How a title-line action looks. There is no form without its word.

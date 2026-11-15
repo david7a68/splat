@@ -2543,7 +2543,7 @@ pub fn facts(d: &mut Driver<'_>) {
             && d.visible_text("“Can a horn ring be sold?” ticked in Horn Rings."),
         "The box ticks that line of its note, and the question leaves the list",
     );
-    d.state("question-ticked", Sizes::Default);
+    d.state("question-ticked", Sizes::All);
     d.click("Undo tick \u{201c}Can a horn ring be sold?\u{201d} in Horn Rings");
     d.observe(
         "T15.5",
@@ -5639,6 +5639,29 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
             format!("At {size:?}, the long name and its Add to fight: {detail}"),
         );
     }
+    // Round 30 AP1: Prep's sentence names Edit encounter, and Prep offers it, also for a
+    // fight that Lookup's Start fight saved a moment ago. The run's own record of its
+    // encounter decides, not Lookup's index (which did not hold this encounter yet).
+    for size in [SMALL, DEFAULT, LARGE] {
+        let offered = d.at_size(size, |d| {
+            !d.visible_text("Add read-aloud text or notes when you edit the encounter.")
+                || d.in_view("Edit encounter")
+        });
+        d.observe(
+            "s30-AP1-offered",
+            offered,
+            format!("At {size:?}, Prep's sentence that names Edit encounter has the action"),
+        );
+    }
+    let large_prep = d.at_size(LARGE, |d| {
+        d.visible_text("Add read-aloud text or notes when you edit the encounter.")
+            && d.in_view("Edit encounter")
+    });
+    d.observe(
+        "s30-AP1-offered-1920",
+        large_prep,
+        "At 1920, Prep shows its sentence and Edit encounter for the fight Lookup started",
+    );
     d.state("npc-long-name-add-to-fight", Sizes::All);
     // Review of PR 355: a package's NPC with no stat block joins through the form that asks for
     // one, and its package note is not written.
@@ -5667,7 +5690,167 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
             "{PACKAGE_NPC} rows {joined}; no Save checkbox {one_save}; the package note is unchanged"
         ),
     );
+    // Append the popup witness after the original Add and its checks: resizing or focusing
+    // this extra menu must never change the scroll seen by those existing steps. A separate
+    // NPC has no stat block and has not joined this run, so its form can open without Undo.
+    const POPUP_NPC: &str = "Popup witness";
+    entry(d, "NPCs/Popup witness.md", POPUP_NPC, "npc", "");
+    reload(d);
+    show(d, POPUP_NPC);
+    d.wait_for_text(POPUP_NPC);
+    d.click(&format!("Add {POPUP_NPC} to the fight"));
+    d.type_into("Stat block", "Guard");
+    d.click("Guard");
+    d.state_prepared("add-to-fight-side-menu-boundary", Sizes::Small, |d| {
+        if !d.has("Side choices") {
+            d.click_starting("Side:");
+        }
+    });
+    d.press(Key::Escape);
+    d.click("Cancel");
     close_run(d);
+    // Round 30 AP1, kept last: when the run's encounter is gone, Edit encounter does not
+    // leave the run; Prep says why under the action. The reason belongs to that run: it ends
+    // when the run closes, so the next run of the encounter shows the action without it.
+    let open_rook_prep = |d: &mut Driver<'_>| {
+        show(d, "Rook Ambry");
+        d.wait_for_text("Watch House");
+        d.click(start);
+        d.expect(&format!("{RUN_HEADING}Fight with Rook Ambry"));
+        d.click("Close Lookup");
+        fight_tab(d, "Prep");
+        d.expect("Edit encounter");
+    };
+    open_rook_prep(d);
+    // The run's encounter is one of the saved fights with Rook: set them all aside.
+    let rook_notes: Vec<(std::path::PathBuf, String)> = fs::read_dir(&encounters)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .is_some_and(|name| name.to_string_lossy().starts_with("Fight with Rook Ambry"))
+        })
+        .map(|path| {
+            let text = fs::read_to_string(&path).unwrap();
+            (path, text)
+        })
+        .collect();
+    assert!(!rook_notes.is_empty());
+    for (path, _) in &rook_notes {
+        fs::remove_file(path).unwrap();
+    }
+    d.click("Edit encounter");
+    d.settle();
+    const GONE: &str = "This encounter is no longer in the campaign.";
+    d.observe(
+        "s30-AP1-refused",
+        d.has_containing(&format!("{RUN_HEADING}Fight with Rook Ambry"))
+            && d.has("Edit encounter")
+            && d.has_containing(GONE),
+        "Edit encounter for a deleted encounter stays on the run, and Prep says why under it",
+    );
+    d.state("prep-edit-encounter-gone", Sizes::All);
+    for (path, text) in &rook_notes {
+        fs::write(path, text).unwrap();
+    }
+    // A setup nobody touched leaves no save, so the next run of this encounter is a new run.
+    close_run(d);
+    open_rook_prep(d);
+    d.observe(
+        "s30-AP1-refusal-ends",
+        !d.has_containing(GONE),
+        "The reason ended with its run: the next run of the encounter shows Edit encounter without it",
+    );
+    // Review of lane B4: Prep's Edit encounter never replaces an unsaved draft. (c) With
+    // nothing unsaved it opens the editor; (a) with unsaved words in the encounter, and (b)
+    // with the encounter saved and a creature beside it unsaved, it stays on the run, the
+    // draft stays, and Prep paints the guard's own sentence under the action.
+    d.click("Edit encounter");
+    d.expect("Back to run");
+    d.observe(
+        "s30-AP1-clean-opens",
+        d.has("Back to run") && d.has(SAVE_ENCOUNTER),
+        "With nothing unsaved, Prep's Edit encounter opens the encounter's editor",
+    );
+    // Only the name changes, so Prep stays empty and keeps its action after a save.
+    const DRAFT_WORDS: &str = " at the well";
+    d.type_into("Encounter name", DRAFT_WORDS);
+    d.click("Back to run");
+    fight_tab(d, "Prep");
+    d.click("Edit encounter");
+    d.settle();
+    let guard = d
+        .app_mut()
+        .encounters
+        .plan_group_blocked()
+        .map(str::to_owned);
+    let kept = d.app_mut().encounters.encounter_dirty();
+    d.observe(
+        "s30-AP1-dirty-encounter",
+        kept && d.has_containing(&format!("{RUN_HEADING}Fight with Rook Ambry"))
+            && guard.as_deref().is_some_and(|reason| d.has_containing(reason)),
+        format!("An unsaved encounter: Edit encounter stays on the run, the draft stays ({kept}), and Prep paints the guard's reason {guard:?}"),
+    );
+    d.state("prep-edit-encounter-unsaved", Sizes::All);
+    d.click(NAV_ENCOUNTERS);
+    // At 1920 the whole editor is in view (B4's back line takes a line at 1200).
+    let kept_words = d.at_size(LARGE, |d| d.visible_text(DRAFT_WORDS));
+    d.observe(
+        "s30-AP1-dirty-encounter-words",
+        kept_words,
+        "The unsaved words are still in the encounter's editor",
+    );
+    // Round 30 review F3: the refusal names a blocker, so it ends when the blocker does. Save
+    // the encounter, go back to the run: Prep shows its action and no old reason.
+    d.click(SAVE_ENCOUNTER);
+    d.settle();
+    d.click("Back to run");
+    fight_tab(d, "Prep");
+    d.settle();
+    let clean = !d.app_mut().encounters.encounter_dirty();
+    d.observe(
+        "s30-AP1-refusal-ends-on-save",
+        clean
+            && d.visible_text("No prep notes yet")
+            && d.has("Edit encounter")
+            && guard.as_deref().is_some_and(|reason| !d.has_containing(reason)),
+        format!("After Save on Encounters (clean {clean}), Prep shows Edit encounter without the old reason {guard:?}"),
+    );
+    d.click("Edit encounter");
+    d.expect("Back to run");
+    d.click("More actions for Rook Ambry");
+    d.click("Make it yours");
+    d.settle();
+    d.click(SAVE_ENCOUNTER);
+    d.settle();
+    d.type_into("Name", " of the Watch");
+    d.settle();
+    let (encounter, creature) = {
+        let page = &d.app_mut().encounters;
+        (page.encounter_dirty(), page.creature_dirty())
+    };
+    d.click("Back to run");
+    fight_tab(d, "Prep");
+    d.click("Edit encounter");
+    d.settle();
+    let guard = d
+        .app_mut()
+        .encounters
+        .plan_group_blocked()
+        .map(str::to_owned);
+    let still = d.app_mut().encounters.creature_dirty();
+    d.observe(
+        "s30-AP1-dirty-creature",
+        !encounter
+            && creature
+            && still
+            && d.has_containing(&format!("{RUN_HEADING}Fight with Rook Ambry"))
+            && guard.as_deref().is_some_and(|reason| d.has_containing(reason)),
+        format!("A saved encounter with an unsaved creature (encounter dirty {encounter}, creature dirty {creature}, after {still}): Edit encounter stays on the run and Prep paints the guard's reason {guard:?}"),
+    );
+    // The same painted reason as state 11 (the guard gives one sentence for both drafts), so
+    // this case has its check and no capture of its own.
 }
 
 /// AD3: a result's Undo follows its message, drawn by `undo_message`, at each size. It has the
@@ -7295,7 +7478,7 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
         let open = d.place_of("Open in Library").expect("Safe manifest repair is present");
         let replace = d.place_of("Replace with a basic Package.md").expect("Manifest replacement is present");
         let notice = d.painted_left("Ashen Marches: Package.md cannot be read").expect("Manifest warning is visible");
-        let help = d.painted_left("Keeps the package name and its links.").expect("Replacement consequence is visible");
+        let help = d.painted_left("This keeps the package name and its links.").expect("Replacement consequence is visible");
         d.observe("iter-7-C-FD4-order", open.top() <= replace.top() && (open.top() < replace.top() || open.right() <= replace.left()),
             "Open in Library precedes manifest replacement");
         d.observe("iter-7-C-FD4-edge", (open.left() - notice).abs() <= 1.0 && (help - notice).abs() <= 1.0,
@@ -7304,7 +7487,7 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
             "Open in Library has a secondary border");
         d.observe("iter-7-C-FD5", d.visible_text("Package.md cannot be read (line 4). Entries are still available."),
             "The manifest fault and availability sentence have a full stop between them");
-        d.observe("iter-6-C-AD1", d.visible_text("Keeps the package name and its links.")
+        d.observe("iter-6-C-AD1", d.visible_text("This keeps the package name and its links.")
             && d.visible_text("including its description.")
             && d.visible_text("The entries stay unchanged."),
             "Manifest replacement states the package name, links, description and unchanged entries");
@@ -7731,6 +7914,132 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.wait_for_text("The package manifest was deleted");
     assert!(!folder.join("Module.md").exists());
     assert_eq!(fs::read(&path).unwrap(), readme.as_bytes());
+    // s30 B11 F4 (lead ruling, R41): with the manifest deleted, a draft of it whose text Save
+    // accepts says the ready word `Unsaved`, not `Invalid`; Save is open; the file's warning
+    // stays in the footer. What Ctrl+S does then is in the detail (named in PR 420).
+    fs::remove_file(&path).unwrap();
+    d.focus_window(false);
+    d.focus_window(true);
+    open_local_package(d, MODULE);
+    d.click_containing("About Ashen Marches");
+    d.wait_for_text("The package manifest was deleted");
+    d.click("Edit Markdown");
+    d.settle();
+    // The manifest's valid text, with one more line: a draft Save accepts.
+    assert!(
+        d.editor_text().is_some(),
+        "Edit Markdown shows the kept manifest"
+    );
+    d.replace_text_in(
+        "Markdown editor",
+        &format!("{}\nKept by the DM.\n", valid.trim_end()),
+    );
+    d.settle();
+    let before = (
+        d.visible_text("Unsaved"),
+        d.visible_text("Invalid"),
+        d.place_of("Save").is_some() && !d.is_disabled("Save"),
+        manifest_fault_tone(d, "The package manifest was deleted."),
+    );
+    d.press_ctrl(egui::Key::S);
+    d.settle();
+    // Save writes the manifest under the package folder: whichever file it chose holds the line.
+    let holding: Vec<String> = fs::read_dir(&folder)
+        .map(|entries| {
+            entries
+                .flatten()
+                .filter(|entry| {
+                    fs::read_to_string(entry.path())
+                        .is_ok_and(|text| text.contains("Kept by the DM."))
+                })
+                .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                .collect()
+        })
+        .unwrap_or_default();
+    let written = !holding.is_empty();
+    let after = (
+        written,
+        d.has_containing("The package manifest was deleted"),
+        d.visible_text("Invalid"),
+    );
+    d.observe(
+        "s30-B11-F4-manifest-gone",
+        // The write after Ctrl+S is reported in the detail, not asserted: named in PR 420.
+        before == (true, false, true, Some("warning")),
+        format!(
+            "Deleted manifest, valid draft: (Unsaved, Invalid, Save open, warning) {before:?}; after Ctrl+S (written, warning, Invalid) {after:?}; files with the line {holding:?}; Saved shown {}; folder {:?}; Not saved {}; editor {:?}; Write again {}",
+            d.visible_text("Saved"),
+            fs::read_dir(&folder)
+                .map(|entries| entries
+                    .flatten()
+                    .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                    .collect::<Vec<_>>())
+                .unwrap_or_default(),
+            d.has_containing("Not saved"),
+            d.editor_text().map(|text| text.len()),
+            d.has("Write the manifest again"),
+        ),
+    );
+    // Round 30 B11 F4 / Astra F8 (lane B2b): Save on the draft of a manifest known to be gone
+    // writes it as a new file (never over one): the manifest holds the DM's line, `Saved`
+    // shows and the missing-manifest warning ends. On main before B2b, Save compared the draft
+    // with an empty text that no file held and left the pane silently in a deleted-file view.
+    let saved = d.visible_text("Saved");
+    d.observe(
+        "s30-B2b-gone-manifest-save-writes",
+        fs::read_to_string(&path).is_ok_and(|text| text.contains("Kept by the DM."))
+            && saved
+            && !after.1,
+        format!(
+            "Ctrl+S writes Package.md from the draft (files with the line {holding:?}), Saved shows ({saved}), the warning ends ({})",
+            !after.1
+        ),
+    );
+    // A file that comes back at the manifest's path before Save keeps the outside-change
+    // guard: Save does not write over it, and the draft stays.
+    let _ = fs::remove_file(&path);
+    d.focus_window(false);
+    d.focus_window(true);
+    // On the old code the first Save left the pane in a deleted-file view, so the warning may
+    // not come back: that is reported here, not as a timeout that hides the checks above.
+    let mut back = false;
+    for _ in 0..20 {
+        back = d.has_containing("The package manifest was deleted");
+        if back {
+            break;
+        }
+        d.settle();
+    }
+    if back {
+        d.click("Edit Markdown");
+        d.settle();
+        d.replace_text_in(
+            "Markdown editor",
+            &format!("{}\nKept by the DM again.\n", valid.trim_end()),
+        );
+        d.settle();
+        let outside = "Someone else's notes.\n";
+        fs::write(&path, outside).unwrap();
+        d.press_ctrl(egui::Key::S);
+        d.settle();
+        let kept = d.app_mut().library.dirty();
+        d.observe(
+            "s30-B2b-gone-manifest-reappears",
+            fs::read_to_string(&path).is_ok_and(|text| text == outside)
+                && kept
+                && !d.visible_text("Saved"),
+            format!(
+                "A file that came back keeps its bytes and the draft stays (draft kept {kept})"
+            ),
+        );
+    } else {
+        d.observe(
+            "s30-B2b-gone-manifest-reappears",
+            false,
+            "The missing-manifest warning did not come back after the manifest was deleted again",
+        );
+    }
+    fs::write(&path, &valid).unwrap();
 }
 
 pub fn package_file_changed(d: &mut Driver<'_>) {
@@ -11444,7 +11753,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.click(&format!(
         "Make all {count} files in ashen-marches-copy/ separate entries"
     ));
-    d.wait_for_text("Undo separate entries");
+    d.wait_for_control("Undo separate entries");
     d.expect(&format!(
         "{count} files in ashen-marches-copy/ are now separate entries."
     ));
@@ -11513,7 +11822,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         "Make all {count} files in ashen-marches-copy/ separate entries"
     ));
     let batch_words = format!("{count} files in ashen-marches-copy/ are now separate entries.");
-    d.wait_for_text("Undo separate entries");
+    d.wait_for_control("Undo separate entries");
     d.expect(&batch_words);
     let wolf = copied_entries
         .iter()
@@ -12702,6 +13011,50 @@ pub fn library_file_fault(d: &mut Driver<'_>) {
                 && !d.has_containing("was deleted on disk")
                 && d.has("Technical details"),
             "The draft's choices never save over the unreadable file",
+        );
+        // B2 packet 3 (F1): the draft's reason is always painted, exactly once: here, with no
+        // save row, on the toolbar's own line after its actions when it fits whole (at 1920,
+        // so no line is added and the draft's editor keeps its whole border), else on the
+        // line under the toolbar. The waiting actions say the same words on hover and as their
+        // accessible description; the body keeps its own sentence and choices.
+        let mut reasons = Vec::new();
+        d.each_painted_text(|text, clip| {
+            if text.galley.job.text == crate::design::save_row::CHANGED_ON_DISK
+                && clip.intersects(text.visual_bounding_rect())
+            {
+                reasons.push(text.visual_bounding_rect());
+            }
+        });
+        let toolbar = d.place_of(EDIT_MARKDOWN);
+        let editor = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.role == egui::accesskit::Role::MultilineTextInput);
+        let cites = d
+            .descriptions()
+            .iter()
+            .any(|words| words == crate::design::save_row::CHANGED_ON_DISK);
+        let wide = d.window_size().0 >= 1900.0;
+        d.observe(
+            "s30-B2-disk-reason-painted",
+            d.visible_text(&conflict)
+                && d.has("Try again")
+                && cites
+                && reasons.len() == 1
+                && editor.is_some()
+                && (!wide
+                    || toolbar.is_some_and(|toolbar| {
+                        (reasons[0].center().y - toolbar.center().y).abs() <= crate::design::S
+                    }) && editor.as_ref().is_some_and(|editor| {
+                        editor.shown.min.distance(editor.rect.min) <= 0.5
+                            && editor.shown.max.distance(editor.rect.max) <= 0.5
+                            && editor.rect.bottom() + crate::design::S <= d.window_size().1
+                    })),
+            format!(
+                "The reason is painted once {reasons:?} (on the toolbar line {toolbar:?} at 1920), \
+                 the actions cite it ({cites}), the body keeps {conflict:?}; editor {:?}",
+                editor.as_ref().map(|editor| (editor.rect, editor.shown))
+            ),
         );
     });
     assert!(d.app_mut().library.dirty(), "the draft stays");

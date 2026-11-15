@@ -52,16 +52,34 @@ impl Invalid {
     fn missing(text: &str) -> Self {
         Self {
             missing: true,
+            // R37: a missing part's tone, the one its diagnosis gives the save row's word.
+            tone: Tone::Warning,
             ..Self::from(text)
         }
     }
 
-    /// The save row's typed diagnosis of this fault.
+    /// The save row's typed diagnosis of this fault. Its tone is the fault's (R41): a deleted
+    /// creature is a thing that is gone, a warning; an unreadable one or a change that cannot
+    /// stand is an error.
     fn diagnosis(&self) -> design::save_row::Diagnosis<'static> {
         if self.missing {
             design::save_row::Diagnosis::incomplete(self.text.clone())
+        } else if self.tone == Tone::Warning {
+            design::save_row::Diagnosis::missing(self.text.clone())
         } else {
             design::save_row::Diagnosis::refused(self.text.clone())
+        }
+    }
+}
+
+/// A group's refusal, with its kind: the encounter page keeps it as its last refusal, and the
+/// save row and the footer give it the refusal's tone (R41).
+impl From<&groups::Refusal> for Invalid {
+    fn from(refusal: &groups::Refusal) -> Self {
+        Self {
+            text: refusal.text().to_owned(),
+            tone: refusal.tone(),
+            missing: refusal.diagnosis().only_incomplete(),
         }
     }
 }
@@ -221,7 +239,11 @@ impl RosterFault {
 struct OwnedGroupsFound {
     found: design::save_row::Diagnosis<'static>,
     origin: Option<design::save_row::DraftOrigin>,
-    footer: Option<String>,
+    footer: Option<EncounterFault>,
+    /// N4: the cause that the footer's next step answers, in the words Save says it (`Group
+    /// <name>: <cause>`), so the footer can leave out a stored failed-action message that only
+    /// repeats it, and keep any other.
+    cause: Option<String>,
 }
 
 /// N1: Save's checks of an encounter's changed groups, ranked: the first refused change outranks
@@ -232,7 +254,12 @@ fn owned_groups_found(
     encounter: Uuid,
 ) -> OwnedGroupsFound {
     use design::save_row::Diagnosis;
-    let (mut refused, mut incomplete, mut refused_footer) = (None, None, None);
+    let mut incomplete = None;
+    let mut incomplete_cause = None;
+    // Lead ruling 1 (s30 B11 F1): the most severe refusal across the groups by the diagnosis
+    // rank, then group order (`Diagnosis::outranks`; equals keep the first). Its diagnosis, its
+    // typed footer and its cause are chosen together, so none comes from another group.
+    let mut chosen: Option<(Diagnosis<'static>, EncounterFault, String)> = None;
     for group in groups.iter().filter(|group| group.dirty()) {
         let Err(refusal) = group.check(snapshot, Some(encounter)) else {
             continue;
@@ -243,9 +270,12 @@ fn owned_groups_found(
             } else {
                 named_group_words(&group.name(), refusal.text())
             };
+            incomplete_cause.get_or_insert(named_group_words(&group.name(), refusal.text()));
             incomplete.get_or_insert((words, group.origin()));
         } else {
             let words = named_group_words(&group.name(), refusal.text());
+            // Save's words for it, with the refusal's kind and so its tone.
+            let found = refusal.named(words.clone());
             // N2 (lead ruling, R35): a fault with a place of its own (a member's row, Belongs
             // to) keeps its cause there, and the footer always names the next step, so a blocked
             // Save has painted words whether that place is in view or not; never the cause twice.
@@ -259,19 +289,35 @@ fn owned_groups_found(
                     group_words(&group.name())
                 ),
             };
-            refused_footer.get_or_insert(footer);
-            refused.get_or_insert(words);
+            if chosen
+                .as_ref()
+                .is_none_or(|(kept, ..)| found.outranks(kept))
+            {
+                // R41: the footer says the fault in the refusal's tone.
+                let fault = EncounterFault::refusal(footer, &found);
+                chosen = Some((found, fault, words));
+            }
         }
     }
     let origin = incomplete.as_ref().map(|(_, origin)| *origin);
-    let footer = refused_footer.or_else(|| incomplete.as_ref().map(|(words, _)| words.clone()));
+    let (refused, footer, cause) = match chosen {
+        Some((found, footer, cause)) => (Some(found), Some(footer), Some(cause)),
+        None => (
+            None,
+            incomplete.as_ref().map(|(words, _)| {
+                EncounterFault::refusal(words.clone(), &Diagnosis::incomplete(words.as_str()))
+            }),
+            incomplete_cause,
+        ),
+    };
     let found = incomplete
         .map_or_else(Diagnosis::valid, |(words, _)| Diagnosis::incomplete(words))
-        .and(refused.map_or_else(Diagnosis::valid, Diagnosis::refused));
+        .and(refused.unwrap_or_else(Diagnosis::valid));
     OwnedGroupsFound {
         found,
         origin,
         footer,
+        cause,
     }
 }
 
@@ -316,6 +362,18 @@ fn group_words(name: &str) -> String {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// The error the next encounter write gives instead of writing (`fail_next_encounter_write`).
+    static FAIL_NEXT_WRITE: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
+/// A test makes the next Save of an encounter fail at its write, as a full disk would.
+#[cfg(test)]
+pub(crate) fn fail_next_encounter_write(error: &str) {
+    FAIL_NEXT_WRITE.with(|next| *next.borrow_mut() = Some(error.to_owned()));
+}
+
 /// A group's refusal as the encounter's Save says it: `Group <name>: <words>`.
 fn named_group_words(name: &str, words: &str) -> String {
     match name.trim() {
@@ -337,6 +395,31 @@ fn roster_fault_rows_id(draft: Uuid) -> egui::Id {
     egui::Id::new(("roster_fault_rows", draft))
 }
 
+/// Save's reason for the encounter's unread roster rows (`reason`), as its typed diagnosis.
+/// Lead ruling (s30 B11, R41): an unread roster row is a row of a file that is there and cannot
+/// be read, so it is an error wherever the editor says it: Save's reason (`Invalid`), the
+/// message above the roster and the row's own mark. This is the one value they read; a roster
+/// row whose creature file is missing stays a warning (`missing_creature_tone`).
+fn unread_rows_found(reason: String) -> design::save_row::Diagnosis<'static> {
+    design::save_row::Diagnosis::refused(reason)
+}
+
+/// The tone of every place that says an unread roster row: its diagnosis's. Run setup reads it
+/// too.
+pub(crate) fn unread_row_tone() -> Tone {
+    unread_rows_found(String::new())
+        .tone()
+        .unwrap_or(Tone::Error)
+}
+
+/// The icon and colour of that tone inside the row's muted words, as `design::message` draws it.
+pub(crate) fn unread_row_mark() -> (&'static str, egui::Color32) {
+    match unread_row_tone() {
+        Tone::Error => (icons::ERROR, colors().result.error),
+        _ => (icons::WARN, colors().result.warning),
+    }
+}
+
 /// A roster row's own mark for its unread row fault (FC3): short, as a row's other faults are.
 fn roster_row_fault_words(line: usize) -> String {
     format!("Line {line} not read")
@@ -354,16 +437,14 @@ fn unread_roster_row(ui: &mut egui::Ui, fault: &RosterFault) {
                     egui::Label::new(Type::Strong.rich(ui, &fault.name).color(colors().text))
                         .truncate(),
                 );
-                // FA5, AA2: the whole mark, icon and words, in the warning tone, as run setup
-                // marks the same row; the name keeps the text colour.
+                // FA5, AA2: the whole mark, icon and words, in the fault's tone (R41: an unread
+                // row is an error, `unread_row_mark`); the name keeps the text colour.
+                let (icon, color) = unread_row_mark();
                 ui.add(
                     egui::Label::new(
                         Type::Small
-                            .rich(
-                                ui,
-                                format!("{} {}", icons::WARN, roster_row_fault_words(fault.line)),
-                            )
-                            .color(colors().result.warning),
+                            .rich(ui, format!("{icon} {}", roster_row_fault_words(fault.line)))
+                            .color(color),
                     )
                     .wrap(),
                 );
@@ -449,27 +530,43 @@ fn unread_notes(
     path: &str,
     flags: &[splat::content::layout::Flag],
     faults: &[RosterFault],
-) -> Vec<String> {
+) -> Vec<(String, Tone)> {
     flags
         .iter()
         .map(|flag| {
             let row = faults.iter().find(|fault| fault.line == flag.line);
-            // A flag read back from a saved copy has only its sentence, which names its line:
-            // it follows the file or the row, and no line is added.
-            let Some(words) = flag.words() else {
-                return match row {
-                    _ if faults.is_empty() => format!("{path}: {}", flag.message),
-                    Some(fault) => format!("{}: {}", fault.name, flag.message),
-                    None => flag.message.clone(),
-                };
+            // R41: a flag of an unread roster row in that fault's tone; any other a warning.
+            let tone = if row.is_some() {
+                unread_row_tone()
+            } else {
+                Tone::Warning
             };
-            match row {
-                _ if faults.is_empty() => format!("{path}, line {}: {words}", flag.line),
-                Some(fault) => row_fault_words(&fault.name, flag.line, &words),
-                None => flag.message.clone(),
-            }
+            (unread_note(path, flag, row, faults), tone)
         })
         .collect()
+}
+
+/// One flag's words (`unread_notes`).
+fn unread_note(
+    path: &str,
+    flag: &splat::content::layout::Flag,
+    row: Option<&RosterFault>,
+    faults: &[RosterFault],
+) -> String {
+    // A flag read back from a saved copy has only its sentence, which names its line: it
+    // follows the file or the row, and no line is added.
+    let Some(words) = flag.words() else {
+        return match row {
+            _ if faults.is_empty() => format!("{path}: {}", flag.message),
+            Some(fault) => format!("{}: {}", fault.name, flag.message),
+            None => flag.message.clone(),
+        };
+    };
+    match row {
+        _ if faults.is_empty() => format!("{path}, line {}: {words}", flag.line),
+        Some(fault) => row_fault_words(&fault.name, flag.line, &words),
+        None => flag.message.clone(),
+    }
 }
 
 /// `N content issues to repair`: the words of a page's collapsing content issue count.
@@ -509,28 +606,29 @@ pub(crate) fn file_line(ui: &mut egui::Ui, root: &std::path::Path, relative: &st
     ui.horizontal_wrapped(|ui| crate::world::entry_file_links(ui, &path, true));
 }
 
-/// The encounter file's unread rows, one warning each. The last warning says what to do, and the
-/// file's path and links start at its words, as every message's actions do.
+/// The encounter file's unread rows, one message each: an unread roster row in its error tone
+/// (`unread_row_tone`, R41), any other flag of the file as a warning. The last message says what
+/// to do, and the file's path and links start at its words, as every message's actions do.
 fn unread_roster_rows(
     ui: &mut egui::Ui,
     root: &std::path::Path,
     path: &str,
-    notes: &[String],
+    notes: &[(String, Tone)],
     faults: usize,
 ) {
-    let Some((last, before)) = notes.split_last() else {
+    let Some(((last, last_tone), before)) = notes.split_last() else {
         return;
     };
-    for note in before {
-        design::message(ui, Tone::Warning, note);
+    for (note, tone) in before {
+        design::message(ui, *tone, note);
     }
     if faults == 0 {
-        design::message(ui, Tone::Warning, last);
+        design::message(ui, *last_tone, last);
         return;
     }
     design::message_with_actions(
         ui,
-        Tone::Warning,
+        unread_row_tone(),
         &format!("{last} {}", fix_roster_rows(faults)),
         |ui| file_line(ui, root, path),
     );
@@ -949,6 +1047,12 @@ impl Draft {
                 changes.push(group.change(campaign, None)?);
             }
         }
+        #[cfg(test)]
+        if let Some(error) = FAIL_NEXT_WRITE.with(std::cell::RefCell::take) {
+            // A test's failed write: the real save path, refused at its write, before the
+            // baseline moves.
+            return Err(error);
+        }
         crate::file_batch::apply(&changes)?;
         self.source = text.clone();
         self.baseline = Some(text);
@@ -982,7 +1086,11 @@ impl Draft {
             &self.path,
             &roster_faults(&entry, &snapshot.known_creature_names),
         ) {
-            return Err(reason.into());
+            // R41: in the tone of its diagnosis, as the message above the roster says it.
+            return Err(Invalid {
+                tone: unread_row_tone(),
+                ..reason.into()
+            });
         }
         if self.name.trim().is_empty() {
             return Err(Invalid::missing("Enter an encounter name."));
@@ -1456,10 +1564,6 @@ pub(super) fn lane_help(ui: &mut egui::Ui, text: &str) {
 
 /// The run folder is known not to be there. A folder that cannot be looked for (a parent
 /// without permission) is not "missing": it cannot be read.
-fn folder_missing(directory: &std::path::Path) -> bool {
-    matches!(directory.try_exists(), Ok(false))
-}
-
 fn grouped(value: u64) -> String {
     design::count(value as usize, "", "").trim().to_owned()
 }
@@ -1985,6 +2089,17 @@ fn missing_creature_tone(unreadable: Option<&crate::content_workspace::Unreadabl
     }
 }
 
+/// R41 (lead ruling, s30 B11): whether a creature reference that does not resolve names a file
+/// that is there and cannot be read (unreadable, an error), as against a creature that is gone (a
+/// warning). The roster's one classification (`missing_creature_tone`), which a group's members
+/// share.
+pub(super) fn creature_unreadable(
+    catalogue: &crate::content_workspace::Catalogue,
+    reference: &crate::content_workspace::EntryRef,
+) -> bool {
+    missing_creature_tone(catalogue.unreadable_ref(reference)) == Tone::Error
+}
+
 /// The icon and colour of that tone inside the row's muted words, as `design::message` draws it.
 fn missing_creature_mark(
     unreadable: Option<&crate::content_workspace::UnreadableNote>,
@@ -2437,14 +2552,13 @@ struct Snapshot {
     saved_options: crate::encounter_settings::Options,
     campaign_text: String,
     runs: Vec<crate::encounter_run::SavedRunInfo>,
-    /// AB1: the run list could not be read, and an issue says why. In progress and History then
-    /// say they cannot be read instead of their empty states. It ends when a read succeeds.
-    runs_unread: bool,
+    /// AB1, R41: the run list could not be read, and why. The footer says it in its tone, and
+    /// In progress and History say it instead of their empty states. It ends when a read
+    /// succeeds.
+    runs_unread: Option<crate::encounter_run::RunFolderFault>,
     /// The run folder is not there and nothing names a run, so it may never have been made. The
     /// page turns this into `runs_unread` when it has seen this campaign's folder hold runs.
-    runs_missing: Option<String>,
-    /// The issue `runs_unread` added, so a later read that succeeds takes exactly it away.
-    runs_error: Option<String>,
+    runs_missing: Option<crate::encounter_run::RunFolderFault>,
     groups: Arc<Vec<Arc<crate::encounter_run::RunGroup>>>,
     run_creatures: Arc<Vec<Arc<crate::encounter_run::RunCreature>>>,
     /// The campaign's XP budget table and its party's levels, for each fight's difficulty.
@@ -2675,8 +2789,7 @@ impl Snapshot {
         let directory = options.directory(campaign)?;
         let read = crate::encounter_run::Run::list(&directory, campaign.id);
         // A folder the timeline names runs in is not one that was never made.
-        let missing = read.is_err()
-            && folder_missing(&directory)
+        let missing = matches!(read, Err(crate::encounter_run::RunFolderFault::Missing(_)))
             && !crate::sessions::folder(campaign)
                 .ok()
                 .and_then(|folder| fs::read_to_string(folder.join("Timeline.md")).ok())
@@ -2714,9 +2827,8 @@ impl Snapshot {
             saved_options: options,
             campaign_text: document.text,
             runs: Vec::new(),
-            runs_unread: false,
+            runs_unread: None,
             runs_missing: None,
-            runs_error: None,
             catalogue,
             creatures,
             templates,
@@ -2728,17 +2840,15 @@ impl Snapshot {
     /// AB1: the one classification of a run list read, for the first load, a reload and every
     /// refresh. Runs that read replace the list. A folder known not to be there may never have
     /// been made, so it is `runs_missing` until the page knows it held runs. Any other failure
-    /// (an unreadable folder or parent) is `runs_unread`, with its issue, until a read succeeds.
+    /// (an unreadable folder or parent) is `runs_unread` until a read succeeds. The fault is
+    /// said by the footer and the two lists, never again as a content issue.
     fn take_run_list(
         &mut self,
-        read: Result<Vec<crate::encounter_run::SavedRunInfo>, String>,
+        read: Result<Vec<crate::encounter_run::SavedRunInfo>, crate::encounter_run::RunFolderFault>,
         missing: bool,
     ) {
-        if let Some(old) = self.runs_error.take() {
-            self.issues.retain(|issue| *issue != old);
-        }
         self.runs_missing = None;
-        self.runs_unread = false;
+        self.runs_unread = None;
         match read {
             Ok(runs) => self.runs = runs,
             Err(error) => {
@@ -2746,17 +2856,10 @@ impl Snapshot {
                 if missing {
                     self.runs_missing = Some(error);
                 } else {
-                    self.runs_unread(error);
+                    self.runs_unread = Some(error);
                 }
             }
         }
-    }
-    fn runs_unread(&mut self, error: String) {
-        self.runs_unread = true;
-        if !self.issues.contains(&error) {
-            self.issues.push(error.clone());
-        }
-        self.runs_error = Some(error);
     }
     /// The encounters a group can belong to, in the list's order.
     fn encounter_choices(&self) -> impl Iterator<Item = (Uuid, &str)> {
@@ -2937,8 +3040,9 @@ enum EncounterFault {
     /// A deleted run had changes that never reached D&D Beyond: the result says so, in the
     /// warning tone, and keeps its Undo.
     RunDeletedUnsent(String),
-    /// The campaign's run folder is not there: the DM chooses another.
-    RunFolderMissing(String),
+    /// R41: the campaign's run folder is not there, cannot be read, or is not set: the DM
+    /// chooses another. Its words and tone come from the fault.
+    RunFolder(crate::encounter_run::RunFolderFault),
     /// A copied note's separation, or its Undo, failed: the reason.
     SeparationFailed(String),
     /// A warning of a group's file that no member row states.
@@ -2948,12 +3052,23 @@ enum EncounterFault {
     Invalid(String),
 }
 
+impl EncounterFault {
+    /// Save's refusal `words` in the tone of its diagnosis `found` (R41): the one place that
+    /// turns a refusal into a footer fault, so the footer and the save row's word agree.
+    fn refusal(words: String, found: &design::save_row::Diagnosis<'_>) -> Self {
+        match found.tone() {
+            Some(Tone::Error) => Self::Failed(words),
+            _ => Self::Invalid(words),
+        }
+    }
+}
+
 impl design::outcome::Fault for EncounterFault {
     fn severity(&self) -> design::outcome::Severity {
         match self {
             Self::Failed(_) => design::outcome::Severity::NotSaved,
+            Self::RunFolder(fault) => fault.severity(),
             Self::RunDeletedUnsent(_)
-            | Self::RunFolderMissing(_)
             | Self::SeparationFailed(_)
             | Self::FileWarning(_)
             | Self::Invalid(_) => design::outcome::Severity::NeedsFixing,
@@ -2969,8 +3084,8 @@ impl design::outcome::Fault for EncounterFault {
                 .unwrap_or(crate::sentence!("The act did not work.")),
             Self::RunDeletedUnsent(words) => design::outcome::Sentence::outside(words.as_str())
                 .unwrap_or(crate::sentence!("The run was deleted.")),
-            Self::RunFolderMissing(words) => design::outcome::Sentence::outside(words.as_str())
-                .unwrap_or(crate::sentence!("The run folder is not there.")),
+            Self::RunFolder(fault) => design::outcome::Sentence::outside(fault.message().as_str())
+                .unwrap_or(crate::sentence!("Splat cannot list the run folder.")),
             Self::SeparationFailed(words) => design::outcome::Sentence::outside(words.as_str())
                 .unwrap_or(crate::sentence!("The note was not changed.")),
             Self::FileWarning(words) => design::outcome::Sentence::outside(words.as_str())
@@ -3078,6 +3193,17 @@ pub struct Encounters {
     /// A Save or a start was refused for the draft at `validation_path`, so its check runs again
     /// when that draft or the campaign changes. It ends with another draft.
     refusal_watch: bool,
+    /// B4c: the plan refusal's check, keyed by the snapshot revision and `plan_epoch`: whether
+    /// the refusal for that group still stands. An unchanged frame does not compare the drafts.
+    plan_refusal_check: Option<(PlanRefusalKey, bool)>,
+    /// Bumped on each frame with an editing input and the frame after it, while a plan refusal
+    /// is stored (as `edit_epoch`, for every page).
+    plan_epoch: u64,
+    plan_edited_last_frame: bool,
+    /// Test only: while set, `poll` takes no new read of the campaign (a load in flight waits),
+    /// so a proof's window of unchanged frames keeps one snapshot revision.
+    #[cfg(test)]
+    pub(crate) hold_reads: bool,
     /// Bumped on each frame that can change a draft (an editing input) and the frame after it,
     /// because a click's change lands late in its frame.
     edit_epoch: u64,
@@ -3294,6 +3420,17 @@ pub const GROUP_DRAFT: &str = "Group draft";
 pub const CREATURE_DRAFT: &str = "Creature draft";
 pub const RUN_SETTINGS_DRAFT: &str = "Run settings draft";
 const BLOCKED_BY_CREATURE: &str = design::Unsaved::Creature.reason();
+/// The key of the plan refusal's cached check: the campaign read's revision, the edit epoch and
+/// the refused group's id.
+type PlanRefusalKey = (Option<Uuid>, u64, Uuid);
+
+#[cfg(test)]
+thread_local! {
+    /// B4b N1, B4c F1: how often a draft was compared for being unsaved (`DraftOwner::unsaved`),
+    /// on this thread.
+    pub(crate) static PLAN_BLOCK_CHECKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// What a plan or run route that opens a draft got (B4 review F1): the caller gives the draft
 /// its host only when it is `Opened`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -3309,6 +3446,8 @@ pub enum PlanOpen {
 /// and the replacement guards read.
 impl design::DraftOwner for Encounters {
     fn unsaved(&self, draft: design::Unsaved) -> bool {
+        #[cfg(test)]
+        PLAN_BLOCK_CHECKS.with(|checks| checks.set(checks.get() + 1));
         match draft {
             design::Unsaved::Group => self.group_draft.as_ref().is_some_and(GroupDraft::dirty),
             design::Unsaved::Encounter => self.draft.as_ref().is_some_and(Draft::dirty),
@@ -3397,12 +3536,25 @@ impl Encounters {
     /// first refused change (named `Group <name>: …`, as Save says it) outranks the first missing
     /// part, whose group's origin comes with it. Checked again only when the campaign's read or a
     /// changed group's own revision changes.
+    /// F5 (B3b): the owned-group check's key inputs now, and whether a campaign read is still
+    /// pending: a test holds them fixed and names the input that changed.
+    #[cfg(test)]
+    pub(crate) fn owned_group_inputs(&self) -> Option<(Uuid, usize, u64, bool)> {
+        let (snapshot, draft) = (self.snapshot.as_ref()?, self.draft.as_ref()?);
+        Some((
+            snapshot.revision,
+            draft.groups.len(),
+            groups::revisions_issued(),
+            self.pending.is_some(),
+        ))
+    }
     fn owned_groups_diagnosis(&mut self) -> OwnedGroupsFound {
         let (Some(snapshot), Some(draft)) = (self.snapshot.as_ref(), self.draft.as_ref()) else {
             return OwnedGroupsFound {
                 found: design::save_row::Diagnosis::valid(),
                 origin: None,
                 footer: None,
+                cause: None,
             };
         };
         #[cfg(test)]
@@ -3926,10 +4078,58 @@ impl Encounters {
                 .collect()
         })
     }
+    /// B4c: whether the plan's refusal for `group` still stands: a draft is unsaved and the
+    /// campaign still has the group. Read only while a refusal is stored; the drafts are
+    /// compared again only when the campaign was read again or a frame had an editing input
+    /// (or follows one: a click's change lands late in its frame).
+    pub fn plan_refusal_stands(&mut self, ctx: &egui::Context, group: Uuid) -> bool {
+        let edited = edit_input(ctx);
+        let edited_before = std::mem::replace(&mut self.plan_edited_last_frame, edited);
+        if edited || edited_before {
+            self.plan_epoch += 1;
+        }
+        let key = (
+            self.snapshot.as_ref().map(|snapshot| snapshot.revision),
+            self.plan_epoch,
+            group,
+        );
+        if let Some((cached, stands)) = self.plan_refusal_check
+            && cached == key
+        {
+            return stands;
+        }
+        let stands = self.plan_group_blocked().is_some()
+            && self
+                .snapshot
+                .as_ref()
+                .is_some_and(|snapshot| snapshot.groups.iter().any(|g| g.id == group));
+        self.plan_refusal_check = Some((key, stands));
+        stands
+    }
+    /// Test only: the campaign read's revision, which keys the plan refusal's check.
+    #[cfg(test)]
+    pub(crate) fn snapshot_revision(&self) -> Option<Uuid> {
+        self.snapshot.as_ref().map(|snapshot| snapshot.revision)
+    }
+    /// No plan refusal is stored: its check is forgotten, so a new one compares afresh.
+    pub fn forget_plan_refusal(&mut self) {
+        self.plan_refusal_check = None;
+    }
+    /// The stable id of the plan's group at `path`, if the campaign has it.
+    pub fn plan_group_id(&self, path: &str) -> Option<Uuid> {
+        self.snapshot
+            .as_ref()?
+            .groups
+            .iter()
+            .find(|group| group.path == path)
+            .map(|group| group.id)
+    }
     /// Why a group cannot be assembled from the plan now.
     /// The unsaved draft that refuses it says which it is, from the back lines' recipe (R38):
     /// the encounter, its group or a creature, each with its own reason.
     pub fn plan_group_blocked(&self) -> Option<&'static str> {
+        #[cfg(test)]
+        PLAN_BLOCK_CHECKS.with(|checks| checks.set(checks.get() + 1));
         design::first_unsaved(self)
             .map(design::Unsaved::reason)
             .or(self
@@ -3964,21 +4164,6 @@ impl Encounters {
         self.from_session = None;
         self.plan_on_save = false;
         self.creature = None;
-    }
-    /// Start a fight from a saved encounter, with no editor left open.
-    pub fn edit_path(&mut self, path: &str, active: &Campaign) {
-        self.clear_notice();
-        match Draft::open(&active.path, path) {
-            Ok(draft) => {
-                self.search.clear();
-                self.draft = Some(draft);
-                self.from_session = None;
-                self.plan_on_save = false;
-                self.error = None;
-                self.message = None;
-            }
-            Err(error) => self.error = Some(error),
-        }
     }
 
     /// A planned fight's `Edit encounter` (W1-D1): that encounter, found by its ID, opens in the
@@ -4279,6 +4464,10 @@ impl Encounters {
     }
     /// Keep the snapshot current. The shell calls this every frame.
     pub fn poll(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
+        #[cfg(test)]
+        if self.hold_reads {
+            return;
+        }
         // A run restored at startup comes before the first load. With nothing loaded,
         // there is nothing a load could drop, so it does not wait for the run to close.
         if let Some(active) = campaigns.active_campaign()
@@ -4914,9 +5103,9 @@ impl Encounters {
             && campaign.is_some()
             && self.runs_known == campaign
         {
-            snapshot.runs_unread(error);
+            snapshot.runs_unread = Some(error);
         }
-        if !snapshot.runs.is_empty() || snapshot.runs_unread {
+        if !snapshot.runs.is_empty() || snapshot.runs_unread.is_some() {
             self.runs_known = campaign;
         }
     }
@@ -4931,8 +5120,10 @@ impl Encounters {
             return;
         };
         let directory = s.saved_options.directory(active);
-        let missing = directory.as_deref().is_ok_and(folder_missing);
-        let read = directory.and_then(|dir| crate::encounter_run::Run::list(&dir, active.id));
+        let read = directory
+            .map_err(crate::encounter_run::RunFolderFault::Setting)
+            .and_then(|dir| crate::encounter_run::Run::list(&dir, active.id));
+        let missing = matches!(read, Err(crate::encounter_run::RunFolderFault::Missing(_)));
         s.take_run_list(read, missing);
         self.note_run_folder(&mut s);
         self.snapshot = Some(s);
@@ -5341,7 +5532,7 @@ impl Encounters {
         frame: &'f design::outcome::PaneFrame,
         width: f32,
         root: &std::path::Path,
-        groups_reason: Option<String>,
+        groups_reason: Option<(EncounterFault, String)>,
     ) -> design::outcome::Messages<'f, FooterPress> {
         use design::outcome::FaultMessage;
         self.record_member_results();
@@ -5376,7 +5567,13 @@ impl Encounters {
         if let Some(error) = self.separation_failure() {
             messages.outcome(FaultMessage::new(&EncounterFault::SeparationFailed(error)));
         }
-        if let Some(error) = self.error.clone() {
+        // N4 (lead rule): the reason that disables Save now is always painted. A stored
+        // failed-action message stays as its own line while it holds, unless it only repeats
+        // the cause that the owned groups' next step answers.
+        let (groups_reason, groups_cause) = groups_reason.unzip();
+        if let Some(error) = self.error.clone()
+            && groups_cause.as_deref() != Some(error.as_str())
+        {
             // A deleted entry and an unreadable file are stated in the rows' tone too.
             let fault = if self.error_tone() == Tone::Warning {
                 EncounterFault::Invalid(error)
@@ -5384,10 +5581,12 @@ impl Encounters {
                 EncounterFault::Failed(error)
             };
             messages.outcome(FaultMessage::new(&fault));
-        } else if let Some(reason) = groups_reason {
-            // F2, R35: the owned groups' first reason that no row says, painted once (an empty
-            // group, a blank name or side, a refusal with no row of its own).
-            messages.outcome(FaultMessage::new(&EncounterFault::Invalid(reason)));
+        }
+        if let Some(reason) = groups_reason {
+            // F2, R35: the owned groups' chosen reason, as its next step where a row or field
+            // says the cause (an empty group, a blank name or side, a member's row), in its own
+            // typed tone (R41).
+            messages.outcome(FaultMessage::new(&reason));
         }
         messages
     }
@@ -5745,7 +5944,7 @@ impl Encounters {
             story.events,
             story.sessions,
         );
-        page.runs_unread = snapshot.runs_unread;
+        page.runs_unread = snapshot.runs_unread.as_ref();
         let start_blocked = self.start_blocked();
         let mut action = None;
         // The list is the pane's scroll column, which keeps the scroll bar's lane (FB2).
@@ -5966,23 +6165,16 @@ impl Encounters {
         };
         if let Some(error) = &self.error {
             let fault = design::outcome::FaultMessage::new(&EncounterFault::Failed(error.clone()));
-            messages.outcome(if error.starts_with("Run folder not found") {
-                fault.choice(choose_folder())
-            } else {
-                fault
-            });
+            messages.outcome(fault);
         }
-        for issue in self.snapshot.iter().flat_map(|snapshot| {
-            snapshot
-                .issues
-                .iter()
-                .filter(|issue| issue.starts_with("Run folder not found"))
-        }) {
+        if let Some(folder) = self
+            .snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.runs_unread.clone())
+        {
             messages.outcome(
-                design::outcome::FaultMessage::new(&EncounterFault::RunFolderMissing(
-                    issue.clone(),
-                ))
-                .choice(choose_folder()),
+                design::outcome::FaultMessage::new(&EncounterFault::RunFolder(folder))
+                    .choice(choose_folder()),
             );
         }
         // R2: History's `Open` scrolls the list once.
@@ -6237,12 +6429,13 @@ impl Encounters {
         let found = groups
             .found
             .clone()
-            .and(roster_reason.clone().map_or_else(
-                design::save_row::Diagnosis::valid,
-                design::save_row::Diagnosis::refused,
-            ))
+            .and(
+                roster_reason
+                    .clone()
+                    .map_or_else(design::save_row::Diagnosis::valid, unread_rows_found),
+            )
             .and(own.unwrap_or_else(design::save_row::Diagnosis::valid));
-        let groups_footer = groups.footer;
+        let groups_footer = groups.footer.zip(groups.cause);
         // One `DraftState` decides the save row's word, Save's weight and reason, Discard and
         // the campaign lock (migrate:O, rows 42 and 51). The encounter draft says `Invalid`
         // only while it has changes; its rows name the faults of a clean one.
@@ -6564,7 +6757,11 @@ impl Encounters {
         );
         if let Some((notes, faults, path)) = unread_rows.filter(|(notes, ..)| !notes.is_empty()) {
             let root = active.path.clone();
-            let words = notes.join(" ");
+            let words = notes
+                .iter()
+                .map(|(note, _)| note.as_str())
+                .collect::<Vec<_>>()
+                .join(" ");
             unread.reason(words, move |ui| {
                 unread_roster_rows(ui, &root, &path, &notes, faults);
             });
@@ -8092,7 +8289,7 @@ use crate::design::LIST_MEASURE;
 mod list;
 pub(crate) use list::run_state_word;
 #[cfg(test)]
-pub(crate) use list::{ENDED_UNREAD, FIGHT_OPEN, GO_TO_RUN, UNFINISHED_UNREAD};
+pub(crate) use list::{FIGHT_OPEN, GO_TO_RUN};
 use list::{
     blocked_reason, choice_note, group_list, history_list, in_progress_list, menu_action,
     ready_list, row_menu, side_control,
@@ -8254,13 +8451,18 @@ mod tests {
         let saved = |line: usize, message: &str| -> splat::content::layout::Flag {
             serde_json::from_value(serde_json::json!({"line": line, "message": message})).unwrap()
         };
+        // R41 (lead ruling, s30 B11): an unread roster row's note is an error; another flag of
+        // the file is a warning.
         assert_eq!(
             unread_notes(
                 "Encounters/Shrine.md",
                 &[saved(3, "Line 3: the date was not read.")],
                 &[]
             ),
-            ["Encounters/Shrine.md: Line 3: the date was not read."]
+            [(
+                "Encounters/Shrine.md: Line 3: the date was not read.".to_owned(),
+                Tone::Warning
+            )]
         );
         assert_eq!(
             unread_notes(
@@ -8268,7 +8470,10 @@ mod tests {
                 &[saved(20, "Line 20: the change was not read.")],
                 &[row("Ember Cultist", 20)]
             ),
-            ["Ember Cultist: Line 20: the change was not read."]
+            [(
+                "Ember Cultist: Line 20: the change was not read.".to_owned(),
+                Tone::Error
+            )]
         );
         for (flags, rows, path, expected, sentence) in [
             (
@@ -8303,7 +8508,23 @@ mod tests {
             ),
         ] {
             let notes = unread_notes(path, &flags, &rows);
-            assert_eq!(notes, expected);
+            let (words, tones): (Vec<String>, Vec<Tone>) = notes.iter().cloned().unzip();
+            assert_eq!(words, expected);
+            // R41: each roster row's note in the error tone of Save's reason for it.
+            for (flag, tone) in flags.iter().zip(&tones) {
+                let roster_row = rows.iter().any(|row| row.line == flag.line);
+                assert_eq!(
+                    *tone,
+                    if roster_row {
+                        unread_rows_found(String::new()).tone().unwrap()
+                    } else {
+                        Tone::Warning
+                    },
+                    "line {}",
+                    flag.line
+                );
+            }
+            assert_eq!(unread_row_tone(), Tone::Error);
             // The run setup and Save's reason give each row the editor's words (iter-23 FA4).
             for row in &rows {
                 let flag = flags.iter().find(|flag| flag.line == row.line).unwrap();
@@ -8311,7 +8532,7 @@ mod tests {
                     problem: flag.words().unwrap(),
                     ..row.clone()
                 };
-                assert!(notes.contains(&fault.words()), "{}", fault.words());
+                assert!(words.contains(&fault.words()), "{}", fault.words());
                 let reason = roster_fault_reason(path, std::slice::from_ref(&fault)).unwrap();
                 assert!(
                     reason.contains(fault.words().trim_end_matches('.')),
@@ -8363,7 +8584,7 @@ mod tests {
                     links, 0,
                     "a fault that is not a roster row has no file line"
                 );
-                assert_eq!(find(&notes[0]).len(), 1);
+                assert_eq!(find(&words[0]).len(), 1);
                 continue;
             };
             assert_eq!(
@@ -8376,8 +8597,8 @@ mod tests {
                 .collect();
             assert_eq!(ended.len(), 1, "only the last warning says what to do");
             let last = ended[0].1;
-            assert!(ended[0].0.starts_with(notes.last().unwrap().as_str()));
-            for note in &notes[..notes.len() - 1] {
+            assert!(ended[0].0.starts_with(words.last().unwrap().as_str()));
+            for note in &words[..words.len() - 1] {
                 let found = find(note);
                 assert_eq!(
                     found.len(),
@@ -10818,8 +11039,9 @@ mod tests {
             "Choose a replacement for the Cinder Wolf row before you save or start a fight."
         );
         assert!(invalid.tone == Tone::Warning);
-        // The row says the same fault in the same tone.
+        // The row says the same fault in the same tone, and so does the save row's word (R41).
         assert!(invalid.tone == missing_creature_tone(None));
+        assert_eq!(invalid.diagnosis().tone(), Some(invalid.tone));
         let mut encounters = Encounters {
             snapshot: Some(deleted),
             validation_path: Some(draft.path.clone()),
@@ -10862,6 +11084,7 @@ mod tests {
             .catalogue
             .unreadable_ref(draft.setup.roster[0].creature.as_ref().unwrap());
         assert!(invalid.tone == missing_creature_tone(unread));
+        assert_eq!(invalid.diagnosis().tone(), Some(invalid.tone));
         assert_eq!(missing_creature_mark(unread).0, icons::ERROR);
         encounters.snapshot = Some(snapshot);
         encounters.draft = Some(draft);
@@ -10887,6 +11110,7 @@ mod tests {
         );
         assert!(invalid.tone == Tone::Warning, "{invalid:?}");
         assert!(invalid.tone == missing_creature_tone(duplicate));
+        assert_eq!(invalid.diagnosis().tone(), Some(invalid.tone));
         assert_eq!(missing_creature_mark(duplicate).0, icons::WARN);
         encounters.snapshot = Some(snapshot);
         encounters.error = Some(invalid.text.clone());
@@ -11387,29 +11611,29 @@ mod tests {
         assert!(editor.paused_run().is_none());
         assert_eq!(editor.paused_run_count(), 0);
         assert!(editor.error.is_none());
-        assert_eq!(
-            editor
-                .snapshot
-                .as_ref()
-                .unwrap()
+        // R41: the snapshot holds the typed cause, a folder that is not there; it is said by the
+        // footer and the lists, never again as a content issue.
+        let snapshot = editor.snapshot.as_ref().unwrap();
+        assert!(
+            matches!(
+                snapshot.runs_unread,
+                Some(crate::encounter_run::RunFolderFault::Missing(_))
+            ),
+            "{:?}",
+            snapshot.runs_unread
+        );
+        assert!(
+            !snapshot
                 .issues
                 .iter()
-                .filter(|issue| issue.starts_with("Run folder not found"))
-                .count(),
-            1
+                .any(|issue| issue.contains("run folder") || issue.contains("Run folder")),
+            "{:?}",
+            snapshot.issues
         );
         fs::rename(dir.path().join("Moved runs"), &folder).unwrap();
         editor.read_runs_again(&campaign);
         assert_eq!(editor.paused_run_count(), 1);
-        assert!(
-            !editor
-                .snapshot
-                .as_ref()
-                .unwrap()
-                .issues
-                .iter()
-                .any(|issue| issue.starts_with("Run folder not found"))
-        );
+        assert!(editor.snapshot.as_ref().unwrap().runs_unread.is_none());
 
         // AB1 (Astra review of PR 259): on a first load, with nothing known about earlier runs,
         // a run folder whose parent cannot be looked in is unread, not "never made"; a folder
@@ -11422,10 +11646,17 @@ mod tests {
             fs::write(&blocker, "").unwrap();
             std::os::unix::fs::symlink(blocker.join("runs"), &folder).unwrap();
             let snapshot = Snapshot::load(&campaign, &[]).unwrap();
-            assert!(snapshot.runs_unread && snapshot.runs_missing.is_none());
+            assert!(
+                matches!(
+                    snapshot.runs_unread,
+                    Some(crate::encounter_run::RunFolderFault::Unreadable { .. })
+                ) && snapshot.runs_missing.is_none(),
+                "{:?}",
+                snapshot.runs_unread
+            );
             fs::remove_file(&folder).unwrap();
             let snapshot = Snapshot::load(&campaign, &[]).unwrap();
-            assert!(!snapshot.runs_unread && snapshot.runs_missing.is_some());
+            assert!(snapshot.runs_unread.is_none() && snapshot.runs_missing.is_some());
             fs::rename(&aside, &folder).unwrap();
         }
     }

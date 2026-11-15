@@ -79,6 +79,27 @@ pub struct HasChoices;
 /// let _ = splat::layout::Dropdown::new(splat::field_id!("doc_side").once(splat::layout::Once::Example), "Side").blocked_choice(0_u8, "Allies");
 /// ```
 ///
+/// Plain labels and short labels compile:
+///
+/// ```
+/// let _ = splat::layout::Dropdown::new(splat::field_id!("doc_short").once(splat::layout::Once::Example), "Session")
+///     .choice_with_short_label(0_u8, "Session 1: Tonight", "Session 1");
+/// ```
+///
+/// A caller cannot give a choice a weight (including a short closed label):
+///
+/// ```compile_fail,E0277
+/// fn pick(ui: &eframe::egui::Ui) {
+///     let _ = splat::layout::Dropdown::new(splat::field_id!("doc_weight").once(splat::layout::Once::Example), "Side")
+///         .choice(0_u8, eframe::egui::RichText::new("Allies").strong());
+/// }
+/// ```
+///
+/// ```compile_fail,E0061
+/// let _ = splat::layout::Dropdown::new(splat::field_id!("doc_short_weight").once(splat::layout::Once::Example), "Session")
+///     .choice_with_short_label(0_u8, "Session 1: Tonight", "Session 1", eframe::egui::FontId::default());
+/// ```
+///
 /// The current value is of the choices' type:
 ///
 /// ```compile_fail,E0308
@@ -94,6 +115,7 @@ pub struct Dropdown<'a, T, State = NoChoice> {
     name: &'a str,
     choices: Vec<Entry<'a, T>>,
     width: Option<f32>,
+    room: Option<Rect>,
     blocked: Option<&'a str>,
     command: Option<Word>,
     state: PhantomData<State>,
@@ -103,6 +125,7 @@ pub struct Dropdown<'a, T, State = NoChoice> {
 struct Entry<'a, T> {
     value: T,
     label: Cow<'a, str>,
+    short: Option<Cow<'a, str>>,
     blocked: Option<&'a str>,
 }
 
@@ -124,6 +147,7 @@ impl<'a, T> Dropdown<'a, T, NoChoice> {
             name,
             choices: Vec::new(),
             width: None,
+            room: None,
             blocked: None,
             command: None,
             state: PhantomData,
@@ -139,6 +163,7 @@ impl<'a, T, State> Dropdown<'a, T, State> {
             name: self.name,
             choices: self.choices,
             width: self.width,
+            room: self.room,
             blocked: self.blocked,
             command: self.command,
             state: PhantomData,
@@ -149,6 +174,23 @@ impl<'a, T, State> Dropdown<'a, T, State> {
         self.push(Entry {
             value,
             label: label.into(),
+            short: None,
+            blocked: None,
+        })
+    }
+
+    /// The closed control may use a short name; the menu and accessible name keep the full
+    /// label. Both are plain words: the part owns their regular weight.
+    pub fn choice_with_short_label(
+        self,
+        value: T,
+        label: impl Into<Cow<'a, str>>,
+        short: impl Into<Cow<'a, str>>,
+    ) -> Dropdown<'a, T, HasChoices> {
+        self.push(Entry {
+            value,
+            label: label.into(),
+            short: Some(short.into()),
             blocked: None,
         })
     }
@@ -163,6 +205,7 @@ impl<'a, T, State> Dropdown<'a, T, State> {
         self.push(Entry {
             value,
             label: label.into(),
+            short: None,
             blocked: Some(reason),
         })
     }
@@ -171,6 +214,14 @@ impl<'a, T, State> Dropdown<'a, T, State> {
     /// `FORM_WIDTH`.
     pub fn width(mut self, width: f32) -> Self {
         self.width = Some(width);
+        self
+    }
+
+    /// A smaller room owned by the control's layout (for example, a header above two
+    /// panes). The part intersects it with the owning pane and clip; it chooses the menu's
+    /// side, width and position inside that room. This cannot widen the parent's room.
+    pub fn within(mut self, room: Rect) -> Self {
+        self.room = Some(room);
         self
     }
 
@@ -198,9 +249,74 @@ impl<'a, T> Dropdown<'a, T, HasChoices> {
             .extend(more.into_iter().map(|(value, label)| Entry {
                 value,
                 label: label.into(),
+                short: None,
                 blocked: None,
             }));
         self
+    }
+}
+
+/// The one font for a chosen value, including an editable value. A caller supplies words.
+fn value_font(ui: &Ui) -> egui::FontId {
+    Type::Body.font(ui)
+}
+
+impl Dropdown<'_, ()> {
+    /// Accessibility marker for the popup group; the gate keeps checking its choices against
+    /// neighbouring splitters and scroll bars after the group receives its proper role.
+    pub(crate) const CHOICES_ROLE: &'static str = "Dropdown choices";
+
+    /// The editable value inside a drop-down. Keeps typed and empty words on one baseline,
+    /// in the same regular weight as a closed choice. The caller owns the surrounding field
+    /// and its choices, and names the response. No font or weight can be passed.
+    ///
+    /// ```
+    /// fn field(ui: &mut eframe::egui::Ui, value: &mut String) {
+    ///     splat::layout::Dropdown::editable_value(ui,
+    ///         splat::field_id!("doc_folder").once(splat::layout::Once::Example),
+    ///         value, "Main folder", 200.0);
+    /// }
+    /// ```
+    ///
+    /// ```compile_fail,E0061
+    /// fn field(ui: &mut eframe::egui::Ui, value: &mut String) {
+    ///     splat::layout::Dropdown::editable_value(ui,
+    ///         splat::field_id!("doc_folder").once(splat::layout::Once::Example),
+    ///         value, "Main folder", 200.0, eframe::egui::FontId::default());
+    /// }
+    /// ```
+    pub fn editable_value(
+        ui: &mut Ui,
+        id: FieldId,
+        value: &mut String,
+        empty: &str,
+        width: f32,
+    ) -> Response {
+        let font = value_font(ui);
+        let response = id.single_line(ui, value, |edit| {
+            edit.frame(false)
+                .font(font)
+                .margin(Vec2::ZERO)
+                .vertical_align(Align::Center)
+                .desired_width(width)
+                .min_size(vec2(width, super::XL))
+        });
+        if value.is_empty() {
+            ui.painter().text(
+                response.rect.left_center(),
+                Align2::LEFT_CENTER,
+                empty,
+                value_font(ui),
+                colors().text,
+            );
+        }
+        response
+    }
+
+    /// Regular chosen words for a staged raw control. Its popup and events stay with the
+    /// caller until it migrates to `Dropdown`.
+    pub fn selected_words(ui: &Ui, words: impl Into<String>) -> egui::RichText {
+        egui::RichText::new(words).font(value_font(ui))
     }
 }
 
@@ -227,11 +343,24 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
             Sense::hover()
         };
         let mut response = ui.interact(rect, control, sense);
-        let chosen = self
-            .choices
-            .iter()
-            .find(|entry| entry.value == *current)
-            .map(|entry| entry.label.as_ref());
+        let index_key = control.with("chosen_index");
+        let kept = ui.ctx().data(|data| data.get_temp::<usize>(index_key));
+        let chosen_index = kept
+            .filter(|&at| {
+                self.choices
+                    .get(at)
+                    .is_some_and(|entry| entry.value == *current)
+            })
+            .or_else(|| {
+                self.choices
+                    .iter()
+                    .position(|entry| entry.value == *current)
+            });
+        if let Some(at) = chosen_index {
+            ui.ctx().data_mut(|data| data.insert_temp(index_key, at));
+        }
+        let chosen_entry = chosen_index.and_then(|at| self.choices.get(at));
+        let chosen = chosen_entry.map(|entry| entry.label.as_ref());
         // A blocked or disabled drop-down has no open list: it takes no selection or command.
         if !enabled {
             egui::Popup::close_id(ui.ctx(), list);
@@ -254,13 +383,18 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
                 egui::StrokeKind::Inside,
             );
             let (words, color) = match chosen {
-                Some(label) => (label, if enabled { c.text } else { c.muted }),
+                Some(label) => (
+                    chosen_entry
+                        .and_then(|entry| entry.short.as_deref())
+                        .unwrap_or(label),
+                    if enabled { c.text } else { c.muted },
+                ),
                 None => (self.name, c.faint),
             };
             let room = (width - 2.0 * S - ICON_SLOT).max(1.0);
-            let galley = one_line(ui, words, Type::Body.font(ui), color, room);
-            if galley.elided {
-                response = response.on_hover_text(words);
+            let galley = one_line(ui, words, value_font(ui), color, room);
+            if galley.elided || chosen_entry.is_some_and(|entry| entry.short.is_some()) {
+                response = response.on_hover_text(chosen.unwrap_or(words));
             }
             ui.painter().galley(
                 pos2(rect.left() + S, rect.center().y - galley.size().y / 2.0),
@@ -305,7 +439,7 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
         let mut picked = None;
         let mut command = false;
         if enabled {
-            (picked, command) = self.list(ui, &response, current, rect, width);
+            (picked, command) = self.follow_list(ui, &response, current, rect, width);
         }
         let changed = picked.as_ref().is_some_and(|value| value != current);
         if let Some(value) = picked {
@@ -323,11 +457,7 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
 
     /// The open list, placed inside the owning body's usable rect. Returns the value the DM
     /// chose and whether the DM chose the command.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
-    )]
-    fn list(
+    fn follow_list(
         &self,
         ui: &mut Ui,
         response: &Response,
@@ -339,58 +469,220 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
         let was_open_id = list.with("was_open");
         let rows_id = list.with("rows");
         let revealed_id = list.with("revealed");
+        let reveal_index = list.with("reveal_index");
         let revealed = ui
             .ctx()
             .data(|data| data.get_temp::<Option<Id>>(revealed_id))
             .flatten();
-        let mut reveal = None;
         let was_open = ui
             .ctx()
             .data(|data| data.get_temp::<bool>(was_open_id))
             .unwrap_or(false);
+        // Toggle before any row measurement. A closed control draws only its chosen words.
+        if response.clicked() {
+            egui::Popup::toggle_id(ui.ctx(), list);
+        }
+        let requested_open = egui::Popup::is_id_open(ui.ctx(), list);
+        let drawn = requested_open
+            .then(|| self.list(ui, response, current, rect, width, (was_open, revealed)))
+            .flatten();
+        let ListFrame {
+            picked,
+            command,
+            rows,
+            reveal,
+        } = drawn.unwrap_or_default();
+        let shown = egui::Popup::is_id_open(ui.ctx(), list);
+        // A choice or the command closes the list, also from the keyboard (egui closes a popup
+        // on a pointer click only).
+        if picked.is_some() || command {
+            egui::Popup::close_id(ui.ctx(), list);
+        }
+        let open_now = shown && egui::Popup::is_id_open(ui.ctx(), list);
+        // Focus goes back to the control when the list closes with the keyboard on it, or on
+        // nothing (Escape, a chosen row).
+        if (was_open || requested_open) && !open_now {
+            let last_rows = ui
+                .ctx()
+                .data(|data| data.get_temp::<Vec<Id>>(rows_id))
+                .unwrap_or_default();
+            let focused = ui.ctx().memory(|memory| memory.focused());
+            if focused.is_none_or(|id| last_rows.contains(&id)) {
+                response.request_focus();
+            }
+        }
+        ui.ctx().data_mut(|data| {
+            data.insert_temp(reveal_index, reveal.map(|(_, at)| at));
+            if let Some((row, _)) = reveal {
+                data.insert_temp(revealed_id, Some(row));
+            }
+            if !open_now {
+                data.insert_temp(revealed_id, None::<Id>);
+            }
+            data.insert_temp(was_open_id, open_now);
+            if open_now {
+                data.insert_temp(rows_id, rows);
+            }
+        });
+        (picked, command)
+    }
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
+    )]
+    fn list(
+        &self,
+        ui: &mut Ui,
+        response: &Response,
+        current: &T,
+        rect: Rect,
+        width: f32,
+        previous: (bool, Option<Id>),
+    ) -> Option<ListFrame<T>> {
+        let (was_open, revealed) = previous;
+        let list = self.id.id().with("list");
+        let mut reveal = None;
         // The list's frame draws its stroke outside its content: the content is that much
         // smaller, so the list is exactly as wide as its control.
         let stroke = ui.style().visuals.window_stroke.width;
-        let inner = width - 2.0 * stroke;
         // Its room: the owning pane's body above its footer, or the visible part of `ui`.
-        let bounds = super::pane::body_room(ui)
+        let mut bounds = super::pane::body_room(ui)
             .unwrap_or_else(|| ui.clip_rect())
+            .intersect(ui.clip_rect())
             .intersect(ui.ctx().content_rect());
-        let rows_width = inner - lane_width();
-        // Each row's top and height in the list, the command's after its rule.
-        let mut places = Vec::with_capacity(self.choices.len() + 1);
-        let mut top = 0.0;
-        for entry in &self.choices {
-            let height =
-                super::extras::choice_wrapped_height(ui, &entry.label, entry.blocked, rows_width);
-            places.push((top, height));
-            top += height;
+        if let Some(room) = self.room {
+            bounds = bounds.intersect(room);
         }
-        if let Some(word) = self.command {
-            top += HAIRLINE_WIDTH;
-            let height = super::extras::choice_wrapped_height(ui, word.as_str(), None, rows_width);
-            places.push((top, height));
-            top += height;
+        if !bounds.is_positive() || rect.top() >= bounds.bottom() || rect.bottom() <= bounds.top() {
+            egui::Popup::close_id(ui.ctx(), list);
+            return None;
         }
+        // Retained metrics belong to this control and these words, fonts and width.
+        // A closed control never enters this function; an unchanged open frame reuses them.
+        let words: Vec<_> = self
+            .choices
+            .iter()
+            .map(|entry| (entry.label.as_ref(), entry.blocked))
+            .chain(self.command.map(|word| (word.as_str(), None)))
+            .collect();
+        let key = list.with("metrics");
+        let font = Type::Body.font(ui);
+        let small = Type::Small.font(ui);
+        let scale = ui.ctx().pixels_per_point();
+        let kept = ui
+            .ctx()
+            .data(|data| data.get_temp::<std::sync::Arc<RowMetrics>>(key));
+        let metrics = kept
+            .filter(|kept| {
+                kept.requested == width
+                    && kept.room_width == bounds.width()
+                    && kept.bounded == self.room.is_some()
+                    && kept.font == font
+                    && kept.small == small
+                    && kept.scale == scale
+                    && kept.command == self.command.is_some()
+                    && kept.words.len() == words.len()
+                    && kept
+                        .words
+                        .iter()
+                        .zip(&words)
+                        .all(|((label, reason), (now, blocked))| {
+                            label == now && reason.as_deref() == *blocked
+                        })
+            })
+            .unwrap_or_else(|| {
+                #[cfg(test)]
+                ROW_METRICS_MADE.with(|made| made.set(made.get() + words.len()));
+                let longest = words
+                    .iter()
+                    .flat_map(|(label, reason)| {
+                        let labels: Box<dyn Iterator<Item = &str>> = if self.room.is_some() {
+                            Box::new(std::iter::once(*label))
+                        } else {
+                            Box::new(label.split_whitespace())
+                        };
+                        labels
+                            .map(|word| (word, &font))
+                            .chain(reason.iter().flat_map(|reason| {
+                                reason.split_whitespace().map(|word| (word, &small))
+                            }))
+                    })
+                    .map(|(word, font)| super::number_width(ui, word, font))
+                    .fold(0.0, f32::max);
+                let menu_width = width
+                    .max(longest + 2.0 * S + ICON_SLOT + lane_width() + 2.0 * stroke)
+                    .min(bounds.width());
+                let rows_width = (menu_width - 2.0 * stroke - lane_width()).max(1.0);
+                let mut places = Vec::with_capacity(words.len());
+                let mut top = 0.0;
+                for (at, (label, reason)) in words.iter().enumerate() {
+                    if at == self.choices.len() {
+                        top += HAIRLINE_WIDTH;
+                    }
+                    let height =
+                        super::extras::choice_wrapped_height(ui, label, *reason, rows_width);
+                    places.push((top, height));
+                    top += height;
+                }
+                let metrics = std::sync::Arc::new(RowMetrics {
+                    words: words
+                        .iter()
+                        .map(|(label, reason)| ((*label).to_owned(), reason.map(str::to_owned)))
+                        .collect(),
+                    requested: width,
+                    room_width: bounds.width(),
+                    bounded: self.room.is_some(),
+                    menu_width,
+                    font,
+                    small,
+                    scale,
+                    command: self.command.is_some(),
+                    places,
+                    top,
+                });
+                ui.ctx()
+                    .data_mut(|data| data.insert_temp(key, metrics.clone()));
+                metrics
+            });
+        let width = metrics.menu_width;
+        let inner = (width - 2.0 * stroke).max(1.0);
+        let left = rect.left().clamp(bounds.left(), bounds.right() - width);
+        let anchor = Rect::from_min_max(pos2(left, rect.top()), pos2(left + width, rect.bottom()));
+        let places = &metrics.places;
+        let top = metrics.top;
         let natural = top + 2.0 * stroke;
+        // The part's normal maximum keeps a long list in its own scroll column.
+        // An explicit room narrows the placement; it does not remove this height cap.
         let natural = natural.min(ui.style().spacing.combo_height);
         let below = bounds.bottom() - rect.bottom() - XS;
         let above = rect.top() - bounds.top() - XS;
-        let (align, room) = if natural <= below || below >= above {
-            (RectAlign::BOTTOM_START, below)
-        } else {
-            (RectAlign::TOP_START, above)
-        };
-        let max = (natural.min(room) - 2.0 * stroke).max(Density::Read.control());
-        // A row that gained keyboard focus last pass comes into the list's view, centred: the
-        // list opens at that offset, at once, so the next key sees the row.
         let reveal_index = list.with("reveal_index");
         let pending = ui
             .ctx()
             .data(|data| data.get_temp::<Option<usize>>(reveal_index))
             .flatten();
+        // Admit the actual row at the viewport's starting/reveal position. Wrapped labels
+        // and blocked reasons can make it taller than a one-line Read control.
+        let whole_row = places
+            .get(pending.unwrap_or(0))
+            .map_or(Density::Read.control(), |(_, height)| *height)
+            + 2.0 * stroke;
+        let (align, room) = if below >= whole_row && (natural <= below || below >= above) {
+            (RectAlign::BOTTOM_START, below)
+        } else {
+            (RectAlign::TOP_START, above)
+        };
+        if natural.min(room) < whole_row {
+            egui::Popup::close_id(ui.ctx(), list);
+            return None;
+        }
+        let max = natural.min(room) - 2.0 * stroke;
+        // A row that gained keyboard focus last pass comes into the list's view, centred: the
+        // list opens at that offset, at once, so the next key sees the row.
+
         let mut column = ScrollColumn::new(list.with("scroll"))
             .max_height(max)
+            .min_scrolled_height(max)
             .fit_height();
         if let Some((top, height)) = pending.and_then(|at| places.get(at).copied()) {
             column = column.vertical_scroll_offset((top - (max - height) / 2.0).max(0.0));
@@ -398,8 +690,10 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
         let mut picked = None;
         let mut command = false;
         let mut rows = Vec::new();
-        let shown = egui::Popup::from_toggle_button_response(response)
+        let shown = egui::Popup::from_response(response)
+            .open_memory(None)
             .id(list)
+            .anchor(anchor)
             .width(inner)
             .frame(list_frame(ui))
             .align(align)
@@ -440,38 +734,55 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
                     }
                 });
             });
-        // A choice or the command closes the list, also from the keyboard (egui closes a popup
-        // on a pointer click only).
-        if picked.is_some() || command {
-            egui::Popup::close_id(ui.ctx(), list);
+        if let Some(shown) = &shown {
+            ui.ctx().accesskit_node_builder(shown.response.id, |node| {
+                node.set_role(egui::accesskit::Role::GenericContainer);
+                node.set_label(format!("{} choices", self.name));
+                node.set_role_description(Dropdown::CHOICES_ROLE);
+            });
         }
-        let open_now = shown.is_some() && egui::Popup::is_id_open(ui.ctx(), list);
-        // Focus goes back to the control when the list closes with the keyboard on it, or on
-        // nothing (Escape, a chosen row).
-        if was_open && !open_now {
-            let last_rows = ui
-                .ctx()
-                .data(|data| data.get_temp::<Vec<Id>>(rows_id))
-                .unwrap_or_default();
-            let focused = ui.ctx().memory(|memory| memory.focused());
-            if focused.is_none_or(|id| last_rows.contains(&id)) {
-                response.request_focus();
-            }
+        shown.map(|_| ListFrame {
+            picked,
+            command,
+            rows,
+            reveal,
+        })
+    }
+}
+
+#[derive(Clone)]
+struct RowMetrics {
+    words: Vec<(String, Option<String>)>,
+    requested: f32,
+    room_width: f32,
+    bounded: bool,
+    menu_width: f32,
+    font: egui::FontId,
+    small: egui::FontId,
+    scale: f32,
+    command: bool,
+    places: Vec<(f32, f32)>,
+    top: f32,
+}
+#[cfg(test)]
+thread_local! {
+    static ROW_METRICS_MADE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+struct ListFrame<T> {
+    picked: Option<T>,
+    command: bool,
+    rows: Vec<Id>,
+    reveal: Option<(Id, usize)>,
+}
+impl<T> Default for ListFrame<T> {
+    fn default() -> Self {
+        Self {
+            picked: None,
+            command: false,
+            rows: Vec::new(),
+            reveal: None,
         }
-        ui.ctx().data_mut(|data| {
-            data.insert_temp(reveal_index, reveal.map(|(_, at)| at));
-            if let Some((row, _)) = reveal {
-                data.insert_temp(revealed_id, Some(row));
-            }
-            if !open_now {
-                data.insert_temp(revealed_id, None::<Id>);
-            }
-            data.insert_temp(was_open_id, open_now);
-            if open_now {
-                data.insert_temp(rows_id, rows);
-            }
-        });
-        (picked, command)
     }
 }
 

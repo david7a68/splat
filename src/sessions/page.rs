@@ -19,7 +19,6 @@ use crate::{
         },
         results::ByTicket,
     },
-    encounter_run::FightSummary,
     encounters::PlanFight,
     lookup::{Written, WrittenIn},
     markdown_view,
@@ -499,7 +498,8 @@ struct Reading {
 struct Added {
     id: String,
     label: String,
-    at: Instant,
+    /// When it was added, on the frame clock (`crate::frame_clock`).
+    at: f64,
     count: usize,
     /// When the add was done: its result's footer order.
     order: design::ResultOrder,
@@ -687,7 +687,9 @@ pub struct Sessions {
     /// The note's plan as rows, built when the note, the content or the encounters change.
     plan_model: plan::PlanModelCache,
     /// The fight behind the open event, read once.
-    fight: Option<(Uuid, Result<FightSummary, String>)>,
+    /// The open played fight's summary, kept with the run's file as last found (or why not):
+    /// a different answer from the folder reads it again (R41, round 30 review F2).
+    fight: Option<plan::KeptFight>,
     /// What the session before the selected one left, read once for each selection.
     last_time: Option<(Uuid, Option<LastTime>)>,
     /// The results of carry-over acts, by the session each changed.
@@ -764,14 +766,17 @@ pub struct Sessions {
     moves: design::Results<kept::Page, kept::Moved>,
     /// When a recording last stopped, and the campaign it was recorded in: the owner, so the
     /// rail says it was kept only while that campaign is open (another campaign's rail never
-    /// says it). It ends after `SAVED_WORD_FOR`.
-    saved_at: Option<(Option<Uuid>, Instant)>,
+    /// says it). It ends after `SAVED_WORD_FOR` of the frame clock (`crate::frame_clock`).
+    saved_at: Option<(Option<Uuid>, f64)>,
     note_had_focus: bool,
     /// The caret to bring into view, on the frame after the editor has laid out.
     caret_to_show: Option<usize>,
     note_scroll_to_top: bool,
     last_check: Option<Instant>,
     last_scan: Option<Instant>,
+    /// Row 123: a count that changes when a listing of the folder (`refresh`) finds other notes
+    /// (an id, a file or a label), so a plan line's owner is checked against the notes only then.
+    pub(super) notes_revision: u64,
     /// The campaign's manifest changed, so what holds a copy of it must reload.
     pub manifest_changed: Option<PathBuf>,
     /// The Sessions page is showing, so a button there need not lead here.
@@ -795,10 +800,14 @@ pub struct Sessions {
     /// The session whose plan a group is being assembled in. It is the one that gets the link.
     group_session: Option<Uuid>,
     /// B4 review F1: the plan's group whose name the DM pressed while an unsaved draft refuses
-    /// to open it (the session, the group's path). The plan paints the refusing reason under
-    /// that group's line. It ends at the next press of a group's name, and (in `lib.rs`, every
-    /// frame) when nothing unsaved refuses any more or another session is selected.
-    pub plan_group_refused: Option<(Option<Uuid>, String)>,
+    /// to open it: the session and the group's stable id (B4b N2: not its path, which another
+    /// group can take). The plan paints the refusing reason under that group's line. It ends at
+    /// the next press of a group's name; when the plan's groups are read and that group is not
+    /// among them (removed, renamed away, its file replaced by another group); and, in
+    /// `lib.rs` while it is stored, when nothing unsaved refuses any more, another session is
+    /// selected, or a new read of the campaign lost the group (B4c; that check is cached by
+    /// `Encounters::plan_refusal_stands`, so an unchanged frame compares no draft).
+    pub plan_group_refused: Option<(Option<Uuid>, Uuid)>,
     /// Notes that kept a group's old name, because they could not be written.
     rename_problem: Option<String>,
     /// The open fight's Arrivals panel, for a planned group that has come.
@@ -1307,6 +1316,41 @@ fn note_width<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
     .inner
 }
 
+/// A session that is not tonight's: the session being played is dated before today, or the open
+/// session is not the one being played. Nothing is lost while it waits for the DM's act, but a
+/// forgotten `New session` files tonight's notes and audio in the wrong place, and the rail
+/// already marks it as a warning; so every place that says it is a warning (R41; the design
+/// system's "the warning that this is not the session being played or that its date has
+/// passed"). This is the one value that the Session footer, the Notes panel's footer, the Record
+/// step and the rail's `Old session` read.
+pub(crate) struct NotTonight;
+
+impl NotTonight {
+    /// The tone of every place that says it.
+    const TONE: Tone = Tone::Warning;
+
+    /// A footer's notice of it, in its tone.
+    fn notice<A>(words: Sentence) -> Notice<A> {
+        match Self::TONE {
+            Tone::Warning => Notice::warning(words),
+            _ => Notice::new(words),
+        }
+    }
+
+    /// The rail's mark while a run files itself under a session dated before today.
+    pub(crate) fn rail() -> Status<'static> {
+        let (icon, color) = match Self::TONE {
+            Tone::Warning => (icons::WARN, colors().result.warning),
+            _ => (icons::INFO, colors().result.info),
+        };
+        Status {
+            icon,
+            word: "Old session",
+            color,
+        }
+    }
+}
+
 /// The words for a note that looks like last week's. A forgotten `New session` puts
 /// tonight's notes and audio there, and neither has a way to move afterward.
 fn dated_before_today(note: &Note, today: &str) -> Option<String> {
@@ -1764,8 +1808,10 @@ impl Sessions {
             .iter()
             .map(|note| (note.id, note.link()))
             .collect();
-        // Row 123: the note's own events end a plan line's result, on every page.
+        // Row 123: the note's own events end a plan line's result, and its journey's removal
+        // ends a refused Undo's answer, on every page.
         self.follow_plan_line();
+        self.end_plan_answers_of_lost_journeys(book);
         book.poll(ctx);
     }
 
@@ -2504,6 +2550,9 @@ impl Sessions {
         self.end_folder_listing();
         self.folder_moves.disk_changed(|moved| moved.to.is_dir());
         let Some(folder) = &self.folder else {
+            if !self.notes.is_empty() {
+                self.notes_revision += 1;
+            }
             self.notes.clear();
             self.mentions.clear();
             self.templates.clear();
@@ -2524,7 +2573,12 @@ impl Sessions {
                 .map(|note| (note.id, note.path.clone(), note.label()))
                 .collect()
         };
-        self.wants_index_refresh |= place(&notes) != place(&self.notes);
+        let changed = place(&notes) != place(&self.notes);
+        self.wants_index_refresh |= changed;
+        if changed {
+            // Row 123: a plan line's owners are checked again only now.
+            self.notes_revision += 1;
+        }
         self.notes = notes;
         // A new, renamed or removed note can change which titles are shared.
         self.last_time = None;
@@ -3284,7 +3338,7 @@ impl Sessions {
     pub fn just_saved(&self) -> bool {
         self.saved_at.is_some_and(|(campaign, at)| {
             campaign == self.campaign.as_ref().map(|campaign| campaign.id)
-                && at.elapsed() < SAVED_WORD_FOR
+                && !crate::frame_clock::passed(at, SAVED_WORD_FOR)
         })
     }
 
@@ -3387,7 +3441,7 @@ impl Sessions {
         if tell && has_audio {
             self.saved_at = Some((
                 self.campaign.as_ref().map(|campaign| campaign.id),
-                Instant::now(),
+                crate::frame_clock::now(),
             ));
             // The result is its recording's (`RecordingSaved`), not the page's one notice.
             self.saved.record(RecordingSaved {
@@ -3773,7 +3827,7 @@ impl Sessions {
             let tone = if other.is_empty() {
                 Tone::Info
             } else {
-                Tone::Warning
+                NotTonight::TONE
             };
             // The choices start at the message text.
             design::message_with_actions(ui, tone, &words, |ui| {
@@ -4871,7 +4925,7 @@ impl Sessions {
                 }
                 if let Some(date) = dated {
                     messages.outcome(
-                        Notice::new(crate::sentence!(
+                        NotTonight::notice(crate::sentence!(
                             "This session is dated {}. Play it tonight, or start a new one.",
                             date
                         ))
@@ -6407,7 +6461,8 @@ impl Sessions {
                 &mut self.notice_order,
                 match delete_recording(&path) {
                     Ok(()) => (Tone::Success, "Recording deleted.".to_owned()),
-                    Err(error) => (Tone::Error, format!("Not deleted. {error}")),
+                    // `delete_recording` says it in plain words (`not_deleted`).
+                    Err(error) => (Tone::Error, error),
                 },
             );
             self.refresh_recordings();
@@ -6510,7 +6565,7 @@ impl Sessions {
         let writing = self.tab != Tab::Recordings && !self.reading_note;
         if writing && self.selected == self.current() && note.date.as_str() < today.as_str() {
             messages.outcome(
-                Notice::new(crate::sentence!(
+                NotTonight::notice(crate::sentence!(
                     "This session is dated {}. Play it tonight, or start a new one.",
                     note.date
                 ))
@@ -6537,7 +6592,7 @@ impl Sessions {
                         "Go to it"
                     }
                 });
-            let mut notice = Notice::new(words);
+            let mut notice = NotTonight::notice(words);
             if let Some(next) = next {
                 notice = notice.choice(Choice::new(
                     MessageChoice::Choice(next),
@@ -7415,7 +7470,7 @@ impl Sessions {
             return;
         }
         if delete && let Some(path) = &template.path {
-            match fs::remove_file(path) {
+            match super::remove_file(path) {
                 Ok(()) => {
                     let body = self
                         .template_draft
@@ -7431,7 +7486,7 @@ impl Sessions {
                     self.template = None;
                     self.refresh();
                 }
-                Err(error) => self.template_error = Some(format!("Not deleted. {error}")),
+                Err(error) => self.template_error = Some(super::not_deleted(path, &error)),
             }
             return;
         }
@@ -7977,10 +8032,22 @@ impl Sessions {
         draft.save();
     }
 
-    /// The open note's save fails, as a full disk would make it.
+    /// The disk refuses the open note's writes, as a full disk would: the DM has typed, and every
+    /// write fails at its result with the system's full-disk error (code 28), before anything is
+    /// written, until `simulate_failed_save_ends`. A direct retry fails too.
     pub fn simulate_failed_save(&mut self) {
         let draft = self.draft.as_mut().expect("an open note");
-        draft.state = DraftState::Failed("Not saved. The disk is full.".to_owned());
+        draft.failing_write = Some(28);
+        draft.body.push_str("\nTyped while the disk was full.\n");
+        draft.edited();
+        draft.save();
+    }
+
+    /// The disk takes writes again.
+    pub fn simulate_failed_save_ends(&mut self) {
+        if let Some(draft) = &mut self.draft {
+            draft.failing_write = None;
+        }
     }
 
     /// The open note's file leaves the folder outside Splat while the DM has unsaved words,
@@ -8500,9 +8567,28 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("Copy.md");
         let before = format!("---\nsession_id: {}\n---\nDM's words\n", Uuid::new_v4());
-        fs::write(&path, before).unwrap();
+        fs::write(&path, &before).unwrap();
+        // Round 30 B7e: a refused write says plain words, never the system's, and leaves the
+        // file's bytes as they were.
+        let failing = |code: Option<i32>| super::super::FAILING_WRITES.with(|c| c.set(code));
+        failing(Some(13));
+        assert_eq!(
+            super::super::new_identity(&path).err().as_deref(),
+            Some(
+                "Not saved. No permission to save. Give your user account permission to change the file and its folder."
+            )
+        );
+        failing(None);
+        assert_eq!(fs::read_to_string(&path).unwrap(), before);
         let undo = super::super::new_identity(&path).unwrap();
         let after = fs::read(&path).unwrap();
+        failing(Some(28));
+        assert_eq!(
+            undo.undo().err().as_deref(),
+            Some("Not saved. Disk is full. Free some space on the disk, then try again.")
+        );
+        failing(None);
+        assert_eq!(fs::read(&path).unwrap(), after);
         let mut sessions = Sessions {
             folder: Some(dir.path().into()),
             ..Default::default()
@@ -9864,6 +9950,38 @@ mod tests {
             shows(&harness, MOVE_FILES)
                 && shows(&harness, "Choose below to move the files or not."),
             "the lock gone, the choices come back"
+        );
+        // Round 30 B7d: the word ends by the frame clock (`crate::frame_clock`), not the wall
+        // clock, so a test's frames decide when it ends: 7.5 s of frames after the stop it
+        // stands; 8.5 s after, it has ended.
+        // Last in this test, because it moves the frame clock on.
+        harness.state_mut().0.live = Some(Live {
+            session: Uuid::nil(),
+            label: "Session 1".to_owned(),
+            recorder: crate::recording::Recorder::start(
+                crate::recording::Tool::Simulated,
+                None,
+                audio.path().join("clock.wav"),
+            )
+            .unwrap(),
+        });
+        harness.state_mut().0.finish_recording();
+        harness.step();
+        assert_eq!(saved(&harness), Some("Recording saved"), "the stop says it");
+        let stopped = harness.state().0.saved_at.map(|(_, at)| at).unwrap();
+        crate::frame_clock::set(stopped + 7.5);
+        harness.step();
+        assert_eq!(
+            saved(&harness),
+            Some("Recording saved"),
+            "7.5 s of frames later"
+        );
+        crate::frame_clock::set(stopped + 8.5);
+        harness.step();
+        assert_eq!(
+            saved(&harness),
+            None,
+            "8.5 s of frames later the word has ended"
         );
     }
 
