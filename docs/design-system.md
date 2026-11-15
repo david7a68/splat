@@ -812,7 +812,9 @@ Fix it here or in World.`), so no edit moves the editor. The cause shows once on
 closed, the message ends with it (`… Fix it here or in World. Line 3 opens a list …`) and the footer does not
 repeat it. While it is open, the repair's messages are in the page's footer: its result with a live Undo
 (`Broken.md draft discarded.` with `Undo discard`), then its cause, named by the path the message uses
-(`Notes/Broken.md: Line 3 opens a list …`), so two notes of one name in different folders stay apart. Discard returns to the unreadable file, so its cause follows the result; the next edit ends the
+(`Notes/Broken.md: Line 3 opens a list …`), so two notes of one name in different folders stay apart. The note
+cannot be read, so the message, the repair's `Invalid` and that cause are all errors (R41), from the repair's one
+diagnosis. Discard returns to the unreadable file, so its cause follows the result; the next edit ends the
 result. In a short window the repair editor gives way: the save row and a few package rows keep their size, and
 the editor's top never moves. Below the repair's save row, an `L` gap and the package list's one hairline
 separate the repair from the list; the repair adds no second rule. Invalid YAML uses plain words and marks the line to fix.
@@ -843,7 +845,7 @@ one that cannot be read), as the About row does; the message above names the fau
 says it in words (`Manifest deleted · 5 of 6 chosen`). A package's heading shares the
 centre line of its mode and its `Choose all` (or `Include future additions`) and `Choose none` actions.
 
-A missing Campaign.md states whether Splat holds the last read copy and counts its packages and rules. Writing
+A missing Campaign.md is a warning, as a missing manifest or folder is (R41). It states whether Splat holds the last read copy and counts its packages and rules. Writing
 held text requires an explicit action. With no copy, `Write a new Campaign.md` sits beside the explanation
 that the DM can write a new one with the default packages (`Campaign.md is missing, and Splat has no copy. You can
 write a new one with the default packages.`). A missing or changed Campaign.md ends `Undo discard` of the package
@@ -1401,8 +1403,11 @@ action moves when a long list starts to scroll. The group editor's header starts
 ends at that column's edge. Save group follows on that line and ends at the editor's right edge, above the Add
 creatures column, where Save encounter ends on the encounter editor's title line: one place in both editors. Then
 the save row with the state and Discard at its start and the reasons. A reason without
-room on the save row takes its own line below it. A group draft that Save's check refuses (a member's change that
-cannot stand, a missing creature) says `Invalid` in the error tone, changed or not, and Save group is not primary.
+room on the save row takes its own line below it. A group draft that Save's check refuses says `Invalid`, changed
+or not, in the tone of its cause, and Save group is not primary: the error tone for a member's change that cannot
+stand, the warning tone for a thing that is gone (a creature this campaign cannot find, a deleted encounter; R41).
+The cause's own words (under Belongs to, on the member's row, beside Save, in the footer) take the same tone, from
+the same diagnosis value.
 A new group that lacks a required part (a name, a side, a creature) says `New` with no fault tone, and Save waits
 with its reason; a saved group that an edit left without one says `Invalid` in the warning tone (R37). The
 draft's origin, new or saved, is its own fact (`DraftOrigin`): it changes at the first save and Discard restores
@@ -1881,7 +1886,7 @@ between character sync blocks. Each block's heading has one form whatever its st
 colour, ` · `, then the status icon and word in the status colour (`Brannoch Vale · ⚠ HP conflict`, `Kestrel Dunmoor ·
 ⟳ Sync pending`). Below the sync blocks, the closed `Prep` and `Combat log` sections share one left
 edge. Signed-out conflicts offer Connect to refresh before Show file. Ended sign-in
-uses muted recovery text; failed Connect retains error state. Sync stopped links to Party and states recovery.
+uses muted recovery text; failed Connect retains error state. Sync stopped links to Party and states recovery. It is a warning in the rail and in Party's footer notice alike (R41).
 
 An ended view has one control that takes the ending away. While the ending is the newest Undo step, that is
 `Undo: end encounter`, and no other control shows. Otherwise it is secondary `Continue fight` with the run icon,
@@ -2371,7 +2376,8 @@ plan's one footer holds both. `Recording saved: …` is its recording's: it show
 file stands, and a recording that starts in that session, a campaign change or its Dismiss ends it: `Recording saved: …`, `Recording
 deleted.`, `Added to the notes.`, `<file> is now a separate session.`, where an open run stays or moved, `No entry
 is named …`, `Draft discarded.` or `Reloaded from disk.` with their Undo, the warning that this is not the session
-being played or that its date has passed, and the chosen input that is not connected. The line below the title
+being played or that its date has passed (a warning wherever it shows: this footer, the Notes panel's footer, the
+Record step and the rail's `Old session`; R41), and the chosen input that is not connected. The line below the title
 holds this session's recording state, which keeps one height from Record to Stop, and the Record step. Another
 session's recording state (`● Recording 12:04 in Session 1: …`) is in the bottom banner, so it moves nothing on the
 page; while the banner says that recording stopped saving audio, it does not say it again. (It stays out of the
