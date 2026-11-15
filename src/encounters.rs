@@ -190,6 +190,56 @@ impl RosterFault {
     }
 }
 
+/// N1: Save's checks of an encounter's changed groups, ranked: the first refused change outranks
+/// the first missing part, whose group's origin comes with it (R37).
+fn owned_groups_found(
+    groups: &[GroupDraft],
+    snapshot: &Snapshot,
+    encounter: Uuid,
+) -> (
+    design::save_row::Diagnosis<'static>,
+    Option<design::save_row::DraftOrigin>,
+) {
+    use design::save_row::Diagnosis;
+    let (mut refused, mut incomplete) = (None, None);
+    for group in groups.iter().filter(|group| group.dirty()) {
+        let Err(refusal) = group.check(snapshot, Some(encounter)) else {
+            continue;
+        };
+        if refusal.diagnosis().only_incomplete() {
+            let words = if group.is_empty() {
+                empty_group_words(&group.name())
+            } else {
+                named_group_words(&group.name(), refusal.text())
+            };
+            incomplete.get_or_insert((words, group.origin()));
+        } else {
+            refused.get_or_insert(named_group_words(&group.name(), refusal.text()));
+        }
+    }
+    let origin = incomplete.as_ref().map(|(_, origin)| *origin);
+    let found = incomplete
+        .map_or_else(Diagnosis::valid, |(words, _)| Diagnosis::incomplete(words))
+        .and(refused.map_or_else(Diagnosis::valid, Diagnosis::refused));
+    (found, origin)
+}
+
+/// A group's refusal as the encounter's Save says it: `Group <name>: <words>`.
+fn named_group_words(name: &str, words: &str) -> String {
+    match name.trim() {
+        "" => words.to_owned(),
+        name => format!("Group {name}: {words}"),
+    }
+}
+
+/// An empty group's reason in the encounter editor: `Add a creature to <name> first.`
+fn empty_group_words(name: &str) -> String {
+    match name.trim() {
+        "" => "Add a creature to the new group first.".to_owned(),
+        name => format!("Add a creature to {name} first."),
+    }
+}
+
 /// Where the editor leaves the roster's unread rows, for the roster to show in their places.
 fn roster_fault_rows_id(draft: Uuid) -> egui::Id {
     egui::Id::new(("roster_fault_rows", draft))
@@ -602,20 +652,12 @@ impl Draft {
         self.groups.insert(at, back);
     }
     /// AB1: Save's reason while one of this encounter's changed groups has no members: Save
-    /// checks every changed group, and refuses an empty one. R37: the reason comes with that
-    /// group's origin, so a new group with only its name makes the draft `New`, and a saved
-    /// group an edit emptied makes it `Invalid`.
-    fn empty_group_reason(&self) -> Option<(String, design::save_row::DraftOrigin)> {
+    /// checks every changed group, and refuses an empty one.
+    fn empty_group_reason(&self) -> Option<String> {
         self.groups
             .iter()
             .find(|group| group.is_empty() && group.dirty())
-            .map(|group| {
-                let reason = match group.name().trim() {
-                    "" => "Add a creature to the new group first.".to_owned(),
-                    name => format!("Add a creature to {name} first."),
-                };
-                (reason, group.origin())
-            })
+            .map(|group| empty_group_words(&group.name()))
     }
     /// Read this encounter's own groups, once the campaign has been read.
     fn read_groups(&mut self, root: &std::path::Path, snapshot: &Snapshot) -> Result<(), String> {
@@ -2926,6 +2968,14 @@ pub struct Encounters {
     /// Save's check of the open group draft (FN5, AI2), with the snapshot revision and the
     /// draft's own revision it was made for. A frame with no change does not check again.
     group_check: Option<((Uuid, u64), Option<groups::Refusal>)>,
+    /// N1: Save's checks of the open encounter's changed groups, as one ranked diagnosis with
+    /// the origin of the first group that only lacks a part. Keyed by the snapshot revision and
+    /// the changed groups' own revisions, so an unchanged frame does not check them again.
+    owned_group_check: Option<(
+        (Uuid, Vec<u64>),
+        design::save_row::Diagnosis<'static>,
+        Option<design::save_row::DraftOrigin>,
+    )>,
     /// The open draft's difficulty, with the snapshot revision, edit epoch and draft it was
     /// worked out for.
     difficulty: Option<((Uuid, u64, Uuid), Arc<crate::difficulty::Difficulty>)>,
@@ -3173,7 +3223,10 @@ impl Encounters {
                 .as_ref()
                 .and_then(groups::Refusal::footer)
                 .map(str::to_owned);
-            (refusal.map(|refusal| Invalid::from(refusal.text)), shown)
+            (
+                refusal.map(|refusal| Invalid::from(refusal.text().to_owned())),
+                shown,
+            )
         } else {
             let invalid = self
                 .draft
@@ -3196,6 +3249,38 @@ impl Encounters {
     fn refused(&mut self, invalid: Option<Invalid>) {
         self.refusal_watch |= invalid.is_some();
         self.validation_error = invalid;
+    }
+    /// N1: Save's checks of the open encounter's changed groups as one ranked diagnosis: the
+    /// first refused change (named `Group <name>: …`, as Save says it) outranks the first missing
+    /// part, whose group's origin comes with it. Checked again only when the campaign's read or a
+    /// changed group's own revision changes.
+    fn owned_groups_diagnosis(
+        &mut self,
+    ) -> (
+        design::save_row::Diagnosis<'static>,
+        Option<design::save_row::DraftOrigin>,
+    ) {
+        use design::save_row::Diagnosis;
+        let (Some(snapshot), Some(draft)) = (self.snapshot.as_ref(), self.draft.as_ref()) else {
+            return (Diagnosis::valid(), None);
+        };
+        let key = (
+            snapshot.revision,
+            draft
+                .groups
+                .iter()
+                .filter(|group| group.dirty())
+                .map(GroupDraft::revision)
+                .collect::<Vec<_>>(),
+        );
+        if let Some((cached, found, origin)) = &self.owned_group_check
+            && *cached == key
+        {
+            return (found.clone(), *origin);
+        }
+        let (found, origin) = owned_groups_found(&draft.groups, snapshot, draft.id);
+        self.owned_group_check = Some((key, found.clone(), origin));
+        (found, origin)
     }
     /// Whether the shown message is the last failed check of the draft.
     fn shows_validation_error(&self) -> bool {
@@ -5953,30 +6038,21 @@ impl Encounters {
         });
         // AB1: Save checks every changed group too, so an empty one makes the draft Invalid now,
         // not after a refused Save. It is the frame's own state, read without parsing.
-        let (empty_group, empty_origin) = self
-            .draft
-            .as_ref()
-            .and_then(Draft::empty_group_reason)
-            .unzip();
-        // The typed check of the save row (R37, E2): an empty group is a missing part, and the
-        // draft's origin for it is that group's (a new group with only its name is `New` in a
-        // saved encounter too); a roster fault or the last refusal is a refused change and
-        // outranks it. With no empty group the origin is the encounter's own.
-        let origin = empty_origin.unwrap_or_else(|| {
+        let empty_group = self.draft.as_ref().and_then(Draft::empty_group_reason);
+        // The typed check of the save row (R37, E2, N1): Save's checks of every changed group,
+        // ranked as the group editor ranks them, then a roster fault or the last refusal, which
+        // is a refused change. A missing part alone takes that group's origin (a new group with
+        // only its name is `New` in a saved encounter too); otherwise the encounter's own.
+        let (groups_found, groups_origin) = self.owned_groups_diagnosis();
+        let origin = groups_origin.unwrap_or_else(|| {
             self.draft
                 .as_ref()
                 .map_or(design::save_row::DraftOrigin::Saved, |draft| draft.origin)
         });
-        let found = empty_group
-            .clone()
-            .map_or_else(
-                design::save_row::Diagnosis::valid,
-                design::save_row::Diagnosis::incomplete,
-            )
-            .and(roster_reason.clone().or(refusal).map_or_else(
-                design::save_row::Diagnosis::valid,
-                design::save_row::Diagnosis::refused,
-            ));
+        let found = groups_found.and(roster_reason.clone().or(refusal).map_or_else(
+            design::save_row::Diagnosis::valid,
+            design::save_row::Diagnosis::refused,
+        ));
         // One `DraftState` decides the save row's word, Save's weight and reason, Discard and
         // the campaign lock (migrate:O, rows 42 and 51). The encounter draft says `Invalid`
         // only while it has changes; its rows name the faults of a clean one.

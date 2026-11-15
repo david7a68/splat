@@ -558,6 +558,16 @@ mod tests {
                 true,
             ),
             (
+                "unreadable, then refused",
+                yes()
+                    .check(Diagnosis::unreadable())
+                    .check(Diagnosis::refused("Bad id.")),
+                SaveWord::Invalid(InvalidCause::Unreadable),
+                SaveWeight::Secondary,
+                Some("Bad id."),
+                true,
+            ),
+            (
                 "new unreadable",
                 new().check(incomplete()).check(Diagnosis::unreadable()),
                 SaveWord::Invalid(InvalidCause::Unreadable),

@@ -164,27 +164,71 @@ pub(super) struct GroupDraft {
     repair_error: Option<String>,
 }
 
-/// Why Save would refuse a group draft (FN5, AI2).
-#[derive(Clone, Debug, PartialEq)]
-pub(super) struct Refusal {
-    pub(super) text: String,
-    /// The one place that says this fault. Save, by its button or by the keyboard, keeps it
-    /// there: no other place repeats it.
-    pub(super) place: RefusalPlace,
-    /// What kind of fault it is: private, so a refusal is made only by [`Refusal::refused`] or
-    /// [`Refusal::incomplete`], and the save row gets a typed diagnosis, never a guess.
-    kind: RefusalKind,
-}
+/// A refusal lives in its own module, so that even this file reads its words and place only
+/// through accessors, and cannot change them after its kind is set.
+mod refusal {
+    use super::{RefusalPlace, design};
 
-/// A refusal's kind, carried to the save row as a [`design::save_row::Diagnosis`].
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum RefusalKind {
-    /// A change that cannot stand (a member's change, a missing creature, a taken name).
-    Refused,
-    /// A required part is missing (no name, no side, no creature). With the draft's origin it
-    /// gives the save row's word (R37).
-    Incomplete,
+    /// Why Save would refuse a group draft (FN5, AI2). Its fields are private and read-only: a
+    /// refusal is made only by [`Refusal::refused`] or [`Refusal::incomplete`], which also make its
+    /// owned typed diagnosis, so the words, the place and the kind cannot drift apart.
+    #[derive(Clone, Debug, PartialEq)]
+    pub(in crate::encounters) struct Refusal {
+        text: String,
+        /// The one place that says this fault. Save, by its button or by the keyboard, keeps it
+        /// there: no other place repeats it.
+        place: RefusalPlace,
+        /// The save row's typed diagnosis (`design::save_row::Diagnosis`), owned, so the cached
+        /// check carries it whole to `DraftState`.
+        diagnosis: design::save_row::Diagnosis<'static>,
+    }
+
+    impl Refusal {
+        /// The words the footer shows for this refusal: none when another place says it.
+        pub(in crate::encounters) fn footer(&self) -> Option<&str> {
+            (self.place == RefusalPlace::Footer).then_some(self.text.as_str())
+        }
+
+        /// A change that cannot stand (a member's change, a missing creature, a taken name).
+        pub(in crate::encounters) fn refused(text: impl Into<String>, place: RefusalPlace) -> Self {
+            let text = text.into();
+            Self {
+                diagnosis: design::save_row::Diagnosis::refused(text.clone()),
+                text,
+                place,
+            }
+        }
+
+        /// A required part is missing (no name, no side, no creature). With the draft's origin it
+        /// gives the save row's word (R37).
+        pub(in crate::encounters) fn incomplete(
+            text: impl Into<String>,
+            place: RefusalPlace,
+        ) -> Self {
+            let text = text.into();
+            Self {
+                diagnosis: design::save_row::Diagnosis::incomplete(text.clone()),
+                text,
+                place,
+            }
+        }
+
+        pub(in crate::encounters) fn text(&self) -> &str {
+            &self.text
+        }
+
+        pub(in crate::encounters) fn place(&self) -> RefusalPlace {
+            self.place
+        }
+
+        /// The save row's typed diagnosis of this refusal: the adapter that the tone lane (B11)
+        /// can carry to a member's row and the footer in place of a separate `Tone`.
+        pub(in crate::encounters) fn diagnosis(&self) -> &design::save_row::Diagnosis<'static> {
+            &self.diagnosis
+        }
+    }
 }
+pub(super) use refusal::Refusal;
 
 /// Where the group editor says a refusal of Save.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -198,38 +242,6 @@ pub(super) enum RefusalPlace {
     /// A member's row: the member's identity (`MemberId`'s own id, since `MemberId` itself
     /// compares equal to every other) and the tone its row says the fault in.
     Member(Uuid, Tone),
-}
-
-impl Refusal {
-    /// The words the footer shows for this refusal: none when another place says it.
-    pub(super) fn footer(&self) -> Option<&str> {
-        (self.place == RefusalPlace::Footer).then_some(self.text.as_str())
-    }
-
-    pub(super) fn refused(text: impl Into<String>, place: RefusalPlace) -> Self {
-        Self {
-            text: text.into(),
-            place,
-            kind: RefusalKind::Refused,
-        }
-    }
-
-    pub(super) fn incomplete(text: impl Into<String>, place: RefusalPlace) -> Self {
-        Self {
-            text: text.into(),
-            place,
-            kind: RefusalKind::Incomplete,
-        }
-    }
-
-    /// The save row's typed diagnosis of this refusal. A member fault's tone can be carried the
-    /// same way when the tone lane (B11) adds it to the kind.
-    pub(super) fn diagnosis(&self) -> design::save_row::Diagnosis<'_> {
-        match self.kind {
-            RefusalKind::Refused => design::save_row::Diagnosis::refused(self.text.as_str()),
-            RefusalKind::Incomplete => design::save_row::Diagnosis::incomplete(self.text.as_str()),
-        }
-    }
 }
 
 /// What a member result's Undo gives back, held in the page's store with the result's ticket.
@@ -398,6 +410,10 @@ impl GroupDraft {
     /// The draft changed: Save's cached check runs again.
     pub(super) fn touch(&mut self) {
         self.revision = next_revision();
+    }
+    /// Changes at each edit of the draft, and only then: the key of a cached check.
+    pub(super) fn revision(&self) -> u64 {
+        self.revision
     }
     /// No member that Save would write: Save refuses the group.
     pub(super) fn is_empty(&self) -> bool {
@@ -676,7 +692,8 @@ impl GroupDraft {
     }
     /// An encounter being saved with this group counts as there, though it is not on disk yet.
     pub(super) fn validate(&self, snapshot: &Snapshot, saving: Option<Uuid>) -> Result<(), String> {
-        self.check(snapshot, saving).map_err(|refusal| refusal.text)
+        self.check(snapshot, saving)
+            .map_err(|refusal| refusal.text().to_owned())
     }
     /// Save's check, without writing. A refusal says whether the editor already shows the fault
     /// in its place (a member row's missing creature or change that cannot stand, or the empty
@@ -2457,7 +2474,7 @@ impl Encounters {
                     .snapshot
                     .as_ref()
                     .and_then(|snapshot| draft.check(snapshot, None).err())
-                    .filter(|refusal| refusal.text == e)
+                    .filter(|refusal| refusal.text() == e)
                 {
                     Some(refusal) => self.refuse_group_save(&refusal),
                     None => {
@@ -2472,7 +2489,7 @@ impl Encounters {
     /// Save's check refused the group draft: the watch starts, and the footer says the fault
     /// only when no other place does.
     fn refuse_group_save(&mut self, refusal: &Refusal) {
-        self.refused(Some(refusal.text.clone().into()));
+        self.refused(Some(refusal.text().to_owned().into()));
         self.error = refusal.footer().map(str::to_owned);
     }
 
@@ -2547,11 +2564,7 @@ impl Encounters {
             let mut state = design::DraftState::new(origin, changed, primary).locks_campaign();
             // E2: the check's one ranked result; an empty group says its reason beside Save
             // (`Add a creature first.`) only while nothing outranks the missing part.
-            state = state.check(save_row_diagnosis(
-                refusal.as_ref(),
-                empty,
-                self.shows_validation_error(),
-            ));
+            state = state.check(save_row_diagnosis(refusal.as_ref(), empty));
             if self.message.is_some() {
                 // FC1: the shared `Saved`; the list keeps the full sentence for after Back.
                 state = state.just_saved();
@@ -2662,7 +2675,7 @@ impl Encounters {
         // they are on main. The body draws first; then that place shows these words when the
         // fault's own place is not whole on screen (another tab, scrolled away), else the switch
         // reason as before. So the fault is said once, by the mouse and the keyboard alike.
-        let elsewhere: Option<(Tone, &'static str)> = match refusal.as_ref().map(|r| r.place) {
+        let elsewhere: Option<(Tone, &'static str)> = match refusal.as_ref().map(Refusal::place) {
             Some(RefusalPlace::BelongsTo) => Some((Tone::Warning, GONE_BESIDE_SAVE)),
             Some(RefusalPlace::Member(_, tone)) => Some((tone, MEMBER_BESIDE_SAVE)),
             _ => None,
@@ -2854,7 +2867,7 @@ impl Encounters {
                     compact,
                     name_right,
                     &separated,
-                    refusal.as_ref().map(|refusal| refusal.place),
+                    refusal.as_ref().map(Refusal::place),
                 ));
             },
         );
@@ -3951,23 +3964,17 @@ pub(crate) const EDIT_GROUP: &str = "Edit group";
 /// Where a missing creature's package is chosen.
 pub(super) const PACKAGES_LINK: &str = "Campaign → Packages";
 
-/// The group editor's save-row diagnosis: the check's one ranked result (E2). An empty group
-/// says its reason beside Save (`Add a creature first.`) only while nothing outranks the
-/// missing part. With no refusal, a last refusal that still shows (AH1) keeps `Invalid`, but
-/// Save is not blocked by words the check no longer finds.
-fn save_row_diagnosis(
-    refusal: Option<&Refusal>,
-    empty: bool,
-    shows_last_refusal: bool,
-) -> design::save_row::Diagnosis<'_> {
+/// The group editor's save-row diagnosis: the cached check's one ranked result (E2), owned and
+/// passed through whole (E4). An empty group says its reason beside Save (`Add a creature
+/// first.`) only while nothing outranks the missing part.
+fn save_row_diagnosis(refusal: Option<&Refusal>, empty: bool) -> design::save_row::Diagnosis<'_> {
     use design::save_row::Diagnosis;
     match refusal {
         Some(refusal) if empty && refusal.diagnosis().only_incomplete() => {
             Diagnosis::incomplete(EMPTY_REASON)
         }
-        Some(refusal) => refusal.diagnosis(),
+        Some(refusal) => refusal.diagnosis().clone(),
         None if empty => Diagnosis::incomplete(EMPTY_REASON),
-        None if shows_last_refusal => Diagnosis::unreadable(),
         None => Diagnosis::valid(),
     }
 }
@@ -5195,14 +5202,15 @@ mod tests {
         use design::save_row::{Changed, DraftState, Primary, SaveWord};
         let word = |draft: &GroupDraft, refusal: Option<&Refusal>| {
             DraftState::new(draft.origin(), Changed::Yes, Primary::Draft)
-                .check(save_row_diagnosis(refusal, draft.is_empty(), false))
+                .check(save_row_diagnosis(refusal, draft.is_empty()))
                 .word()
         };
         let snapshot = Snapshot::load(&campaign, &[]).unwrap();
         draft.name.clear();
         let refusal = draft.check(&snapshot, None).unwrap_err();
         assert_eq!(
-            refusal.text, "Unknown creature: Not in this campaign’s packages.",
+            refusal.text(),
+            "Unknown creature: Not in this campaign’s packages.",
             "a blank name and a member's fault: the member's fault"
         );
         assert!(matches!(word(&draft, Some(&refusal)), SaveWord::Invalid(_)));
@@ -5217,15 +5225,39 @@ mod tests {
         empty.name = "Ash Pack".into();
         let refusal = empty.check(&snapshot, None).unwrap_err();
         assert!(
-            refusal.text.starts_with("Another group is named"),
+            refusal.text().starts_with("Another group is named"),
             "{}",
-            refusal.text
+            refusal.text()
         );
         assert!(matches!(word(&empty, Some(&refusal)), SaveWord::Invalid(_)));
         // With a name of its own it is a new group with only its name: `New`.
         empty.name = "Ember Pack".into();
         let refusal = empty.check(&snapshot, None).unwrap_err();
         assert_eq!(word(&empty, Some(&refusal)), SaveWord::New);
+
+        // N1: in an encounter, a changed group's refusal is not hidden by another, new and
+        // empty group: the encounter says Invalid, not New. The new group alone is New.
+        let encounter_word = |groups: &[GroupDraft]| {
+            let (found, origin) =
+                super::super::owned_groups_found(groups, &snapshot, Uuid::new_v4());
+            DraftState::new(
+                origin.unwrap_or(design::save_row::DraftOrigin::Saved),
+                Changed::Yes,
+                Primary::Draft,
+            )
+            .check(found)
+            .word()
+        };
+        let mut faulty = GroupDraft::new();
+        faulty.name = "Picket".into();
+        faulty.add(Uuid::new_v4());
+        let mut fresh = GroupDraft::new();
+        fresh.name = "Ash Hounds".into();
+        assert_eq!(encounter_word(std::slice::from_ref(&fresh)), SaveWord::New);
+        assert!(matches!(
+            encounter_word(&[faulty, fresh]),
+            SaveWord::Invalid(design::save_row::InvalidCause::Refused)
+        ));
 
         // E3: the origin is the group's own fact. A saved group whose file is lost, whose
         // lost file the DM accepted (the comparison text goes, as `disk_choice` does), and
