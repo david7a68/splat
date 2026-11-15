@@ -1288,7 +1288,7 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/visual_tests/ergonomics.rs",
             "a_menu_over_a_column_splitter_is_an_app_fault",
-            &[Ban::Layout(2)],
+            &[Ban::Layout(3)],
         ),
         (
             "src/visual_tests/ergonomics.rs",

@@ -6415,7 +6415,7 @@ pub mod empty {
                     !node.name.is_empty()
                         && node.name != ADD_REASON
                         && node.name != "Cancel"
-                        && !node.name.starts_with("Will add ")
+                        && !node.name.starts_with("Will create ")
                 })
                 .map(|node| (node.name.clone(), node.rect.top().round() as i32))
                 .collect();
