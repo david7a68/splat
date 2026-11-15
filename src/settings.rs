@@ -185,7 +185,7 @@ impl Settings {
             Account::KeyringWarning => {
                 self.session = session();
                 self.warning = Some(
-                    "Connected, but the session could not be saved in the desktop keyring.".into(),
+                    "Connected, but your sign-in could not be saved in the desktop keyring.".into(),
                 );
             }
             Account::RefreshFailing => {
@@ -324,7 +324,7 @@ impl Settings {
                     Err(mpsc::TryRecvError::Disconnected) => {
                         self.busy = false;
                         self.connect_failed = false;
-                        self.error = Some("The session worker stopped. Restart Splat.".into());
+                        self.error = Some("The sign-in worker stopped. Restart Splat.".into());
                         break;
                     }
                 }
@@ -547,7 +547,7 @@ impl Settings {
                 if design::message_with_action(
                     ui,
                     Tone::Warning,
-                    "Your desktop keyring did not save the session. Unlock the keyring, then connect again.",
+                    "Your desktop keyring did not save your sign-in. Unlock the keyring, then connect again.",
                     "Connect again",
                 ) {
                     self.focus_sign_in();
@@ -778,6 +778,21 @@ mod tests {
             1,
             "the status shows once"
         );
+    }
+
+    #[test]
+    fn a_keyring_warning_names_the_sign_in() {
+        use egui_kittest::kittest::Queryable;
+        let mut settings = Settings::default();
+        settings.simulate(Account::KeyringWarning);
+        let mut harness = egui_kittest::Harness::new_ui_state(
+            |ui, settings: &mut Settings| settings.show_account(ui, true, true),
+            settings,
+        );
+        design::theme::install(&harness.ctx);
+        harness.run();
+        harness.get_by_label("Your desktop keyring did not save your sign-in. Unlock the keyring, then connect again.");
+        harness.get_by_label("Connect again");
     }
 
     #[test]

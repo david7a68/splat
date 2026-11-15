@@ -740,7 +740,7 @@ fn act(
     let mutation = if remote.can_edit {
         action.mutation(&remote)
     } else {
-        Err("This session cannot edit this character on D&D Beyond.".into())
+        Err("This sign-in cannot edit this character on D&D Beyond.".into())
     };
     let mutation = match mutation {
         Ok(m) => m,
@@ -784,7 +784,7 @@ pub enum SyncState {
     NotSent,
 }
 
-const SESSION_LOST: &str = "The D&D Beyond session ended, so this sync stopped. Changes since then are kept in Splat and have not been sent. Connect in Settings. Sync party then starts again, if it was on. Splat reads the sheet first, and asks before it replaces a value you changed.";
+const SESSION_LOST: &str = "The D&D Beyond sign-in ended, so this sync stopped. Changes since then are kept in Splat and have not been sent. Connect in Settings. Sync party then starts again, if it was on. Splat reads the sheet first, and asks before it replaces a value you changed.";
 /// Groups the run holds as its own values, so a saved run keeps them.
 const KEPT_BY_THE_RUN: [&str; 3] = ["hp", "death", "conditions"];
 const DIFFER_AFTER_READ: &str =
@@ -1009,7 +1009,7 @@ impl CombatSync {
         if !self.ready() {
             Some("Wait for the first sheet read.")
         } else if self.read_only() {
-            Some("This session cannot edit this character on D&D Beyond.")
+            Some("This sign-in cannot edit this character on D&D Beyond.")
         } else if self.busy() || self.action.is_some() {
             Some("Wait for the current sheet read.")
         } else if !self.blocked.is_empty() {
@@ -1555,7 +1555,7 @@ impl CombatSync {
                         .density(Density::Read)
                         .blocked(busy.or(
                             (!writable).then_some(
-                                "This session cannot edit this character on D&D Beyond.",
+                                "This sign-in cannot edit this character on D&D Beyond.",
                             ),
                         ))
                         .show(ui)
@@ -1658,7 +1658,7 @@ impl CombatSync {
                 (
                     icons::READ_ONLY,
                     colors().sync.read_only,
-                    "Read only: D&D Beyond reports that this session cannot edit this character. Nothing here can change.",
+                    "Read only: D&D Beyond reports that this sign-in cannot edit this character. Nothing here can change.",
                 )
             };
             ui.label(Type::Small.rich(ui, icon).color(color));

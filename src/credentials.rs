@@ -28,7 +28,7 @@ impl Vault for DesktopVault {
             Ok(cookie) => Ok(Some(Zeroizing::new(cookie))),
             Err(keyring::Error::NoEntry) => Ok(None),
             Err(_) => Err(
-                "Could not read the desktop keyring. You can connect without saving your session."
+                "Could not read the desktop keyring. You can connect without saving your sign-in."
                     .into(),
             ),
         }
@@ -36,14 +36,14 @@ impl Vault for DesktopVault {
 
     fn save(&self, cookie: &str) -> Result<(), String> {
         entry()?.set_password(cookie).map_err(|_| {
-            "Connected, but the session could not be saved in the desktop keyring.".into()
+            "Connected, but your sign-in could not be saved in the desktop keyring.".into()
         })
     }
 
     fn forget(&self) -> Result<(), String> {
         match entry()?.delete_credential() {
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-            Err(_) => Err("Local session cleared, but the saved cookie could not be removed. Unlock your keyring and select Disconnect again.".into()),
+            Err(_) => Err("Local sign-in cleared, but the saved cookie could not be removed. Unlock your keyring and select Disconnect again.".into()),
         }
     }
 }
@@ -59,7 +59,7 @@ impl Vault for DesktopVault {
     }
 
     fn save(&self, _: &str) -> Result<(), String> {
-        Err("Connected, but the session could not be saved in the desktop keyring.".into())
+        Err("Connected, but your sign-in could not be saved in the desktop keyring.".into())
     }
 
     fn forget(&self) -> Result<(), String> {
@@ -219,7 +219,7 @@ impl Worker {
     pub fn send(&self, id: u64, action: Action) -> Result<(), String> {
         self.tx
             .send((id, action))
-            .map_err(|_| "The session worker stopped. Restart Splat to reconnect.".into())
+            .map_err(|_| "The sign-in worker stopped. Restart Splat to reconnect.".into())
     }
 }
 
