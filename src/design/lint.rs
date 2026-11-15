@@ -488,8 +488,9 @@ fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
     struct Fact {
         /// The names a `let` binds to values joined by the middle dot.
         dot_names: std::collections::BTreeSet<String>,
-        /// The names a `let` binds to a format of placeholders and spaces only.
-        bare_names: std::collections::BTreeSet<String>,
+        /// The names a `let` binds to a format of placeholders and spaces only, and whether
+        /// that format was counted already (one count per format site, however often used).
+        bare_names: std::collections::BTreeMap<String, bool>,
         /// The local copies found.
         copies: usize,
     }
@@ -546,6 +547,19 @@ fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
             syn::Expr::Path(path) => path.path.get_ident().map(ToString::to_string),
             _ => None,
         }
+    }
+    /// The names a pattern binds (`label`, `(label, key)`).
+    fn bound(pattern: &syn::Pat) -> Vec<String> {
+        struct Names(Vec<String>);
+        impl<'ast> Visit<'ast> for Names {
+            fn visit_pat_ident(&mut self, name: &'ast syn::PatIdent) {
+                self.0.push(name.ident.to_string());
+                syn::visit::visit_pat_ident(self, name);
+            }
+        }
+        let mut names = Names(Vec::new());
+        names.visit_pat(pattern);
+        names.0
     }
     /// Whether `expr` joins values with the middle dot (`.join(" · ")`).
     fn dot_join(expr: &syn::Expr) -> bool {
@@ -606,16 +620,28 @@ fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
     }
     impl<'ast> Visit<'ast> for Formats<'_> {
         fn visit_local(&mut self, local: &'ast syn::Local) {
+            // A new binding ends what the name held before.
+            for name in bound(&local.pat) {
+                self.fact.dot_names.remove(&name);
+                self.fact.bare_names.remove(&name);
+            }
             if let (syn::Pat::Ident(name), Some(init)) = (&local.pat, &local.init) {
                 let name = name.ident.to_string();
                 if dot_join(&init.expr) {
                     self.fact.dot_names.insert(name.clone());
                 }
                 if template(&init.expr).is_some_and(|words| bare(&words)) {
-                    self.fact.bare_names.insert(name);
+                    self.fact.bare_names.insert(name, false);
                 }
             }
             syn::visit::visit_local(self, local);
+        }
+        fn visit_expr_for_loop(&mut self, looped: &'ast syn::ExprForLoop) {
+            for name in bound(&looped.pat) {
+                self.fact.dot_names.remove(&name);
+                self.fact.bare_names.remove(&name);
+            }
+            syn::visit::visit_expr_for_loop(self, looped);
         }
         fn visit_item_fn(&mut self, item: &'ast syn::ItemFn) {
             self.function(item.sig.ident.to_string(), |this| {
@@ -641,10 +667,16 @@ fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
                 // A tile's label with no colon, given here or through a name.
                 if TILES.contains(&last)
                     && let Some(label) = call.args.iter().nth(1)
-                    && (template(unref(label)).is_some_and(|words| bare(&words))
-                        || ident(label).is_some_and(|name| self.fact.bare_names.contains(&name)))
                 {
-                    self.fact.copies += 1;
+                    if template(unref(label)).is_some_and(|words| bare(&words)) {
+                        self.fact.copies += 1;
+                    } else if let Some(counted) =
+                        ident(label).and_then(|name| self.fact.bare_names.get_mut(&name))
+                        && !*counted
+                    {
+                        *counted = true;
+                        self.fact.copies += 1;
+                    }
                 }
                 // A rolling tile by hand.
                 let numeral = call.args.iter().any(|argument| {
