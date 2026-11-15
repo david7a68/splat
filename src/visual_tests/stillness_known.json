@@ -775,7 +775,10 @@
   "travel-checks-plan": [
     ["N4/quiet-action-line-start","01-plan-on-timeline","1200x800","Button \"On the road\"",1],
     ["N4/quiet-action-line-start","01-plan-on-timeline","1920x1080","Button \"On the road\"",1],
-    ["N4/quiet-action-line-start","01-plan-on-timeline","960x640","Button \"On the road\"",1]
+    ["N4/quiet-action-line-start","01-plan-on-timeline","960x640","Button \"On the road\"",1],
+    ["G3/far-action","04-plan-answer-in-session-plan","1920x1080","Button \"Add to notes: Ford crossing\"",1],
+    ["G3/far-action","04-plan-answer-in-session-plan","1920x1080","Button \"Add to notes: Long road\"",1],
+    ["G3/far-action","04-plan-answer-in-session-plan","1920x1080","Button \"More actions for Shrine of Cinders\"",1]
   ],
   "world": [
     ["G1b/pressed-control-moved","08-world-generated-npc-saved","960x640","Button \"Reroll\"",1]
