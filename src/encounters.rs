@@ -10813,10 +10813,9 @@ mod tests {
         answer(&mut editor, &mut timeline);
         let run = editor.run().unwrap();
         assert!(run.ended());
-        assert!(
-            run.continue_blocked
-                .is_some_and(|reason| reason.starts_with("This fight is not on the Timeline"))
-        );
+        assert!(run.continue_blocked.is_some_and(|reason| {
+            reason.starts_with("This fight cannot go on: it is not on the Timeline")
+        }));
         // On the Timeline as the fight that was played last, it goes on, on the round it
         // ended in.
         let fact = editor.run().unwrap().timeline_fact();

@@ -209,9 +209,6 @@
   "journey-j3": [
     ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Conditions for this participant\"",1]
   ],
-  "journey-j4": [
-    ["G1b/pressed-control-moved","(after the last state)","1200x800","Button \"Add Old Guard, 1-2 seals to the initiative list\"",1]
-  ],
   "journey-j6": [
     ["G1b/pressed-control-moved","(after the last state)","1200x800","Button \"Save encounter\"",1]
   ],
@@ -524,9 +521,6 @@
     ["G1b/pressed-control-moved","(after the last state)","960x640","Button \"Record again\"",1],
     ["G1b/pressed-control-moved","03-blocked-banner-retry","960x640","Button \"Record again\"",1],
     ["G6/footer-far-below-body","05-recording-retry-with-input","1920x1080","Pane 0E31",1]
-  ],
-  "run-add-creature": [
-    ["N5/icon-starts-wrapping-text","04-arrivals-made-up-added","960x640","Text \"\\u{e3b2}\\u{a0}Changed\\n1\\u{a0}×\\u{a0}Rival\\u{a0}Captain (as\\u{a0}Ember\\u{a0}Cultist), 2\\u{a0}×\\u{a0}Cinder\\u{a0}Wolf\"",1]
   ],
   "run-continue": [
     ["G1c/content-moved-with-bar","04-ended-with-loot-beside-lookup","1200x800","Button \"Brannoch Vale, party, HP 58/62, Temp 5, AC 19, Initiative 18\"",1],

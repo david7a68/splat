@@ -331,6 +331,73 @@ fn arrival_total(text: &str) -> Result<Option<i64>, &'static str> {
     }
 }
 
+/// Every smallest `Fight after: …` an Arrivals heading can show: each difficulty word and
+/// each reason. The heading reserves the widest of them (point 3 of the fourth review).
+const WIDEST_ANSWERS: [&str; 6] = [
+    "Fight after: Low",
+    "Fight after: Moderate",
+    "Fight after: High",
+    "Fight after: Above High",
+    "Fight after: XP not known",
+    "Fight after: Level not known",
+];
+
+/// How one Arrivals heading shares its width (points 2 and 3 of the round 29 reviews).
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct HeadingSplit {
+    /// The title's room.
+    title: f32,
+    /// The status words stay in the heading.
+    status: bool,
+    /// The difficulty line's room.
+    room: f32,
+    /// The line has its own line under the heading.
+    below: bool,
+}
+
+/// `whole` is the heading's width, `title` the whole title's, `floor` its first word with `…`
+/// (or the whole title when shorter), `status` the status words with their gap (0 for none),
+/// `current` the smallest complete `Fight after: …` now and `widest` the widest one the row can
+/// show. R1: beside the title or on its own line is decided by `widest` (fourth review), so a
+/// change of difficulty never moves the answer or Add; the status words stay beside the whole
+/// title where the current answer fits after them; else the title shortens to leave `widest`,
+/// never below `floor`. Where even `floor` and the answer do not fit together
+/// (the rule for the boundary), the answer takes its own line under the heading at the whole
+/// width, and the title keeps the heading.
+fn heading_split(
+    whole: f32,
+    title: f32,
+    floor: f32,
+    status: f32,
+    (current, widest): (f32, f32),
+) -> HeadingSplit {
+    if whole < floor + design::L + widest {
+        return HeadingSplit {
+            title: title.min(whole),
+            status: false,
+            room: whole,
+            below: true,
+        };
+    }
+    // The status words stay beside the whole title while the current answer fits after them
+    // (as before); the answer's place (beside, at the right) does not depend on it.
+    if status > 0.0 && title + status + design::L + current <= whole {
+        return HeadingSplit {
+            title,
+            status: true,
+            room: whole - title - status - design::L,
+            below: false,
+        };
+    }
+    let title = title.min(whole - design::L - widest).max(floor);
+    HeadingSplit {
+        title,
+        status: false,
+        room: whole - title - design::L,
+        below: false,
+    }
+}
+
 fn arrival_add_word(group: &super::RunGroup) -> String {
     if group.warnings.is_empty() {
         "Add".to_owned()
@@ -339,11 +406,76 @@ fn arrival_add_word(group: &super::RunGroup) -> String {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Test builds: how often a pending line was worked out (Astra, PR 371: not each frame).
+    static PENDING_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// FL4: the line under a pending sync block's heading in the ended view. The heading above it
 /// names the character, and `Stop sync for …` under it is the way to close now, so the line
 /// says only what waits and that it needs no step (two lines at 960, not three).
 const PENDING_WORDS: &str =
     "Its changes have not reached D&D Beyond yet. Splat tries again by itself.";
+
+/// FL4, AL2, FL2, SL3 (iter-29 G178): the pending line names what waits, from the values that
+/// Splat would send and D&D Beyond does not have yet: `Its change to 49/62 HP has not reached
+/// D&D Beyond yet. Splat tries again by itself.` HP has the form of the conflict's buttons.
+/// With nothing to compare, the general words.
+fn pending_words(sync: &crate::combat_sync::CombatSync) -> String {
+    #[cfg(test)]
+    PENDING_WORK.with(|work| work.set(work.get() + 1));
+    let max = sync.max_hp().unwrap_or(0);
+    let mut changed: Vec<String> = Vec::new();
+    let mut add = |words: String| {
+        if !changed.contains(&words) {
+            changed.push(words);
+        }
+    };
+    for (key, value) in sync.values() {
+        let sheet = sync.confirmed().and_then(|sheet| sheet.get(key));
+        if sheet == Some(value) {
+            continue;
+        }
+        // HP holds two values; each one that waits is named, and only those (Astra, PR 371).
+        if key == "hp" {
+            let field = |value: Option<&serde_json::Value>, name: &str| {
+                value.and_then(|value| value[name].as_i64())
+            };
+            let removed = field(Some(value), "removedHitPoints");
+            if removed != field(sheet, "removedHitPoints") {
+                add(format!("{}/{max} HP", (max - removed.unwrap_or(0)).max(0)));
+            }
+            let temporary = field(Some(value), "temporaryHitPoints");
+            if temporary != field(sheet, "temporaryHitPoints") {
+                add(format!("{} temporary HP", temporary.unwrap_or(0)));
+            }
+            continue;
+        }
+        let words = match key.as_str() {
+            "death" => "death saves".to_owned(),
+            "conditions" => "conditions".to_owned(),
+            "slots" => "spell slots".to_owned(),
+            "pact" => "pact slots".to_owned(),
+            "inspiration" => "Heroic Inspiration".to_owned(),
+            "hp_bonus" => "the maximum HP modifier".to_owned(),
+            "currency" => "currency".to_owned(),
+            key if key.starts_with("item/") => "an item".to_owned(),
+            key if key.starts_with("creature/") => "companion HP".to_owned(),
+            _ => "a limited-use resource".to_owned(),
+        };
+        add(words);
+    }
+    let tail = "D&D Beyond yet. Splat tries again by itself.";
+    match changed.as_slice() {
+        [] => PENDING_WORDS.to_owned(),
+        [one] => format!("Its change to {one} has not reached {tail}"),
+        [first @ .., last] => format!(
+            "Its changes to {} and {last} have not reached {tail}",
+            first.join(", ")
+        ),
+    }
+}
 
 pub(super) fn sync_status(state: SyncState) -> Status<'static> {
     let s = colors().sync;
@@ -603,17 +735,17 @@ impl Run {
 
     /// A footer's second step waits for an answer, and Escape belongs to it.
     pub fn footer_step_open(&self) -> bool {
-        self.closing || self.ending
+        self.closing.is_open() || self.ending
     }
 
     /// Escape backs out of a footer's second step, in every phase.
     fn back_out_on_escape(&mut self, ui: &egui::Ui) -> bool {
         let modal = ui.ctx().memory(|memory| memory.top_modal_layer()).is_some();
         if !modal
-            && (self.closing || self.ending)
+            && (self.closing.is_open() || self.ending)
             && ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape))
         {
-            self.closing = false;
+            self.closing.shut();
             self.ending = false;
             self.return_focus = self.lookup_open;
             return true;
@@ -2361,7 +2493,7 @@ impl Run {
                 }
                 return;
             }
-            if self.closing {
+            if self.closing.is_open() {
                 // FK7 (iter-27-R): the dialog takes the input, and the line behind it stays
                 // as it was, with its save state, so the page behind a dialog does not change.
                 let note = close_saved_words(self.syncs.values().any(|sync| sync.enabled));
@@ -2571,6 +2703,11 @@ impl Run {
         })
     }
 
+    /// This run's close dialog, as the owner of the focus it remembers (G44).
+    fn close_owner(&self) -> egui::Id {
+        egui::Id::new(("close_run", self.id))
+    }
+
     fn close_confirmation(&mut self, ui: &mut egui::Ui, note: &str) -> bool {
         self.close_dialog(ui, note)
     }
@@ -2689,12 +2826,16 @@ impl Run {
                         design::blocked_reason(ui, block.as_deref());
                         design::gap(ui, design::Gap::S);
                     }
-                    let response = Action::secondary("Keep running").show(ui);
-                    let id = ui.id().with("close_default_focused");
-                    if !ui.data(|data| data.get_temp::<bool>(id).unwrap_or(false)) {
-                        response.request_focus();
-                        ui.data_mut(|data| data.insert_temp(id, true));
-                    }
+                    // FO2 (G44): Keep running is the dialog's default control. While the dialog
+                    // shows, the part keeps the focus inside it (`docs/design-system.md:218`):
+                    // on each opening, and back from a request from under it (the dock's
+                    // Amount). A stable id, so words that come in (a conflict) keep it.
+                    let response = ui
+                        .push_id("close_keep_running", |ui| {
+                            Action::secondary("Keep running").show(ui)
+                        })
+                        .inner;
+                    design::dialog_default(ui, &response, self.close_owner());
                     keep |= response.clicked();
                 },
             );
@@ -2706,7 +2847,9 @@ impl Run {
             keep = true;
         }
         if keep {
-            self.closing = false;
+            self.closing.shut();
+            // The focus goes back where it was before the dialog took it.
+            design::dialog_return_focus(ui.ctx(), self.close_owner());
             return false;
         }
         if save_new {
@@ -2751,7 +2894,7 @@ impl Run {
             || !self.stranded_names().is_empty()
             || !self.unsent_only_here_names().is_empty()
         {
-            self.closing = true;
+            self.closing.open();
             false
         } else {
             self.close_run()
@@ -2766,7 +2909,7 @@ impl Run {
         self.mark_closed();
         match self.save() {
             Ok(()) => {
-                self.closing = false;
+                self.closing.shut();
                 self.confirm_close = true;
                 true
             }
@@ -2886,7 +3029,17 @@ impl Run {
                     );
                     if sync.state() == SyncState::Pending {
                         // FL4: say what waits, that it needs no step, and the way to close now.
-                        design::help(ui, PENDING_WORDS);
+                        // Worked out again only when the values or the sheet changed.
+                        let revision = sync.values_revision();
+                        let line = match self.pending_lines.get(&index) {
+                            Some((kept, line)) if *kept == revision => line.clone(),
+                            _ => {
+                                let line = pending_words(sync);
+                                self.pending_lines.insert(index, (revision, line.clone()));
+                                line
+                            }
+                        };
+                        design::help(ui, &line);
                     }
                 }
                 if Action::quiet(&format!("Stop sync for {name}"))
@@ -3302,6 +3455,7 @@ impl Run {
             {
                 self.arrival_counts.1 += 1;
             }
+            // Each input with the name that a missing one is called by (`Difficulty::named`).
             let (mut party, mut foes) = (Vec::new(), Vec::new());
             let mut characters = false;
             for p in &self.state.participants {
@@ -3309,10 +3463,13 @@ impl Run {
                     let level = scale.level(&p.definition);
                     characters |= level.is_some();
                     if p.present {
-                        party.extend(level);
+                        party.extend(level.map(|level| (level, p.name.clone())));
                     }
                 } else if p.present {
-                    foes.push(crate::difficulty::creature_xp(&p.definition));
+                    foes.push((
+                        crate::difficulty::creature_xp(&p.definition),
+                        p.name.clone(),
+                    ));
                 }
             }
             // The campaign's party stands in only for a fight with no character at all. When
@@ -3321,30 +3478,47 @@ impl Run {
             let words = groups
                 .iter()
                 .filter_map(|group| {
-                    // Each member joins on its own side; one on the party's side is an ally.
-                    let added: Vec<_> = group
-                        .members
-                        .iter()
-                        .filter(|member| {
-                            member
-                                .overrides
-                                .side
-                                .as_deref()
-                                .unwrap_or(&group.side)
-                                .trim()
-                                != "party"
-                        })
-                        .flat_map(|member| {
-                            let xp = crate::difficulty::creature_xp(&member.entry);
-                            std::iter::repeat_n(xp, member.count as usize)
-                        })
-                        .collect();
-                    if added.is_empty() || nobody {
+                    if nobody {
                         return None;
                     }
-                    let adds = added.iter().map(|xp| xp.unwrap_or(0)).sum();
-                    let fight = scale.weigh(&party, foes.iter().copied().chain(added));
-                    fight.rating.as_ref()?;
+                    // Each member joins on its own side; one on the party's side is an ally,
+                    // and an ally that is a character brings its level (R1, FJ3: a group of
+                    // allies says the fight after it joins too).
+                    let (mut allies, mut added) = (Vec::new(), Vec::new());
+                    for member in &group.members {
+                        let side = member.overrides.side.as_deref().unwrap_or(&group.side);
+                        let base = splat::content::overrides::Base::of(&member.entry, side);
+                        let name = member
+                            .overrides
+                            .resolve(&base)
+                            .map_or(base.name, |resolved| resolved.name);
+                        let count = member.count as usize;
+                        if side.trim() == "party" {
+                            if let Some(level) = scale.level(&member.entry) {
+                                allies.extend(std::iter::repeat_n((level, name), count));
+                            }
+                        } else {
+                            let xp = crate::difficulty::creature_xp(&member.entry);
+                            added.extend(std::iter::repeat_n((xp, name), count));
+                        }
+                    }
+                    let adds = added.iter().map(|(xp, _)| xp.unwrap_or(0)).sum();
+                    let party: Vec<_> = party.iter().chain(&allies).collect();
+                    let foes: Vec<_> = foes.iter().chain(&added).collect();
+                    // R1 (FK3, SK3): a fight with no word still has its line: `XP not known`
+                    // in the word's place, with whose XP or level it is.
+                    let levels: Vec<_> = party.iter().map(|(level, _)| *level).collect();
+                    let fight =
+                        scale
+                            .weigh(&levels, foes.iter().map(|(xp, _)| *xp))
+                            .named(|what, at| match what {
+                                crate::difficulty::Unknown::Xp => {
+                                    foes.get(at).map(|(_, n)| n.clone())
+                                }
+                                crate::difficulty::Unknown::Level => {
+                                    party.get(at).map(|(_, n)| n.clone())
+                                }
+                            });
                     Some((group.id, (fight, adds)))
                 })
                 .collect();
@@ -3461,16 +3635,6 @@ impl Run {
         }
     }
 
-    /// A group's side, size and worth: `Enemies · 3 members · XP 150`.
-    fn group_totals_text(group: &super::RunGroup) -> String {
-        format!(
-            "{} · {} · {}",
-            style::human_label(&group.side),
-            group.count_label(),
-            group.xp_label()
-        )
-    }
-
     /// The roster shows members; this notice keeps just the group and its totals.
     /// Roll details and member names remain in the unmodified Log.
     fn group_arrival_notice(&self, start: usize) -> Option<String> {
@@ -3535,8 +3699,20 @@ impl Run {
         let block = all
             .iter()
             .map(|group| {
+                // FI5 and the fourth review of PR 371: the block is as wide as the widest status
+                // each group can show, so joining (`Added in setup`) widens nothing and no Add
+                // moves under the DM's pointer.
                 let status = self.group_status(group, self.group_joined(group));
-                let totals = Self::group_totals_text(group);
+                let widest = self.widest_status(group);
+                let small = Type::Small.font(ui);
+                let status = if design::number_width(ui, &status, &small)
+                    > design::number_width(ui, &widest, &small)
+                {
+                    status
+                } else {
+                    widest
+                };
+                let totals = group.facts(true);
                 let heading = design::number_width(
                     ui,
                     &format!("{} {}", icons::DRAG, group.name),
@@ -3563,8 +3739,52 @@ impl Run {
         Some((add_width, block))
     }
 
+    /// Point 1 of the fourth review: a group that is no longer offered here
+    /// (`OfferedGroups::of`, as this list shows them) drops its kept Arrivals line. It runs where
+    /// the list is built, also when the list is empty, once for each read of the groups.
+    pub(super) fn keep_offered_lines(&mut self) {
+        let revision = self.groups_revision();
+        if self.arrival_lines_seen == Some(revision) {
+            return;
+        }
+        self.arrival_lines_seen = Some(revision);
+        let offered: std::collections::BTreeSet<Uuid> = self
+            .groups
+            .as_ref()
+            .map(|groups| {
+                let shown = super::OfferedGroups::of(groups, self.source);
+                shown
+                    .own
+                    .iter()
+                    .chain(&shown.any)
+                    .chain(&shown.other)
+                    .map(|group| group.id)
+                    .collect()
+            })
+            .unwrap_or_default();
+        self.arrival_lines.retain(|id| offered.contains(id));
+    }
+
+    /// The widest join status a group can show (FI5): `Added in round NN`, with `Changed`.
+    fn widest_status(&self, group: &super::RunGroup) -> String {
+        let changed = group
+            .members
+            .iter()
+            .any(|member| member.overrides.changes_creature());
+        format!(
+            "Added in round {}{}",
+            self.state.round.max(10),
+            if changed {
+                format!(" · {} Changed", icons::CHANGED)
+            } else {
+                String::new()
+            }
+        )
+    }
+
     /// Returns the group the DM chooses to add. Those in tonight's plan come first.
     fn group_list(&mut self, ui: &mut egui::Ui, arrival: Option<(f32, f32)>) -> Option<Uuid> {
+        self.keep_offered_lines();
         let c = colors();
         let Some(groups) = self.groups.clone() else {
             design::heading(
@@ -3767,7 +3987,6 @@ impl Run {
             vec2(block.min(ui.available_width()), Density::Read.control()),
             egui::Sense::DRAG,
         );
-        let totals_text = Self::group_totals_text(group);
         let heading_width = design::number_width(
             ui,
             &format!("{} {name}", icons::DRAG),
@@ -3778,48 +3997,69 @@ impl Run {
         } else {
             design::number_width(ui, &status, &Type::Small.font(ui)) + design::L
         };
-        // R1 (FL3, FI1, FJ1, FB2): `Fight after` never gives way. The one difficulty line
-        // (`difficulty::Line`) decides what does, in its order: the member count, then the
-        // side, then the XP number; it never adds a line. The name is the heading's.
-        let side = style::human_label(&group.side);
-        let members = group.count_label();
-        let fight = rating.as_ref().map(|fight| {
+        // R1 (FL3, FI1, FJ1, FB2): `Fight after` never gives way, and every group that can
+        // join says it, also when the fight has no word (FK3: `XP not known` in the word's
+        // place). The one difficulty line (`difficulty::Line`) decides the order of the words
+        // (side, then count; FJ2, FC7) and what gives way: the member count, then the side,
+        // then the XP number; it never adds a line. The name is the heading's.
+        let totals_text = group.facts(true);
+        let no_form = crate::difficulty::Difficulty::default();
+        let (side, members, worth) = (
+            style::human_label(&group.side),
+            group.count_label(),
+            group.xp_label(),
+        );
+        let line = || {
             crate::difficulty::Line::fight_after(
-                fight,
+                rating.as_ref().unwrap_or(&no_form),
                 crate::difficulty::FightAfter {
-                    name,
-                    members: &members,
                     side: &side,
+                    members: &members,
+                    worth: &worth,
                 },
             )
-        });
-        let after_name = |text: &str| -> String {
-            text.strip_prefix(name.as_str())
-                .map_or(text, |rest| rest.trim_start_matches(" · "))
-                .to_owned()
         };
-        // R1: the line's own facts (members, side, XP number) give way so that the status words
-        // keep their place in the heading (they are not the line's); only where even the
-        // shortest line and the status do not fit together do the status words leave the
-        // heading, as before. `Fight after` and its word never give way.
-        let room = grip.rect.width() - heading_width - design::L;
-        let width = |text: &str| design::number_width(ui, &after_name(text), &Type::Small.font(ui));
-        let fit_in = |room: f32| {
-            fight
-                .as_ref()
-                .and_then(|line| line.fit(|text| width(text) <= room))
-                .filter(|fitted| width(&fitted.text()) <= room)
-        };
-        let (fitted, status_in_heading) = match fit_in(room - status_room) {
-            Some(fitted) if !status.is_empty() => (Some(fitted), true),
-            _ => (fit_in(room), false),
-        };
-        // A group with no word keeps its totals, where they fit, and its status beside them.
-        let totals = design::number_width(ui, &totals_text, &Type::Small.font(ui));
-        let status_in_heading = status_in_heading
-            || (fight.is_none() && !status.is_empty() && totals + status_room <= room);
+        // Point 3 (round 29 review): the line's parts change only with the run, the groups or
+        // the scale, so its fit is kept by those revisions, its room and its font: an unchanged
+        // frame builds no line and measures nothing.
+        let content = (
+            self.revision,
+            self.groups_revision(),
+            self.scale_revision(),
+            group.id,
+        );
+        let font = Type::Small.font(ui);
+        // Point 2 (round 29 review, R1): the heading reserves the smallest COMPLETE
+        // `Fight after: <word or reason>` first, and the title shortens in what is left
+        // (`heading_split`, which also holds the rule for a heading too narrow for both).
+        let shortest = self
+            .arrival_lines
+            .shortest(ui, &group.id, content, &font, line);
+        let first_word = name.split_whitespace().next().unwrap_or(name);
+        let floor = heading_width.min(design::number_width(
+            ui,
+            &format!("{} {first_word}…", icons::DRAG),
+            &Type::Strong.font(ui),
+        ));
+        // Point 3 of the fourth review: beside the title or on its own line is decided by the
+        // WIDEST answer this row can show (the longest word and the reasons), never by the
+        // current one, so a change of difficulty moves neither the answer nor Add.
+        let widest = WIDEST_ANSWERS
+            .iter()
+            .map(|answer| design::number_width(ui, answer, &font))
+            .fold(shortest, f32::max);
+        let split = heading_split(
+            grip.rect.width(),
+            heading_width,
+            floor,
+            if status.is_empty() { 0.0 } else { status_room },
+            (shortest, widest),
+        );
+        let (status_in_heading, title_width, room) = (split.status, split.title, split.room);
         let status_room = if status_in_heading { status_room } else { 0.0 };
-        let totals_in_heading = fitted.is_none() && totals + status_room <= room;
+        let fitted = self
+            .arrival_lines
+            .fit(ui, &group.id, content, room, &font, line);
         let shown = rating.as_ref().and_then(|fight| fight.rating.as_ref());
         // A pointer's way to do what the Add button does, so the keyboard does not stop here.
         grip.widget_info(|| {
@@ -3832,36 +4072,55 @@ impl Run {
                 ),
             )
         });
-        if let Some(rating) = shown {
-            let words = format!(
-                "{}. Adds {} XP. {FIGHT_AFTER}{}.",
-                totals_text,
+        let described = match (shown, rating.as_ref().and_then(|f| f.missing.as_ref())) {
+            (Some(rating), _) => Some(format!(
+                "{totals_text}. Adds {} XP. {FIGHT_AFTER}{}.",
                 crate::encounter_run::grouped_number(adds),
                 rating.form(true)
-            );
+            )),
+            (None, Some(missing)) => Some(format!(
+                "{totals_text}. {FIGHT_AFTER}{}.",
+                missing
+                    .words()
+                    .unwrap_or_else(|| missing.short().to_owned())
+            )),
+            (None, None) => None,
+        };
+        if let Some(words) = described {
             ui.ctx()
                 .accesskit_node_builder(grip.id, |node| node.set_description(words));
         }
         // The line's facts muted, the word in the text colour, as every difficulty line.
         let mut job = egui::text::LayoutJob::default();
         if let Some(fitted) = &fitted {
-            let lead = after_name(&fitted.lead);
+            let lead = &fitted.lead;
             if !lead.is_empty() {
-                crate::difficulty::append(
-                    &mut job,
-                    ui,
-                    Type::Small,
-                    &format!("{lead} · "),
-                    c.muted,
-                );
+                let lead = if fitted.form.is_empty() {
+                    lead.clone()
+                } else {
+                    format!("{lead} · ")
+                };
+                crate::difficulty::append(&mut job, ui, Type::Small, &lead, c.muted);
             }
             crate::difficulty::append_form(&mut job, ui, Type::Small, &fitted.form);
-        } else if totals_in_heading {
-            crate::difficulty::append(&mut job, ui, Type::Small, &totals_text, c.muted);
+        }
+        // Point 3 of the third review: an answer wider than its own line wraps at word
+        // boundaries there; it is never cut with `…`.
+        if fitted.as_ref().is_some_and(|fitted| fitted.wrap) {
+            job.wrap.max_width = room.max(1.0);
         }
         let galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
-        let word_rect = Align2::RIGHT_CENTER.anchor_size(grip.rect.right_center(), galley.size());
-        ui.painter().galley(word_rect.min, galley, c.text);
+        // Point 3: with no room for the title's first word and the answer together, the answer
+        // takes its own line under the heading, whole, and the title has the heading.
+        let word_rect = if split.below {
+            Rect::from_min_size(grip.rect.right_center(), egui::Vec2::ZERO)
+        } else {
+            Align2::RIGHT_CENTER.anchor_size(grip.rect.right_center(), galley.size())
+        };
+        let below = split.below.then_some(galley.clone());
+        if !split.below {
+            ui.painter().galley(word_rect.min, galley, c.text);
+        }
         if status_in_heading {
             ui.painter().text(
                 pos2(
@@ -3883,9 +4142,14 @@ impl Run {
         .into_galley(
             ui,
             Some(egui::TextWrapMode::Truncate),
-            // The line was fitted to the room the whole name leaves, so the name keeps it.
-            (word_rect.left() - status_room - grip.rect.left() - design::S)
-                .max(heading_width.min(grip.rect.width())),
+            // Point 2: the line kept its smallest complete form; the title has what is left.
+            // With the answer on its own line, `heading_split` alone owns the title's width
+            // (fifth review: no later cap may take it below its first word).
+            if split.below {
+                title_width
+            } else {
+                title_width.min(word_rect.left() - status_room - grip.rect.left() - design::S)
+            },
             Type::Strong.font(ui),
         );
         ui.painter().galley(
@@ -3919,7 +4183,10 @@ impl Run {
             movable.then_some(GroupDrag(group.id)),
             design::Ghost::new(icons::ADD, name),
         );
-        if fitted.is_none() && !totals_in_heading {
+        if let Some(galley) = below {
+            let (rect, _) = ui.allocate_exact_size(galley.size(), egui::Sense::hover());
+            ui.painter().galley(rect.min, galley, c.text);
+        } else if fitted.is_none() {
             ui.add(egui::Label::new(Type::Small.rich(ui, &totals_text).color(c.muted)).wrap());
         }
         let mut add = false;
@@ -3956,16 +4223,9 @@ impl Run {
         // decides by its widest join status too, so a second join that changes the words never
         // changes the row's shape.
         // A group that joined can show `Added in round N` again; its row keeps that room.
-        let widest = format!(
-            "Added in round {}{}",
-            self.state.round.max(10),
-            if changed {
-                format!(" · {} Changed", icons::CHANGED)
-            } else {
-                String::new()
-            }
-        );
-        let widest_in_heading = totals_in_heading
+        let widest = self.widest_status(group);
+        // A heading with no form says only the group's facts; it may hold the status too.
+        let widest_in_heading = fitted.as_ref().is_some_and(|fitted| fitted.form.is_empty())
             && heading_width
                 + design::L
                 + design::number_width(
@@ -4712,6 +4972,14 @@ impl Run {
                 });
                 correction_reason(ui, "Type a note first.", empty);
                 if !p.notes.is_empty() {
+                    // FJ8 (iter-29 G127): the notes already added have their own label, `S`
+                    // below the reason line, so they never read as the reason's second sentence.
+                    design::gap(ui, design::Gap::S);
+                    ui.add(
+                        egui::Label::new(
+                            Type::Small.rich(ui, "Notes so far").color(colors().muted),
+                        ),
+                    );
                     ui.add(
                         egui::Label::new(Type::Body.rich(ui, &p.notes).color(colors().text)).wrap(),
                     );
@@ -5188,7 +5456,7 @@ impl Run {
         design::rule(ui);
         design::gap(ui, design::Gap::XS);
         ui.horizontal(|ui| {
-            if self.closing {
+            if self.closing.is_open() {
                 let note = if self.untouched_setup() {
                     "Nothing was done, so no run is kept."
                 } else {
@@ -5840,7 +6108,7 @@ impl Run {
                     design::pane::FillsReason::Columns,
                 )),
                 |ui| {
-                    if self.closing {
+                    if self.closing.is_open() {
                         ui.horizontal(|ui| {
                             closed = self.close_confirmation(ui, "The run stays saved.");
                         });
@@ -6804,9 +7072,17 @@ pub(super) fn undo_forms(
         actions.push(rest);
     }
     let mut seen = std::collections::HashSet::new();
+    // SP3 (`docs/design-system.md:1538`): a sheet's step gives up `D&D Beyond` before any
+    // short form of its target. With the source, only the whole label; then every form without.
+    let sourced = actions.len() > 1;
     let forms = actions
         .iter()
-        .flat_map(|action| action_forms(action, target, participants))
+        .enumerate()
+        .flat_map(|(at, action)| {
+            let forms = action_forms(action, target, participants);
+            let keep = if sourced && at == 0 { 1 } else { forms.len() };
+            forms.into_iter().take(keep)
+        })
         .filter(|words| keeps_names(words) && seen.insert(words.clone()))
         .map(|words| format!("{prefix}{words}"))
         .collect();
@@ -7633,6 +7909,9 @@ struct Extra {
     /// Each effect shows as its plain words: the row with each time taken away (X5, the
     /// ruling on PR 276), whose lines and height the row keeps.
     as_plain: bool,
+    /// R27 (G176, amended): this step owes a concentration save whose DC gave way, and a roll's
+    /// result follows the mark. Where the mark ends the line it reads `Conc save due`.
+    save_owed: bool,
 }
 
 /// The effects a row shows: the first ones with their words, each with its count, then the
@@ -7754,12 +8033,80 @@ impl RowLayout {
     /// (Bloodied, Conc) never give way. Only when the two parts fit in none of these does the
     /// result take a line of its own, and the row grows by it. The hover and the Log keep it
     /// whole.
-    fn with_badge(mut self, ui: &egui::Ui, badge: Option<&str>) -> Self {
+    fn with_badge(self, ui: &egui::Ui, badge: Option<&str>) -> Self {
+        let input = self.input.clone();
+        let placed = self.place_badge(ui, badge);
+        match (badge, input) {
+            (Some(badge), Some(input)) => placed.with_save_due(ui, badge, input),
+            _ => placed,
+        }
+    }
+
+    /// R27 (amended, G176): a result follows this row's bare `Conc` mark while a save is owed
+    /// (its DC gave way). The mark then reads `Conc save due` where that keeps the row's place
+    /// and the result's room; else the row shows its DC (`Conc · save DC 10`) and the result
+    /// takes its own line (R8's last form). A row with its DC shown is unchanged.
+    fn with_save_due(self, ui: &egui::Ui, badge: &str, input: Arc<RowInput>) -> Self {
+        let bare = self.second_line.as_ref().is_some_and(|line| {
+            let text = line.text().trim_end();
+            text.ends_with("Conc") && !text.contains("save DC")
+        });
+        if self.badge_below || input.conc_dc.is_none() || !bare {
+            return self;
+        }
+        let font = Type::Small.font(ui);
+        let parts: Vec<&str> = badge.split(" · ").collect();
+        let result = parts[parts.len().saturating_sub(2)..].join(" · ");
+        let whole = design::number_width(ui, &result, &font);
+        let count = input.words.conditions.len();
+        let due = Self::measured(
+            ui,
+            &input,
+            (
+                count,
+                BonusFit::All,
+                &Extra {
+                    as_plain: true,
+                    save_owed: true,
+                    ..Extra::default()
+                },
+            ),
+        );
+        if due.keeps_place_of(&self, input.scale) && whole <= badge_place(&due, 0.0).2 {
+            return Self {
+                art: self.art.clone(),
+                input: Some(input),
+                ..due
+            };
+        }
+        let mut dc = Self::measured(
+            ui,
+            &input,
+            (
+                count,
+                BonusFit::All,
+                &Extra {
+                    as_plain: true,
+                    conc_dc: input.conc_dc,
+                    ..Extra::default()
+                },
+            ),
+        );
+        dc.badge_below = true;
+        Self {
+            art: self.art.clone(),
+            input: Some(input),
+            ..dc
+        }
+    }
+
+    /// The old placing of a result, without R27's mark (see `with_badge`).
+    fn place_badge(mut self, ui: &egui::Ui, badge: Option<&str>) -> Self {
         self.badge_below = false;
         let base = self
             .without_effects
             .take()
-            .map(|base| base.with_badge(ui, badge));
+            .map(|base| base.place_badge(ui, badge));
         if let Some(badge) = badge {
             let font = Type::Small.font(ui);
             let parts: Vec<&str> = badge.split(" · ").collect();
@@ -8447,6 +8794,19 @@ impl RowLayout {
                     },
                     ..Default::default()
                 },
+            );
+        }
+        // R27 (G176, amended): a save is owed, its DC gave way, and the mark ends the line, where
+        // a roll's result follows it: the mark reads `Conc save due` (never `Conc Saved`).
+        if extra.save_owed
+            && extra.conc_dc.is_none()
+            && conc_end.is_some()
+            && conc_end == Some(job.text.chars().count())
+        {
+            job.append(
+                "\u{a0}save\u{a0}due",
+                0.0,
+                egui::TextFormat::simple(font.clone(), c.participant.concentrating),
             );
         }
         // Damage to a row marked Conc: its save, until the next step, in the room left.
@@ -9839,6 +10199,237 @@ mod tests {
                 "iter8-B-FT3: shared field column at {width}: {fields:?}"
             );
         }
+    }
+
+    /// Fourth review of PR 371, through `group_list` (as the app draws Arrivals). The group's
+    /// long first word puts the title's floor where, at some widths of the sweep, the heading
+    /// holds the floor and `Fight after: Low` but not `Fight after: Moderate`:
+    /// point 3: pressing Add across a difficulty boundary (Low to Moderate) moves no Add, at
+    /// any width, because the heading reserves the widest answer, not the current one;
+    /// point 1: when the last offered group goes to another encounter, the list is empty and
+    /// its kept line is dropped.
+    #[test]
+    fn iter_29_r1_arrivals_add_stays_across_a_difficulty_boundary() {
+        use egui_kittest::kittest::Queryable;
+        use std::{cell::RefCell, rc::Rc};
+        let base = super::super::tests::run().state.participants[0]
+            .definition
+            .clone();
+        let with = |field: &str, value: &str| {
+            let mut entry = (*base).clone();
+            entry.id = Uuid::new_v4();
+            entry
+                .fields
+                .insert(field.into(), serde_yaml_ng::from_str(value).unwrap());
+            entry
+        };
+        let name = "Stonewatchers-of-the-Southern-Road Company";
+        let label = format!("Add {name} to the initiative list");
+        let mut moved = Vec::new();
+        for width in (300..=640).step_by(8) {
+            let heroes: Vec<_> = (0..5)
+                .map(|_| with("splat_character", "{level: 3}"))
+                .collect();
+            let mut participants: Vec<_> = heroes
+                .iter()
+                .enumerate()
+                .map(|(i, hero)| {
+                    Participant::new(
+                        format!("hero{i}"),
+                        "party".into(),
+                        hero.clone(),
+                        &serde_yaml_ng::Mapping::new(),
+                        true,
+                    )
+                    .unwrap()
+                })
+                .collect();
+            participants.push(
+                Participant::new(
+                    "foe".into(),
+                    "enemies".into(),
+                    with("splat_creature", "{type: humanoid, cr_text: '1/8'}"),
+                    &serde_yaml_ng::Mapping::new(),
+                    true,
+                )
+                .unwrap(),
+            );
+            let mut run =
+                super::super::Run::new("Road".into(), participants, String::new()).unwrap();
+            run.scale = Some(Arc::new(crate::difficulty::Scale {
+                budgets: Some(crate::difficulty::builtin_budgets()),
+                party: heroes.iter().map(|hero| (hero.id, Some(3))).collect(),
+            }));
+            // 25 XP now; the group adds 450: Low (475), then Moderate (925) after one Add.
+            let group = Arc::new(super::super::RunGroup {
+                id: Uuid::new_v4(),
+                path: "Watchers.md".into(),
+                name: name.into(),
+                side: "enemies".into(),
+                encounter: None,
+                encounter_name: None,
+                members: vec![super::super::GroupMember {
+                    entry: Arc::new(with("splat_creature", "{type: humanoid, cr_text: '2'}")),
+                    count: 1,
+                    overrides: Default::default(),
+                }],
+                notes: String::new(),
+                xp: 450,
+                xp_unknown: vec![],
+                unavailable: 0,
+                unavailable_members: vec![],
+                problem: None,
+                warnings: vec![],
+            });
+            run.groups = Some(Arc::new(vec![group.clone()]));
+            let run = Rc::new(RefCell::new(run));
+            let shown = run.clone();
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(width as f32, 800.0))
+                .build(move |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let mut run = shown.borrow_mut();
+                        let arrival = run.arrival_block(ui);
+                        if let Some(id) = run.group_list(ui, arrival) {
+                            run.add_group_from_panel(id);
+                        }
+                    });
+                });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(3);
+            let before = harness.get_by_label(&label).rect();
+            harness.get_by_label(&label).click();
+            harness.run_steps(3);
+            let words = |run: &super::super::Run| {
+                run.arrival_words
+                    .as_ref()
+                    .and_then(|(_, words)| words.get(&group.id))
+                    .and_then(|(fight, _)| fight.rating.as_ref().map(|rating| rating.word))
+            };
+            assert_eq!(
+                words(&run.borrow()),
+                Some(crate::difficulty::Word::Moderate),
+                "the press crossed the boundary at {width}"
+            );
+            let after = harness.get_by_label(&label).rect();
+            if (after.top() - before.top()).abs() > 0.5
+                || (after.left() - before.left()).abs() > 0.5
+            {
+                moved.push((width, before, after));
+            }
+            // Point 1: the last offered group goes to another encounter; the list is empty and
+            // drops the group's kept line.
+            assert!(run.borrow().arrival_lines.holds(&group.id));
+            {
+                let mut run = run.borrow_mut();
+                let mut elsewhere = (*group).clone();
+                elsewhere.encounter = Some(Uuid::new_v4());
+                run.source = Some(Uuid::new_v4());
+                run.groups = Some(Arc::new(vec![Arc::new(elsewhere)]));
+            }
+            harness.run_steps(2);
+            assert!(harness.query_by_label(&label).is_none());
+            assert!(
+                !run.borrow().arrival_lines.holds(&group.id),
+                "iter-29-R1 point 1 at {width}: the empty list dropped the kept line"
+            );
+        }
+        assert!(moved.is_empty(), "iter-29-R1 point 3: Add moved: {moved:?}");
+        // Fifth review: at the narrowest headings, with the answer on its own line, the title
+        // keeps at least its first word (`heading_split`'s floor) as drawn by the production
+        // row. A long first word puts that floor within a few pixels of the heading's width at
+        // some width of this sweep; the title then ends `…` right after the whole first word.
+        let first = "Stonewatchers-of-the-Southern-Road-and-the-Ember-Hills";
+        let long = format!("{first} Company of Wardens");
+        let mut at_floor = 0;
+        for width in 340..=520 {
+            let run = super::super::tests::run();
+            let mut group = (*run.groups.clone().map_or_else(
+                || {
+                    Arc::new(super::super::RunGroup {
+                        id: Uuid::new_v4(),
+                        path: "Long.md".into(),
+                        name: String::new(),
+                        side: "enemies".into(),
+                        encounter: None,
+                        encounter_name: None,
+                        members: vec![super::super::GroupMember {
+                            entry: run.state.participants[0].definition.clone(),
+                            count: 1,
+                            overrides: Default::default(),
+                        }],
+                        notes: String::new(),
+                        xp: 0,
+                        xp_unknown: vec![],
+                        unavailable: 0,
+                        unavailable_members: vec![],
+                        problem: None,
+                        warnings: vec![],
+                    })
+                },
+                |groups| groups[0].clone(),
+            ))
+            .clone();
+            group.name = long.clone();
+            let mut run = run;
+            run.groups = Some(Arc::new(vec![Arc::new(group)]));
+            let floor = std::rc::Rc::new(std::cell::Cell::new(0.0_f32));
+            let measured = floor.clone();
+            let floor_words = format!("{} {first}…", icons::DRAG);
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(width as f32, 600.0))
+                .build(move |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        measured.set(design::number_width(
+                            ui,
+                            &floor_words,
+                            &Type::Strong.font(ui),
+                        ));
+                        let arrival = run.arrival_block(ui);
+                        run.group_list(ui, arrival);
+                    });
+                });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            let title = harness
+                .output()
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text.ends_with(&long) => Some(
+                        text.galley
+                            .rows
+                            .iter()
+                            .map(|row| row.text())
+                            .collect::<String>(),
+                    ),
+                    _ => None,
+                });
+            let Some(title) = title else { continue };
+            // The real heading: the drag handle's own rect. The floor: the first word with the
+            // drag mark and `…`, in the title's type.
+            let heading = harness
+                .query_by_label_contains("Drag Stonewatchers")
+                .map(|node| node.rect().width());
+            let floor = floor.get();
+            let Some(heading) = heading else { continue };
+            if heading < floor {
+                continue;
+            }
+            let shown = title.trim_start_matches(|c: char| c != ' ').trim_start();
+            assert!(
+                shown.starts_with(first),
+                "iter-29-R1 fifth review at {width} (heading {heading}, floor {floor}): the \
+                 title {title:?} lost its first word"
+            );
+            if heading - floor < design::S {
+                at_floor += 1;
+            }
+        }
+        assert!(
+            at_floor > 0,
+            "the sweep reached a heading less than S wider than the floor"
+        );
     }
 
     #[test]
@@ -11331,6 +11922,67 @@ mod tests {
                     line.contains("Bloodied") && line.contains("Conc"),
                     "iter-28-R-R8: both marks stay: {line}"
                 );
+                // R27 (amended, iter-29 G176): the line holds the DC, or the mark reads `Conc save
+                // due` before the result; never a bare `Conc` and never `Conc save` before it.
+                let end = line.trim_end();
+                assert!(
+                    line.contains("save DC 10") || end.ends_with("Conc\u{a0}save\u{a0}due"),
+                    "iter-29-R1-G176: {line}"
+                );
+                assert!(
+                    !end.ends_with("Conc") && !end.ends_with("Conc\u{a0}save"),
+                    "iter-29-R1-G176: {line}"
+                );
+                // Across widths: where the DC gave way and the result is beside the mark, the
+                // mark reads `Conc save due`; and that form is reached (so this check can fail).
+                let mut due = 0;
+                for width in (300..=900).step_by(4) {
+                    let layout = RowLayout::fitted(
+                        ui,
+                        width as f32,
+                        &wolf,
+                        (None, Some(10), false),
+                        scale,
+                        RowFit::Natural,
+                        0.0,
+                    )
+                    .with_badge(ui, Some("Saved · 1 damage (half)"));
+                    let line = layout.second_line.as_ref().unwrap().text().to_owned();
+                    let end = line.trim_end();
+                    if !layout.badge_below && !line.contains("save DC 10") {
+                        assert!(
+                            end.ends_with("Conc\u{a0}save\u{a0}due"),
+                            "iter-29-R1-G176 at {width}: {line}"
+                        );
+                        due += 1;
+                    }
+                }
+                assert!(due > 0, "iter-29-R1-G176: no width reached `Conc save due`");
+                // The earlier trap: with conditions after the mark, `due` changes nothing, and
+                // no condition word folds into `N more` for it, at 450 px.
+                let crowded = || {
+                    RowLayout::fitted(
+                        ui,
+                        450.0,
+                        &p,
+                        (None, Some(10), false),
+                        scale,
+                        RowFit::Natural,
+                        0.0,
+                    )
+                };
+                let text = |layout: RowLayout| {
+                    layout
+                        .second_line
+                        .map(|line| line.text().to_owned())
+                        .unwrap_or_default()
+                };
+                let result = Some("Saved · 1 damage (half)");
+                assert_eq!(
+                    text(crowded().with_badge(ui, result)),
+                    text(crowded().place_badge(ui, result)),
+                    "iter-29-R1-G176 at 450"
+                );
                 assert_eq!(
                     saved.height(scale),
                     row(None).height(scale)
@@ -11795,12 +12447,21 @@ mod tests {
                     |width: f32| move_words(ui, "Shrine Reserve", "Brannoch Vale", &font, width);
                 assert_eq!(alone(plain_width).as_deref(), Some(plain));
                 assert_eq!(alone(plain_width - 1.0), None);
-                // The name shortens first, while the source fits.
-                let named = format!("Undo: {SHEET_SOURCE}HP for Brannoch…");
-                assert_eq!(words(&full, design::number_width(ui, &named, &font)), named);
-                // Then the source goes, and the target stays.
+                // SP3 (iter-29 G177, `docs/design-system.md:1538`): the source goes first, and
+                // the name stays whole; only then does the name shorten. Never `D&D Beyond HP
+                // for Brannoch…`.
+                let sourceless = format!("Undo: HP for {}", p.name);
+                assert_eq!(
+                    words(&full, wide - 2.0),
+                    sourceless,
+                    "iter-29-R1-G177: one pixel short of the whole label"
+                );
                 let short = "Undo: HP for Brannoch…";
                 assert_eq!(words(&full, design::number_width(ui, short, &font)), short);
+                let named = format!("Undo: {SHEET_SOURCE}HP for Brannoch…");
+                for width in [wide - 2.0, design::number_width(ui, &named, &font)] {
+                    assert_ne!(words(&full, width), named, "iter-29-R1-G177 at {width}");
+                }
                 // A count of characters has no name to shorten.
                 let many = format!("Undo: {SHEET_SOURCE}values for 2 characters");
                 let target = "Undo: values for 2 characters";
@@ -12338,7 +12999,7 @@ mod tests {
         harness.get_by_label("Close run").click();
         harness.run_steps(2);
         assert!(closed.get());
-        assert!(!run.borrow().closing);
+        assert!(!run.borrow().closing.is_open());
     }
 
     #[test]
@@ -13251,11 +13912,66 @@ mod tests {
 
     #[test]
     fn iter_1_b_unsaved_close_still_asks_and_keeps_the_run() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+        use std::{cell::RefCell, rc::Rc};
         let mut run = super::super::tests::run();
         run.disk_conflict = true;
         assert!(!run.request_close());
-        assert!(run.closing);
+        assert!(run.closing.is_open());
         assert!(!run.confirm_close);
+        // FO2 (iter-29 G44, `signed-in` 16): every opening of the close dialog gives Keep
+        // running the default focus (`docs/design-system.md:218`), also a second opening in
+        // the same view after Keep running.
+        let run = Rc::new(RefCell::new(run));
+        let shown = run.clone();
+        let away = Rc::new(std::cell::Cell::new(false));
+        let elsewhere = away.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(960.0, 640.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let mut run = shown.borrow_mut();
+                    if run.closing.is_open() && !elsewhere.get() {
+                        run.close_dialog(ui, "The run stays saved.");
+                    }
+                });
+            });
+        design::theme::install(&harness.ctx);
+        let keep_focused = |harness: &egui_kittest::Harness<'_>| {
+            harness
+                .query_by_label("Keep running")
+                .is_some_and(|node| node.accesskit_node().is_focused())
+        };
+        for opening in ["first", "second", "third"] {
+            harness.run_steps(3);
+            assert!(
+                keep_focused(&harness),
+                "iter-29-R1-G44: the {opening} opening focuses Keep running"
+            );
+            harness.get_by_label("Keep running").click();
+            harness.run_steps(2);
+            assert!(
+                !run.borrow().closing.is_open(),
+                "Keep running keeps the run"
+            );
+            assert!(harness.query_by_label("Keep running").is_none());
+            assert!(!run.borrow_mut().request_close());
+        }
+        // `signed-in` 16: the dialog stays open while the DM is on another page (it is not
+        // drawn, and the focus goes elsewhere); when it shows again, Keep running has the focus.
+        harness.run_steps(3);
+        assert!(keep_focused(&harness));
+        away.set(true);
+        harness
+            .ctx
+            .memory_mut(|memory| memory.request_focus(egui::Id::new("another page")));
+        harness.run_steps(3);
+        away.set(false);
+        harness.run_steps(3);
+        assert!(
+            keep_focused(&harness),
+            "iter-29-R1-G44: the dialog that shows again focuses Keep running"
+        );
 
         // Spell slots kept only here are lost on close, so the close asks first.
         let mut run = super::super::tests::run();
@@ -13264,8 +13980,408 @@ mod tests {
         run.syncs.insert(0, sync);
         assert!(!run.unsent_only_here_names().is_empty());
         assert!(!run.request_close());
-        assert!(run.closing);
+        assert!(run.closing.is_open());
         assert!(!run.confirm_close);
+    }
+
+    /// Point 3 of the third review: which widths reach the own-line form. A group's heading is
+    /// as wide as the group block, which is never narrower than Initiative, its field and Add
+    /// (or the panel at its smallest, 340 px less its margins). At that width every smallest
+    /// answer fits on its own line, so the wrap of `Line::fit_or_wrap` is not reached in the
+    /// app; it is there for any narrower room.
+    #[test]
+    fn iter_29_r1_the_smallest_arrivals_heading_holds_every_shortest_answer() {
+        let ctx = egui::Context::default();
+        design::theme::install(&ctx);
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let font = Type::Small.font(ui);
+                let gap = ui.spacing().item_spacing.x;
+                let controls = design::number_width(ui, "Initiative", &font)
+                    + gap
+                    + ARRIVAL_FIELD_WIDTH
+                    + design::XS
+                    + gap
+                    + Action::secondary("Add")
+                        .density(Density::Read)
+                        .natural_width(ui);
+                let smallest = controls.min(design::PANEL_MIN_WIDTH - 2.0 * design::L);
+                for answer in WIDEST_ANSWERS {
+                    let width = design::number_width(ui, answer, &font);
+                    assert!(width <= smallest, "{answer}: {width} in {smallest}");
+                }
+            });
+        });
+    }
+
+    /// Points 2 and 3 of the round 29 reviews (R1): an Arrivals heading reserves the smallest
+    /// complete `Fight after: …` before its title; the title shortens, never below its first
+    /// word; where even that and the answer do not fit, the answer takes its own line under the
+    /// heading at the whole width. At no width is the answer's room less than that answer.
+    #[test]
+    fn iter_29_r1_the_heading_reserves_fight_after_before_the_title() {
+        let (title, floor, shortest) = (250.0, 60.0, 100.0);
+        for whole in 1..=600 {
+            let whole = whole as f32;
+            for status in [0.0, 80.0] {
+                let split = heading_split(whole, title, floor, status, (shortest, shortest));
+                assert!(
+                    split.room >= shortest - 0.01 || (split.below && split.room == whole),
+                    "{whole} {status}: {split:?}"
+                );
+                if split.below {
+                    assert!(whole < floor + design::L + shortest, "{whole}: {split:?}");
+                    assert!(!split.status);
+                } else {
+                    assert!(split.title >= floor, "{whole}: {split:?}");
+                    assert!(split.title <= title);
+                }
+                // The status words stay only beside the whole title.
+                if split.status {
+                    assert_eq!(split.title, title, "{whole}: {split:?}");
+                }
+            }
+        }
+        // Fourth review: with no status words, the current answer changes neither the place of
+        // the answer (beside or below) nor the title's width; only the widest answer does.
+        for whole in 1..=600 {
+            let whole = whole as f32;
+            let low = heading_split(whole, title, floor, 0.0, (60.0, shortest));
+            let high = heading_split(whole, title, floor, 0.0, (shortest, shortest));
+            assert_eq!((low.below, low.title), (high.below, high.title), "{whole}");
+        }
+        // The boundary: exactly the first word, its gap and the answer.
+        let edge = heading_split(
+            floor + design::L + shortest,
+            title,
+            floor,
+            0.0,
+            (shortest, shortest),
+        );
+        assert_eq!(
+            (edge.below, edge.title, edge.room),
+            (false, floor, shortest)
+        );
+        let under = heading_split(
+            floor + design::L + shortest - 1.0,
+            title,
+            floor,
+            0.0,
+            (shortest, shortest),
+        );
+        assert!(under.below);
+    }
+
+    /// FL4, AL2, FL2, SL3 (iter-29 G178): the pending line names the change that waits, in the
+    /// HP form of the conflict's buttons; with nothing to compare, the general words.
+    #[test]
+    fn iter_29_r1_g178_the_pending_line_names_what_waits() {
+        use crate::combat_sync::CombatSync;
+        let pending = CombatSync::simulated_state(SyncState::Pending, 7, 62, 8);
+        assert_eq!(
+            pending_words(&pending),
+            "Its change to 53/62 HP has not reached D&D Beyond yet. Splat tries again by itself."
+        );
+        let same = CombatSync::simulated_state(SyncState::Error, 7, 62, 8);
+        assert_eq!(pending_words(&same), PENDING_WORDS);
+        // Astra, PR 371: HP holds two values; only those that wait are named. Temporary HP
+        // alone, then with HP.
+        let changed = |removed: i64, temporary: i64| {
+            let mut sync = CombatSync::simulated_state(SyncState::Pending, 7, 62, 8);
+            let mut hp = sync.values()["hp"].clone();
+            hp["removedHitPoints"] = removed.into();
+            hp["temporaryHitPoints"] = temporary.into();
+            sync.set_group("hp", hp);
+            sync
+        };
+        assert_eq!(
+            pending_words(&changed(8, 5)),
+            "Its change to 5 temporary HP has not reached D&D Beyond yet. Splat tries again by itself."
+        );
+        assert_eq!(
+            pending_words(&changed(9, 5)),
+            "Its changes to 53/62 HP and 5 temporary HP have not reached D&D Beyond yet. Splat tries again by itself."
+        );
+        // Not each frame: the ended view works the line out again only when the sync's values
+        // or the sheet change (`values_revision`).
+        use egui_kittest::kittest::NodeT;
+        use std::{cell::RefCell, rc::Rc};
+        let mut run = super::super::tests::run();
+        run.state.phase = super::super::Phase::Ended {
+            outcome: "Party won".into(),
+        };
+        run.syncs.insert(0, changed(8, 5));
+        run.hide_panel = false;
+        let work = || PENDING_WORK.with(std::cell::Cell::get);
+        let start = work();
+        let run = Rc::new(RefCell::new(run));
+        let shown = run.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(1200.0, 800.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    shown.borrow_mut().show(ui);
+                });
+            });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(3);
+        let first = work();
+        assert!(
+            first > start,
+            "the ended view shows the pending line: {:?}",
+            harness
+                .root()
+                .children_recursive()
+                .filter_map(|node| node.accesskit_node().label())
+                .filter(|label| label.contains("sync") || label.contains("Sync"))
+                .collect::<Vec<_>>()
+        );
+        harness.run_steps(5);
+        assert_eq!(
+            work(),
+            first,
+            "iter-29-R1-G178: an unchanged frame works nothing out"
+        );
+        // A new read of the sheet or a changed value gives a new revision; here the row's sync
+        // is replaced, as a new start does.
+        run.borrow_mut().syncs.insert(0, changed(8, 6));
+        harness.run_steps(2);
+        assert!(work() > first, "a changed value works the line out again");
+        // The kept line ends with its row: a row that goes (Undo of its arrival) takes its
+        // sync and its line with it.
+        {
+            let mut run = run.borrow_mut();
+            assert!(run.pending_lines.contains_key(&0));
+            let last = run.state.participants.len() - 1;
+            let sync = run.syncs.remove(&0).unwrap();
+            run.syncs.insert(last, sync);
+            run.pending_lines.insert(last, (0, String::new()));
+            run.state.participants.truncate(last);
+            run.forget_removed_participants();
+            assert!(
+                !run.pending_lines.contains_key(&last),
+                "iter-29-R1-G178: a removed row's line is gone"
+            );
+        }
+    }
+
+    /// iter-29 G44, through the WHOLE run view (as the app draws it, dock included): after the
+    /// close dialog's second opening, Keep running holds the focus and keeps it on the next
+    /// frames (no control under the dialog takes it), Enter keeps the run, and when the
+    /// dialog closes the focus is back where it was.
+    #[test]
+    fn iter_29_r1_the_open_close_dialog_keeps_the_focus_in_the_whole_view() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+        use std::{cell::RefCell, rc::Rc};
+        let mut run = super::super::tests::run();
+        for (index, total) in [20, 15, 10].into_iter().enumerate() {
+            run.apply(Command::Initiative(index, Some(total))).unwrap();
+        }
+        run.apply(Command::Begin).unwrap();
+        run.disk_conflict = true;
+        let run = Rc::new(RefCell::new(run));
+        let shown = run.clone();
+        // A second modal over it: the app's own close prompt, as `src/lib.rs` draws it.
+        let app_prompt = Rc::new(std::cell::Cell::new(false));
+        let prompt = app_prompt.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(1200.0, 800.0))
+            .build(move |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    shown.borrow_mut().show(ui);
+                });
+                // As `src/lib.rs` does it: the prompt asks for its default focus once per
+                // opening (a flag that the closed prompt clears), and nothing more.
+                let once = egui::Id::new("app_close_default_focused_test");
+                if prompt.get() {
+                    design::dialog(ctx, "close_app_test", "Close Splat?", |ui| {
+                        let keep = Action::secondary("Keep working").show(ui);
+                        if !ui.data(|data| data.get_temp::<bool>(once).unwrap_or(false)) {
+                            keep.request_focus();
+                            ui.data_mut(|data| data.insert_temp(once, true));
+                        }
+                        if keep.clicked() {
+                            prompt.set(false);
+                        }
+                    });
+                } else {
+                    ctx.data_mut(|data| data.remove::<bool>(once));
+                }
+            });
+        design::theme::install(&harness.ctx);
+        harness.run_steps(4);
+        let focused_name = |harness: &egui_kittest::Harness<'_>| {
+            harness
+                .root()
+                .children_recursive()
+                .find(|node| node.accesskit_node().is_focused())
+                .map(|node| node.accesskit_node().label().unwrap_or_default())
+        };
+        // Before the dialog: the Amount field has the focus, as after a step.
+        run.borrow_mut().focus_amount = true;
+        harness.run_steps(2);
+        let before = focused_name(&harness);
+        assert!(before.is_some(), "the Amount field has the focus first");
+        for (opening, key) in [("first", egui::Key::Enter), ("second", egui::Key::Escape)] {
+            // The DM's own way: the dock's Close run.
+            harness
+                .get_all_by_label("Close run")
+                .next()
+                .expect("Close run in the dock")
+                .click();
+            harness.run_steps(2);
+            // A request from under the dialog: the dock asks for the Amount field's focus
+            // (`focus_amount`). It may win its own frame; the dialog takes the focus back.
+            run.borrow_mut().focus_amount = true;
+            harness.run_steps(2);
+            // As in the app (`signed-in` 16): the focus is lost under the open dialog; the
+            // dialog takes it back.
+            harness.ctx.memory_mut(egui::Memory::stop_text_input);
+            harness.run_steps(2);
+            let mut seen = Vec::new();
+            for _ in 0..3 {
+                harness.run_steps(1);
+                seen.push(focused_name(&harness));
+            }
+            assert!(
+                seen.iter()
+                    .all(|name| name.as_deref() == Some("Keep running")),
+                "iter-29-R1-G44 whole view, {opening} opening: focus on each frame {seen:?}"
+            );
+            if opening == "first" {
+                // Fifth review, point 1: the app's close prompt opens over the run's dialog.
+                // The top modal holds the focus; the run's dialog does not take it back.
+                app_prompt.set(true);
+                // On EACH pass from its opening, the upper prompt's control has the focus; no
+                // pass is skipped, and an empty focus does not pass (a dead keyboard).
+                let mut top = Vec::new();
+                for _ in 0..4 {
+                    harness.run_steps(1);
+                    top.push(focused_name(&harness));
+                }
+                assert!(
+                    top.iter()
+                        .all(|name| name.as_deref() == Some("Keep working")),
+                    "iter-29-R1-G44 two modals: focus on each pass {top:?}"
+                );
+                // Enter dismisses the upper prompt; the focus goes back to the lower dialog.
+                harness.key_press(egui::Key::Enter);
+                harness.run_steps(1);
+                assert!(!app_prompt.get(), "Enter dismissed the upper prompt");
+                harness.run_steps(3);
+                assert_eq!(
+                    focused_name(&harness).as_deref(),
+                    Some("Keep running"),
+                    "the app prompt closed: the run's dialog has the focus again"
+                );
+            }
+            harness.key_press(key);
+            harness.run_steps(3);
+            assert!(
+                !run.borrow().closing.is_open() && !run.borrow().confirm_close,
+                "{key:?} keeps the run"
+            );
+            assert_eq!(
+                focused_name(&harness),
+                before,
+                "after the dialog closes the focus is back where it was"
+            );
+        }
+    }
+
+    /// Fifth review, point 2: a dialog's focus return is cancelled by a newer focus choice.
+    /// `Connect to sync` closes the dialog and the next page focuses its sign-in field: the
+    /// field keeps the focus. Keep running (Enter or Escape) gives the focus back to Amount.
+    #[test]
+    fn iter_29_r1_a_newer_focus_cancels_the_dialog_return() {
+        use egui_kittest::kittest::{NodeT, Queryable};
+        use std::{cell::RefCell, rc::Rc};
+        #[derive(Default)]
+        struct Page {
+            open: bool,
+            settings: bool,
+            focus_amount: bool,
+            focus_cookie: bool,
+        }
+        for (choice, key) in [
+            ("Connect to sync", None),
+            ("Keep running", Some(egui::Key::Enter)),
+            ("Keep running", Some(egui::Key::Escape)),
+        ] {
+            let page = Rc::new(RefCell::new(Page {
+                focus_amount: true,
+                ..Page::default()
+            }));
+            let shown = page.clone();
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(800.0, 600.0))
+                .build(move |ctx| {
+                    let owner = egui::Id::new("close_run_test");
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let mut page = shown.borrow_mut();
+                        // Amount stays drawn, so only the newer focus choice (not a gone
+                        // control) can keep the return from taking it back.
+                        let amount = Action::secondary("Amount").show(ui);
+                        if std::mem::take(&mut page.focus_amount) {
+                            amount.request_focus();
+                        }
+                        if page.settings {
+                            let cookie = Action::secondary("Paste session cookie").show(ui);
+                            if std::mem::take(&mut page.focus_cookie) {
+                                cookie.request_focus();
+                            }
+                        }
+                    });
+                    if shown.borrow().open {
+                        design::dialog(ctx, "close_run_test", "Close this run?", |ui| {
+                            let escape = ui.input_mut(|i| {
+                                i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)
+                            });
+                            let keep = Action::secondary("Keep running").show(ui);
+                            design::dialog_default(ui, &keep, owner);
+                            let connect = Action::secondary("Connect to sync").show(ui);
+                            let mut page = shown.borrow_mut();
+                            if keep.clicked() || escape || connect.clicked() {
+                                page.open = false;
+                                design::dialog_return_focus(ui.ctx(), owner);
+                            }
+                            if connect.clicked() {
+                                // As the app does: Settings opens and asks for its field.
+                                page.settings = true;
+                                page.focus_cookie = true;
+                            }
+                        });
+                    }
+                });
+            design::theme::install(&harness.ctx);
+            harness.run_steps(3);
+            let focused_name = |harness: &egui_kittest::Harness<'_>| {
+                harness
+                    .root()
+                    .children_recursive()
+                    .find(|node| node.accesskit_node().is_focused())
+                    .map(|node| node.accesskit_node().label().unwrap_or_default())
+            };
+            assert_eq!(focused_name(&harness).as_deref(), Some("Amount"));
+            page.borrow_mut().open = true;
+            harness.run_steps(3);
+            assert_eq!(focused_name(&harness).as_deref(), Some("Keep running"));
+            match key {
+                Some(key) => harness.key_press(key),
+                None => harness.get_by_label(choice).click(),
+            }
+            harness.run_steps(5);
+            let expected = if key.is_some() {
+                "Amount"
+            } else {
+                "Paste session cookie"
+            };
+            assert_eq!(
+                focused_name(&harness).as_deref(),
+                Some(expected),
+                "iter-29-R1-G44 return after {choice} {key:?}"
+            );
+        }
     }
 
     #[test]
