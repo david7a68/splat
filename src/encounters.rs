@@ -222,10 +222,6 @@ struct OwnedGroupsFound {
     found: design::save_row::Diagnosis<'static>,
     origin: Option<design::save_row::DraftOrigin>,
     footer: Option<String>,
-    /// N4: the cause that the footer's next step answers, in the words Save says it (`Group
-    /// <name>: <cause>`), so the footer can leave out a stored failed-action message that only
-    /// repeats it, and keep any other.
-    cause: Option<String>,
 }
 
 /// N1: Save's checks of an encounter's changed groups, ranked: the first refused change outranks
@@ -237,7 +233,6 @@ fn owned_groups_found(
 ) -> OwnedGroupsFound {
     use design::save_row::Diagnosis;
     let (mut refused, mut incomplete, mut refused_footer) = (None, None, None);
-    let mut incomplete_cause = None;
     for group in groups.iter().filter(|group| group.dirty()) {
         let Err(refusal) = group.check(snapshot, Some(encounter)) else {
             continue;
@@ -248,7 +243,6 @@ fn owned_groups_found(
             } else {
                 named_group_words(&group.name(), refusal.text())
             };
-            incomplete_cause.get_or_insert(named_group_words(&group.name(), refusal.text()));
             incomplete.get_or_insert((words, group.origin()));
         } else {
             let words = named_group_words(&group.name(), refusal.text());
@@ -265,18 +259,12 @@ fn owned_groups_found(
                     group_words(&group.name())
                 ),
             };
-            refused_footer.get_or_insert((footer, words.clone()));
+            refused_footer.get_or_insert(footer);
             refused.get_or_insert(words);
         }
     }
     let origin = incomplete.as_ref().map(|(_, origin)| *origin);
-    let (footer, cause) = match refused_footer {
-        Some((footer, cause)) => (Some(footer), Some(cause)),
-        None => (
-            incomplete.as_ref().map(|(words, _)| words.clone()),
-            incomplete_cause,
-        ),
-    };
+    let footer = refused_footer.or_else(|| incomplete.as_ref().map(|(words, _)| words.clone()));
     let found = incomplete
         .map_or_else(Diagnosis::valid, |(words, _)| Diagnosis::incomplete(words))
         .and(refused.map_or_else(Diagnosis::valid, Diagnosis::refused));
@@ -284,7 +272,6 @@ fn owned_groups_found(
         found,
         origin,
         footer,
-        cause,
     }
 }
 
@@ -3416,7 +3403,6 @@ impl Encounters {
                 found: design::save_row::Diagnosis::valid(),
                 origin: None,
                 footer: None,
-                cause: None,
             };
         };
         #[cfg(test)]
@@ -5355,7 +5341,7 @@ impl Encounters {
         frame: &'f design::outcome::PaneFrame,
         width: f32,
         root: &std::path::Path,
-        groups_reason: Option<(String, String)>,
+        groups_reason: Option<String>,
     ) -> design::outcome::Messages<'f, FooterPress> {
         use design::outcome::FaultMessage;
         self.record_member_results();
@@ -5390,13 +5376,7 @@ impl Encounters {
         if let Some(error) = self.separation_failure() {
             messages.outcome(FaultMessage::new(&EncounterFault::SeparationFailed(error)));
         }
-        // N4 (lead rule): the reason that disables Save now is always painted. A stored
-        // failed-action message stays as its own line while it holds, unless it only repeats
-        // the cause that the owned groups' next step answers.
-        let (groups_reason, groups_cause) = groups_reason.unzip();
-        if let Some(error) = self.error.clone()
-            && groups_cause.as_deref() != Some(error.as_str())
-        {
+        if let Some(error) = self.error.clone() {
             // A deleted entry and an unreadable file are stated in the rows' tone too.
             let fault = if self.error_tone() == Tone::Warning {
                 EncounterFault::Invalid(error)
@@ -5404,10 +5384,9 @@ impl Encounters {
                 EncounterFault::Failed(error)
             };
             messages.outcome(FaultMessage::new(&fault));
-        }
-        if let Some(reason) = groups_reason {
-            // F2, R35: the owned groups' first reason, as its next step where a row or field
-            // says the cause (an empty group, a blank name or side, a member's row).
+        } else if let Some(reason) = groups_reason {
+            // F2, R35: the owned groups' first reason that no row says, painted once (an empty
+            // group, a blank name or side, a refusal with no row of its own).
             messages.outcome(FaultMessage::new(&EncounterFault::Invalid(reason)));
         }
         messages
@@ -6263,7 +6242,7 @@ impl Encounters {
                 design::save_row::Diagnosis::refused,
             ))
             .and(own.unwrap_or_else(design::save_row::Diagnosis::valid));
-        let groups_footer = groups.footer.zip(groups.cause);
+        let groups_footer = groups.footer;
         // One `DraftState` decides the save row's word, Save's weight and reason, Discard and
         // the campaign lock (migrate:O, rows 42 and 51). The encounter draft says `Invalid`
         // only while it has changes; its rows name the faults of a clean one.
