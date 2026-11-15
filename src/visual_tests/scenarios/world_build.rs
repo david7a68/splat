@@ -12522,11 +12522,15 @@ pub fn library_file_fault(d: &mut Driver<'_>) {
                 && d.has("Try again")
                 && toolbar_line.is_none()
                 && cites
-                && editor.as_ref().is_some_and(|editor| {
+                // At 1920 the whole editor fits the window (as on main); at 960 and 1200 it is
+                // taller than the window there too, so only its place is checked above.
+                && (d.window_size().0 < 1900.0
+                    || editor.as_ref().is_some_and(|editor| {
                     editor.shown.min.distance(editor.rect.min) <= 0.5
                         && editor.shown.max.distance(editor.rect.max) <= 0.5
                         && editor.rect.bottom() + crate::design::S <= d.window_size().1
-                }),
+                }))
+                && editor.is_some(),
             format!(
                 "The body says {conflict:?} with its choices; no toolbar line ({toolbar_line:?}); \
                  the actions cite it ({cites}); the editor is whole: {:?}",
