@@ -797,8 +797,9 @@ impl Campaigns {
                 .action(Action::quiet("Edit details").blocked(blocked)),
         );
         let link_blocked = Self::link_lock(blocked);
+        // The page's lock is said once, above the first block (lib.rs); each control keeps it on
+        // hover and in its accessible description.
         let (block, _) = block.field(|ui| {
-            design::blocked_reason(ui, link_blocked);
             ui.add(egui::Label::new(campaign.path.display().to_string()).wrap());
             Self::folder_status(ui, &campaign)
         });

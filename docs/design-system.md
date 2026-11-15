@@ -937,7 +937,9 @@ session folder's block comes first, then the campaign folder's and D&D Beyond's.
 form (`HeadingRow`): the heading, its note (a state) on the same line, and its action at the right edge, one
 control high. The session folder's warning, its save error and its move result are its block's messages (the
 typed `Row` place), so the first typed letter, a refusal or a move never moves the save row or its field; they
-may move the blocks below. The link's and the details form's messages stay in the pane's footer. Folder help
+may move the blocks below. The link's and the details form's messages stay in the pane's footer. While a run locks the page, its sentence (`Close the run to change the folder, the session folder or the
+link.`) is the tab's first line, above the first block, said once; each locked control keeps it on hover and in its
+accessible description. Folder help
 uses `design::help`; the current folder's `Now:` line is one line (`design::path_help`: the path rule, whole on
 hover and in its accessible description), so a save never moves the save row. The save row's commit place holds
 `Save folder` in every state: while the current folder keeps files it waits, disabled with its reason, and Move files

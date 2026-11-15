@@ -155,6 +155,8 @@ pub(crate) enum FolderFault {
     NoteNotSaved,
     /// Save folder found files in the current folder that the form did not show yet.
     FilesCame,
+    /// Save without moving found other files in the current folder than its warning named.
+    FilesChanged,
 }
 
 impl From<String> for FolderFault {
@@ -175,7 +177,7 @@ impl Fault for FolderFault {
             Self::Missing(_) => Severity::NeedsFixing,
             Self::CannotRead(_) => Severity::CannotRead,
             Self::NotSaved(_) | Self::NoteNotSaved => Severity::NotSaved,
-            Self::FilesCame => Severity::NeedsFixing,
+            Self::FilesCame | Self::FilesChanged => Severity::NeedsFixing,
         }
     }
     fn cause(&self) -> Sentence {
@@ -190,6 +192,9 @@ impl Fault for FolderFault {
             ),
             Self::FilesCame => crate::sentence!(
                 "Not changed. The current folder now keeps session files. Choose to move them or not."
+            ),
+            Self::FilesChanged => crate::sentence!(
+                "Not changed. The files in the current folder changed. Check the new counts, then choose again."
             ),
         }
     }
@@ -7332,7 +7337,7 @@ impl Sessions {
         }
         if let Some(folder) = &self.folder {
             // One line for every path (the path rule), so a save never moves the save row.
-            design::path_help(ui, "Now: ", &folder.display().to_string());
+            design::path_help(ui, "Now: ", folder);
             design::help(
                 ui,
                 "Notes, Timeline.md, Templates and Recordings are all here.",
@@ -7428,21 +7433,36 @@ impl Sessions {
             self.folder_error = Some(FolderFault::NoteNotSaved);
             return;
         }
-        // Save folder was offered from the listing drawn, which can be older than the disk:
-        // the act reads the folder now, and files that came since stop it.
-        if act == FolderAct::Save {
-            self.end_folder_listing();
-            match self.folder_files() {
-                Err(error) => {
-                    self.folder_error = Some(FolderFault::CannotRead(error));
-                    return;
-                }
-                Ok(Some(now)) if now.files > 0 => {
-                    self.folder_error = Some(FolderFault::FilesCame);
-                    return;
-                }
-                Ok(_) => {}
+        // The rule: an act commits only what the DM was shown. The row and the warning were
+        // drawn from the kept listing, which can be older than the disk, so every act reads the
+        // current folder now. Save folder (offered with no files) stops when files came; Save
+        // without moving stops when the files differ from the counts its warning named; a folder
+        // that cannot be read stops all three. Move files and save moves what is there at the
+        // act, and its result names what it moved (`move_storage`), never the counts shown.
+        let shown = {
+            let drawn = self.folder_files();
+            self.folder_move_counts(book, &drawn)
+        };
+        self.end_folder_listing();
+        let now = self.folder_files();
+        if let Err(error) = &now {
+            self.folder_error = Some(FolderFault::CannotRead(error.clone()));
+            return;
+        }
+        match act {
+            FolderAct::Save
+                if now
+                    .as_ref()
+                    .is_ok_and(|now| now.is_some_and(|now| now.files > 0)) =>
+            {
+                self.folder_error = Some(FolderFault::FilesCame);
+                return;
             }
+            FolderAct::WithoutMoving if self.folder_move_counts(book, &now) != shown => {
+                self.folder_error = Some(FolderFault::FilesChanged);
+                return;
+            }
+            _ => {}
         }
         let campaign = campaign.clone();
         let link = kept::FolderLink {
@@ -9294,6 +9314,36 @@ mod tests {
             Some("Unsent words"),
             "the form keeps its unsent words"
         );
+        // Astra FINAL review of 83e0fd5f, P2 1: an act commits only what the DM was shown.
+        // A template comes outside Splat after the warning was drawn (no scan): Save without
+        // moving reads the folder at the press, refuses, and the warning names the new counts.
+        fs::write(templates_c.join("Third.md"), "Third").unwrap();
+        harness.get_by_label("Save without moving").click();
+        harness.run_steps(3);
+        assert_eq!(super::super::folder_setting(&c).unwrap(), DEFAULT_FOLDER);
+        assert!(
+            shows(
+                &harness,
+                "Not changed. The files in the current folder changed."
+            ) && shows(&harness, "The current folder keeps 3 templates."),
+            "Save without moving refuses files its warning did not name"
+        );
+        // The folder cannot be read at the press: no choice commits.
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&templates_c, fs::Permissions::from_mode(0o000)).unwrap();
+            harness.get_by_label("Save without moving").click();
+            harness.run_steps(3);
+            let fault = harness.state().0.folder_error.clone();
+            fs::set_permissions(&templates_c, fs::Permissions::from_mode(0o755)).unwrap();
+            assert_eq!(super::super::folder_setting(&c).unwrap(), DEFAULT_FOLDER);
+            assert!(
+                matches!(fault, Some(FolderFault::CannotRead(_))),
+                "an unreadable folder stops Save without moving: {fault:?}"
+            );
+        }
+        harness.state_mut().0.simulate_folder_scan();
+        harness.run_steps(3);
         // Early-pass packet, point 3: the current folder's `Now:` line is one line, so a save to
         // a long folder and back to a short one never moves the save row under it.
         switch(&mut harness, &b);
@@ -9316,6 +9366,15 @@ mod tests {
             now.rect().height() <= Type::Small.line() + 1.0,
             "the Now: line is one line: {:?}",
             now.rect()
+        );
+        // Astra FINAL review of 83e0fd5f, P2 3: the shortened line is kept; an unchanged
+        // redraw does no shortening work.
+        let cuts = crate::design::layout::path_cuts();
+        harness.run_steps(4);
+        assert_eq!(
+            crate::design::layout::path_cuts(),
+            cuts,
+            "an unchanged redraw shortens no path"
         );
         // Validation of bbadb689, point 1: while the page is locked (a run) and the folder keeps
         // files, the warning offers no choice, and the disabled Save's reason is the lock's,

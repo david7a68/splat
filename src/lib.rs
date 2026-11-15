@@ -2233,13 +2233,12 @@ impl Splat {
                                 // A child that starts empty, so the form narrows itself
                                 // (`set_max_width`) as it did in its own scroll area.
                                 ui.vertical(|ui| {
-                                    // The page's lock in the link's words, on the session
-                                    // folder's field and on its Save.
-                                    sessions.folder_block(
-                                        ui,
-                                        timeline,
-                                        campaigns::Campaigns::link_lock(blocked),
-                                    );
+                                    // The page's lock in the link's words: said once, as the
+                                    // tab's first line (it names all three values), and kept on
+                                    // each locked control's hover and accessible description.
+                                    let lock = campaigns::Campaigns::link_lock(blocked);
+                                    design::blocked_reason(ui, lock);
+                                    sessions.folder_block(ui, timeline, lock);
                                     design::rule(ui);
                                     let mut campaigns = campaigns.borrow_mut();
                                     campaigns.show_active(ui, session, dndbeyond, blocked);

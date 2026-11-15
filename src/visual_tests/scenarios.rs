@@ -11579,7 +11579,7 @@ pub mod signed_in {
             format!("D&D BEYOND starts L below the rule over it, as a column heading: {above:?} (heading {heading:?}, rule {rule:?})"),
         );
         d.state_prepared("link-tab-during-run", Sizes::All, |d| {
-            super::session_recording::link_blocks_in_order(d, false);
+            super::session_recording::link_blocks_in_order(d, false, Some(BLOCKED_REASON));
         });
         d.begin_task();
 
@@ -13509,7 +13509,7 @@ pub mod session_notes {
         );
         d.expect("Not connected · showing the name saved on this computer");
         d.state_prepared("session-folder-in-campaign", Sizes::All, |d| {
-            super::session_recording::link_blocks_in_order(d, false);
+            super::session_recording::link_blocks_in_order(d, false, None);
         });
         // Round 26 FN2, FN5: the form's warning and its result sit in the pane's message footer,
         // so the save row keeps its y when the first letter brings the warning, and after a move.
@@ -13634,7 +13634,7 @@ pub mod session_notes {
             ),
         );
         d.state_prepared("session-folder-move-offered", Sizes::All, |d| {
-            super::session_recording::link_blocks_in_order(d, true);
+            super::session_recording::link_blocks_in_order(d, true, None);
             // Early-pass packet (R24): the move choices are the warning's, under the save row,
             // and Save folder waits in the commit place, so no control in view has the accent.
             // The old check (Move files and save the one primary) caught two primaries; this one
@@ -13740,7 +13740,7 @@ pub mod session_notes {
         // opens it moves Edit details by design; no prepare step can avoid that scroll.
         d.expect_moves("Edit details brings its form and its Save into view");
         d.state_prepared("session-folder-moved", Sizes::All, |d| {
-            super::session_recording::link_blocks_in_order(d, true);
+            super::session_recording::link_blocks_in_order(d, true, None);
         });
         d.click(NAV_SESSIONS);
         d.expect(&format!("Session 1: {TITLE}"));
@@ -14947,7 +14947,10 @@ pub mod session_recording {
     /// below the save row; and one heading-row form (one height, one left edge). `messages`:
     /// whether the Session folder block shows its own messages now (its warning or its result),
     /// which must then be wholly in view with its save row.
-    pub(super) fn link_blocks_in_order(d: &Driver<'_>, messages: bool) {
+    ///
+    /// `lock`: the page's lock sentence, said once as the tab's first line, above the first
+    /// heading row (the lead's point 4 on PR 383).
+    pub(super) fn link_blocks_in_order(d: &Driver<'_>, messages: bool, lock: Option<&str>) {
         let blocks = d.value_blocks();
         let titles: Vec<&str> = blocks.iter().map(|block| block.title.as_str()).collect();
         assert_eq!(
@@ -14994,6 +14997,19 @@ pub mod session_recording {
             assert!(
                 inside(save) && inside(said),
                 "the save row and its messages are wholly in view: {save:?} {said:?}"
+            );
+        }
+        if let Some(lock) = lock {
+            let said: Vec<egui::Rect> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name == lock && node.in_view())
+                .map(|node| node.rect)
+                .collect();
+            assert!(
+                said.len() == 1 && said[0].bottom() <= blocks[0].heading.top() + 0.5,
+                "the lock is said once, above the first heading row: {said:?}, first heading {:?}",
+                blocks[0].heading
             );
         }
         let first = blocks[0].heading;
