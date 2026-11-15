@@ -55,7 +55,9 @@ fn fault_here(fault: &FileFault) -> String {
         Kind::ReadDenied => "Splat has no permission to read this file.".to_owned(),
         Kind::Gone => "Splat cannot find this file.".to_owned(),
         Kind::CannotRead => "Splat cannot open this file.".to_owned(),
-        Kind::WriteDenied | Kind::Exists | Kind::DiskFull | Kind::CannotWrite => fault.headline(),
+        Kind::WriteDenied | Kind::ReadOnly | Kind::Exists | Kind::DiskFull | Kind::CannotWrite => {
+            fault.headline()
+        }
     }
 }
 
