@@ -150,6 +150,45 @@ impl Typed {
         self.name_with_words(name, name_words).map(Rank::creature)
     }
 
+    /// [`Typed::creature`] for a list that keeps only the names found as typed (the encounter
+    /// search's `Use it`, the replacement picker): the same rank where the name fits as typed,
+    /// and `None` where it fits only with a typo. No typo is worked out (review of PR 450).
+    pub(crate) fn creature_as_typed<'a>(
+        &self,
+        name: &str,
+        name_words: impl IntoIterator<Item = &'a str>,
+    ) -> Option<Rank> {
+        if let Some(tier) = name_rank(name, &self.phrase) {
+            return Some(Rank::typed(tier).creature());
+        }
+        self.in_name_as_typed(name_words)
+            .map(|fit| match fit {
+                Fit::Exact => Rank::typed(4),
+                _ => Rank::typed(5),
+            })
+            .map(Rank::creature)
+    }
+
+    /// `in_name` with the fits as typed only (`Exact`, `Start`): the same answer where it is
+    /// one of those, and no typo comparison.
+    fn in_name_as_typed<'a>(&self, name: impl IntoIterator<Item = &'a str>) -> Option<Fit> {
+        if self.words.is_empty() {
+            return None;
+        }
+        let name: Vec<&str> = name.into_iter().collect();
+        if name.len() < self.words.len() {
+            return None;
+        }
+        let fits: Vec<Vec<Option<Fit>>> = self
+            .words
+            .iter()
+            .map(|typed| name.iter().map(|word| fit_as_typed(word, typed)).collect())
+            .collect();
+        [Fit::Exact, Fit::Start]
+            .into_iter()
+            .find(|&worst| assign(&fits, worst))
+    }
+
     /// `name`, for a name whose words are already split.
     pub(crate) fn name_with_words<'a>(
         &self,
@@ -265,6 +304,17 @@ fn best_in_set(set: &[String], typed: &str) -> Option<Fit> {
     (limit > 0 && set.iter().any(|word| within(word, typed, limit))).then_some(Fit::Typo)
 }
 
+/// `fit` as typed: no typo.
+fn fit_as_typed(word: &str, typed: &str) -> Option<Fit> {
+    if word == typed {
+        Some(Fit::Exact)
+    } else if word.starts_with(typed) {
+        Some(Fit::Start)
+    } else {
+        None
+    }
+}
+
 fn fit(word: &str, typed: &str) -> Option<Fit> {
     if word == typed {
         Some(Fit::Exact)
@@ -287,6 +337,8 @@ fn typos_allowed(typed: &str) -> usize {
 /// True if no more than `limit` changes turn `a` into `b`. A change adds, removes or replaces
 /// one letter, or swaps two letters beside each other.
 fn within(a: &str, b: &str, limit: usize) -> bool {
+    #[cfg(test)]
+    TYPO_CHECKS.with(|checks| checks.set(checks.get() + 1));
     if limit == 0 {
         return a == b;
     }
@@ -319,6 +371,12 @@ fn within(a: &str, b: &str, limit: usize) -> bool {
         std::mem::swap(&mut last, &mut row);
     }
     last[b.len()] <= limit
+}
+
+// Typo comparisons (`within`) on this thread, for a test that a list as typed works out none.
+#[cfg(test)]
+thread_local! {
+    pub(crate) static TYPO_CHECKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]
@@ -439,6 +497,45 @@ mod tests {
             Some(Rank::typed(4))
         );
         assert_eq!(creature("winter wolf", "wolf wintr"), Some(Rank::typo(0)));
+        // Review of PR 450: the rank as typed is the creature rank where that fits as typed and
+        // none where only a typo fits, and it compares no typo.
+        let checks = TYPO_CHECKS.with(std::cell::Cell::get);
+        for name in [
+            "wolf",
+            "wolf spider",
+            "winter wolf",
+            "werewolf",
+            "potion of healing",
+            "potions of healing",
+            "dire bear",
+        ] {
+            for query in [
+                "wolf",
+                "healing potion",
+                "wolf wintr",
+                "healng potion",
+                "bear",
+            ] {
+                let typed = Typed::new(query);
+                assert_eq!(
+                    typed.creature_as_typed(name, words(name)),
+                    creature(name, query).filter(|rank| !rank.typo),
+                    "{name} / {query}"
+                );
+            }
+        }
+        let after = TYPO_CHECKS.with(std::cell::Cell::get);
+        let typo = Typed::new("wolf wintr");
+        assert_eq!(
+            typo.creature_as_typed("winter wolf", words("winter wolf")),
+            None
+        );
+        assert_eq!(
+            TYPO_CHECKS.with(std::cell::Cell::get),
+            after,
+            "a rank as typed compares no typo"
+        );
+        assert!(after > checks, "the creature rank above did compare typos");
         // Arrivals' tiers of the search as typed are the same order.
         for name in [
             "wolf",

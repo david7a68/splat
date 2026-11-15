@@ -2473,8 +2473,33 @@ fn replace_missing_creature(
         ui.checkbox(&mut all, format!("Replace all {count} {name} rows"));
     }
     let query = search.to_lowercase();
+    // The five, kept for this picker and worked out again only when the words or the
+    // campaign's encounters (a new read: `Snapshot::revision`) change: a repaint ranks nothing
+    // (review of PR 450, P2).
+    let ranked_key = key.with("ranked");
+    let found = match ui
+        .ctx()
+        .data(|data| data.get_temp::<ReplacementKept>(ranked_key))
+        .filter(|kept| kept.snapshot == snapshot.revision && kept.query == query)
+    {
+        Some(kept) => kept.found,
+        None => {
+            let found = std::sync::Arc::new(replacement_indices(&snapshot.creatures, &query));
+            ui.ctx().data_mut(|data| {
+                data.insert_temp(
+                    ranked_key,
+                    ReplacementKept {
+                        snapshot: snapshot.revision,
+                        query: query.clone(),
+                        found: found.clone(),
+                    },
+                );
+            });
+            found
+        }
+    };
     let mut replaced = None;
-    for creature in replacement_matches(&snapshot.creatures, &query) {
+    for creature in found.iter().filter_map(|&at| snapshot.creatures.get(at)) {
         ui.push_id(creature.id, |ui| {
             let (chosen, read) = creature_result_row(ui, creature, "Use", false);
             if chosen {
@@ -2502,26 +2527,54 @@ fn replace_missing_creature(
 /// `matching::Typed::creature`) and then by origin, as the encounter search ranks them. They are
 /// ranked before the five are taken, so the exact name is never left out. With no words, the
 /// list's first five.
+#[cfg(test)]
 fn replacement_matches<'a>(creatures: &'a [Creature], query: &str) -> Vec<&'a Creature> {
-    let typed = crate::matching::Typed::new(query);
-    let mut found: Vec<(crate::matching::Rank, &Creature)> = creatures
+    replacement_indices(creatures, query)
+        .into_iter()
+        .map(|at| &creatures[at])
+        .collect()
+}
+
+/// `replacement_matches` as the places of the five in `creatures`. With no words it stops at
+/// the fifth creature it can offer; with words it ranks as typed only, so no typo is worked
+/// out (review of PR 450).
+fn replacement_indices(creatures: &[Creature], query: &str) -> Vec<usize> {
+    let offered = creatures
         .iter()
-        .filter(|c| !c.linked)
-        .filter_map(|c| {
-            if query.is_empty() {
-                return Some((crate::matching::Rank::typed(0), c));
-            }
-            let rank = typed
-                .creature(&c.lower, crate::matching::words(&c.lower))
-                .filter(|rank| !rank.typo)?;
-            Some((rank, c))
+        .enumerate()
+        .filter(|(_, c)| !c.linked)
+        .inspect(|_| {
+            #[cfg(test)]
+            REPLACEMENT_NAMES.with(|names| names.set(names.get() + 1));
+        });
+    if query.is_empty() {
+        return offered.map(|(at, _)| at).take(5).collect();
+    }
+    let typed = crate::matching::Typed::new(query);
+    let mut found: Vec<(crate::matching::Rank, crate::lookup::Origin, usize)> = offered
+        .filter_map(|(at, c)| {
+            let rank = typed.creature_as_typed(&c.lower, crate::matching::words(&c.lower))?;
+            Some((rank, c.origin, at))
         })
         .collect();
-    if !query.is_empty() {
-        // Stable: the list's order stays inside one rank and origin.
-        found.sort_by_key(|&(rank, c)| (rank, c.origin));
-    }
-    found.into_iter().map(|(_, c)| c).take(5).collect()
+    // Stable: the list's order stays inside one rank and origin.
+    found.sort_by_key(|&(rank, origin, _)| (rank, origin));
+    found.into_iter().map(|(.., at)| at).take(5).collect()
+}
+
+/// One replacement picker's five, with the read of the encounters and the words they are for.
+#[derive(Clone)]
+struct ReplacementKept {
+    snapshot: Uuid,
+    query: String,
+    found: std::sync::Arc<Vec<usize>>,
+}
+
+// Creatures the replacement picker visited on this thread, for a test that a repaint visits
+// none.
+#[cfg(test)]
+thread_local! {
+    static REPLACEMENT_NAMES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 // Group members use the same picker without the roster's bulk action.
@@ -3022,6 +3075,9 @@ enum KeptResult {
     EncounterRemoved,
     /// `Encounter saved.` or `Group saved.` (`message`), with no Undo.
     Saved,
+    /// `Rules and runs draft discarded.` with its Undo (`discarded_options`): only Rules and runs
+    /// shows it (`run_settings`).
+    OptionsDiscarded,
 }
 
 /// Whose kept result it is: the campaign and its kind. One of each kind per campaign, as each
@@ -3280,9 +3336,9 @@ pub struct Encounters {
     message: Option<String>,
     /// The draft `Discard changes` last dropped, for one step of undo.
     discarded: Option<Draft>,
+    /// The Rules and runs draft that Discard set aside; its result is in `kept`
+    /// (`KeptResult::OptionsDiscarded`), which issued its order at the discard.
     discarded_options: Option<crate::encounter_settings::Options>,
-    /// When `discarded_options` was discarded, for the footer's order.
-    discarded_options_order: Option<design::ResultOrder>,
     pub saved: bool,
     run: Option<crate::encounter_run::Run>,
     /// The encounter editor's last frame found that Save would refuse its changed draft, so
@@ -4527,21 +4583,18 @@ impl Encounters {
         self.run_facts.0.revision()
     }
 
-    /// Note the saved-run facts: a revision and the open run's timeline fact (its id, state and
-    /// name, as the app reads each frame), never the run list.
+    /// Note the saved-run facts: a revision and the open run's id and running flag, constant
+    /// work with no string copied (`Run::keeps_saved_hp`), never the run list.
     fn note_run_facts(&mut self) {
         let facts = RunFacts {
             listed: self
                 .snapshot
                 .as_ref()
                 .map(|snapshot| snapshot.runs_read.revision()),
-            open: self.run.as_ref().map(|run| {
-                let fact = run.timeline_fact();
-                (
-                    fact.id,
-                    matches!(fact.state, crate::timeline::RunState::Running),
-                )
-            }),
+            open: self
+                .run
+                .as_ref()
+                .map(crate::encounter_run::Run::keeps_saved_hp),
         };
         self.run_facts.0.set(facts);
     }
@@ -4908,7 +4961,7 @@ impl Encounters {
             ui.available_width(),
         );
         if let Some(error) = editor.error.clone() {
-            footer.reason(error.clone(), move |ui| {
+            footer.legacy_reason(error.clone(), move |ui| {
                 design::message(ui, Tone::Error, &error);
             });
         }
@@ -5370,6 +5423,12 @@ impl Encounters {
                 page,
             ),
             (KeptResult::Saved, self.message.is_some(), page),
+            // Only Rules and runs shows it (`run_settings`).
+            (
+                KeptResult::OptionsDiscarded,
+                self.discarded_options.is_some(),
+                false,
+            ),
         ];
         let Some(root) = self.active.as_ref().map(|active| active.path.clone()) else {
             return Vec::new();
@@ -5467,6 +5526,7 @@ impl Encounters {
                     .unwrap_or(crate::sentence!("Saved.")),
             )
             .into(),
+            KeptResult::OptionsDiscarded => options_discarded(),
         }
     }
 
@@ -5856,6 +5916,18 @@ impl Encounters {
     fn undo_kept(&mut self, kind: KeptResult, campaign: Option<(&Campaign, &[Module])>) -> bool {
         match kind {
             KeptResult::Saved => false,
+            KeptResult::OptionsDiscarded => {
+                match (self.discarded_options.take(), self.snapshot.as_mut()) {
+                    (Some(options), Some(snapshot)) => {
+                        snapshot.options = options;
+                        true
+                    }
+                    (options, _) => {
+                        self.discarded_options = options;
+                        false
+                    }
+                }
+            }
             KeptResult::Discarded => {
                 self.undo_discard();
                 true
@@ -6845,7 +6917,7 @@ impl Encounters {
                 .map(|(note, _)| note.as_str())
                 .collect::<Vec<_>>()
                 .join(" ");
-            unread.reason(words, move |ui| {
+            unread.legacy_reason(words, move |ui| {
                 unread_roster_rows(ui, &root, &path, &notes, faults);
             });
         }
@@ -7269,7 +7341,10 @@ impl Encounters {
                 ))
             });
             if let Some(index) = index {
-                for (package, entry, name, owner) in index.unused_creatures(&parsed.words) {
+                // Kept for this search and worked out again only when its words or the index
+                // change: a repaint with no match as typed ranks nothing (review of PR 450).
+                let unused = index.unused_creatures_kept(ui.ctx(), response.id, &parsed.words);
+                for &(package, entry, ref name, ref owner) in unused.iter() {
                     ui.horizontal_wrapped(|ui| {
                         ui.label(
                             Type::Small
@@ -8125,51 +8200,57 @@ impl Encounters {
         };
         let discard_shown =
             snapshot.options == snapshot.saved_options && self.discarded_options.is_some();
-        // The tab's footer: the discard's Undo, the reasons, then the notices. The pane places
-        // it `S` below the form while the form fits, and at the tab's bottom only when the form
+        // The tab's footer, typed (layout PR 2b): the discard's result and its Undo (the page's
+        // store keeps it, by its ticket), the reasons, then the notices. The pane places it `S`
+        // below the form while the form fits, and at the tab's bottom only when the form
         // scrolls, so the form keeps its place whatever the footer holds.
-        let undo_discard = std::cell::Cell::new(false);
-        let undo = &undo_discard;
-        let mut footer =
-            design::Footer::new(("run_settings_footer", active.id), design::FORM_WIDTH);
-        if discard_shown && let Some(order) = self.discarded_options_order {
-            let words = "Rules and runs draft discarded.";
-            footer.result(order, words, true, move |ui| {
-                if design::draft_discarded(ui, "Rules and runs") {
-                    undo.set(true);
-                }
-            });
+        let discarded = KeptOwner {
+            root: active.path.clone(),
+            kind: KeptResult::OptionsDiscarded,
+        };
+        if self.discarded_options.is_none() {
+            // Its draft was dropped (an edit, a save, another campaign): the Undo ends.
+            self.kept.owner_changed(&discarded);
         }
-        if let Some(e) = self.error.clone() {
-            footer.reason(e.clone(), move |ui| {
-                design::message(ui, Tone::Error, &e);
-            });
+        let frame = design::outcome::PaneFrame::new(ui);
+        let mut messages = design::outcome::Messages::new(
+            &frame,
+            ("run_settings_footer", active.id),
+            design::FORM_WIDTH,
+        );
+        if discard_shown && let Some(shown) = self.kept.get(&discarded) {
+            messages.kept(shown.outcome(&frame, |_| options_discarded()));
         }
-        // The warning names the line; the file's path and links start at the last warning's
-        // words.
+        if let Some(e) = &self.error {
+            messages.outcome(design::outcome::FaultMessage::new(&EncounterFault::Failed(
+                e.clone(),
+            )));
+        }
+        // Each warning names its line; the file's path and links follow the last one.
         if let Some((last, before)) = rule_words.split_last() {
-            let (last, before, root) = (last.clone(), before.to_vec(), active.path.clone());
-            footer.reason(rule_words.join(" "), move |ui| {
-                for text in &before {
-                    design::message(ui, Tone::Warning, text);
-                }
-                design::message_with_actions(ui, Tone::Warning, &last, |ui| {
-                    file_line(ui, &root, "Campaign.md");
-                });
-            });
+            for words in before {
+                messages.outcome(design::outcome::FaultMessage::new(
+                    &EncounterFault::FileWarning(words.clone()),
+                ));
+            }
+            messages.outcome(
+                design::outcome::FaultMessage::new(&EncounterFault::FileWarning(last.clone()))
+                    .file(
+                        design::outcome::FileLine::new(&active.path, "Campaign.md")
+                            .edit()
+                            .show(),
+                    ),
+            );
         }
         if let Some(words) = folder_warning {
-            footer.notice(words.clone(), move |ui| {
-                design::message(ui, Tone::Warning, &words);
-            });
+            messages.outcome(design::outcome::Notice::warning(outcome_words(&words)));
         }
         if draft_open {
-            let words = "Save or discard the open encounter to change run settings.";
-            footer.notice(words, move |ui| {
-                design::message(ui, Tone::Info, words);
-            });
+            messages.outcome(design::outcome::Notice::new(crate::sentence!(
+                "Save or discard the open encounter to change run settings."
+            )));
         }
-        footer.pane(ui, design::Body::Content, |ui| {
+        let paned = messages.pane(ui, design::Body::Content, |ui| {
         ui.vertical(|ui| {
         // The form is as wide as the tab, at most `FORM_WIDTH`.
         ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
@@ -8290,7 +8371,11 @@ impl Encounters {
                             &mut snapshot.options,
                             snapshot.saved_options.clone(),
                         ));
-                        self.discarded_options_order = Some(design::ResultOrder::issue());
+                        Self::record_kept(
+                            &mut self.kept,
+                            self.active.as_ref(),
+                            KeptResult::OptionsDiscarded,
+                        );
                     }
                 }
                 if !changed && !rule_flags.is_empty() {
@@ -8391,13 +8476,24 @@ impl Encounters {
         if let Some(e) = error {
             self.error = Some(e);
         }
-        if undo_discard.get()
-            && let Some(options) = self.discarded_options.take()
-            && let Some(snapshot) = self.snapshot.as_mut()
+        // `Undo discard of Rules and runs`: the page's store acts by the press's ticket, and only
+        // then is the draft put back.
+        if let Some(press) = paned.pressed
+            && press.id == FooterPress::Undo
+            && let Some(ticket) = press.ticket
         {
-            snapshot.options = options;
+            self.undo_by_ticket(ticket, None);
         }
     }
+}
+
+/// `Rules and runs draft discarded.` with `Undo discard of Rules and runs`.
+fn options_discarded() -> design::outcome::KeptOutcome<FooterPress> {
+    design::outcome::KeptOutcome::Notice(
+        design::outcome::Notice::new(crate::sentence!("Rules and runs draft discarded.")),
+        design::outcome::UndoStep::of(design::outcome::Verb::Discard, "Rules and runs")
+            .pressed_as(FooterPress::Undo),
+    )
 }
 
 /// The widest a list row grows, so that its actions stay near the name they belong to.
@@ -8507,6 +8603,56 @@ mod tests {
             .collect();
         assert_eq!(listed.len(), 5, "fixture: five creatures listed");
         assert_eq!(names(""), listed);
+        // P2 of the review of PR 450: the picker keeps its five. A repaint with the same words
+        // visits no creature; new words rank again, as typed only (no typo compared); with no
+        // words it stops at the fifth it can offer.
+        use egui_kittest::kittest::Queryable;
+        let visited = || REPLACEMENT_NAMES.with(std::cell::Cell::get);
+        let typos = || crate::matching::TYPO_CHECKS.with(std::cell::Cell::get);
+        let offered = snapshot.creatures.iter().filter(|c| !c.linked).count();
+        assert!(offered > 5, "fixture: more creatures than the five");
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(600.0, 600.0))
+            .build_ui_state(
+                |ui, snapshot: &mut Snapshot| {
+                    let _ = replace_missing_creature(ui, snapshot, 1, "Missing");
+                },
+                snapshot,
+            );
+        crate::design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        let empty = visited();
+        harness.get_by_label("Replacement creature").click();
+        harness.run_steps(1);
+        harness
+            .get_by_label("Replacement creature")
+            .type_text("fenstalker");
+        harness.run_steps(3);
+        let (seen, compared) = (visited(), typos());
+        harness.run_steps(5);
+        assert_eq!(visited(), seen, "an unchanged repaint visits no creature");
+        assert!(seen > empty, "the words ranked");
+        harness.get_by_label("Replacement creature").type_text(" ");
+        harness.run_steps(3);
+        assert!(visited() > seen, "new words rank again");
+        assert_eq!(typos(), compared, "as typed only: no typo is compared");
+        // Another read of the encounters (a new revision) ranks again.
+        let seen = visited();
+        *harness.state_mut() = Snapshot::load(&active, &[]).unwrap();
+        harness.run_steps(2);
+        assert!(
+            visited() > seen,
+            "another read of the encounters ranks again"
+        );
+        // No words: the first five it can offer, and no more visited.
+        let before = visited();
+        let fresh = Snapshot::load(&active, &[]).unwrap();
+        assert_eq!(
+            replacement_indices(&fresh.creatures, "").len(),
+            5,
+            "the list's first five"
+        );
+        assert_eq!(visited() - before, 5, "it stops at the fifth");
     }
 
     #[test]
@@ -11702,6 +11848,20 @@ mod tests {
             editor.saved_runs_revision(),
             no_run,
             "an open run's facts are over the list"
+        );
+        // Review F2 of PR 444: an unchanged poll copies no timeline fact (no run name).
+        let open = editor.saved_runs_revision();
+        let made = crate::encounter_run::TIMELINE_FACTS.with(std::cell::Cell::get);
+        for _ in 0..3 {
+            editor.note_run_facts();
+        }
+        assert_eq!(
+            (
+                editor.saved_runs_revision(),
+                crate::encounter_run::TIMELINE_FACTS.with(std::cell::Cell::get)
+            ),
+            (open, made),
+            "an unchanged poll keeps the revision and copies no fact of the run"
         );
         let current = editor.run().unwrap().live_info().unwrap().id;
         editor.open_saved_run(&path, &campaign);

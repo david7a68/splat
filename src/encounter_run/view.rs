@@ -3333,10 +3333,10 @@ impl Run {
             .flatten();
         let mut footer = design::Footer::new(("arrival_footer", self.id), ui.available_width());
         if let Some(line) = &line {
-            footer.kept_line(line, true, |_, ui| self.arrival_result(ui));
+            footer.legacy_kept_line(line, true, |_, ui| self.arrival_result(ui));
         }
         for reason in reasons.iter() {
-            footer.reason(reason.as_str(), move |ui| {
+            footer.legacy_reason(reason.as_str(), move |ui| {
                 // The group faults' form: a mark, and words in text colour.
                 design::small_message(ui, Tone::Warning, reason);
             });

@@ -3423,7 +3423,8 @@ impl Sessions {
             }
             live.recorder.heard_just_now()
         });
-        self.timed_words.0.set((self.saved_at.is_some(), hearing));
+        // The word as its readers show it: also its campaign's (`just_saved`).
+        self.timed_words.0.set((self.just_saved(), hearing));
     }
 
     /// A job finished, and the DM has not looked at it yet.
@@ -9615,6 +9616,15 @@ mod tests {
         harness.state_mut().0.finish_recording(&ctx);
         harness.run_steps(2);
         assert_eq!(saved(&harness), Some("Recording saved"), "A's own rail");
+        // Review F1 of PR 444: the timed words' revision changes with each visible change of the
+        // word (here a campaign switch and back), and not on an idle poll.
+        let in_a = harness.state().0.recording_revision();
+        harness.step();
+        assert_eq!(
+            harness.state().0.recording_revision(),
+            in_a,
+            "an idle poll is no change"
+        );
         // Round 30 review of PR 400 (F3): the footer's `Recording saved: …` is kept by A's
         // session until the campaign changes; the change ends it, and coming back does not
         // bring it back (only the rail's word, its own fact, returns).
@@ -9632,12 +9642,19 @@ mod tests {
             None,
             "B's rail says nothing of A's recording"
         );
+        let in_b = harness.state().0.recording_revision();
+        assert_ne!(in_b, in_a, "the word went: a new revision");
         switch(&mut harness, &a);
         assert!(
             harness.state().0.saved.is_empty(),
             "back in A, the ended result stays ended"
         );
         assert_eq!(saved(&harness), Some("Recording saved"), "back in A");
+        assert_ne!(
+            harness.state().0.recording_revision(),
+            in_b,
+            "the word came back: a new revision"
+        );
         // Round 30 re-check N1 of PR 400: with no input, a kept `Recording saved: …` still ends
         // with its file. X and Y record in two sessions; the idle frame asks to wake by the next
         // disk check; X's file goes; that wake ends X, and Y stays.
