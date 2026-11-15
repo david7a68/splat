@@ -15003,7 +15003,11 @@ pub mod session_recording {
             let said: Vec<egui::Rect> = d
                 .nodes()
                 .into_iter()
-                .filter(|node| node.name == lock && node.in_view())
+                .filter(|node| {
+                    node.name == lock
+                        && node.in_view()
+                        && node.role != egui::accesskit::Role::TextRun
+                })
                 .map(|node| node.rect)
                 .collect();
             assert!(
