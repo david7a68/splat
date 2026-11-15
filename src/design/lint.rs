@@ -4,6 +4,8 @@
 use super::attributes::{self, Found, Kind};
 use std::{collections::BTreeMap, fs, path::Path};
 
+pub(crate) mod legacy;
+
 const ALLOWLIST: &str = include_str!("lint_allowlist.txt");
 const COLOUR_CONSTANTS: [&str; 22] = [
     "BLACK",
@@ -402,7 +404,8 @@ fn phrase_owner(path: &str, words: &str) -> bool {
 /// `syn`, never matched as text; the escapes of `design::outcome` are Clippy bans counted in
 /// `design::results::STAGED_ALLOWS`. Each rule here is a count per file in the allowlist.
 /// "Shrink only" holds for a count alone: a change that raises a count and its allowance
-/// together passes this test, so a reviewer reads every raised line (AGENTS.md).
+/// together passes this test, so a reviewer reads every raised line (AGENTS.md). The legacy
+/// host freeze (`legacy`) closes that hole for its own list: it compares with the merge base.
 ///
 /// - `allow-deprecated`: each attribute that lets `deprecated` (or `warnings`) pass, in any
 ///   form: inner or outer, a list across lines, `cfg_attr`.
@@ -577,16 +580,19 @@ fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
     formats.found
 }
 
+/// Counts the rules of every source file under `folder`, and keeps each file's text by its key
+/// in `files` (for the legacy host freeze).
 fn scan(
     folder: &Path,
     counts: &mut BTreeMap<String, usize>,
     levels: &mut BTreeMap<String, FileLevel>,
+    files: &mut Vec<(String, String)>,
 ) {
     for item in fs::read_dir(folder).expect("read source folder") {
         let path = item.expect("read source entry").path();
         let relative = path.to_string_lossy().replace('\\', "/");
         if path.is_dir() {
-            scan(&path, counts, levels);
+            scan(&path, counts, levels, files);
         } else if path.extension().is_some_and(|e| e == "rs")
             // A file of unit tests, such as `formats_tests.rs`, does not ship either.
             && !relative.ends_with("tests.rs")
@@ -597,6 +603,7 @@ fn scan(
             let code = text.split("#[cfg(test)]\nmod tests {").next().unwrap_or("");
             let root = concat!(env!("CARGO_MANIFEST_DIR"), "/");
             let key = relative.strip_prefix(root).unwrap_or(&relative);
+            files.push((key.to_owned(), text.clone()));
             // Design and capture code owns raw drawing values. Only the popup classification
             // marker is restricted there, to its part and the gate that reads it.
             if key.starts_with("src/design/") || key.starts_with("src/visual_tests/") {
@@ -636,12 +643,14 @@ fn scan(
 fn raw_colours_and_sizes_stay_inside_the_design_system() {
     let mut counts = BTreeMap::new();
     let mut levels = BTreeMap::new();
+    let mut files = Vec::new();
     // The core crate writes many UI words too, such as a note's warnings.
     for folder in ["/src", "/crates/core/src"] {
         scan(
             Path::new(&format!("{}{folder}", env!("CARGO_MANIFEST_DIR"))),
             &mut counts,
             &mut levels,
+            &mut files,
         );
     }
     // A module under an allow of `deprecated` writes its own level: an allow (counted), or
@@ -705,6 +714,9 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
             ));
         }
     }
+    // The legacy host freeze (ruling L12): `legacy_hosts.tsv` is exact, and no site grows
+    // against the merge base with `origin/main`, also when its row grows with it.
+    problems.extend(legacy::problems(&files));
     assert!(problems.is_empty(), "{}", problems.join("\n"));
 }
 

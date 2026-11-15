@@ -52,7 +52,7 @@ fn section(letter: char) -> &'static str {
 
 /// How a banned path is written at a call.
 #[derive(Clone, Debug, PartialEq, Eq)]
-enum Shape {
+pub(crate) enum Shape {
     /// `Type::name`, also `Type::name::<T>`.
     Assoc(String, String),
     /// `.name(…)`: a method of a value (`ui.menu_button(…)`).
@@ -64,6 +64,41 @@ enum Shape {
     Chain(String, String),
     /// `.name(…)` with at least this many arguments (a turbofish's comma can count as one more).
     Arity(String, usize),
+}
+
+impl Shape {
+    /// A shape from its spelling in a list (`lint::legacy`): `.name` is a method, `.name/n` a
+    /// method called with at least `n` arguments, `Owner::name` a function by its path, and a
+    /// bare `name` a free function.
+    pub(crate) fn of(spelling: &str) -> Self {
+        if let Some(method) = spelling.strip_prefix('.') {
+            return match method.split_once('/') {
+                Some((name, args)) => Self::Arity(
+                    name.to_owned(),
+                    args.parse().expect("a number of arguments"),
+                ),
+                None => Self::Method(method.to_owned()),
+            };
+        }
+        match spelling.rsplit_once("::") {
+            Some((owner, name)) => Self::Assoc(owner.to_owned(), name.to_owned()),
+            None => Self::Free(None, spelling.to_owned()),
+        }
+    }
+
+    /// The owner and the name an alias could rename (`banned-alias`); a method has no owner.
+    pub(crate) fn path(&self) -> Option<(String, String)> {
+        match self {
+            Self::Assoc(owner, name) | Self::Chain(owner, name) => {
+                Some((owner.clone(), name.clone()))
+            }
+            Self::Free(module, name) => Some((
+                module.clone().unwrap_or_else(|| "fn".to_owned()),
+                name.clone(),
+            )),
+            Self::Method(_) | Self::Arity(..) => None,
+        }
+    }
 }
 
 /// Builder types whose banned methods are counted in a constructor's chain.
@@ -177,15 +212,18 @@ enum Token {
     Literal,
 }
 
-fn flatten(stream: TokenStream, out: &mut Vec<Token>) {
+/// The tokens of `stream`, and the line each one starts on.
+fn flatten(stream: TokenStream, out: &mut Vec<Token>, lines: &mut Vec<usize>) {
     for tree in stream {
+        lines.push(tree.span().start().line);
         match tree {
             TokenTree::Ident(ident) => out.push(Token::Ident(ident.to_string())),
             TokenTree::Punct(punct) => out.push(Token::Punct(punct.as_char())),
             TokenTree::Literal(_) => out.push(Token::Literal),
             TokenTree::Group(group) => {
                 out.push(Token::Open(group.delimiter()));
-                flatten(group.stream(), out);
+                flatten(group.stream(), out, lines);
+                lines.push(group.span_close().start().line);
                 out.push(Token::Close);
             }
         }
@@ -297,17 +335,23 @@ fn arguments(tokens: &[Token], at: usize) -> Option<usize> {
 
 /// How many calls of `group`'s paths `source` holds. `Err` when it does not lex.
 pub(crate) fn count(source: &str, group: Group) -> Result<usize, String> {
-    let stream = TokenStream::from_str(source).map_err(|error| error.to_string())?;
-    let mut tokens = Vec::new();
-    flatten(stream, &mut tokens);
     let patterns: Vec<Shape> = patterns()
         .into_iter()
         .filter(|(of, _)| *of == group)
         .map(|(_, shape)| shape)
         .collect();
-    let mut found = 0;
+    Ok(calls(source, &patterns)?.len())
+}
+
+/// Each call of one of `patterns` in `source`: the line it starts on and the index of its
+/// pattern. `Err` when `source` does not lex.
+pub(crate) fn calls(source: &str, patterns: &[Shape]) -> Result<Vec<(usize, usize)>, String> {
+    let stream = TokenStream::from_str(source).map_err(|error| error.to_string())?;
+    let (mut tokens, mut lines) = (Vec::new(), Vec::new());
+    flatten(stream, &mut tokens, &mut lines);
+    let mut found = Vec::new();
     for at in 0..tokens.len() {
-        for shape in &patterns {
+        for (index, shape) in patterns.iter().enumerate() {
             let hit = match shape {
                 Shape::Assoc(owner, name) => {
                     // `Owner::name`, also `Owner::<T>::name`.
@@ -346,7 +390,7 @@ pub(crate) fn count(source: &str, group: Group) -> Result<usize, String> {
                 }
             };
             if hit {
-                found += 1;
+                found.push((lines[at], index));
             }
         }
     }
@@ -357,7 +401,8 @@ pub(crate) fn count(source: &str, group: Group) -> Result<usize, String> {
 const ORDERS: [&str; 5] = ["Foreground", "Tooltip", "Middle", "Debug", "Background"];
 
 /// Every banned path of `clippy.toml`, all packages' lists, by its last two segments: the
-/// owner or module and the name. A renaming import or a type alias of one would hide it from
+/// owner or module and the name; and every path the legacy host freeze counts
+/// (`lint::legacy::CAPABILITIES`). A renaming import or a type alias of one would hide it from
 /// the counters, which match names in an item's tokens.
 fn banned_paths() -> Vec<(String, String)> {
     CLIPPY
@@ -370,6 +415,7 @@ fn banned_paths() -> Vec<(String, String)> {
             };
             Some(((*owner).to_owned(), (*name).to_owned()))
         })
+        .chain(crate::design::lint::legacy::alias_paths())
         .collect()
 }
 
