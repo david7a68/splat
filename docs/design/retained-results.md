@@ -150,15 +150,17 @@ Add loses one staged `ResultOrder::issue` and one `outcome_at` (their `STAGED_AL
 `Messages` keeps its lines as typed data (`FooterLine`: rank, act order, the typed message, a kept line's
 ticket); nothing is lowered to a closure. The pane draws them through `TypedFooter`, which keeps a plan per
 footer: the lines' one order (`footer_order`'s rule), the accessible name, each Undo's short form
-(`undo_alone`), the room the lines take (`bare`), the room their open locks' reasons want (`reserved`) and
-the room each of those reasons keeps (`rooms`).
+(`undo_alone`), each kept Undo's words as fitted to its room (`forms`: the visible form, the whole form that
+names it, the action's width), the room the lines take (`bare`), the room their open locks' reasons want
+(`reserved`) and the room each of those reasons keeps (`rooms`).
 
 - **When the plan is made.** By the pass that draws the lines, so its measure is the paint's own (the
   typography, wraps, actions and reasons that are drawn), and only when the lines changed (compared as data
   with the last ones, with the state their file lines draw from: a link pressed for a file that is gone adds a
-  reason line), or the width, the scale or the style. An unchanged frame sorts, names, counts Undo verbs and
-  lays out no reservation (an empty widget-like rect takes each reservation's kept room); `FooterWork` counts
-  plans, sorted lines, named bytes, reason probes, verb comparisons and reservation layouts. The pane knows an
+  reason line), or the width, the scale or the style. An unchanged frame sorts, names, counts Undo verbs,
+  builds and fits no Undo label (`Body::undo_form` takes the plan's) and lays out no reservation (an empty
+  widget-like rect takes each reservation's kept room); `FooterWork` counts plans, sorted lines, named bytes,
+  reason probes, verb comparisons, Undo labels fitted and reservation layouts. The pane knows an
   **unchanged** footer's demand before it draws (`Footer::planned`). A **changed** footer's first frame still
   paints at its last height and measures, as before; its placement in that same frame comes with PR 456 (L1c).
 - **Reasons' room (R29), per footer.** A fresh plan decides `give_up` from its own numbers and the room where

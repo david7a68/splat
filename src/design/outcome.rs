@@ -2674,11 +2674,12 @@ impl<'f, A: 'static> Messages<'f, A> {
 
 /// A [`Messages`] footer as the pane draws it (layout PR 2b, ruling L9): its typed lines, and the
 /// footer's retained plan. The plan holds the footer's order, its accessible name, which Undo is
-/// the only one of its verb, the room its lines take and the room each open lock's reason keeps,
-/// at one width, scale and style, for one revision of the lines (their data, and the state their
-/// file lines draw from). It is made by the pass that draws the lines (the paint is its measure),
-/// and only when one of those changed: an unchanged frame sorts, joins, counts verbs and lays out
-/// no reservation, and the pane knows an unchanged footer's height before it draws. A changed
+/// the only one of its verb, each kept Undo's words as fitted to its room, the room its lines take
+/// and the room each open lock's reason keeps, at one width, scale and style, for one revision of
+/// the lines (their data, and the state their file lines draw from). It is made by the pass that
+/// draws the lines (the paint is its measure), and only when one of those changed: an unchanged
+/// frame sorts, joins, counts verbs, builds and fits no Undo label and lays out no reservation,
+/// and the pane knows an unchanged footer's height before it draws. A changed
 /// footer's first frame still paints at the last height and measures (its placement in that same
 /// frame comes with layout PR 456, L1c). Each footer's reservations are its own (no shared
 /// state): a pane that gives up its reasons' room takes nothing from another. The plans live in
@@ -2746,6 +2747,8 @@ struct FooterPlan {
     name: String,
     /// For each line, whether its Undo is the only kept Undo of its verb (`undo_alone`).
     alone: Vec<bool>,
+    /// For each line, its Undo's words as fitted to the line's room (`Body::undo_form`).
+    forms: std::sync::Arc<[Option<std::sync::Arc<UndoForm>>]>,
     /// The room the lines take, without their open locks' reasons.
     bare: f32,
     /// The room the open locks' reasons want (ruling R29).
@@ -2809,6 +2812,8 @@ pub(crate) struct FooterWork {
     pub laid: usize,
     /// Undo verbs compared to find each line's `undo_alone`.
     pub verbs: usize,
+    /// Undo labels built and fitted to their room (`Body::undo_form`).
+    pub undo_fits: usize,
     /// Lines compared with the retained ones, and the bytes of their words.
     pub compared: usize,
     pub compared_bytes: usize,
@@ -2824,6 +2829,7 @@ thread_local! {
             probes: 0,
             laid: 0,
             verbs: 0,
+            undo_fits: 0,
             compared: 0,
             compared_bytes: 0,
         })
@@ -2913,13 +2919,21 @@ impl<A: 'static> TypedFooter<A> {
         }
     }
 
-    /// Draw one line, with its reasons' room as the plan decides; its press goes to the pane's
-    /// one slot, with a kept line's ticket.
-    fn draw_line(&self, ui: &mut Ui, line: FooterLine<A>, alone: bool, room: &mut ReasonRoom) {
+    /// Draw line `at`, with its Undo's words and its reasons' room as the plan decides; its press
+    /// goes to the pane's one slot, with a kept line's ticket.
+    fn draw_line(
+        &self,
+        ui: &mut Ui,
+        at: usize,
+        line: FooterLine<A>,
+        alone: bool,
+        room: &mut FooterPass,
+    ) {
         let FooterLine {
             mut typed, ticket, ..
         } = line;
         typed.body.undo_alone = alone;
+        room.line = at;
         let pressed = match &ticket {
             // A global id from the ticket: egui's child ids count the children before them, so
             // a line added above would hand this line's focus and press to another.
@@ -2982,7 +2996,7 @@ impl<A: 'static> super::components::FooterLines for TypedFooter<A> {
             // The plan holds: its order, its name, its Undos' forms and its room. Ruling R29:
             // the open locks' reasons keep their room while the footer has room for it where it
             // stands; each takes the room the plan measured, with no reason laid out.
-            let mut room = ReasonRoom {
+            let mut room = FooterPass {
                 give_up: plan.reserved > 0.0 && plan.wanted() > most,
                 measure: false,
                 reserved: 0.0,
@@ -2990,11 +3004,14 @@ impl<A: 'static> super::components::FooterLines for TypedFooter<A> {
                 rooms: plan.rooms.clone(),
                 next: 0,
                 measured: Vec::new(),
+                line: 0,
+                forms: plan.forms.clone(),
+                fitted: Vec::new(),
             };
             let _ = super::components::scroll_part(ui, rect, id, &plan.name, |ui| {
                 for &at in &plan.order {
                     if let Some(line) = lines[at].take() {
-                        self.draw_line(ui, line, plan.alone[at], &mut room);
+                        self.draw_line(ui, at, line, plan.alone[at], &mut room);
                     }
                 }
             });
@@ -3043,7 +3060,7 @@ impl<A: 'static> super::components::FooterLines for TypedFooter<A> {
         // Ruling R29: whether the reasons give up their room this pass is the footer's own last
         // decision, kept with its plan; this pass measures what they want and decides again.
         let give_up = retained.give_up;
-        let mut room = ReasonRoom {
+        let mut room = FooterPass {
             give_up,
             measure: true,
             reserved: 0.0,
@@ -3051,11 +3068,14 @@ impl<A: 'static> super::components::FooterLines for TypedFooter<A> {
             rooms: std::sync::Arc::from([]),
             next: 0,
             measured: Vec::new(),
+            line: 0,
+            forms: std::sync::Arc::from([]),
+            fitted: vec![None; lines.len()],
         };
         let (_, content) = super::components::scroll_part(ui, rect, id, &name, |ui| {
             for &at in &order {
                 if let Some(line) = lines[at].take() {
-                    self.draw_line(ui, line, alone[at], &mut room);
+                    self.draw_line(ui, at, line, alone[at], &mut room);
                 }
             }
         });
@@ -3064,6 +3084,7 @@ impl<A: 'static> super::components::FooterLines for TypedFooter<A> {
             order,
             name,
             alone,
+            forms: std::sync::Arc::from(std::mem::take(&mut room.fitted)),
             bare: content - room.drawn,
             reserved: room.reserved,
             rooms: std::sync::Arc::from(std::mem::take(&mut room.measured)),
@@ -3250,19 +3271,21 @@ pub fn dismiss_on_first_line(ui: &mut Ui, words: impl FnOnce(&mut Ui)) -> Respon
     })
 }
 
-/// Where a message's open locks' reasons take their room (ruling R29).
+/// Where a message's open locks' reasons take their room (ruling R29), and where its Undo's
+/// fitted words come from.
 pub(in crate::design) enum Reasons<'r> {
     /// A legacy footer's closures (`Footer::result`, `kept_result`), and every place outside a
     /// footer: the legacy footer's shared flags (`GIVE_UP`, `RESERVED`, `DRAWN`) while it draws;
     /// elsewhere the room is kept and nothing is counted.
     Legacy,
-    /// A typed footer's own room, which its plan decides (layout PR 2b): no shared state.
-    Planned(&'r mut ReasonRoom),
+    /// A typed footer's own room and Undo words, which its plan decides (layout PR 2b): no
+    /// shared state.
+    Planned(&'r mut FooterPass),
 }
 
-/// One typed footer's reasons' room in one pass: whether they give it up (its plan's decision),
-/// whether this pass measures what they want, and the sums it measured.
-pub(in crate::design) struct ReasonRoom {
+/// One typed footer in one pass: whether its reasons give up their room (its plan's decision),
+/// whether this pass measures (makes the plan), the sums it measured, and its lines' Undo words.
+pub(in crate::design) struct FooterPass {
     give_up: bool,
     measure: bool,
     reserved: f32,
@@ -3273,6 +3296,12 @@ pub(in crate::design) struct ReasonRoom {
     next: usize,
     /// What a measuring pass found for each, in drawing order.
     measured: Vec<f32>,
+    /// The footer line drawn now (its index in the footer's lines).
+    line: usize,
+    /// The plan's Undo words for each line: a pass that does not measure builds and fits none.
+    forms: std::sync::Arc<[Option<std::sync::Arc<UndoForm>>]>,
+    /// What a measuring pass fitted for each line.
+    fitted: Vec<Option<std::sync::Arc<UndoForm>>>,
 }
 
 impl Body {
@@ -3342,12 +3371,18 @@ impl Body {
                             line = first_line_centre(&tone_message(ui, self.tone, words));
                         }
                         Some(step) => {
-                            let label = step.label();
-                            let shown = self.undo_words(ui, step);
-                            let name = (shown != label).then_some(label.as_str());
+                            let form = self.undo_form(ui, step, reasons);
+                            let name = (form.shown != form.label).then_some(form.label.as_str());
                             let lock = holding(&self.undo_lock);
-                            let (undo, centre) =
-                                undo_message_line(ui, self.tone, words, &shown, name, lock, true);
+                            let (undo, centre) = undo_message_line(
+                                ui,
+                                self.tone,
+                                words,
+                                &form.shown,
+                                name,
+                                lock,
+                                true,
+                            );
                             activated(ui, pressed, undo, words, Pressed::Undo);
                             line = centre;
                         }
@@ -3361,14 +3396,10 @@ impl Body {
                 self.file_line(ui);
                 let inset = message.rect.left() - ui.cursor().left();
                 let gap = ui.spacing().item_spacing.x;
-                let undo = self.undo.as_ref().map(|step| {
-                    let (label, shown) = (step.label(), self.undo_words(ui, step));
-                    let width = Action::quiet(&shown)
-                        .icon(icons::UNDO)
-                        .density(Density::Read)
-                        .natural_width(ui);
-                    (label, shown, width)
-                });
+                let undo = self
+                    .undo
+                    .as_ref()
+                    .map(|step| self.undo_form(ui, step, reasons));
                 // Undo, then the choices `L` after it, on one line from the words when they fit;
                 // else Undo on its line and the choices on the lines under it, from the words.
                 let choices: f32 = self
@@ -3376,12 +3407,13 @@ impl Body {
                     .map(|(at, choice)| self.choice_width(ui, at, choice) + gap)
                     .sum();
                 let one_line =
-                    inset + undo.as_ref().map_or(0.0, |(_, _, width)| width + L) + choices
+                    inset + undo.as_ref().map_or(0.0, |form| form.width + L) + choices
                         <= ui.available_width();
                 if undo.is_some() || one_line {
                     ui.horizontal(|ui| {
                         space(ui, inset);
-                        if let Some((label, shown, _)) = &undo {
+                        if let Some(form) = &undo {
+                            let (label, shown) = (&form.label, &form.shown);
                             // Its words start at the message's words, its icon in the message's
                             // icon column.
                             let mut action = Action::quiet(shown)
@@ -3623,15 +3655,56 @@ impl Body {
         }
     }
 
-    /// Undo's label for the room after the message's icon. The room is measured before any
-    /// form is chosen, so a lone Undo shows its whole form wherever it fits (`UndoStep::alone`).
-    fn undo_words(&self, ui: &Ui, step: &UndoStep) -> String {
-        let room = undo_room(ui, self.tone, &step.label());
-        if self.undo_alone {
-            return step.alone(ui, room);
+    /// Undo's words for the room after the message's icon, and the action's width with them.
+    /// The room is measured before any form is chosen, so a lone Undo shows its whole form
+    /// wherever it fits (`UndoStep::alone`). A typed footer's plan keeps them with its key
+    /// (the lines as data, the width, the scale, the style): a pass that does not make the plan
+    /// builds and fits no label; the pass that makes it records what it fitted.
+    fn undo_form(
+        &self,
+        ui: &Ui,
+        step: &UndoStep,
+        reasons: &mut Reasons<'_>,
+    ) -> std::sync::Arc<UndoForm> {
+        if let Reasons::Planned(pass) = reasons
+            && !pass.measure
+            && let Some(Some(form)) = pass.forms.get(pass.line)
+        {
+            return form.clone();
         }
-        step.fit(ui, room)
+        count(|work| work.undo_fits += 1);
+        let label = step.label();
+        let room = undo_room(ui, self.tone, &label);
+        let shown = if self.undo_alone {
+            step.alone(ui, room)
+        } else {
+            step.fit(ui, room)
+        };
+        let width = Action::quiet(&shown)
+            .icon(icons::UNDO)
+            .density(Density::Read)
+            .natural_width(ui);
+        let form = std::sync::Arc::new(UndoForm {
+            label,
+            shown,
+            width,
+        });
+        if let Reasons::Planned(pass) = reasons
+            && pass.measure
+            && let Some(slot) = pass.fitted.get_mut(pass.line)
+        {
+            *slot = Some(form.clone());
+        }
+        form
     }
+}
+
+/// A message's Undo words for one room: the whole form (its accessible name and tip), the
+/// visible form (`UndoStep::fit` or `alone`), and the action's natural width with it.
+pub(in crate::design) struct UndoForm {
+    label: String,
+    shown: String,
+    width: f32,
 }
 
 /// The room for an Undo's words on a line of its own under a message of `tone`: the line
@@ -6059,11 +6132,12 @@ mod tests {
                 after.named - quiet.named,
                 after.probes - quiet.probes,
                 after.verbs - quiet.verbs,
+                after.undo_fits - quiet.undo_fits,
                 after.laid - quiet.laid,
             ),
-            (0, 0, 0, 0, 0, 0),
-            "an unchanged frame sorts, names, counts Undo verbs and lays out no reservation \
-             (each kept Undo, each open lock's reason)"
+            (0, 0, 0, 0, 0, 0, 0),
+            "an unchanged frame sorts, names, counts Undo verbs, builds and fits no Undo label \
+             and lays out no reservation (each kept Undo, each open lock's reason)"
         );
         let wide = footers(&h);
         assert_eq!(wide, fresh(1200.0, false));
@@ -6073,16 +6147,21 @@ mod tests {
         assert!(
             replanned.plans > after.plans
                 && replanned.verbs > after.verbs
+                && replanned.undo_fits > after.undo_fits
                 && replanned.laid > after.laid,
-            "a new width makes the plans again, counting the Undos' verbs and laying out the \
-             reservations once: {after:?} -> {replanned:?}"
+            "a new width makes the plans again, counting the Undos' verbs, fitting their labels \
+             and laying out the reservations once: {after:?} -> {replanned:?}"
         );
         let quiet = footer_work();
         h.run_steps(4);
         let still = footer_work();
         assert_eq!(
-            (still.verbs - quiet.verbs, still.laid - quiet.laid),
-            (0, 0),
+            (
+                still.verbs - quiet.verbs,
+                still.undo_fits - quiet.undo_fits,
+                still.laid - quiet.laid
+            ),
+            (0, 0, 0),
             "and then no more"
         );
         let narrow = fresh(700.0, false);
