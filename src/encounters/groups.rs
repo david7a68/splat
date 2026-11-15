@@ -5454,6 +5454,52 @@ mod tests {
             encounter_word(&[faulty, fresh]),
             SaveWord::Invalid(design::save_row::InvalidCause::Missing)
         ));
+        // Lead ruling 1 (s30 B11 F1): the most severe fault leads, in either order: inside a
+        // group (a count that cannot stand, an error, over a creature not in the packages, a
+        // warning) and across the encounter's groups, whose footer and cause come with it.
+        let missing_member = |name: &str| {
+            let mut group = GroupDraft::new();
+            group.name = name.into();
+            group.add(Uuid::new_v4());
+            group
+        };
+        let refused_member = |name: &str| {
+            let mut group = missing_member(name);
+            group.setup.members[0].count = 0;
+            group
+        };
+        let mut pair = missing_member("Pair");
+        pair.add(Uuid::new_v4());
+        pair.setup.members[1].count = 0;
+        for _ in 0..2 {
+            let refusal = pair.check(&snapshot, None).unwrap_err();
+            assert_eq!(refusal.tone(), Tone::Error, "{refusal:?}");
+            assert!(refusal.text().contains("count must be"), "{refusal:?}");
+            pair.setup.members.reverse();
+        }
+        for groups in [
+            [missing_member("Picket"), refused_member("Vanguard")],
+            [refused_member("Vanguard"), missing_member("Picket")],
+        ] {
+            let found = super::super::owned_groups_found(&groups, &snapshot, Uuid::new_v4());
+            assert_eq!(
+                found.found.cause(),
+                Some(design::save_row::InvalidCause::Refused)
+            );
+            assert!(
+                found
+                    .cause
+                    .as_deref()
+                    .is_some_and(|cause| cause.starts_with("Group Vanguard:")),
+                "{:?}",
+                found.cause
+            );
+            assert!(
+                matches!(&found.footer, Some(super::super::EncounterFault::Failed(words)) if words.starts_with("Group Vanguard:")),
+                "{:?}",
+                found.footer
+            );
+        }
 
         // F4: no editor opens a group whose note does not read: open gives an error.
         let unreadable = dir.path().join(FOLDER).join("Broken.md");
