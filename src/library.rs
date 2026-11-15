@@ -5674,7 +5674,7 @@ impl Library {
                                     let label = section.label();
                                     // Round 30 AI4: with no search, All entries paints no
                                     // count, which would repeat the header's; its name keeps it.
-                                    let painted = !(section == Section::All && !searching);
+                                    let painted = section != Section::All || searching;
                                     let response =
                                         section_row_counted(ui, label, count, selected, painted);
                                     if response.clicked() {
