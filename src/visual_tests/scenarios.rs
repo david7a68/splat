@@ -6232,7 +6232,51 @@ pub mod settings {
                 && d.visible_text("Campaign details draft discarded."),
             format!("{UNLINKED_CAMPAIGN} row y: changed {changed:?}, discarded {discarded:?}"),
         );
-        d.state("campaign-details-discarded", Sizes::Default);
+        // Migration-32 L2b (layout PR 2b): the typed footer's room is its plan's, known before it
+        // draws. At each size the discard's words and its live Undo are whole in the footer, and
+        // the footer stands exactly `S` from the content: below it when it fits, below the
+        // body's view when the footer is pinned.
+        d.state_prepared("campaign-details-discarded", Sizes::All, |d| {
+            let size = d.window_size();
+            let words = d.place_of("Campaign details draft discarded.");
+            let undo = d.place_of("Undo discard of Campaign details");
+            let live = !d.is_disabled("Undo discard of Campaign details");
+            let pane = d.pane_records().into_iter().find(|record| {
+                record
+                    .footer()
+                    .zip(words)
+                    .is_some_and(|(f, w)| f.contains_rect(w))
+            });
+            let gap = pane.as_ref().and_then(|record| {
+                let footer = record.footer()?;
+                let view = record.viewport()?;
+                Some(match record.placement() {
+                    crate::design::pane::Placement::Follows => {
+                        footer.top() - (view.top() + record.content_height()?)
+                    }
+                    crate::design::pane::Placement::Pinned => footer.top() - view.bottom(),
+                })
+            });
+            let footer = pane
+                .as_ref()
+                .and_then(crate::design::pane::PaneRecord::footer);
+            d.observe(
+                "m32-L2b-settings-discard-footer",
+                live && footer
+                    .zip(words)
+                    .zip(undo)
+                    .is_some_and(|((footer, words), undo)| {
+                        footer.contains_rect(words)
+                            && footer.contains_rect(undo)
+                            && footer.bottom() <= size.1 + 0.5
+                    })
+                    && gap.is_some_and(|gap| (gap - crate::design::S).abs() <= 1.0),
+                format!(
+                    "At {size:?}: footer {footer:?}, words {words:?}, Undo {undo:?} (live {live}), \
+                     gap from the content {gap:?}"
+                ),
+            );
+        });
         d.click("Undo discard of Campaign details");
         assert_eq!(
             d.field_text(EDIT_FORM).as_deref(),
