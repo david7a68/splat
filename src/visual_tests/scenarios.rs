@@ -14825,70 +14825,47 @@ pub mod session_notes {
     /// the banner and a page's pinned result (the templates page's `Deleted …` with its Undo)
     /// share 960x640 whole, apart. After the scenario's last state.
     fn note_warnings_beside_other_editors(d: &mut Driver<'_>) {
-        // A banner message whose words start with the note's name, whole in view, with its
-        // choices, beside the event form's own field.
-        let named = |d: &Driver<'_>, cause: &str, choices: &[&str]| {
-            let words = d.nodes().into_iter().find(|node| {
-                node.fully_in_view()
-                    && node.name.starts_with("The note of Session ")
-                    && node.name.contains(cause)
-            });
-            let field = d.place_of("Title");
-            let choices_in_view = choices.iter().all(|choice| d.in_view(choice));
-            (
-                words.is_some() && field.is_some() && choices_in_view,
-                format!(
-                    "{cause}: words {:?}, the event form's Title {field:?}, choices {choices:?} in view {choices_in_view}",
-                    words.map(|node| node.name)
-                ),
-            )
-        };
+        // Round 30 B7c (review F1 of PR 409): each banner is a captured state. Its check: the
+        // note's warning is painted exactly once, its words name the note and are whole in view,
+        // and every control named (its choices, another page's own field, a pinned result's
+        // Undo) is wholly in view, not clipped.
         d.click(NAV_SESSIONS);
         d.settle();
         d.app_mut().sessions.simulate_failed_save();
         // Timeline still holds the event form the scenario opened (Rest at the mill).
         d.click(NAV_TIMELINE);
         d.expect("Rest at the mill");
-        let failed = named(
-            d,
-            "was not saved. The disk is full.",
-            &["Try to save again"],
-        );
-        let failed_wide = d.at_size(DEFAULT, |d| {
-            named(
+        d.state_prepared("note-save-failed-elsewhere", Sizes::Standard, |d| {
+            banner_whole(
                 d,
-                "was not saved. The disk is full.",
-                &["Try to save again"],
-            )
+                "round-30-note-warnings-elsewhere",
+                "was not saved.",
+                &["Try to save again", "Title"],
+            );
         });
+        d.app_mut().sessions.simulate_failed_save_ends();
         d.click("Try to save again");
         d.settle();
-        let retried = !d.has_containing("was not saved. The disk is full.");
-        let (path, away) = d.app_mut().sessions.simulate_note_gone();
-        d.settle();
-        let gone = named(
-            d,
-            "is gone from the folder.",
-            &["Save my draft as a new file", "Discard"],
-        );
-        let gone_wide = d.at_size(DEFAULT, |d| {
-            named(
-                d,
-                "is gone from the folder.",
-                &["Save my draft as a new file", "Discard"],
-            )
+        let retried = !d.nodes().iter().any(|node| {
+            node.name.starts_with("The note of Session ") && node.name.contains("was not saved.")
         });
         d.observe(
             "round-30-note-warnings-elsewhere",
-            failed.0 && failed_wide.0 && retried && gone.0 && gone_wide.0,
-            format!(
-                "960x640: {}; {}. 1200x800: {}; {}. The retry ends the failure: {retried}",
-                failed.1, gone.1, failed_wide.1, gone_wide.1
-            ),
+            retried,
+            "Try to save again ends the failure on Timeline",
         );
-        // The banner beside a pinned result, at 960x640: the templates page's delete result and
-        // its Undo, and the note's warning with its choices, each whole, the result above the
-        // banner.
+        let (path, away) = d.app_mut().sessions.simulate_note_gone();
+        d.settle();
+        d.state_prepared("note-gone-elsewhere", Sizes::Standard, |d| {
+            banner_whole(
+                d,
+                "round-30-note-warnings-elsewhere",
+                "is gone from the folder.",
+                &["Save my draft as a new file", "Discard", "Title"],
+            );
+        });
+        // The banner beside a pinned result: the templates page's delete result and its Undo,
+        // and the note's warning with its choices, each whole, the result above the banner.
         d.click(NAV_SESSIONS);
         d.click("Templates");
         d.click("New template");
@@ -14898,31 +14875,69 @@ pub mod session_notes {
         d.click("More actions for Short break");
         d.click("Delete this template");
         d.expect("Undo delete");
-        let result = d
-            .nodes()
-            .into_iter()
-            .find(|node| node.fully_in_view() && node.name.starts_with("Deleted “Short break”."));
-        let undo = d.place_of("Undo delete");
-        let banner = d.nodes().into_iter().find(|node| {
+        d.state_prepared("note-gone-beside-a-pinned-result", Sizes::Small, |d| {
+            banner_whole(
+                d,
+                "round-30-note-warning-beside-a-pinned-result",
+                "is gone from the folder.",
+                &["Save my draft as a new file", "Discard", "Undo delete"],
+            );
+            let result = d.nodes().into_iter().find(|node| {
+                node.fully_in_view() && node.name.starts_with("Deleted “Short break”.")
+            });
+            let banner = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.fully_in_view() && node.name.starts_with("The note of Session "));
+            d.observe(
+                "round-30-note-warning-beside-a-pinned-result",
+                result
+                    .as_ref()
+                    .zip(banner.as_ref())
+                    .is_some_and(|(result, banner)| result.rect.bottom() <= banner.rect.top()),
+                format!(
+                    "The pinned result {:?} stands whole above the banner {:?}",
+                    result.map(|node| node.rect),
+                    banner.map(|node| node.rect)
+                ),
+            );
+        });
+        std::fs::rename(&away, &path).unwrap();
+    }
+
+    /// The session note's warning in the bottom banner: painted exactly once (inside its clip),
+    /// its words whole in view and naming the note with `cause`, and each of `controls` (a
+    /// control by its accessible name, not a label of that name) wholly in view, not clipped.
+    fn banner_whole(d: &mut Driver<'_>, id: &str, cause: &str, controls: &[&str]) {
+        let copies = painted_starts(d, "The note of Session ", 0).len();
+        let words = d.nodes().into_iter().find(|node| {
             node.fully_in_view()
                 && node.name.starts_with("The note of Session ")
-                && node.name.contains("is gone from the folder.")
+                && node.name.contains(cause)
         });
-        let discard = d.place_of("Discard");
+        let cut: Vec<&str> = controls
+            .iter()
+            .copied()
+            .filter(|control| {
+                !d.nodes().iter().any(|node| {
+                    node.name == *control
+                        && !matches!(
+                            node.role,
+                            egui::accesskit::Role::Label | egui::accesskit::Role::TextRun
+                        )
+                        && node.fully_in_view()
+                })
+            })
+            .collect();
+        let size = d.window_size();
         d.observe(
-            "round-30-note-warning-beside-a-pinned-result",
-            result.as_ref().zip(banner.as_ref()).zip(undo.zip(discard)).is_some_and(
-                |((result, banner), (undo, _))| {
-                    result.rect.bottom() <= banner.rect.top() && undo.bottom() <= banner.rect.top()
-                },
-            ),
+            id,
+            copies == 1 && words.is_some() && cut.is_empty(),
             format!(
-                "At 960x640 the pinned result {:?} and its Undo {undo:?} stand above the banner {:?} with Discard {discard:?}",
-                result.map(|node| node.rect),
-                banner.map(|node| node.rect)
+                "At {size:?}: {copies} painted banner(s), words {:?}, not wholly in view {cut:?}",
+                words.map(|node| node.name)
             ),
         );
-        std::fs::rename(&away, &path).unwrap();
     }
 
     /// A Sessions note's link keeps focus when Lookup opens a World note beside it, and
@@ -23462,6 +23477,17 @@ pub mod session_plan_groups {
             d.has(&format!("Group name: {GROUP_RIVALS}")),
             d.visible_text(reason),
         );
+        // B4b: the refused press as a captured state, its reason whole, once, under Rival Team.
+        let mut under = (true, String::new());
+        d.state_prepared("plan-group-refused", Sizes::Standard, |d| {
+            let (ok, words) = refusal_under(d, reason, GROUP_RIVALS);
+            under.0 &= ok;
+            under
+                .1
+                .push_str(&format!("{:?}: {words}; ", d.window_size()));
+        });
+        under.0 &= under.1.contains("(960.0, 640.0)") && under.1.contains("(1200.0, 800.0)");
+        d.observe("s30-B4b-refusal-under-its-group", under.0, under.1);
         // Back to the draft's own session (the link names it while the host is kept).
         if d.has("Return to the session being played") {
             d.click("Return to the session being played");
@@ -23476,14 +23502,20 @@ pub mod session_plan_groups {
         d.click_starting("Session 1: The Crossing ·");
         d.expect(&format!("Add {GROUP_RIVALS} to fight"));
         let in_one = d.has_containing("Ash Two");
+        // B4b: the host as the files say it: the saved session notes that link Ash Two.
+        d.focus_window(false);
+        d.focus_window(true);
+        let files = notes_linking(d, "Ash Two");
+        let on_disk = files.len() == 1 && files[0].contains("The Ford");
         d.observe(
             "s30-B4-F1-group-keeps-its-host",
             before == (true, false, false)
                 && refused == (true, false, false, true)
                 && in_two
-                && !in_one,
+                && !in_one
+                && on_disk,
             format!(
-                "Before the press (warning, Save, Ash Two in Session 1): {before:?}; after the refused press (warning, Save, Rival Team open, reason painted): {refused:?}; after Save, Ash Two in Session 2's plan {in_two}, in Session 1's {in_one}"
+                "Before the press (warning, Save, Ash Two in Session 1): {before:?}; after the refused press (warning, Save, Rival Team open, reason painted): {refused:?}; after Save, Ash Two in Session 2's plan {in_two}, in Session 1's {in_one}; notes on disk that link it: {files:?}"
             ),
         );
         // The same press with an unsaved encounter and no group editor: the encounter's reason
@@ -23504,7 +23536,155 @@ pub mod session_plan_groups {
                 d.visible_text(encounter_reason)
             ),
         );
+        let mut under = (true, String::new());
+        d.state_prepared("plan-encounter-refused", Sizes::Standard, |d| {
+            let (ok, words) = refusal_under(d, encounter_reason, GROUP_RIVALS);
+            under.0 &= ok;
+            under
+                .1
+                .push_str(&format!("{:?}: {words}; ", d.window_size()));
+        });
+        under.0 &= under.1.contains("(960.0, 640.0)") && under.1.contains("(1200.0, 800.0)");
+        d.observe(
+            "s30-B4b-encounter-refusal-under-its-group",
+            under.0,
+            under.1,
+        );
+
+        // B4b N2: the refusal belongs to the group, not to its file's path. Another group takes
+        // Rival Team's file: no reason under it until it is pressed. Then that group's file goes
+        // away and comes back: the plan read in between ended the refusal, so it does not come
+        // back with it.
+        let file = d.root.join(format!(
+            "campaigns/emberfall/Encounter Groups/{GROUP_RIVALS}.md"
+        ));
+        let original = std::fs::read_to_string(&file).unwrap();
+        let replaced = original.replacen(
+            original
+                .lines()
+                .find(|line| line.starts_with("splat_id: "))
+                .unwrap(),
+            &format!("splat_id: {}", crate::hermetic::new_uuid()),
+            1,
+        );
+        std::fs::write(&file, &replaced).unwrap();
+        d.focus_window(false);
+        d.focus_window(true);
+        d.settle();
+        rivals_in_view(d);
+        let reused = (d.in_view(GROUP_RIVALS), d.visible_text(encounter_reason));
+        d.click_first(GROUP_RIVALS);
+        let pressed = d.visible_text(encounter_reason);
+        std::fs::remove_file(&file).unwrap();
+        d.focus_window(false);
+        d.focus_window(true);
+        d.settle();
+        let removed = (d.in_view(GROUP_RIVALS), d.visible_text(encounter_reason));
+        std::fs::write(&file, &replaced).unwrap();
+        d.focus_window(false);
+        d.focus_window(true);
+        d.settle();
+        rivals_in_view(d);
+        let back = (d.in_view(GROUP_RIVALS), d.visible_text(encounter_reason));
+        std::fs::write(&file, &original).unwrap();
+        d.focus_window(false);
+        d.focus_window(true);
+        d.settle();
+        d.observe(
+            "s30-B4b-refusal-follows-the-group",
+            reused == (true, false) && pressed && removed == (false, false) && back == (true, false),
+            format!(
+                "(row in view, reason painted): another group at the path {reused:?}; pressed {pressed}; file removed {removed:?}; the same group back {back:?}"
+            ),
+        );
+
+        // B4b N1: with no refusal stored, no frame compares the drafts for it. The encounter is
+        // discarded (its refusal ends), then unchanged frames on Encounters do no check.
+        d.click(NAV_ENCOUNTERS);
+        d.click("Discard");
+        d.settle();
+        let checks = crate::test_support::CachedWork::start("Plan refusal end", d, |d| {
+            crate::test_support::Counts {
+                reached: d.passes(),
+                work: crate::encounters::PLAN_BLOCK_CHECKS.with(std::cell::Cell::get),
+            }
+        });
+        let idle = checks.steady(d, |d| {
+            for _ in 0..5 {
+                d.settle();
+            }
+            d.at_size(DEFAULT, |_| ());
+            d.has(NEW_ENCOUNTER)
+        });
+        d.observe(
+            "s30-B4b-no-idle-refusal-check",
+            idle.is_ok(),
+            format!("Unchanged frames with no refusal stored: {idle:?}"),
+        );
     }
+}
+
+/// B4b: `reason` is painted once, whole in its clip and in the window, under `group`'s line in
+/// the plan and above the next group's line.
+fn refusal_under(d: &Driver<'_>, reason: &str, group: &str) -> (bool, String) {
+    let mut found = Vec::new();
+    d.each_painted_text(|text, clip| {
+        if text.galley.job.text == reason {
+            let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+            found.push((rect, clip.expand(1.0).contains_rect(rect)));
+        }
+    });
+    let links: Vec<egui::Rect> = d
+        .nodes()
+        .into_iter()
+        .filter(|node| node.is_link() && node.in_view())
+        .map(|node| node.rect)
+        .collect();
+    let own = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.is_link() && node.name == group && node.in_view())
+        .map(|node| node.rect);
+    let (w, h) = d.window_size();
+    let window = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, h));
+    let ok = match (found.as_slice(), own) {
+        ([(rect, whole)], Some(own)) => {
+            let next = links
+                .iter()
+                .filter(|link| link.top() > own.bottom() && (link.left() - own.left()).abs() < 2.0)
+                .map(|link| link.top())
+                .fold(f32::INFINITY, f32::min);
+            *whole
+                && window.contains_rect(*rect)
+                && rect.top() >= own.bottom() - 0.5
+                && rect.bottom() <= next + 0.5
+        }
+        _ => false,
+    };
+    (ok, format!("painted {found:?}, {group} at {own:?}"))
+}
+
+/// B4b: the saved notes that link `name` in their plan, by file name.
+fn notes_linking(d: &Driver<'_>, name: &str) -> Vec<String> {
+    fn walk(folder: &std::path::Path, link: &str, out: &mut Vec<String>) {
+        for entry in std::fs::read_dir(folder).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(&path, link, out);
+            } else if path.extension().is_some_and(|ext| ext == "md")
+                && std::fs::read_to_string(&path).is_ok_and(|text| text.contains(link))
+            {
+                out.push(path.file_name().unwrap().to_string_lossy().into_owned());
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(
+        &d.root.join("campaigns/emberfall"),
+        &format!("[[{name}]]"),
+        &mut out,
+    );
+    out
 }
 
 /// W14: an evening from the session's one page: the plan, the fights, and what they leave behind.
