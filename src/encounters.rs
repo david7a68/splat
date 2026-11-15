@@ -3600,8 +3600,22 @@ impl Encounters {
             run.show_arrivals();
         }
     }
-    /// Assemble a group where the plan is, with the session's note still beside it.
+    /// B4, E1: an unsaved draft (encounter, group or creature) holds the open drafts: a plan or
+    /// run route that would replace one is refused with that draft's reason, and every draft is
+    /// kept. True when refused.
+    fn replacement_held(&mut self) -> bool {
+        let Some(draft) = design::first_unsaved(self) else {
+            return false;
+        };
+        self.error = Some(draft.reason().to_owned());
+        true
+    }
+    /// Assemble a group where the plan is, with the session's note still beside it. Refused,
+    /// with every draft kept, while one is unsaved.
     pub fn new_group_in_plan(&mut self) {
+        if self.replacement_held() {
+            return;
+        }
         self.clear_notice();
         self.group_draft = Some(GroupDraft::new());
         self.discarded_group = None;
@@ -3613,8 +3627,13 @@ impl Encounters {
         self.error = None;
         self.message = None;
     }
-    /// Returns false when the group cannot be read. Encounters says why.
+    /// Returns false when the group cannot be read. Encounters says why. While a draft is
+    /// unsaved it is refused with that draft's reason and every draft is kept (true: nothing to
+    /// read on the Encounters page).
     pub fn open_group_in_plan(&mut self, path: &str, active: &Campaign) -> bool {
+        if self.replacement_held() {
+            return true;
+        }
         self.clear_notice();
         match GroupDraft::open(&active.path, path) {
             Ok(draft) => {
@@ -3696,7 +3715,11 @@ impl Encounters {
                 .is_none()
                 .then_some("Still reading this campaign."))
     }
+    /// A new fight from the plan. Refused, with every draft kept, while one is unsaved.
     pub fn new_from_plan(&mut self, session: Option<Uuid>) {
+        if self.replacement_held() {
+            return;
+        }
         self.start_new_draft();
         self.from_session = session;
         self.plan_on_save = true;
@@ -6949,6 +6972,29 @@ impl Encounters {
     /// what the party has left while they choose what to put against it.
     fn sync_option(ui: &mut egui::Ui, draft: &mut Draft, snapshot: &Snapshot, party: &Party) {
         ui.checkbox(&mut draft.setup.combat_sync, SYNC_OPTION);
+        // The live fact stands directly under its control, the help after it (B4, lead ruling:
+        // at 960 the help, not the party's HP, is what goes below the view). With sync off, the
+        // help is itself the fact: nothing reaches D&D Beyond.
+        if draft.setup.combat_sync {
+            let sheets: Vec<_> = draft
+                .setup
+                .roster
+                .iter()
+                .filter_map(|slot| slot_sheet(slot, snapshot, party))
+                .collect();
+            if let Some(line) = crate::party::party_line(&sheets, party.connected()) {
+                ui.horizontal_wrapped(|ui| {
+                    ui.add(
+                        egui::Label::new(Type::Small.rich(ui, line).color(colors().text)).wrap(),
+                    );
+                    if !party.connected() && design::link(ui, "Connect to sync").clicked() {
+                        ui.ctx().data_mut(|data| {
+                            data.insert_temp(egui::Id::new("open_account_settings"), true)
+                        });
+                    }
+                });
+            }
+        }
         let words = if draft.setup.combat_sync {
             "The party starts with the HP and conditions on their sheets. When connected, the run and D&D Beyond stay matched."
         } else {
@@ -6956,25 +7002,6 @@ impl Encounters {
         };
         // AD1: help under an option keeps the reader measure.
         design::help(ui, words);
-        if !draft.setup.combat_sync {
-            return;
-        }
-        let sheets: Vec<_> = draft
-            .setup
-            .roster
-            .iter()
-            .filter_map(|slot| slot_sheet(slot, snapshot, party))
-            .collect();
-        if let Some(line) = crate::party::party_line(&sheets, party.connected()) {
-            ui.horizontal_wrapped(|ui| {
-                ui.add(egui::Label::new(Type::Small.rich(ui, line).color(colors().text)).wrap());
-                if !party.connected() && design::link(ui, "Connect to sync").clicked() {
-                    ui.ctx().data_mut(|data| {
-                        data.insert_temp(egui::Id::new("open_account_settings"), true)
-                    });
-                }
-            });
-        }
     }
 
     #[allow(
@@ -9776,6 +9803,54 @@ mod tests {
             fs::read_dir(dir.path().join("Encounters")).unwrap().count(),
             before
         );
+
+        // B4, E1: the plan's and the run's routes that would replace the open drafts are refused
+        // in the owner while one is unsaved, each with that draft's reason, and keep every draft.
+        let kept = encounters.draft.as_ref().map(|draft| draft.id);
+        encounters.error = None;
+        encounters.new_from_plan(None);
+        assert_eq!(
+            encounters.draft.as_ref().map(|d| d.id),
+            kept,
+            "New fight keeps it"
+        );
+        assert_eq!(encounters.error.as_deref(), Some(BLOCKED_BY_DRAFT));
+        encounters.error = None;
+        encounters.new_group_in_plan();
+        assert!(encounters.group_draft.is_none(), "New group is refused");
+        assert_eq!(encounters.error.as_deref(), Some(BLOCKED_BY_DRAFT));
+        encounters.error = None;
+        assert!(encounters.open_group_in_plan("Groups/Any.md", &active));
+        assert!(
+            encounters.group_draft.is_none(),
+            "a group is not opened over it"
+        );
+        assert_eq!(encounters.draft.as_ref().map(|d| d.id), kept);
+        assert_eq!(encounters.error.as_deref(), Some(BLOCKED_BY_DRAFT));
+        // A changed group holds them too, with the group's own reason.
+        let mut encounters = fresh();
+        encounters.group_draft = Some(GroupDraft::new());
+        let group = encounters.group_draft.as_ref().map(GroupDraft::id);
+        assert!(encounters.open_group_in_plan("Groups/Any.md", &active));
+        encounters.new_group_in_plan();
+        encounters.new_from_plan(None);
+        assert_eq!(encounters.group_draft.as_ref().map(GroupDraft::id), group);
+        assert!(
+            encounters.draft.is_none(),
+            "no new fight over the changed group"
+        );
+        assert_eq!(
+            encounters.error.as_deref(),
+            Some(design::Unsaved::Group.reason())
+        );
+        // With nothing unsaved, New fight opens its draft.
+        let mut encounters = fresh();
+        encounters.new_from_plan(None);
+        assert!(
+            encounters.draft.is_some(),
+            "a new fight opens with nothing unsaved"
+        );
+        assert_eq!(encounters.error, None);
     }
 
     #[test]

@@ -872,11 +872,7 @@ pub(super) fn said_once(
             clipped = true;
         }
     });
-    // B4: the back line moves the editor down 34 px, so at 960 the member row's words can be
-    // wholly below the plan's editor, not painted at all; the save row then says the fault
-    // once, as it must. That case is looked at at 1920 too.
-    let below = said(d) == 1 && !d.visible_text(field) && d.visible_text(beside);
-    let cut = said(d) > 1 && clipped || below;
+    let cut = said(d) > 1 && clipped;
     let look = |d: &Driver<'_>| (said(d), d.visible_text(field), d.visible_text(beside));
     let place = if cut { d.at_size(LARGE, look) } else { look(d) };
     let mut painted = Vec::new();
@@ -898,7 +894,7 @@ pub(super) fn said_once(
     (
         steady && tab == once && button == once && key == once && place == (1, true, false),
         format!(
-            "tabs and words steady {steady} (from {tops:?}: {moves:?}); Add creatures tab {tab:?}; after Save group {button:?}; after Ctrl+S {key:?}; Members (cut or below at first: {cut}, below: {below}) {place:?}: {painted:?}"
+            "tabs and words steady {steady} (from {tops:?}: {moves:?}); Add creatures tab {tab:?}; after Save group {button:?}; after Ctrl+S {key:?}; Members (cut at first: {cut}) {place:?}: {painted:?}"
         ),
     )
 }
@@ -22191,6 +22187,15 @@ pub mod session_plan_groups {
             d.focus_window(true);
             // The row's heading names the gone creature, whichever place says the fault.
             d.wait_for_text("Unknown creature");
+            // B4: at 960 the back line moves the plan's editor 34 px down, so the member row's
+            // fault is below the view on the Members tab. The DM scrolls the row into view.
+            d.click_starting("Members");
+            for _ in 0..10 {
+                if d.visible_text("not in this campaign’s packages") {
+                    break;
+                }
+                d.scroll_at(pos2(600.0, 450.0), 1);
+            }
             let member = said_once(
                 d,
                 &[

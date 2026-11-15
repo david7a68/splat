@@ -538,7 +538,8 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
         ),
     ];
     for width in [NARROWEST_PANE, 454.0, need + 0.5] {
-        let mut field_rects = Vec::new();
+        let (mut field_rects, mut save_rects) = (Vec::new(), Vec::new());
+        // clean, creature, both, encounter, then the same for a group: held and saved again.
         for (editor, unsaved, held) in cases {
             let owner = Owner(unsaved);
             let head = EditorHead::new(editor, &owner);
@@ -564,6 +565,7 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
                                     "",
                                     200.0,
                                 );
+                                let _ = Action::secondary("Save").show(ui);
                             });
                         });
                         *followed = Some(back);
@@ -632,6 +634,7 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
                 "the name field starts at the text edge {left}: {field:?} {at}"
             );
             field_rects.push(field);
+            save_rects.push(bounds(&nodes, "Save"));
             let reasons: Vec<&Painted> = painted
                 .iter()
                 .filter(|text| {
@@ -672,6 +675,10 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
                 .windows(2)
                 .all(|pair| (pair[0].top() - pair[1].top()).abs() < 0.5),
             "the name field keeps its line in every state: {field_rects:?} at {width}"
+        );
+        assert!(
+            save_rects.windows(2).all(|pair| pair[0] == pair[1]),
+            "Save keeps its place in every state (G1b): {save_rects:?} at {width}"
         );
     }
     // Every destination with every cause has a form that fits the narrowest pane.
