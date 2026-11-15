@@ -8188,7 +8188,6 @@ impl Library {
             broken_cache: (Vec<String>, String),
             broken_taken: bool,
             results_shown: bool,
-            waits: bool,
             reason_tone: Tone,
         }
         let mut edit_data = None;
@@ -8222,11 +8221,10 @@ impl Library {
             // or Reload, so a reason first would hide the only way back. Then Save's reason (a
             // repair draft's parse error with its recovery, a refusal before the write, the
             // disk's failure). Then the notices: results with no Undo, the missing link Campaign
-            // sent here, the other broken links, the first-heading and stat warnings. With none
-            // of these, the footer says why other actions wait.
+            // sent here, the other broken links, the first-heading and stat warnings. Why other
+            // actions wait is the save row's (`design::DraftSlot`), never the footer's.
             let discard_shown =
                 discard_is_for(self.discarded.as_ref(), note) && self.draft == note.text;
-            let link_words = missing_link.as_ref().map(|(_, words)| words.as_str());
             let vital_result = self
                 .vital_undo
                 .as_ref()
@@ -8270,19 +8268,8 @@ impl Library {
                 }
                 _ => Default::default(),
             };
-            let broken = &broken_cache.0;
             // In Read with a changed draft too: one list of kept results per footer.
             let results_shown = results.any();
-            let waits = repair_problem.is_none()
-                && failed.is_none()
-                && link_words.is_none()
-                && broken.is_empty()
-                && heading.fix.is_none()
-                && vitals.is_empty()
-                && !discard_shown
-                && heading.undo.is_none()
-                && vital_result.is_none()
-                && !results_shown;
             let reason_tone = recovery
                 .as_ref()
                 .filter(|_| note.error.is_some())
@@ -8322,7 +8309,6 @@ impl Library {
                 broken_cache,
                 broken_taken,
                 results_shown,
-                waits,
                 reason_tone,
             });
         }
@@ -8361,7 +8347,6 @@ impl Library {
                 vitals,
                 broken_cache,
                 results_shown,
-                waits,
                 reason_tone,
                 ..
             } = data;
@@ -8470,13 +8455,6 @@ impl Library {
                             *vital_use = Some((*key, *label, *value));
                         }
                     }
-                });
-            }
-            if *waits && let Some(reason) = draft_reason {
-                // Round 27 FA3: the footer's message form (bar and icon), as its other
-                // messages have.
-                footer.notice(reason, move |ui| {
-                    design::message(ui, Tone::Info, reason);
                 });
             }
             // Round 26 FC4: the duplicate warning and its choices join Edit Markdown's messages,
@@ -11436,6 +11414,77 @@ mod tests {
                 // `More` is a menu button: its words, then room for its caret.
                 rendered.iter().any(|text| text.trim_end() == word),
                 "Missing {word}: {rendered:?}"
+            );
+        }
+
+        // M2 (packet E1): a campaign creature's draft with changes and a heading that no longer
+        // matches its name: `Make NPC note` waits for the draft, and the draft's reason is
+        // painted once, by the save row's slot, whatever the footer holds (here the heading
+        // warning), at a wide pane and behind `More` in a narrow one.
+        for width in [900.0, 360.0] {
+            let text = note_text("Cinder Wolf", "creature", None);
+            let note = Note {
+                path: "Cinder Wolf.md".into(),
+                entry: Some(Entry::parse("Cinder Wolf.md", &text).unwrap()),
+                text: text.clone(),
+                error: None,
+                fault: None,
+                manifest_gone: false,
+                owner: Owner::Campaign(Campaign {
+                    id: Uuid::new_v4(),
+                    name: "Ashen Marches".into(),
+                    path: "ashen".into(),
+                    dndbeyond_campaign_id: None,
+                    dndbeyond_campaign_name: None,
+                }),
+            };
+            let mut library = Library {
+                loaded: Some(Loaded {
+                    notes: vec![note],
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            library.open_entry(0);
+            library.source = true;
+            library.draft = format!("{text}\n# Ash Wolf\n");
+            let ctx = egui::Context::default();
+            crate::design::theme::install(&ctx);
+            let mut painted = Vec::new();
+            for _ in 0..4 {
+                let output = ctx.run(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(width, 800.0),
+                        )),
+                        ..Default::default()
+                    },
+                    |ctx| {
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            library.editor(ui, "Entry", &Campaigns::default());
+                        });
+                    },
+                );
+                painted = output
+                    .shapes
+                    .into_iter()
+                    .filter_map(|shape| match shape.shape {
+                        egui::Shape::Text(text) if text.fallback_color.a() > 0 => {
+                            Some(text.galley.job.text.clone())
+                        }
+                        _ => None,
+                    })
+                    .collect();
+            }
+            let reason = DRAFT_IN_CAMPAIGN.as_str();
+            assert_eq!(
+                painted
+                    .iter()
+                    .filter(|text| text.as_str() == reason)
+                    .count(),
+                1,
+                "at {width}: the draft's reason is painted once: {painted:?}"
             );
         }
     }

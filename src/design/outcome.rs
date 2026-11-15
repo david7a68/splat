@@ -5158,7 +5158,7 @@ mod tests {
                             let undo = UndoStep::act(step).pressed_as(()).locked_by(&cause);
                             let _ = kept_result(ui, words, undo, Vec::new());
                         }
-                        ui.button(format!("After {pane}"));
+                        let _ = ui.button(format!("After {pane}"));
                     });
                 }
                 for words in ["Third change.", "Fourth change."] {
