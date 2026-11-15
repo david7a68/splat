@@ -343,15 +343,16 @@ Several safe choices after a message share one line when they fit. Put a destruc
 after an `L` gap, or on its own line below after an `M` gap.
 
 Library, Lookup and encounter search rank equal names in this order: campaign entries, book and package
-entries, then character sheet copies. The creature searches (Lookup, World's creature pickers, the encounter
-editor, the group editor, their `Use it` lines for unused packages, the replacement picker and Arrivals; not yet
-Library's entry search) rank a creature's name in one order, which one function owns
+entries, then character sheet copies. The creature searches (Lookup, Library's entry search, World's creature
+pickers, the encounter editor, the group editor, their `Use it` lines for unused packages, the replacement picker and
+Arrivals) rank a creature's name in one order, which one function owns
 (`matching::Typed::creature`; Arrivals' `matching::creature_tier` is its first three tiers): the exact name, then
 names that start with the search, then names that hold it anywhere, in the list's order (`wolf`: Wolf, then Werewolf
 before Winter Wolf), then the typed words in any order, then a typo. A short list ranks every match before it takes
-its first five, so the exact name is never left out. In Lookup's mixed results other kinds keep their
-word, section and note-text tiers (a whole word before a word that only holds the search), and results of one tier, of
-any kind, sort by origin and then by name. Creature results keep names close to stats with an `S` gap between
+its first five, so the exact name is never left out. In the mixed results of Lookup and Library other kinds keep their
+word tiers (a whole word before a word that only holds the search). After the name tiers come the matches by other
+words (Lookup: section and note text; Library: path, section or creature facts), and results of one tier, of any kind,
+sort by origin and then by name. Creature results keep names close to stats with an `S` gap between
 results. The CR column fits `CR 1/8` plus an `M` gap. Paths shorten before file actions wrap; hover keeps the
 full path.
 
@@ -418,7 +419,7 @@ Only a row too narrow for the short form keeps a slot under it, in both states. 
 a fault owns the pane, or the entry cannot be edited) it stands on the toolbar's own line after the actions when it
 fits whole, else on the line under the toolbar; it is never left out. The waiting actions say the same words on
 hover and as their accessible description. Every toolbar action, Make NPC note and the actions in More included, is a Read control
-(28 px), so the toolbar row has one height and a campaign creature's title sits where a campaign spell's does. Lookup keeps its Back hint; its Back is a Read control (28 px), as its title line's icon buttons are, so the title line has one height with or without Back and the search field below never moves. Both use Alt+Left, and Alt+Right for Forward, which has no button. Lookup takes the key when focus is there. Beside the Library, the mouse's Back and Forward buttons act on the side under the pointer.
+(28 px) in one form, its words with no icon (`Copy to…`, `Make NPC note`, `Choose all`; Back keeps its arrow), so the toolbar row has one height and a campaign creature's title sits where a campaign spell's does. Lookup keeps its Back hint; its Back is a Read control (28 px), as its title line's icon buttons are, so the title line has one height with or without Back and the search field below never moves. Both use Alt+Left, and Alt+Right for Forward, which has no button. Lookup takes the key when focus is there. Beside the Library, the mouse's Back and Forward buttons act on the side under the pointer.
 
 Library omits `Library / <kind>` above the title. Its kind line does not repeat the package name: where two
 packages share a name, it adds only the folder that tells them apart (`Creature · CR 1 · ashen-marches/`). Owner status
@@ -545,7 +546,10 @@ The scope control says `Can use` in both layouts, at the top of the category col
 whole at minimum width. Its menu is as wide as the control, so it stays in the column, `S` clear of the splitter;
 a long package name wraps. An empty search or filter names its scope (`No entries match in Can use. Try fewer
 words, or search Everything.`), and quiet `Search Everything` starts the next line at the text edge: it keeps
-the words and filters. In Everything the sentence ends at `Try fewer words.` with no action. At narrow widths, scope and category share an equal-width line directly above search. The package's About row follows search as the first list row.
+the words and filters. In Everything the sentence ends at `Try fewer words.` with no action. At narrow widths, scope and category share an equal-width line directly above search. The category is then the shared `Section`
+drop-down (`design::Dropdown`): like the category rows, it chooses no section while About is open or a search lists
+the whole scope, so choosing any section ends the search. The category rows sit in a `ScrollColumn`, and the column is
+one scroll lane wider than its rows, so a lane never takes a label's room. The package's About row follows search as the first list row.
 All entries stays in its place in every state; with an empty search it paints no count (the header has it; its
 accessible name keeps it), and with a search it shows the count as the other rows do. Empty categories and their headings stay hidden. Fixed scope names
 wrap; package names can shorten with full hover text and accessible names. The About row stays one line, with
@@ -578,8 +582,11 @@ many files need fixing: a validation message, a broken link, a duplicate identit
 once, and both files of a duplicate identity count. It has the tone of the most severe fault it counts: amber with
 the warning icon, or red with the error icon when a counted file cannot be read. A file is
 its owner and its path, so two packages that each have `Rules/Watch.md` count as two files. Its menu
-lists the messages, then a link for each file with broken links (`<path>: N broken links`) that opens it. The menu is as wide as its
-content, up to `READER_MEASURE`, and ends at the count's right edge, so it stays clear of the list's splitter.
+lists the messages, then a link for each file with broken links (`<path>: N broken links`) that opens it. The menu is as tall
+as its lines up to six controls, then it scrolls, and as wide as its content, up to `READER_MEASURE`; it ends at the
+count's right edge, so short lines stay clear of the list's splitter. Open fault: lines wider than the room between
+the reader's splitter and the count reach over the list at 960 and 1200, because `menu_popup` has no room inside
+the reader yet.
 When two owners have the same path, the message and link name the owner first (`Ashen Marches ·
 Rules/Watch.md`). Unreadable notes use CANNOT BE READ. Rows name
 their kind, path and error line; the owner line says Cannot be read. The reader's title is the file name, and its
