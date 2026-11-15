@@ -6219,9 +6219,14 @@ pub mod empty {
                 .nodes()
                 .iter()
                 .filter(|node| node.rect.top() > add.bottom() + crate::design::L)
-                // Cancel comes on the reason's line once there is something to cancel.
+                // Cancel comes on the reason's line once there is something to cancel, and the
+                // folder preview takes the reason's place once nothing blocks Add (G137): the
+                // kept line's own contents, not what follows the form.
                 .filter(|node| {
-                    !node.name.is_empty() && node.name != ADD_REASON && node.name != "Cancel"
+                    !node.name.is_empty()
+                        && node.name != ADD_REASON
+                        && node.name != "Cancel"
+                        && !node.name.starts_with("Will add ")
                 })
                 .map(|node| (node.name.clone(), node.rect.top().round() as i32))
                 .collect();
