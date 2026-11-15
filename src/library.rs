@@ -10198,7 +10198,7 @@ mod tests {
             (
                 "src/campaigns.rs",
                 &[
-                    ("kept_result", 1),
+                    ("kept_result", 0),
                     (".blocked(", 5),
                     ("blocked_if(", 0),
                     ("design::locked(", 1),

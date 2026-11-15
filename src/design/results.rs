@@ -1021,7 +1021,9 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/campaigns.rs",
             "footer_messages",
-            &[Ban::Results, Ban::Words],
+            // Layout PR 2b: typed lines (`outcome_at` keeps the staged orders; `Footer::result`
+            // went); the page's lock words are app-owned `&str`.
+            &[Ban::Order, Ban::Words],
         ),
         ("src/campaigns.rs", "form", &[Ban::Results]),
         (
@@ -1056,7 +1058,10 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Results, Ban::Layout(4)],
         ),
         ("src/design/results.rs", "act_order", &[Ban::Results]),
-        ("src/dndbeyond.rs", "footer_messages", &[Ban::Results]),
+        // Layout PR 2b: the link's result keeps its staged order through `outcome_at`.
+        ("src/dndbeyond.rs", "footer_messages", &[Ban::Order]),
+        // Layout PR 2b: the one escape of the Settings and Link and folder footers' words.
+        ("src/campaigns.rs", "footer_words", &[Ban::Words]),
         ("src/dndbeyond.rs", "show_link", &[Ban::Results]),
         (
             "src/encounter_run/view.rs",

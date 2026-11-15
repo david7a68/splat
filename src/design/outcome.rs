@@ -3983,7 +3983,7 @@ mod tests {
             }
         }
         found.sort();
-        assert_eq!(found, ["src/campaigns.rs", "src/library.rs"]);
+        assert_eq!(found, ["src/library.rs"]);
     }
 
     /// Whether `text` holds `word` as a whole identifier (not `kept_results`).
