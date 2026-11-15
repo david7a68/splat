@@ -24063,6 +24063,61 @@ pub mod session_plan_groups {
             ),
         );
 
+        // B4c F1, F2: a refusal stays stored while the DM is on another page. Unchanged frames
+        // there compare no draft for it. The group's file goes away and comes back while the
+        // plan is not drawn: the campaign read in between ended the refusal, so the plan does
+        // not show it again.
+        rivals_in_view(d);
+        d.click_first(GROUP_RIVALS);
+        let shown = d.visible_text(encounter_reason);
+        d.click(NAV_WORLD);
+        d.settle();
+        let stored = d.app_mut().sessions.plan_group_refused.is_some();
+        // The campaign read is held for the window, so only the frames themselves are measured;
+        // the revision is checked unchanged, so a failure says which input moved.
+        d.app_mut().encounters.hold_reads = true;
+        let revision = d.app_mut().encounters.snapshot_revision();
+        let compares = crate::test_support::CachedWork::start("Stored plan refusal", d, |d| {
+            crate::test_support::Counts {
+                reached: d.passes(),
+                work: crate::encounters::PLAN_BLOCK_CHECKS.with(std::cell::Cell::get),
+            }
+        });
+        let away = compares.steady(d, |d| {
+            for _ in 0..5 {
+                d.settle();
+            }
+            d.at_size(DEFAULT, |_| ());
+            d.app_mut().sessions.plan_group_refused.is_some()
+        });
+        let same_read = d.app_mut().encounters.snapshot_revision() == revision;
+        d.app_mut().encounters.hold_reads = false;
+        std::fs::remove_file(&file).unwrap();
+        d.focus_window(false);
+        d.focus_window(true);
+        d.settle();
+        std::fs::write(&file, &original).unwrap();
+        d.focus_window(false);
+        d.focus_window(true);
+        d.settle();
+        d.click(NAV_SESSIONS);
+        rivals_in_view(d);
+        let hidden_back = (d.in_view(GROUP_RIVALS), d.visible_text(encounter_reason));
+        d.observe(
+            "s30-B4c-stored-refusal-costs-nothing",
+            shown && stored && same_read && away.is_ok(),
+            format!(
+                "Reason shown {shown}, stored on World {stored}; the campaign read unchanged in the window {same_read}; unchanged frames there: {away:?}"
+            ),
+        );
+        d.observe(
+            "s30-B4c-refusal-ends-while-hidden",
+            hidden_back == (true, false),
+            format!(
+                "After the group's file went and came back with the plan not drawn (row in view, reason painted): {hidden_back:?}"
+            ),
+        );
+
         // B4b N1: with no refusal stored, no frame compares the drafts for it. The encounter is
         // discarded (its refusal ends), then unchanged frames on Encounters do no check.
         d.click(NAV_ENCOUNTERS);
