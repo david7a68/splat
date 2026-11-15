@@ -15,7 +15,7 @@ use crate::{
         self, Action, CreateReasons, Density, Status, Tone, Type, colors, icons,
         outcome::{
             Choice, Fault, FaultMessage, KeptOutcome, Lost, MessageChoice, Messages, Notice,
-            PaneFrame, Press, Said, Sentence, Severity, UndoStep, Verb,
+            PaneFrame, Press, RowMessages, Said, Sentence, Severity, UndoStep, Verb,
         },
         results::ByTicket,
     },
@@ -155,6 +155,10 @@ pub(crate) enum FolderFault {
     NoteNotSaved,
     /// Save folder found files in the current folder that the form did not show yet.
     FilesCame,
+    /// Save without moving found other files in the current folder than its warning named.
+    FilesChanged,
+    /// Save without moving found no file left in the current folder: Save folder is the way on.
+    FilesGone,
 }
 
 impl From<String> for FolderFault {
@@ -175,7 +179,7 @@ impl Fault for FolderFault {
             Self::Missing(_) => Severity::NeedsFixing,
             Self::CannotRead(_) => Severity::CannotRead,
             Self::NotSaved(_) | Self::NoteNotSaved => Severity::NotSaved,
-            Self::FilesCame => Severity::NeedsFixing,
+            Self::FilesCame | Self::FilesChanged | Self::FilesGone => Severity::NeedsFixing,
         }
     }
     fn cause(&self) -> Sentence {
@@ -189,41 +193,56 @@ impl Fault for FolderFault {
                 "Not changed. Your note could not be saved. Choose what to do with it first."
             ),
             Self::FilesCame => crate::sentence!(
-                "Not changed. The current folder now keeps session files. Choose to move them or not, then save again."
+                "Not changed. The current folder now keeps session files. Choose to move them or not."
+            ),
+            Self::FilesChanged => crate::sentence!(
+                "Not changed. The files in the current folder changed. Check the new counts, then choose again."
+            ),
+            Self::FilesGone => crate::sentence!(
+                "Not changed. The current folder has no files now. Use Save folder."
             ),
         }
     }
 }
 
-/// The Session folder form's messages for a footer that is not typed yet: Campaign's Link and
-/// folder page, until package C moves it to `Messages` and calls `Sessions::folder_messages`.
-/// Owned lines with the same words and the same store entry; `add_to` gives them to the footer.
-pub struct FolderFooter {
-    fault: Option<(Tone, String)>,
-    keeps: Option<String>,
-    moved: Option<design::results::FooterResult>,
+/// The Session folder's acts: `Save folder` in its save row, and the warning's two choices.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FolderAct {
+    Save,
+    Move,
+    WithoutMoving,
 }
 
-impl FolderFooter {
-    /// The lines, in the old footer's places: the fault with the reasons, the warning with the
-    /// notices, the move's result with the results, by the order its store issued.
-    pub fn add_to<'a>(&'a self, footer: &mut design::Footer<'a>) {
-        if let Some((tone, words)) = &self.fault {
-            footer.reason(words.as_str(), move |ui| {
-                design::message(ui, *tone, words);
-            });
+/// Why the Session folder cannot be saved now, by its own state.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum FolderWait {
+    Recording,
+    Processing,
+    Unsaved,
+    CannotRead,
+    NoChanges,
+}
+
+impl FolderWait {
+    fn words(self) -> &'static str {
+        match self {
+            Self::Recording => "Stop the recording first.",
+            Self::Processing => "Wait for processing to finish.",
+            Self::Unsaved => "Choose what to do with the unsaved file first.",
+            Self::CannotRead => "Could not read the session files. Check the current folder first.",
+            Self::NoChanges => "No changes to save.",
         }
-        // Kept on the old call while the Link and folder page uses this untyped footer; the
-        // typed footer (`folder_messages`) shows it as `Notice::warning`, in the same tone.
-        if let Some(words) = &self.keeps {
-            footer.notice(words.as_str(), move |ui| {
-                design::message(ui, Tone::Warning, words);
-            });
-        }
-        if let Some(moved) = &self.moved {
-            footer.kept_line(moved, false, |words, ui| {
-                design::message(ui, Tone::Success, words);
-            });
+    }
+
+    fn sentence(self) -> Sentence {
+        match self {
+            Self::Recording => crate::sentence!("Stop the recording first."),
+            Self::Processing => crate::sentence!("Wait for processing to finish."),
+            Self::Unsaved => crate::sentence!("Choose what to do with the unsaved file first."),
+            Self::CannotRead => crate::sentence!(
+                "Could not read the session files. Check the current folder first."
+            ),
+            Self::NoChanges => crate::sentence!("No changes to save."),
         }
     }
 }
@@ -7255,21 +7274,46 @@ impl Sessions {
         }
     }
 
-    /// The Session folder form's fields, in the pane's body. Its title line and save row are
-    /// `folder_save_row`, drawn above the pane so Save never scrolls away (round 28, lead
-    /// ruling; a named lead exception split them from one function).
-    pub fn folder_view(&mut self, ui: &mut egui::Ui, locked: Option<&str>) {
-        // Earlier sections can have a wider minimum rect. Give this form its own column.
-        let rect = egui::Rect::from_min_size(
-            ui.cursor().min,
-            egui::vec2(
-                ui.available_width().min(design::FORM_WIDTH),
-                ui.available_height(),
-            ),
-        );
-        ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
-            self.folder_fields(ui, locked);
-        });
+    /// The Session folder's block on Campaign's Link and folder page (ruling R24): its heading
+    /// row, its field with its help, its save row, then its own messages `S` below the save row
+    /// (`folder_messages`). `locked`: why the page's links and folders cannot change now (a run).
+    ///
+    /// The save row's commit place holds `Save folder` in every state. When the current folder
+    /// keeps files, that Save is disabled with its reason, and the two choices (`Move files and
+    /// save`, `Save without moving`) are the warning's, under the save row: a second press where
+    /// `Save folder` was (after a refusal found files) never moves files.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "R24: a value block’s save row shows its own messages"
+    )]
+    pub fn folder_block(&mut self, ui: &mut egui::Ui, book: &Book, locked: Option<&str>) {
+        let Some(campaign) = self.campaign.clone() else {
+            return;
+        };
+        let frame = PaneFrame::new(ui);
+        let (block, _) = design::ValueBlock::new(ui, design::HeadingRow::new("Session folder"));
+        let (block, ()) =
+            block.field(|ui| design::locked(ui, locked, |ui| self.folder_fields(ui, locked)));
+        let (block, save) = block
+            .save_row(|ui| design::locked(ui, locked, |ui| self.folder_save_row(ui, book, locked)));
+        // A refusal of Save without moving ends when its cause goes (`save_folder_act`).
+        if let Some(FolderFault::FilesChanged | FolderFault::FilesGone) = &self.folder_error {
+            let files = self.folder_files();
+            let offered = self.folder_move_counts(book, &files).is_some();
+            let gone = matches!(self.folder_error, Some(FolderFault::FilesGone));
+            if offered == gone {
+                self.folder_error = None;
+            }
+        }
+        let mut messages = RowMessages::new(&frame);
+        self.folder_messages(&frame, &mut messages, book, locked.is_some());
+        let pressed = block.messages(messages).map(|press| press.id);
+        // One act per frame: Save folder, or one of the warning's two choices. Each reads the
+        // disk again at the act (`save_folder_act`).
+        let act = if save { Some(FolderAct::Save) } else { pressed };
+        if let Some(act) = act {
+            self.save_folder_act(&campaign, book, act);
+        }
     }
 
     fn folder_fields(&mut self, ui: &mut egui::Ui, locked: Option<&str>) {
@@ -7299,14 +7343,22 @@ impl Sessions {
                 .accesskit_node_builder(response.id, |node| node.set_description(reason));
             response.clone().on_disabled_hover_text(reason);
         }
-        if response.changed()
-            && let Some(link) = self.folder_link()
-        {
-            // The DM's next edit of the folder ends its move's result (`kept::FolderMoved`).
-            self.folder_moves.owner_changed(&link);
+        if response.changed() {
+            // An edit of the draft ends a refusal of Save without moving (`save_folder_act`).
+            if matches!(
+                self.folder_error,
+                Some(FolderFault::FilesChanged | FolderFault::FilesGone)
+            ) {
+                self.folder_error = None;
+            }
+            if let Some(link) = self.folder_link() {
+                // The DM's next edit of the folder ends its move's result (`kept::FolderMoved`).
+                self.folder_moves.owner_changed(&link);
+            }
         }
         if let Some(folder) = &self.folder {
-            design::help(ui, &format!("Now: {}", folder.display()));
+            // One line for every path (the path rule), so a save never moves the save row.
+            design::path_help(ui, "session_folder_now", "Now: ", folder);
             design::help(
                 ui,
                 "Notes, Timeline.md, Templates and Recordings are all here.",
@@ -7314,161 +7366,167 @@ impl Sessions {
         }
     }
 
-    /// The Session folder form's title line and save row: its state word, Discard, the reason
-    /// and Save, at the form's right edge. `details_open`: the campaign details form, with its
-    /// own primary save, is in view.
-    pub fn folder_save_row(
-        &mut self,
-        ui: &mut egui::Ui,
-        book: &Book,
-        locked: Option<&str>,
-        details_open: bool,
-    ) {
+    /// The Session folder form's save row: its state word, Discard, the reason and `Save folder`
+    /// at the form's right edge. True when the DM pressed Save.
+    fn folder_save_row(&mut self, ui: &mut egui::Ui, book: &Book, locked: Option<&str>) -> bool {
         let Some(campaign) = self.campaign.clone() else {
-            return;
+            return false;
         };
         ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
-        design::heading(
-            ui,
-            design::Heading::Group {
-                title: "Session folder",
-                count: 0,
-            },
-        );
         let changed = super::resolve(&campaign, &self.folder_text).ok() != self.folder.clone();
         // The listing the footer read this frame (`folder_scan`, kept until the next scan).
         let files = self.folder_files();
         let has_files = self.folder_move_counts(book, &files).is_some();
-        let blocked = if self.live.is_some() {
-            Some("Stop the recording first.")
+        // The page's lock first: while it holds, the warning offers no choice, so Save never
+        // points at choices that are not there.
+        let blocked = locked
+            .or(self
+                .folder_wait(book, changed, &files)
+                .map(FolderWait::words))
+            .or(has_files.then_some("Choose below to move the files or not."));
+        ui.horizontal_wrapped(|ui| {
+            if changed {
+                design::status(
+                    ui,
+                    Status {
+                        icon: icons::DRAFT,
+                        word: "Unsaved",
+                        color: colors().document.unsaved,
+                    },
+                );
+                if Action::quiet("Discard").show(ui).clicked() {
+                    if let Ok(saved) = folder_setting(&campaign) {
+                        self.folder_text = saved;
+                    }
+                    self.folder_error = None;
+                }
+            }
+            if !changed {
+                design::status(
+                    ui,
+                    Status {
+                        icon: icons::OK,
+                        word: "No changes",
+                        color: colors().document.clean,
+                    },
+                );
+            }
+            if locked.is_none() && changed {
+                design::blocked_reason(ui, blocked);
+            }
+            // The commit place: `Save folder` in every state, so the place the DM pressed
+            // never turns into another act.
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                Action::secondary("Save folder")
+                    .blocked(blocked)
+                    .show(ui)
+                    .clicked()
+            })
+            .inner
+        })
+        .inner
+    }
+
+    /// Why the folder cannot be saved now, by the folder's own state; `None` when it can.
+    fn folder_wait(&self, book: &Book, changed: bool, files: &FolderFiles) -> Option<FolderWait> {
+        if self.live.is_some() {
+            Some(FolderWait::Recording)
         } else if self.job.is_some() {
-            Some("Wait for processing to finish.")
+            Some(FolderWait::Processing)
         } else if self.busy_with_edit() || book.not_saved() {
-            Some("Choose what to do with the unsaved file first.")
+            Some(FolderWait::Unsaved)
         } else if files.is_err() {
-            Some("Could not read the session files. Check the current folder first.")
+            Some(FolderWait::CannotRead)
         } else if !changed {
-            Some("No changes to save.")
+            Some(FolderWait::NoChanges)
         } else {
             None
+        }
+    }
+
+    /// The DM's act on the folder: Save folder (no files offered), or one of the warning's two
+    /// choices. Each reads the disk at the act.
+    fn save_folder_act(&mut self, campaign: &Campaign, book: &Book, act: FolderAct) {
+        let move_files = act == FolderAct::Move;
+        self.flush();
+        // The save just now can fail. Those words stay on screen, as `select` keeps them.
+        if self.draft.as_ref().is_some_and(Draft::needs_attention) {
+            self.folder_error = Some(FolderFault::NoteNotSaved);
+            return;
+        }
+        // The rule: an act commits only what the DM was shown. The row and the warning were
+        // drawn from the kept listing, which can be older than the disk, so every act reads the
+        // current folder now. Save folder (offered with no files) stops when files came; Save
+        // without moving stops when the files differ from the counts its warning named; a folder
+        // that cannot be read stops all three. Move files and save moves what is there at the
+        // act, and its result names what it moved (`move_storage`), never the counts shown.
+        let shown = {
+            let drawn = self.folder_files();
+            self.folder_move_counts(book, &drawn)
         };
-        let mut move_files = false;
-        let save = ui
-            .horizontal_wrapped(|ui| {
-                if changed {
-                    design::status(
-                        ui,
-                        Status {
-                            icon: icons::DRAFT,
-                            word: "Unsaved",
-                            color: colors().document.unsaved,
-                        },
-                    );
-                    if Action::quiet("Discard").show(ui).clicked() {
-                        if let Ok(saved) = folder_setting(&campaign) {
-                            self.folder_text = saved;
-                        }
-                        self.folder_error = None;
-                    }
-                }
-                if !changed {
-                    design::status(
-                        ui,
-                        Status {
-                            icon: icons::OK,
-                            word: "No changes",
-                            color: colors().document.clean,
-                        },
-                    );
-                }
-                if locked.is_none() && changed {
-                    design::blocked_reason(ui, blocked);
-                }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if has_files {
-                        // One primary in view: the open details form owns its own save.
-                        // While a run is open, `reserve_primary` keeps Next turn the only one.
-                        move_files = (if details_open {
-                            Action::secondary(MOVE_FILES)
-                        } else {
-                            Action::primary(MOVE_FILES)
-                        })
-                        .blocked(blocked)
-                        .show(ui)
-                        .clicked();
-                        Action::quiet("Save without moving")
-                            .blocked(blocked)
-                            .show(ui)
-                            .clicked()
-                            || move_files
-                    } else {
-                        Action::secondary("Save folder")
-                            .blocked(blocked)
-                            .show(ui)
-                            .clicked()
-                    }
-                })
-                .inner
-            })
-            .inner;
-        if save {
-            self.flush();
-            // The save just now can fail. Those words stay on screen, as `select` keeps them.
-            if self.draft.as_ref().is_some_and(Draft::needs_attention) {
-                self.folder_error = Some(FolderFault::NoteNotSaved);
+        self.end_folder_listing();
+        let now = self.folder_files();
+        if let Err(error) = &now {
+            self.folder_error = Some(FolderFault::CannotRead(error.clone()));
+            return;
+        }
+        match act {
+            FolderAct::Save
+                if now
+                    .as_ref()
+                    .is_ok_and(|now| now.is_some_and(|now| now.files > 0)) =>
+            {
+                self.folder_error = Some(FolderFault::FilesCame);
                 return;
             }
-            // Save folder was offered from the listing drawn, which can be older than the disk:
-            // the act reads the folder now, and files that came since stop it.
-            if !has_files {
-                self.end_folder_listing();
-                match self.folder_files() {
-                    Err(error) => {
-                        self.folder_error = Some(FolderFault::CannotRead(error));
-                        return;
-                    }
-                    Ok(Some(now)) if now.files > 0 => {
-                        self.folder_error = Some(FolderFault::FilesCame);
-                        return;
-                    }
-                    Ok(_) => {}
-                }
+            // The refusals of Save without moving end at the draft's next edit or Discard
+            // (`folder_fields`, Discard), and when their cause goes (`folder_block`): the warning
+            // gone for `FilesChanged`, files back for `FilesGone`.
+            FolderAct::WithoutMoving if self.folder_move_counts(book, &now) != shown => {
+                self.folder_error = Some(if self.folder_move_counts(book, &now).is_none() {
+                    FolderFault::FilesGone
+                } else {
+                    FolderFault::FilesChanged
+                });
+                return;
             }
-            let link = kept::FolderLink {
-                campaign: campaign.path.clone(),
-            };
-            // A save or a failed save of the folder ends the last move's result.
-            self.folder_moves.owner_changed(&link);
-            let events = book.events.len();
-            let saved = if move_files {
-                // What it moved, listed at the act: never the listing drawn.
-                super::move_storage(&campaign, &self.folder_text)
-                    .map(|(folder, moved)| (folder, storage_words(moved, events)))
-            } else {
-                save_folder(&campaign, &self.folder_text).map(|folder| (folder, None))
-            };
-            match saved {
-                Ok((folder, moved)) => {
-                    if let Some(counts) = moved {
-                        self.folder_moves.record(kept::FolderMoved {
-                            link,
-                            counts,
-                            typed: self.folder_text.clone(),
-                            to: folder.clone(),
-                        });
-                    }
-                    self.folder = Some(folder);
-                    self.folder_error = None;
-                    self.manifest_changed = Some(campaign.path.clone());
-                    self.draft = None;
-                    self.template_draft = None;
-                    self.template = None;
-                    self.refresh();
-                    self.select(self.notes.first().map(|note| note.id));
+            _ => {}
+        }
+        let campaign = campaign.clone();
+        let link = kept::FolderLink {
+            campaign: campaign.path.clone(),
+        };
+        // A save or a failed save of the folder ends the last move's result.
+        self.folder_moves.owner_changed(&link);
+        let events = book.events.len();
+        let saved = if move_files {
+            // What it moved, listed at the act: never the listing drawn.
+            super::move_storage(&campaign, &self.folder_text)
+                .map(|(folder, moved)| (folder, storage_words(moved, events)))
+        } else {
+            save_folder(&campaign, &self.folder_text).map(|folder| (folder, None))
+        };
+        match saved {
+            Ok((folder, moved)) => {
+                if let Some(counts) = moved {
+                    self.folder_moves.record(kept::FolderMoved {
+                        link,
+                        counts,
+                        typed: self.folder_text.clone(),
+                        to: folder.clone(),
+                    });
                 }
-                Err(error) => {
-                    self.folder_error = Some(FolderFault::NotSaved(error));
-                }
+                self.folder = Some(folder);
+                self.folder_error = None;
+                self.manifest_changed = Some(campaign.path.clone());
+                self.draft = None;
+                self.template_draft = None;
+                self.template = None;
+                self.refresh();
+                self.select(self.notes.first().map(|note| note.id));
+            }
+            Err(error) => {
+                self.folder_error = Some(FolderFault::NotSaved(error));
             }
         }
     }
@@ -7513,34 +7571,47 @@ impl Sessions {
         storage_words(*files.as_ref().ok()?.as_ref()?, book.events.len())
     }
 
-    /// Round 26 FN2, FN5: the Session folder form's messages, for the footer of the pane that
-    /// holds the form (Campaign's Link and folder page), so a typed letter, a refusal or a
-    /// result never moves its save row: why the folder cannot be used or a write failed
-    /// (`FolderFault`), what Save without moving would hide, and the open campaign's move
-    /// result from its store. Nothing here can be pressed, so any pane's `Messages` takes them.
-    /// Call it before the body, with the pane's frame:
-    /// `sessions.folder_messages(&frame, &mut messages, &timeline)`. The folder's listing is
-    /// read once per disk scan (`folder_scan`).
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "the Link and folder page (package C) calls it when its footer moves to `Messages`; until then that page calls `folder_footer`"
-        )
-    )]
-    pub fn folder_messages<'f, A: 'static>(
+    /// Round 26 FN2, FN5, ruling R24: the Session folder form's messages, `S` below its save row
+    /// (`folder_block`), so a typed letter, a refusal or a result never moves the save row: why
+    /// the folder cannot be used or a write failed (`FolderFault`), what Save without moving
+    /// would hide (`Notice::warning`, with the two choices `Move files and save` and `Save
+    /// without moving`, none while the page is locked), and the open campaign's move result from
+    /// its store; a choice's press comes back from `ValueBlock::messages`. The folder's listing is read once per disk scan
+    /// (`folder_scan`).
+    fn folder_messages<'f>(
         &mut self,
         frame: &'f PaneFrame,
-        messages: &mut Messages<'f, A>,
+        messages: &mut RowMessages<'f, FolderAct>,
         book: &Book,
+        page_locked: bool,
     ) {
         let files = self.folder_files();
         if let Some(fault) = &self.folder_error {
             messages.outcome(FaultMessage::new(fault));
         }
         if let Some(counts) = self.folder_move_counts(book, &files) {
-            // A warning before the act, in the warning tone, as the untyped footer draws it.
-            messages.outcome(Notice::warning(folder_keeps(&counts)));
+            // A warning before the act, in the warning tone, with its two choices: they are the
+            // folder's commit when it keeps files. While the page is locked (a run), the save
+            // row says why, and no choice is offered.
+            let mut warning = Notice::warning(folder_keeps(&counts));
+            if !page_locked {
+                let campaign = self.campaign.as_ref();
+                let changed = campaign.is_some_and(|campaign| {
+                    super::resolve(campaign, &self.folder_text).ok() != self.folder.clone()
+                });
+                let wait = self.folder_wait(book, changed, &files);
+                for (words, act) in [
+                    (MOVE_FILES, FolderAct::Move),
+                    ("Save without moving", FolderAct::WithoutMoving),
+                ] {
+                    let mut choice = Choice::new(MessageChoice::Choice(words), act);
+                    if let Some(wait) = wait {
+                        choice = choice.locked_when(true, wait.sentence());
+                    }
+                    warning = warning.choice(choice);
+                }
+            }
+            messages.outcome(warning);
         }
         if let Some(shown) = self.folder_link().and_then(|link| {
             self.folder_moves
@@ -7548,34 +7619,6 @@ impl Sessions {
                 .map(|shown| shown.outcome(frame, |moved| folder_moved(moved).into()))
         }) {
             messages.kept(shown);
-        }
-    }
-
-    /// `folder_messages` for a footer that is not typed yet (`FolderFooter`): the same fault,
-    /// the same words, and the same store entry with its own order.
-    pub fn folder_footer(&mut self, book: &Book) -> FolderFooter {
-        let files = self.folder_files();
-        FolderFooter {
-            fault: self.folder_error.as_ref().map(|fault| {
-                let tone = match fault.severity() {
-                    Severity::NeedsFixing => Tone::Warning,
-                    Severity::CannotRead | Severity::NotSaved => Tone::Error,
-                };
-                (tone, String::from(fault.clone()))
-            }),
-            keeps: self
-                .folder_move_counts(book, &files)
-                .map(|counts| folder_keeps(&counts).as_str().to_owned()),
-            moved: self.folder_link().and_then(|link| {
-                self.folder_moves.get(&link).map(|shown| {
-                    shown.footer(|moved| {
-                        folder_moved::<design::outcome::NoPress>(moved)
-                            .words()
-                            .as_str()
-                            .to_owned()
-                    })
-                })
-            }),
         }
     }
 
@@ -8977,8 +9020,7 @@ mod tests {
     /// ends B's only. The missing folder is a typed fault in a sentence (routing row 136).
     #[test]
     fn a_folder_move_result_is_its_campaigns_over_a_switch_and_a_lost_folder() {
-        use crate::design::outcome::NoPress;
-        use egui_kittest::kittest::Queryable;
+        use egui_kittest::kittest::{NodeT, Queryable};
         let dirs = [
             tempfile::tempdir().unwrap(),
             tempfile::tempdir().unwrap(),
@@ -9026,24 +9068,18 @@ mod tests {
             .unwrap();
             campaign
         });
-        type State = (Sessions, Book, Campaign);
+        // The fourth value is the page's lock (a run), as the Link and folder page passes it.
+        type State = (Sessions, Book, Campaign, Option<&'static str>);
         let mut harness = egui_kittest::Harness::builder()
             .with_size(egui::vec2(900.0, 700.0))
             .build_state(
-                |ctx, (sessions, book, campaign): &mut State| {
+                |ctx, (sessions, book, campaign, lock): &mut State| {
                     sessions.poll(ctx, Some(campaign), book);
                     egui::CentralPanel::default().show(ctx, |ui| {
-                        sessions.folder_save_row(ui, book, None, false);
-                        let frame = PaneFrame::new(ui);
-                        let mut messages =
-                            Messages::<NoPress>::new(&frame, ("folder_test", campaign.id), 600.0);
-                        sessions.folder_messages(&frame, &mut messages, book);
-                        let _ = messages.pane(ui, design::Body::Content, |ui| {
-                            sessions.folder_view(ui, None);
-                        });
+                        sessions.folder_block(ui, book, *lock);
                     });
                 },
-                (Sessions::default(), Book::default(), a.clone()),
+                (Sessions::default(), Book::default(), a.clone(), None),
             );
         design::theme::install(&harness.ctx);
         harness.run_steps(2);
@@ -9105,21 +9141,30 @@ mod tests {
         ));
         // The warning before the move is a warning (`Notice::warning`, PR 350), as the untyped
         // footer draws it: the part registers it in the warning tone, and paints the warning's
-        // tone bar inside it, as tall as a line of its words (the driver's `has_tone_bar` rule).
-        fn has_tone_bar(shape: &egui::Shape, message: egui::Rect, color: Color32) -> bool {
-            match shape {
-                egui::Shape::Vec(shapes) => shapes
-                    .iter()
-                    .any(|shape| has_tone_bar(shape, message, color)),
-                egui::Shape::Rect(bar) => {
-                    bar.fill == color
-                        && bar.rect.width() <= design::XS
-                        && message.expand(1.0).contains_rect(bar.rect)
-                        && bar.rect.height() >= Type::Body.line() - 1.0
+        // tone bar inside it, as tall as its words (the driver's `has_tone_bar` rule: from the
+        // words' top to their bottom; one line in the value block, where the words are wider than
+        // in the old footer).
+        let words = harness
+            .get_by_label_contains("The current folder keeps 1 note and 2 templates.")
+            .rect();
+        let has_tone_bar = |shape: &egui::Shape, message: egui::Rect, color: Color32| -> bool {
+            fn bars(shape: &egui::Shape, out: &mut Vec<egui::epaint::RectShape>) {
+                match shape {
+                    egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| bars(shape, out)),
+                    egui::Shape::Rect(bar) => out.push(bar.clone()),
+                    _ => {}
                 }
-                _ => false,
             }
-        }
+            let mut found = Vec::new();
+            bars(shape, &mut found);
+            found.iter().any(|bar| {
+                bar.fill == color
+                    && bar.rect.width() <= design::XS
+                    && message.expand(1.0).contains_rect(bar.rect)
+                    && (bar.rect.top() - words.top()).abs() <= 1.0
+                    && bar.rect.bottom() >= words.bottom() - 1.0
+            })
+        };
         let warnings: Vec<egui::Rect> = design::outcome::message_rects(&harness.ctx)
             .into_iter()
             .filter(|(_, _, tone)| *tone == Tone::Warning)
@@ -9228,8 +9273,23 @@ mod tests {
         let templates_c = c.path.join("Sessions").join(super::super::TEMPLATES);
         fs::create_dir_all(&templates_c).unwrap();
         fs::write(templates_c.join("Late.md"), "Late").unwrap();
-        harness.get_by_label("Save folder").click();
-        harness.run_steps(3);
+        // The press is the pointer's, at Save folder's place, so a second press there is the
+        // DM's double click.
+        let save_at = harness.get_by_label("Save folder").rect();
+        let press = |harness: &mut egui_kittest::Harness<'_, State>| {
+            for down in [true, false] {
+                harness.event(egui::Event::PointerMoved(save_at.center()));
+                harness.event(egui::Event::PointerButton {
+                    pos: save_at.center(),
+                    button: egui::PointerButton::Primary,
+                    pressed: down,
+                    modifiers: egui::Modifiers::NONE,
+                });
+                harness.step();
+            }
+            harness.run_steps(3);
+        };
+        press(&mut harness);
         assert!(
             shows(&harness, "The current folder now keeps session files."),
             "Save folder reads the disk at the press"
@@ -9238,6 +9298,32 @@ mod tests {
         assert!(
             shows(&harness, MOVE_FILES) && shows(&harness, "The current folder keeps 1 template."),
             "after the refused press the form shows what is on the disk"
+        );
+        // Review of the early commit, point 1: the refused Save keeps its place, disabled with
+        // its reason, and the move choices are outside its former hit area; a second press
+        // there moves nothing.
+        let save = harness.get_by_label("Save folder");
+        assert!(
+            save.rect() == save_at && save.accesskit_node().is_disabled(),
+            "the refused Save keeps its place, disabled: {:?}",
+            save.rect()
+        );
+        assert!(
+            shows(&harness, "Choose below to move the files or not."),
+            "the disabled Save says why"
+        );
+        for choice in [MOVE_FILES, "Save without moving"] {
+            let rect = harness.get_by_label(choice).rect();
+            assert!(
+                !rect.intersects(save_at),
+                "{choice} is outside Save folder’s place: {rect:?}"
+            );
+        }
+        press(&mut harness);
+        assert!(
+            templates_c.join("Late.md").is_file()
+                && super::super::folder_setting(&c).unwrap() == DEFAULT_FOLDER,
+            "a second press where Save folder was moves nothing and saves nothing"
         );
         fs::write(templates_c.join("Later.md"), "Later").unwrap();
         harness.state_mut().0.simulate_folder_scan();
@@ -9255,6 +9341,154 @@ mod tests {
                 .map(|form| form.title.as_str()),
             Some("Unsent words"),
             "the form keeps its unsent words"
+        );
+        // Astra FINAL review of 83e0fd5f, P2 1: an act commits only what the DM was shown.
+        // A template comes outside Splat after the warning was drawn (no scan): Save without
+        // moving reads the folder at the press, refuses, and the warning names the new counts.
+        fs::write(templates_c.join("Third.md"), "Third").unwrap();
+        harness.get_by_label("Save without moving").click();
+        harness.run_steps(3);
+        assert_eq!(super::super::folder_setting(&c).unwrap(), DEFAULT_FOLDER);
+        assert!(
+            shows(
+                &harness,
+                "Not changed. The files in the current folder changed."
+            ) && shows(&harness, "The current folder keeps 3 templates."),
+            "Save without moving refuses files its warning did not name"
+        );
+        // Re-check of da245d42, P2 1: the refusal ends at the draft's next edit.
+        harness.get_by_label("Folder").click();
+        harness.run_steps(2);
+        harness.get_by_label("Folder").type_text("2");
+        harness.run_steps(3);
+        assert!(
+            !shows(&harness, "Check the new counts") && shows(&harness, MOVE_FILES),
+            "an edit of the folder ends the refusal; the warning and its choices stay"
+        );
+        // The folder cannot be read at the press: no choice commits.
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&templates_c, fs::Permissions::from_mode(0o000)).unwrap();
+            harness.get_by_label("Save without moving").click();
+            harness.run_steps(3);
+            let fault = harness.state().0.folder_error.clone();
+            fs::set_permissions(&templates_c, fs::Permissions::from_mode(0o755)).unwrap();
+            assert_eq!(super::super::folder_setting(&c).unwrap(), DEFAULT_FOLDER);
+            assert!(
+                matches!(fault, Some(FolderFault::CannotRead(_))),
+                "an unreadable folder stops Save without moving: {fault:?}"
+            );
+        }
+        harness.state_mut().0.simulate_folder_scan();
+        harness.run_steps(3);
+        // Re-check of da245d42, P2 1 a: the refusal ends when its cause goes. Refused again,
+        // then the original folder typed back: No changes, and no sentence pointing at nothing.
+        fs::write(templates_c.join("Fourth.md"), "Fourth").unwrap();
+        harness.get_by_label("Save without moving").click();
+        harness.run_steps(3);
+        assert!(shows(&harness, "Check the new counts"));
+        harness.state_mut().0.folder_text = DEFAULT_FOLDER.to_owned();
+        harness.run_steps(3);
+        assert!(
+            shows(&harness, "No changes") && !shows(&harness, "Check the new counts"),
+            "the folder typed back ends the refusal with its warning"
+        );
+        // b: at the refused press the folder has no file left. The words name the control that
+        // is there (Save folder), and they end when files come back.
+        harness.state_mut().0.folder_text = "Elsewhere".to_owned();
+        harness.run_steps(3);
+        assert!(shows(&harness, "Save without moving"));
+        fs::remove_dir_all(&templates_c).unwrap();
+        harness.get_by_label("Save without moving").click();
+        harness.run_steps(3);
+        assert_eq!(super::super::folder_setting(&c).unwrap(), DEFAULT_FOLDER);
+        assert!(
+            shows(
+                &harness,
+                "Not changed. The current folder has no files now. Use Save folder."
+            ) && !shows(&harness, "Check the new counts")
+                && !shows(&harness, MOVE_FILES)
+                && !harness
+                    .get_by_label("Save folder")
+                    .accesskit_node()
+                    .is_disabled(),
+            "an empty folder at the press points at Save folder, which is there"
+        );
+        fs::create_dir_all(&templates_c).unwrap();
+        fs::write(templates_c.join("Back.md"), "Back").unwrap();
+        harness.state_mut().0.simulate_folder_scan();
+        harness.run_steps(3);
+        assert!(
+            !shows(&harness, "has no files now") && shows(&harness, MOVE_FILES),
+            "files back end the refusal"
+        );
+        // Early-pass packet, point 3: the current folder's `Now:` line is one line, so a save to
+        // a long folder and back to a short one never moves the save row under it.
+        switch(&mut harness, &b);
+        let save_top = |harness: &egui_kittest::Harness<'_, State>| {
+            harness.get_by_label("Save folder").rect().top()
+        };
+        let clean = save_top(&harness);
+        let long = "A folder with a name long enough to wrap the current path line twice over at this width";
+        move_to(&mut harness, long);
+        assert!(shows(&harness, "Moved 1 note to A folder with a name long"));
+        let after_long = save_top(&harness);
+        move_to(&mut harness, "B");
+        let after_short = save_top(&harness);
+        assert!(
+            after_long == clean && after_short == clean,
+            "the save row stays: clean {clean}, after the long path {after_long}, after the short one {after_short}"
+        );
+        let now = harness.get_by_label_contains("Now: ");
+        assert!(
+            now.rect().height() <= Type::Small.line() + 1.0,
+            "the Now: line is one line: {:?}",
+            now.rect()
+        );
+        // Astra FINAL review of 83e0fd5f, P2 3: the shortened line is kept; an unchanged
+        // redraw does no shortening work.
+        let cuts = crate::design::layout::path_cuts();
+        harness.run_steps(4);
+        assert_eq!(
+            crate::design::layout::path_cuts(),
+            cuts,
+            "an unchanged redraw shortens no path"
+        );
+        // Validation of bbadb689, point 1: while the page is locked (a run) and the folder keeps
+        // files, the warning offers no choice, and the disabled Save's reason is the lock's,
+        // never a pointer at choices that are not there.
+        const LOCK: &str = "Close the run to change the folder, the session folder or the link.";
+        harness.state_mut().0.folder_text = "Elsewhere".to_owned();
+        harness.state_mut().3 = Some(LOCK);
+        harness.run_steps(3);
+        let save = harness.get_by_label("Save folder");
+        assert!(
+            save.accesskit_node().is_disabled()
+                && save.accesskit_node().description().as_deref() == Some(LOCK),
+            "the locked Save says the lock’s reason: {:?}",
+            save.accesskit_node().description()
+        );
+        assert!(
+            shows(&harness, "The current folder keeps 1 note.")
+                && !shows(&harness, "Choose below")
+                && !shows(&harness, MOVE_FILES)
+                && !shows(&harness, "Save without moving"),
+            "under the lock the warning stays, with no choice and no pointer to one"
+        );
+        // The hover says the lock's reason alone (a tooltip waits half a second).
+        harness.hover_at(harness.get_by_label("Save folder").rect().center());
+        harness.run_steps(8);
+        assert!(
+            shows(&harness, LOCK) && !shows(&harness, "Choose below"),
+            "the locked Save’s hover names the lock, not the choices"
+        );
+        harness.remove_cursor();
+        harness.state_mut().3 = None;
+        harness.run_steps(3);
+        assert!(
+            shows(&harness, MOVE_FILES)
+                && shows(&harness, "Choose below to move the files or not."),
+            "the lock gone, the choices come back"
         );
     }
 

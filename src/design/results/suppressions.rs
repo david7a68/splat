@@ -21,8 +21,8 @@ pub(crate) enum Ban {
     Sentence,
     /// Package M: `Footer::outcome_at`, a result with a hand-issued order (staged).
     Order,
-    /// Package M: the body places `banner`, `row_fault` and `PagePlaceholder::show`. A named
-    /// escape: a body message is a review decision.
+    /// Package M: the body places `banner`, `row_fault`, `PagePlaceholder::show`, `BodyFault::show`
+    /// and `RowMessages::new` (ruling R24). A named escape: a body message is a review decision.
     Body,
     /// Package K: raw egui calls that a layout part replaces. The number is how many calls of
     /// `clippy.toml`'s package K paths the item holds, counted in its tokens
@@ -62,7 +62,7 @@ impl Ban {
                 "__checked",
             ],
             Self::Order => &["outcome_at"],
-            Self::Body => &["banner", "row_fault", ".show("],
+            Self::Body => &["banner", "row_fault", ".show(", "RowMessages::new"],
             // Counted in the item's tokens instead (`check`).
             Self::Layout(_)
             | Self::RowKey(_)
@@ -248,6 +248,74 @@ pub(crate) fn find(path: &str, text: &str) -> (Vec<Suppression>, Vec<String>) {
     (kept, faults)
 }
 
+/// The one item that may call `RowMessages::new` (ruling R24), once.
+const ROW_MESSAGES_USE: (&str, &str) = ("src/sessions/page.rs", "folder_block");
+
+/// How many times `body` calls `RowMessages::new`, also with generic arguments
+/// (`RowMessages::<A>::new`) and in a qualified type (`<RowMessages<A>>::new`); strings and
+/// comments do not count. A text scan by design: not syntax-aware.
+fn row_messages_calls(body: &str) -> usize {
+    let code = code_only(body);
+    let bytes = code.as_bytes();
+    let mut found = 0;
+    let mut from = 0;
+    while let Some(at) = code[from..].find("RowMessages") {
+        let mut i = from + at + "RowMessages".len();
+        from = i;
+        let skip = |i: &mut usize| {
+            while *i < bytes.len() && bytes[*i].is_ascii_whitespace() {
+                *i += 1;
+            }
+        };
+        skip(&mut i);
+        // Generic arguments, with a turbofish (`RowMessages::<A>`) or in a qualified type
+        // (`<RowMessages<A>>`).
+        let mut j = i;
+        if bytes[j..].starts_with(b"::") {
+            j += 2;
+            skip(&mut j);
+        }
+        if bytes.get(j) == Some(&b'<') {
+            let mut depth = 0;
+            while j < bytes.len() {
+                match bytes[j] {
+                    b'<' => depth += 1,
+                    b'>' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            j += 1;
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+                j += 1;
+            }
+            i = j;
+            skip(&mut i);
+        }
+        // The end of a qualified type (`<RowMessages<A>>::new`, `<RowMessages>::new`).
+        if bytes.get(i) == Some(&b'>') {
+            i += 1;
+            skip(&mut i);
+        }
+        if !bytes[i..].starts_with(b"::") {
+            continue;
+        }
+        let mut k = i + 2;
+        skip(&mut k);
+        let rest = &bytes[k..];
+        if rest.starts_with(b"new")
+            && !rest
+                .get(3)
+                .is_some_and(|c| c.is_ascii_alphanumeric() || *c == b'_')
+        {
+            found += 1;
+        }
+    }
+    found
+}
+
 /// Every suppression in `files` against `table`: one row per suppression (file, item, bans).
 pub(crate) fn check(files: &[(String, String)], table: &[(&str, &str, &[Ban])]) -> Vec<String> {
     let mut faults = Vec::new();
@@ -306,6 +374,19 @@ pub(crate) fn check(files: &[(String, String)], table: &[(&str, &str, &[Ban])]) 
                                 suppression.line, suppression.item
                             )),
                         }
+                    }
+                    // R24: `RowMessages::new` is counted on its own, in every allowed item,
+                    // whatever bans its row lists: exactly one call, in `Sessions::folder_block`.
+                    let made = row_messages_calls(&suppression.body);
+                    let allowed = usize::from(
+                        (path.as_str(), suppression.item.as_str()) == ROW_MESSAGES_USE,
+                    );
+                    holds |= made > 0;
+                    if made != allowed {
+                        faults.push(format!(
+                            "{path}:{}: `{}` holds {made} `RowMessages::new` calls; R24 allows {allowed} here (one, in `{}` `{}`).",
+                            suppression.line, suppression.item, ROW_MESSAGES_USE.0, ROW_MESSAGES_USE.1
+                        ));
                     }
                     if !holds {
                         faults.push(format!(
@@ -455,6 +536,49 @@ mod tests {
             faults.len() == 1 && faults[0].contains("holds 2 ByOwner calls; its row lists 1"),
             "{faults:?}"
         );
+    }
+
+    /// Astra FINAL review of 83e0fd5f, P2 2: `RowMessages::new` is counted on its own. A second
+    /// call in `folder_block` fails; a call in an item allowed only for another ban fails; the
+    /// one call in `folder_block` passes, also with generic arguments.
+    #[test]
+    fn row_messages_new_has_exactly_one_use() {
+        let page = |text: &str| vec![("src/sessions/page.rs".to_owned(), text.to_owned())];
+        let block = |calls: &str| {
+            format!("#[allow(clippy::disallowed_methods)]\nfn folder_block() {{\n{calls}}}\n")
+        };
+        let one = "    let m = RowMessages::new(&frame);\n";
+        let rows: &[(&str, &str, &[Ban])] =
+            &[("src/sessions/page.rs", "folder_block", &[Ban::Body])];
+        assert!(check(&page(&block(one)), rows).is_empty());
+        let generic = "    let m = RowMessages::<FolderAct>::new(&frame);\n";
+        assert!(check(&page(&block(generic)), rows).is_empty());
+        let faults = check(&page(&block(&format!("{one}{generic}"))), rows);
+        assert!(
+            faults.len() == 1 && faults[0].contains("holds 2 `RowMessages::new` calls"),
+            "a second call in folder_block: {faults:?}"
+        );
+        // An item allowed only for another ban (here `Ban::Results`).
+        let other = format!(
+            "#[allow(clippy::disallowed_methods)]\nfn order() {{\n    let _ = <crate::design::ResultOrder>::issue();\n{one}}}\n"
+        );
+        let faults = check(&file(&other), &[("src/new.rs", "order", STAGED)]);
+        assert!(
+            faults.len() == 1
+                && faults[0].contains("holds 1 `RowMessages::new` calls; R24 allows 0"),
+            "a call under another ban's allowance: {faults:?}"
+        );
+        // The qualified-type spellings count too (re-check of da245d42, P2 2).
+        let qualified = "    let m = <RowMessages<FolderAct>>::new(&frame);\n";
+        let faults = check(&page(&block(&format!("{one}{qualified}"))), rows);
+        assert!(
+            faults.len() == 1 && faults[0].contains("holds 2 `RowMessages::new` calls"),
+            "a qualified-type second call: {faults:?}"
+        );
+        assert_eq!(row_messages_calls("<RowMessages>::new(&frame)"), 1);
+        // Words in strings and comments are not calls.
+        let words = "    let _ = \"RowMessages::new\"; // RowMessages::new\n";
+        assert_eq!(row_messages_calls(words), 0);
     }
 
     /// Package K's rows: the number of raw egui calls (and row keys) in a row is the item's,

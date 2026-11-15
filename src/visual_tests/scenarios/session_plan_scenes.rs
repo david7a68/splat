@@ -1033,6 +1033,9 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     fs::write(&path, &away).unwrap();
     d.app_mut().lookup.refresh();
     d.settle();
+    // D-2: the DM changes the status at 960, where the reader is short: the field opens with
+    // room for the new Log entry in view, so the act moves nothing and the entry is whole.
+    d.set_base(SMALL);
     d.click("Change Status");
     d.observe(
         "T15.4",
@@ -1041,8 +1044,26 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         "Change on Status in Lookup puts the keyboard in the field, with the status on disk",
     );
     d.type_text("missing");
+    let lookup_pane = |d: &Driver<'_>| {
+        d.place_of(SEARCH_LOOKUP).map(|search| {
+            egui::Rect::from_min_max(
+                egui::pos2(search.left(), 0.0),
+                egui::pos2(f32::INFINITY, f32::INFINITY),
+            )
+        })
+    };
+    // Immediately before and after the act, at 960: the title (the witness of any scroll),
+    // the focused field and, after the act, `Change` in the field's place.
+    let title_before = lookup_pane(d).and_then(|pane| d.painted_word_rect(VARRA_BLACK, pane));
+    let field_before = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.name == "Status" && node.role == egui::accesskit::Role::TextInput)
+        .map(|node| node.rect);
     d.press(Key::Enter);
     d.expect("Undo change to Status");
+    let title_after = lookup_pane(d).and_then(|pane| d.painted_word_rect(VARRA_BLACK, pane));
+    let change_after = d.place_of("Change Status");
     let changed = fs::read_to_string(&path).unwrap();
     d.observe(
         "T15.4",
@@ -1054,7 +1075,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     );
     // Round 28 FC8: Lookup names the session as the Session page beside it does, in the Log
     // line, in `From other notes` and in its row's link, never by its file.
-    let named = |d: &Driver<'_>, size: (f32, f32)| {
+    let named = |d: &Driver<'_>| {
         let pane = d.place_of(SEARCH_LOOKUP).map(|search| {
             egui::Rect::from_min_max(
                 egui::pos2(search.left(), 0.0),
@@ -1067,46 +1088,48 @@ pub fn log_from_play(d: &mut Driver<'_>) {
             .nodes()
             .into_iter()
             .any(|node| node.role == egui::accesskit::Role::Link && node.name == label);
-        let line = pane.is_some_and(|pane| d.painted_line_with(&label, pane));
         (
-            pane.is_some()
-                && !words.contains(&session)
-                && fc8_label_painted(size, words.contains(&label), line)
-                && link,
+            pane.is_some() && !words.contains(&session) && words.contains(&label) && link,
             format!("link {link}, painted {words:?}"),
         )
     };
-    for size in [DEFAULT, LARGE] {
-        let (named, detail) = d.at_size(size, |d| named(d, size));
-        d.observe(
-            "iter-28-D-FC8",
-            named,
-            format!("At {size:?}, Lookup names the session `{label}`, not `{session}`: {detail}"),
-        );
-    }
-    // At 960 the check reads the capture's own settled frame (review of f29ef2c0: a look
-    // straight after a resize read the reader before it settled, with the Log line not yet
-    // painted).
-    // `Sizes::Default` captures 960, then 1200, in that order.
+    // FC8 reads each size from the capture below, in its settled frame after its resize; a look
+    // across resizes before it would scroll the reader away from what the act left in view.
     let mut at_capture = Vec::new();
+    // `Sizes::Default` captures 960, then 1200, as on main; each look is after its resize.
+    const STATUS_ENTRY: &str = ": Status away → missing.";
     d.state_prepared("status-changed-in-lookup", Sizes::Default, |d| {
         d.settle();
-        let size = if at_capture.is_empty() {
-            SMALL
-        } else {
-            DEFAULT
-        };
-        at_capture.push(named(d, size));
+        let entry = lookup_pane(d).is_some_and(|pane| d.painted_in(pane).contains(STATUS_ENTRY));
+        at_capture.push((named(d), entry));
     });
-    let (fits, detail) = at_capture
-        .into_iter()
-        .next()
-        .unwrap_or((false, "no capture".into()));
+    // D-2 (a), before and after the act at 960: `Change` stands where the focused field stood.
+    let _ = (title_before, title_after);
+    let still = field_before
+        .zip(change_after)
+        .is_some_and(|(field, change)| {
+            change.top() >= field.top() - 0.5
+                && change.bottom() <= field.bottom() + crate::design::L
+        });
     d.observe(
-        "iter-28-D-FC8",
-        fits,
-        format!("At {SMALL:?}, Lookup names the session `{label}`, not `{session}`: {detail}"),
+        "iter-29-D2-status-still",
+        still,
+        format!("At {SMALL:?}: title {title_before:?} → {title_after:?}; the field {field_before:?}, then Change {change_after:?}"),
     );
+    for (size, ((fits, detail), entry)) in [SMALL, DEFAULT].into_iter().zip(at_capture) {
+        d.observe(
+            "iter-28-D-FC8",
+            fits,
+            format!("At {size:?}, Lookup names the session `{label}`, not `{session}`: {detail}"),
+        );
+        // The new Status entry, both its lines, painted whole after each resize.
+        d.observe(
+            "iter-29-D2-status-log",
+            entry,
+            format!("At {size:?}, the new entry `{STATUS_ENTRY}` is painted whole: {detail}"),
+        );
+    }
+    d.set_base(DEFAULT);
     d.click("Undo change to Status");
     d.observe(
         "T15.4",
@@ -1529,45 +1552,77 @@ pub fn log_from_play(d: &mut Driver<'_>) {
             "A name that two entries share is not Not found: row {row:?}, Not found at {found:?}"
         ),
     );
-}
 
-/// FC8's one property, the session's name painted whole, per size. At 960 the new Stat block
-/// row (G43) leaves the Log entry's second line cut at the bottom of Lookup's scroll area, so
-/// there the label's own line is read (`Driver::painted_line_with`, the lead's option 1). At
-/// 1200 and 1920 the whole text block must be painted (`Driver::painted_in`), as before.
-fn fc8_label_painted(size: (f32, f32), whole_block: bool, label_line: bool) -> bool {
-    if size == SMALL {
-        label_line
-    } else {
-        whole_block
+    // D-2 (a) for Place, in World's reader at 960: `Change` on Place opens its picker, and the
+    // room for the Log entry comes into view in that pass. Choosing `Riverside Mill` writes
+    // `Place Ashfall Keep → Riverside Mill.` into that room. The room holds two lines and this entry needs one, so
+    // the content gives that line back: `Change` may move by one line, never more and never
+    // out of view (ruling R30's amendment; weaker than "moves nothing").
+    d.set_base(SMALL);
+    // The note was deleted above (state 07); it comes back with its place set.
+    fs::write(&path, &before).unwrap();
+    entry(
+        d,
+        "Locations/Riverside Mill.md",
+        "Riverside Mill",
+        "location",
+        "",
+    );
+    d.app_mut().lookup.refresh();
+    d.settle();
+    if d.has("Close Lookup") {
+        d.click("Close Lookup");
     }
-}
-
-#[cfg(test)]
-mod fc8_tests {
-    use super::fc8_label_painted;
-    use crate::visual_tests::driver::{DEFAULT, LARGE, SMALL};
-
-    /// Review of 55a1f89e: a clipped block whose label line is whole passes only at 960.
-    #[test]
-    fn only_960_reads_the_label_line() {
-        for size in [DEFAULT, LARGE] {
-            assert!(
-                !fc8_label_painted(size, false, true),
-                "a clipped block at {size:?}"
-            );
-            assert!(
-                fc8_label_painted(size, true, true),
-                "a whole block at {size:?}"
-            );
-        }
-        assert!(
-            fc8_label_painted(SMALL, false, true),
-            "the label line at 960"
-        );
-        assert!(
-            !fc8_label_painted(SMALL, true, false),
-            "a cut label line at 960"
+    d.click(NAV_WORLD);
+    let campaign = d.app().campaigns.active_campaign().expect("a campaign").id;
+    d.app_mut().world_page.reveal(campaign, varra);
+    d.settle();
+    d.expect("Change Place");
+    d.click("Change Place");
+    d.expect("Find a location");
+    let world_reader = |d: &Driver<'_>| {
+        d.place_of("Resize World notes column").map(|splitter| {
+            egui::Rect::from_min_max(
+                egui::pos2(splitter.right(), 0.0),
+                egui::pos2(f32::INFINITY, f32::INFINITY),
+            )
+        })
+    };
+    let place_title =
+        |d: &Driver<'_>| world_reader(d).and_then(|pane| d.painted_word_rect(VARRA_BLACK, pane));
+    let _ = place_title;
+    let before_clear = d.place_of("Change Place");
+    d.type_text("Riverside");
+    d.click("Riverside Mill");
+    d.expect("Undo change to Place");
+    let after_clear = d.place_of("Change Place");
+    let in_view = d.in_view("Change Place");
+    const PLACE_ENTRY: &str = "→ Riverside Mill.";
+    let mut place_capture = Vec::new();
+    d.state_prepared("place-cleared-log-in-view", Sizes::Default, |d| {
+        d.settle();
+        place_capture
+            .push(world_reader(d).is_some_and(|pane| d.painted_in(pane).contains(PLACE_ENTRY)));
+    });
+    d.observe(
+        "iter-29-D2-place-still",
+        in_view
+            && before_clear
+                .zip(after_clear)
+                .is_some_and(|(before, after)| {
+                    (before.top() - after.top()).abs() <= crate::design::XL
+                }),
+        format!("At {SMALL:?}, Change Place {before_clear:?} → {after_clear:?} (at most one line)"),
+    );
+    for (size, entry) in [SMALL, DEFAULT].into_iter().zip(place_capture) {
+        d.observe(
+            "iter-29-D2-place-log",
+            entry,
+            format!("At {size:?}, the new Place entry is painted whole: {entry}"),
         );
     }
+    fs::write(&path, &before).unwrap();
+    d.app_mut().lookup.refresh();
+    d.settle();
+    d.set_base(DEFAULT);
 }
