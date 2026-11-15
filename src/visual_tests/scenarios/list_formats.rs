@@ -345,7 +345,7 @@ pub fn run(d: &mut Driver<'_>) {
         "A lowercase rule heading keeps its warning on the page its repair link opens",
         |d| {
             d.visible_text("Roll NPC initiative")
-                && d.has_containing("combat initiative choice “Lost initiative” is not a rule.")
+                && d.has_containing("Combat initiative choice “Lost initiative” is not a rule.")
         },
     );
     fs::write(&manifest, &saved).unwrap();

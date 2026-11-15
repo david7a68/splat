@@ -21795,18 +21795,20 @@ pub mod session_plan_groups {
             d.expect("Back to the plan");
         });
         // AK1: the empty group's reason has a reserved place, so adding the first creature moves
-        // no field. AH1: Save refuses an empty group, so it says Invalid.
+        // no field. AH1, R37 (Q-m): Save waits for a creature, and a new group with only its
+        // name is not wrong, so it says New with the draft icon, not Invalid and not Unsaved.
         let sizes = [SMALL, DEFAULT, LARGE];
         let empty =
             sizes.map(|size| d.at_size(size, |d| d.place_of(FIND_CREATURE).map(|r| r.top())));
         d.observe(
             "iter-25-B-AH1",
-            d.visible_text("Invalid")
+            d.visible_text(&format!("{} New", crate::design::icons::DRAFT))
+                && !d.visible_text("Invalid")
                 && !d.visible_text("Unsaved")
                 && d.has("Add a creature first.")
                 && d.visible_text(crate::encounters::blocked_draft_switch_reason())
                 && !d.visible_text(crate::encounters::draft_switch_reason()),
-            "An empty new group says Invalid beside its blocked Save, and Discard is the way to switch (FB6)",
+            "An empty new group says New beside its blocked Save, and Discard is the way to switch (FB6)",
         );
         d.type_into(FIND_CREATURE, "wolf");
         d.click_beside_exact("Wolf", ADD);
