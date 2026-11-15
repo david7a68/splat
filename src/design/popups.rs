@@ -79,6 +79,20 @@ pub struct HasChoices;
 /// let _ = splat::layout::Dropdown::new(splat::field_id!("doc_side").once(splat::layout::Once::Example), "Side").blocked_choice(0_u8, "Allies");
 /// ```
 ///
+/// A caller cannot give a choice a weight (including a short closed label):
+///
+/// ```compile_fail,E0277
+/// fn pick(ui: &eframe::egui::Ui) {
+///     let _ = splat::layout::Dropdown::new(splat::field_id!("doc_weight").once(splat::layout::Once::Example), "Side")
+///         .choice(0_u8, eframe::egui::RichText::new("Allies").strong());
+/// }
+/// ```
+///
+/// ```compile_fail,E0061
+/// let _ = splat::layout::Dropdown::new(splat::field_id!("doc_short_weight").once(splat::layout::Once::Example), "Session")
+///     .choice_with_short_label(0_u8, "Session 1: Tonight", "Session 1", eframe::egui::FontId::default());
+/// ```
+///
 /// The current value is of the choices' type:
 ///
 /// ```compile_fail,E0308
@@ -103,6 +117,7 @@ pub struct Dropdown<'a, T, State = NoChoice> {
 struct Entry<'a, T> {
     value: T,
     label: Cow<'a, str>,
+    short: Option<Cow<'a, str>>,
     blocked: Option<&'a str>,
 }
 
@@ -149,6 +164,23 @@ impl<'a, T, State> Dropdown<'a, T, State> {
         self.push(Entry {
             value,
             label: label.into(),
+            short: None,
+            blocked: None,
+        })
+    }
+
+    /// The closed control may use a short name; the menu and accessible name keep the full
+    /// label. Both are plain words: the part owns their regular weight.
+    pub fn choice_with_short_label(
+        self,
+        value: T,
+        label: impl Into<Cow<'a, str>>,
+        short: impl Into<Cow<'a, str>>,
+    ) -> Dropdown<'a, T, HasChoices> {
+        self.push(Entry {
+            value,
+            label: label.into(),
+            short: Some(short.into()),
             blocked: None,
         })
     }
@@ -163,6 +195,7 @@ impl<'a, T, State> Dropdown<'a, T, State> {
         self.push(Entry {
             value,
             label: label.into(),
+            short: None,
             blocked: Some(reason),
         })
     }
@@ -198,9 +231,62 @@ impl<'a, T> Dropdown<'a, T, HasChoices> {
             .extend(more.into_iter().map(|(value, label)| Entry {
                 value,
                 label: label.into(),
+                short: None,
                 blocked: None,
             }));
         self
+    }
+}
+
+/// The one font for a chosen value, including an editable value. A caller supplies words.
+fn value_font(ui: &Ui) -> egui::FontId {
+    Type::Body.font(ui)
+}
+
+impl Dropdown<'_, ()> {
+    /// The editable value inside a drop-down. Keeps typed and empty words on one baseline,
+    /// in the same regular weight as a closed choice. The caller owns the surrounding field
+    /// and its choices, and names the response. No font or weight can be passed.
+    ///
+    /// ```compile_fail,E0061
+    /// fn field(ui: &mut eframe::egui::Ui, value: &mut String) {
+    ///     splat::layout::Dropdown::editable_value(ui,
+    ///         splat::field_id!("doc_folder").once(splat::layout::Once::Example),
+    ///         value, "Main folder", 200.0, eframe::egui::FontId::default());
+    /// }
+    /// ```
+    pub fn editable_value(
+        ui: &mut Ui,
+        id: FieldId,
+        value: &mut String,
+        empty: &str,
+        width: f32,
+    ) -> Response {
+        let font = value_font(ui);
+        let response = id.single_line(ui, value, |edit| {
+            edit.frame(false)
+                .font(font)
+                .margin(Vec2::ZERO)
+                .vertical_align(Align::Center)
+                .desired_width(width)
+                .min_size(vec2(width, super::XL))
+        });
+        if value.is_empty() {
+            ui.painter().text(
+                response.rect.left_center(),
+                Align2::LEFT_CENTER,
+                empty,
+                value_font(ui),
+                colors().text,
+            );
+        }
+        response
+    }
+
+    /// Regular chosen words for a staged raw control. Its popup and events stay with the
+    /// caller until it migrates to `Dropdown`.
+    pub fn selected_words(ui: &Ui, words: impl Into<String>) -> egui::RichText {
+        egui::RichText::new(words).font(value_font(ui))
     }
 }
 
@@ -227,11 +313,8 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
             Sense::hover()
         };
         let mut response = ui.interact(rect, control, sense);
-        let chosen = self
-            .choices
-            .iter()
-            .find(|entry| entry.value == *current)
-            .map(|entry| entry.label.as_ref());
+        let chosen_entry = self.choices.iter().find(|entry| entry.value == *current);
+        let chosen = chosen_entry.map(|entry| entry.label.as_ref());
         // A blocked or disabled drop-down has no open list: it takes no selection or command.
         if !enabled {
             egui::Popup::close_id(ui.ctx(), list);
@@ -254,13 +337,18 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
                 egui::StrokeKind::Inside,
             );
             let (words, color) = match chosen {
-                Some(label) => (label, if enabled { c.text } else { c.muted }),
+                Some(label) => (
+                    chosen_entry
+                        .and_then(|entry| entry.short.as_deref())
+                        .unwrap_or(label),
+                    if enabled { c.text } else { c.muted },
+                ),
                 None => (self.name, c.faint),
             };
             let room = (width - 2.0 * S - ICON_SLOT).max(1.0);
-            let galley = one_line(ui, words, Type::Body.font(ui), color, room);
-            if galley.elided {
-                response = response.on_hover_text(words);
+            let galley = one_line(ui, words, value_font(ui), color, room);
+            if galley.elided || chosen_entry.is_some_and(|entry| entry.short.is_some()) {
+                response = response.on_hover_text(chosen.unwrap_or(words));
             }
             ui.painter().galley(
                 pos2(rect.left() + S, rect.center().y - galley.size().y / 2.0),

@@ -60,6 +60,7 @@ struct Text {
     words: String,
     rect: Rect,
     elided: bool,
+    fonts: Vec<egui::FontId>,
 }
 
 fn texts(output: &egui::FullOutput) -> Vec<Text> {
@@ -69,6 +70,13 @@ fn texts(output: &egui::FullOutput) -> Vec<Text> {
                 words: text.galley.job.text.clone(),
                 rect: text.visual_bounding_rect(),
                 elided: text.galley.elided,
+                fonts: text
+                    .galley
+                    .job
+                    .sections
+                    .iter()
+                    .map(|section| section.format.font_id.clone())
+                    .collect(),
             }),
             egui::Shape::Vec(shapes) => shapes.iter().for_each(|shape| walk(shape, out)),
             _ => {}
@@ -1307,4 +1315,66 @@ fn a_menu_of_long_choices_stays_beside_its_splitter() {
             draw(Vec::new());
         }
     }
+}
+
+/// R40: closed choices, typed values and the empty-folder words share regular weight even
+/// when their parent uses bold. Short paint keeps the full menu and accessible label.
+#[test]
+fn chosen_values_use_regular_weight_and_keep_full_choice_words() {
+    const FULL: &str = "Session 1: Tonight at the old bridge";
+    const TYPED: FieldId =
+        crate::field_id!("test_dropdown_typed").once(crate::design::Once::Example);
+    const EMPTY: FieldId =
+        crate::field_id!("test_dropdown_empty").once(crate::design::Once::Example);
+    let ctx = context();
+    let size = vec2(960.0, 640.0);
+    let control = Cell::new(Rect::NOTHING);
+    let expected = std::cell::RefCell::new(None);
+    let mut current = 0;
+    let mut typed = "Typed folder".to_owned();
+    let mut empty = String::new();
+    let mut draw = |events| {
+        frame(&ctx, size, events, |ui| {
+            *expected.borrow_mut() = Some(Type::Body.font(ui));
+            ui.style_mut().override_font_id = Some(Type::Strong.font(ui));
+            control.set(
+                Dropdown::new(SIDE, "Adds to")
+                    .choice_with_short_label(0, FULL, "Session 1")
+                    .choice(1, "No session")
+                    .width(220.0)
+                    .show(ui, &mut current)
+                    .response
+                    .rect,
+            );
+            Dropdown::editable_value(ui, TYPED, &mut typed, "Main folder", 220.0);
+            Dropdown::editable_value(ui, EMPTY, &mut empty, "Main folder", 220.0);
+            ui.label(Dropdown::selected_words(ui, "Chosen package"));
+        })
+    };
+    draw(Vec::new());
+    let closed = draw(Vec::new());
+    let text = texts(&closed);
+    let expected = expected.borrow().clone().unwrap();
+    for words in ["Session 1", "Typed folder", "Main folder", "Chosen package"] {
+        let painted = text.iter().find(|text| text.words == words).expect(words);
+        assert!(!painted.fonts.is_empty());
+        assert!(
+            painted.fonts.iter().all(|font| *font == expected),
+            "{words}: {:?}",
+            painted.fonts
+        );
+    }
+    assert!(
+        closed
+            .platform_output
+            .accesskit_update
+            .unwrap()
+            .nodes
+            .iter()
+            .any(|(_, node)| node.label() == Some(&format!("Adds to: {FULL}")))
+    );
+    draw(click(control.get().center()));
+    draw(Vec::new());
+    let open = draw(Vec::new());
+    assert!(painted(&open).iter().any(|words| words == FULL));
 }
