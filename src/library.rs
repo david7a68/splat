@@ -3333,28 +3333,15 @@ pub(crate) fn folder_field(
                             let width =
                                 (ui.available_width() - design::XL - ui.spacing().item_spacing.x)
                                     .max(design::XXL);
-                            let font = Type::Strong.font(ui);
-                            let response = id.single_line(ui, value, |edit| {
-                                edit.frame(false)
-                                    .font(font)
-                                    .margin(egui::Vec2::ZERO)
-                                    // Round 27 FH10: centred, as `Main folder` is painted, so
-                                    // typed words and the chosen value share one baseline.
-                                    .vertical_align(egui::Align::Center)
-                                    .desired_width(width)
-                                    .min_size(egui::vec2(width, design::XL))
-                            });
+                            let response = design::Dropdown::editable_value(
+                                ui,
+                                id,
+                                value,
+                                "Main folder",
+                                width,
+                            );
                             design::named(ui, &response, label);
                             let typing = response.has_focus();
-                            if value.is_empty() {
-                                ui.painter().text(
-                                    response.rect.left_center(),
-                                    egui::Align2::LEFT_CENTER,
-                                    "Main folder",
-                                    Type::Strong.font(ui),
-                                    colors().text,
-                                );
-                            }
                             let (rect, response) = ui.allocate_exact_size(
                                 egui::vec2(design::XL, design::XL),
                                 egui::Sense::click(),
@@ -6378,7 +6365,7 @@ impl Library {
                 .width(width)
                 .height(height)
                 .wrap()
-                .selected_text(Type::Strong.rich(ui, fitted))
+                .selected_text(design::Dropdown::selected_words(ui, fitted))
                 .show_ui(ui, |ui| {
                     // The popup is as wide as the control, so it covers the counts beside it and
                     // stays in the scope's column, clear of the splitter. Its content is the
