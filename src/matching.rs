@@ -27,10 +27,10 @@ impl Rank {
         Self { typo: true, tier }
     }
 
-    /// FI5: where a creature search sorts this name, in the one creature order that the
-    /// encounter editor, the group editor and Arrivals share: a name that holds the search as
-    /// a whole word sorts with any other name that holds it (`creature_tier`).
-    pub(crate) const fn creature(self) -> Self {
+    /// FI5, M3: where the creature order puts a name rank: a name that holds the search as a
+    /// whole word (2) sorts with any other name that holds it (3). Private, so that only
+    /// [`Typed::creature`] and [`creature_tier`] rank a creature.
+    const fn creature(self) -> Self {
         if !self.typo && self.tier == 3 {
             Self::typed(2)
         } else {
@@ -39,11 +39,12 @@ impl Rank {
     }
 }
 
-/// FI5: the one creature search order, Arrivals' order: the exact name (0), then a name that
-/// starts with the search (1), then a name that holds it anywhere (2). Names in one tier keep
-/// the list's order.
+/// FI5, M3: the one creature search order for the search as typed, Arrivals' order: the exact
+/// name (0), then a name that starts with the search (1), then a name that holds it anywhere
+/// (2). Names in one tier keep the list's order. [`Typed::creature`] adds the typed words and
+/// typos after these tiers.
 pub(crate) fn creature_tier(name: &str, query: &str) -> Option<u8> {
-    name_rank(name, query).map(|tier| tier.min(2))
+    name_rank(name, query).map(|tier| Rank::typed(tier).creature().tier)
 }
 
 /// Shown when every result was found only with a typo.
@@ -132,6 +133,21 @@ impl Typed {
     /// typo.
     pub(crate) fn name(&self, name: &str) -> Option<Rank> {
         self.name_with_words(name, words(name))
+    }
+
+    /// M3: the one creature rank. Every search that lists creatures ranks a creature's
+    /// lower-case name here (Lookup, the creature pickers, the encounter and group editors;
+    /// Arrivals through [`creature_tier`]), so the DM meets one order on every screen: the exact
+    /// name, then a name that starts with the search, then a name that holds it anywhere (a
+    /// whole word or inside a word: `wolf` puts Werewolf before Winter Wolf, in the list's
+    /// order), then the typed words in any order, then a typo. Other kinds keep
+    /// [`Typed::name_with_words`], where a whole word ranks before a word that only holds it.
+    pub(crate) fn creature<'a>(
+        &self,
+        name: &str,
+        name_words: impl IntoIterator<Item = &'a str>,
+    ) -> Option<Rank> {
+        self.name_with_words(name, name_words).map(Rank::creature)
     }
 
     /// `name`, for a name whose words are already split.
@@ -409,6 +425,34 @@ mod tests {
         assert_eq!(rank("potion of healing", "fire"), None);
         // A typo sorts after every tier found as typed.
         assert!(Rank::typed(9) < Rank::typo(0));
+        // M3: a creature's name holds the search as a whole word or inside a word in one
+        // tier, so the list's order decides Werewolf before Winter Wolf. Other kinds keep the
+        // whole word first.
+        let creature = |name: &str, query: &str| Typed::new(query).creature(name, words(name));
+        assert_eq!(creature("wolf", "wolf"), Some(Rank::typed(0)));
+        assert_eq!(creature("wolf spider", "wolf"), Some(Rank::typed(1)));
+        assert_eq!(creature("winter wolf", "wolf"), Some(Rank::typed(2)));
+        assert_eq!(creature("werewolf", "wolf"), Some(Rank::typed(2)));
+        assert_eq!(rank("werewolf", "wolf"), Some(Rank::typed(3)));
+        assert_eq!(
+            creature("potion of healing", "healing potion"),
+            Some(Rank::typed(4))
+        );
+        assert_eq!(creature("winter wolf", "wolf wintr"), Some(Rank::typo(0)));
+        // Arrivals' tiers of the search as typed are the same order.
+        for name in [
+            "wolf",
+            "wolf spider",
+            "winter wolf",
+            "werewolf",
+            "dire bear",
+        ] {
+            assert_eq!(
+                creature_tier(name, "wolf").map(Rank::typed),
+                creature(name, "wolf").filter(|rank| rank.tier < 4),
+                "{name}"
+            );
+        }
     }
 
     #[test]
