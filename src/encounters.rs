@@ -6998,10 +6998,7 @@ impl Encounters {
             ui.add(
                 egui::Label::new(
                     Type::Small
-                        .rich(
-                            ui,
-                            "Nothing in this encounter reaches D&D Beyond, unless you select Sync party in the run.",
-                        )
+                        .rich(ui, "Nothing in this encounter reaches D&D Beyond.")
                         .color(colors().text),
                 )
                 .wrap(),
@@ -7010,7 +7007,7 @@ impl Encounters {
         let words = if draft.setup.combat_sync {
             "The party starts with the HP and conditions on their sheets. When connected, the run and D&D Beyond stay matched."
         } else {
-            "The party starts from their saved copies and the starting values here."
+            "The party starts from their saved copies and the starting values here. To sync a fight, select Sync party in the run."
         };
         // AD1: help under an option keeps the reader measure.
         design::help(ui, words);
