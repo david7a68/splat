@@ -8545,6 +8545,14 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
 /// M9: Remove's Undo names the removed entry (`Undo remove <entry>`), whole when it fits.
 const UNDO_REMOVE: &str = "Undo remove Ash Exposure";
 
+/// Whether Remove's Undo shows, whatever its label's form: the steps act on it, and only
+/// `M9-undo-remove-object` asserts its words.
+fn has_undo_remove(d: &Driver<'_>) -> bool {
+    d.nodes()
+        .iter()
+        .any(|node| node.name.starts_with("Undo remove"))
+}
+
 pub fn package_delete_entry(d: &mut Driver<'_>) {
     let package = d.root.join("modules/ashen-marches");
     let rules = package.join("Rules/Ash Exposure.md");
@@ -8983,7 +8991,7 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         "Ash Exposure removed. Its draft was discarded. Ember Cultist now needs a missing entry.",
     );
     assert!(!d.has_containing("Ash Exposure · "));
-    d.expect(UNDO_REMOVE);
+    d.expect("Undo remove");
     // M9: Remove's Undo names the entry, whole where it fits (here at every size).
     d.state_prepared("deleted-draft-let-go", Sizes::All, |d| {
         let size = d.window_size();
@@ -8995,7 +9003,7 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         );
     });
     let let_go_count = files_to_fix(d);
-    d.click(UNDO_REMOVE);
+    d.click_starting("Undo remove");
     d.expect("Remove entry and lose draft");
     d.expect("A draft to let go.");
     // Round 23 FD1: Undo remove gives back the entry's campaign use and the header count with
@@ -9054,8 +9062,8 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.settle();
     let b_after = wraith_chosen(d);
     go_library(d);
-    d.wait_for_text(UNDO_REMOVE);
-    d.click(UNDO_REMOVE);
+    d.wait_for_text("Undo remove");
+    d.click_starting("Undo remove");
     d.expect("Remove entry and lose draft");
     let a_back = d.has_containing("A draft to let go.")
         && d.visible_text("Ashen Marches · Chosen for this campaign");
@@ -9088,7 +9096,7 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     let removed = |d: &mut Driver<'_>| {
         d.click("Remove entry and lose draft");
         d.wait_for_text("No entry open");
-        d.has(UNDO_REMOVE)
+        has_undo_remove(d)
     };
     // Lookup: Open in Library selects another entry.
     let lookup_offered = removed(d);
@@ -9100,14 +9108,14 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         d.press_ctrl(Key::K);
     }
     go_library(d);
-    let lookup_ended = !d.has(UNDO_REMOVE) && !d.has_containing("Ash Exposure · ");
+    let lookup_ended = !has_undo_remove(d) && !d.has_containing("Ash Exposure · ");
     // The list: a row selects another entry.
     gone_draft(d);
     let list_offered = removed(d);
     search_library(d, "Ash Wraith");
     d.click_starting("Ash Wraith · ");
     d.settle();
-    let list_ended = !d.has(UNDO_REMOVE) && !d.has_containing("Ash Exposure · ");
+    let list_ended = !has_undo_remove(d) && !d.has_containing("Ash Exposure · ");
     // Another campaign: Undo would put A into its catalogue with this campaign's choice. The
     // encounter draft from earlier in this scenario would block the switch: let it go first.
     go_encounters(d);
@@ -9119,11 +9127,11 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     switch_campaign(d, QUIET_CAMPAIGN);
     go_library(d);
     d.settle();
-    let in_other = d.has(UNDO_REMOVE);
+    let in_other = has_undo_remove(d);
     switch_campaign(d, CAMPAIGN);
     go_library(d);
     d.settle();
-    let switch_ended = !in_other && !d.has(UNDO_REMOVE) && !d.has_containing("Ash Exposure · ");
+    let switch_ended = !in_other && !has_undo_remove(d) && !d.has_containing("Ash Exposure · ");
     // Astra re-check 2: the same round trip while the Library is hidden. The switch itself ends
     // the Undo; coming back to the first campaign does not bring it back.
     gone_draft(d);
@@ -9135,7 +9143,7 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.settle();
     go_library(d);
     d.settle();
-    let hidden_ended = !d.has(UNDO_REMOVE) && !d.has_containing("Ash Exposure · ");
+    let hidden_ended = !has_undo_remove(d) && !d.has_containing("Ash Exposure · ");
     d.observe(
         "iter-25-L-undo-remove-owner",
         lookup_offered

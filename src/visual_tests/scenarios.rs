@@ -2441,13 +2441,17 @@ pub mod library_navigation {
         );
         for size in [SMALL, DEFAULT, LARGE] {
             let (named, quiet_undo) = d.at_size(size, |d| {
-                let named = d.place_of(UNDO_COPY);
-                let quiet = named.is_some_and(|rect| {
-                    d.control_frame(UNDO_COPY)
+                // The copy's Undo, whatever its label's form; M9 below asserts its words.
+                let undo = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with("Undo copy"));
+                let quiet = undo.as_ref().is_some_and(|undo| {
+                    d.control_frame(&undo.name)
                         .is_some_and(|frame| frame.stroke == egui::Stroke::NONE)
-                        && d.painted_in(rect).contains(crate::design::icons::UNDO)
+                        && d.painted_in(undo.rect).contains(crate::design::icons::UNDO)
                 });
-                (named, quiet)
+                (undo.map(|undo| undo.name), quiet)
             });
             d.observe(
                 "iter-7-D-SD2",
@@ -2457,12 +2461,12 @@ pub mod library_navigation {
             // M9: the Undo names the entry it copied, whole where it fits (here at every size).
             d.observe(
                 "M9-undo-copy-object",
-                named.is_some(),
-                format!("At {size:?} the copy's Undo is {UNDO_COPY:?}: {named:?}"),
+                named.as_deref() == Some(UNDO_COPY),
+                format!("At {size:?} the copy's Undo is {named:?}; expected {UNDO_COPY:?}"),
             );
         }
         d.state("dependency-copy-reconnected", Sizes::All);
-        d.click(UNDO_COPY);
+        d.click_starting("Undo copy");
         d.wait_for_text("Ash Exposure links to Captain Varra, which is in this campaign only. Another campaign that uses Ashen Marches will not find it.");
         // A link in a paragraph is named by its words and where it goes (iter-16 AD1).
         d.click("Wiki watch spell (opens Ashfall)");
@@ -2662,7 +2666,7 @@ pub mod library_navigation {
         let a_alone = d.has_containing("Captain Varra copied to Ashen Marches and linked.")
             && !d.has_containing("copied to Ember Reach");
         if a_alone {
-            d.click(UNDO_COPY);
+            d.click_starting("Undo copy");
             d.wait_for_text("Ash Exposure links to Captain Varra, which is in this campaign only. Another campaign that uses Ashen Marches will not find it.");
         }
         let a_back = std::fs::read_to_string(&path).unwrap() == a_text && copies_in(&a_folder) == 0;
@@ -2671,8 +2675,8 @@ pub mod library_navigation {
             && copies_in(&b_folder) == 1;
         open_in(d, "Ember Reach");
         d.wait_for_text("Ember Reach keeps its own rule.");
-        let b_result_kept =
-            d.has_containing("Captain Varra copied to Ember Reach and linked.") && d.has(UNDO_COPY);
+        let b_result_kept = d.has_containing("Captain Varra copied to Ember Reach and linked.")
+            && d.has_containing("Undo copy");
         d.observe(
             "iter-26-L-copy-owner",
             a_hidden_in_b && b_alone && a_alone && a_back && b_kept && b_result_kept,
@@ -26983,7 +26987,7 @@ pub mod remove_package_in_use {
             d.root.join("modules/ashen-marches/Module.md").is_file(),
             "Unregistering keeps the package files",
         );
-        d.expect(UNDO_UNREGISTER);
+        d.expect("Undo unregister");
         let with_result = places(d);
         // Round 25 FG2: a finished change is a success message.
         let words = d.painted_rect_in("Ashen Marches is unregistered.", egui::Rect::EVERYTHING);
@@ -27003,7 +27007,7 @@ pub mod remove_package_in_use {
                 format!("At {size:?} the unregister's Undo is {UNDO_UNREGISTER:?}: {named:?}"),
             );
         });
-        d.click(UNDO_UNREGISTER);
+        d.click_starting("Undo unregister");
         d.expect(&format!("More actions for {MODULE}"));
         let registered = d
             .app_mut()
@@ -27027,7 +27031,7 @@ pub mod remove_package_in_use {
         d.click(&format!("More actions for {MODULE}"));
         d.click(&format!("Unregister {MODULE}"));
         d.click("Unregister");
-        d.expect(UNDO_UNREGISTER);
+        d.expect("Undo unregister");
         go_campaign(d);
         d.click("Reload from disk");
         d.expect("Ashen Marches is not registered.");
