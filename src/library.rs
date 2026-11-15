@@ -250,6 +250,22 @@ fn repair_notice(
     }
 }
 
+/// Whose file a note is: its owner's kind and id. Settings check package and campaign UUIDs
+/// apart (`persistence.rs`), so a campaign and a package may share one: the kind is part of a
+/// file's identity (M-L0.4a). Every file key in the Library is a [`FileId`].
+#[derive(Clone, Copy, Default, PartialEq, Eq, Hash, Debug)]
+enum OwnerKey {
+    #[default]
+    Builtin,
+    Package(Uuid),
+    Campaign(Uuid),
+}
+
+/// One file in the Library: its owner (kind and id) and its path in the owner's folder. Two
+/// packages can each have `Rules/Watch.md`, and so can a campaign and a package with one UUID:
+/// they are different files.
+type FileId = (OwnerKey, String);
+
 /// Who owns an entry, and so whether and where it can be saved.
 #[derive(Clone, Default, PartialEq, Debug)]
 enum Owner {
@@ -272,6 +288,14 @@ impl Owner {
             Self::Builtin => None,
             Self::Package(module) => Some(module.id),
             Self::Campaign(campaign) => Some(campaign.id),
+        }
+    }
+    /// The owner's kind and id: the owner part of a [`FileId`].
+    fn key(&self) -> OwnerKey {
+        match self {
+            Self::Builtin => OwnerKey::Builtin,
+            Self::Package(module) => OwnerKey::Package(module.id),
+            Self::Campaign(campaign) => OwnerKey::Campaign(campaign.id),
         }
     }
     fn root(&self) -> Option<&Path> {
@@ -642,7 +666,7 @@ fn duplicate_choices(
         let mut shown = std::collections::HashSet::new();
         for (position, &at) in duplicate_indices.iter().enumerate() {
             let owner = &loaded.notes[at].owner;
-            if shown.insert(owner.id())
+            if shown.insert(owner.key())
                 && let Some(paths) = loaded.duplicate_folder_paths(owner)
             {
                 ui.add_space((design::L - ui.spacing().item_spacing.y).max(0.0));
@@ -667,14 +691,14 @@ fn duplicate_choices(
                             .notes
                             .iter()
                             .filter(|target| {
-                                target.owner.id() == owner.id() && batch.contains(&target.path)
+                                target.owner.key() == owner.key() && batch.contains(&target.path)
                             })
                             .filter_map(|target| target.entry.as_ref())
                             .collect();
                         let mut users: Vec<String> = Vec::new();
                         for other in &loaded.notes {
                             // An encounter inside the batch gets the new identities with it.
-                            if other.owner.id() == owner.id() && batch.contains(&other.path) {
+                            if other.owner.key() == owner.key() && batch.contains(&other.path) {
                                 continue;
                             }
                             let Some(encounter) = other.entry.as_ref() else {
@@ -708,7 +732,7 @@ fn duplicate_choices(
                     let remaining = duplicate_indices
                         .iter()
                         .map(|&other| &loaded.notes[other].owner)
-                        .find(|other| other.id() != owner.id())
+                        .find(|other| other.key() != owner.key())
                         .expect("a folder repair has another owner");
                     duplicate_repair_consequence(
                         ui,
@@ -1001,7 +1025,7 @@ fn place(
 ) -> Option<Place> {
     let current = loaded.notes.get(selected?)?;
     Some(Place {
-        owner: current.owner.id(),
+        owner: current.owner.key(),
         path: current.path.clone(),
         scope,
         section,
@@ -1118,14 +1142,20 @@ impl Note {
             .map_or(Section::Unreadable, Section::for_entry)
     }
     /// The key of this note's text fields (its Markdown, the read-only copy of the DM's draft),
-    /// with its owner's id. A file has no identity but its path, so the path is the key: a counted
+    /// with its owner's id. A file has no identity but its owner and path, so the owner's kind and
+    /// the path are the key (a campaign and a package may share a UUID: `OwnerKey`): a counted
     /// escape (`Ban::RowKey`), the one place that builds it.
     #[allow(
         clippy::disallowed_methods,
         reason = "staged: a text key from data (design::results::STAGED_ALLOWS)"
     )]
     fn field_key(&self) -> design::TextKey {
-        design::TextKey::from_data(self.path.clone())
+        let kind = match self.owner.key() {
+            OwnerKey::Builtin => "builtin",
+            OwnerKey::Package(_) => "package",
+            OwnerKey::Campaign(_) => "campaign",
+        };
+        design::TextKey::from_data(format!("{kind}\u{0}{}", self.path))
     }
     /// This note's Markdown editor.
     fn markdown_field(&self) -> design::FieldId {
@@ -1184,14 +1214,9 @@ type BrokenLinks = (
     Vec<(usize, usize)>,
 );
 
-/// A file's identity in the Library: its owner and its path in the owner's folder. Two packages
-/// can each have `Rules/Watch.md`; they are two files. A load error has its package or campaign
-/// id and an empty path.
-type FileKey = (Option<Uuid>, String);
-
 /// A problem the Library header counts, and the file it belongs to.
 pub(crate) struct Diagnostic {
-    file: FileKey,
+    file: FileId,
     /// The menu line: the file (with its owner when another owner has the same path) and the problem.
     text: String,
 }
@@ -1205,14 +1230,14 @@ pub(crate) struct Loaded {
     owners: Vec<Owner>,
     /// Problems that kept content from loading. The notes cannot show these again.
     /// Each keyed by its package or campaign id, so two packages with one name count twice.
-    load_errors: Vec<(FileKey, String)>,
+    load_errors: Vec<(FileId, String)>,
     diagnostics: Vec<Diagnostic>,
     /// Files the header counts that have no message of their own: each file of a duplicate
     /// identity or key, whose row says `Same entry in two files`. The check names one side only.
-    duplicate_files: Vec<FileKey>,
+    duplicate_files: Vec<FileId>,
     /// Files whose every counted problem is a link to an entry that cannot be found. Their row
     /// says `N broken links` once, with no second `Needs fixing` mark.
-    link_faults_only: std::collections::HashSet<FileKey>,
+    link_faults_only: std::collections::HashSet<FileId>,
     /// A counted file cannot be read, so the header count has the error tone.
     unreadable_counted: bool,
     /// Paths that more than one note has, such as `Rules/Watch.md` in two packages, with the
@@ -1572,7 +1597,7 @@ impl Loaded {
             diagnostics.push(match note {
                 Some(note) => self.note_problem(note, &check.message),
                 None => Diagnostic {
-                    file: (None, check.path.clone()),
+                    file: (OwnerKey::Builtin, check.path.clone()),
                     text: format!("{}: {}", check.path, check.message),
                 },
             });
@@ -1698,8 +1723,8 @@ impl Loaded {
         }
     }
 
-    fn file_key(note: &Note) -> FileKey {
-        (note.owner.id(), note.path.clone())
+    fn file_key(note: &Note) -> FileId {
+        (note.owner.key(), note.path.clone())
     }
 
     fn note_problem(&self, note: &Note, message: &str) -> Diagnostic {
@@ -1718,20 +1743,20 @@ impl Loaded {
     fn has_problem(&self, note: &Note) -> bool {
         self.diagnostics
             .iter()
-            .any(|d| d.file.0 == note.owner.id() && d.file.1 == note.path)
+            .any(|d| d.file.0 == note.owner.key() && d.file.1 == note.path)
     }
 
     /// How many files the header counts: each file once, by owner and path, for a problem, a
     /// broken link, a duplicate identity or more than one.
     /// `extra` is a file the loaded notes do not know is faulty yet: an open draft's file that
     /// stopped reading.
-    fn files_to_fix(&self, broken: &[(usize, usize)], extra: Option<&FileKey>) -> usize {
+    fn files_to_fix(&self, broken: &[(usize, usize)], extra: Option<&FileId>) -> usize {
         self.diagnostics
             .iter()
             .map(|d| (d.file.0, d.file.1.as_str()))
             .chain(broken.iter().map(|&(at, _)| {
                 let note = &self.notes[at];
-                (note.owner.id(), note.path.as_str())
+                (note.owner.key(), note.path.as_str())
             }))
             .chain(
                 self.duplicate_files
@@ -2354,7 +2379,7 @@ impl design::results::Reconcile for RostersUse {
 /// state slot says `Not saved` with Save's reason until the draft changes, another entry opens,
 /// or a Save succeeds. Nothing reads the disk to show it.
 struct SaveFailure {
-    owner: Option<Uuid>,
+    owner: OwnerKey,
     path: String,
     revision: u64,
     reason: String,
@@ -2369,7 +2394,7 @@ impl SaveFailure {
     /// each read in tests; it needs none of them, so no frame compares or hashes the draft.
     fn owns(&self, note: &Note, revision: u64, draft: DraftView<'_>) -> bool {
         let _ = draft;
-        self.owner == note.owner.id() && self.path == note.path && self.revision == revision
+        self.owner == note.owner.key() && self.path == note.path && self.revision == revision
     }
 }
 
@@ -3744,7 +3769,7 @@ pub(crate) fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Resul
         } else {
             module.name.clone()
         };
-        let key = (Some(module.id), String::new());
+        let key = (OwnerKey::Package(module.id), String::new());
         if let Err(error) = splat::content::art::ArtIndex::default().add_package(&module.path) {
             all.load_errors
                 .push((key.clone(), format!("{name}: {error}")));
@@ -3789,7 +3814,7 @@ pub(crate) fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Resul
                 }
             }
             Err(error) => all.load_errors.push((
-                (Some(campaign.id), String::new()),
+                (OwnerKey::Campaign(campaign.id), String::new()),
                 format!("{}: {error}", campaign.name),
             )),
         }
@@ -3810,7 +3835,7 @@ pub(crate) fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Resul
                 );
             }
             Err(error) => all.load_errors.push((
-                (Some(campaign.id), String::new()),
+                (OwnerKey::Campaign(campaign.id), String::new()),
                 format!("{}: {error}", campaign.name),
             )),
         }
@@ -3822,8 +3847,8 @@ pub(crate) fn load_all(modules: &[Module], campaign: Option<&Campaign>) -> Resul
 
 /// Undo discard offers words only to the note they came from. Two owners can each have a
 /// note at the same path.
-fn discard_is_for(discarded: Option<&(Option<Uuid>, String, String)>, note: &Note) -> bool {
-    discarded.is_some_and(|(owner, path, _)| *owner == note.owner.id() && *path == note.path)
+fn discard_is_for(discarded: Option<&(OwnerKey, String, String)>, note: &Note) -> bool {
+    discarded.is_some_and(|(owner, path, _)| *owner == note.owner.key() && *path == note.path)
 }
 
 /// The catalogue needs reloading when either of these changes.
@@ -3994,7 +4019,7 @@ pub struct Library {
     list_hidden: bool,
     /// The draft `Discard changes` last dropped, with its note's path, for one step of undo.
     /// The note's owner and path, and the discarded words.
-    discarded: Option<(Option<Uuid>, String, String)>,
+    discarded: Option<(OwnerKey, String, String)>,
     discarded_note: Option<LetGo>,
     /// A Save that failed on the disk, for the draft it tried to write.
     save_failure: Option<SaveFailure>,
@@ -4090,7 +4115,7 @@ pub struct Library {
     package_folder_changed: bool,
     pub use_entry: Option<(Uuid, Uuid)>,
     source: bool,
-    reselect: Option<(Option<Uuid>, String)>,
+    reselect: Option<FileId>,
     pub copy: Option<crate::content_workspace::CopySource>,
     pub copy_to_package: Option<Uuid>,
     /// An entry to read beside the open draft, in Lookup.
@@ -4261,7 +4286,7 @@ fn moved_note(root: &Path, id: Uuid, old: &str) -> Result<Option<(String, String
 }
 /// An entry Back or Forward returns to, with the list as it was there.
 struct Place {
-    owner: Option<Uuid>,
+    owner: OwnerKey,
     path: String,
     scope: Scope,
     section: Section,
@@ -4271,7 +4296,7 @@ impl Place {
     fn find(&self, notes: &[Note]) -> Option<usize> {
         notes
             .iter()
-            .position(|n| n.owner.id() == self.owner && n.path == self.path)
+            .position(|n| n.owner.key() == self.owner && n.path == self.path)
     }
 }
 impl Library {
@@ -4632,7 +4657,7 @@ impl Library {
             OrderKey::Reader(ResultKind::Discarded),
             design::ResultOrder::issue(),
         );
-        self.discarded = Some((note.owner.id(), note.path.clone(), draft));
+        self.discarded = Some((note.owner.key(), note.path.clone(), draft));
         if let Some(fault) = change.fault {
             // The note becomes the file as it is: unreadable, with its fault and no text.
             note.entry = None;
@@ -4966,7 +4991,7 @@ impl Library {
                 loaded
                     .notes
                     .iter()
-                    .find(|note| note.owner.id() == *owner && &note.path == path)
+                    .find(|note| note.owner.key() == *owner && &note.path == path)
             });
             match (loaded, &self.discarded_note) {
                 (Some(note), _) => changed_here(&note.owner, path, Some(&note.text)),
@@ -4989,7 +5014,7 @@ impl Library {
             .loaded
             .as_ref()
             .and_then(|l| self.selected.and_then(|i| l.notes.get(i)))
-            .map(|n| (n.owner.id(), n.path.clone()));
+            .map(|n| (n.owner.key(), n.path.clone()));
         self.load_key = Some(load_key(campaigns));
         let modules = campaigns.modules().to_vec();
         let campaign = campaigns.active_campaign();
@@ -5109,7 +5134,7 @@ impl Library {
                             self.selected = self.reselect.as_ref().and_then(|(owner, path)| {
                                 l.notes
                                     .iter()
-                                    .position(|n| n.owner.id() == *owner && &n.path == path)
+                                    .position(|n| n.owner.key() == *owner && &n.path == path)
                             });
                             if let Some(i) = self.selected {
                                 self.draft = l.notes[i].text.clone();
@@ -7189,7 +7214,7 @@ impl Library {
                                     chosen.insert(entry.id);
                                 }
                                 let created_path = path.clone();
-                                let created_owner = owner.id();
+                                let created_owner = owner.key();
                                 l.notes.push(Note {
                                     path,
                                     text: text.clone(),
@@ -7204,7 +7229,7 @@ impl Library {
                                 self.matches = None;
                                 self.scope_counts = None;
                                 self.selected = l.notes.iter().position(|n| {
-                                    n.path == created_path && n.owner.id() == created_owner
+                                    n.path == created_path && n.owner.key() == created_owner
                                 });
                                 if self.selected.is_some() {
                                     self.trail.leave(left);
@@ -7517,7 +7542,7 @@ impl Library {
                 // The disk refused the write: the draft's state slot says so with Save's reason.
                 Ok(_) if refused.is_none() => {
                     self.save_failure = Some(SaveFailure {
-                        owner: note.owner.id(),
+                        owner: note.owner.key(),
                         path: note.path.clone(),
                         revision: self.draft_revision,
                         reason: e,
@@ -8352,7 +8377,7 @@ impl Library {
                     OrderKey::Reader(ResultKind::Discarded),
                     design::ResultOrder::issue(),
                 );
-                self.discarded = Some((note.owner.id(), note.path.clone(), self.draft.clone()));
+                self.discarded = Some((note.owner.key(), note.path.clone(), self.draft.clone()));
                 self.draft = note.text.clone();
                 // The draft changed: a failed Save of the old words no longer owns it.
                 self.draft_revision += 1;
@@ -8546,7 +8571,7 @@ impl Library {
                     } else {
                         "library_footer"
                     },
-                    note.owner.id(),
+                    note.owner.key(),
                     &note.path,
                 ),
                 editor_width,
@@ -8659,7 +8684,7 @@ impl Library {
             pane_footer = Some(footer);
         } else if choices_in_reader {
             let mut footer = design::Footer::new(
-                ("library_footer", note.owner.id(), &note.path),
+                ("library_footer", note.owner.key(), &note.path),
                 editor_width.min(design::READER_MEASURE),
             );
             reader_messages(
@@ -8785,7 +8810,7 @@ impl Library {
             // footer is empty, and the pane is still the editor's.
             let footer = pane_footer.take().unwrap_or_else(|| {
                 design::Footer::new(
-                    ("library_source", note.owner.id(), &note.path),
+                    ("library_source", note.owner.key(), &note.path),
                     editor_width,
                 )
             });
@@ -8964,7 +8989,7 @@ impl Library {
             // scrolls (round 28 rows 17, 50, 53, 54; G6; P2 for the draft's footer).
             let footer = pane_footer.take().unwrap_or_else(|| {
                 design::Footer::new(
-                    ("library_footer", note.owner.id(), &note.path),
+                    ("library_footer", note.owner.key(), &note.path),
                     editor_width.min(design::READER_MEASURE),
                 )
             });
@@ -9729,7 +9754,7 @@ mod tests {
         assert_eq!(unresolved.len(), 1, "{:?}", loaded.diagnostic_texts());
         assert_eq!(
             unresolved[0].file,
-            (Some(ember.id), "Rules/Watch.md".to_owned())
+            (OwnerKey::Package(ember.id), "Rules/Watch.md".to_owned())
         );
         assert!(
             unresolved[0]
@@ -10553,7 +10578,7 @@ mod tests {
         assert_eq!(wolves.len(), 2);
         // Round 24 AC1: both files of the duplicate count in the header, as both rows are
         // marked, though the check names one side.
-        let wolf_files: Vec<FileKey> = wolves.iter().map(|(_, n)| Loaded::file_key(n)).collect();
+        let wolf_files: Vec<FileId> = wolves.iter().map(|(_, n)| Loaded::file_key(n)).collect();
         let named = loaded
             .diagnostics
             .iter()
@@ -10562,7 +10587,7 @@ mod tests {
             .collect::<std::collections::HashSet<_>>()
             .len();
         assert!(named < 2, "fixture: the check names one Wolf file only");
-        let counted: std::collections::HashSet<&FileKey> = loaded
+        let counted: std::collections::HashSet<&FileId> = loaded
             .diagnostics
             .iter()
             .map(|d| &d.file)
@@ -13392,10 +13417,27 @@ mod tests {
             manifest_gone: false,
             owner: Owner::Package(module.clone()),
         };
-        let discarded = (Some(first.id), "a.md".to_string(), "words".to_string());
+        let discarded = (
+            OwnerKey::Package(first.id),
+            "a.md".to_string(),
+            "words".to_string(),
+        );
         assert!(discard_is_for(Some(&discarded), &note(&first, "a.md")));
         assert!(!discard_is_for(Some(&discarded), &note(&first, "b.md")));
         assert!(!discard_is_for(Some(&discarded), &note(&second, "a.md")));
+        // M-L0.4a: a campaign with the package's UUID (settings check the two apart) holds a
+        // different file at the same path: the package's Undo is not offered there.
+        let campaign = Note {
+            owner: Owner::Campaign(Campaign {
+                id: first.id,
+                name: "Campaign".into(),
+                path: temp.path().join("campaign"),
+                dndbeyond_campaign_id: None,
+                dndbeyond_campaign_name: None,
+            }),
+            ..note(&first, "a.md")
+        };
+        assert!(!discard_is_for(Some(&discarded), &campaign));
     }
 
     #[test]
