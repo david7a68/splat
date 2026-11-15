@@ -1090,7 +1090,7 @@ impl TimelinePage {
         }
         // Row 123: the plan line's result, or its refused Undo's answer, from the one store the
         // Session plan reads too.
-        if let Some(line) = notes.plan_line_line(frame, ListAct::UndoPlanLine) {
+        for line in notes.plan_line_lines(frame, ListAct::UndoPlanLine) {
             messages.kept(line);
         }
         if let Some(offer) = offer {

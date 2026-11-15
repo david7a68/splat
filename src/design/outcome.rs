@@ -2117,27 +2117,24 @@ pub struct KeptLine<'f, A> {
     /// The order of the entry's refused attempt, while its refusal stands: the line ranks by it
     /// ([`kept_rank`]), and keeps the entry's ticket for its ids and presses.
     refused: Option<ResultOrder>,
-    /// Its store's latest act in its scope (`Results::latest`).
-    latest: Option<ResultOrder>,
     frame: std::marker::PhantomData<&'f PaneFrame>,
 }
 
 impl<'f, A> KeptLine<'f, A> {
     /// For `Shown::outcome` (in `results`), which holds the entry's ticket and the refusal of
     /// its last attempt. A refused attempt's line is one answer: the refusal's words first, in
-    /// the warning tone; the result's own words follow only while its Undo is live (the caller
+    /// the tone of its diagnosis (`Refusal::tone`, R41); the result's own words follow only while its Undo is live (the caller
     /// gives the Undo only then), because only then does the file still hold what it says; then
     /// the Undo, once.
     pub(in crate::design) fn new(
         _frame: &'f PaneFrame,
         ticket: Ticket,
         outcome: KeptOutcome<A>,
-        refused: Option<(ResultOrder, Sentence)>,
-        latest: Option<ResultOrder>,
+        refused: Option<(ResultOrder, Sentence, Tone)>,
     ) -> Self {
         let mut typed = outcome.typed();
-        let refused = refused.map(|(order, words)| {
-            typed.body.tone = Tone::Warning;
+        let refused = refused.map(|(order, words, tone)| {
+            typed.body.tone = tone;
             let result = std::mem::replace(&mut typed.body.words, words);
             if typed.body.undo.is_some() {
                 typed.body.words = typed.body.words.clone().then(result);
@@ -2148,58 +2145,82 @@ impl<'f, A> KeptLine<'f, A> {
             ticket,
             typed,
             refused,
-            latest,
             frame: std::marker::PhantomData,
         }
     }
 }
 
-/// The one rank of a kept line, in a pane's footer ([`Messages`]) and under a save row
-/// ([`RowMessages`]) alike (ruling R33): the place it takes and the order it sorts by. `newest`
-/// is the newest act this footer knows of: every kept line's order, every refused attempt's,
-/// and each store's latest act in its scope (carried by its lines, or given by `after`). A
-/// refused attempt's answer leads while it is that newest act; a later act on any other object
-/// pushes it down to its place among the results, by its attempt's order, and never ends it.
-/// Every other kept line keeps its place: a live Undo before reasons, no Undo after the notices,
-/// newest first. No order is global and a draw issues none: each comes from a store.
-pub(in crate::design) fn kept_rank(
+/// A footer line as the one footer order sees it ([`footer_order`]).
+pub(in crate::design) trait Ranked {
+    /// Its place, and its act's order (a kept line's; `None` for a reason or a notice).
+    fn key(&self) -> (FooterRank, Option<ResultOrder>);
+    /// It answers the footer's newest act: it leads.
+    fn lead(&mut self);
+}
+
+/// The one order of a pane's footer ([`Messages`], `Footer::draw_messages`) and of a save row's
+/// messages ([`RowMessages`]) (ruling R42). The line with the newest act order leads, whatever
+/// its kind: a refused attempt (by its attempt's order), a success with an Undo, a success with
+/// none. Every other line keeps its place: a live Undo, then reasons, then notices and results
+/// with no Undo; results newest first by their act's order; reasons and notices in the caller's
+/// order. Only the lines decide: an act that leaves no line moves nothing, and no order outside
+/// the footer's own lines is read.
+pub(in crate::design) fn footer_order<T: Ranked>(items: &mut [T]) {
+    if let Some(newest) = items
+        .iter_mut()
+        .filter(|item| item.key().1.is_some())
+        .max_by_key(|item| item.key().1)
+        && matches!(newest.key().0, FooterRank::Undo | FooterRank::Notice)
+    {
+        newest.lead();
+    }
+    items.sort_by_key(|item| {
+        let (rank, order) = item.key();
+        (rank, order.map(std::cmp::Reverse))
+    });
+}
+
+/// A kept line's place and the order it sorts by: a live Undo before reasons, no Undo after the
+/// notices; a refused attempt sorts by its attempt's order ([`footer_order`] then lets the newest
+/// act lead).
+fn kept_place(
     order: ResultOrder,
     refused: Option<ResultOrder>,
     has_undo: bool,
-    newest: Option<ResultOrder>,
 ) -> (FooterRank, ResultOrder) {
     let place = if has_undo {
         FooterRank::Undo
     } else {
         FooterRank::Notice
     };
-    match refused {
-        Some(attempt) if newest.is_none_or(|newest| attempt >= newest) => {
-            (FooterRank::Answer, attempt)
-        }
-        Some(attempt) => (place, attempt),
-        None => (place, order),
+    (place, refused.unwrap_or(order))
+}
+
+/// A pane footer's message (`Footer`'s own list).
+impl<'a> Ranked
+    for (
+        FooterRank,
+        Option<ResultOrder>,
+        Cow<'a, str>,
+        Box<dyn FnOnce(&mut Ui) + 'a>,
+    )
+{
+    fn key(&self) -> (FooterRank, Option<ResultOrder>) {
+        (self.0, self.1)
+    }
+    fn lead(&mut self) {
+        self.0 = FooterRank::Answer;
     }
 }
 
-/// The newest of what a kept line tells a footer about acts: its order, its refused attempt's,
-/// its store's latest act.
-fn newest_of(
-    newest: Option<ResultOrder>,
-    more: impl IntoIterator<Item = Option<ResultOrder>>,
-) -> Option<ResultOrder> {
-    more.into_iter()
-        .flatten()
-        .fold(newest, |newest, order| newest.max(Some(order)))
+impl<A> Ranked for RowEntry<A> {
+    fn key(&self) -> (FooterRank, Option<ResultOrder>) {
+        (self.0, self.1)
+    }
+    fn lead(&mut self) {
+        self.0 = FooterRank::Answer;
+    }
 }
-
-/// A refused attempt's line, waiting until the footer knows every act it holds.
-type PendingAnswer = (
-    ResultOrder,
-    bool,
-    Cow<'static, str>,
-    Box<dyn FnOnce(&mut Ui) + 'static>,
-);
 
 /// What the DM pressed in a pane's footer: the kind of action, as the caller's own id, and for
 /// a kept result the store's [`Ticket`] of that entry. The store acts by the ticket
@@ -2289,10 +2310,6 @@ pub struct Messages<'f, A: 'static> {
     frame: std::marker::PhantomData<&'f PaneFrame>,
     /// Whether this frame's footer has its one `answer` (ruling Q-x).
     answered: bool,
-    /// The newest act this footer knows of (`kept_rank`).
-    newest: Option<ResultOrder>,
-    /// The refused attempts' lines, ranked when the pane is drawn, after every line is in.
-    answers: Vec<PendingAnswer>,
 }
 
 impl<'f, A: 'static> Messages<'f, A> {
@@ -2305,25 +2322,6 @@ impl<'f, A: 'static> Messages<'f, A> {
             sink: PressSink(std::rc::Rc::default()),
             frame: std::marker::PhantomData,
             answered: false,
-            newest: None,
-            answers: Vec::new(),
-        }
-    }
-
-    /// A store's latest act in this pane's scope, for a store none of whose results this footer
-    /// shows (`Results::latest`): a refused answer of another store then gives it the first
-    /// place when it is newer (ruling R33).
-    pub fn after(&mut self, latest: Option<super::results::Latest>) -> &mut Self {
-        self.newest = newest_of(self.newest, [latest.map(|latest| latest.0)]);
-        self
-    }
-
-    /// Rank the refused attempts' lines, now that every line is in.
-    fn rank_answers(&mut self) {
-        let newest = self.newest;
-        for (attempt, has_undo, words, draw) in self.answers.drain(..) {
-            let (rank, order) = kept_rank(attempt, Some(attempt), has_undo, newest);
-            self.footer.push(rank, Some(order), words, draw);
         }
     }
 
@@ -2385,10 +2383,6 @@ impl<'f, A: 'static> Messages<'f, A> {
 
     /// A kept result of this frame, newest first by the order its store issued.
     pub fn kept(&mut self, line: KeptLine<'f, A>) -> &mut Self {
-        self.newest = newest_of(
-            self.newest,
-            [Some(line.ticket.order()), line.refused, line.latest],
-        );
         self.kept_at(line.ticket, line.typed, line.refused)
     }
 
@@ -2398,19 +2392,10 @@ impl<'f, A: 'static> Messages<'f, A> {
         typed: Typed<A>,
         refused: Option<ResultOrder>,
     ) -> &mut Self {
-        let has_undo = typed.body.undo.is_some();
+        let (rank, order) = kept_place(ticket.order(), refused, typed.body.undo.is_some());
         let words = Cow::Owned(typed.body.words.as_str().to_owned());
-        let order = ticket.order();
         let draw = self.draw(typed, Some(ticket));
-        match refused {
-            Some(attempt) => self
-                .answers
-                .push((attempt, has_undo, words, Box::new(draw))),
-            None => {
-                let (rank, order) = kept_rank(order, None, has_undo, None);
-                self.footer.push(rank, Some(order), words, draw);
-            }
-        }
+        self.footer.push(rank, Some(order), words, draw);
         self
     }
 
@@ -2421,7 +2406,6 @@ impl<'f, A: 'static> Messages<'f, A> {
         order: ResultOrder,
         outcome: impl Into<KeptOutcome<A>>,
     ) -> &mut Self {
-        self.newest = newest_of(self.newest, [Some(order)]);
         self.kept_at(Ticket::of(order), outcome.into().typed(), None)
     }
 
@@ -2433,9 +2417,7 @@ impl<'f, A: 'static> Messages<'f, A> {
         body: super::pane::Body,
         add: impl FnOnce(&mut Ui) -> R,
     ) -> Paned<R, A> {
-        let mut this = self;
-        this.rank_answers();
-        let Self { footer, sink, .. } = this;
+        let Self { footer, sink, .. } = self;
         let body = footer.pane(ui, body, add);
         Paned {
             body,
@@ -2451,9 +2433,7 @@ impl<'f, A: 'static> Messages<'f, A> {
         scroll: super::pane::ContentScroll,
         add: impl FnOnce(&mut Ui) -> R,
     ) -> Paned<R, A> {
-        let mut this = self;
-        this.rank_answers();
-        let Self { footer, sink, .. } = this;
+        let Self { footer, sink, .. } = self;
         let body = footer.pane_content(ui, scroll, add);
         Paned {
             body,
@@ -2468,9 +2448,7 @@ impl<'f, A: 'static> Messages<'f, A> {
         ui: &mut Ui,
         add: impl for<'r> FnOnce(&mut Ui, super::pane::EditorRegion<'r>) -> R,
     ) -> Paned<R, A> {
-        let mut this = self;
-        this.rank_answers();
-        let Self { footer, sink, .. } = this;
+        let Self { footer, sink, .. } = self;
         let body = footer.pane_editor(ui, add);
         Paned {
             body,
@@ -2487,20 +2465,11 @@ impl<'f, A: 'static> Messages<'f, A> {
 /// [`Messages`] footer's are, and a kept line still borrows this frame's [`PaneFrame`].
 /// One entry of [`RowMessages`]: its rank and order in the footer's order, what it draws, and
 /// a kept result's ticket.
-type RowEntry<A> = (
-    FooterRank,
-    Option<ResultOrder>,
-    Typed<A>,
-    Option<Ticket>,
-    // A refused attempt's order: its rank waits for every line (`kept_rank`).
-    Option<ResultOrder>,
-);
+type RowEntry<A> = (FooterRank, Option<ResultOrder>, Typed<A>, Option<Ticket>);
 
 #[must_use = "give it to `ValueBlock::messages`"]
 pub struct RowMessages<'f, A: 'static> {
     items: Vec<RowEntry<A>>,
-    /// The newest act these messages know of (`kept_rank`).
-    newest: Option<ResultOrder>,
     frame: std::marker::PhantomData<&'f PaneFrame>,
 }
 
@@ -2509,43 +2478,26 @@ impl<'f, A: 'static> RowMessages<'f, A> {
         let _ = frame;
         Self {
             items: Vec::new(),
-            newest: None,
             frame: std::marker::PhantomData,
         }
-    }
-
-    /// As `Messages::after`.
-    pub fn after(&mut self, latest: Option<super::results::Latest>) -> &mut Self {
-        self.newest = newest_of(self.newest, [latest.map(|latest| latest.0)]);
-        self
     }
 
     /// A reason or a notice, at the place its variant gives it.
     pub fn outcome(&mut self, outcome: impl Into<Outcome<A>>) -> &mut Self {
         let (rank, typed) = outcome.into().parts();
-        self.items.push((rank, None, typed, None, None));
+        self.items.push((rank, None, typed, None));
         self
     }
 
     /// A kept result of this frame, newest first by the order its store issued.
     pub fn kept(&mut self, line: KeptLine<'f, A>) -> &mut Self {
-        self.newest = newest_of(
-            self.newest,
-            [Some(line.ticket.order()), line.refused, line.latest],
-        );
-        let (rank, order) = kept_rank(
+        let (rank, order) = kept_place(
             line.ticket.order(),
             line.refused,
             line.typed.body.undo.is_some(),
-            None,
         );
-        self.items.push((
-            rank,
-            Some(order),
-            line.typed,
-            Some(line.ticket),
-            line.refused,
-        ));
+        self.items
+            .push((rank, Some(order), line.typed, Some(line.ticket)));
         self
     }
 
@@ -2555,17 +2507,9 @@ impl<'f, A: 'static> RowMessages<'f, A> {
 
     /// Draw them at the cursor, top down; the first press, as the caller's id.
     pub(in crate::design) fn show(mut self, ui: &mut Ui) -> Option<Press<A>> {
-        let newest = self.newest;
-        for (rank, order, typed, _, refused) in &mut self.items {
-            if let Some(attempt) = *refused {
-                (*rank, _) = kept_rank(attempt, Some(attempt), typed.body.undo.is_some(), newest);
-                *order = Some(attempt);
-            }
-        }
-        self.items
-            .sort_by_key(|(rank, order, ..)| (*rank, order.map(std::cmp::Reverse)));
+        footer_order(&mut self.items);
         let mut first = None;
-        for (_, _, typed, ticket, _) in self.items {
+        for (_, _, typed, ticket) in self.items {
             let pressed = match &ticket {
                 // A kept line's ids come from its ticket, as in a footer.
                 Some(ticket) => {

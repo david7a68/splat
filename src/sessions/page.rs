@@ -701,6 +701,9 @@ pub struct Sessions {
     note_scroll_to_top: bool,
     last_check: Option<Instant>,
     last_scan: Option<Instant>,
+    /// Row 123: a count that changes at each listing of the folder (`refresh`), so a plan line's
+    /// owner is checked against the notes only when they may have changed.
+    pub(super) notes_revision: u64,
     /// The campaign's manifest changed, so what holds a copy of it must reload.
     pub manifest_changed: Option<PathBuf>,
     /// The Sessions page is showing, so a button there need not lead here.
@@ -1658,7 +1661,7 @@ impl Sessions {
         // Row 123: the note's own events end a plan line's result, and its journey's removal
         // ends a refused Undo's answer, on every page.
         self.follow_plan_line();
-        self.end_plan_line_refusal(Some(&book.events));
+        self.end_plan_answers_of_lost_journeys(book);
         book.poll(ctx);
     }
 
@@ -2346,6 +2349,7 @@ impl Sessions {
         // the folder again, and a result whose folder is gone ends.
         self.end_folder_listing();
         self.folder_moves.disk_changed(|moved| moved.to.is_dir());
+        self.notes_revision += 1;
         let Some(folder) = &self.folder else {
             self.notes.clear();
             self.mentions.clear();

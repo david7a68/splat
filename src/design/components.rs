@@ -3423,10 +3423,9 @@ impl<'a> Footer<'a> {
         most: f32,
         stored: f32,
     ) {
-        // Results newest first by their order; a stable sort keeps the caller's order for
-        // reasons and notices, and puts plain notices before results with no live Undo.
-        self.messages
-            .sort_by_key(|(rank, order, ..)| (*rank, order.map(std::cmp::Reverse)));
+        // The one footer order (ruling R42): the newest act's line leads, then results with a
+        // live Undo, reasons, notices and results with no Undo.
+        super::outcome::footer_order(&mut self.messages);
         if cut && rect.height() > 0.0 {
             // The cut body's last line reads as a list that goes on, not as a drawing fault.
             ui.painter().hline(
