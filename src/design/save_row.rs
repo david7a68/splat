@@ -606,6 +606,7 @@ mod tests {
         let ctx = egui::Context::default();
         crate::design::theme::install(&ctx);
         let mut forms = std::collections::BTreeSet::new();
+        let mut seen = Vec::new();
         for locks in [false, true] {
             for width in (240..=900).step_by(4) {
                 let mut tops = Vec::new();
@@ -615,8 +616,11 @@ mod tests {
                         let _ = ctx.run(egui::RawInput::default(), |ctx| {
                             egui::CentralPanel::default().show(ctx, |ui| {
                                 ui.set_max_width(width as f32);
-                                let _ = save_row_with(ui, &state, "Save", Some(reason(locked)));
+                                let before = ui.available_width();
+                                let row = save_row_with(ui, &state, "Save", Some(reason(locked)));
+                                let _ = row;
                                 top = ui.label("After").rect.top();
+                                seen.push((width, before, top));
                             });
                         });
                     }
