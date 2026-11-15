@@ -2546,10 +2546,14 @@ pub mod library_navigation {
                     Some((name, icon))
                 })
                 .collect();
+            // At 960 both fold into More; elsewhere both show.
+            let folded = forms.is_empty() && d.place_of("More").is_some();
             d.observe(
                 "M0355-toolbar-one-form",
-                !forms.is_empty() && forms.iter().all(|(_, icon)| !icon),
-                format!("At {size:?} the toolbar's actions (name, paints an icon): {forms:?}"),
+                folded || (forms.len() == 2 && forms.iter().all(|(_, icon)| !icon)),
+                format!(
+                    "At {size:?} the toolbar's actions (name, paints an icon): {forms:?}; folded into More: {folded}"
+                ),
             );
         });
         let toolbar = d
