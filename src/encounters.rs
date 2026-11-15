@@ -8156,7 +8156,11 @@ impl Encounters {
             }
             messages.outcome(
                 design::outcome::FaultMessage::new(&EncounterFault::FileWarning(last.clone()))
-                    .file(design::outcome::FileLine::new(&active.path, "Campaign.md")),
+                    .file(
+                        design::outcome::FileLine::new(&active.path, "Campaign.md")
+                            .edit()
+                            .show(),
+                    ),
             );
         }
         if let Some(words) = folder_warning {
