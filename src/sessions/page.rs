@@ -884,7 +884,7 @@ fn notice_sentence(words: &str) -> Sentence {
     clippy::disallowed_methods,
     reason = "the one named escape of the pane: `Fills::because` (design::results::STAGED_ALLOWS)"
 )]
-fn fills(reason: design::pane::FillsReason) -> design::pane::Body {
+fn fills_body(reason: design::pane::FillsReason) -> design::pane::Body {
     design::pane::Body::Fills(design::pane::Fills::because(reason))
 }
 
@@ -2850,7 +2850,7 @@ impl Sessions {
     fn session_body_kind(&self, view: &SessionView) -> design::pane::Body {
         use design::pane::{Body, FillsReason};
         match view {
-            SessionView::Conflict => fills(FillsReason::NoteEditor),
+            SessionView::Conflict => fills_body(FillsReason::NoteEditor),
             SessionView::Tab {
                 shown: Tab::Recordings,
                 ..
@@ -2861,8 +2861,8 @@ impl Sessions {
             } if self.reading_note => Body::Content,
             SessionView::Tab {
                 shown: Tab::Note, ..
-            } => fills(FillsReason::NoteEditor),
-            SessionView::Tab { .. } => fills(FillsReason::Columns),
+            } => fills_body(FillsReason::NoteEditor),
+            SessionView::Tab { .. } => fills_body(FillsReason::Columns),
         }
     }
 
@@ -5027,7 +5027,7 @@ impl Sessions {
                         )),
                     );
                 }
-                let paned = messages.pane(ui, fills(design::pane::FillsReason::NoteEditor), |ui| {
+                let paned = messages.pane(ui, fills_body(design::pane::FillsReason::NoteEditor), |ui| {
                     self.note_editor(ui, true);
                 });
                 match paned.pressed.map(|press| press.id) {
@@ -6898,9 +6898,13 @@ impl Sessions {
                 let frame = PaneFrame::new(ui);
                 let messages =
                     self.draft_messages(&frame, "session_gone_footer", false, ui.available_width());
-                let paned = messages.pane(ui, fills(design::pane::FillsReason::NoteEditor), |ui| {
-                    self.note_editor(ui, false);
-                });
+                let paned = messages.pane(
+                    ui,
+                    fills_body(design::pane::FillsReason::NoteEditor),
+                    |ui| {
+                        self.note_editor(ui, false);
+                    },
+                );
                 if let Some(press) = paned.pressed {
                     self.draft_press(press, false);
                 }
@@ -7303,7 +7307,7 @@ impl Sessions {
                 let body = if self.new_template.is_some() {
                     design::pane::Body::Content
                 } else {
-                    fills(design::pane::FillsReason::NoteEditor)
+                    fills_body(design::pane::FillsReason::NoteEditor)
                 };
                 let paned = messages.pane(ui, body, |ui| {
                     // One thing at a time, so that the DM does not type into another template.
