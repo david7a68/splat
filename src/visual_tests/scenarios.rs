@@ -14937,6 +14937,21 @@ pub mod session_notes {
                 ),
             );
         }
+        // R40: the migrated Adds to popup shows full session names. Append the state so
+        // every existing capture keeps its number. No test scroll prepares the popup.
+        d.press(Key::Escape);
+        d.click(NAV_TIMELINE);
+        d.state_prepared("adds-to-session-menu", Sizes::All, |d| {
+            if !d.has("No session") {
+                d.click("Session for new events");
+            }
+            d.observe(
+                "s30-B10-chosen-value-menu",
+                d.visible_text("No session") && d.visible_text("Session 4: Ferry Watch"),
+                "The menu shows full session names at every size",
+            );
+        });
+        d.press(Key::Escape);
     }
 }
 

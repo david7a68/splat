@@ -79,6 +79,13 @@ pub struct HasChoices;
 /// let _ = splat::layout::Dropdown::new(splat::field_id!("doc_side").once(splat::layout::Once::Example), "Side").blocked_choice(0_u8, "Allies");
 /// ```
 ///
+/// Plain labels and short labels compile:
+///
+/// ```
+/// let _ = splat::layout::Dropdown::new(splat::field_id!("doc_short").once(splat::layout::Once::Example), "Session")
+///     .choice_with_short_label(0_u8, "Session 1: Tonight", "Session 1");
+/// ```
+///
 /// A caller cannot give a choice a weight (including a short closed label):
 ///
 /// ```compile_fail,E0277
@@ -247,6 +254,14 @@ impl Dropdown<'_, ()> {
     /// The editable value inside a drop-down. Keeps typed and empty words on one baseline,
     /// in the same regular weight as a closed choice. The caller owns the surrounding field
     /// and its choices, and names the response. No font or weight can be passed.
+    ///
+    /// ```
+    /// fn field(ui: &mut eframe::egui::Ui, value: &mut String) {
+    ///     splat::layout::Dropdown::editable_value(ui,
+    ///         splat::field_id!("doc_folder").once(splat::layout::Once::Example),
+    ///         value, "Main folder", 200.0);
+    /// }
+    /// ```
     ///
     /// ```compile_fail,E0061
     /// fn field(ui: &mut eframe::egui::Ui, value: &mut String) {

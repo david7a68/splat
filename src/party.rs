@@ -2637,7 +2637,7 @@ pub(crate) fn details(ui: &mut egui::Ui, record: &EntitySnapshot, page: usize, s
 
 #[cfg(test)]
 mod sheet_now_tests {
-    use super::{EntitySnapshot, SheetNow, SlotsLeft, party_line};
+    use super::{EntitySnapshot, SheetNow, SlotsLeft, party_line, sheet_label};
     use serde_json::json;
     #[test]
     fn iter7_b_overflow_tabs_have_no_button_border_and_keep_selected_underline() {
