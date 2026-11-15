@@ -13484,7 +13484,7 @@ pub mod session_notes {
         check_choices_at_text(
             d,
             "iter-15-C-FT1-conflict",
-            "This note changed on disk.",
+            "changed on disk. Your draft is safe until you choose.",
             &["Overwrite with my draft", "Reload and lose my draft"],
             Some("Reload and lose my draft"),
             &[SMALL, DEFAULT, LARGE],
@@ -13495,7 +13495,7 @@ pub mod session_notes {
         // Two stacked messages share one left edge for their choices: each message's text.
         for (words, choices, gap) in [
             (
-                "This note changed on disk.",
+                "changed on disk. Your draft is safe until you choose.",
                 &["Overwrite with my draft", "Reload and lose my draft"][..],
                 Some("Reload and lose my draft"),
             ),
@@ -13524,7 +13524,7 @@ pub mod session_notes {
         check_choices_at_text(
             d,
             "iter-15-C-ST1",
-            "This note changed on disk.",
+            "changed on disk. Your draft is safe until you choose.",
             &["Overwrite with my draft", "Reload and lose my draft"],
             Some("Reload and lose my draft"),
             &[DEFAULT],
@@ -13557,6 +13557,22 @@ pub mod session_notes {
         d.observe_both("iter-1-C-FT3", "The rail names the changed notes", |d| {
             d.rail_words().contains("Notes changed")
         });
+        // Round 30 `note-conflict-cross-page-banner` (SM2): on the Timeline the bottom banner
+        // keeps the conflict's words, naming the note, and its two choices, whole in view.
+        d.observe_both(
+            "round-30-note-conflict-elsewhere",
+            "The conflict names its note and keeps its choices on another page",
+            |d| {
+                d.nodes().iter().any(|node| {
+                    node.fully_in_view()
+                        && node.name.starts_with("The note of Session ")
+                        && node
+                            .name
+                            .contains(" changed on disk. Your draft is safe until you choose.")
+                }) && d.in_view("Overwrite with my draft")
+                    && d.in_view("Reload and lose my draft")
+            },
+        );
         d.state("note-conflict-elsewhere", Sizes::All);
         d.click("Notes changed on disk");
         d.expect("Overwrite with my draft");
@@ -14015,7 +14031,7 @@ pub mod session_notes {
         d.observe(
             "T11.3",
             d.has_containing(
-                "Session 1 is not the session being played. What you write and add on this page goes into Session 1 - Ash on the Road.md.",
+                "What you write and add on this page goes into Session 1 - Ash on the Road.md. The session being played is Session 2.",
             ),
             "Adding an event to an older session says so before it happens",
         );
@@ -14042,7 +14058,7 @@ pub mod session_notes {
         d.observe(
             "T11.8",
             d.has_containing(
-                "Session 1 is not the session being played. What you write and add on this page goes into Session 1 - Ash on the Road.md.",
+                "What you write and add on this page goes into Session 1 - Ash on the Road.md. The session being played is Session 2.",
             ),
             "Writing in an older note says so",
         );
@@ -15439,6 +15455,13 @@ pub mod session_recording {
         std::fs::remove_file(&failed).unwrap();
         d.settle();
         d.state_prepared("blocked-banner-retry", Sizes::All, |d| {
+            // Round 30 `recording-result-owner` (FG1, SG3): the recordings made since were
+            // deleted, so their `Recording saved: …` ended with them; no session shows it.
+            d.observe(
+                "round-30-saved-ends-with-its-file",
+                !d.has_containing("Recording saved:"),
+                "A saved recording's result ends when its file goes",
+            );
             d.observe(
                 "iter-9-C-ST1-blocked-availability",
                 d.is_disabled("Continue processing"),
@@ -15650,6 +15673,25 @@ pub mod session_recording {
         d.settle();
         d.click_starting("Recordings");
         d.state_prepared("recording-retry-with-input", Sizes::All, |d| {
+            // Round 30 `record-again-repeat` (FG8, SG6, AG5): two rows stopped by themselves, and
+            // `Record again` stands once, on the newest; the older keeps `Process`.
+            let offers = d
+                .nodes()
+                .iter()
+                .filter(|node| {
+                    node.role == egui::accesskit::Role::Button && node.name == "Record again"
+                })
+                .count();
+            let stopped = d
+                .nodes()
+                .iter()
+                .filter(|node| node.name.starts_with("Stopped by itself:"))
+                .count();
+            d.observe(
+                "round-30-record-again-once",
+                offers == 1 && stopped >= 2,
+                format!("Record again on {offers} rows, with {stopped} stopped rows"),
+            );
             check_one_primary(d, "Record again", "iter-9-C-ST1-retry");
             check_processing_action(d, "Process:", false);
             assert!(d.visible_text("microphone stopped"));
@@ -15690,6 +15732,55 @@ pub mod session_recording {
         let size = d.window_size();
         let _ = size;
         check_dismiss_at_message_end(d, "iter-15-C-FD5-dismiss-alone", "stream error 42");
+
+        // Round 30 review of PR 400 (F3): `Recording saved: …` ends by its own events, through
+        // the DM's acts. A: Session 2's recording stops with audio. B: Session 1's stops too, an
+        // unrelated result. A's file goes outside Splat while nothing records: the disk check
+        // ends A, and B stays. A recording that starts in Session 1 ends B. The next result's
+        // Dismiss ends it.
+        const SAVED: &str = "Recording saved: ";
+        d.app_mut().sessions.open(second);
+        d.settle();
+        d.click("Stop recording");
+        d.settle();
+        let a_shown = d.has_containing(SAVED);
+        d.app_mut().sessions.open(first);
+        d.settle();
+        // Session 1's Recordings tab: its newest stopped row offers the start.
+        d.click("Record again");
+        d.expect("Stop recording");
+        d.click("Stop recording");
+        d.settle();
+        let b_shown = d.has_containing(SAVED);
+        d.app_mut().sessions.open(second);
+        d.settle();
+        let a_back = d.has_containing(SAVED);
+        let a_file = crate::sessions::list_recordings(&folder, second)
+            .remove(0)
+            .path;
+        std::fs::remove_file(&a_file).unwrap();
+        d.app_mut().sessions.simulate_disk_check();
+        d.settle();
+        let a_ended = !d.has_containing(SAVED);
+        d.app_mut().sessions.open(first);
+        d.settle();
+        let b_stays = d.has_containing(SAVED);
+        d.click("Record again");
+        d.expect("Stop recording");
+        let b_ended = !d.has_containing(SAVED);
+        d.click("Stop recording");
+        d.settle();
+        let c_shown = d.has_containing(SAVED);
+        d.click_beside(SAVED, crate::design::outcome::DISMISS_NAME);
+        d.settle();
+        let c_dismissed = !d.has_containing(SAVED);
+        d.observe(
+            "round-30-saved-end-events",
+            a_shown && b_shown && a_back && a_ended && b_stays && b_ended && c_shown && c_dismissed,
+            format!(
+                "A shown {a_shown}, B shown {b_shown}, A back in its session {a_back}, A ended with its file {a_ended}, B stays {b_stays}, B ended by a start {b_ended}, C shown {c_shown}, C dismissed {c_dismissed}"
+            ),
+        );
     }
 
     fn check_marker_columns(d: &mut Driver<'_>) {
@@ -17356,14 +17447,14 @@ pub mod session_recording {
         // choice is explained.
         d.observe(
             "iter-23-S-FL2",
-            d.visible_text("This note was moved or renamed. It is now Renamed in Obsidian.md.")
-                && !d.visible_text("This file is gone from the folder."),
+            d.visible_text("was moved or renamed. It is now Renamed in Obsidian.md.")
+                && !d.visible_text("is gone from the folder."),
             "A renamed note's warning names where it went",
         );
         check_choices_at_text(
             d,
             "iter-15-C-FT1-gone",
-            "This note was moved or renamed.",
+            "was moved or renamed.",
             &[
                 "Save my draft to Renamed in Obsidian.md",
                 "Save my draft as a new file",
@@ -17431,6 +17522,33 @@ pub mod session_recording {
                     moved_before.contains(text.trim()) && !text.trim().is_empty()
                 }),
             format!("After Discard the editor holds the moved file {moved_path:?}: {bound:?}"),
+        );
+        // Round 30 `session-pane-footer-owner` (FN5, SN3, AN4): the discard is the note's, so
+        // beside the plan (1200x800) its result and Undo stand in the session pane's footer,
+        // which reaches under the note, not in the plan's column.
+        let (placed, detail) = d.at_size(DEFAULT, |d| {
+            let editor = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name == "Note text")
+                .map(|node| node.rect);
+            let result = d.painted_rect_in("Draft discarded.", egui::Rect::EVERYTHING);
+            let band = result.and_then(|result| {
+                d.footer_bands()
+                    .into_iter()
+                    .find(|band| band.expand(0.5).contains_rect(result))
+            });
+            (
+                editor.zip(band).is_some_and(|(editor, band)| {
+                    band.right() > editor.left() + crate::design::L && d.in_view("Undo discard")
+                }),
+                format!("editor {editor:?}, result {result:?}, its footer {band:?}"),
+            )
+        });
+        d.observe(
+            "round-30-note-result-below-note",
+            placed,
+            format!("Draft discarded. and Undo discard in the footer under the note: {detail}"),
         );
         d.state("note-discarded", Sizes::Default);
         d.click("Undo discard");
@@ -17552,24 +17670,34 @@ pub mod session_recording {
             .iter()
             .find(|note| note.id != played.id && note.number == played.number)
             .unwrap();
+        let destination = recovered.path.file_name().unwrap().to_string_lossy();
         let expected = format!(
-            "{} is not the session being played. The session being played is {}.",
-            recovered.path.file_name().unwrap().to_string_lossy(),
+            "What you write and add on this page goes into {destination}. The session being played is {}.",
             played.path.file_name().unwrap().to_string_lossy()
         );
         d.state_prepared("recording-summary-narrow", Sizes::All, |d| {
             d.observe(
                 "iter-9-C-FT9",
                 d.visible_text(&format!(
-                    "What you write and add on this page goes into {}.",
-                    recovered.path.file_name().unwrap().to_string_lossy()
+                    "What you write and add on this page goes into {destination}."
                 )),
                 "The warning names the note where writing goes",
             );
+            // Round 30 `session-not-played-repeat` (FN15): the notice starts with where the
+            // writing goes and names that file once.
+            let notice = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.contains("The session being played is"))
+                .map(|node| node.name);
             d.observe(
                 "iter-8-C-ST2-files",
-                d.visible_text(&expected),
-                "Duplicate session numbers name both note files",
+                d.visible_text(&expected)
+                    && notice.as_deref().is_some_and(|notice| {
+                        notice.starts_with("What you write")
+                            && notice.matches(destination.as_ref()).count() == 1
+                    }),
+                format!("Duplicate session numbers name both note files, each once: {notice:?}"),
             );
             assert!(d.in_view("Return to the session being played"));
         });
