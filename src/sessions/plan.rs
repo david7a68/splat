@@ -4221,8 +4221,23 @@ impl Sessions {
                                 self.wants_group = Some(group.path.clone()); self.group_session = self.selected;
                             }
                         });
+                        // B4 review F1: an unsaved draft refuses the open (the same value as the
+                        // owner's guard reads); the press paints why under this line and leaves
+                        // the draft's host where it is.
+                        if read_group {
+                            if plan.group_blocked.is_some() {
+                                self.plan_group_refused = Some((self.selected, group.path.clone()));
+                            } else {
+                                self.plan_group_refused = None;
+                                self.wants_group = Some(group.path.clone()); self.group_session = self.selected;
+                            }
+                        }
+                        if let Some(reason) = plan.group_blocked
+                            && self.plan_group_refused.as_ref() == Some(&(self.selected, group.path.clone()))
+                        {
+                            design::blocked_reason(ui, Some(reason));
+                        }
                         closed += ui.cursor().top() - top;
-                        if read_group { self.wants_group = Some(group.path.clone()); self.group_session = self.selected; }
                         closed += plan_rule(ui);
                     });
                     if let Some((at, _, height)) = &mut remove_group && *at == position { *height = row.response.rect.height(); }
