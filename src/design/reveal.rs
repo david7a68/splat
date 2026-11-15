@@ -197,9 +197,10 @@ struct Run {
     left: u8,
     /// The column of the pressed control, bound at the ask.
     column: Id,
-    /// The keyboard focus at the ask, and whether the opener's one focus in the form was taken.
+    /// The keyboard focus at the ask, then as last seen.
     focus: Option<Id>,
-    focus_moved: bool,
+    /// The opener's field: the one control in the form that may take the focus.
+    opener_field: Option<Id>,
     /// The target's rect, the column's content `Ui` and the pass, as marked.
     marked: Option<(Rect, Id, u64)>,
     /// The target has drawn in its column.
@@ -295,7 +296,7 @@ impl Reveal {
             left: PASSES,
             column: act.column.unwrap_or(Id::NULL),
             focus: focus(&act.ctx, act.id),
-            focus_moved: false,
+            opener_field: None,
             marked: None,
             drawn: false,
             frame: None,
@@ -371,6 +372,29 @@ impl Reveal {
 fn focus(ctx: &Context, act: Id) -> Option<Id> {
     ctx.memory(|memory| memory.focused())
         .filter(|focused| *focused != act)
+}
+
+/// Whether the focus now is allowed for `run`: unchanged; lost (no field to keep still); or
+/// taken by the opener's field, the first control inside `form` that took it. Records it.
+fn focus_allowed(ctx: &Context, run: &mut Run, form: Option<Rect>) -> bool {
+    let focused = focus(ctx, run.act_id);
+    if focused == run.focus || focused.is_none() {
+        run.focus = focused;
+        return true;
+    }
+    let inside = form.is_some_and(|form| {
+        focused
+            .and_then(|focused| ctx.read_response(focused))
+            .is_some_and(|field| form.contains_rect(field.rect))
+    });
+    let opener = run.opener_field.is_none_or(|field| Some(field) == focused);
+    if inside && opener {
+        run.opener_field = focused;
+        run.focus = focused;
+        true
+    } else {
+        false
+    }
 }
 
 /// Whether a reveal runs in the column that `ui` is drawn in: the pane's focus reveal then makes
@@ -470,18 +494,11 @@ pub(super) fn take_offset(ui: &Ui, key: Id) -> Option<f32> {
         run.end(End::ByTheDm);
         return None;
     }
-    // A focus change since the last pass, other than the opener's one focus in the form.
-    let focused = focus(ui.ctx(), run.act_id);
-    if focused != run.focus {
-        let inside = run.marked.is_some_and(|(form, ..)| {
-            focused
-                .and_then(|focused| ui.ctx().read_response(focused))
-                .is_some_and(|field| form.contains_rect(field.rect))
-        });
-        if run.focus_moved || !inside {
-            run.end(End::Focus);
-            return None;
-        }
+    // A control that took the focus since the last pass, other than the opener's field.
+    let form = run.marked.map(|(form, ..)| form);
+    if !focus_allowed(ui.ctx(), &mut run, form) {
+        run.end(End::Focus);
+        return None;
     }
     Some(to)
 }
@@ -550,20 +567,10 @@ fn resolve(ui: &Ui, run: &mut Run, region: &Region, content: Id, input: bool) {
         .marked
         .filter(|&(_, at, marked)| at == content && marked == pass)
         .map(|(rect, ..)| rect);
-    // The focus at the ask may change once, to a control inside the form (the opener's focus).
-    let focused = focus(ui.ctx(), run.act_id);
-    if focused != run.focus {
-        let inside = target.is_some_and(|target| {
-            focused
-                .and_then(|focused| ui.ctx().read_response(focused))
-                .is_some_and(|field| target.contains_rect(field.rect))
-        });
-        if run.focus_moved || !inside {
-            run.end(End::Focus);
-            return;
-        }
-        run.focus = focused;
-        run.focus_moved = true;
+    // A control that took the focus since the ask, other than the opener's field.
+    if !focus_allowed(ui.ctx(), run, target) {
+        run.end(End::Focus);
+        return;
     }
     let Some(target) = target else {
         if run.drawn {
