@@ -1925,20 +1925,25 @@ impl Splat {
                     // bottom of the pane (the campaign form, the campaign list), so none of them
                     // moves the form the DM works in. Round 27 FA1: a failed Connect's cause is in
                     // the reason slot beside Connect; the account's other errors stay here.
-                    // Round 28: the pane places the footer after the content. The footer's
-                    // messages and the body share the campaigns through one cell: the body
-                    // runs first, the footer draws after it.
+                    // Round 28: the pane places the footer after the content. Layout PR 2b: the
+                    // footer's lines are typed data, built before the body; a press comes back
+                    // from the pane and is done after it.
                     let width = ui.available_width().min(design::LIST_MEASURE);
+                    let frame = design::outcome::PaneFrame::new(ui);
+                    let mut messages = design::outcome::Messages::<campaigns::CampaignAct>::new(
+                        &frame,
+                        "settings_footer",
+                        width,
+                    );
+                    self.campaigns.footer_messages(&mut messages, true, blocked);
+                    self.settings.footer_messages(&mut messages);
+                    self.dndbeyond.footer_messages(&mut messages, false);
                     let campaigns = std::cell::RefCell::new(&mut self.campaigns);
-                    let mut footer = design::Footer::new("settings_footer", width);
-                    campaigns::Campaigns::footer_messages(&campaigns, &mut footer, true, blocked);
-                    self.settings.footer_messages(&mut footer);
-                    self.dndbeyond.footer_messages(&mut footer, false);
                     let (settings, dndbeyond) = (&mut self.settings, &mut self.dndbeyond);
                     let has_run = self.encounters.has_run();
                     // R46: the import form's reveal runs in this column.
                     let scroll = design::pane::ContentScroll::default().hosts_reveals();
-                    footer.pane_content(ui, scroll, |ui| {
+                    let paned = messages.pane_content(ui, scroll, |ui| {
                         // A child that starts empty, so the forms narrow themselves (`set_max_width`): the
                         // pane's column holds its content at the column's width (gap sent to K).
                         ui.vertical(|ui| {
@@ -2005,6 +2010,9 @@ impl Splat {
                             }
                         });
                     });
+                    if let Some(press) = paned.pressed {
+                        campaigns.into_inner().footer_act(press.id);
+                    }
                 });
             }
             Page::Sessions => {
@@ -2218,19 +2226,21 @@ impl Splat {
                             // below the save row (`design::ValueBlock`): the session folder's
                             // warning and move result are its block's, not the footer's.
                             let width = ui.available_width().min(design::LIST_MEASURE);
+                            let frame = design::outcome::PaneFrame::new(ui);
+                            let mut messages =
+                                design::outcome::Messages::<campaigns::CampaignAct>::new(
+                                    &frame,
+                                    "campaign_link_footer",
+                                    width,
+                                );
+                            self.campaigns
+                                .footer_messages(&mut messages, false, blocked);
+                            self.dndbeyond.footer_messages(&mut messages, true);
                             let campaigns = std::cell::RefCell::new(&mut self.campaigns);
-                            let mut footer = design::Footer::new("campaign_link_footer", width);
-                            campaigns::Campaigns::footer_messages(
-                                &campaigns,
-                                &mut footer,
-                                false,
-                                blocked,
-                            );
-                            self.dndbeyond.footer_messages(&mut footer, true);
                             let sessions = &mut self.sessions;
                             let timeline = &self.timeline;
                             let dndbeyond = &mut self.dndbeyond;
-                            footer.pane(ui, design::Body::Content, |ui| {
+                            let paned = messages.pane(ui, design::Body::Content, |ui| {
                                 // A child that starts empty, so the form narrows itself
                                 // (`set_max_width`) as it did in its own scroll area.
                                 ui.vertical(|ui| {
@@ -2248,6 +2258,9 @@ impl Splat {
                                     });
                                 });
                             });
+                            if let Some(press) = paned.pressed {
+                                campaigns.into_inner().footer_act(press.id);
+                            }
                         });
                     }
                 }

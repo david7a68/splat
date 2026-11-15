@@ -200,6 +200,21 @@ fn next_generation() -> u64 {
     NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
+/// One view's `unused_creatures`, with the index load and the query it was worked out for.
+#[derive(Clone)]
+struct UnusedKept {
+    generation: u64,
+    query: String,
+    found: Arc<Vec<(Uuid, Uuid, String, String)>>,
+}
+
+// Creature names `unused_creatures` visited on this thread, for a test that an unchanged
+// repaint visits none.
+#[cfg(test)]
+thread_local! {
+    pub(crate) static UNUSED_NAMES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Every entry the active campaign can see, including all registered packages.
 #[derive(Default)]
 pub struct ContentIndex {
@@ -1391,6 +1406,37 @@ impl ContentIndex {
         output
     }
 
+    /// `unused_creatures` for one view, `id`, kept in egui's memory for that view and worked out
+    /// again only when the query or the index (its load, `generation`) changes: a repaint of an
+    /// encounter search with no match as typed ranks nothing (review of PR 450, P2). The view's
+    /// own state, never a process-wide one: the visual suite draws scenarios on parallel threads.
+    pub fn unused_creatures_kept(
+        &self,
+        ctx: &eframe::egui::Context,
+        id: eframe::egui::Id,
+        query: &str,
+    ) -> Arc<Vec<(Uuid, Uuid, String, String)>> {
+        let key = id.with("unused_creatures");
+        let kept = ctx.data(|data| data.get_temp::<UnusedKept>(key));
+        if let Some(kept) =
+            kept.filter(|kept| kept.generation == self.generation && kept.query == query)
+        {
+            return kept.found;
+        }
+        let found = Arc::new(self.unused_creatures(query));
+        ctx.data_mut(|data| {
+            data.insert_temp(
+                key,
+                UnusedKept {
+                    generation: self.generation,
+                    query: query.to_owned(),
+                    found: found.clone(),
+                },
+            );
+        });
+        found
+    }
+
     /// Creatures of packages the campaign does not use whose names the lower-case `query` finds
     /// as typed (no typo), for the encounter search's `Use it`: the best five in the one
     /// creature order (M3, `Typed::creature`), then by origin, as every creature list ranks
@@ -1399,6 +1445,8 @@ impl ContentIndex {
         if query.trim().is_empty() {
             return Vec::new();
         }
+        #[cfg(test)]
+        UNUSED_NAMES.with(|names| names.set(names.get() + self.creatures.len()));
         let typed = Typed::new(query);
         let mut found: Vec<(Rank, Origin, usize)> = self
             .creatures
@@ -1410,10 +1458,15 @@ impl ContentIndex {
                         .usable
                         .as_ref()
                         .is_some_and(|usable| !usable.contains(&item.entry.id));
+                // As typed only: a typo is not offered, so none is worked out.
                 let rank = unused
-                    .then(|| item.name_rank(&typed))
-                    .flatten()
-                    .filter(|rank| !rank.typo)?;
+                    .then(|| {
+                        typed.creature_as_typed(
+                            &item.lower,
+                            item.name_words.iter().map(String::as_str),
+                        )
+                    })
+                    .flatten()?;
                 Some((rank, item.origin(), at))
             })
             .collect();
@@ -4737,6 +4790,37 @@ mod tests {
                 "Winter Wolf"
             ]
         );
+        // P2 of the review of PR 450: the encounter search keeps its five for its view. A
+        // repaint with the same words and the same index visits no name; new words rank again,
+        // as typed only (no typo compared); another load of the index ranks again.
+        use egui_kittest::kittest::Queryable;
+        let names = || UNUSED_NAMES.with(std::cell::Cell::get);
+        let typos = || crate::matching::TYPO_CHECKS.with(std::cell::Cell::get);
+        let index = Arc::new(index);
+        type State = (Arc<ContentIndex>, String);
+        let mut harness = egui_kittest::Harness::builder().build_ui_state(
+            |ui, (index, query): &mut State| {
+                let found = index.unused_creatures_kept(ui.ctx(), ui.id().with("search"), query);
+                for (_, _, name, _) in found.iter() {
+                    ui.label(name.as_str());
+                }
+            },
+            (index.clone(), "fenstalker".to_owned()),
+        );
+        harness.run_steps(2);
+        assert!(harness.query_by_label("Fenstalker").is_some());
+        let (visited, compared) = (names(), typos());
+        harness.run_steps(5);
+        assert_eq!(names(), visited, "an unchanged repaint visits no name");
+        harness.state_mut().1 = "wolf".to_owned();
+        harness.run_steps(2);
+        assert!(names() > visited, "new words rank again");
+        assert_eq!(typos(), compared, "as typed only: no typo is compared");
+        assert!(harness.query_by_label("Winter Wolf").is_some());
+        let visited = names();
+        harness.state_mut().0 = Arc::new(ContentIndex::load(&modules, Some(&campaign)).unwrap());
+        harness.run_steps(2);
+        assert!(names() > visited, "another load of the index ranks again");
     }
     #[test]
     fn words_find_a_name_in_any_order_and_with_a_typo() {

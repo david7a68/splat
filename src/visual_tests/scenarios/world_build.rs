@@ -13347,13 +13347,17 @@ pub fn campaign_copy_registered(d: &mut Driver<'_>) {
                 d.place_of("Undo register campaign"),
             )
         });
-        // Round 23 FB3: the same bordered action as after a plain add, on its own line below
-        // the Undo line, its border at the message words.
+        // Round 23 FB3: the same bordered action as after a plain add, under the message's
+        // words. Migration-32 L2b: the registration is a typed footer line (layout PR 2b), so its
+        // choice takes the typed message's one place: `L` after the Undo, on the Undo's line
+        // (the hand-drawn closure put it on a line of its own below the Undo).
         let placed = message.zip(build).zip(words).zip(undo).is_some_and(
             |(((message, build), words), undo)| {
                 build.top() >= message.bottom() - 1.0
-                    && build.top() >= undo.bottom()
-                    && (build.left() - message.left()).abs() <= 1.0
+                    && (build.center().y - undo.center().y).abs() <= 1.0
+                    // `L` after the Undo's slot, which ends `S` (its item spacing) past its
+                    // accessible rect.
+                    && (build.left() - (undo.right() + design::L + design::S)).abs() <= 1.0
                     && words > build.left()
             },
         );
@@ -13361,7 +13365,7 @@ pub fn campaign_copy_registered(d: &mut Driver<'_>) {
             "iter-23-C-FB3-build",
             placed && frame == Some(design::colors().field_border) && clear.is_ok(),
             format!(
-                "At {size:?}, Build an encounter {build:?} (border {frame:?}, words {words:?}) starts at the message words {message:?}, below Undo {undo:?}; press area: {clear:?}"
+                "At {size:?}, Build an encounter {build:?} (border {frame:?}, words {words:?}) under the message words {message:?}, `L` after Undo {undo:?} on its line; press area: {clear:?}"
             ),
         );
     }

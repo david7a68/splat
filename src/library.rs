@@ -419,10 +419,14 @@ impl HeadingChoice {
 /// scroll area, so the title and body scroll into view; source mode draws them above the editor.
 /// The page's last error, as a reason in the pane's message footer. Its words can hold code in
 /// backticks.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: a legacy footer line, a closure (`Ban::Footer`, design::results::STAGED_ALLOWS)"
+)]
 fn page_error<'a>(footer: &mut design::Footer<'a>, error: Option<&'a str>) {
     if let Some(error) = error {
         let words = format!("Error: {error}");
-        footer.reason(words.clone(), move |ui| {
+        footer.legacy_reason(words.clone(), move |ui| {
             design::message_with_code(ui, Tone::Error, &words);
         });
     }
@@ -525,12 +529,12 @@ fn reader_messages<'a>(
         });
     }
     if let Some((words, action, _)) = heading.and_then(|heading| heading.fix.as_ref()) {
-        footer.notice(words.as_str(), |ui| {
+        footer.legacy_notice(words.as_str(), |ui| {
             *heading_fix = design::message_with_action(ui, Tone::Warning, words, action);
         });
     }
     if let Some((loaded, note, indices)) = duplicates.filter(|(_, _, at)| !at.is_empty()) {
-        footer.notice(crate::world::DUPLICATE_ENTRY, move |ui| {
+        footer.legacy_notice(crate::world::DUPLICATE_ENTRY, move |ui| {
             duplicate_choices(
                 ui,
                 loaded,
@@ -548,7 +552,7 @@ fn reader_messages<'a>(
             .map(|(_, words, _)| words.as_str())
             .collect::<Vec<_>>()
             .join(" ");
-        footer.notice(words, move |ui| {
+        footer.legacy_notice(words, move |ui| {
             for (id, words, action) in dependencies {
                 if design::locked(ui, draft_reason, |ui| {
                     design::message_with_action(ui, Tone::Warning, words, action)
@@ -4124,7 +4128,7 @@ enum OrderKey {
 type ResultOrders = std::collections::HashMap<OrderKey, design::ResultOrder>;
 
 /// One of the reader's results in a footer, in Read and in Edit Markdown alike. A link offer and
-/// a link result each belong to one renamed entry: they go through `Footer::kept`, with the order
+/// a link result each belong to one renamed entry: they go through `Footer::legacy_kept`, with the order
 /// their store issued bound to their words. The other kinds hold one result at a time, so their
 /// kind's slot is that result's.
 #[allow(
@@ -4148,7 +4152,7 @@ fn add_reader_result<'a>(
     };
     match line {
         Some(line) => {
-            footer.kept_line(line, undo, move |_, ui| draw(ui));
+            footer.legacy_kept_line(line, undo, move |_, ui| draw(ui));
         }
         None => {
             footer.result(order_of(orders, OrderKey::Reader(kind)), words, undo, draw);
@@ -8582,7 +8586,7 @@ impl Library {
             // A repair draft's fault in its tone (a deleted manifest is a warning), or Save's
             // refusal before the write, a YAML fault in its own words.
             if let Some(problem) = &repair_problem {
-                footer.reason(problem.as_str(), move |ui| {
+                footer.legacy_reason(problem.as_str(), move |ui| {
                     design::message(ui, reason_tone, problem);
                 });
             }
@@ -8590,30 +8594,30 @@ impl Library {
             // the DM edits.
             if let Some(repair) = repair {
                 let pressed = &mut footer_repair;
-                footer.reason("", |ui| {
+                footer.legacy_reason("", |ui| {
                     *pressed = recovery_action(ui, repair, draft_reason);
                 });
             }
             if let Some(failure) = &failed {
                 // The disk's failure of the last Save of this draft.
-                footer.reason(failure.as_str(), |ui| {
+                footer.legacy_reason(failure.as_str(), |ui| {
                     design::message(ui, Tone::Error, failure);
                 });
             }
             // The repair this note was opened for.
             if let Some(words) = link_words {
-                footer.notice(words, |ui| {
+                footer.legacy_notice(words, |ui| {
                     design::message(ui, Tone::Warning, words);
                 });
             }
             for words in broken {
-                footer.notice(words.as_str(), |ui| {
+                footer.legacy_notice(words.as_str(), |ui| {
                     design::message(ui, Tone::Warning, words);
                 });
             }
             if let Some((words, action, _)) = heading.fix.as_ref() {
                 let fix = &mut heading_fix;
-                footer.notice(words.as_str(), |ui| {
+                footer.legacy_notice(words.as_str(), |ui| {
                     *fix = design::message_with_action(ui, Tone::Warning, words, action);
                 });
             }
@@ -8624,7 +8628,7 @@ impl Library {
                     .map(|(_, _, _, words)| words.as_str())
                     .collect::<Vec<_>>()
                     .join(" ");
-                footer.notice(words, move |ui| {
+                footer.legacy_notice(words, move |ui| {
                     for (key, label, value, message) in vitals {
                         if design::message_with_action(
                             ui,
@@ -10236,7 +10240,7 @@ mod tests {
             (
                 "src/campaigns.rs",
                 &[
-                    ("kept_result", 1),
+                    ("kept_result", 0),
                     (".blocked(", 5),
                     ("blocked_if(", 0),
                     ("design::locked(", 1),
