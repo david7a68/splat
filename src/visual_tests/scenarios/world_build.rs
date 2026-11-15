@@ -3550,7 +3550,7 @@ pub fn generator(d: &mut Driver<'_>) {
     d.click("Generate NPC");
     d.observe(
         "W14",
-        d.visible_text("the name table stops at 1, but 1d6 rolls up to 6.")
+        d.visible_text("The name table stops at 1, but 1d6 rolls up to 6.")
             && d.visible_text("Built-in names stand in until it is fixed."),
         "A bad campaign table states why the built-in list stands in",
     );
@@ -3562,7 +3562,7 @@ pub fn generator(d: &mut Driver<'_>) {
             let warning = d
                 .nodes()
                 .into_iter()
-                .find(|n| n.role == Role::Label && n.name.contains("the name table stops at 1"))
+                .find(|n| n.role == Role::Label && n.name.contains("The name table stops at 1"))
                 .unwrap();
             action.top() >= warning.rect.bottom()
                 && (action.left() - warning.rect.left()).abs() <= 1.0

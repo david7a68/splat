@@ -167,9 +167,14 @@ impl Tables {
                     tables.sources.push(format!("{key}: {path}"));
                 }
                 Some(error) => tables.problems.push(TableProblem {
+                    // R36: the cause after the file's name is a sentence: a capital first.
                     message: format!(
                         "{path}: {} Built-in {} stand in until it is fixed.",
-                        error.replacen("the table", &format!("the {label} table"), 1),
+                        capital_first(&error.replacen(
+                            "the table",
+                            &format!("the {label} table"),
+                            1
+                        )),
                         if key == NAME_KEY {
                             "names"
                         } else {
@@ -235,6 +240,15 @@ pub fn roll(tables: &Tables) -> Result<Generated, String> {
     )
 }
 
+/// Words with their first letter as a capital (R36: a cause after a file's name).
+fn capital_first(words: &str) -> String {
+    let mut chars = words.chars();
+    chars
+        .next()
+        .map(|first| first.to_uppercase().chain(chars).collect())
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -288,7 +302,7 @@ mod tests {
         assert!(
             tables.problems[0]
                 .message
-                .contains("Names.md: the name table stops at 1, but 1d6 rolls up to 6.")
+                .contains("Names.md: The name table stops at 1, but 1d6 rolls up to 6.")
         );
         assert_eq!(tables.problems[0].marker, NAME_KEY);
         let npc = generate(&tables, &mut Random::seeded(3)).unwrap();
