@@ -1618,8 +1618,12 @@ fn a_menu_of_long_choices_stays_beside_its_splitter() {
     }
     // An overwide word gets one ellipsis, never several broken pieces. The accessible
     // choice still names every original word, and ordinary words stay whole.
-    {
-        const FULL: &str = "Copper watch ExtraordinarilyUnmistakableSessionName";
+    let prefix = "W".repeat(80);
+    let overlapping = format!("{prefix} \t {prefix}{}", "X".repeat(80));
+    for full in [
+        "Copper watch ExtraordinarilyUnmistakableSessionName",
+        &overlapping,
+    ] {
         let ctx = context();
         let control = Cell::new(Rect::NOTHING);
         let current = Cell::new(0);
@@ -1628,7 +1632,7 @@ fn a_menu_of_long_choices_stays_beside_its_splitter() {
                 let mut chosen = current.get();
                 control.set(
                     Dropdown::new(SIDE, "Words")
-                        .choice(0, FULL)
+                        .choice(0, full)
                         .within(Rect::from_min_max(pos2(0.0, 0.0), pos2(140.0, 640.0)))
                         .width(110.0)
                         .show(ui, &mut chosen)
@@ -1645,10 +1649,32 @@ fn a_menu_of_long_choices_stays_beside_its_splitter() {
         let popup = list_rect(&ctx);
         let rows: Vec<_> = texts(&open)
             .into_iter()
-            .filter(|text| popup.contains_rect(text.rect) && text.words.starts_with("Copper"))
+            .filter(|text| {
+                popup.contains_rect(text.rect)
+                    && text.words.starts_with(
+                        full.split_whitespace()
+                            .next()
+                            .unwrap()
+                            .chars()
+                            .next()
+                            .unwrap(),
+                    )
+            })
             .collect();
         assert_eq!(rows.len(), 1);
         let painted = &rows[0];
+        assert_eq!(
+            painted.words.split_whitespace().count(),
+            full.split_whitespace().count(),
+            "one fitted token per original word: {}",
+            painted.words
+        );
+        if full == overlapping {
+            assert!(
+                painted.words.contains(" \t "),
+                "original separators stay exact"
+            );
+        }
         assert!(
             painted.words.contains('…'),
             "one overwide word is shortened: {}",
@@ -1670,7 +1696,7 @@ fn a_menu_of_long_choices_stays_beside_its_splitter() {
                 .unwrap()
                 .nodes
                 .iter()
-                .any(|(_, node)| node.label() == Some(FULL)),
+                .any(|(_, node)| node.label() == Some(full)),
             "the row's accessible name remains exact"
         );
     }
