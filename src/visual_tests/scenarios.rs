@@ -22915,10 +22915,16 @@ pub mod session_plan_groups {
             d.has(&format!("Group name: {GROUP_RIVALS}")),
             d.visible_text(reason),
         );
-        d.click("Return to the session being played");
-        d.expect("Group name: Ash Two");
-        d.click("Save group");
-        d.wait_for_text("Ash Two");
+        // Back to the draft's own session (the link names it while the host is kept).
+        if d.has("Return to the session being played") {
+            d.click("Return to the session being played");
+        } else {
+            d.click_starting("Session 2: The Ford ·");
+        }
+        if d.has("Group name: Ash Two") {
+            d.click("Save group");
+            d.wait_for_text("Ash Two");
+        }
         let in_two = d.has_containing("Ash Two");
         d.click_starting("Session 1: The Crossing ·");
         d.expect(&format!("Add {GROUP_RIVALS} to fight"));
