@@ -495,7 +495,7 @@ fn reader_messages<'a>(
     duplicates: Option<(&'a Loaded, &'a Note, &'a [usize])>,
     draft_reason: Option<&'static str>,
     dependencies: &'a [(Uuid, String, String)],
-    dependency_results: &'a [DependencyResult],
+    dependency_results: &'a [(usize, String, design::ResultOrder)],
     orders: &ResultOrders,
     out: &'a mut ReaderPress,
 ) {
@@ -515,20 +515,11 @@ fn reader_messages<'a>(
             *heading_undo = design::undo_message(ui, Tone::Success, result, "Undo heading change");
         });
     }
-    // Round 25 FF8: each result names the entry and the package, in the button's words. M9:
-    // each Undo names the entry it copied, whole when it fits. A lone copy may then drop its
-    // object, which its result names; two copies keep theirs, so they are told apart.
-    let alone = dependency_results.len() == 1;
-    for (at, result, step, order) in dependency_results {
+    // Round 25 FF8: each result names the entry and the package, in the button's words.
+    for (at, result, order) in dependency_results {
         let undo = &*undo_dependency;
         footer.result(*order, result.as_str(), true, move |ui| {
-            let width = ui.available_width();
-            let label = if alone {
-                step.alone(ui, width)
-            } else {
-                step.fit(ui, width)
-            };
-            if design::undo_message(ui, Tone::Success, result, &label) {
+            if design::undo_message(ui, Tone::Success, result, "Undo copy") {
                 undo.set(Some(*at));
             }
         });
@@ -2588,8 +2579,8 @@ struct PageResults {
     use_copy: Option<Option<&'static str>>,
     /// That registration's source change: its footer line and why its Undo waits.
     rosters: Option<(design::results::FooterResult, bool)>,
-    /// A package unregister's result, and its Undo's step (M9: `Undo unregister <package>`).
-    unregistered: Option<(String, UndoStep)>,
+    /// A package unregister's result.
+    unregistered: Option<String>,
     /// Why the scope changed to show an entry.
     scope_notice: Option<String>,
 }
@@ -2758,11 +2749,7 @@ impl ReaderResults {
                 .map(|(line, _)| line.words().to_owned()),
             true,
         );
-        add(
-            ResultKind::Unregistered,
-            page.unregistered.as_ref().map(|(words, _)| words.clone()),
-            true,
-        );
+        add(ResultKind::Unregistered, page.unregistered.clone(), true);
         add(
             ResultKind::PackageUse,
             self.package_use.then(|| PACKAGE_USE_RESULT.to_owned()),
@@ -2886,11 +2873,10 @@ fn show_result(
             }
         }
         ResultKind::Unregistered => {
-            if let Some((words, step)) = &page.unregistered {
-                // A finished change: the package left this campaign's lists. M9: its Undo names
-                // the package, whole when it fits; it is the footer's one Undo of its verb.
-                let label = step.alone(ui, ui.available_width());
-                pressed.page.unregistered = design::undo_message(ui, Tone::Success, words, &label);
+            if let Some(words) = &page.unregistered {
+                // A finished change: the package left this campaign's lists.
+                pressed.page.unregistered =
+                    design::undo_message(ui, Tone::Success, words, "Undo unregister");
             }
         }
         ResultKind::PackageUse => {
@@ -3888,15 +3874,9 @@ struct DependencyUndo {
     copied_text: String,
     /// The result's words: `<entry> copied to <package> and linked.`
     result: String,
-    /// The copied entry's name: the object of its Undo (M9, `Undo copy <entry>`).
-    entry: String,
     /// When the copy was made, for the footer's order.
     order: design::ResultOrder,
 }
-
-/// A copy's result in the reader's footer: its place in `dependency_undos`, its words, its
-/// Undo's step and its order.
-type DependencyResult = (usize, String, UndoStep, design::ResultOrder);
 
 struct IdentityUndo {
     root: PathBuf,
@@ -5481,12 +5461,11 @@ impl Library {
             // the search and the list never move when it comes or goes.
             scope_notice: self.scope_notice.clone(),
             unregistered: self.unregistered.as_ref().map(|module| {
-                let words = format!(
+                format!(
                     "{} is unregistered. Its files stay in {}.",
                     module.name,
                     module.path.display()
-                );
-                (words, UndoStep::of(Verb::Unregister, module.name.clone()))
+                )
             }),
         };
         if self.pending.is_some() {
@@ -7622,10 +7601,6 @@ impl Library {
         };
         // With no entry open, the results and Remove's notice sit in the pane's message footer,
         // below the empty reader (round 26). Its id is the reader's, so one pane has one footer.
-        let gone_step = self
-            .discarded_note
-            .as_ref()
-            .map(|LetGo { note, .. }| UndoStep::of(Verb::Remove, note.name()));
         let gone_notice = self.discarded_note.as_ref().map(|LetGo { note, .. }| {
             let names = self
                 .loaded
@@ -7649,17 +7624,11 @@ impl Library {
                 "library_footer",
                 ui.available_width().min(design::READER_MEASURE),
             );
-            if let Some((words, step)) = gone_notice
-                .as_deref()
-                .zip(gone_step.as_ref())
-                .filter(|_| !self.dirty())
-            {
+            if let Some(words) = gone_notice.as_deref().filter(|_| !self.dirty()) {
                 let undo = &mut undo_remove;
                 let order = order_of(&self.result_orders, OrderKey::Removed);
-                // M9: the Undo names the removed entry, whole when it fits.
                 footer.result(order, words, true, move |ui| {
-                    let label = step.alone(ui, ui.available_width());
-                    *undo = design::undo_message(ui, Tone::Info, words, &label);
+                    *undo = design::undo_message(ui, Tone::Info, words, "Undo remove");
                 });
             }
             add_results(&mut footer, &results, &self.result_orders, &pressed);
@@ -8335,7 +8304,7 @@ impl Library {
         };
         // The copies this file made, by package root and path, newest first, with their place in
         // `dependency_undos` for their Undo.
-        let dependency_results: Vec<DependencyResult> = self
+        let dependency_results: Vec<(usize, String, design::ResultOrder)> = self
             .dependency_undos
             .iter()
             .enumerate()
@@ -8345,10 +8314,7 @@ impl Library {
                     && change.path == note.path
                     && note.owner.root() == Some(change.root.as_path())
             })
-            .map(|(at, change)| {
-                let step = UndoStep::of(Verb::Copy, change.entry.clone());
-                (at, change.result.clone(), step, change.order)
-            })
+            .map(|(at, change)| (at, change.result.clone(), change.order))
             .collect();
         let mut reader_press = ReaderPress::default();
         let no_results = ReaderResults::default();
@@ -9249,7 +9215,6 @@ impl Library {
                         "{} copied to {} and linked.",
                         source.entry.name, package.name
                     ),
-                    entry: source.entry.name.clone(),
                     order: design::ResultOrder::issue(),
                 });
                 self.content_changed = Some(package.path.clone());
@@ -12532,7 +12497,6 @@ mod tests {
             copied_path: paths[1].clone(),
             copied_text: fs::read_to_string(root.join(&paths[1])).unwrap(),
             result: String::new(),
-            entry: String::new(),
             order: design::ResultOrder::issue(),
         }];
         library.forget_changed_undos();

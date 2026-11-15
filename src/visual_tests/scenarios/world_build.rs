@@ -8542,11 +8542,8 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
 }
 
 /// Deleting a file leaves its uses visible and its reader link unresolved.
-/// M9: Remove's Undo names the removed entry (`Undo remove <entry>`), whole when it fits.
-const UNDO_REMOVE: &str = "Undo remove Ash Exposure";
-
-/// Whether Remove's Undo shows, whatever its label's form: the steps act on it, and only
-/// `M9-undo-remove-object` asserts its words.
+/// Whether Remove's Undo shows, whatever its label's form (`Undo remove`, or a later form that
+/// names its entry), so a check that it is gone cannot pass on a label that changed.
 fn has_undo_remove(d: &Driver<'_>) -> bool {
     d.nodes()
         .iter()
@@ -8992,16 +8989,7 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     );
     assert!(!d.has_containing("Ash Exposure · "));
     d.expect("Undo remove");
-    // M9: Remove's Undo names the entry, whole where it fits (here at every size).
-    d.state_prepared("deleted-draft-let-go", Sizes::All, |d| {
-        let size = d.window_size();
-        let named = d.place_of(UNDO_REMOVE);
-        d.observe(
-            "M9-undo-remove-object",
-            named.is_some() && d.in_view(UNDO_REMOVE),
-            format!("At {size:?} Remove's Undo is {UNDO_REMOVE:?}: {named:?}"),
-        );
-    });
+    d.state("deleted-draft-let-go", Sizes::All);
     let let_go_count = files_to_fix(d);
     d.click_starting("Undo remove");
     d.expect("Remove entry and lose draft");
