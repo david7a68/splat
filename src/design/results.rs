@@ -1130,7 +1130,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/library.rs", "open_entry", &[Ban::Results]),
         ("src/library.rs", "reader_messages", &[Ban::Results]),
-        ("src/library.rs", "register_copy", &[Ban::Results]),
         ("src/library.rs", "reload_note_from_disk", &[Ban::Results]),
         ("src/library.rs", "unregister_dialog", &[Ban::Results]),
         ("src/party.rs", "sheet_view", &[Ban::Body]),
