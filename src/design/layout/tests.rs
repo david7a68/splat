@@ -466,22 +466,84 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
         }
     }
 
-    // R38, R35: an editor's back line, as both Encounters editors draw it. Its destination word
-    // starts at the text edge with the arrow after it, on a line of its own; the name field
-    // starts at the same edge on the next line; while a draft holds it, that draft's reason is
-    // painted after the link (not only on hover) and the link cannot be followed; and the name
-    // field does not move between the open and the held line. The widths: the narrowest pane,
-    // the encounter editor at 960 beside Lookup (454 px), and a wide editor.
-    const ENCOUNTERS: Word = crate::word!("Encounters");
+    // R38, R35: an Encounters editor's head, as both editors draw it. The back line is one row
+    // of 28 px in every state: its destination word starts at the text edge with the arrow after
+    // it; the name row starts at the same edge exactly one item gap below (34 px from the line's
+    // top, so a reserved second line fails); while a draft holds the line, that draft's reason is
+    // painted once after the link, whole, in its long or short form, and the link cannot be
+    // followed. The widths: the narrowest pane (316 px), the encounter editor at 960 beside
+    // Lookup (454 px), and a wide editor. Every destination and every cause.
+    struct Owner([bool; 3]);
+    impl DraftOwner for Owner {
+        fn unsaved(&self, draft: Unsaved) -> bool {
+            self.0[draft as usize]
+        }
+    }
     const NAME: FieldName = crate::field_id!("test_back_line_name");
+    let (group, encounter, creature) = (
+        Unsaved::Group as usize,
+        Unsaved::Encounter as usize,
+        Unsaved::Creature as usize,
+    );
+    let flags = |on: &[usize]| {
+        let mut flags = [false; 3];
+        for &i in on {
+            flags[i] = true;
+        }
+        flags
+    };
+    // (editor, the drafts that are unsaved, the draft that must hold the line)
+    let cases = [
+        (
+            EditorKind::Encounter {
+                from_session: false,
+            },
+            flags(&[]),
+            None,
+        ),
+        (
+            EditorKind::Encounter {
+                from_session: false,
+            },
+            flags(&[creature]),
+            Some(Unsaved::Creature),
+        ),
+        (
+            EditorKind::Encounter { from_session: true },
+            flags(&[encounter, creature]),
+            Some(Unsaved::Encounter),
+        ),
+        (
+            EditorKind::Encounter { from_session: true },
+            flags(&[encounter]),
+            Some(Unsaved::Encounter),
+        ),
+        (EditorKind::Group { in_plan: true }, flags(&[]), None),
+        (
+            EditorKind::Group { in_plan: true },
+            flags(&[group]),
+            Some(Unsaved::Group),
+        ),
+        (
+            EditorKind::Group { in_plan: false },
+            flags(&[creature]),
+            Some(Unsaved::Creature),
+        ),
+        // The group editor is not held by the encounter it may belong to: its Back keeps that
+        // draft.
+        (
+            EditorKind::Group { in_plan: false },
+            flags(&[encounter]),
+            None,
+        ),
+    ];
     for width in [NARROWEST_PANE, 454.0, need + 0.5] {
         let mut field_rects = Vec::new();
-        for held in [None, Some(Unsaved::Encounter), Some(Unsaved::Creature)] {
-            let lock = BackLock::first_unsaved(&[
-                (Unsaved::Encounter, held == Some(Unsaved::Encounter)),
-                (Unsaved::Creature, held.is_some()),
-            ]);
-            assert_eq!(lock.held_by(), held, "the first unsaved draft holds Back");
+        for (editor, unsaved, held) in cases {
+            let owner = Owner(unsaved);
+            let head = EditorHead::new(editor, &owner);
+            assert_eq!(head.held_by(), held, "{editor:?} {unsaved:?}");
+            let to = editor.back_to();
             let mut left = 0.0;
             let mut followed = None;
             let mut name = String::from("Bridge Ambush");
@@ -489,22 +551,34 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
                 let rect = Rect::from_min_size(ui.cursor().min, vec2(width, 300.0));
                 *left = rect.left();
                 ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
-                    *followed =
-                        Some(BackLine::new(ENCOUNTERS, "Back to encounters", lock).show(ui));
+                    // A caller's row cannot put the back line beside the name: the head makes
+                    // its own top-down child.
                     ui.horizontal(|ui| {
-                        let _ = line_field(ui, NAME.of(RowIndex(0)), "Name", &mut name, "", 200.0);
+                        let (back, ()) = head.show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                let _ = line_field(
+                                    ui,
+                                    NAME.of(RowIndex(0)),
+                                    "Name",
+                                    &mut name,
+                                    "",
+                                    200.0,
+                                );
+                            });
+                        });
+                        *followed = Some(back);
                     });
                 });
             };
-            let _ = frame_with(&ctx, vec2(width + 40.0, 400.0), Vec::new(), |ui| {
-                draw(ui, &mut left, &mut followed);
+            let size = vec2(width + 40.0, 400.0);
+            let _ = frame_with(&ctx, size, Vec::new(), |ui| {
+                draw(ui, &mut left, &mut followed)
             });
-            // A press on the link, in a second frame at the same place.
             let link = {
-                let (nodes, _) = frame_with(&ctx, vec2(width + 40.0, 400.0), Vec::new(), |ui| {
-                    draw(ui, &mut left, &mut followed);
+                let (nodes, _) = frame_with(&ctx, size, Vec::new(), |ui| {
+                    draw(ui, &mut left, &mut followed)
                 });
-                bounds(&nodes, "Back to encounters")
+                bounds(&nodes, to.name())
             };
             let press = |pressed| egui::Event::PointerButton {
                 pos: link.center(),
@@ -514,83 +588,105 @@ fn title_line_keeps_every_action_and_its_word_at_every_width() {
             };
             let _ = frame_with(
                 &ctx,
-                vec2(width + 40.0, 400.0),
+                size,
                 vec![egui::Event::PointerMoved(link.center()), press(true)],
                 |ui| draw(ui, &mut left, &mut followed),
             );
-            let (nodes, painted) =
-                frame_with(&ctx, vec2(width + 40.0, 400.0), vec![press(false)], |ui| {
-                    draw(ui, &mut left, &mut followed);
-                });
+            let (nodes, painted) = frame_with(&ctx, size, vec![press(false)], |ui| {
+                draw(ui, &mut left, &mut followed);
+            });
+            let at = format!("{editor:?} {unsaved:?} at {width}");
             assert_eq!(
                 followed,
                 Some(held.is_none()),
-                "followed only while open ({held:?}) at {width}"
+                "followed only while open: {at}"
             );
-            let target = bounds(&nodes, "Back to encounters");
+            let target = bounds(&nodes, to.name());
+            let word = to.word().as_str();
             let ink = painted
                 .iter()
-                .find(|text| text.text == "Encounters")
-                .unwrap_or_else(|| panic!("the destination word is painted at {width}"));
-            assert!(painted_whole(&painted, "Encounters"), "whole at {width}");
+                .find(|text| text.text == word)
+                .unwrap_or_else(|| panic!("the destination word is painted: {at}"));
+            assert!(painted_whole(&painted, word), "whole: {at}");
             assert!(
                 (ink.rect.left() - left).abs() <= 1.5,
-                "the word starts at the text edge {left}: {:?} at {width}",
+                "the word starts at the text edge {left}: {:?} {at}",
                 ink.rect
             );
             let icon = painted
                 .iter()
                 .find(|text| text.text == BACK_LINK_ICON && target.contains_rect(text.rect))
-                .unwrap_or_else(|| panic!("the arrow inside the link at {width}"));
+                .unwrap_or_else(|| panic!("the arrow inside the link: {at}"));
             assert!(
                 icon.rect.left() > ink.rect.right(),
                 "the arrow after the word"
             );
             let field = bounds(&nodes, "Name");
+            // One 28 px row, then one item gap: a reserved or wrapped second line fails here.
             assert!(
-                field.top() >= target.bottom() - 0.5,
-                "the name row is below the back line: {field:?} {target:?} at {width}"
+                (field.top() - target.top() - (Density::Read.control() + 6.0)).abs() <= 1.0,
+                "the name row is one 28 px line and a 6 px gap below the back line: {field:?} {target:?} {at}"
             );
             assert!(
                 (field.left() - left).abs() <= 1.5,
-                "the name field starts at the text edge {left}: {field:?} at {width}"
+                "the name field starts at the text edge {left}: {field:?} {at}"
             );
             field_rects.push(field);
+            let reasons: Vec<&Painted> = painted
+                .iter()
+                .filter(|text| {
+                    Unsaved::ALL
+                        .iter()
+                        .any(|d| text.text == d.reason() || text.text == d.short_reason())
+                })
+                .collect();
             match held {
                 Some(draft) => {
-                    let reason = painted
-                        .iter()
-                        .find(|text| text.text == draft.reason())
-                        .unwrap_or_else(|| panic!("{draft:?}'s reason painted at {width}"));
+                    assert_eq!(reasons.len(), 1, "one painted reason: {at}");
+                    let reason = reasons[0];
                     assert!(
-                        reason.shown && reason.clip.expand(0.5).contains_rect(reason.rect),
-                        "{draft:?}'s reason whole at {width}"
+                        reason.text == draft.reason() || reason.text == draft.short_reason(),
+                        "{draft:?}'s own reason: {:?} {at}",
+                        reason.text
+                    );
+                    assert!(
+                        reason.shown
+                            && !reason.elided
+                            && reason.clip.expand(0.5).contains_rect(reason.rect),
+                        "the reason whole: {at}"
                     );
                     assert!(
                         reason.rect.left() >= target.right() + L - 1.0
-                            && reason.rect.top() < target.bottom()
-                            && reason.rect.bottom() <= field.top() + 0.5,
-                        "the reason is beside the link, above the name: {:?} {target:?} at {width}",
+                            && reason.rect.top() >= target.top() - 0.5
+                            && reason.rect.bottom() <= target.bottom() + 0.5
+                            && reason.rect.right() <= left + width + 0.5,
+                        "the reason on the back line, after the link: {:?} {target:?} {at}",
                         reason.rect
                     );
-                    assert!(
-                        reason.rect.right() <= left + width + 0.5,
-                        "inside the line at {width}"
-                    );
                 }
-                None => assert!(
-                    !painted
-                        .iter()
-                        .any(|text| Unsaved::ALL.iter().any(|d| text.text == d.reason())),
-                    "no reason while open at {width}"
-                ),
+                None => assert!(reasons.is_empty(), "no reason while open: {at}"),
             }
         }
         assert!(
-            field_rects.windows(2).all(|pair| pair[0] == pair[1]),
-            "the name field keeps its place, open and held: {field_rects:?} at {width}"
+            field_rects
+                .windows(2)
+                .all(|pair| (pair[0].top() - pair[1].top()).abs() < 0.5),
+            "the name field keeps its line in every state: {field_rects:?} at {width}"
         );
     }
+    // Every destination with every cause has a form that fits the narrowest pane.
+    frame(&ctx, vec2(NARROWEST_PANE + 40.0, 300.0), |ui| {
+        for to in BackTo::ALL {
+            let room = EditorHead::reason_room(ui, to, NARROWEST_PANE);
+            for draft in Unsaved::ALL {
+                let words = EditorHead::reason_words(ui, draft, room);
+                assert!(
+                    number_width(ui, words, &Type::Small.font(ui)) <= room,
+                    "{draft:?} beside {to:?} fits {NARROWEST_PANE}: {words:?} in {room}"
+                );
+            }
+        }
+    });
 }
 
 /// The longest word a `Word` may have, in the widest letters and with an icon, is painted whole

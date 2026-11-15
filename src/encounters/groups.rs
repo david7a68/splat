@@ -2498,13 +2498,9 @@ impl Encounters {
             && ui
                 .ctx()
                 .input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
-        // R38: the destination word, then the arrow, on a line of its own above the name row.
-        let (back_word, back_name) = if in_plan {
-            (crate::word!("Plan"), "Back to the plan")
-        } else {
-            (crate::word!("Encounters"), "Back to encounters")
-        };
-        let back_lock = design::BackLock::first_unsaved(&[(design::Unsaved::Group, dirty)]);
+        // R38: the back line on a line of its own above the name row. The group's changes hold
+        // it first, then an unsaved creature.
+        let head = design::EditorHead::new(design::EditorKind::Group { in_plan }, &*self);
         let compact = ui.available_width() < 760.0;
 
         let focus_name = std::mem::take(&mut self.focus_name);
@@ -2548,34 +2544,35 @@ impl Encounters {
         }
         .min_width(save_width)
         .blocked(state.save_blocked());
-        let back = design::BackLine::new(back_word, back_name, back_lock).show(ui);
-        ui.horizontal(|ui| {
-            let gap = ui.spacing().item_spacing.x;
-            let room = (block_right.min(title_right - button.natural_width(ui) - gap)
-                - ui.cursor().left())
-            .min(ui.available_width());
-            let width = (room - 2.0 * design::S).max(Density::Scan.control());
-            let column = column_right.map_or(f32::INFINITY, |right| {
-                right - ui.cursor().left() - 2.0 * design::S
+        let (back, ()) = head.show(ui, |ui| {
+            ui.horizontal(|ui| {
+                let gap = ui.spacing().item_spacing.x;
+                let room = (block_right.min(title_right - button.natural_width(ui) - gap)
+                    - ui.cursor().left())
+                .min(ui.available_width());
+                let width = (room - 2.0 * design::S).max(Density::Scan.control());
+                let column = column_right.map_or(f32::INFINITY, |right| {
+                    right - ui.cursor().left() - 2.0 * design::S
+                });
+                let response = name_field(ui, draft, width.min(name_width(column)));
+                design::named(ui, &response, &format!("Group name: {}", draft.name));
+                if response.changed() {
+                    draft.touch();
+                }
+                // Belongs to ends where the name field ends.
+                name_right = response.rect.right();
+                if focus_name {
+                    design::focus_and_select(ui, response.id, &draft.name);
+                }
+                ui.allocate_ui_with_layout(
+                    egui::vec2(
+                        (title_right - ui.cursor().left()).max(0.0),
+                        Density::Scan.control(),
+                    ),
+                    egui::Layout::right_to_left(egui::Align::Center),
+                    |ui| save = button.show(ui).clicked(),
+                );
             });
-            let response = name_field(ui, draft, width.min(name_width(column)));
-            design::named(ui, &response, &format!("Group name: {}", draft.name));
-            if response.changed() {
-                draft.touch();
-            }
-            // Belongs to ends where the name field ends.
-            name_right = response.rect.right();
-            if focus_name {
-                design::focus_and_select(ui, response.id, &draft.name);
-            }
-            ui.allocate_ui_with_layout(
-                egui::vec2(
-                    (title_right - ui.cursor().left()).max(0.0),
-                    Density::Scan.control(),
-                ),
-                egui::Layout::right_to_left(egui::Align::Center),
-                |ui| save = button.show(ui).clicked(),
-            );
         });
         // The save row: the state and Discard at its start, Save group at the block's edge. A
         // reason that has no room on the row takes its own line below it. AK1, FK1: each reason

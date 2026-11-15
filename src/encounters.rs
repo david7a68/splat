@@ -3103,13 +3103,26 @@ fn edit_input(ctx: &egui::Context) -> bool {
 }
 
 const BLOCKED_BY_RUN: &str = "Close the open run first.";
-const BLOCKED_BY_DRAFT: &str = "Save or discard the open encounter first.";
+/// The open encounter's draft holds the page (the same words as its back line's reason).
+const BLOCKED_BY_DRAFT: &str = design::Unsaved::Encounter.reason();
 /// The rail's words for this page's drafts; the rail opens Encounters for each (FF2).
 pub const ENCOUNTER_DRAFT: &str = "Encounter draft";
 pub const GROUP_DRAFT: &str = "Group draft";
 pub const CREATURE_DRAFT: &str = "Creature draft";
 pub const RUN_SETTINGS_DRAFT: &str = "Run settings draft";
 const BLOCKED_BY_CREATURE: &str = design::Unsaved::Creature.reason();
+/// R38: the drafts that hold an Encounters editor's back line, from the same values that Save
+/// and the replacement guards read.
+impl design::DraftOwner for Encounters {
+    fn unsaved(&self, draft: design::Unsaved) -> bool {
+        match draft {
+            design::Unsaved::Group => self.group_draft.as_ref().is_some_and(GroupDraft::dirty),
+            design::Unsaved::Encounter => self.draft.as_ref().is_some_and(Draft::dirty),
+            design::Unsaved::Creature => self.creature_dirty(),
+        }
+    }
+}
+
 impl Encounters {
     pub fn refocus_draft(&mut self) {
         self.focus_name = true;
@@ -3673,11 +3686,15 @@ impl Encounters {
         })
     }
     /// Why a group cannot be assembled from the plan now.
+    /// The unsaved draft that refuses it says which it is, from the back lines' recipe (R38):
+    /// the encounter, its group or a creature, each with its own reason.
     pub fn plan_group_blocked(&self) -> Option<&'static str> {
-        self.draft_dirty().then_some(BLOCKED_BY_DRAFT).or(self
-            .snapshot
-            .is_none()
-            .then_some("Still reading this campaign."))
+        design::first_unsaved(self)
+            .map(design::Unsaved::reason)
+            .or(self
+                .snapshot
+                .is_none()
+                .then_some("Still reading this campaign."))
     }
     pub fn new_from_plan(&mut self, session: Option<Uuid>) {
         self.start_new_draft();
@@ -5965,6 +5982,14 @@ impl Encounters {
             state
         };
         self.save_refused = dirty && !state.can_save();
+        // R38: the back line on a line of its own above the name row. The encounter's changes
+        // hold it first, then an unsaved creature.
+        let head = design::EditorHead::new(
+            design::EditorKind::Encounter {
+                from_session: self.from_session.is_some(),
+            },
+            &*self,
+        );
         let draft_ref = self.draft.as_mut().expect("the editor has a draft");
         let focus_name = &mut self.focus_name;
         let focus_search_after_name = &mut self.focus_search;
@@ -5980,148 +6005,143 @@ impl Encounters {
                 .unwrap_or(f32::INFINITY)
         };
         let (roster_right, header_right) = (edge(ROSTER_PANE), edge(ADD_PANE));
-        // R38: the destination word, then the arrow, on a line of its own above the name row.
-        // Unsaved encounter changes hold it first, then an unsaved creature, as before.
-        let back_lock = design::BackLock::first_unsaved(&[
-            (design::Unsaved::Encounter, dirty),
-            (design::Unsaved::Creature, creature_dirty),
-        ]);
-        let (back_word, back_name) = if from_session.is_some() {
-            (crate::word!("Session"), "Back to session")
-        } else {
-            (crate::word!("Encounters"), "Back to encounters")
-        };
-        let back = design::BackLine::new(back_word, back_name, back_lock).show(ui);
-        ui.horizontal_wrapped(|ui| {
-            // X51, SB1: Save and Start keep their width on line one, and the name field takes
-            // the rest. The actions are measured, as they are drawn. They take a line of their
-            // own only when the saved name does not fit beside them: the saved name, not the
-            // typed one, so nothing moves while the DM types.
-            let gap = ui.spacing().item_spacing.x;
-            let start_word = if unfinished.is_some() {
-                "Resume"
-            } else {
-                START_FIGHT
-            };
-            // Each button is measured in its wider form, primary or secondary (the weight
-            // changes with the draft), and rounded up to the pixel: a button given exactly its
-            // natural width can lose its last letter to rounding.
-            let button = |word: &str| {
-                Action::primary(word)
-                    .natural_width(ui)
-                    .max(Action::secondary(word).natural_width(ui))
-                    .ceil()
-            };
-            let actions = button("Save encounter")
-                + gap
-                + button(start_word)
-                + if unfinished.is_some() {
-                    Action::quiet(icons::EXPAND)
-                        .density(Density::Read)
-                        .natural_width(ui)
-                        .ceil()
-                        + gap
+        let (back, ()) = head.show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                // X51, SB1: Save and Start keep their width on line one, and the name field takes
+                // the rest. The actions are measured, as they are drawn. They take a line of their
+                // own only when the saved name does not fit beside them: the saved name, not the
+                // typed one, so nothing moves while the DM types.
+                let gap = ui.spacing().item_spacing.x;
+                let start_word = if unfinished.is_some() {
+                    "Resume"
                 } else {
-                    0.0
-                }
-                + if has_run {
-                    design::number_width(ui, BLOCKED_BY_RUN, &Type::Small.font(ui)).ceil()
-                        + design::L
-                        + gap
-                } else {
-                    0.0
+                    START_FIGHT
                 };
-            let saved_name =
-                design::number_width(ui, &draft_ref.saved_name, &Type::Heading.font(ui));
-            // The field's margins are outside its desired width.
-            let rest = ui.available_rect_before_wrap().width() - actions - 2.0 * design::S - gap;
-            let stack_actions = rest < saved_name.max(Density::Scan.control());
-            let width = if stack_actions {
-                (ui.available_rect_before_wrap().width() - 2.0 * design::S)
-                    .max(Density::Scan.control())
-            } else {
-                rest
-            }
-            // The field's margins are outside its desired width.
-            .min(
-                (roster_right - ui.cursor().left() - 2.0 * design::S).max(Density::Scan.control()),
-            );
-            let response = name_field(ui, draft_ref, width);
-            design::named(ui, &response, &format!("{NAME_FIELD}: {}", draft_ref.name));
-            if std::mem::take(focus_name) {
-                design::focus_and_select(ui, response.id, &draft_ref.name);
-            }
-            if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                *focus_search_after_name = true;
-            }
-            let action_width = if stack_actions {
-                ui.max_rect().width()
-            } else {
-                ui.available_rect_before_wrap()
-                    .width()
-                    .min(header_right - ui.cursor().left())
-                    .max(0.0)
-            };
-            ui.allocate_ui_with_layout(
-                egui::vec2(action_width, Density::Scan.control()),
-                egui::Layout::right_to_left(egui::Align::Center),
-                |ui| {
-                    let start_blocked =
-                        roster_reason
-                            .as_deref()
-                            .or(empty_group.as_deref())
-                            .or(has_run
+                // Each button is measured in its wider form, primary or secondary (the weight
+                // changes with the draft), and rounded up to the pixel: a button given exactly its
+                // natural width can lose its last letter to rounding.
+                let button = |word: &str| {
+                    Action::primary(word)
+                        .natural_width(ui)
+                        .max(Action::secondary(word).natural_width(ui))
+                        .ceil()
+                };
+                let actions = button("Save encounter")
+                    + gap
+                    + button(start_word)
+                    + if unfinished.is_some() {
+                        Action::quiet(icons::EXPAND)
+                            .density(Density::Read)
+                            .natural_width(ui)
+                            .ceil()
+                            + gap
+                    } else {
+                        0.0
+                    }
+                    + if has_run {
+                        design::number_width(ui, BLOCKED_BY_RUN, &Type::Small.font(ui)).ceil()
+                            + design::L
+                            + gap
+                    } else {
+                        0.0
+                    };
+                let saved_name =
+                    design::number_width(ui, &draft_ref.saved_name, &Type::Heading.font(ui));
+                // The field's margins are outside its desired width.
+                let rest =
+                    ui.available_rect_before_wrap().width() - actions - 2.0 * design::S - gap;
+                let stack_actions = rest < saved_name.max(Density::Scan.control());
+                let width = if stack_actions {
+                    (ui.available_rect_before_wrap().width() - 2.0 * design::S)
+                        .max(Density::Scan.control())
+                } else {
+                    rest
+                }
+                // The field's margins are outside its desired width.
+                .min(
+                    (roster_right - ui.cursor().left() - 2.0 * design::S)
+                        .max(Density::Scan.control()),
+                );
+                let response = name_field(ui, draft_ref, width);
+                design::named(ui, &response, &format!("{NAME_FIELD}: {}", draft_ref.name));
+                if std::mem::take(focus_name) {
+                    design::focus_and_select(ui, response.id, &draft_ref.name);
+                }
+                if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                    *focus_search_after_name = true;
+                }
+                let action_width = if stack_actions {
+                    ui.max_rect().width()
+                } else {
+                    ui.available_rect_before_wrap()
+                        .width()
+                        .min(header_right - ui.cursor().left())
+                        .max(0.0)
+                };
+                ui.allocate_ui_with_layout(
+                    egui::vec2(action_width, Density::Scan.control()),
+                    egui::Layout::right_to_left(egui::Align::Center),
+                    |ui| {
+                        let start_blocked =
+                            roster_reason
+                                .as_deref()
+                                .or(empty_group.as_deref())
+                                .or(has_run
+                                    .then_some(BLOCKED_BY_RUN)
+                                    .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
+                                    .or(loading.then_some("Still reading this campaign."))
+                                    .or(draft_ref
+                                        .setup
+                                        .roster
+                                        .is_empty()
+                                        .then_some("Add participants first.")));
+                        if unfinished.is_some() {
+                            row_menu(ui, &draft_ref.name, |ui| {
+                                start_another =
+                                    menu_action(ui, "Start another fight", start_blocked);
+                            });
+                        }
+                        let word = start_word;
+                        // Unsaved changes own the primary: Resume waits until they are saved or
+                        // discarded.
+                        run_it = if has_run || dirty {
+                            Action::secondary(word)
+                        } else {
+                            Action::primary(word)
+                        }
+                        .blocked(if unfinished.is_some() {
+                            has_run
                                 .then_some(BLOCKED_BY_RUN)
                                 .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
                                 .or(loading.then_some("Still reading this campaign."))
-                                .or(draft_ref
-                                    .setup
-                                    .roster
-                                    .is_empty()
-                                    .then_some("Add participants first.")));
-                    if unfinished.is_some() {
-                        row_menu(ui, &draft_ref.name, |ui| {
-                            start_another = menu_action(ui, "Start another fight", start_blocked);
-                        });
-                    }
-                    let word = start_word;
-                    // Unsaved changes own the primary: Resume waits until they are saved or
-                    // discarded.
-                    run_it = if has_run || dirty {
-                        Action::secondary(word)
-                    } else {
-                        Action::primary(word)
-                    }
-                    .blocked(if unfinished.is_some() {
-                        has_run
-                            .then_some(BLOCKED_BY_RUN)
-                            .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
-                            .or(loading.then_some("Still reading this campaign."))
-                    } else {
-                        start_blocked
-                    })
-                    .hint(if unfinished.is_some() {
-                        "Save this encounter and resume its unfinished run."
-                    } else {
-                        "Save this encounter and start a run."
-                    })
-                    .show(ui)
-                    .clicked();
-                    if has_run {
-                        blocked_reason(ui, Some(BLOCKED_BY_RUN));
-                        design::gap(ui, design::Gap::L);
-                    }
-                    save = match state.save_weight() {
-                        design::save_row::SaveWeight::Primary => Action::primary("Save encounter"),
-                        design::save_row::SaveWeight::Secondary => {
-                            Action::secondary("Save encounter")
+                        } else {
+                            start_blocked
+                        })
+                        .hint(if unfinished.is_some() {
+                            "Save this encounter and resume its unfinished run."
+                        } else {
+                            "Save this encounter and start a run."
+                        })
+                        .show(ui)
+                        .clicked();
+                        if has_run {
+                            blocked_reason(ui, Some(BLOCKED_BY_RUN));
+                            design::gap(ui, design::Gap::L);
                         }
-                    }
-                    .blocked(state.save_blocked())
-                    .show(ui)
-                    .clicked();
-                },
-            );
+                        save = match state.save_weight() {
+                            design::save_row::SaveWeight::Primary => {
+                                Action::primary("Save encounter")
+                            }
+                            design::save_row::SaveWeight::Secondary => {
+                                Action::secondary("Save encounter")
+                            }
+                        }
+                        .blocked(state.save_blocked())
+                        .show(ui)
+                        .clicked();
+                    },
+                );
+            });
         });
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Read.control());
@@ -6168,8 +6188,7 @@ impl Encounters {
             }
             // The creature's reason has one home: the back line paints it while it holds Back;
             // while the encounter's changes hold Back, this row says it for Start and Save.
-            let creature_here =
-                creature_dirty && back_lock.held_by() != Some(design::Unsaved::Creature);
+            let creature_here = creature_dirty && head.held_by() != Some(design::Unsaved::Creature);
             blocked_reason(
                 ui,
                 creature_here

@@ -281,32 +281,14 @@ fn arrow_only(label: &str) -> bool {
 /// its STAGED text count (`design::results::STAGED`) counts only real uses.
 const LEGACY: &str = concat!("LEGACY", "_BACK");
 
-/// The names of arrow glyphs, as a path's last segment names them (the legacy back arrow,
-/// `egui_phosphor::regular::ARROW_LEFT`). A label given by one of these names is an arrow alone.
-const ARROW_NAMES: &[&str] = &[
-    LEGACY,
-    "ARROW_LEFT",
-    "ARROW_RIGHT",
-    "ARROW_UP",
-    "ARROW_DOWN",
-    "ARROW_U_UP_LEFT",
-    "ARROW_U_DOWN_LEFT",
-    "ARROW_BEND_UP_LEFT",
-    "ARROW_BEND_DOWN_LEFT",
-    "ARROW_ARC_LEFT",
-    "ARROW_CIRCLE_LEFT",
-    "ARROW_FAT_LEFT",
-    "ARROW_LINE_LEFT",
-    "ARROW_ELBOW_LEFT",
-    "ARROW_SQUARE_LEFT",
-    "CARET_LEFT",
-    "CARET_RIGHT",
-    "CARET_DOUBLE_LEFT",
-    "CARET_CIRCLE_LEFT",
-];
+/// Whether a path's last segment names an arrow glyph: the legacy back arrow, or any of
+/// Phosphor's `ARROW_…` and `CARET_…` families (`egui_phosphor::regular::ARROW_ELBOW_UP_LEFT`).
+fn arrow_name(name: &str) -> bool {
+    name == LEGACY || name.starts_with("ARROW_") || name.starts_with("CARET_")
+}
 
 /// Whether a label argument is an arrow alone: a string literal of arrows, or a path whose last
-/// segment is one of [`ARROW_NAMES`].
+/// segment names an arrow ([`arrow_name`]), also inside parentheses or a reference.
 fn arrow_argument(argument: Option<&syn::Expr>) -> bool {
     match argument {
         Some(syn::Expr::Lit(syn::ExprLit {
@@ -317,8 +299,10 @@ fn arrow_argument(argument: Option<&syn::Expr>) -> bool {
             .path
             .segments
             .last()
-            .is_some_and(|segment| ARROW_NAMES.contains(&segment.ident.to_string().as_str())),
+            .is_some_and(|segment| arrow_name(&segment.ident.to_string())),
         Some(syn::Expr::Reference(reference)) => arrow_argument(Some(&reference.expr)),
+        Some(syn::Expr::Paren(inner)) => arrow_argument(Some(&inner.expr)),
+        Some(syn::Expr::Group(inner)) => arrow_argument(Some(&inner.expr)),
         _ => false,
     }
 }
@@ -549,7 +533,7 @@ fn raw_colours_and_sizes_stay_inside_the_design_system() {
                     "Call the phrase's owner: `XP {` in src/difficulty.rs, `· line {` in `fault_words`, `N of M chosen` in `chosen_count`, a close icon's `Dismiss this …` in `MessageChoice::Dismiss`"
                 }
                 "arrow-label" => {
-                    "Give the control its word: an editor's back is `BackLine::new(word!(…), name, BackLock)` above its name row; a back link that starts a line is `TitleLine::back(word!(…), BackEdge)`"
+                    "Give the control its word: an editor's back is `BackLine::new(word!(…), name, BackLock)` above its name row; a back link that starts a line is `TitleLine::back` with its word"
                 }
                 _ => "Use design tokens",
             };
@@ -692,6 +676,10 @@ fn the_message_rules_find_what_they_should() {
         ),
         "fn f() { Action::quiet(egui_phosphor::regular::ARROW_LEFT).show(ui); }".to_owned(),
         "fn f() { Action::quiet(ARROW_U_UP_LEFT).show(ui); }".to_owned(),
+        "fn f() { Action::quiet(egui_phosphor::regular::ARROW_ELBOW_UP_LEFT).show(ui); }"
+            .to_owned(),
+        "fn f() { Action::quiet((egui_phosphor::regular::ARROW_LEFT)).show(ui); }".to_owned(),
+        "fn f() { Action::quiet((\"←\")).show(ui); }".to_owned(),
         format!("fn f() {{ design::icon_button(ui, icons::{LEGACY}, \"Back\"); }}"),
         "fn f() { icon_button(ui, \"←\", \"Back\"); }".to_owned(),
         "fn f() { ui.link(\"←\"); }".to_owned(),

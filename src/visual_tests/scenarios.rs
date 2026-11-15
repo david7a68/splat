@@ -4939,7 +4939,7 @@ pub mod encounter_build {
             "Encounters",
             "Back to encounters",
             "Encounter name",
-            Some("Save or discard this encounter first."),
+            Some("Save or discard the open encounter first."),
         );
         d.observe(
             "s30-B4-back-line-encounter",
