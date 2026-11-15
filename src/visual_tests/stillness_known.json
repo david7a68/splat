@@ -165,6 +165,8 @@
     ["G3/far-action","02-groups-for-encounters-open","1920x1080","Button \"Edit group Watch Detail\"",1],
     ["G3/far-action","02-groups-for-encounters-open","1920x1080","Button \"Resume\"",2],
     ["G3/far-action","02-groups-for-encounters-open","1920x1080","Button \"Start fight\"",1],
+    ["N4/quiet-action-line-start","03-group-whose-encounter-is-gone","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","03-group-whose-encounter-is-gone","1920x1080","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","03-group-whose-encounter-is-gone","960x640","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","04-encounter-with-its-groups","1200x800","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","04-encounter-with-its-groups","1920x1080","Button \"Filter creatures\"",1],
@@ -678,7 +680,9 @@
     ["N4/quiet-action-line-start","01-plan-group-empty","960x640","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","02-plan-group-assembled","1200x800","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","02-plan-group-assembled","1920x1080","Button \"Filter creatures\"",1],
-    ["N4/quiet-action-line-start","02-plan-group-assembled","960x640","Button \"Filter creatures\"",1]
+    ["N4/quiet-action-line-start","02-plan-group-assembled","960x640","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","07-plan-group-edit","1200x800","Button \"Filter creatures\"",1],
+    ["N4/quiet-action-line-start","07-plan-group-edit","1920x1080","Button \"Filter creatures\"",1]
   ],
   "session-plan-scenes": [
     ["G1b/pressed-control-moved","07-scene-removed","1200x800","Button \"Add\"",1],

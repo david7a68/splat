@@ -8177,11 +8177,31 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.click("More actions for Bridge Ambush");
     d.click("Start another fight");
     assert!(!d.app_mut().encounters.has_run());
-    d.state("deleted-package-blocks-new-fight", Sizes::All);
+    // iter-29 G125 (AD5): the rows keep the cause; the message says only the next act, naming
+    // and counting the rows, whole and in view at every size.
+    let next_act = "Choose replacements for the 2 Cinder Wolf rows.";
+    d.state_prepared("deleted-package-blocks-new-fight", Sizes::All, |d| {
+        let mut messages = Vec::new();
+        d.each_painted_text(|text, _| {
+            let words = text.galley.job.text.as_str();
+            if words.contains("Choose replacement") {
+                messages.push(words.to_owned());
+            }
+        });
+        let rows = row_marks(d, "Not found. Its package entry was deleted.").len();
+        d.observe(
+            "iter-29-BC5-G125",
+            d.visible_text(next_act)
+                && !messages.is_empty()
+                && messages.iter().all(|words| !words.contains("deleted"))
+                && rows == 2,
+            format!("The message {messages:?} says only the next act; {rows} rows say the cause"),
+        );
+    });
     // iter-19-B-FD5 must stay true: a deleted entry stays a warning in the message and the rows.
     let (warned, detail) = fault_tone(
         d,
-        "2 Cinder Wolf rows have no creature.",
+        next_act,
         "Not found. Its package entry was deleted.",
         (design::icons::WARN, design::colors().result.warning),
     );
@@ -8250,10 +8270,7 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         format!("Roster heading and row 1 tops before {before_result:?} and with the result {with_result:?}"),
     );
     assert!(!d.has_containing("Not found. Its package entry was deleted."));
-    assert!(
-        !d.has_containing("have no creature")
-            && !d.has_containing("Choose a replacement in the roster.")
-    );
+    assert!(!d.has_containing("have no creature") && !d.has_containing("Choose replacements for"));
     let dirty = d.app_mut().encounters.draft_dirty();
     d.observe(
         "Replace deleted creature",
@@ -8450,7 +8467,7 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         invalid
             && fs::read(&bridge).unwrap() == on_disk
             && d.visible_text("Invalid")
-            && d.has_containing("2 Cinder Wolf rows have no creature."),
+            && d.has_containing("Choose replacements for the 2 Cinder Wolf rows."),
         format!("Invalid before Ctrl+S: {invalid}; the file and the state stay after it"),
     );
     d.replace_text_in("Encounter name", "Bridge Ambush");
