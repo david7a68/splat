@@ -1935,7 +1935,9 @@ impl Splat {
                     self.dndbeyond.footer_messages(&mut footer, false);
                     let (settings, dndbeyond) = (&mut self.settings, &mut self.dndbeyond);
                     let has_run = self.encounters.has_run();
-                    footer.pane(ui, design::Body::Content, |ui| {
+                    // R46: the import form's reveal runs in this column.
+                    let scroll = design::pane::ContentScroll::default().hosts_reveals();
+                    footer.pane_content(ui, scroll, |ui| {
                         // A child that starts empty, so the forms narrow themselves (`set_max_width`): the
                         // pane's column holds its content at the column's width (gap sent to K).
                         ui.vertical(|ui| {

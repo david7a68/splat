@@ -172,9 +172,16 @@ pub enum FillsReason {
 pub struct ContentScroll {
     from_top: bool,
     holds: bool,
+    reveals: bool,
 }
 
 impl ContentScroll {
+    /// R46: the pane's column may host a reveal (`ScrollColumn::hosts_reveals`).
+    pub fn hosts_reveals(mut self) -> Self {
+        self.reveals = true;
+        self
+    }
+
     /// Open at the top in this frame (a view shown again); a hold ends.
     pub fn from_top(mut self, from_top: bool) -> Self {
         self.from_top = from_top;
@@ -743,8 +750,10 @@ fn reveal_focus(ui: &mut Ui, id: Id, widgets: std::ops::Range<usize>, room: Rect
                 .flatten()
         })
     });
+    // A reveal that runs in this column owns its scroll (`design::reveal`).
     if let Some(rect) = rect
         && !(moved_room && visible.contains_rect(rect))
+        && !super::reveal::holds(ui)
     {
         ui.scroll_to_rect(rect, None);
     }
@@ -1495,6 +1504,9 @@ impl Footer<'_> {
                 let mut column = ScrollColumn::new(id.with("column"))
                     .max_height(room_height)
                     .min_scrolled_height(room_height);
+                if options.reveals {
+                    column = column.hosts_reveals();
+                }
                 if options.from_top {
                     column = column.vertical_scroll_offset(0.0);
                 }

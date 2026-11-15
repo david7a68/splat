@@ -6226,11 +6226,37 @@ pub mod settings {
         d.settle();
         d.click("Add from D&D Beyond");
         d.wait_for_text("Salt Road");
-        d.click("Add Salt Road from D&D Beyond");
+        // G137 at the original single open, before any Cancel, resize or test scroll: the form
+        // shows whole and the kept line names the folder Splat proposes, whole (R30, R34). The
+        // open starts low: in a short window the row's Add… is near the view's bottom, so the
+        // form opens below the view and only its reveal shows it whole.
+        const LOW_OPENER: (f32, f32) = (960.0, 520.0);
+        let opened = d.act_at_size(LOW_OPENER, |d| {
+            d.click("Add Salt Road from D&D Beyond");
+            d.wait_for_text("Campaign name");
+            let preview = "Will create …/Salt Road";
+            let nodes = d.nodes();
+            let whole = |name: &str| {
+                nodes
+                    .iter()
+                    .any(|node| node.name == name && node.fully_in_view())
+            };
+            d.visible_text(preview) && whole(preview) && whole("Cancel") && whole("Add campaign")
+        });
+        d.observe(
+            "iter-30-B6-G137-first-open",
+            opened,
+            "At the first open, `Will create …/Salt Road`, Add campaign and Cancel whole and in view",
+        );
         d.state_prepared("add-from-remote", Sizes::All, |d| {
-            if !d.has("Campaign name") {
+            // The DM's open act at each size: a reveal never starts again on a resize (R34).
+            // The form open before is closed as setup, not as an act of the DM's.
+            d.app_mut().campaigns.cancel_import();
+            d.settle();
+            if !d.has("Add Salt Road from D&D Beyond") {
                 d.click("Add from D&D Beyond");
             }
+            d.click("Add Salt Road from D&D Beyond");
             // No `row_of` here: it scrolls a hidden row into view, and the G137 witness must not
             // depend on a test scroll. The scroll loop below runs after the check.
             d.wait_for_text("Campaign name");
@@ -11522,7 +11548,28 @@ pub mod signed_in {
                 opened.0, opened.1
             ),
         );
-        d.click("Add Salt Road from D&D Beyond");
+        // G138 at the original single open, before any Cancel, resize or test scroll (R34). The
+        // open starts low: in a short window the row's Add… is near the view's bottom, so the
+        // form opens below the view and only its reveal shows it whole.
+        const LOW_OPENER: (f32, f32) = (960.0, 520.0);
+        let opened = d.act_at_size(LOW_OPENER, |d| {
+            d.click("Add Salt Road from D&D Beyond");
+            let preview = format!("Will create …/{REMOTE_NAME}");
+            let nodes = d.nodes();
+            let whole = |name: &str| {
+                nodes
+                    .iter()
+                    .any(|node| node.name == name && node.fully_in_view())
+            };
+            d.visible_text(&preview) && whole(&preview) && whole("Cancel")
+        });
+        d.observe(
+            "iter-30-B6-G138-first-open",
+            opened,
+            format!(
+                "At the first open, `Will create …/{REMOTE_NAME}` and Cancel whole and in view"
+            ),
+        );
         // Round 23 AM2/FM7: quiet Cancel starts the form's last row at the labels' text edge.
         let (add, labels) = d.at_size(DEFAULT, |d| {
             (
@@ -11542,6 +11589,11 @@ pub mod signed_in {
         );
         // G138 (AO2, FO7): the kept line names the folder Splat proposes, whole, at every size.
         d.state_prepared("import-remote-campaign", Sizes::All, |d| {
+            // The DM's open act at each size: a reveal never starts again on a resize (R34).
+            // The form open before is closed as setup, not as an act of the DM's.
+            d.app_mut().campaigns.cancel_import();
+            d.settle();
+            d.click("Add Salt Road from D&D Beyond");
             // No test scroll: the form shows whole when it opens (R30).
             let preview = format!("Will create …/{REMOTE_NAME}");
             let shown = d.visible_text(&preview)

@@ -200,5 +200,9 @@ pub fn install(ctx: &egui::Context) {
     apply_colors(&mut style, colors());
     apply_type(&mut style);
     apply_spacing(&mut style);
+    // R43: no scroll animation in the app. A programmatic scroll lands in one jump, in the pass
+    // after its request (egui keeps a target of no length for one pass); a column that hosts a
+    // reveal lands it in the same pass (R46). The DM's own wheel and drag stay as they are.
+    style.scroll_animation = egui::style::ScrollAnimation::none();
     ctx.set_style_of(Theme::Dark, style);
 }
