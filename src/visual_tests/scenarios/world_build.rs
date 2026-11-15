@@ -9812,7 +9812,9 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
     d.type_into("Search the world", "Watchkeeper");
     d.state("npc-stat-block-deleted-in-world", Sizes::All);
     look_up(d, "Watchkeeper");
-    d.wait_for_text("Watchkeeper Guard · Not found");
+    // Lookup's missing stat block takes the narrow reader's form (round 30, FD6 above): its
+    // name line, with `Not found` on the line below.
+    d.wait_for_text(&format!("{} Watchkeeper Guard", design::icons::WARN));
     // Round 23 FG1, SG1: with Lookup open, World's rows stack each label above its value. The
     // value keeps the label column's room, so each missing link stays on one line. Must stay
     // true: Change still starts an `L` gap after its value.
