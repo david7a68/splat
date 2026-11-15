@@ -2906,6 +2906,10 @@ pub struct Encounters {
     /// is stored (as `edit_epoch`, for every page).
     plan_epoch: u64,
     plan_edited_last_frame: bool,
+    /// Test only: while set, `poll` takes no new read of the campaign (a load in flight waits),
+    /// so a proof's window of unchanged frames keeps one snapshot revision.
+    #[cfg(test)]
+    pub(crate) hold_reads: bool,
     /// Bumped on each frame that can change a draft (an editing input) and the frame after it,
     /// because a click's change lands late in its frame.
     edit_epoch: u64,
@@ -3758,6 +3762,11 @@ impl Encounters {
         self.plan_refusal_check = Some((key, stands));
         stands
     }
+    /// Test only: the campaign read's revision, which keys the plan refusal's check.
+    #[cfg(test)]
+    pub(crate) fn snapshot_revision(&self) -> Option<Uuid> {
+        self.snapshot.as_ref().map(|snapshot| snapshot.revision)
+    }
     /// No plan refusal is stored: its check is forgotten, so a new one compares afresh.
     pub fn forget_plan_refusal(&mut self) {
         self.plan_refusal_check = None;
@@ -4124,6 +4133,10 @@ impl Encounters {
     }
     /// Keep the snapshot current. The shell calls this every frame.
     pub fn poll(&mut self, ctx: &egui::Context, campaigns: &Campaigns) {
+        #[cfg(test)]
+        if self.hold_reads {
+            return;
+        }
         // A run restored at startup comes before the first load. With nothing loaded,
         // there is nothing a load could drop, so it does not wait for the run to close.
         if let Some(active) = campaigns.active_campaign()

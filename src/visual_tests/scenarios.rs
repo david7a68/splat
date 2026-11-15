@@ -23312,6 +23312,10 @@ pub mod session_plan_groups {
         d.click(NAV_WORLD);
         d.settle();
         let stored = d.app_mut().sessions.plan_group_refused.is_some();
+        // The campaign read is held for the window, so only the frames themselves are measured;
+        // the revision is checked unchanged, so a failure says which input moved.
+        d.app_mut().encounters.hold_reads = true;
+        let revision = d.app_mut().encounters.snapshot_revision();
         let compares = crate::test_support::CachedWork::start("Stored plan refusal", d, |d| {
             crate::test_support::Counts {
                 reached: d.passes(),
@@ -23325,6 +23329,8 @@ pub mod session_plan_groups {
             d.at_size(DEFAULT, |_| ());
             d.app_mut().sessions.plan_group_refused.is_some()
         });
+        let same_read = d.app_mut().encounters.snapshot_revision() == revision;
+        d.app_mut().encounters.hold_reads = false;
         std::fs::remove_file(&file).unwrap();
         d.focus_window(false);
         d.focus_window(true);
@@ -23338,9 +23344,9 @@ pub mod session_plan_groups {
         let hidden_back = (d.in_view(GROUP_RIVALS), d.visible_text(encounter_reason));
         d.observe(
             "s30-B4c-stored-refusal-costs-nothing",
-            shown && stored && away.is_ok(),
+            shown && stored && same_read && away.is_ok(),
             format!(
-                "Reason shown {shown}, stored on World {stored}; unchanged frames there: {away:?}"
+                "Reason shown {shown}, stored on World {stored}; the campaign read unchanged in the window {same_read}; unchanged frames there: {away:?}"
             ),
         );
         d.observe(
