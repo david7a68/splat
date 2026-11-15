@@ -19701,7 +19701,7 @@ pub mod encounter_owned_groups {
             std::fs::remove_file(&wolf).unwrap();
             d.focus_window(false);
             d.focus_window(true);
-            d.wait_for_text("not in this campaign’s packages");
+            d.wait_for_text("Unknown creature");
             let (member, member_detail) = said_once(
                 d,
                 &["not in this campaign’s packages"],
@@ -21769,7 +21769,7 @@ pub mod session_plan_groups {
         // iter-29 G122 on the Sessions page: the plan's group comes to belong to an encounter
         // that is then deleted. With Belongs to off screen, the save row says the cause once,
         // by the mouse and the keyboard. The file and the group are put back after.
-        let (gone, member) = d.aside(|d| {
+        let (once, detail) = d.aside(|d| {
             let arena = d.root.join(format!(
                 "campaigns/emberfall/Encounters/{}.md",
                 crate::visual_tests::fixture::RUN_ARENA
@@ -21787,6 +21787,10 @@ pub mod session_plan_groups {
             d.focus_window(true);
             d.click("Discard");
             d.expect("Belongs to: Any encounter");
+            once
+        });
+        d.observe("iter-29-BC5-G122-off-screen-plan", once, detail);
+        let (member, member_detail) = d.aside(|d| {
             // A member whose creature is gone, with a changed name: its Cinder Wolf's package
             // entry is deleted, then put back.
             d.type_into(&format!("Group name: {GROUP_RIVALS}"), " 2");
@@ -21797,7 +21801,8 @@ pub mod session_plan_groups {
             std::fs::remove_file(&wolf).unwrap();
             d.focus_window(false);
             d.focus_window(true);
-            d.wait_for_text("not in this campaign’s packages");
+            // The row's heading names the gone creature, whichever place says the fault.
+            d.wait_for_text("Unknown creature");
             let member = said_once(
                 d,
                 &["not in this campaign’s packages"],
@@ -21810,10 +21815,8 @@ pub mod session_plan_groups {
             d.focus_window(true);
             d.click("Discard");
             d.expect(&format!("Group name: {GROUP_RIVALS}"));
-            (once, member)
+            member
         });
-        let ((once, detail), (member, member_detail)) = (gone, member);
-        d.observe("iter-29-BC5-G122-off-screen-plan", once, detail);
         d.observe(
             "iter-29-BC5-G122-member-off-screen-plan",
             member,
