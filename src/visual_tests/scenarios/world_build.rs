@@ -9730,21 +9730,54 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
     d.observe("iter-24-D-AG1", marked, detail);
     d.state("npc-place-deleted-in-world", Sizes::All);
     look_up(d, "Watchkeeper");
-    d.wait_for_text("Watch House · Not found");
-    // Round 24 FD6: the compact reader's link fault reads as its other values: the muted label
-    // `Place`, then the value in the warning tone. The label is not in the warning colour.
-    let missing = format!("{} Watch House · Not found", design::icons::WARN);
-    d.observe(
-        "iter-24-D-FD6",
-        d.painted_color("Place") == Some(design::colors().muted)
-            && d.painted_color(&missing) == Some(design::colors().result.warning)
-            && !d.has_containing("Place Watch House"),
-        format!(
-            "Place is {:?} and its value is {:?}",
-            d.painted_color("Place"),
-            d.painted_color(&missing)
-        ),
-    );
+    let missing = format!("{} Watch House", design::icons::WARN);
+    d.wait_for_text(&missing);
+    // Round 24 FD6 caught a link fault that did not read as its other values: it wants the
+    // muted label `Place`, then the value in the warning tone, on one line. Round 30: Lookup's
+    // value rows now carry Change (one function draws them for World and Lookup), so a missing
+    // link there takes the narrow reader's form, which replaces round 24's one-line form: the
+    // name in the warning tone on Change's line, and `Not found` on its own line directly
+    // below it, at the same text edge. Change stays whole on the name's line.
+    let value_form = |d: &Driver<'_>| {
+        let lookup = egui::Rect::from_min_max(
+            egui::pos2(d.place_of(LOOKUP_SPLITTER)?.right(), f32::NEG_INFINITY),
+            egui::pos2(f32::INFINITY, f32::INFINITY),
+        );
+        let name = d.painted_rect_in(&missing, lookup)?;
+        let below = d.painted_rect_in("Not found", lookup)?;
+        let change = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name == "Change Place" && lookup.contains(node.rect.center()))?
+            .rect;
+        let whole = d.painted_rect_in("Change", change).is_some();
+        Some((name, below, change, whole))
+    };
+    for size in [SMALL, DEFAULT, LARGE] {
+        let form = d.at_size(size, value_form);
+        let stacked = form.is_some_and(|(name, below, change, whole)| {
+            (below.top() - name.bottom()).abs() <= 1.0
+                && (below.left() - name.left()).abs() <= 1.0
+                && whole
+                && change.top() <= name.center().y
+                && name.center().y <= change.bottom()
+        });
+        d.observe(
+            "iter-24-D-FD6",
+            d.painted_color("Place") == Some(design::colors().muted)
+                && d.painted_color(&missing) == Some(design::colors().result.warning)
+                && d.painted_color("Not found") == Some(design::colors().result.warning)
+                && !d.has_containing("Place Watch House")
+                && stacked,
+            format!(
+                "At {size:?}: Place is {:?}, its value {:?} and Not found {:?}; name, Not found, \
+                 Change and whether Change is whole: {form:?}",
+                d.painted_color("Place"),
+                d.painted_color(&missing),
+                d.painted_color("Not found"),
+            ),
+        );
+    }
     // Round 26 AE2: Lookup's result says the fault that World's row says, with its warning
     // mark, before the note's summary. Neighbour: the stat block's result has no mark.
     let mark = format!("{} Place not found", design::icons::WARN);

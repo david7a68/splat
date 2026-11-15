@@ -1073,9 +1073,10 @@ files safely in this folder, so nothing was moved.`; its result `The file is now
 while the note's edit form is open, or when the name cannot be a file name. World's New note, New NPC and New
 location are inline creation forms: the named Create action follows the last field on its line, and the kept line
 below holds quiet `Cancel`, then `Type a name first.` or, for an NPC, its future path (`Will create
-NPCs/Watchkeeper.md`), so typing moves nothing. A compact NPC reader puts Fights as and Place on one read-only line; both open
-Lookup. A missing link there reads as its other values: the muted label, then `⚠ <name> · Not found` in the warning
-tone (`Place` `⚠ Watch House · Not found`).
+NPCs/Watchkeeper.md`), so typing moves nothing. Lookup's NPC reader shows World's value rows, each with its Change.
+A missing link there reads as its other values: the muted label, then `⚠ <name>` in the warning tone on Change's line,
+with `Not found` on its own line directly below it, as in every narrow reader (`Place` `⚠ Watch House`, then
+`Not found`). Round 24's one-line form for Lookup is replaced: with Change on the row it cut Change.
 
 A campaign world entry has a quiet Edit action, with a pencil icon and the word Edit, on its title line in Lookup and World. Its icon sits one `L` after the measured title at every title width, so a kind line wider than a short title does not push it away; beside a portrait, the actions stay left of it. With no run open, a creature's or an NPC's reader (a campaign
 entry, or a package creature, whose header has no Edit) has a quiet `Start fight` with the run icon after Edit,
