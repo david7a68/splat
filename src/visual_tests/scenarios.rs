@@ -14730,6 +14730,113 @@ pub mod session_notes {
         );
         d.state("timeline-disk-conflict", Sizes::All);
         links_beside_lookup(d);
+        note_warnings_beside_other_editors(d);
+    }
+
+    /// Round 30 re-check of PR 400 (follow-up B7b): the session note's warnings stand in the
+    /// bottom banner on every page and name the note, also beside another page's own editor
+    /// (Timeline's event form), for a failed save and for a note whose file left the folder; and
+    /// the banner and a page's pinned result (the templates page's `Deleted …` with its Undo)
+    /// share 960x640 whole, apart. After the scenario's last state.
+    fn note_warnings_beside_other_editors(d: &mut Driver<'_>) {
+        // A banner message whose words start with the note's name, whole in view, with its
+        // choices, beside the event form's own field.
+        let named = |d: &Driver<'_>, cause: &str, choices: &[&str]| {
+            let words = d.nodes().into_iter().find(|node| {
+                node.fully_in_view()
+                    && node.name.starts_with("The note of Session ")
+                    && node.name.contains(cause)
+            });
+            let field = d.place_of("Title");
+            let choices_in_view = choices.iter().all(|choice| d.in_view(choice));
+            (
+                words.is_some() && field.is_some() && choices_in_view,
+                format!(
+                    "{cause}: words {:?}, the event form's Title {field:?}, choices {choices:?} in view {choices_in_view}",
+                    words.map(|node| node.name)
+                ),
+            )
+        };
+        d.click(NAV_SESSIONS);
+        d.settle();
+        d.app_mut().sessions.simulate_failed_save();
+        // Timeline still holds the event form the scenario opened (Rest at the mill).
+        d.click(NAV_TIMELINE);
+        d.expect("Rest at the mill");
+        let failed = named(
+            d,
+            "was not saved. The disk is full.",
+            &["Try to save again"],
+        );
+        let failed_wide = d.at_size(DEFAULT, |d| {
+            named(
+                d,
+                "was not saved. The disk is full.",
+                &["Try to save again"],
+            )
+        });
+        d.click("Try to save again");
+        d.settle();
+        let retried = !d.has_containing("was not saved. The disk is full.");
+        let (path, away) = d.app_mut().sessions.simulate_note_gone();
+        d.settle();
+        let gone = named(
+            d,
+            "is gone from the folder.",
+            &["Save my draft as a new file", "Discard"],
+        );
+        let gone_wide = d.at_size(DEFAULT, |d| {
+            named(
+                d,
+                "is gone from the folder.",
+                &["Save my draft as a new file", "Discard"],
+            )
+        });
+        d.observe(
+            "round-30-note-warnings-elsewhere",
+            failed.0 && failed_wide.0 && retried && gone.0 && gone_wide.0,
+            format!(
+                "960x640: {}; {}. 1200x800: {}; {}. The retry ends the failure: {retried}",
+                failed.1, gone.1, failed_wide.1, gone_wide.1
+            ),
+        );
+        // The banner beside a pinned result, at 960x640: the templates page's delete result and
+        // its Undo, and the note's warning with its choices, each whole, the result above the
+        // banner.
+        d.click(NAV_SESSIONS);
+        d.click("Templates");
+        d.click("New template");
+        d.type_into("Template name", "Short break");
+        d.click("Create template");
+        d.expect("Short break");
+        d.click("More actions for Short break");
+        d.click("Delete this template");
+        d.expect("Undo delete");
+        let result = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.fully_in_view() && node.name.starts_with("Deleted “Short break”."));
+        let undo = d.place_of("Undo delete");
+        let banner = d.nodes().into_iter().find(|node| {
+            node.fully_in_view()
+                && node.name.starts_with("The note of Session ")
+                && node.name.contains("is gone from the folder.")
+        });
+        let discard = d.place_of("Discard");
+        d.observe(
+            "round-30-note-warning-beside-a-pinned-result",
+            result.as_ref().zip(banner.as_ref()).zip(undo.zip(discard)).is_some_and(
+                |((result, banner), (undo, _))| {
+                    result.rect.bottom() <= banner.rect.top() && undo.bottom() <= banner.rect.top()
+                },
+            ),
+            format!(
+                "At 960x640 the pinned result {:?} and its Undo {undo:?} stand above the banner {:?} with Discard {discard:?}",
+                result.map(|node| node.rect),
+                banner.map(|node| node.rect)
+            ),
+        );
+        std::fs::rename(&away, &path).unwrap();
     }
 
     /// A Sessions note's link keeps focus when Lookup opens a World note beside it, and
