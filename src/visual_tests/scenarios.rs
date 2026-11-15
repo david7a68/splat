@@ -1362,7 +1362,27 @@ pub mod library_browse {
                         .is_some_and(|rect| (rect.top() - 105.0).abs() < 1.0)
             },
         );
-        d.state("first-launch", Sizes::AllAndHiDpi);
+        d.state_prepared("first-launch", Sizes::AllAndHiDpi, |d| {
+            // Round 30 AI4: with an empty search, All entries stands in its place (the way back
+            // to every entry, selected now) and paints no count: the header already says it.
+            // Its accessible name keeps the count.
+            let row = d.place_of("All entries   2,065");
+            let mut counts = Vec::new();
+            d.each_painted_text(|text, clip| {
+                if text.galley.job.text == "2,065" && clip.intersects(text.visual_bounding_rect()) {
+                    counts.push(text.visual_bounding_rect());
+                }
+            });
+            d.observe(
+                "s30-B2-all-entries-count",
+                row.is_some_and(|row| {
+                    !counts.iter().any(|count| {
+                        count.center().y >= row.top() && count.center().y <= row.bottom()
+                    })
+                }),
+                format!("All entries {row:?} paints no count beside it: {counts:?}"),
+            );
+        });
         d.check_tab_order("library, first launch");
         d.begin_task();
 
