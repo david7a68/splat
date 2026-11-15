@@ -4551,10 +4551,7 @@ fn files_to_fix(d: &Driver<'_>) -> Option<String> {
 /// in view with its words starting at the result's words.
 fn blocked_reason_shown(d: &Driver<'_>, words: &str) -> (Option<egui::Color32>, bool) {
     let message = d.painted_rect_in(words, egui::Rect::EVERYTHING);
-    let reason = d.painted_rect_in(
-        crate::content_workspace::UNDO_ENDED_REASON.as_str(),
-        egui::Rect::EVERYTHING,
-    );
+    let reason = d.painted_rect_in(crate::content_workspace::UNDO_ENDED, egui::Rect::EVERYTHING);
     (
         d.painted_color(words),
         message.zip(reason).is_some_and(|(message, reason)| {
@@ -7217,7 +7214,7 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
         let open = d.place_of("Open in Library").expect("Safe manifest repair is present");
         let replace = d.place_of("Replace with a basic Package.md").expect("Manifest replacement is present");
         let notice = d.painted_left("Ashen Marches: Package.md cannot be read").expect("Manifest warning is visible");
-        let help = d.painted_left("Keeps the package name and its links.").expect("Replacement consequence is visible");
+        let help = d.painted_left("This keeps the package name and its links.").expect("Replacement consequence is visible");
         d.observe("iter-7-C-FD4-order", open.top() <= replace.top() && (open.top() < replace.top() || open.right() <= replace.left()),
             "Open in Library precedes manifest replacement");
         d.observe("iter-7-C-FD4-edge", (open.left() - notice).abs() <= 1.0 && (help - notice).abs() <= 1.0,
@@ -7226,7 +7223,7 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
             "Open in Library has a secondary border");
         d.observe("iter-7-C-FD5", d.visible_text("Package.md cannot be read (line 4). Entries are still available."),
             "The manifest fault and availability sentence have a full stop between them");
-        d.observe("iter-6-C-AD1", d.visible_text("Keeps the package name and its links.")
+        d.observe("iter-6-C-AD1", d.visible_text("This keeps the package name and its links.")
             && d.visible_text("including its description.")
             && d.visible_text("The entries stay unchanged."),
             "Manifest replacement states the package name, links, description and unchanged entries");
@@ -10682,7 +10679,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     };
     let columns_before = columns_top(d);
     d.click("Register");
-    d.wait_for_text("Undo register package");
+    d.wait_for_text("Undo package registration");
     let columns_after = columns_top(d);
     d.observe(
         "iter-24-L-FC4-registration",
@@ -10706,7 +10703,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     assert_eq!(d.app_mut().campaigns.modules().len(), 2);
     for size in [SMALL, DEFAULT, LARGE] {
         let icon = d.at_size(size, |d| {
-            d.place_of("Undo register package")
+            d.place_of("Undo package registration")
                 .is_some_and(|rect| d.painted_in(rect).contains(design::icons::UNDO))
         });
         d.observe(
@@ -10716,14 +10713,14 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         );
     }
     d.state("copied-package-registered-alongside-original", Sizes::All);
-    // SD1: `Undo register package` follows its message on the message line through
+    // SD1: `Undo package registration` follows its message on the message line through
     // `undo_message`, with its icon before its words. When the line has no room it starts the
     // next line, with its words at the message's words and its icon hanging over the message's
     // icon column (the unit test `iter18_a_sd1_a_wrapped_undo_starts_its_words_at_the_message_words`
     // reaches that branch). Either way, its press area clears the entries column's splitter.
     for size in [SMALL, DEFAULT, LARGE] {
         let (undo, message, icon, clear) = d.at_size(size, |d| {
-            let target = d.place_of("Undo register package");
+            let target = d.place_of("Undo package registration");
             let mut icon = None;
             if let Some(target) = target {
                 d.each_painted_text(|text, _| {
@@ -10753,8 +10750,8 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
                 message,
                 icon,
                 target.map_or_else(
-                    || Err("Undo register package is not in view".to_owned()),
-                    |target| super::press_area_clear(d, target, "Undo register package", None),
+                    || Err("Undo package registration is not in view".to_owned()),
+                    |target| super::press_area_clear(d, target, "Undo package registration", None),
                 ),
             )
         });
@@ -10772,7 +10769,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
             "iter-18-A-SD1",
             placed && clear.is_ok(),
             format!(
-                "At {size:?}, Undo register package's words and target {undo:?}, the message \
+                "At {size:?}, Undo package registration's words and target {undo:?}, the message \
                  {message:?}, its icon {icon:?}; press area: {clear:?}"
             ),
         );
@@ -10829,7 +10826,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
                 })
                 .map(|n| n.rect);
             (
-                d.place_of("Undo register package"),
+                d.place_of("Undo package registration"),
                 message,
                 d.place_of(crate::library::USE_COPY),
             )
@@ -10848,7 +10845,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
                 (same_line || wrapped) && action.top() >= undo.bottom()
             }),
             format!(
-                "At {size:?}, Undo register package {undo:?} is on the message line {message:?} where both fit in the measure ({measure}), and Use the copy in encounters {action:?} is the one row below"
+                "At {size:?}, Undo package registration {undo:?} is on the message line {message:?} where both fit in the measure ({measure}), and Use the copy in encounters {action:?} is the one row below"
             ),
         );
     }
@@ -10859,7 +10856,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         let reload_library = |d: &mut Driver<'_>| {
             d.click("Packages");
             d.click("Reload from disk");
-            d.wait_for_text("Undo register package");
+            d.wait_for_text("Undo package registration");
         };
         let (entries, _) = splat::content::read_directory(&copied).unwrap();
         let file = copied.join(
@@ -10871,19 +10868,19 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         );
         let written = fs::read(&file).unwrap();
         assert!(
-            !d.is_disabled("Undo register package"),
+            !d.is_disabled("Undo package registration"),
             "fixture: Undo starts available"
         );
         let mut outside = written.clone();
         outside.extend_from_slice(b"\nAn outside note.\n");
         fs::write(&file, &outside).unwrap();
         reload_library(d);
-        let blocked = d.is_disabled("Undo register package");
+        let blocked = d.is_disabled("Undo package registration");
         let use_kept =
             d.in_view(crate::library::USE_COPY) && !d.is_disabled(crate::library::USE_COPY);
         let reason = d.tooltip_contains(
-            "Undo register package",
-            crate::content_workspace::UNDO_ENDED_REASON.as_str(),
+            "Undo package registration",
+            crate::content_workspace::UNDO_ENDED,
         );
         d.state("registration-undo-blocked", Sizes::Default);
         // Round 23 FD6: the change still happened, so its words keep the text colour. Only Undo
@@ -10901,15 +10898,15 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
             "iter-14-E-AD1-registration",
             blocked && use_kept && reason && fs::read(&file).unwrap() == outside,
             format!(
-                "After an outside change, Undo register package is blocked ({blocked}) and says why ({reason}); Use the copy in encounters stays ({use_kept}); the file keeps the outside bytes"
+                "After an outside change, Undo package registration is blocked ({blocked}) and says why ({reason}); Use the copy in encounters stays ({use_kept}); the file keeps the outside bytes"
             ),
         );
         fs::write(&file, &written).unwrap();
         reload_library(d);
         d.observe(
             "iter-14-E-AD1-registration-back",
-            !d.is_disabled("Undo register package"),
-            "With the written bytes back, a reload makes Undo register package available again",
+            !d.is_disabled("Undo package registration"),
+            "With the written bytes back, a reload makes Undo package registration available again",
         );
     }
     go_campaign(d);
@@ -10947,7 +10944,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         "iter-29-L-R11-clause-ends",
         d.has_containing("Ashen Reaches is registered.")
             && !d.has_containing("is registered, with")
-            && d.has("Undo register package"),
+            && d.has("Undo package registration"),
         "After Use the copy in encounters, the registration result says `Ashen Reaches is registered.` and keeps its Undo",
     );
     d.state_prepared("copy-entries-used", Sizes::All, |d| {
@@ -10959,7 +10956,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         let undo = d
             .nodes()
             .into_iter()
-            .find(|node| node.name == "Undo register package")
+            .find(|node| node.name == "Undo package registration")
             .map(|node| (node.rect, node.fully_in_view()));
         let source = d.painted_rect_in(crate::library::USE_COPY_RESULT, egui::Rect::EVERYTHING);
         d.observe(
@@ -10994,8 +10991,8 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         let first_in_view = d.in_view("Undo source change");
         let footer = d.place_of("Undo source change").map(|undo| undo.center());
         let older_reached = footer.is_some_and(|at| {
-            d.scroll_until(at, "Undo register package", 8);
-            d.in_view("Undo register package")
+            d.scroll_until(at, "Undo package registration", 8);
+            d.in_view("Undo package registration")
         });
         if let Some(at) = footer {
             d.scroll_up_at(at, 8);
@@ -11004,7 +11001,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
             "iter-26-L-results-order",
             newest_first && first_in_view && older_reached,
             format!(
-                "At {size:?}: newest first {newest_first} in {order:?}; Undo source change in view {first_in_view}; Undo register package reached {older_reached}"
+                "At {size:?}: newest first {newest_first} in {order:?}; Undo source change in view {first_in_view}; Undo package registration reached {older_reached}"
             ),
         );
     }
@@ -11034,10 +11031,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         fs::write(&changed, &outside).unwrap();
         reload_library(d);
         let blocked = d.is_disabled("Undo source change");
-        let reason = d.tooltip_contains(
-            "Undo use the copy",
-            crate::content_workspace::UNDO_ENDED_REASON.as_str(),
-        );
+        let reason = d.tooltip_contains("Undo source change", crate::content_workspace::UNDO_ENDED);
         let kept = d.has(crate::library::USE_COPY_RESULT);
         // Round 23 FD6: the same rule for the source change's result.
         let (color, said) = blocked_reason_shown(d, crate::library::USE_COPY_RESULT);
@@ -11096,7 +11090,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.state("encounter-uses-copy-with-kept-changes", Sizes::All);
     go_library(d);
     d.click("Undo source change");
-    d.click("Undo register package");
+    d.click("Undo package registration");
     d.wait_for_text("Ashen Marches");
     assert_eq!(d.app_mut().campaigns.modules().len(), 1);
     assert_eq!(fs::read(copied.join("Module.md")).unwrap(), before);

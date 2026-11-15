@@ -555,6 +555,9 @@ enum Step {
     Verb(Verb, Option<String>),
     /// An act the DM named: `Undo: Take seal`.
     Act(String),
+    /// The app's own fixed words for a step that is not a verb and an object:
+    /// `Undo package registration`. Never cut.
+    Words(&'static str),
 }
 
 /// What an Undo takes back, typed: a verb, an optional object, and the joining word the verb's
@@ -606,6 +609,20 @@ impl UndoStep {
         }
     }
 
+    /// The app's own fixed words for a step that is not a verb and an object
+    /// (`Undo package registration`): a `'static` literal that starts with `Undo `, never words
+    /// from data. Its label is these words, whole at every width.
+    pub fn words(label: &'static str) -> Self {
+        debug_assert!(
+            label.starts_with("Undo "),
+            "an Undo's words start with `Undo `"
+        );
+        Self {
+            step: Step::Words(label),
+            tell_apart: None,
+        }
+    }
+
     /// The part that tells this step from another of the same words: `2`, `in Ruins`. A fit
     /// never drops it.
     pub fn tell_apart(mut self, part: impl Into<String>) -> Self {
@@ -649,6 +666,7 @@ impl UndoStep {
                 }),
             ),
             Step::Act(label) => ("Undo:".to_owned(), Some(label.clone())),
+            Step::Words(label) => ((*label).to_owned(), None),
         }
     }
 
@@ -660,7 +678,7 @@ impl UndoStep {
     pub fn fit(&self, ui: &Ui, width: f32) -> String {
         let font = Type::Strong.font(ui);
         let whole = self.label();
-        if number_width(ui, &whole, &font) <= width {
+        if matches!(self.step, Step::Words(_)) || number_width(ui, &whole, &font) <= width {
             return whole;
         }
         if let Step::Verb(verb, Some(_)) = &self.step
@@ -2757,7 +2775,14 @@ impl Body {
                 RESERVED,
                 probe.min_rect().height() + ui.spacing().item_spacing.y,
             );
-            if !give_up {
+            // In a footer's draw (it set the sums), the room stays in the footer's height, at
+            // its end: no blank line under this message, and a lock that closes takes that room,
+            // so the footer neither grows nor shows a band between its messages. A body message
+            // has no such height: it keeps the room in place.
+            let in_footer = ui
+                .ctx()
+                .data(|data| data.get_temp::<f32>(egui::Id::new(RESERVED)).is_some());
+            if !give_up && !in_footer {
                 let before = ui.cursor().top();
                 message_choice_row(ui, self.tone, |ui| {
                     ui.scope_builder(egui::UiBuilder::new().invisible(), |ui| {

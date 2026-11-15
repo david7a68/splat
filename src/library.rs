@@ -792,13 +792,41 @@ impl Places {
     }
 }
 
-/// The reader's kind line keeps its kind, class, level and source.
-fn reader_subtitle(owner: &Owner, listed: &str, class_level: Option<String>) -> String {
+/// The reader's kind line keeps its kind, class, level and source. A spell's level part
+/// names its school too, as the books print it (`spell`: the list's part and the reader's).
+fn reader_subtitle(
+    owner: &Owner,
+    listed: &str,
+    class_level: Option<String>,
+    spell: Option<(String, String)>,
+) -> String {
+    let listed = match spell {
+        Some((list, reader)) => listed
+            .split(" · ")
+            .map(|part| if part == list { reader.as_str() } else { part })
+            .collect::<Vec<_>>()
+            .join(" · "),
+        None => listed.to_owned(),
+    };
     match class_level {
         Some(level) => format!("Class feature · {level} · {}", owner.source()),
         None if *owner == Owner::Builtin => format!("{listed} · {BUILTIN_NAME}"),
-        None => listed.to_owned(),
+        None => listed,
     }
+}
+
+/// A spell's level part of the list line (`Level 1`, `Cantrip`), and the reader's form of it with
+/// the spell's school (`Level 1 Evocation`, `Evocation Cantrip`), from its `splat_spell`
+/// fields. `None` without a school.
+fn spell_kind(spell: &serde_yaml_ng::Value) -> Option<(String, String)> {
+    use serde_yaml_ng::Value;
+    let school = spell.get("school")?.as_str()?.trim();
+    let mut letters = school.chars();
+    let school = format!("{}{}", letters.next()?.to_uppercase(), letters.as_str());
+    Some(match spell.get("level").and_then(Value::as_u64)? {
+        0 => ("Cantrip".to_owned(), format!("{school} Cantrip")),
+        level => (format!("Level {level}"), format!("Level {level} {school}")),
+    })
 }
 
 /// The reader's kind line from its list line. The owner line names the package, so the kind line
@@ -2725,7 +2753,7 @@ fn show_result(
                 // The Undo sits on the message line, as every Undo after a message does. After
                 // an outside change it stays there, blocked, and the reason follows at the
                 // message words. The result still happened, so its words keep the text colour.
-                let undo = UndoStep::of(Verb::Register, "package").pressed_as(());
+                let undo = UndoStep::words("Undo package registration").pressed_as(());
                 let undo = match blocked {
                     // A lock that holds for as long as the result shows: an outside change, or
                     // another campaign that chose the copy.
@@ -2753,7 +2781,7 @@ fn show_result(
             if let Some((line, blocked)) = &page.rosters
                 && let Some((.., owner)) = &page.registration
             {
-                let undo = UndoStep::of(Verb::Use, "the copy").pressed_as(());
+                let undo = UndoStep::words("Undo source change").pressed_as(());
                 let undo = if *blocked {
                     undo.blocked(crate::content_workspace::UNDO_ENDED_REASON)
                 } else {
@@ -2797,10 +2825,7 @@ fn show_result(
         }
         ResultKind::Identity => {
             if let Some(words) = &results.identity {
-                let step = UndoStep::of(Verb::Separate, "entry");
-                // World's Undo of one separate entry has the same words.
-                debug_assert_eq!(step.label(), crate::world::SEPARATE_ENTRY_UNDO);
-                let undo = results.draft_lock(step);
+                let undo = results.draft_lock(UndoStep::words(crate::world::SEPARATE_ENTRY_UNDO));
                 pressed.identity =
                     design::outcome::kept_result(ui, words, undo, Vec::new()).is_some();
             }
@@ -3140,7 +3165,52 @@ fn kind_folder(kind: &str) -> &'static str {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many folder reads `visit_folders` made on this thread, for the tests' idle bound.
+    static FOLDER_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// A folder field's suggestions: each visible subfolder of `root`, and the kind's folder. They
+/// are read from disk once when the suggestions menu `menu` opens, and kept while it stays open
+/// for the same root and kind: the open menu owns them. When the menu is closed (also when its
+/// dialog or form is gone and comes back) they are dropped, so the next open reads again and
+/// shows a folder made in the meantime. A redraw with the menu closed reads nothing.
+fn folder_suggestions(
+    ctx: &egui::Context,
+    menu: egui::Id,
+    open: bool,
+    root: &Path,
+    kind: Option<&str>,
+) -> std::sync::Arc<Vec<String>> {
+    type Kept = (PathBuf, Option<String>, std::sync::Arc<Vec<String>>);
+    let key = menu.with("folder_suggestions");
+    if !open {
+        ctx.data_mut(|data| data.remove::<Kept>(key));
+        return std::sync::Arc::default();
+    }
+    let kind = kind.map(str::to_owned);
+    if let Some((_, _, folders)) = ctx
+        .data(|data| data.get_temp::<Kept>(key))
+        .filter(|(at, of, _)| at == root && *of == kind)
+    {
+        return folders;
+    }
+    let mut folders = Vec::new();
+    visit_folders(root, root, &mut folders);
+    if let Some(kind) = &kind {
+        folders.push(kind_folder(kind).to_owned());
+    }
+    folders.sort();
+    folders.dedup();
+    let folders = std::sync::Arc::new(folders);
+    ctx.data_mut(|data| data.insert_temp(key, (root.to_path_buf(), kind, folders.clone())));
+    folders
+}
+
 fn visit_folders(root: &Path, path: &Path, folders: &mut Vec<String>) {
+    #[cfg(test)]
+    FOLDER_READS.with(|reads| reads.set(reads.get() + 1));
     let Ok(entries) = fs::read_dir(path) else {
         return;
     };
@@ -3164,22 +3234,6 @@ pub(crate) fn folder_field(
     root: &Path,
     kind: Option<&str>,
 ) {
-    let mut folders = Vec::new();
-    visit_folders(root, root, &mut folders);
-    if let Some(kind) = kind {
-        folders.push(
-            match kind {
-                "creature" => "Creatures",
-                "spell" => "Spells",
-                "item" => "Items",
-                "effect" => "Effects",
-                _ => "Rules",
-            }
-            .into(),
-        );
-    }
-    folders.sort();
-    folders.dedup();
     let query = value.to_lowercase();
     design::field(
         ui,
@@ -3241,6 +3295,14 @@ pub(crate) fn folder_field(
                                 ),
                             );
                             design::named(ui, &response, &format!("Suggestions for {label}"));
+                            let menu = egui::Popup::default_response_id(&response);
+                            let folders = folder_suggestions(
+                                ui.ctx(),
+                                menu,
+                                egui::Popup::is_id_open(ui.ctx(), menu) || response.clicked(),
+                                root,
+                                kind,
+                            );
                             design::menu_popup(&*ui, &response).show(|ui| {
                                 if design::extras::choice_wrapped(
                                     ui,
@@ -5535,7 +5597,10 @@ impl Library {
                                 }
                                 for &section in sections {
                                     let count = count_of(section, &counts);
-                                    if count == 0 {
+                                    // Without a search, All entries would repeat the header's
+                                    // count above the useful kinds (round 30 AI4): it shows only
+                                    // with a search, to leave the results for the whole scope.
+                                    if count == 0 || (section == Section::All && !searching) {
                                         continue;
                                     }
                                     if section == Section::Unreadable {
@@ -5589,7 +5654,10 @@ impl Library {
                                             self.selected = None;
                                             self.draft.clear();
                                         }
-                                        self.section = section;
+                                        // The selected kind, pressed again, goes back to every
+                                        // entry of the scope: no row comes or goes, so none moves.
+                                        self.section =
+                                            if selected { Section::All } else { section };
                                         self.unreadable_kind = None;
                                         self.search.clear();
                                     }
@@ -7490,6 +7558,11 @@ impl Library {
             reading
                 .as_ref()
                 .and_then(|_| presentation::class_level(parsed.as_ref().ok()?)),
+            parsed
+                .as_ref()
+                .ok()
+                .and_then(|entry| entry.fields.get("splat_spell"))
+                .and_then(spell_kind),
         );
         let dirty = self.draft != note.text;
         let editable = note.owner.editable();
@@ -9972,6 +10045,42 @@ mod tests {
         assert_eq!(local_module(&module.path).unwrap().id, module.id);
     }
 
+    /// Round 30 SH1: a folder field reads its folders only while its suggestions menu is open,
+    /// once per open; an unchanged redraw reads nothing.
+    #[test]
+    fn folder_suggestions_read_once_per_open_menu() {
+        let temp = tempfile::tempdir().unwrap();
+        for folder in ["Creatures/Undead", "Spells", ".hidden"] {
+            fs::create_dir_all(temp.path().join(folder)).unwrap();
+        }
+        let ctx = egui::Context::default();
+        let menu = egui::Id::new("folder_menu");
+        let reads = || FOLDER_READS.with(std::cell::Cell::get);
+        let show = |open| folder_suggestions(&ctx, menu, open, temp.path(), Some("spell"));
+        let before = reads();
+        for _ in 0..3 {
+            assert!(show(false).is_empty());
+        }
+        assert_eq!(reads(), before, "a closed menu reads no folder");
+        let folders = show(true);
+        assert_eq!(*folders, ["Creatures", "Creatures/Undead", "Spells"]);
+        let one_open = reads() - before;
+        assert!(one_open > 0);
+        for _ in 0..3 {
+            assert_eq!(*show(true), *folders);
+        }
+        assert_eq!(
+            reads() - before,
+            one_open,
+            "an open menu's redraw reads nothing"
+        );
+        // Another root is another list; closing drops it, and the next open reads again.
+        fs::create_dir(temp.path().join("Items")).unwrap();
+        show(false);
+        assert!(show(true).contains(&"Items".to_owned()));
+        assert_eq!(reads() - before, 2 * one_open + 1);
+    }
+
     #[test]
     fn copying_without_a_destination_is_blocked() {
         let campaigns = Campaigns::default();
@@ -9996,6 +10105,11 @@ mod tests {
             ..places
         };
         assert_eq!(closed.copy(), None);
+        // The checks find the typed Undo lock by the same words.
+        assert_eq!(
+            crate::content_workspace::UNDO_ENDED_REASON.as_str(),
+            crate::content_workspace::UNDO_ENDED
+        );
 
         assert_eq!(
             closed.create().as_ref().map(|reason| reason.as_str()),
@@ -10644,16 +10758,38 @@ mod tests {
         });
         // The list leaves the built-in package unsaid, and already names any other.
         assert_eq!(
-            reader_subtitle(&Owner::Builtin, "Spell · Level 3", None),
+            reader_subtitle(&Owner::Builtin, "Spell · Level 3", None, None),
             format!("Spell · Level 3 · {BUILTIN_NAME}")
         );
         assert_eq!(
-            reader_subtitle(&package, "Spell · Level 3 · Ashen Marches", None),
+            reader_subtitle(&package, "Spell · Level 3 · Ashen Marches", None, None),
             "Spell · Level 3 · Ashen Marches"
         );
+        // Round 30 FD10: the reader names a spell's school with its level, as the books do;
+        // the list keeps its short line.
+        let spell = |fields: &str| spell_kind(&serde_yaml_ng::from_str(fields).unwrap());
+        assert_eq!(
+            reader_subtitle(
+                &package,
+                "Spell · Level 1 · Ashen Marches",
+                None,
+                spell("level: 1\nschool: evocation\n")
+            ),
+            "Spell · Level 1 Evocation · Ashen Marches"
+        );
+        assert_eq!(
+            reader_subtitle(
+                &package,
+                "Spell · Cantrip",
+                None,
+                spell("level: 0\nschool: illusion\n")
+            ),
+            "Spell · Illusion Cantrip"
+        );
+        assert_eq!(spell("level: 1\n"), None);
         // A class page's own line replaces the list's, so it needs the name too.
         assert_eq!(
-            reader_subtitle(&package, "Rule", Some("Bard · Level 3".into())),
+            reader_subtitle(&package, "Rule", Some("Bard · Level 3".into()), None),
             "Class feature · Bard · Level 3 · Ashen Marches"
         );
         // Round 23 FE8: the kind line under the owner line leaves the package name out. Where
@@ -12042,7 +12178,7 @@ mod tests {
         assert_eq!(fs::read(&campaign_file).unwrap(), cleared);
         fs::write(&campaign_file, saved).unwrap();
 
-        // `Undo register package`: a copied file changed. Each registration result lives in
+        // `Undo package registration`: a copied file changed. Each registration result lives in
         // its store entry, with all its Undo needs (review of PR 367, points 1 to 4).
         let copy_folder = |name: &str| {
             let copied = temp.path().join(name);

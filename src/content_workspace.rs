@@ -55,7 +55,7 @@ pub(crate) fn manifest_fault_tone(on_disk: bool) -> crate::design::Tone {
 /// What `Replace with a basic <path>` keeps and what it replaces, in Campaign and in Library.
 pub(crate) fn manifest_replace_consequence(path: &str) -> String {
     format!(
-        "Keeps the package name and its links. Replaces the other contents of {path}, including its description. The entries stay unchanged."
+        "This keeps the package name and its links. It replaces the other contents of {path}, including its description. The entries stay unchanged."
     )
 }
 
@@ -311,6 +311,11 @@ impl PackageCopy {
         ContentEdits::write(files)
     }
 }
+
+/// [`UNDO_ENDED_REASON`]'s words, for the visual checks that find them on screen.
+#[cfg(test)]
+pub(crate) const UNDO_ENDED: &str =
+    "A file changed on disk after this change. Undo is no longer available.";
 
 /// Why a kept result's Undo is blocked: a file it wrote changed after the write.
 pub(crate) const UNDO_ENDED_REASON: crate::design::outcome::Sentence =
