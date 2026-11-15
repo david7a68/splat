@@ -2612,6 +2612,52 @@ pub fn facts(d: &mut Driver<'_>) {
         "The problems name an entry with no summary and an entry that shows on no other page",
     );
     d.state("world-problems", Sizes::All);
+
+    // Round 30 FE11, SE7, AE8: a lone tick's Undo paints `Undo tick`, as its result already
+    // names the question and the note; two ticks paint the whole form, which tells them apart.
+    // The accessible name is always the whole form. A second note with its own question.
+    let pact = root(d).join("Lore/Ash Pact.md");
+    let pact_open = open
+        .replace(id, "splat_id: 00000000-0000-4000-8000-0000000000ab")
+        .replace("Horn Rings", "Ash Pact")
+        .replace("Can a horn ring be sold?", "Who signed the pact?");
+    fs::write(&pact, &pact_open).unwrap();
+    reload(d);
+    d.click_containing("Open questions · ");
+    let horn_undo = "Undo tick \u{201c}Can a horn ring be sold?\u{201d} in Horn Rings";
+    let pact_undo = "Undo tick \u{201c}Who signed the pact?\u{201d} in Ash Pact";
+    // The words an Undo paints inside its own target, by its whole accessible name.
+    let painted = |d: &Driver<'_>, name: &str| {
+        let rect = d.place_of(name)?;
+        if d.painted_size(rect, name).is_some() {
+            Some("whole")
+        } else if d.painted_size(rect, "Undo tick").is_some()
+            && d.painted_size(rect, "Undo tick \u{201c}").is_none()
+        {
+            Some("short")
+        } else {
+            None
+        }
+    };
+    d.click(question);
+    let one = painted(d, horn_undo);
+    d.click("Open: Who signed the pact?");
+    let two = (painted(d, horn_undo), painted(d, pact_undo));
+    d.click(horn_undo);
+    let after = painted(d, pact_undo);
+    d.observe(
+        "s30-FE11-undo-alone",
+        one == Some("short")
+            && two == (Some("whole"), Some("whole"))
+            && after == Some("short")
+            && fs::read_to_string(&horn).unwrap() == open
+            && fs::read_to_string(&pact).unwrap()
+                == pact_open.replacen("- [ ] Who signed", "- [x] Who signed", 1),
+        format!(
+            "One tick's Undo {one:?}; two ticks' Undos {two:?}; after Undo of the first, the \
+             other's {after:?}, and only the first note's box opened again"
+        ),
+    );
 }
 
 pub fn places(d: &mut Driver<'_>) {
