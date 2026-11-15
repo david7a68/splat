@@ -2283,31 +2283,6 @@ impl Lookup {
             .density(Density::Read)
     }
 
-    /// Whether the title line holds the open action with its words, from the declared widths
-    /// of everything that may stand on it: the title, `Back` with its key (counted whether or
-    /// not it shows, so Back coming or going never moves the action or the search field), the
-    /// action and Close, with their gaps.
-    fn open_fits_title_line(&self, ui: &egui::Ui) -> bool {
-        let Some(words) = self.open_action_words() else {
-            return true;
-        };
-        let gap = ui.spacing().item_spacing.x;
-        let back = Action::quiet("Back")
-            .icon(icons::LEGACY_BACK)
-            .key("Alt+Left")
-            .density(Density::Read)
-            .natural_width(ui);
-        let title = design::number_width(ui, "Lookup", &Type::Heading.font(ui));
-        let needed = title
-            + gap
-            + back
-            + design::L
-            + Self::open_action_of(words).natural_width(ui)
-            + gap
-            + Density::Read.control();
-        needed <= ui.available_width()
-    }
-
     /// The open action, locked while a Library draft is unsaved. Returns whether it was pressed.
     fn open_action(&self, ui: &mut egui::Ui, own_line: bool) -> bool {
         let Some(words) = self.open_action_words() else {
@@ -2400,7 +2375,6 @@ impl Lookup {
                 self.leave_trackers();
             }
         } else {
-            open_on_title = self.open_fits_title_line(ui);
             ui.horizontal(|ui| {
                 ui.label(Type::Heading.rich(ui, "Lookup"));
                 if self.trail.peek(Step::Back).is_some()
@@ -2417,6 +2391,13 @@ impl Lookup {
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     close = design::icon_button(ui, icons::CLOSE, "Close Lookup").clicked();
+                    // The room left after the title, Back while it shows, and Close: the action
+                    // stands here with its icon and words when they fit whole, else on its own
+                    // line above the entry.
+                    open_on_title = self.open_action_words().is_none_or(|words| {
+                        Self::open_action_of(words).natural_width(ui) + design::L
+                            <= ui.available_width()
+                    });
                     if open_on_title {
                         open_pressed = self.open_action(ui, false);
                     }
