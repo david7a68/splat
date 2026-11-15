@@ -1891,13 +1891,19 @@ impl TimelinePage {
             .is_some_and(|id| book.events.iter().any(|event| event.id == *id));
         if !(narrow && event_open) {
             // The header is drawn before the body splits. Use the app's current width
-            // decision, including pending keyboard resize, rather than last pass's panel.
+            // decision, including pending keyboard and pointer resize, rather than the
+            // previous pass's panel.
             let mut room = ui.clip_rect();
             if !narrow && event_open {
                 let natural = design::side_panel_width(page_width);
                 let content_width = page_width.min(design::LIST_MEASURE + natural);
-                let detail = design::Column::panel("timeline_detail_panel", natural)
-                    .width_within(ui.ctx(), content_width);
+                let detail = design::Column::panel("timeline_detail_panel", natural).width_within(
+                    ui.ctx(),
+                    egui::Rect::from_min_size(
+                        ui.max_rect().min,
+                        egui::vec2(content_width, ui.available_height()),
+                    ),
+                );
                 room.max.x = room.right().min(
                     ui.max_rect().left() + content_width
                         - detail

@@ -3,8 +3,9 @@
 //! here and after a restart, and the column beside it takes what is left.
 use super::tokens::*;
 use eframe::egui::{
-    self, Context, Id, Ui,
+    self, Context, Id, Rect, Ui,
     containers::panel::{PanelState, Side},
+    emath::GuiRounding as _,
 };
 use std::{collections::BTreeMap, ops::RangeInclusive};
 
@@ -89,7 +90,7 @@ impl Column {
     pub fn show<R>(self, ctx: &Context, add: impl FnOnce(&mut Ui) -> R) -> R {
         let (id, side, margin) = (self.id, self.side, self.frame.inner_margin);
         let shown = self
-            .panel_within(ctx, ctx.available_rect().width())
+            .panel_within(ctx, ctx.available_rect())
             .show(ctx, |ui| fill_and_add(ui, side, margin, add));
         finish_handle(ctx, id, &shown.response);
         shown.inner
@@ -99,7 +100,7 @@ impl Column {
         let (id, side, margin) = (self.id, self.side, self.frame.inner_margin);
         let ctx = ui.ctx().clone();
         let shown = self
-            .panel_within(&ctx, ui.available_width())
+            .panel_within(&ctx, ui.available_rect_before_wrap())
             .show_inside(ui, |ui| fill_and_add(ui, side, margin, add));
         finish_handle(&ctx, id, &shown.response);
         shown.inner
@@ -116,10 +117,10 @@ impl Column {
     }
 
     /// The width this column will draw in `room`, without changing its saved width.
-    /// A header may ask before the panel draws. Pending keyboard resize keys are read here;
-    /// `panel_within` then consumes them and stores this same width in the same pass.
-    pub fn width_within(&self, ctx: &Context, room: f32) -> f32 {
-        let (min, max) = self.bounds(room);
+    /// A header may ask before the panel draws. Read the same pending key and pointer
+    /// decisions as the panel, from its current horizontal bounds; consume and save nothing.
+    pub fn width_within(&self, ctx: &Context, room: Rect) -> f32 {
+        let (min, max) = self.bounds(room.width());
         let dragged = ctx
             .data(|data| data.get_temp::<Widths>(widths_id()))
             .and_then(|widths| widths.0.get(self.id).copied());
@@ -146,14 +147,32 @@ impl Column {
                     + (i32::from(right) - i32::from(left)) as f32 * L * direction;
             }
         }
-        width.clamp(min, max).min(room)
+        // SidePanel applies the current pointer before drawing, using this fixed outer
+        // edge. Do that same calculation here, so a header sees this pass's split too.
+        if let Some(response) = ctx.read_response(Id::new(self.id).with("__resize"))
+            && response.dragged()
+            && let Some(pointer) = response.interact_pointer_pos()
+        {
+            let fixed = match self.side {
+                Side::Left => room.left(),
+                Side::Right => room.right(),
+            };
+            width = (pointer.x - fixed).abs();
+        }
+        let width = width.clamp(min, max).min(room.width());
+        let mut panel = room;
+        match self.side {
+            Side::Left => panel.max.x = room.left() + width,
+            Side::Right => panel.min.x = room.right() - width,
+        }
+        panel.round_ui().width()
     }
 
-    fn panel_within(self, ctx: &Context, room: f32) -> egui::SidePanel {
+    fn panel_within(self, ctx: &Context, room: Rect) -> egui::SidePanel {
         let id = Id::new(self.id);
         // Egui would hold the last frame's natural width as the window changes.
         ctx.data_mut(|data| data.remove::<PanelState>(id));
-        let (min, max) = self.bounds(room);
+        let (min, max) = self.bounds(room.width());
         let width = self.width_within(ctx, room);
         if ctx.memory(|memory| memory.has_focus(id.with("__resize"))) {
             // Egui moves focus with the arrow keys at the end of the frame; a focused handle
@@ -356,7 +375,7 @@ mod tests {
                     let column = Column::panel("timeline_detail_panel", PANEL_MIN_WIDTH);
                     let saved = column_widths(ctx);
                     bounds.set(ui.available_rect_before_wrap());
-                    before.set(column.width_within(ctx, ui.available_width()));
+                    before.set(column.width_within(ctx, ui.available_rect_before_wrap()));
                     assert_eq!(column_widths(ctx), saved, "the width read saves nothing");
                     column.show_inside(ui, |ui| after.set(ui.max_rect().width()));
                     assert_eq!(
