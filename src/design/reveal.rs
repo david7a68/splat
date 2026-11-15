@@ -68,6 +68,15 @@ impl Act {
             id: Id::new(("reveal_test_act", salt)),
         }
     }
+
+    /// An act in frame `frame`, for a test.
+    #[cfg(test)]
+    pub(crate) fn test_at(salt: impl Hash, frame: u64) -> Self {
+        Self {
+            frame: Some(frame),
+            id: Id::new(("reveal_test_act", salt)),
+        }
+    }
 }
 
 /// What the target is, which decides the edge that shows when it is taller than the view.
@@ -96,7 +105,9 @@ enum Phase {
     Running {
         /// Scroll frames left.
         left: u8,
-        /// The absolute frame after which it ends; set at its first mark, never reset in draw.
+        /// The absolute frame after which it ends: `DEADLINE` frames after the act (a target
+        /// that never shows ages out), or after the first mark for a test's act or a resize.
+        /// Never reset in draw.
         deadline: Option<u64>,
         /// The target's top and the frame of the last scroll asked for.
         asked: Option<(f32, u64)>,
@@ -107,10 +118,11 @@ enum Phase {
 }
 
 impl Phase {
-    fn fresh() -> Self {
+    /// A running reveal whose deadline is `deadline`, or `DEADLINE` frames after its first mark.
+    fn fresh(deadline: Option<u64>) -> Self {
         Self::Running {
             left: PASSES,
-            deadline: None,
+            deadline,
             asked: None,
             edge: false,
         }
@@ -150,7 +162,7 @@ impl Reveal {
             act,
             visit: Id::new(visit),
             want,
-            phase: Phase::fresh(),
+            phase: Phase::fresh(act.frame.map(|frame| frame + DEADLINE)),
             touched: false,
             frame: None,
             seen: None,
@@ -211,7 +223,7 @@ impl Reveal {
             && matches!(run.phase, Phase::Ended(End::Whole))
             && !run.touched
         {
-            run.phase = Phase::fresh();
+            run.phase = Phase::fresh(None);
         }
         run.seen = Some((view.size(), whole));
         let Phase::Running {
@@ -405,5 +417,214 @@ fn owning_area(ui: &Ui) -> Area {
             view: ui.clip_rect(),
             column: None,
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use egui_kittest::kittest::Queryable;
+
+    const WIDTH: f32 = 400.0;
+    const HEIGHT: f32 = 300.0;
+
+    /// What a test page draws: a column with `above` px of room, the target (`Target top`, a
+    /// block of `tall` px, `Target end`), then 900 px; whether the target is drawn; and a draw
+    /// path that asks again on every frame with the act it kept.
+    struct Page {
+        reveal: Reveal,
+        act: Act,
+        want: Want,
+        above: f32,
+        tall: f32,
+        drawn: bool,
+        renew: bool,
+        /// The target inside a nested column 120 px high, at the outer column's top.
+        nested: bool,
+    }
+
+    impl Page {
+        fn new() -> Self {
+            Self {
+                reveal: Reveal::default(),
+                act: Act::test(1),
+                want: Want::Open,
+                above: 900.0,
+                tall: 40.0,
+                drawn: true,
+                renew: false,
+                nested: false,
+            }
+        }
+    }
+
+    fn room(ui: &mut Ui, height: f32) {
+        ui.allocate_exact_size(egui::vec2(1.0, height), egui::Sense::hover());
+    }
+
+    fn target(ui: &mut Ui, page: &mut Page) {
+        if page.renew {
+            page.reveal.ask(page.act, 0, page.want);
+        }
+        if page.drawn {
+            let tall = page.tall;
+            let rect = ui
+                .vertical(|ui| {
+                    ui.label("Target top");
+                    room(ui, tall);
+                    ui.label("Target end");
+                })
+                .response
+                .rect;
+            page.reveal.mark(ui, 0, rect);
+        }
+    }
+
+    fn harness(mut page: Page) -> egui_kittest::Harness<'static, Page> {
+        page.reveal.ask(page.act, 0, page.want);
+        egui_kittest::Harness::builder()
+            .with_size(egui::vec2(WIDTH, HEIGHT))
+            .build_ui_state(
+                |ui, page: &mut Page| {
+                    super::super::ScrollColumn::new("outer").show(ui, |ui| {
+                        ui.label("Outer top");
+                        if page.nested {
+                            super::super::ScrollColumn::new("inner")
+                                .max_height(120.0)
+                                .min_scrolled_height(120.0)
+                                .show(ui, |ui| {
+                                    room(ui, page.above);
+                                    target(ui, page);
+                                    room(ui, 900.0);
+                                });
+                        } else {
+                            room(ui, page.above);
+                            target(ui, page);
+                        }
+                        room(ui, 900.0);
+                    });
+                },
+                page,
+            )
+    }
+
+    fn top(h: &egui_kittest::Harness<'_, Page>, name: &str) -> f32 {
+        h.get_by_label(name).rect().top()
+    }
+
+    fn wheel(h: &mut egui_kittest::Harness<'_, Page>, by: f32) {
+        h.event(egui::Event::PointerMoved(egui::pos2(WIDTH / 2.0, 100.0)));
+        h.event(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, by),
+            modifiers: egui::Modifiers::NONE,
+        });
+    }
+
+    /// A draw path that asks on every frame with the act it kept asks for nothing new: an
+    /// ended reveal stays ended after the DM scrolls the target away.
+    #[test]
+    fn asking_again_with_the_same_act_is_no_new_request() {
+        let mut page = Page::new();
+        page.renew = true;
+        let mut h = harness(page);
+        h.run_steps(8);
+        assert_eq!(h.state().reveal.ended(), Some(End::Whole));
+        wheel(&mut h, 600.0);
+        h.run_steps(8);
+        let away = top(&h, "Target top");
+        h.run_steps(8);
+        assert!(
+            away > HEIGHT && (top(&h, "Target top") - away).abs() < 0.5,
+            "a renewed ask brought the target back: {away} then {}",
+            top(&h, "Target top")
+        );
+        assert_eq!(h.state().reveal.ended(), Some(End::ByTheDm));
+        // Another act is a new request, and it replaces the old one.
+        h.state_mut().act = Act::test(2);
+        h.run_steps(8);
+        assert!(
+            (0.0..HEIGHT).contains(&top(&h, "Target top")),
+            "a new act did not reveal the target"
+        );
+    }
+
+    /// A frame that does not draw the target ends the reveal: when the target comes back, it
+    /// is not scrolled to again. A target that never shows ages out from its act.
+    #[test]
+    fn a_missing_target_ends_the_reveal() {
+        let mut h = harness(Page::new());
+        h.step();
+        h.state_mut().drawn = false;
+        h.step();
+        // It comes back further down, out of view.
+        h.state_mut().drawn = true;
+        h.state_mut().above += 1000.0;
+        h.step();
+        assert!(
+            top(&h, "Target top") > HEIGHT,
+            "the target came back in view"
+        );
+        let back = top(&h, "Target top");
+        h.run_steps(8);
+        assert_eq!(h.state().reveal.ended(), Some(End::OwnerGone));
+        assert!(
+            (top(&h, "Target top") - back).abs() < 0.5,
+            "a target that left a frame was scrolled to again: {back} then {}",
+            top(&h, "Target top")
+        );
+        // Asked in frame 0, first drawn 20 frames later: it ended with its deadline.
+        let mut page = Page::new();
+        page.act = Act::test_at(3, 0);
+        page.drawn = false;
+        let mut h = harness(page);
+        h.run_steps(20);
+        h.state_mut().drawn = true;
+        h.run_steps(8);
+        assert_eq!(h.state().reveal.ended(), Some(End::Bound));
+        assert!(
+            top(&h, "Target top") > HEIGHT,
+            "a late target was scrolled to"
+        );
+    }
+
+    /// The target in a nested column scrolls that column only: the outer column stays.
+    #[test]
+    fn a_nested_column_owns_its_target() {
+        let mut page = Page::new();
+        page.nested = true;
+        page.above = 400.0;
+        let mut h = harness(page);
+        let outer = top(&h, "Outer top");
+        h.run_steps(8);
+        assert_eq!(h.state().reveal.ended(), Some(End::Whole));
+        let (start, end) = (top(&h, "Target top"), h.get_by_label("Target end").rect());
+        assert!(
+            start >= outer && end.bottom() <= outer + 140.0,
+            "the target is not whole in its column: {start} to {end:?}"
+        );
+        assert!(
+            (top(&h, "Outer top") - outer).abs() < 0.5,
+            "the outer column moved: {outer} then {}",
+            top(&h, "Outer top")
+        );
+    }
+
+    /// Taller than the view: an opened form shows its top, an act's result its end, once.
+    #[test]
+    fn a_tall_target_shows_the_edge_its_want_names() {
+        for (want, name) in [(Want::Open, "Target top"), (Want::Result, "Target end")] {
+            let mut page = Page::new();
+            page.want = want;
+            page.tall = 600.0;
+            let mut h = harness(page);
+            h.run_steps(8);
+            assert_eq!(h.state().reveal.ended(), Some(End::TooTall), "{want:?}");
+            let at = h.get_by_label(name).rect();
+            assert!(
+                at.top() >= -0.5 && at.bottom() <= HEIGHT + 0.5,
+                "{want:?}: {name} at {at:?}"
+            );
+        }
     }
 }

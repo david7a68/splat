@@ -2236,10 +2236,129 @@ mod tests {
             (later - typed).abs() < 0.5 && !h.state().reveal.running(),
             "the form moved after the DM typed: {typed} then {later}"
         );
+        // So do pasted and composed text (IME) during the reveal.
+        for event in [
+            egui::Event::Paste("Salt".into()),
+            egui::Event::Ime(egui::ImeEvent::Commit("Salt".into())),
+        ] {
+            let mut h = scrolled(400.0);
+            h.step();
+            h.event(event.clone());
+            h.step();
+            let typed = h.get_by_label("Add campaign").rect().top();
+            h.run_steps(10);
+            let later = h.get_by_label("Add campaign").rect().top();
+            assert!(
+                (later - typed).abs() < 0.5
+                    && h.state().reveal.ended() == Some(design::reveal::End::ByTheDm),
+                "the form moved after {event:?}: {typed} then {later}"
+            );
+        }
         // It opens: the whole form comes into view, and the reveal ends.
         let mut h = scrolled(400.0);
         h.run_steps(8);
         assert!(in_view(&h, 400.0), "the opened form shows whole");
         assert!(!h.state().reveal.running());
+        // The DM types in the whole form, then the window gets smaller and cuts the form: the
+        // typing ended the reveal for good, so the resize brings nothing back.
+        let before = h.get_by_label("Add campaign").rect().top();
+        h.event(egui::Event::Text("s".into()));
+        h.step();
+        h.set_size(egui::vec2(WIDTH, 300.0));
+        h.run_steps(8);
+        let after = h.get_by_label("Add campaign").rect().top();
+        assert!(
+            (after - before).abs() < 0.5 && !h.state().reveal.running() && !in_view(&h, 300.0),
+            "a resize after the DM typed moved the form: Add campaign {before} then {after}"
+        );
+        // Untouched, a smaller window brings the whole form back (the captures' three sizes).
+        let mut h = scrolled(400.0);
+        h.run_steps(8);
+        h.set_size(egui::vec2(WIDTH, 300.0));
+        h.run_steps(8);
+        assert!(
+            in_view(&h, 300.0) && !h.state().reveal.running(),
+            "an untouched form was not whole after a resize"
+        );
+
+        // Settings' real form: the remote list's `Add…` opens it inside the `Add from D&D
+        // Beyond` collapsing header, in the pane's own scroll column, with the pane's footer.
+        let session = crate::auth::Session::for_test(
+            std::time::Duration::from_secs(3600),
+            std::time::Duration::from_secs(7200),
+        );
+        let settings_page = |height: f32| {
+            let campaigns = Campaigns::at(settings.join("settings.json"));
+            let mut h = egui_kittest::Harness::builder()
+                .with_size(egui::vec2(WIDTH, height))
+                .build_ui_state(
+                    |ui, (campaigns, dndbeyond): &mut (Campaigns, crate::dndbeyond::DndBeyond)| {
+                        dndbeyond.poll(ui.ctx(), 0, true, campaigns);
+                        let footer = design::Footer::new("settings_footer", WIDTH);
+                        footer.pane(ui, design::Body::Content, |ui| {
+                            // 700 px of the account section above the list.
+                            ui.allocate_exact_size(egui::vec2(1.0, 700.0), egui::Sense::hover());
+                            campaigns.show(ui, Some(session.clone()), dndbeyond, None);
+                        });
+                    },
+                    (campaigns, crate::dndbeyond::DndBeyond::default()),
+                );
+            for _ in 0..200 {
+                h.step();
+                if h.query_by_label("Add Salt Road from D&D Beyond").is_some()
+                    && !h.state().1.busy()
+                {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            h
+        };
+        let mut h = settings_page(400.0);
+        // The DM scrolls until the list's last row just shows at the bottom, then presses its
+        // `Add…`: the form opens below the view.
+        let below = h
+            .get_by_label("Add Salt Road from D&D Beyond")
+            .rect()
+            .bottom()
+            - 396.0;
+        h.event(egui::Event::PointerMoved(egui::pos2(WIDTH / 2.0, 100.0)));
+        h.event(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -below),
+            modifiers: egui::Modifiers::NONE,
+        });
+        h.run_steps(12);
+        let add = h.get_by_label("Add Salt Road from D&D Beyond").rect();
+        assert!(
+            add.bottom() <= 400.0 && add.bottom() > 300.0,
+            "the Add… row is not at the view's bottom: {add:?}"
+        );
+        h.get_by_label("Add Salt Road from D&D Beyond").click();
+        let cut = |h: &egui_kittest::Harness<'_, (Campaigns, crate::dndbeyond::DndBeyond)>| {
+            ["Add campaign", "Cancel", words]
+                .iter()
+                .filter(|name| {
+                    h.query_all_by_label(name).next().is_none_or(|node| {
+                        let rect = node.rect();
+                        rect.top() < -0.5 || rect.bottom() > 400.0 + 0.5
+                    })
+                })
+                .copied()
+                .collect::<Vec<_>>()
+        };
+        h.step();
+        let opened = cut(&h);
+        assert!(
+            !opened.is_empty() && h.state().0.reveal.running(),
+            "the form opened whole, or with no reveal: the case proves nothing ({opened:?} cut)"
+        );
+        h.run_steps(8);
+        assert!(
+            cut(&h).is_empty() && h.state().0.reveal.ended() == Some(design::reveal::End::Whole),
+            "Settings' import form opened from Add… at {add:?} is not whole: {:?} cut; {:?}",
+            cut(&h),
+            h.state().0.reveal.ended()
+        );
     }
 }
