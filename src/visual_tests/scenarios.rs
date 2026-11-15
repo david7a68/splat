@@ -14718,6 +14718,7 @@ pub mod session_notes {
         // Timeline still holds the event form the scenario opened (Rest at the mill).
         d.click(NAV_TIMELINE);
         d.expect("Rest at the mill");
+        d.expect("Try to save again");
         d.state_prepared("note-save-failed-elsewhere", Sizes::Standard, |d| {
             banner_whole(
                 d,
