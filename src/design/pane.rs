@@ -1388,61 +1388,21 @@ fn forget(ui: &Ui, id: Id) {
     });
 }
 
-/// A footer laid out in its pass before it was measured (`Footer::pane`): at the pane's bottom,
-/// in the most room it may take there, then placed in that same pass (`settle`).
-struct Settle {
-    id: Id,
-    layer: LayerId,
-    room: Rect,
-    width: f32,
-    /// Where it was laid out.
-    laid: Rect,
-    /// Its demand, whole, as the next pass takes it.
-    demand: f32,
-    /// A third of the pane: the most a pinned footer takes (Q-c).
-    third: f32,
-    /// A `Content` body's scroll output in this pass.
-    scroll: Option<Scroll>,
-    /// The body's paint, and the footer's.
-    body: (usize, usize),
-    footer_from: usize,
-    /// The row cut's hairline that the pass drew for the body's room, if any.
-    cut_line: Option<usize>,
-    rows_before: usize,
-}
-
-/// Where `settle` placed a footer.
-struct Settled {
-    rect: Rect,
+/// Where the next pass, measured, places a footer of `demand` (`place`).
+struct Next {
     placement: Placement,
-    /// Content goes on below the body's room.
-    cut: bool,
+    rect: Rect,
+    /// The most it may take where it stands (Q-c): the room to the pane's end, or a third.
+    most: f32,
+    /// The body's room, and a `Content` body's scroll output in it.
+    body_room: Rect,
+    view: Option<Scroll>,
 }
 
-/// Place a footer that was laid out before it was measured (see `Settle`) as the next pass,
-/// measured, places it. The body's room ends `S` above the footer's height, a third of the pane
-/// at most. The footer follows the content when the content fits that room; else it is pinned
-/// at the pane's bottom, and the body's paint stops at the room's end, or at its last whole
-/// registered row there (N12) with that row cut's hairline, which the next pass keeps, so it is
-/// drawn the same. The footer's paint moves there. Its controls stay where they were laid out
-/// until the next pass, so in this one no press on them reaches them.
-fn settle(ui: &Ui, settle: Settle) -> Settled {
-    use egui::{emath::TSTransform, layers::ShapeIdx};
-    let Settle {
-        id,
-        layer,
-        room,
-        width,
-        laid,
-        demand,
-        third,
-        scroll,
-        body,
-        footer_from,
-        cut_line,
-        rows_before,
-    } = settle;
-    // The next pass's body room and its scroll output (`place`): the content is laid out the same.
+/// The body's room ends `S` above the footer's height, a third of the pane at most; the footer
+/// follows the content when the content fits that room, else it is pinned at the pane's bottom.
+/// The content is laid out the same in that room: `scroll` is this pass's output.
+fn next_place(room: Rect, width: f32, demand: f32, third: f32, scroll: Option<Scroll>) -> Next {
     let height = demand.min(third);
     let limit = if height > 0.0 {
         room.bottom() - height - S
@@ -1450,7 +1410,7 @@ fn settle(ui: &Ui, settle: Settle) -> Settled {
         room.bottom()
     };
     let body_room = Rect::from_min_max(room.min, pos2(room.right(), limit.max(room.top())));
-    let next = scroll.map(|scroll| Scroll {
+    let view = scroll.map(|scroll| Scroll {
         viewport: Rect::from_min_max(
             scroll.viewport.min,
             pos2(
@@ -1460,41 +1420,61 @@ fn settle(ui: &Ui, settle: Settle) -> Settled {
         ),
         ..scroll
     });
-    let (placement, rect) = match next {
-        Some(next) if next.fits() => {
-            let top = (next.viewport.top() + next.height + S).min(room.bottom() - height);
-            let tall = demand.min(room.bottom() - top);
-            (
-                Placement::Follows,
-                Rect::from_min_size(pos2(room.left(), top), vec2(width, tall)),
-            )
+    let (placement, top, most) = match view {
+        Some(view) if view.fits() => {
+            let top = (view.viewport.top() + view.height + S).min(room.bottom() - height);
+            (Placement::Follows, top, room.bottom() - top)
         }
-        _ => (
-            Placement::Pinned,
-            Rect::from_min_size(
-                pos2(room.left(), room.bottom() - height),
-                vec2(width, height),
-            ),
-        ),
+        _ => (Placement::Pinned, room.bottom() - height, third),
     };
-    let cut = next.is_some_and(Scroll::cut);
-    // The body's last whole registered row in that room (N12).
-    let row_cut = next.filter(|_| cut).and_then(|next| {
+    Next {
+        placement,
+        rect: Rect::from_min_size(pos2(room.left(), top), vec2(width, demand.min(most))),
+        most,
+        body_room,
+        view,
+    }
+}
+
+/// A typed footer whose lines came after the body (`pane_then`), drawn where the next pass places
+/// it (`next_place`) after the body was laid out for another demand.
+struct Stop {
+    id: Id,
+    layer: LayerId,
+    room: Rect,
+    width: f32,
+    next: Next,
+    /// The body's paint.
+    body: (usize, usize),
+    /// The row cut's hairline that the pass drew for the body's room, if any.
+    cut_line: Option<usize>,
+    rows_before: usize,
+}
+
+/// The body's paint stops where the next pass's body room ends (`Stop`): at that room's end, or
+/// at its last whole registered row there (N12) with that row cut's hairline, which the next pass
+/// keeps, so it is drawn the same; a line cut's hairline at the footer's top. Nothing moves: the
+/// footer was drawn once, in its place. Returns whether content goes on below the body's room.
+fn stop_body(ui: &Ui, stop: Stop) -> bool {
+    use egui::layers::ShapeIdx;
+    let Stop {
+        id,
+        layer,
+        room,
+        width,
+        next,
+        body,
+        cut_line,
+        rows_before,
+    } = stop;
+    let cut = next.view.is_some_and(Scroll::cut);
+    let row_cut = next.view.filter(|_| cut).and_then(|view| {
         let rows = super::components::rows_this_pass(ui.ctx());
-        whole_row_cut(rows.get(rows_before..).unwrap_or_default(), next.viewport)
+        whole_row_cut(rows.get(rows_before..).unwrap_or_default(), view.viewport)
     });
-    let limit = row_cut.unwrap_or(body_room.bottom());
-    let shift = rect.top() - laid.top();
+    let limit = row_cut.unwrap_or(next.body_room.bottom());
     ui.ctx().graphics_mut(|graphics| {
         let list = graphics.entry(layer);
-        let end = list.next_idx();
-        if shift.abs() > 0.0 {
-            list.transform_range(
-                ShapeIdx(footer_from),
-                end,
-                TSTransform::from_translation(vec2(0.0, shift)),
-            );
-        }
         for at in body.0..body.1 {
             list.mutate_shape(ShapeIdx(at), |shape| {
                 shape.clip_rect.max.y = shape.clip_rect.max.y.min(limit);
@@ -1518,22 +1498,14 @@ fn settle(ui: &Ui, settle: Settle) -> Settled {
     if let Some(cut) = row_cut {
         hairline(cut - super::tokens::HAIRLINE_WIDTH / 2.0);
     } else if cut {
-        hairline(rect.top() + super::tokens::HAIRLINE_WIDTH / 2.0);
+        hairline(next.rect.top() + super::tokens::HAIRLINE_WIDTH / 2.0);
     }
     // Keep this cut for the next pass's body room.
     ui.ctx().data_mut(|data| match row_cut {
-        Some(cut) => data.insert_temp(id.with("row_cut"), (body_room, cut)),
+        Some(cut) => data.insert_temp(id.with("row_cut"), (next.body_room, cut)),
         None => data.remove::<(Rect, f32)>(id.with("row_cut")),
     });
-    // The controls as laid out take no press in this pass.
-    if shift.abs() > 0.0 {
-        let _ = ui.interact(laid, id.with("settling"), Sense::CLICK);
-    }
-    Settled {
-        rect,
-        placement,
-        cut,
-    }
+    cut
 }
 
 fn banner_below(ctx: &egui::Context) -> bool {
@@ -1919,13 +1891,13 @@ impl Footer<'_> {
                 }
                 _ => (pinned, most),
             };
-            // A footer that was not measured with these messages (one that an act brought in
-            // this pass, a footer that comes, or for a typed footer any change of its lines,
-            // width or locks) is laid out and fitted to what it shows, and placed by that demand
-            // in this same pass, as the next pass places it (`settle`), so its messages show whole
-            // at once, even in a frame of one pass; the pass is drawn again, measured.
-            // A typed footer is measured when its retained plan holds (layout PR 2b); a legacy one
-            // when it was measured with these words.
+            // A typed footer is always measured: its plan is made before it is placed (`planned`,
+            // L1c). A legacy footer is measured when it was measured with these words. One that
+            // was not (an act brought its messages in this pass, or it comes) below a short body
+            // is laid out in its whole room there and fitted to what it shows, in this pass, so
+            // its messages show whole at once, even in a frame of one pass; the pass is drawn
+            // again, measured. Pinned, it keeps its measured room until that pass (the legacy
+            // footer's limit: its words are closures, measured only by drawing them).
             let measured = if self.is_typed() {
                 planned.is_some()
             } else {
@@ -1938,21 +1910,24 @@ impl Footer<'_> {
                 }
                 measured
             };
-            let fit = !measured;
-            // Not measured: laid out at the pane's bottom in the most room it may take (Q-c): the
-            // room to the pane's end below the content (while the content is not scrolled), or a
-            // third of the pane, the larger. Its fitted height is then the height it takes where
-            // its demand places it.
-            let (top, most) = if fit {
-                let below = scroll.filter(|scroll| scroll.offset <= 0.5).map_or(0.0, |scroll| {
-                    room.bottom() - (scroll.viewport.top() + scroll.height + S)
-                });
-                let most = below.max(third);
-                (room.bottom() - most, most)
-            } else {
-                (top, most)
+            let fit = placement == Placement::Follows && !measured;
+            // Lines that come after the body (`pane_then`) are planned after it. When their demand
+            // is not the one the body's room was made for, the footer is placed by it as the next
+            // pass places it and drawn there once; the body's paint stops at its edge
+            // (`stop_body`), and the pass is drawn again with the body in its new room.
+            let after = planned
+                .filter(|_| late)
+                .filter(|now| (now - demand).abs() >= super::tokens::HAIRLINE_WIDTH)
+                .map(|now| next_place(room, width, now, third, scroll));
+            let (top, most) = match &after {
+                Some(next) => (next.rect.top(), next.most),
+                None => (top, most),
             };
-            let tall = if fit {
+            let tall = if let Some(next) = &after {
+                ui.ctx()
+                    .request_discard("the body's room changed with its footer");
+                next.rect.height()
+            } else if fit {
                 ui.ctx()
                     .request_discard("the message footer measures its new messages");
                 most
@@ -1972,44 +1947,35 @@ impl Footer<'_> {
             // The kept lines take their control ids from this pane's footer and their ticket.
             ui.ctx()
                 .data_mut(|data| data.insert_temp(Id::new("design_footer_drawing"), id));
-            // Laid out in its room; when fitted, as tall as what it shows, in this same pass.
-            // Measured, it draws the hairline of a line cut at its top now; fitted, `settle`
-            // draws the hairline where the footer lands.
-            let footer_from = paint_at(ui);
-            let (drawn, wanted) =
-                self.draw_messages(ui, rect, !fit && cut && new_cut.is_none(), most, stored, fit);
-            let rect = if fit {
-                let settled = settle(
+            // Laid out in its room; when fitted, as tall as what it shows, in this same pass. It
+            // draws the hairline of a line cut at its top; placed after the body was laid out for
+            // another demand, `stop_body` draws the hairlines.
+            let rect = self
+                .draw_messages(
                     ui,
-                    Settle {
+                    rect,
+                    after.is_none() && cut && new_cut.is_none(),
+                    most,
+                    stored,
+                    fit,
+                )
+                .0;
+            if let Some(next) = after {
+                placement = next.placement;
+                cut = stop_body(
+                    ui,
+                    Stop {
                         id,
                         layer,
                         room,
                         width,
-                        laid: rect,
-                        // As the next pass takes it: a typed footer's plan, or the stored height
-                        // when it changes by a hairline or more.
-                        demand: if self.is_typed()
-                            || (wanted - stored).abs() >= super::tokens::HAIRLINE_WIDTH
-                        {
-                            wanted
-                        } else {
-                            stored
-                        },
-                        third,
-                        scroll,
+                        next,
                         body: (body_from, body_to),
-                        footer_from,
                         cut_line: new_cut.map(|_| cut_line),
                         rows_before,
                     },
                 );
-                placement = settled.placement;
-                cut = settled.cut;
-                settled.rect
-            } else {
-                drawn
-            };
+            }
             if rect.height() > 0.0 {
                 footer = Some(rect);
                 #[cfg(test)]

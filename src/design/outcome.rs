@@ -2715,10 +2715,11 @@ impl<'f, A: 'static> Messages<'f, A> {
 /// the lines (their data, and the state their file lines draw from). It is made by the pass that
 /// draws the lines (the paint is its measure), and only when one of those changed: an unchanged
 /// frame sorts, joins, counts verbs, builds and fits no Undo label and lays out no reservation,
-/// and the pane knows an unchanged footer's height before it draws. A changed
-/// footer's first frame still paints at the last height and measures (its placement in that same
-/// frame comes with layout PR 456, L1c). Each footer's reservations are its own (no shared
-/// state): a pane that gives up its reasons' room takes nothing from another. The plans live in
+/// and the pane knows an unchanged footer's height before it draws. A changed footer's plan is
+/// made before the pane places it, by drawing its lines in a context of their own (`measure`,
+/// L1c): so the pane knows every footer's height before it draws, and draws its lines once, in
+/// their place, from the plan. Each footer's reservations are its own (no shared state): a pane
+/// that gives up its reasons' room takes nothing from another. The plans live in
 /// one store per context, which drops the plan of a footer that no frame drew since the last one
 /// ([`FooterPlans`]).
 struct TypedFooter<A: 'static> {
@@ -2775,6 +2776,7 @@ fn file_gone(ctx: &egui::Context, body: &Body) -> bool {
 }
 
 /// A footer's retained plan. See [`TypedFooter`].
+#[derive(Clone)]
 struct FooterPlan {
     env: PlanEnv,
     /// The lines' indices in the footer's one order (`footer_order`).
@@ -2801,14 +2803,12 @@ impl FooterPlan {
     }
 }
 
-/// A footer's lines as last planned, their revision, its plan, its own reservations' decision
-/// (ruling R29), and the frame that last drew it.
+/// A footer's lines as last planned, their revision, its plan, and the frame that last drew it.
 #[derive(Clone)]
 struct Retained {
     lines: std::sync::Arc<Vec<PlanLine>>,
     revision: super::memo::Revision,
     plan: Option<std::sync::Arc<FooterPlan>>,
-    give_up: bool,
     drawn: u64,
 }
 
@@ -2945,7 +2945,6 @@ impl<A: 'static> TypedFooter<A> {
                     return kept.clone();
                 }
             }
-            let give_up = plans.plans.get(&id).is_some_and(|kept| kept.give_up);
             let retained = Retained {
                 lines: std::sync::Arc::new(
                     self.lines
@@ -2962,7 +2961,6 @@ impl<A: 'static> TypedFooter<A> {
                 ),
                 revision: super::memo::Revision::next(),
                 plan: None,
-                give_up,
                 drawn: frame,
             };
             plans.plans.insert(id, retained.clone());
@@ -3004,16 +3002,17 @@ impl<A: 'static> TypedFooter<A> {
                     .ctx()
                     .data(|data| data.get_temp::<egui::Id>(egui::Id::new("design_footer_drawing")));
                 let id = egui::Id::new(("design_kept_line", pane, ticket.order()));
-                ui.scope_builder(egui::UiBuilder::new().id(id), |ui| {
+                line_ui(ui, Some(id), |ui| {
                     typed
                         .body
                         .draw_in(ui, MessagePlace::Footer, Reasons::Planned(room))
                 })
-                .inner
             }
-            None => typed
-                .body
-                .draw_in(ui, MessagePlace::Footer, Reasons::Planned(room)),
+            None => line_ui(ui, None, |ui| {
+                typed
+                    .body
+                    .draw_in(ui, MessagePlace::Footer, Reasons::Planned(room))
+            }),
         };
         if let Some(pressed) = pressed
             && let Some(id) = typed.id(pressed)
@@ -3023,16 +3022,234 @@ impl<A: 'static> TypedFooter<A> {
     }
 }
 
+impl<A: 'static> TypedFooter<A> {
+    /// The footer's plan at `width`: the retained one while it holds, else one made now
+    /// (`measure`) and kept.
+    fn plan_for(&mut self, ui: &Ui, id: egui::Id, width: f32) -> std::sync::Arc<FooterPlan> {
+        let retained = match self.retained.take() {
+            Some(retained) => retained,
+            None => self.revision(ui.ctx(), id),
+        };
+        let env = Self::env(ui, retained.revision, width);
+        if let Some(plan) = retained.plan.as_ref().filter(|plan| plan.env == env) {
+            let plan = plan.clone();
+            self.retained = Some(retained);
+            return plan;
+        }
+        let plan = std::sync::Arc::new(self.measure(ui, id, width, env));
+        let retained = Retained {
+            plan: Some(plan.clone()),
+            ..retained
+        };
+        ui.ctx().data_mut(|data| {
+            data.get_temp_mut_or_default::<FooterPlans>(plans_id())
+                .plans
+                .insert(id, retained.clone());
+        });
+        self.retained = Some(retained);
+        plan
+    }
+
+    /// Make the plan of these lines at `width`: their one footer order (`footer_order`), the
+    /// footer's name, which Undo is alone of its verb, each Undo's words as fitted, and the room
+    /// the lines and their open locks' reasons take, by drawing them as the footer draws them,
+    /// in a context of their own with this one's fonts, style and scale (`measuring`). L1c,
+    /// finding 2 of PR 452's review: so a changed footer's demand is known before the pane
+    /// places it, and its lines are drawn once in this context, in their place. A second draw
+    /// here would give each control a second widget and accessible node.
+    fn measure(&self, ui: &Ui, id: egui::Id, width: f32, env: PlanEnv) -> FooterPlan {
+        let lines = &self.lines;
+        let mut order: Vec<usize> = (0..lines.len()).collect();
+        order.sort_by_key(|&at| (lines[at].rank, lines[at].order.map(std::cmp::Reverse)));
+        count(|work| {
+            work.plans += 1;
+            work.sorted += order.len();
+        });
+        let name = order
+            .iter()
+            .map(|&at| lines[at].typed.body.words.as_str())
+            .filter(|words| !words.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        count(|work| work.named += name.len());
+        // The footer's one short-Undo rule: the verbs of its kept Undos, counted once.
+        let verbs: Vec<Verb> = lines
+            .iter()
+            .filter(|line| line.ticket.is_some())
+            .filter_map(|line| line.typed.body.undo.as_ref().and_then(UndoStep::counted))
+            .collect();
+        let alone: Vec<bool> = lines
+            .iter()
+            .map(|line| {
+                count(|work| work.verbs += verbs.len());
+                undo_alone(&verbs, line.typed.body.undo.as_ref())
+            })
+            .collect();
+        // Every open lock's reason is laid out and measured (ruling R29): a pass decides from the
+        // plan and the footer's room whether they keep it.
+        let mut room = FooterPass {
+            give_up: false,
+            measure: true,
+            reserved: 0.0,
+            drawn: 0.0,
+            rooms: std::sync::Arc::from([]),
+            next: 0,
+            measured: Vec::new(),
+            line: 0,
+            forms: std::sync::Arc::from([]),
+            fitted: vec![None; lines.len()],
+        };
+        // The state the file lines draw from (a file that is gone adds a reason line).
+        let gone = file_states(ui.ctx(), lines);
+        let content = measuring(ui, &gone, |ui| {
+            let rect = Rect::from_min_size(ui.max_rect().min, egui::vec2(width, MEASURE_ROOM));
+            let (_, content, _) =
+                super::components::scroll_part(ui, rect, id, &name, false, |ui| {
+                    for &at in &order {
+                        let line = &lines[at];
+                        let mut body = line.typed.body.clone();
+                        body.undo_alone = alone[at];
+                        room.line = at;
+                        let scope = line
+                            .ticket
+                            .as_ref()
+                            .map(|ticket| egui::Id::new(("design_kept_line", id, ticket.order())));
+                        let _ = line_ui(ui, scope, |ui| {
+                            body.draw_in(ui, MessagePlace::Footer, Reasons::Planned(&mut room))
+                        });
+                    }
+                });
+            content
+        });
+        FooterPlan {
+            env,
+            order,
+            name,
+            alone,
+            forms: std::sync::Arc::from(std::mem::take(&mut room.fitted)),
+            bare: content - room.drawn,
+            reserved: room.reserved,
+            rooms: std::sync::Arc::from(std::mem::take(&mut room.measured)),
+        }
+    }
+}
+
+/// The state each of `lines`' file lines draws from: its key, and whether it says its file is
+/// gone (`FileLine::draw`).
+fn file_states<A>(ctx: &egui::Context, lines: &[FooterLine<A>]) -> Vec<(egui::Id, bool)> {
+    lines
+        .iter()
+        .filter_map(|line| line.typed.body.file.as_ref().and_then(FileLine::path))
+        .map(|path| {
+            let key = egui::Id::new(("design_file_gone", path));
+            (key, ctx.data(|data| data.get_temp::<bool>(key)) == Some(true))
+        })
+        .collect()
+}
+
+/// The state of the same file lines (`file_states`), read again.
+fn file_states_of(ctx: &egui::Context, files: &[(egui::Id, bool)]) -> Vec<(egui::Id, bool)> {
+    files
+        .iter()
+        .map(|&(key, _)| (key, ctx.data(|data| data.get_temp::<bool>(key)) == Some(true)))
+        .collect()
+}
+
+/// A footer line drawn in a scope of its own id (a kept line: its controls' ids come from its
+/// ticket), or in `ui`.
+fn line_ui<R>(ui: &mut Ui, scope: Option<egui::Id>, add: impl FnOnce(&mut Ui) -> R) -> R {
+    match scope {
+        Some(id) => ui.scope_builder(egui::UiBuilder::new().id(id), add).inner,
+        None => add(ui),
+    }
+}
+
+/// The height a footer's lines are measured in: more than any footer takes.
+const MEASURE_ROOM: f32 = 100_000.0;
+
+/// The context a footer's lines are measured in (`TypedFooter::measure`), kept in this one's
+/// memory, and the font generation it has (`theme::font_generation`).
+#[derive(Clone)]
+struct MeasureContext {
+    ctx: egui::Context,
+    fonts: u64,
+}
+
+/// One pass of the measuring context: `add` gets a `Ui` there with `ui`'s style and this
+/// context's fonts and scale, and the file lines' state `gone`. Nothing it draws reaches this
+/// context: no widget, no accessible node, no focus and no paint.
+fn measuring<R>(ui: &Ui, gone: &[(egui::Id, bool)], mut add: impl FnMut(&mut Ui) -> R) -> R {
+    let main = ui.ctx();
+    let key = egui::Id::new("design_footer_measure");
+    let fonts = super::theme::font_generation(main);
+    let kept = main.data(|data| data.get_temp::<MeasureContext>(key));
+    let measure = match kept {
+        Some(kept) if kept.fonts == fonts => kept.ctx,
+        kept => {
+            let ctx = kept.map(|kept| kept.ctx).unwrap_or_default();
+            ctx.options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
+            ctx.set_fonts(main.fonts(|view| view.definitions().clone()));
+            main.data_mut(|data| {
+                data.insert_temp(
+                    key,
+                    MeasureContext {
+                        ctx: ctx.clone(),
+                        fonts,
+                    },
+                );
+            });
+            ctx
+        }
+    };
+    if measure.zoom_factor() != main.zoom_factor() {
+        measure.set_zoom_factor(main.zoom_factor());
+    }
+    measure.data_mut(|data| {
+        for &(key, gone) in gone {
+            if gone {
+                data.insert_temp(key, true);
+            } else {
+                data.remove::<bool>(key);
+            }
+        }
+    });
+    let screen = Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(MEASURE_ROOM, MEASURE_ROOM));
+    let mut input = egui::RawInput {
+        screen_rect: Some(screen),
+        ..Default::default()
+    };
+    input.viewports.insert(
+        egui::ViewportId::ROOT,
+        egui::ViewportInfo {
+            native_pixels_per_point: main.native_pixels_per_point(),
+            ..Default::default()
+        },
+    );
+    let style = ui.style().clone();
+    let mut out = None;
+    let _ = measure.run(input, |ctx| {
+        let mut ui = Ui::new(
+            ctx.clone(),
+            egui::Id::new("design_footer_measure"),
+            egui::UiBuilder::new().max_rect(screen).style(style.clone()),
+        );
+        out = Some(add(&mut ui));
+    });
+    out.expect("the measuring context draws one pass")
+}
+
 impl<A: 'static> super::components::FooterLines for TypedFooter<A> {
     fn is_empty(&self) -> bool {
         self.lines.is_empty()
     }
 
     fn planned(&mut self, ui: &Ui, id: egui::Id, width: f32) -> Option<f32> {
-        let retained = self.revision(ui.ctx(), id);
-        self.retained = Some(retained.clone());
-        let env = Self::env(ui, retained.revision, width);
-        let plan = retained.plan.filter(|plan| plan.env == env)?;
+        if self.lines.is_empty() {
+            // No footer: nothing to measure (the store still sees it drawn this frame).
+            self.retained = Some(self.revision(ui.ctx(), id));
+            return None;
+        }
+        let plan = self.plan_for(ui, id, width);
         let wanted = plan.wanted();
         self.plan = Some(plan);
         Some(wanted)
@@ -3057,131 +3274,77 @@ impl<A: 'static> super::components::FooterLines for TypedFooter<A> {
                 egui::Stroke::new(HAIRLINE_WIDTH, super::tokens::colors().hairline),
             );
         }
+        // The plan: the pane's (`planned`), else one made now for a footer drawn by hand.
+        let (plan, made) = match self.plan.take() {
+            Some(plan) => (plan, false),
+            None => (self.plan_for(ui, id, rect.width()), true),
+        };
+        let files = file_states(ui.ctx(), &self.lines);
         let mut lines: Vec<Option<FooterLine<A>>> = std::mem::take(&mut self.lines)
             .into_iter()
             .map(Some)
             .collect();
-        if let Some(plan) = self.plan.take() {
-            // The plan holds: its order, its name, its Undos' forms and its room. Ruling R29:
-            // the open locks' reasons keep their room while the footer has room for it where it
-            // stands; each takes the room the plan measured, with no reason laid out.
-            let mut room = FooterPass {
-                give_up: plan.reserved > 0.0 && plan.wanted() > most,
-                measure: false,
-                reserved: 0.0,
-                drawn: 0.0,
-                rooms: plan.rooms.clone(),
-                next: 0,
-                measured: Vec::new(),
-                line: 0,
-                forms: plan.forms.clone(),
-                fitted: Vec::new(),
-            };
-            let (_, _, part) =
-                super::components::scroll_part(ui, rect, id, &plan.name, fit, |ui| {
-                    for &at in &plan.order {
-                        if let Some(line) = lines[at].take() {
-                            self.draw_line(ui, at, line, plan.alone[at], &mut room);
-                        }
-                    }
-                });
-            return (part, plan.wanted());
-        }
-        // The lines, their width, scale or style changed: this pass draws them and is their
-        // measure. The one footer order (`footer_order`), the name, each Undo's form, and the
-        // room.
-        let width = rect.width();
-        let retained = match self.retained.take() {
-            Some(retained) => retained,
-            None => self.revision(ui.ctx(), id),
-        };
-        let mut order: Vec<usize> = (0..lines.len()).collect();
-        order.sort_by_key(|&at| {
-            let line = lines[at].as_ref().expect("each line once");
-            (line.rank, line.order.map(std::cmp::Reverse))
-        });
-        count(|work| {
-            work.plans += 1;
-            work.sorted += order.len();
-        });
-        let name = order
-            .iter()
-            .filter_map(|&at| lines[at].as_ref())
-            .map(|line| line.typed.body.words.as_str())
-            .filter(|words| !words.is_empty())
-            .collect::<Vec<_>>()
-            .join(" ");
-        count(|work| work.named += name.len());
-        // The footer's one short-Undo rule: the verbs of its kept Undos, counted once.
-        let verbs: Vec<Verb> = lines
-            .iter()
-            .flatten()
-            .filter(|line| line.ticket.is_some())
-            .filter_map(|line| line.typed.body.undo.as_ref().and_then(UndoStep::counted))
-            .collect();
-        let alone: Vec<bool> = lines
-            .iter()
-            .flatten()
-            .map(|line| {
-                count(|work| work.verbs += verbs.len());
-                undo_alone(&verbs, line.typed.body.undo.as_ref())
-            })
-            .collect();
-        // Ruling R29: whether the reasons give up their room this pass is the footer's own last
-        // decision, kept with its plan; this pass measures what they want and decides again.
-        let give_up = retained.give_up;
+        // Its order, its name, its Undos' forms and its room. Ruling R29: the open locks'
+        // reasons keep their room while the footer has room for it where it stands; each takes
+        // the room the plan measured, with no reason laid out.
         let mut room = FooterPass {
-            give_up,
-            measure: true,
+            give_up: plan.reserved > 0.0 && plan.wanted() > most,
+            measure: false,
             reserved: 0.0,
             drawn: 0.0,
-            rooms: std::sync::Arc::from([]),
+            rooms: plan.rooms.clone(),
             next: 0,
             measured: Vec::new(),
             line: 0,
-            forms: std::sync::Arc::from([]),
-            fitted: vec![None; lines.len()],
+            forms: plan.forms.clone(),
+            fitted: Vec::new(),
         };
-        let (_, content, part) = super::components::scroll_part(ui, rect, id, &name, fit, |ui| {
-            for &at in &order {
-                if let Some(line) = lines[at].take() {
-                    self.draw_line(ui, at, line, alone[at], &mut room);
+        let (_, content, part) =
+            super::components::scroll_part(ui, rect, id, &plan.name, fit, |ui| {
+                for &at in &plan.order {
+                    if let Some(line) = lines[at].take() {
+                        self.draw_line(ui, at, line, plan.alone[at], &mut room);
+                    }
                 }
-            }
-        });
-        let plan = FooterPlan {
-            env: Self::env(ui, retained.revision, width),
-            order,
-            name,
-            alone,
-            forms: std::sync::Arc::from(std::mem::take(&mut room.fitted)),
-            bare: content - room.drawn,
-            reserved: room.reserved,
-            rooms: std::sync::Arc::from(std::mem::take(&mut room.measured)),
+            });
+        // The plan was measured in a context of its own (`measure`): drawn here, the lines take
+        // the room it says, less the reasons' room they keep. A press in this draw can change
+        // what a line shows (a link to a file that is gone adds its reason; the next frame plans
+        // the new lines). Any other difference is a fault of that measure: test builds stop at
+        // it. Either way the plan takes this paint's room, and the pass is drawn again with it.
+        let bare = content - plan.rooms.iter().take(room.next).sum::<f32>();
+        let plan = if (bare - plan.bare).abs() >= HAIRLINE_WIDTH {
+            debug_assert!(
+                files != file_states_of(ui.ctx(), &files),
+                "a footer's lines measure {} and paint {bare}",
+                plan.bare
+            );
+            let plan = std::sync::Arc::new(FooterPlan {
+                bare,
+                ..(*plan).clone()
+            });
+            ui.ctx().data_mut(|data| {
+                if let Some(kept) = data
+                    .get_temp_mut_or_default::<FooterPlans>(plans_id())
+                    .plans
+                    .get_mut(&id)
+                {
+                    kept.plan = Some(plan.clone());
+                }
+            });
+            ui.ctx()
+                .request_discard("a footer's lines paint another room than they measured");
+            plan
+        } else {
+            plan
         };
         let wanted = plan.wanted();
-        let next = plan.reserved > 0.0 && wanted > most;
-        if next != give_up {
-            ui.ctx()
-                .request_discard("the message footer's reservations changed");
-        }
-        if (wanted - stored).abs() >= HAIRLINE_WIDTH {
+        if made && (wanted - stored).abs() >= HAIRLINE_WIDTH {
             ui.ctx()
                 .data_mut(|data| data.insert_temp(id.with("height"), wanted));
             ui.ctx()
                 .request_discard("the message footer changed height");
         }
-        ui.ctx().data_mut(|data| {
-            let plans = data.get_temp_mut_or_default::<FooterPlans>(plans_id());
-            plans.plans.insert(
-                id,
-                Retained {
-                    plan: Some(std::sync::Arc::new(plan)),
-                    give_up: next,
-                    ..retained
-                },
-            );
-        });
         (part, wanted)
     }
 }
@@ -6181,8 +6344,12 @@ mod tests {
         // one pass.
         use crate::design::pane::{Placement, pane_records};
         /// Each pane's footer and where it stands, left to right; where each kept line's words
-        /// are painted, and whether whole inside their clip.
-        type Shown = (Vec<(egui::Rect, Placement)>, Vec<(egui::Rect, bool)>);
+        /// are painted, and whether whole inside their clip; each Undo's accessible bounds.
+        type Shown = (
+            Vec<(egui::Rect, Placement)>,
+            Vec<(egui::Rect, bool)>,
+            Vec<(String, egui::Rect)>,
+        );
         fn shown(h: &egui_kittest::Harness<'_, App>) -> Shown {
             fn walk(shape: &egui::Shape, clip: egui::Rect, out: &mut Vec<(egui::Rect, bool)>) {
                 match shape {
@@ -6213,7 +6380,21 @@ mod tests {
                     .partial_cmp(&(b.0.left(), b.0.top()))
                     .expect("finite")
             });
-            (panes, words)
+            let mut undos: Vec<(String, egui::Rect)> = h
+                .query_all_by_role(egui::accesskit::Role::Button)
+                .filter_map(|node| {
+                    let label = node.accesskit_node().label()?;
+                    label
+                        .starts_with("Undo change")
+                        .then(|| (label.to_owned(), node.rect()))
+                })
+                .collect();
+            undos.sort_by(|a, b| {
+                (a.1.left(), a.1.top())
+                    .partial_cmp(&(b.1.left(), b.1.top()))
+                    .expect("finite")
+            });
+            (panes, words, undos)
         }
         /// The same, within a hundredth of a point.
         fn same(a: &Shown, b: &Shown) -> bool {
@@ -6222,8 +6403,10 @@ mod tests {
             };
             a.0.len() == b.0.len()
                 && a.1.len() == b.1.len()
+                && a.2.len() == b.2.len()
                 && a.0.iter().zip(&b.0).all(|(a, b)| near(a.0, b.0) && a.1 == b.1)
                 && a.1.iter().zip(&b.1).all(|(a, b)| near(a.0, b.0) && a.1 == b.1)
+                && a.2.iter().zip(&b.2).all(|(a, b)| a.0 == b.0 && near(a.1, b.1))
         }
         /// A frame drawn in one pass (egui declines the rerun a changed footer asks for), then
         /// the next frame, in one pass too: what each shows.
@@ -6239,6 +6422,22 @@ mod tests {
             h.ctx.options_mut(|options| options.max_passes = passes);
             assert_eq!(h.state().passes - before, 2, "two frames of one pass");
             (first, next)
+        }
+        /// A frame drawn in one pass, then a press at `at` decided on that frame's targets: the
+        /// pointer goes down in the next frame and up in the one after, one pass each. What the
+        /// first frame shows.
+        fn press_after_one_pass(h: &mut egui_kittest::Harness<'_, App>, at: egui::Pos2) -> Shown {
+            let passes = h.ctx.options(|options| options.max_passes);
+            h.ctx
+                .options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
+            h.step();
+            let first = shown(h);
+            pointer(h, at, true);
+            h.step();
+            pointer(h, at, false);
+            h.step();
+            h.ctx.options_mut(|options| options.max_passes = passes);
+            first
         }
         /// A fresh pane of `app` at `size`, settled: what it shows.
         fn settles(app: App, size: egui::Vec2) -> Shown {
@@ -6411,6 +6610,35 @@ mod tests {
                 ([true, true], [Placement::Follows; 2])
             };
             assert_eq!((fits.as_slice(), stand.as_slice()), (&want.0[..], &want.1[..]));
+            // Its controls take presses where they are painted in the frame that brings them: a
+            // third result comes, and a press on its Undo where a fresh pane settles it, decided
+            // on that first frame's targets, reaches it.
+            h.run_steps(2);
+            h.state_mut()
+                .dndbeyond
+                .results
+                .record(Saved(Campaign("third"), "Folder chosen"));
+            let third = order(h.state(), "third");
+            let settled = settles(
+                app(&[lines[0], lines[1], ("third", "Folder chosen")]),
+                size,
+            );
+            let (_, undo) = settled
+                .2
+                .iter()
+                .find(|(label, _)| label == "Undo change third")
+                .expect("the third result's Undo, in the left pane");
+            let before = h.state().presses.len();
+            let first = press_after_one_pass(&mut h, undo.center());
+            assert!(
+                same(&first, &settled),
+                "{heights:?}, 3 kept: the first frame {first:?}, settled {settled:?}"
+            );
+            assert_eq!(
+                &h.state().presses[before..],
+                [(0, Act::Undo, third)],
+                "{heights:?}: a press on the new Undo, decided on its first frame's targets"
+            );
         }
 
         // Review of PR 452, 5: a footer that no frame draws has ended, and its plan with its

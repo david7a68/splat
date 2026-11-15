@@ -8001,9 +8001,10 @@ mod tests {
         // it brought, whole, never the ones it ended, and the next frame moves nothing: none →
         // one reason (a footer that comes) → three in its place (a footer that grew). Below a
         // short body the footer follows it by `S`; below a tall body (review of PR 456) it is
-        // pinned at the pane's bottom, a third of the pane at most, with no body line under it,
-        // and a press in that first frame reaches no footer control (their places from the
-        // layout before the footer moved down are not targets).
+        // pinned at the pane's bottom, a third of the pane at most, with no body line under it.
+        // The footer's plan is made before it is placed and its lines drawn once, in their place
+        // (finding 2 of PR 452's review): in that first frame its controls' accessible bounds
+        // are where they are painted, and a press there reaches them.
         const PRESS_WORDS: [&str; 4] = ["Press 0", "Press 1", "Press 2", "Press 3"];
         let shown = Rc::new(Cell::new(0_usize));
         let pressed = Rc::new(Cell::new(None::<usize>));
@@ -8128,7 +8129,7 @@ mod tests {
                 });
             }
         };
-        let mut misfire_checked = false;
+        let mut press_checked = false;
         for is_tall in [false, true] {
             tall.set(is_tall);
             shown.set(0);
@@ -8185,57 +8186,41 @@ mod tests {
                         && placed,
                     "pane_then (tall {is_tall}), one pass a frame: the frame of {press} shows its {count} reason(s) whole in the footer {footer:?} (body ends {body_end}, lowest body line {body_low}, pane {room:?}), and not {ended:?}: {reasons:?}"
                 );
-                // The next frame, one pass. Below the tall body, after three reasons, it holds a
-                // press on the first choice's place as laid out before the footer moved down: no
-                // control takes that press.
-                let mut at_first = None;
+                // The next frame, one pass. Below the tall body, after three reasons: in the act's
+                // frame the first choice's accessible bounds are where it is painted, and a press
+                // there, decided on that frame's targets, reaches it.
+                let mut press_first = false;
                 if is_tall && count == 3 {
-                    // The first choice's place as laid out (its accessible rect in this frame);
-                    // the footer moved down, so it is painted elsewhere now.
-                    let laid =
+                    let bounds =
                         egui_kittest::kittest::Queryable::query_by_label(&harness, PRESS_WORDS[0])
                             .expect("the first choice")
-                            .rect()
-                            .center();
+                            .rect();
                     let first_painted = painted(&harness, PRESS_WORDS[0])
                         .expect("the first choice is painted")
                         .0;
                     assert!(
-                        !first_painted.expand(4.0).contains(laid),
-                        "pane_then fixture: the footer moved: the first choice laid out at {laid:?}, painted at {first_painted:?}"
+                        bounds.expand(1.0).contains_rect(first_painted),
+                        "pane_then: in the act's frame, the first choice's accessible bounds {bounds:?} hold where it is painted, {first_painted:?}"
                     );
-                    let now = (0..count).find(|now| {
-                        painted(&harness, PRESS_WORDS[*now])
-                            .is_some_and(|(rect, _)| rect.expand(4.0).contains(laid))
-                    });
-                    click(&mut harness, laid);
-                    at_first = Some((laid, now));
+                    click(&mut harness, first_painted.center());
+                    press_first = true;
                 }
                 harness.step();
                 let next = view(&harness, count);
                 assert!(
-                    same(&first, &next) && pressed.get().is_none(),
-                    "pane_then (tall {is_tall}): the frame after {press} moves nothing ({first:?} then {next:?}), and a press in it reaches no footer control: {:?}",
+                    same(&first, &next) && pressed.get() == press_first.then_some(0),
+                    "pane_then (tall {is_tall}): the frame after {press} moves nothing ({first:?} then {next:?}), and a press on the first choice where it is painted reaches it: {:?}",
                     pressed.get()
                 );
-                if let Some((centre, now)) = at_first {
-                    // A press on the same place, a frame later, is the choice painted there now,
-                    // if any.
-                    click(&mut harness, centre);
-                    harness.step();
-                    assert_eq!(
-                        pressed.get(),
-                        now,
-                        "pane_then: a frame later, a press at {centre:?} is the choice painted there"
-                    );
+                if press_first {
                     pressed.set(None);
-                    misfire_checked = true;
+                    press_checked = true;
                 }
                 harness.event(egui::Event::PointerGone);
                 harness.run_steps(4);
             }
         }
-        assert!(misfire_checked, "pane_then: the press check ran");
+        assert!(press_checked, "pane_then: the press check ran");
         // With reruns allowed again, an unchanged frame draws the footer in one pass: a footer
         // whose messages come after the body keeps its measured room and words.
         harness
