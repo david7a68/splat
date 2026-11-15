@@ -428,7 +428,7 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
         let value = chosen.unwrap_or_default().to_owned();
         response.widget_info(|| {
             let mut info = WidgetInfo::labeled(WidgetType::ComboBox, enabled, &named);
-            info.current_text_value = Some(value.split(':').next().unwrap_or_default().to_owned());
+            info.current_text_value = Some(value.clone());
             info
         });
         if let Some(reason) = self.blocked {
