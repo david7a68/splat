@@ -14852,8 +14852,20 @@ pub mod session_notes {
             banner_whole(
                 d,
                 "round-30-note-warnings-elsewhere",
-                "was not saved.",
+                "was not saved. Disk is full. Free some space on the disk, then try again.",
                 &["Try to save again", "Title"],
+            );
+            // Round 30 B7d: the painted words are plain, never the system's (`os error`).
+            let mut system = Vec::new();
+            d.each_painted_text(|text, _| {
+                if text.galley.job.text.contains("os error") {
+                    system.push(text.galley.job.text.clone());
+                }
+            });
+            d.observe(
+                "round-30-note-save-plain-words",
+                system.is_empty(),
+                format!("No painted words carry the system's error text: {system:?}"),
             );
         });
         // The captured state's own saves failed too; so does the DM's retry while the disk is

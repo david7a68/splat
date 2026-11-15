@@ -696,13 +696,20 @@ pub fn create_note(folder: &Path, new: &NewNote<'_>) -> Result<Note, String> {
 }
 
 fn write_new(path: &Path, text: &str) -> Result<(), String> {
-    let parent = path.parent().ok_or("Invalid location.")?;
-    let mut temp = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
-    temp.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
-    temp.as_file().sync_all().map_err(|e| e.to_string())?;
-    temp.persist_noclobber(path).map_err(|e| e.to_string())?;
-    sync_folder(parent)?;
-    Ok(())
+    write_new_io(path, text).map_err(|e| e.to_string())
+}
+
+/// `write_new` with the system error kept, so a note's save can say what happened in plain
+/// words (`not_saved`).
+fn write_new_io(path: &Path, text: &str) -> std::io::Result<()> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| std::io::Error::other("Invalid location."))?;
+    let mut temp = tempfile::NamedTempFile::new_in(parent)?;
+    temp.write_all(text.as_bytes())?;
+    temp.as_file().sync_all()?;
+    temp.persist_noclobber(path).map_err(|e| e.error)?;
+    sync_folder_io(parent)
 }
 
 /// Change a note's title or date, and leave any other property the DM added.
@@ -762,24 +769,41 @@ pub fn note_identity(path: &Path, text: &str) -> Option<Uuid> {
 }
 
 pub(crate) fn replace_file(path: &Path, text: &str) -> Result<(), String> {
-    let parent = path.parent().ok_or("Invalid location.")?;
-    let mut temp = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
+    replace_file_io(path, text).map_err(|e| e.to_string())
+}
+
+/// `replace_file` with the system error kept, so a note's save can say what happened in plain
+/// words (`not_saved`).
+fn replace_file_io(path: &Path, text: &str) -> std::io::Result<()> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| std::io::Error::other("Invalid location."))?;
+    let mut temp = tempfile::NamedTempFile::new_in(parent)?;
     temp.write_all(text.as_bytes())
-        .and_then(|()| temp.as_file().sync_all())
-        .map_err(|e| e.to_string())?;
-    temp.persist(path).map_err(|e| e.to_string())?;
-    sync_folder(parent)?;
-    Ok(())
+        .and_then(|()| temp.as_file().sync_all())?;
+    temp.persist(path).map_err(|e| e.error)?;
+    sync_folder_io(parent)
 }
 
 pub(crate) fn sync_folder(path: &Path) -> Result<(), String> {
+    sync_folder_io(path).map_err(|e| e.to_string())
+}
+
+fn sync_folder_io(path: &Path) -> std::io::Result<()> {
     #[cfg(unix)]
-    fs::File::open(path)
-        .and_then(|file| file.sync_all())
-        .map_err(|e| e.to_string())?;
+    fs::File::open(path).and_then(|file| file.sync_all())?;
     #[cfg(not(unix))]
     let _ = path;
     Ok(())
+}
+
+/// Round 30 B7d: a note's failed save in plain words from the error's KIND, never the system's
+/// words: `Not saved.`, the cause and the recovery of the World page's file faults
+/// (`world::file_fault`, the one mapping). Every painter of a note's failed save reads this
+/// value: the Sessions banner on every page, the Notes status, an act's `NotSaved` result.
+fn not_saved(error: &std::io::Error) -> String {
+    let fault = crate::world::file_fault::FileFault::write("", error);
+    format!("Not saved. {}. {}", fault.cause(), fault.recovery())
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1436,10 +1460,10 @@ pub struct Draft {
     last_edit: Option<Instant>,
     /// Changes when the words or the file change. No two drafts share one.
     revision: u64,
-    /// A test's full disk: each write fails with this error, as `replace_file` gives it, before
-    /// anything is written or the baseline moves.
+    /// A test's failing disk: each write fails with this system error code (28 is a full disk),
+    /// before anything is written or the baseline moves.
     #[cfg(test)]
-    pub(crate) failing_write: Option<String>,
+    pub(crate) failing_write: Option<i32>,
 }
 
 /// A revision no draft has had.
@@ -1582,19 +1606,19 @@ impl Draft {
     fn write(&mut self) {
         let text = format!("{}{}", self.prefix, self.body);
         #[cfg(test)]
-        let written = match &self.failing_write {
-            Some(error) => Err(error.clone()),
-            None => replace_file(&self.path, &text),
+        let written = match self.failing_write {
+            Some(code) => Err(std::io::Error::from_raw_os_error(code)),
+            None => replace_file_io(&self.path, &text),
         };
         #[cfg(not(test))]
-        let written = replace_file(&self.path, &text);
+        let written = replace_file_io(&self.path, &text);
         match written {
             Ok(()) => {
                 self.baseline = Some(text);
                 self.state = DraftState::Saved;
             }
             Err(error) => {
-                self.state = DraftState::Failed(format!("Not saved. {error}"));
+                self.state = DraftState::Failed(not_saved(&error));
             }
         }
     }
@@ -1629,7 +1653,7 @@ impl Draft {
             return;
         }
         let text = format!("{prefix}{}", self.body);
-        match write_new(&self.path, &text) {
+        match write_new_io(&self.path, &text) {
             Ok(()) => {
                 self.prefix = prefix;
                 if restored.is_some() {
@@ -1638,7 +1662,7 @@ impl Draft {
                 self.baseline = Some(text);
                 self.state = DraftState::Saved;
             }
-            Err(error) => self.refuse_save_again(format!("Not saved. {error}")),
+            Err(error) => self.refuse_save_again(not_saved(&error)),
         }
     }
 
@@ -2317,6 +2341,47 @@ pub fn remove_rewards(text: &str, written: &Rewarded) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+
+    /// Round 30 B7d: a note's failed save says plain words from the error's kind, one sentence
+    /// each, ending with a full stop, never the system's words; the draft's own write uses it.
+    #[test]
+    fn a_failed_note_save_says_plain_words_from_the_error_kind() {
+        use std::io::ErrorKind;
+        let permission = "Not saved. No permission to save. Give your user account permission to change the file and its folder.";
+        for (kind, words) in [
+            (
+                ErrorKind::StorageFull,
+                "Not saved. Disk is full. Free some space on the disk, then try again.",
+            ),
+            (ErrorKind::PermissionDenied, permission),
+            (ErrorKind::ReadOnlyFilesystem, permission),
+            (
+                ErrorKind::Interrupted,
+                "Not saved. File cannot be saved. Check that the disk that holds it is connected, then try again.",
+            ),
+        ] {
+            let said = not_saved(&std::io::Error::new(kind, "raw words (os error 99)"));
+            assert_eq!(said, words, "{kind:?}");
+            assert!(
+                !said.contains("os error") && !said.contains("raw"),
+                "{said}"
+            );
+        }
+        let folder = tempfile::tempdir().unwrap();
+        let path = folder.path().join("Session 1.md");
+        fs::write(&path, "---\nsession_id: 1\n---\n# One\n").unwrap();
+        let mut draft = Draft::open(&path).unwrap();
+        draft.failing_write = Some(28);
+        draft.body.push_str("More words.\n");
+        draft.edited();
+        draft.save();
+        assert_eq!(
+            draft.state,
+            DraftState::Failed(
+                "Not saved. Disk is full. Free some space on the disk, then try again.".into()
+            )
+        );
+    }
     use super::*;
 
     /// F7: a block goes at the end of `## Loot and rewards`, or under that heading added at the

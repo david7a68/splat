@@ -7979,11 +7979,11 @@ impl Sessions {
     }
 
     /// The disk refuses the open note's writes, as a full disk would: the DM has typed, and every
-    /// write fails at its result with the error `replace_file` gives for a full disk, before
-    /// anything is written, until `simulate_failed_save_ends`. A direct retry fails too.
+    /// write fails at its result with the system's full-disk error (code 28), before anything is
+    /// written, until `simulate_failed_save_ends`. A direct retry fails too.
     pub fn simulate_failed_save(&mut self) {
         let draft = self.draft.as_mut().expect("an open note");
-        draft.failing_write = Some(std::io::Error::from_raw_os_error(28).to_string());
+        draft.failing_write = Some(28);
         draft.body.push_str("\nTyped while the disk was full.\n");
         draft.edited();
         draft.save();
