@@ -401,8 +401,19 @@ fn focus_allowed(ctx: &Context, run: &mut Run, form: Option<Rect>) -> bool {
     }
     let inside = form.is_some_and(|form| {
         focused
-            .and_then(|focused| ctx.read_response(focused))
-            .is_some_and(|field| form.contains_rect(field.rect))
+            // The field's rect as drawn, read without `read_response`, whose interaction
+            // would surrender the field's focus on a press elsewhere (the act's own press).
+            .and_then(|focused| {
+                ctx.viewport(|viewport| {
+                    viewport
+                        .this_pass
+                        .widgets
+                        .get(focused)
+                        .or_else(|| viewport.prev_pass.widgets.get(focused))
+                        .map(|widget| widget.rect)
+                })
+            })
+            .is_some_and(|field| form.contains_rect(field))
     });
     let opener = run.opener_field.is_none_or(|field| Some(field) == focused);
     if inside && opener {
