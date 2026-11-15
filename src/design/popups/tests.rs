@@ -451,6 +451,68 @@ fn the_list_is_as_wide_as_its_control_and_stays_in_its_pane() {
         "a stale room cannot open beyond its edge"
     );
     assert_eq!(focused(&ctx), Some(SIDE.id()));
+    // Wrapped rows need their measured height, not the one-line Read minimum.
+    // Neither 40 px side can hold this three-line target; a larger upper room can.
+    {
+        let ctx = context();
+        let room = Cell::new(Rect::from_min_max(pos2(0.0, 0.0), pos2(160.0, 640.0)));
+        let control = Cell::new(Rect::NOTHING);
+        let draw = |events| {
+            frame(&ctx, vec2(960.0, 640.0), events, |ui| {
+                ui.allocate_exact_size(vec2(0.0, 240.0), Sense::hover());
+                let mut current = 0;
+                control.set(
+                    Dropdown::new(SIDE, "Wrapped choices")
+                        .choice(0, "Copper watch beside the old ferry bridge")
+                        .choice(1, "Silver watch beside the old ferry bridge")
+                        .within(room.get())
+                        .width(140.0)
+                        .show(ui, &mut current)
+                        .response
+                        .rect,
+                );
+            })
+        };
+        draw(Vec::new());
+        let rect = control.get();
+        room.set(Rect::from_min_max(
+            pos2(0.0, rect.top() - 44.0),
+            pos2(160.0, rect.bottom() + 44.0),
+        ));
+        draw(click(rect.center()));
+        draw(Vec::new());
+        assert!(
+            !egui::Popup::is_id_open(&ctx, list()),
+            "no whole wrapped row fits on either side"
+        );
+        assert_eq!(focused(&ctx), Some(SIDE.id()));
+        assert_eq!(
+            ctx.data(|data| data.get_temp::<Option<usize>>(list().with("reveal_index"))),
+            Some(None)
+        );
+        room.set(Rect::from_min_max(
+            pos2(0.0, rect.top() - 160.0),
+            pos2(160.0, rect.bottom() + 44.0),
+        ));
+        draw(click(rect.center()));
+        draw(Vec::new());
+        draw(Vec::new());
+        let popup = list_rect(&ctx);
+        assert!(egui::Popup::is_id_open(&ctx, list()));
+        assert!(
+            popup.bottom() <= rect.top(),
+            "the whole row fits above only"
+        );
+        assert!(room.get().contains_rect(popup));
+        let rows = ctx
+            .data(|data| data.get_temp::<Vec<Id>>(list().with("rows")))
+            .unwrap();
+        assert!(
+            rows.iter()
+                .filter_map(|id| ctx.read_response(*id))
+                .any(|row| popup.contains_rect(row.rect))
+        );
+    }
     // A control partly clipped by either edge still opens into the visible room.
     // Recording's service control can meet this case after the pane footer grows.
     for partial in [
