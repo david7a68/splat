@@ -6182,12 +6182,9 @@ mod tests {
                     });
                 });
                 painted = output.shapes.iter().find_map(|shape| match &shape.shape {
-                    // The day gives way last (R39), and Q-s may drop the XP number: the
-                    // summary is the line with the day.
-                    egui::Shape::Text(text)
-                        if text.galley.job.text.contains("XP")
-                            || text.galley.job.text.contains("Day 2") =>
-                    {
+                    // Q-s (R39) may drop the XP number, and at the narrowest the day: the
+                    // summary is the line that ends with the word, which never gives way.
+                    egui::Shape::Text(text) if text.galley.job.text.contains("Above") => {
                         Some(text.galley.job.text.replace(['\u{a0}', '\n'], " "))
                     }
                     _ => None,
