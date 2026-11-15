@@ -872,7 +872,11 @@ pub(super) fn said_once(
             clipped = true;
         }
     });
-    let cut = said(d) > 1 && clipped;
+    // B4: the back line moves the editor down 34 px, so at 960 the member row's words can be
+    // wholly below the plan's editor, not painted at all; the save row then says the fault
+    // once, as it must. That case is looked at at 1920 too.
+    let below = said(d) == 1 && !d.visible_text(field) && d.visible_text(beside);
+    let cut = said(d) > 1 && clipped || below;
     let look = |d: &Driver<'_>| (said(d), d.visible_text(field), d.visible_text(beside));
     let place = if cut { d.at_size(LARGE, look) } else { look(d) };
     let mut painted = Vec::new();
@@ -894,7 +898,7 @@ pub(super) fn said_once(
     (
         steady && tab == once && button == once && key == once && place == (1, true, false),
         format!(
-            "tabs and words steady {steady} (from {tops:?}: {moves:?}); Add creatures tab {tab:?}; after Save group {button:?}; after Ctrl+S {key:?}; Members (cut at first: {cut}) {place:?}: {painted:?}"
+            "tabs and words steady {steady} (from {tops:?}: {moves:?}); Add creatures tab {tab:?}; after Save group {button:?}; after Ctrl+S {key:?}; Members (cut or below at first: {cut}, below: {below}) {place:?}: {painted:?}"
         ),
     )
 }
@@ -18139,8 +18143,16 @@ pub mod encounter_groups {
                         .iter()
                         .find(|node| node.name == heading && node.in_view())?
                         .rect;
+                    // The form's own column: from the heading to the right edge of its `Done`.
+                    // The Add creatures column beside it is not what follows a heading (B4: its
+                    // rows lined up with a heading at 960 once the back line moved the form).
+                    let form_right = nodes
+                        .iter()
+                        .find(|node| node.name == "Done with changes")
+                        .map_or(label.right() + 400.0, |done| done.rect.right());
                     let column = |rect: &egui::Rect| {
-                        rect.left() < label.right() + 400.0 && rect.right() > label.left()
+                        rect.left() < (label.right() + 400.0).min(form_right)
+                            && rect.right() > label.left()
                     };
                     let above = nodes
                         .iter()

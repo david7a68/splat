@@ -5993,7 +5993,6 @@ impl Encounters {
         let draft_ref = self.draft.as_mut().expect("the editor has a draft");
         let focus_name = &mut self.focus_name;
         let focus_search_after_name = &mut self.focus_search;
-        let from_session = self.from_session;
         // FA9, FI9: in a wide window the name field ends at the roster column's edge and the
         // header's actions at the Add participants column's edge, so neither stretches to the
         // window's edge. The roster's edge is the one its pane drew last.
