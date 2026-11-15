@@ -12,6 +12,7 @@ pub mod pane;
 pub mod popups;
 pub mod reader;
 pub mod results;
+pub mod reveal;
 pub mod save_row;
 pub mod status;
 pub mod theme;

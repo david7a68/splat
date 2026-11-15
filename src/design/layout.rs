@@ -1091,6 +1091,17 @@ impl ScrollColumn {
         area
     }
 
+    /// The area for this pass in `ui` (the `Ui` it is shown in), and its persistent key for a
+    /// reveal (`design::reveal`): a reveal's offset, written in the last frame, wins once.
+    fn area_in(&self, ui: &Ui) -> (egui::ScrollArea, Id) {
+        let key = ui.make_persistent_id(("design_reveal_column", self.id));
+        let mut area = self.area();
+        if let Some(offset) = super::reveal::take_offset(ui, key) {
+            area = area.vertical_scroll_offset(offset);
+        }
+        (area, key)
+    }
+
     /// Run `add` in a child `Ui` with the app's scroll style, and the content's width: the
     /// width the column is given, less the lane.
     fn styled<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui, f32) -> R) -> R {
@@ -1111,32 +1122,38 @@ impl ScrollColumn {
         // at the text edge (P3a): the surface covers the hang, and nothing moves.
         let Some(reach) = super::pane::column_reach(ui, lane_width()) else {
             return Self::styled(ui, |ui, width| {
-                self.area().show(ui, |ui| {
-                    if !sideways {
-                        ui.set_max_width(width);
-                    }
-                    if full {
-                        ui.set_min_width(width);
-                    }
-                    super::pane::whole_rows(ui, id, add)
+                let (area, key) = self.area_in(ui);
+                area.show_viewport(ui, |ui, viewport| {
+                    super::reveal::region(ui, key, viewport, |ui| {
+                        if !sideways {
+                            ui.set_max_width(width);
+                        }
+                        if full {
+                            ui.set_min_width(width);
+                        }
+                        super::pane::whole_rows(ui, id, add)
+                    })
                 })
             });
         };
         super::pane::reaching(ui, reach, |ui| {
             Self::styled(ui, |ui, width| {
-                self.area().show(ui, |ui| {
-                    if !sideways {
-                        ui.set_max_width(width);
-                    }
-                    if full {
-                        ui.set_min_width(width);
-                    }
-                    super::pane::whole_rows(ui, id, |ui| {
-                        super::pane::inset(ui, reach, |ui| {
-                            if full {
-                                ui.set_min_width(ui.max_rect().width());
-                            }
-                            add(ui)
+                let (area, key) = self.area_in(ui);
+                area.show_viewport(ui, |ui, viewport| {
+                    super::reveal::region(ui, key, viewport, |ui| {
+                        if !sideways {
+                            ui.set_max_width(width);
+                        }
+                        if full {
+                            ui.set_min_width(width);
+                        }
+                        super::pane::whole_rows(ui, id, |ui| {
+                            super::pane::inset(ui, reach, |ui| {
+                                if full {
+                                    ui.set_min_width(ui.max_rect().width());
+                                }
+                                add(ui)
+                            })
                         })
                     })
                 })
@@ -1152,9 +1169,12 @@ impl ScrollColumn {
         add: impl FnOnce(&mut Ui) -> R,
     ) -> ScrollAreaOutput<R> {
         Self::styled(ui, |ui, width| {
-            self.area().show(ui, |ui| {
-                ui.set_max_width(width);
-                add(ui)
+            let (area, key) = self.area_in(ui);
+            area.show_viewport(ui, |ui, viewport| {
+                super::reveal::region(ui, key, viewport, |ui| {
+                    ui.set_max_width(width);
+                    add(ui)
+                })
             })
         })
     }
@@ -1196,12 +1216,15 @@ impl ScrollColumn {
         }
         Self::styled(ui, |ui, width| {
             let (full, id) = (self.full_width, self.id);
-            self.area().show_viewport(ui, |ui, viewport| {
-                ui.set_max_width(width);
-                if full {
-                    ui.set_min_width(width);
-                }
-                super::pane::whole_rows(ui, id, |ui| add(ui, viewport))
+            let (area, key) = self.area_in(ui);
+            area.show_viewport(ui, |ui, viewport| {
+                super::reveal::region(ui, key, viewport, |ui| {
+                    ui.set_max_width(width);
+                    if full {
+                        ui.set_min_width(width);
+                    }
+                    super::pane::whole_rows(ui, id, |ui| add(ui, viewport))
+                })
             })
         })
     }

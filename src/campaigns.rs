@@ -21,7 +21,7 @@ pub struct Campaigns {
     editing: Option<Uuid>,
     focus_name: bool,
     /// The open import form's reveal (R30): its one owner is that form.
-    reveal: ImportReveal,
+    reveal: design::reveal::Reveal,
     /// Edit details was pressed on Link and folder: the details form comes into view once, with
     /// its Save, in that pane (round 28: the session folder's save row stands above the pane).
     reveal_details: bool,
@@ -68,7 +68,7 @@ impl Default for Campaigns {
             writable: false,
             editing: None,
             focus_name: false,
-            reveal: ImportReveal::default(),
+            reveal: design::reveal::Reveal::default(),
             reveal_details: false,
             form_open: false,
             add_name: String::new(),
@@ -96,7 +96,7 @@ impl Default for Campaigns {
 }
 
 impl Campaigns {
-    pub fn start_import(&mut self, id: &str, name: &str) {
+    pub fn start_import(&mut self, act: design::reveal::Act, id: &str, name: &str) {
         self.clear_form();
         self.name = name.into();
         let parent = self
@@ -127,7 +127,11 @@ impl Campaigns {
         // The form opens with the name field taking the keyboard, and shows whole (the folder
         // Splat proposes and its preview too: G138).
         self.focus_name = true;
-        self.reveal.start(self.data.active_campaign_id);
+        self.reveal.ask(
+            act,
+            (id, self.data.active_campaign_id),
+            design::reveal::Want::Open,
+        );
     }
 
     pub fn cancel_import(&mut self) {
@@ -360,7 +364,7 @@ impl Campaigns {
             writable: true,
             editing: None,
             focus_name: false,
-            reveal: ImportReveal::default(),
+            reveal: design::reveal::Reveal::default(),
             reveal_details: false,
             form_open: false,
             add_name: String::new(),
@@ -629,7 +633,7 @@ impl Campaigns {
         };
         self.remote = None;
         // The form closes: its reveal ends with it.
-        self.reveal = ImportReveal::default();
+        self.reveal.end();
     }
 
     pub fn active_campaign(&self) -> Option<Campaign> {
@@ -1297,8 +1301,10 @@ impl Campaigns {
     pub fn show_import_form(&mut self, ui: &mut egui::Ui, remote_id: &str) {
         if self.remote.as_ref().is_some_and(|(id, _)| id == remote_id) {
             let form = ui.scope(|ui| self.form(ui, false, true)).response.rect;
-            let active = self.data.active_campaign_id;
-            self.reveal.step(ui, form, active);
+            // R30: the opened form shows whole (its fields, Add campaign, Cancel and the
+            // preview); a change of campaign is another visit, which ends the reveal.
+            let visit = (remote_id, self.data.active_campaign_id);
+            self.reveal.mark(ui, visit, form);
         }
     }
 
@@ -1597,133 +1603,6 @@ fn folder_preview(path: &str) -> Option<String> {
             None => name.into_owned(),
         },
     )
-}
-
-/// R30 for the open import form: the least scroll that shows the whole form (its fields, Add
-/// campaign, Cancel and the preview), as the add field shows its own. One owner: the open form
-/// (`Campaigns::remote`); `clear_form` ends it with the form.
-///
-/// It starts when the form opens, and after a resize only if the form was whole in view before
-/// it (the DM was still looking at it). It ends at the first of: the form is whole in view; a
-/// frame shows no progress; the form is taller than the view (then its top shows); any scroll
-/// input or typing by the DM; the form not drawn in a frame (the page left); a change of
-/// campaign; [`ImportReveal::PASSES`] frames. Nothing repaints for it once it has ended.
-#[derive(Default)]
-struct ImportReveal {
-    /// Frames left while it runs; 0: ended.
-    left: u8,
-    /// The campaign open when it started.
-    campaign: Option<Uuid>,
-    /// The form's top and the frame of the last scroll it asked for.
-    asked: Option<(f32, u64)>,
-    /// The form is taller than its view: only its top is asked for.
-    top_only: bool,
-    /// The view's size and whether the form was whole in it, in the last frame that drew it.
-    view: Option<(egui::Vec2, bool)>,
-    /// The last frame that drew the form.
-    frame: Option<u64>,
-}
-
-impl ImportReveal {
-    /// A hard bound, in frames.
-    const PASSES: u8 = 4;
-
-    fn start(&mut self, campaign: Option<Uuid>) {
-        self.left = Self::PASSES;
-        self.campaign = campaign;
-        self.asked = None;
-        self.top_only = false;
-    }
-
-    fn end(&mut self) {
-        self.left = 0;
-        self.asked = None;
-        self.top_only = false;
-    }
-
-    /// One pass of the open form at `form`, in the campaign open now.
-    fn step(&mut self, ui: &egui::Ui, form: egui::Rect, campaign: Option<Uuid>) {
-        let frame = ui.ctx().cumulative_frame_nr();
-        if self.frame.is_some_and(|last| frame > last + 1) {
-            // The form was not drawn in a frame: the DM left the page.
-            self.end();
-            self.view = None;
-        }
-        self.frame = Some(frame);
-        let view = ui.clip_rect();
-        let whole = form.top() >= view.top() - 0.5 && form.bottom() <= view.bottom() + 0.5;
-        if let Some((size, was_whole)) = self.view
-            && (size - view.size()).length() > 0.5
-            && was_whole
-        {
-            self.start(campaign);
-        }
-        self.view = Some((view.size(), whole));
-        if self.left == 0 {
-            return;
-        }
-        let by_the_dm = ui.input(|input| {
-            input.raw_scroll_delta != egui::Vec2::ZERO
-                || input.pointer.is_decidedly_dragging()
-                || [
-                    egui::Key::PageUp,
-                    egui::Key::PageDown,
-                    egui::Key::Home,
-                    egui::Key::End,
-                    egui::Key::ArrowUp,
-                    egui::Key::ArrowDown,
-                ]
-                .into_iter()
-                .any(|key| input.key_pressed(key))
-                || input
-                    .events
-                    .iter()
-                    .any(|event| matches!(event, egui::Event::Text(_)))
-        });
-        if whole || by_the_dm || campaign != self.campaign {
-            self.end();
-            return;
-        }
-        if let Some((top, at)) = self.asked {
-            // A pass drawn again in the same frame asks again (a pass drawn again may drop a
-            // scroll); a new frame judges the last one.
-            if at != frame {
-                if self.top_only || (top - form.top()).abs() < 0.5 {
-                    // Its top shows (a form taller than its view), or no progress: stop.
-                    self.end();
-                    return;
-                }
-                self.left -= 1;
-            }
-        } else {
-            self.left -= 1;
-        }
-        // Taller than the view: only its top shows, and the next frame ends the reveal.
-        self.top_only |= form.height() > view.height();
-        self.asked = Some((form.top(), frame));
-        if self.top_only {
-            // Not animated: nothing moves once the reveal has ended (a typed key does not stop
-            // egui's animation; a wheel turn does).
-            ui.scroll_to_rect_animation(
-                egui::Rect::from_min_size(form.min, egui::vec2(form.width(), 1.0)),
-                Some(egui::Align::TOP),
-                egui::style::ScrollAnimation::none(),
-            );
-        } else {
-            ui.scroll_to_rect_animation(form, None, egui::style::ScrollAnimation::none());
-        }
-        if self.left == 0 && !self.top_only {
-            self.end();
-        } else {
-            ui.ctx().request_repaint();
-        }
-    }
-
-    /// Whether it runs (tests).
-    #[cfg(test)]
-    fn running(&self) -> bool {
-        self.left > 0
-    }
 }
 
 /// The leading words of the folder preview; they stay when the path gives way.
@@ -2029,7 +1908,7 @@ mod tests {
         let folder = temp.path().join("campaign");
         std::fs::create_dir(&folder).unwrap();
         let mut campaigns = Campaigns::at(temp.path().join("settings.json"));
-        campaigns.start_import("12", "Remote name");
+        campaigns.start_import(design::reveal::Act::test(0), "12", "Remote name");
         campaigns.path = folder.to_string_lossy().into_owned();
         campaigns.save_form().unwrap();
         let campaign = campaigns.active_campaign().unwrap();
@@ -2044,7 +1923,7 @@ mod tests {
         reopened.save_form().unwrap();
         assert_eq!(reopened.active_campaign(), Some(campaign));
         assert_eq!(std::fs::read_to_string(&file).unwrap(), text);
-        reopened.start_import("34", "Other campaign");
+        reopened.start_import(design::reveal::Act::test(0), "34", "Other campaign");
         reopened.path = folder.to_string_lossy().into_owned();
         assert!(reopened.save_form().is_err());
         assert_eq!(std::fs::read_to_string(&file).unwrap(), text);
@@ -2086,7 +1965,7 @@ mod tests {
             writable: true,
             editing: None,
             focus_name: false,
-            reveal: ImportReveal::default(),
+            reveal: design::reveal::Reveal::default(),
             reveal_details: false,
             form_open: false,
             add_name: String::new(),
@@ -2174,7 +2053,7 @@ mod tests {
         let folder = temp.path().join("campaign");
         std::fs::create_dir(&folder).unwrap();
         let mut campaigns = Campaigns::at(temp.path().join("settings.json"));
-        campaigns.start_import("12", "Campaign");
+        campaigns.start_import(design::reveal::Act::test(0), "12", "Campaign");
         campaigns.path = folder.to_string_lossy().into_owned();
         campaigns.save_form().unwrap();
         let campaign = campaigns.active_campaign().unwrap();
@@ -2230,7 +2109,7 @@ mod tests {
             .path()
             .join("a-long-folder-of-settings/with/several/levels/settings");
         let mut campaigns = Campaigns::at(settings.join("settings.json"));
-        campaigns.start_import("7", "Salt Road");
+        campaigns.start_import(design::reveal::Act::test(0), "7", "Salt Road");
         assert!(campaigns.path.ends_with("Salt Road"));
         const WIDTH: f32 = 544.0;
         let words = "Will add …/Salt Road";
@@ -2259,7 +2138,7 @@ mod tests {
         // R30: the form's reveal in a column that scrolls, the form far below the view.
         let scrolled = |height: f32| {
             let mut campaigns = Campaigns::at(settings.join("settings.json"));
-            campaigns.start_import("7", "Salt Road");
+            campaigns.start_import(design::reveal::Act::test(0), "7", "Salt Road");
             egui_kittest::Harness::builder()
                 .with_size(egui::vec2(WIDTH, height))
                 .build_ui_state(
@@ -2329,7 +2208,7 @@ mod tests {
             frames += 1;
         }
         assert!(
-            frames <= usize::from(ImportReveal::PASSES) + 1 && !h.state().reveal.running(),
+            frames <= usize::from(design::reveal::PASSES) + 1 && !h.state().reveal.running(),
             "a form taller than its view kept its reveal for {frames} frames"
         );
         let top = h
