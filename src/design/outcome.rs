@@ -3961,9 +3961,12 @@ mod tests {
                 .collect();
             (node.accesskit_node().id(), shown)
         };
+        // Two Undos of one verb (round 30: a lone one paints `Undo discard`, below), so the
+        // footer must tell them apart.
         let discard = || {
             let mut app = two();
             app.older_line = OlderLine::Discard("Bridge Ambush");
+            app.same_verb = true;
             app
         };
         let mut narrow = discard();
@@ -3981,10 +3984,22 @@ mod tests {
             ["Undo discard of Bridge Ambush"],
             "wide: the whole form"
         );
+        // Round 30 FE11: the only Undo of its verb in its footer paints `Undo discard`, as its
+        // result names the object; its accessible name stays whole.
+        let mut lone = two();
+        lone.older_line = OlderLine::Discard("Bridge Ambush");
+        let h = harness_sized(lone, 960.0);
+        let (_, shown) = visible(&h, "Undo discard of Bridge Ambush");
+        assert_eq!(
+            shown,
+            ["Undo discard"],
+            "lone: the short form, the whole name"
+        );
         // A long object with no joining word: cut by whole words in the visible words only.
         let long = "Bridge Ambush at the Ravenholm Ironside Crossing";
         let mut narrow = two();
         narrow.older_line = OlderLine::Remove(long);
+        narrow.same_verb = true;
         narrow.narrow = Some(320.0);
         let h = harness_sized(narrow, 960.0);
         let name = format!("Undo remove {long}");
@@ -4464,6 +4479,9 @@ mod tests {
             pub narrow: Option<f32>,
             /// What the older line says.
             pub older_line: OlderLine,
+            /// The newer line has the older line's verb too (about Shrine of Cinders), so two
+            /// Undos of one verb stand in the footer.
+            pub same_verb: bool,
             /// The older line has a choice whose words hold two objects from data (M3).
             pub moves: Option<[&'static str; 2]>,
             /// It also has a red choice with data, given before `Move` (the part puts it after).
@@ -4507,6 +4525,7 @@ mod tests {
             let live = app.run_live;
             let older_undo_open = app.older_undo_open;
             let older_line = app.older_line;
+            let same_verb = app.same_verb;
             let frame = PaneFrame::new(ui);
             let mut messages = Messages::new(&frame, ("pilot", pane), ui.available_width());
             for owner in ["older", "newer", "third"] {
@@ -4516,6 +4535,20 @@ mod tests {
                     let deletes = app.deletes;
                     let line = shown.outcome(&frame, |saved| {
                         match (owner, older_line) {
+                            ("newer", OlderLine::Discard(_)) if same_verb => {
+                                return KeptOutcome::Notice(
+                                    Notice::new(crate::sentence!(
+                                        "Shrine of Cinders draft discarded."
+                                    )),
+                                    UndoStep::of(Verb::Discard, "Shrine of Cinders")
+                                        .pressed_as(Act::Undo),
+                                );
+                            }
+                            ("newer", OlderLine::Remove(_)) if same_verb => {
+                                return Done::new(Verb::Remove, "Shrine of Cinders")
+                                    .undo(Act::Undo)
+                                    .into();
+                            }
                             (_, OlderLine::Said) | ("newer" | "third", _) => {}
                             ("older", OlderLine::Discard(name)) => {
                                 return KeptOutcome::Notice(
