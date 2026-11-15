@@ -5052,7 +5052,7 @@ mod tests {
         assert_eq!(unread.len(), 1);
         assert_eq!(
             unread[0].flag.message,
-            "Line 13: the change “HP lots” was not read. Use a number, such as HP +5.",
+            "Line 13: The change “HP lots” was not read. Use a number, such as HP +5.",
             "the editor's words keep the example"
         );
         assert_eq!(
