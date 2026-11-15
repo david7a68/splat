@@ -13682,6 +13682,21 @@ mod tests {
                 .get(&key)
                 .is_none_or(|f| f.words.is_empty())
         );
+        // M-R0.2 (G1c, `ScrollColumn`): the tab keeps its scroll bar's lane, so when it grows
+        // taller than its pane and the bar comes, no right edge in it moves.
+        let edges = |harness: &egui_kittest::Harness<'_>| {
+            ["Other effect", "Add"].map(|label| harness.get_by_label(label).rect().right())
+        };
+        let mut seen = Vec::new();
+        for height in [1000.0, 200.0] {
+            harness.set_size(vec2(560.0, height));
+            harness.run_steps(3);
+            seen.push(edges(&harness));
+        }
+        assert_eq!(
+            seen[0], seen[1],
+            "m-r0-2-G1c: the Conditions tab's right edges with no bar, then with one"
+        );
     }
 
     #[test]
