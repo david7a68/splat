@@ -155,6 +155,22 @@ pub fn open_local_package(d: &mut Driver<'_>, name: &str) {
     d.click(name);
 }
 
+/// Library's `Section` drop-down (`design::Dropdown`), where the categories are one control
+/// (960, or a list narrowed by a draft): its accessible name is `Section` and the chosen
+/// section's full label (`Section: All entries`), or `Section` alone while none is chosen.
+pub fn library_section(d: &Driver<'_>) -> Option<eframe::egui::Rect> {
+    d.nodes()
+        .into_iter()
+        .find(|node| node.name == "Section" || node.name.starts_with("Section: "))
+        .map(|node| node.rect)
+}
+
+/// Open the `Section` drop-down and choose the section with this label (`Creatures`).
+pub fn choose_library_section(d: &mut Driver<'_>, label: &str) {
+    d.click_starting("Section");
+    d.click(label);
+}
+
 pub fn search_library(d: &mut Driver<'_>, text: &str) {
     if d.has(CLEAR_SEARCH) {
         d.click(CLEAR_SEARCH);

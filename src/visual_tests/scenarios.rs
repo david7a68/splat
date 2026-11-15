@@ -1547,7 +1547,7 @@ pub mod library_browse {
                 }
             });
             // At 960 the categories are the `Section` drop-down, with no rows.
-            let compact = d.window_size().0 < 1000.0 && d.place_of("Section").is_some();
+            let compact = d.window_size().0 < 1000.0 && library_section(d).is_some();
             d.observe(
                 "s30-B2-all-entries-count",
                 (compact && row.is_none())
@@ -1764,9 +1764,7 @@ pub mod library_browse {
             "frame times are not stable while scenarios share the CPU",
         );
 
-        d.click("Section");
-
-        d.click(&format!("Library section: {CREATURES_SECTION}"));
+        choose_library_section(d, CREATURES_SECTION);
         d.expect(CREATURES_COUNT);
         d.state("creature-list", Sizes::Default);
         d.click_containing(NEXT_CREATURE);
@@ -1785,8 +1783,7 @@ pub mod creature_filter {
     const SEARCH_RESULTS: &str = "SEARCH RESULTS";
 
     pub fn run(d: &mut Driver<'_>) {
-        d.click("Section");
-        d.click("Library section: Creatures");
+        choose_library_section(d, "Creatures");
         d.expect(CREATURES_COUNT);
         d.begin_task();
 
@@ -1947,7 +1944,7 @@ pub mod library_author {
                     d.expect(name);
                 }
                 let scope = d.place_of("What the Library shows: Ashen Marches").unwrap();
-                let category = d.place_of("Section").unwrap();
+                let category = library_section(d).unwrap();
                 let search = d.place_of("Search the Library").unwrap();
                 let about = d.place_of("About Ashen Marches").unwrap();
                 scope.bottom().max(category.bottom()) <= search.top()
@@ -2422,6 +2419,17 @@ pub mod library_navigation {
                     "The menu {frame:?} ends at the count {count:?}, its words {words:?} keep one line, and it is clear of the lanes {lanes:?}"
                 ),
             );
+            // M0330 (migration-32, the L0 pressure caller): the menu is as tall as its one link,
+            // so no empty band of the scroll column's height is left below it.
+            let (margin, _, stroke) = issues_menu_frame(d);
+            let below = link.zip(frame).map(|(link, frame)| frame.bottom() - link.bottom());
+            d.observe(
+                "M0330-issues-menu-fits",
+                below.is_some_and(|below| below >= 0.0 && below <= margin + stroke + 1.0),
+                format!(
+                    "The one-link menu {frame:?} ends {below:?} below its link {link:?}: its frame's margin {margin} and stroke {stroke}, no empty band"
+                ),
+            );
         });
         d.click("Rules/Ash Exposure.md: 1 broken link");
         d.wait_for_text("Captain Varra knows the road through the ash fields.");
@@ -2646,6 +2654,82 @@ pub mod library_navigation {
                 "Each copy result shows in its own file's reader: A hidden in B {a_hidden_in_b}, B alone {b_alone}, A alone {a_alone}; Undo A restores A {a_back} and keeps B's files {b_kept} and result {b_result_kept}"
             ),
         );
+
+        // M0330: a long issues menu stops at six controls and scrolls. It still ends at the
+        // count and stays clear of every splitter and scroll bar, as the one-link menu does.
+        for n in 1..=BROKEN_FILES {
+            let name = format!("Broken Watch {n}");
+            std::fs::write(
+                b_folder.join(format!("Rules/{name}.md")),
+                format!(
+                    "{}\n[[Missing watch post {n}]]\n",
+                    crate::library::note_text(&name, "rule", None)
+                ),
+            )
+            .unwrap();
+        }
+        d.click("Packages");
+        d.click("Reload from disk");
+        d.wait_for_text("Broken Watch 1");
+        let count = issues_count(d);
+        d.click(&count);
+        d.state_prepared("long-issues-menu", Sizes::All, |d| {
+            if !d.has_containing("Broken Watch 1.md: ") {
+                d.click(&count);
+            }
+            let size = d.window_size();
+            let control = d.place_of(&count);
+            let first = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.contains("Broken Watch 1.md: "))
+                .map(|node| node.rect);
+            let frame = first.and_then(|first| d.painted_frame_around(first));
+            let (_, margins, stroke) = issues_menu_frame(d);
+            let lanes = d.chrome_lanes();
+            let clear = |rect: egui::Rect| {
+                lanes.iter().all(|lane| {
+                    !lane.y_range().intersects(rect.y_range())
+                        || !lane.x_range().intersects(rect.expand(crate::design::S).x_range())
+                })
+            };
+            // The column's six controls, and the frame's margins and stroke above and below.
+            let most = crate::design::XXL * 6.0 + margins + 2.0 * stroke;
+            d.observe(
+                "M0330-long-issues-menu",
+                control.zip(frame).is_some_and(|(control, frame)| {
+                    (frame.height() - most).abs() <= 1.0
+                        && clear(frame)
+                        && (frame.right() - control.right()).abs() <= crate::design::S
+                }),
+                format!(
+                    "At {size:?} the {count} menu {frame:?} is six controls tall ({most}), ends at the count {control:?} and is clear of the lanes {lanes:?}"
+                ),
+            );
+        });
+    }
+
+    /// Files that M0330's long issues menu lists, more than its six controls hold.
+    const BROKEN_FILES: usize = 12;
+
+    /// The Library header's file count (`13 files need fixing`), by its accessible name.
+    fn issues_count(d: &Driver<'_>) -> String {
+        d.nodes()
+            .into_iter()
+            .map(|node| node.name)
+            .find(|name| name.ends_with(" files need fixing"))
+            .unwrap_or_else(|| "files need fixing".to_owned())
+    }
+
+    /// A menu frame's bottom margin, its top and bottom margins together, and its stroke.
+    fn issues_menu_frame(d: &Driver<'_>) -> (f32, f32, f32) {
+        let style = d.app_style();
+        let margin = style.spacing.menu_margin;
+        (
+            f32::from(margin.bottom),
+            margin.sum().y,
+            style.visuals.window_stroke.width,
+        )
     }
 }
 
@@ -6501,8 +6585,7 @@ pub mod dialogs {
     pub fn run(d: &mut Driver<'_>) {
         go_library(d);
         d.begin_task();
-        d.click("Section");
-        d.click(&format!("Library section: {CREATURES_SECTION}"));
+        choose_library_section(d, CREATURES_SECTION);
         d.expect(CREATURE);
         d.click(COPY_TO);
         d.expect(COPY_TITLE);
@@ -12503,8 +12586,7 @@ pub mod nav_table {
         go_library(d);
         d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
         d.click(EVERYTHING);
-        d.click("Section");
-        d.click(&format!("Library section: {SECTION}"));
+        choose_library_section(d, SECTION);
         d.expect(ENTRY_ROW);
         let entry_top = d.scroll_position_of_reader(ENTRY);
         d.scroll_at(pos2(720.0, 400.0), 2);
@@ -26370,8 +26452,7 @@ pub mod session_plan {
 
         // A save on Encounters reaches the Library, so its next save is not a false conflict.
         go_library(d);
-        d.click("Section");
-        d.click("Library section: Encounters");
+        choose_library_section(d, "Encounters");
         d.click_containing("Ford of Ash");
         d.click(EDIT_MARKDOWN);
         d.type_into_editor("More tactics.\n");
