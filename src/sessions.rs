@@ -694,10 +694,7 @@ impl TransferFault {
                 .to_string_lossy()
                 .into_owned()
         };
-        let folder = |path: &Path| {
-            path.parent()
-                .map_or_else(String::new, |parent| name(parent))
-        };
+        let folder = |path: &Path| path.parent().map_or_else(String::new, &name);
         let fault = |read: bool, error: &std::io::Error| {
             let fault = if read {
                 FileFault::read("", error)
