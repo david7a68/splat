@@ -8034,13 +8034,10 @@ mod tests {
                         },
                         |shown, messages| {
                             let count = [0, 1, 3][shown];
-                            for line in 0..count {
+                            for (line, press) in PRESS.iter().enumerate().take(count) {
                                 messages.outcome(
                                     Notice::new(crate::sentence!("Reason {} of {}.", line, count))
-                                        .choice(Choice::new(
-                                            MessageChoice::Choice(PRESS[line]),
-                                            line,
-                                        )),
+                                        .choice(Choice::new(MessageChoice::Choice(press), line)),
                                 );
                             }
                         },
