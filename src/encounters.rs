@@ -3111,6 +3111,17 @@ pub const GROUP_DRAFT: &str = "Group draft";
 pub const CREATURE_DRAFT: &str = "Creature draft";
 pub const RUN_SETTINGS_DRAFT: &str = "Run settings draft";
 const BLOCKED_BY_CREATURE: &str = design::Unsaved::Creature.reason();
+/// What a plan or run route that opens a draft got (B4 review F1): the caller gives the draft
+/// its host only when it is `Opened`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PlanOpen {
+    Opened,
+    /// An unsaved draft refuses it, with that draft's reason; every draft is kept.
+    Refused(&'static str),
+    /// The file cannot be read; Encounters says why.
+    Failed,
+}
+
 /// R38: the drafts that hold an Encounters editor's back line, from the same values that Save
 /// and the replacement guards read.
 impl design::DraftOwner for Encounters {
@@ -3602,19 +3613,17 @@ impl Encounters {
     }
     /// B4, E1: an unsaved draft (encounter, group or creature) holds the open drafts: a plan or
     /// run route that would replace one is refused with that draft's reason, and every draft is
-    /// kept. True when refused.
-    fn replacement_held(&mut self) -> bool {
-        let Some(draft) = design::first_unsaved(self) else {
-            return false;
-        };
-        self.error = Some(draft.reason().to_owned());
-        true
+    /// kept. The reason when refused.
+    fn replacement_held(&mut self) -> Option<&'static str> {
+        let reason = design::first_unsaved(self)?.reason();
+        self.error = Some(reason.to_owned());
+        Some(reason)
     }
     /// Assemble a group where the plan is, with the session's note still beside it. Refused,
     /// with every draft kept, while one is unsaved.
-    pub fn new_group_in_plan(&mut self) {
-        if self.replacement_held() {
-            return;
+    pub fn new_group_in_plan(&mut self) -> PlanOpen {
+        if let Some(reason) = self.replacement_held() {
+            return PlanOpen::Refused(reason);
         }
         self.clear_notice();
         self.group_draft = Some(GroupDraft::new());
@@ -3626,13 +3635,14 @@ impl Encounters {
         self.expanded = None;
         self.error = None;
         self.message = None;
+        PlanOpen::Opened
     }
-    /// Returns false when the group cannot be read. Encounters says why. While a draft is
-    /// unsaved it is refused with that draft's reason and every draft is kept (true: nothing to
-    /// read on the Encounters page).
-    pub fn open_group_in_plan(&mut self, path: &str, active: &Campaign) -> bool {
-        if self.replacement_held() {
-            return true;
+    /// Open a group in the plan. `Failed` when it cannot be read (Encounters says why);
+    /// `Refused` while a draft is unsaved, with that draft's reason, every draft kept. The caller
+    /// gives the group its host only on `Opened`.
+    pub fn open_group_in_plan(&mut self, path: &str, active: &Campaign) -> PlanOpen {
+        if let Some(reason) = self.replacement_held() {
+            return PlanOpen::Refused(reason);
         }
         self.clear_notice();
         match GroupDraft::open(&active.path, path) {
@@ -3651,11 +3661,11 @@ impl Encounters {
                 self.expanded = None;
                 self.error = None;
                 self.message = None;
-                true
+                PlanOpen::Opened
             }
             Err(error) => {
                 self.error = Some(error);
-                false
+                PlanOpen::Failed
             }
         }
     }
@@ -3716,13 +3726,14 @@ impl Encounters {
                 .then_some("Still reading this campaign."))
     }
     /// A new fight from the plan. Refused, with every draft kept, while one is unsaved.
-    pub fn new_from_plan(&mut self, session: Option<Uuid>) {
-        if self.replacement_held() {
-            return;
+    pub fn new_from_plan(&mut self, session: Option<Uuid>) -> PlanOpen {
+        if let Some(reason) = self.replacement_held() {
+            return PlanOpen::Refused(reason);
         }
         self.start_new_draft();
         self.from_session = session;
         self.plan_on_save = true;
+        PlanOpen::Opened
     }
     fn start_new_draft(&mut self) {
         self.clear_notice();
@@ -9825,7 +9836,10 @@ mod tests {
         );
         assert_eq!(encounters.error.as_deref(), Some(BLOCKED_BY_DRAFT));
         encounters.error = None;
-        encounters.new_group_in_plan();
+        assert_eq!(
+            encounters.new_group_in_plan(),
+            PlanOpen::Refused(BLOCKED_BY_DRAFT)
+        );
         assert!(encounters.group_draft.is_none(), "New group is refused");
         assert_eq!(encounters.error.as_deref(), Some(BLOCKED_BY_DRAFT));
         encounters.error = None;
@@ -9840,9 +9854,13 @@ mod tests {
         let mut encounters = fresh();
         encounters.group_draft = Some(GroupDraft::new());
         let group = encounters.group_draft.as_ref().map(GroupDraft::id);
-        assert!(encounters.open_group_in_plan("Groups/Any.md", &active));
-        encounters.new_group_in_plan();
-        encounters.new_from_plan(None);
+        let group_reason = PlanOpen::Refused(design::Unsaved::Group.reason());
+        assert_eq!(
+            encounters.open_group_in_plan("Groups/Any.md", &active),
+            group_reason
+        );
+        assert_eq!(encounters.new_group_in_plan(), group_reason);
+        assert_eq!(encounters.new_from_plan(None), group_reason);
         assert_eq!(encounters.group_draft.as_ref().map(GroupDraft::id), group);
         assert!(
             encounters.draft.is_none(),

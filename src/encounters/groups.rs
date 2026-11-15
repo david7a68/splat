@@ -1365,7 +1365,12 @@ pub(super) fn of_encounter(
         ui,
         "They arrive when you add them to a run of this encounter. Save encounter saves them too.",
     );
-    design::gap(ui, design::Gap::XS);
+    // `XS` sets the first group's card apart from the help. With no group, New group follows the
+    // help as any action under its text does (B4 review F2: at 1920 the space let the 34 px back
+    // line cut the roster's last control).
+    if draft.groups.iter().any(|group| group.belongs_to(draft.id)) {
+        design::gap(ui, design::Gap::XS);
+    }
     let reveal = std::mem::take(&mut draft.reveal_group);
     let Draft {
         groups,
@@ -4649,7 +4654,10 @@ mod tests {
         assert!(!encounters.group_open_in_plan());
         assert!(encounters.group_draft.is_none());
 
-        assert!(encounters.open_group_in_plan(&path, &campaign));
+        assert_eq!(
+            encounters.open_group_in_plan(&path, &campaign),
+            super::PlanOpen::Opened
+        );
         encounters.group_draft.as_mut().unwrap().name = "Cinder Pack".into();
         encounters.save_group_draft(&ctx, &campaign, &[]);
         assert_eq!(encounters.saved_for_plan, None, "it is linked already");
@@ -4676,11 +4684,20 @@ mod tests {
             encounters.save_group_draft(&ctx, &campaign, &[]);
             paths.push(format!("Encounter Groups/{name}.md"));
         }
-        assert!(encounters.open_group_in_plan(&paths[0], &campaign));
+        assert_eq!(
+            encounters.open_group_in_plan(&paths[0], &campaign),
+            super::PlanOpen::Opened
+        );
         encounters.search = "wolf".into();
-        assert!(encounters.open_group_in_plan(&paths[0], &campaign));
+        assert_eq!(
+            encounters.open_group_in_plan(&paths[0], &campaign),
+            super::PlanOpen::Opened
+        );
         assert_eq!(encounters.search, "wolf");
-        assert!(encounters.open_group_in_plan(&paths[1], &campaign));
+        assert_eq!(
+            encounters.open_group_in_plan(&paths[1], &campaign),
+            super::PlanOpen::Opened
+        );
         assert!(encounters.search.is_empty());
         encounters.search = "scout".into();
         encounters.start_new_draft();
