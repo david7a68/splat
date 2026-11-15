@@ -186,27 +186,7 @@ fn slot_and_status_slot_keep_the_next_control_still() {
     const SAVES: Slot = Slot::new(&["0 of 3", "3 of 3 saves"], SlotType::Small);
     let ctx = context();
     let after = |value: &str, state: usize| {
-        let letter = [KeyLetter::Hidden, KeyLetter::Shown][state];
-        let (nodes, painted) = frame_with(&ctx, vec2(600.0, 300.0), Vec::new(), |ui| {
-            // F8: a control's key letter comes and goes; the control after it stays, in a
-            // right-to-left row and in a left-to-right row. (A line with a name releases the
-            // room instead: R22, `design::turn_heading`'s tests.)
-            ui.horizontal(|ui| {
-                let _ =
-                    KeySlot::new(Action::primary("Next turn"), crate::key!("N")).show(ui, letter);
-                Action::secondary("Add to fight").show(ui);
-            });
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let _ =
-                    KeySlot::new(Action::primary("Next turn"), crate::key!("N")).show(ui, letter);
-                Action::secondary("Add").show(ui);
-            });
-            // An action's own least width is kept when it is wider than its measure.
-            ui.horizontal(|ui| {
-                let wide = Action::secondary("Next").min_width(200.0);
-                let _ = KeySlot::new(wide, crate::key!("X")).show(ui, letter);
-                Action::quiet("After").show(ui);
-            });
+        let (nodes, _) = frame_with(&ctx, vec2(600.0, 300.0), Vec::new(), |ui| {
             ui.horizontal(|ui| {
                 SAVES.show(ui, value, colors().text);
                 Action::quiet("Success").show(ui);
@@ -220,21 +200,7 @@ fn slot_and_status_slot_keep_the_next_control_still() {
                 Action::quiet("Account").show(ui);
             });
         });
-        // The letter itself comes and goes, so the case is not still because nothing changed.
-        let letters = painted.iter().filter(|text| text.text == "N").count();
-        assert_eq!(letters, 2 * state, "key letters painted for {letter:?}");
-        let next = bounds(&nodes, "Next");
-        assert!(
-            next.width() >= 200.0 - 0.5,
-            "the action's own least width stays: {next:?}"
-        );
-        (
-            bounds(&nodes, "Success"),
-            bounds(&nodes, "Account"),
-            bounds(&nodes, "Add to fight"),
-            bounds(&nodes, "Add"),
-            bounds(&nodes, "After"),
-        )
+        (bounds(&nodes, "Success"), bounds(&nodes, "Account"))
     };
     let narrow = after("0 of 3", 0);
     let wide = after("3 of 3 saves", 1);

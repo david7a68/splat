@@ -11,7 +11,8 @@
 //! **Key policy of a name line (R22).** In a line that holds a name, the key letter `N` gives
 //! up its room before the name is cut: a candidate with the letter is tried only while the
 //! name is whole beside it. With the keyboard elsewhere (Lookup open) the letter is never a
-//! candidate. A line with no name (the dock) keeps a fixed slot: [`super::KeySlot`].
+//! candidate. A line with no name keeps its controls' places by its own layout (the dock's keys are
+//! plain `Action` keys).
 //!
 //! **Kept result.** [`KeptTurnHeading`] holds the one chosen candidate, its galleys and its
 //! words. Its owner is the run view (`Run::turn_heading`); it ends with the run. A frame whose
