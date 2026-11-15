@@ -741,7 +741,6 @@ pub struct Sessions {
     markers: design::Results<kept::OfSession, kept::MarkerAdd>,
     /// `Recording saved: …`, by the session whose recording it names.
     saved: design::Results<kept::OfSession, RecordingSaved>,
-
     notice_context: Option<(Option<Uuid>, View)>,
     job: Option<(Job, Uuid)>,
     reading: Option<Reading>,
@@ -796,10 +795,13 @@ pub struct Sessions {
     /// The session whose plan a group is being assembled in. It is the one that gets the link.
     group_session: Option<Uuid>,
     /// B4 review F1: the plan's group whose name the DM pressed while an unsaved draft refuses
-    /// to open it (the session, the group's path). The plan paints the refusing reason under
-    /// that group's line. It ends at the next press of a group's name, and (in `lib.rs`, every
-    /// frame) when nothing unsaved refuses any more or another session is selected.
-    pub plan_group_refused: Option<(Option<Uuid>, String)>,
+    /// to open it: the session and the group's stable id (B4b N2: not its path, which another
+    /// group can take). The plan paints the refusing reason under that group's line. It ends at
+    /// the next press of a group's name; when the plan's groups are read and that group is not
+    /// among them (removed, renamed away, its file replaced by another group); and, in
+    /// `lib.rs` while it is stored, when nothing unsaved refuses any more or another session
+    /// is selected.
+    pub plan_group_refused: Option<(Option<Uuid>, Uuid)>,
     /// Notes that kept a group's old name, because they could not be written.
     rename_problem: Option<String>,
     /// The open fight's Arrivals panel, for a planned group that has come.

@@ -23451,6 +23451,17 @@ pub mod session_plan_groups {
             d.has(&format!("Group name: {GROUP_RIVALS}")),
             d.visible_text(reason),
         );
+        // B4b: the refused press as a captured state, its reason whole, once, under Rival Team.
+        let mut under = (true, String::new());
+        d.state_prepared("plan-group-refused", Sizes::Standard, |d| {
+            let (ok, words) = refusal_under(d, reason, GROUP_RIVALS);
+            under.0 &= ok;
+            under
+                .1
+                .push_str(&format!("{:?}: {words}; ", d.window_size()));
+        });
+        under.0 &= under.1.contains("(960.0, 640.0)") && under.1.contains("(1200.0, 800.0)");
+        d.observe("s30-B4b-refusal-under-its-group", under.0, under.1);
         // Back to the draft's own session (the link names it while the host is kept).
         if d.has("Return to the session being played") {
             d.click("Return to the session being played");
@@ -23465,14 +23476,20 @@ pub mod session_plan_groups {
         d.click_starting("Session 1: The Crossing ·");
         d.expect(&format!("Add {GROUP_RIVALS} to fight"));
         let in_one = d.has_containing("Ash Two");
+        // B4b: the host as the files say it: the saved session notes that link Ash Two.
+        d.focus_window(false);
+        d.focus_window(true);
+        let files = notes_linking(d, "Ash Two");
+        let on_disk = files.len() == 1 && files[0].contains("The Ford");
         d.observe(
             "s30-B4-F1-group-keeps-its-host",
             before == (true, false, false)
                 && refused == (true, false, false, true)
                 && in_two
-                && !in_one,
+                && !in_one
+                && on_disk,
             format!(
-                "Before the press (warning, Save, Ash Two in Session 1): {before:?}; after the refused press (warning, Save, Rival Team open, reason painted): {refused:?}; after Save, Ash Two in Session 2's plan {in_two}, in Session 1's {in_one}"
+                "Before the press (warning, Save, Ash Two in Session 1): {before:?}; after the refused press (warning, Save, Rival Team open, reason painted): {refused:?}; after Save, Ash Two in Session 2's plan {in_two}, in Session 1's {in_one}; notes on disk that link it: {files:?}"
             ),
         );
         // The same press with an unsaved encounter and no group editor: the encounter's reason
@@ -23493,7 +23510,155 @@ pub mod session_plan_groups {
                 d.visible_text(encounter_reason)
             ),
         );
+        let mut under = (true, String::new());
+        d.state_prepared("plan-encounter-refused", Sizes::Standard, |d| {
+            let (ok, words) = refusal_under(d, encounter_reason, GROUP_RIVALS);
+            under.0 &= ok;
+            under
+                .1
+                .push_str(&format!("{:?}: {words}; ", d.window_size()));
+        });
+        under.0 &= under.1.contains("(960.0, 640.0)") && under.1.contains("(1200.0, 800.0)");
+        d.observe(
+            "s30-B4b-encounter-refusal-under-its-group",
+            under.0,
+            under.1,
+        );
+
+        // B4b N2: the refusal belongs to the group, not to its file's path. Another group takes
+        // Rival Team's file: no reason under it until it is pressed. Then that group's file goes
+        // away and comes back: the plan read in between ended the refusal, so it does not come
+        // back with it.
+        let file = d.root.join(format!(
+            "campaigns/emberfall/Encounter Groups/{GROUP_RIVALS}.md"
+        ));
+        let original = std::fs::read_to_string(&file).unwrap();
+        let replaced = original.replacen(
+            original
+                .lines()
+                .find(|line| line.starts_with("splat_id: "))
+                .unwrap(),
+            &format!("splat_id: {}", crate::hermetic::new_uuid()),
+            1,
+        );
+        std::fs::write(&file, &replaced).unwrap();
+        d.focus_window(false);
+        d.focus_window(true);
+        d.settle();
+        rivals_in_view(d);
+        let reused = (d.in_view(GROUP_RIVALS), d.visible_text(encounter_reason));
+        d.click_first(GROUP_RIVALS);
+        let pressed = d.visible_text(encounter_reason);
+        std::fs::remove_file(&file).unwrap();
+        d.focus_window(false);
+        d.focus_window(true);
+        d.settle();
+        let removed = (d.in_view(GROUP_RIVALS), d.visible_text(encounter_reason));
+        std::fs::write(&file, &replaced).unwrap();
+        d.focus_window(false);
+        d.focus_window(true);
+        d.settle();
+        rivals_in_view(d);
+        let back = (d.in_view(GROUP_RIVALS), d.visible_text(encounter_reason));
+        std::fs::write(&file, &original).unwrap();
+        d.focus_window(false);
+        d.focus_window(true);
+        d.settle();
+        d.observe(
+            "s30-B4b-refusal-follows-the-group",
+            reused == (true, false) && pressed && removed == (false, false) && back == (true, false),
+            format!(
+                "(row in view, reason painted): another group at the path {reused:?}; pressed {pressed}; file removed {removed:?}; the same group back {back:?}"
+            ),
+        );
+
+        // B4b N1: with no refusal stored, no frame compares the drafts for it. The encounter is
+        // discarded (its refusal ends), then unchanged frames on Encounters do no check.
+        d.click(NAV_ENCOUNTERS);
+        d.click("Discard");
+        d.settle();
+        let checks = crate::test_support::CachedWork::start("Plan refusal end", d, |d| {
+            crate::test_support::Counts {
+                reached: d.passes(),
+                work: crate::encounters::PLAN_BLOCK_CHECKS.with(std::cell::Cell::get),
+            }
+        });
+        let idle = checks.steady(d, |d| {
+            for _ in 0..5 {
+                d.settle();
+            }
+            d.at_size(DEFAULT, |_| ());
+            d.has(NEW_ENCOUNTER)
+        });
+        d.observe(
+            "s30-B4b-no-idle-refusal-check",
+            idle.is_ok(),
+            format!("Unchanged frames with no refusal stored: {idle:?}"),
+        );
     }
+}
+
+/// B4b: `reason` is painted once, whole in its clip and in the window, under `group`'s line in
+/// the plan and above the next group's line.
+fn refusal_under(d: &Driver<'_>, reason: &str, group: &str) -> (bool, String) {
+    let mut found = Vec::new();
+    d.each_painted_text(|text, clip| {
+        if text.galley.job.text == reason {
+            let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+            found.push((rect, clip.expand(1.0).contains_rect(rect)));
+        }
+    });
+    let links: Vec<egui::Rect> = d
+        .nodes()
+        .into_iter()
+        .filter(|node| node.is_link() && node.in_view())
+        .map(|node| node.rect)
+        .collect();
+    let own = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.is_link() && node.name == group && node.in_view())
+        .map(|node| node.rect);
+    let (w, h) = d.window_size();
+    let window = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, h));
+    let ok = match (found.as_slice(), own) {
+        ([(rect, whole)], Some(own)) => {
+            let next = links
+                .iter()
+                .filter(|link| link.top() > own.bottom() && (link.left() - own.left()).abs() < 2.0)
+                .map(|link| link.top())
+                .fold(f32::INFINITY, f32::min);
+            *whole
+                && window.contains_rect(*rect)
+                && rect.top() >= own.bottom() - 0.5
+                && rect.bottom() <= next + 0.5
+        }
+        _ => false,
+    };
+    (ok, format!("painted {found:?}, {group} at {own:?}"))
+}
+
+/// B4b: the saved notes that link `name` in their plan, by file name.
+fn notes_linking(d: &Driver<'_>, name: &str) -> Vec<String> {
+    fn walk(folder: &std::path::Path, link: &str, out: &mut Vec<String>) {
+        for entry in std::fs::read_dir(folder).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(&path, link, out);
+            } else if path.extension().is_some_and(|ext| ext == "md")
+                && std::fs::read_to_string(&path).is_ok_and(|text| text.contains(link))
+            {
+                out.push(path.file_name().unwrap().to_string_lossy().into_owned());
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(
+        &d.root.join("campaigns/emberfall"),
+        &format!("[[{name}]]"),
+        &mut out,
+    );
+    out
 }
 
 /// W14: an evening from the session's one page: the plan, the fights, and what they leave behind.
