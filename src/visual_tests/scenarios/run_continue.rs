@@ -799,7 +799,10 @@ pub fn run(d: &mut Driver<'_>) {
         d.has_label("IN PROGRESS 2 · last closed first") && d.visible_text("No ended fights yet."),
         format!(
             "Encounters lists the continued fight in In progress, and History has none: {:?}",
-            d.name_starting("IN PROGRESS")
+            d.nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with("IN PROGRESS"))
+                .map(|node| node.name)
         ),
     );
     d.click(NAV_SESSIONS);

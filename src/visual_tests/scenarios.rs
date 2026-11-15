@@ -24700,6 +24700,42 @@ pub mod session_plan {
             "The Library holds the encounter's latest file",
         );
         d.begin_task();
+        // R41 (round 30 review F2), kept last: the plan's played fight says the run folder's
+        // cause in Encounters' words and tone, not "This fight's run cannot be read" in the
+        // info tone; when the folder comes back, its kept failure ends and the summary shows,
+        // with the event still open.
+        d.click(NAV_SESSIONS);
+        show_plan(d);
+        if !d.has("Whole run") {
+            d.click(FIRST);
+        }
+        d.expect("Whole run");
+        let folder = d.app_mut().encounters.saved_runs()[0]
+            .path
+            .parent()
+            .unwrap()
+            .to_owned();
+        let aside = folder.with_file_name("Runs set aside");
+        std::fs::rename(&folder, &aside).unwrap();
+        d.settle();
+        d.observe(
+            "s30-R41-plan-missing",
+            d.has_containing("Splat cannot find the run folder ")
+                && !d.has_containing("This fight’s run cannot be read"),
+            "The plan's played fight says Splat cannot find the run folder, as Encounters does",
+        );
+        d.state("played-fight-run-folder-gone", Sizes::All);
+        std::fs::rename(&aside, &folder).unwrap();
+        let campaign = d.app_mut().campaigns.active_campaign().unwrap();
+        d.app_mut().encounters.read_runs_again(&campaign);
+        d.settle();
+        d.observe(
+            "s30-R41-plan-restored",
+            !d.has_containing("cannot find the run folder")
+                && !d.has_containing("This fight’s run cannot be read")
+                && d.has("Whole run"),
+            "With the run folder back, the open played fight shows its summary, not the old failure",
+        );
     }
 }
 

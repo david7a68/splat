@@ -243,25 +243,6 @@ fn missing_folders(
         unread(d),
         "After a synchronous refresh, the lists still say the run folder cannot be read",
     );
-    // R41 (round 30 review F2): the Session plan's played fight says the same cause, in the
-    // same words, as Encounters; not "This fight's run cannot be read" in the info tone.
-    let past = splat::character::stable_id("visual:session:past");
-    let open_played_fight = |d: &mut Driver<'_>| {
-        d.click(NAV_SESSIONS);
-        d.app_mut().sessions.select(Some(past));
-        d.settle();
-        show_plan(d);
-    };
-    open_played_fight(d);
-    d.click(RUN_PAST);
-    d.settle();
-    d.observe(
-        "s30-R41-plan-missing",
-        d.has_containing("Splat cannot find the run folder ")
-            && !d.has_containing("This fight’s run cannot be read"),
-        "The Session plan's played fight says Splat cannot find the run folder, as Encounters does",
-    );
-    d.click(NAV_ENCOUNTERS);
     fs::rename(&moved, &run_folder).unwrap();
     d.app_mut().encounters.read_runs_again(campaign);
     d.settle();
@@ -270,17 +251,6 @@ fn missing_folders(
         !d.has(UNFINISHED_GONE) && !d.has(ENDED_GONE) && d.has_containing(&runs[0].encounter),
         "When the folder is back, its runs show again",
     );
-    // R41 (review F2): the played fight stayed open in the plan; with the folder back, its
-    // kept failure ends and the summary shows.
-    open_played_fight(d);
-    d.observe(
-        "s30-R41-plan-restored",
-        !d.has_containing("cannot find the run folder")
-            && !d.has_containing("This fight’s run cannot be read")
-            && d.has_containing("Party won"),
-        "With the run folder back, the open played fight shows its summary, not the old failure",
-    );
-    d.click(NAV_ENCOUNTERS);
     // A run folder whose parent cannot be looked in is not a folder that was never made: the
     // lists say it cannot be read, through a reload and a synchronous refresh. The parent here is
     // a plain file, so the system answers "not a directory", not "not found" (a permission
