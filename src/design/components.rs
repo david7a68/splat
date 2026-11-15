@@ -3322,7 +3322,7 @@ pub fn fixed_part<R>(
     name: &str,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> R {
-    scroll_part(ui, rect, Id::new(id), name, add).0
+    scroll_part(ui, rect, Id::new(id), name, false, add).0
 }
 
 /// How far a message part's words sit inside its edge: the focus ring's width and one hairline
@@ -3338,13 +3338,17 @@ pub const PART_INSET: f32 = FOCUS_WIDTH + HAIRLINE_WIDTH;
     clippy::disallowed_methods,
     reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
 )]
+/// `fit`: the part is laid out in `rect` but is only as tall as what it shows (up to `rect`): a
+/// footer drawn in its whole room before it was measured (`pane::Footer::pane`). Returns what
+/// `add` returns, the content's height, and the part's rect.
 fn scroll_part<R>(
     ui: &mut Ui,
     rect: Rect,
     id: Id,
     name: &str,
+    fit: bool,
     add: impl FnOnce(&mut Ui) -> R,
-) -> (R, f32) {
+) -> (R, f32, Rect) {
     let focus = id.with("focus");
     let inner_rect = rect.shrink(PART_INSET);
     let focused = ui.ctx().memory(|memory| memory.has_focus(focus));
@@ -3424,6 +3428,14 @@ fn scroll_part<R>(
             }
             out
         });
+    let rect = if fit {
+        let tall = (output.content_size.y + 2.0 * PART_INSET)
+            .ceil()
+            .min(rect.height());
+        Rect::from_min_size(rect.min, vec2(rect.width(), tall))
+    } else {
+        rect
+    };
     let response = ui.interact(rect, focus, Sense::focusable_noninteractive());
     // A named group that holds the message and its actions: a screen reader reads the whole
     // message, and the group is not a second target over its own Undo.
@@ -3438,7 +3450,7 @@ fn scroll_part<R>(
             Rect::from_min_max(rect.min, pos2(inner_rect.right() - lane, rect.bottom())),
         );
     }
-    (output.inner, output.content_size.y)
+    (output.inner, output.content_size.y, rect)
 }
 
 /// Where a footer message stands in the footer's one order.
@@ -3697,7 +3709,7 @@ impl<'a> Footer<'a> {
                 .viewport(|viewport| viewport.this_pass.widgets.get_layer(layer).count())
         };
         let before = added(ui);
-        self.draw_messages(ui, rect, cut, most, stored);
+        let _ = self.draw_messages(ui, rect, cut, most, stored, false);
         let own: std::collections::HashSet<Id> = ui.ctx().viewport(|viewport| {
             let widgets = viewport.this_pass.widgets.get_layer(layer);
             widgets.skip(before).map(|widget| widget.id).collect()
@@ -3732,6 +3744,18 @@ impl<'a> Footer<'a> {
         self.messages.is_empty()
     }
 
+    /// A key of the messages' words, in the caller's order: a footer measured with other words
+    /// is measured again (`pane::Footer::pane`). It reads each message's words once a pass, as
+    /// the footer's name does.
+    pub(super) fn words_key(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        for (_, _, words, _) in &self.messages {
+            words.hash(&mut hasher);
+        }
+        hasher.finish()
+    }
+
     /// Scope the footer's id to `parent` (a pane's parent `Ui`); returns the id the caller gave.
     pub(super) fn rescope(&mut self, parent: Id) -> Id {
         let local = self.id;
@@ -3749,7 +3773,8 @@ impl<'a> Footer<'a> {
     /// the footer may take where it stands: a third of the pane when pinned, the room down to the
     /// pane's end when it follows a short body (ruling Q-c). Keep the height they want, whole
     /// (the caller caps it where it places the footer); a change from `stored` draws the pass
-    /// again.
+    /// again. `fit`: the messages are laid out in `rect`, and the footer is only as tall as they
+    /// are (`scroll_part`). Returns the footer's rect.
     pub(super) fn draw_messages(
         &mut self,
         ui: &mut Ui,
@@ -3757,7 +3782,8 @@ impl<'a> Footer<'a> {
         cut: bool,
         most: f32,
         stored: f32,
-    ) {
+        fit: bool,
+    ) -> Rect {
         // The one footer order (`outcome::footer_order`): results with a live Undo newest
         // first, reasons and notices in the caller's order, then results with no live Undo.
         super::outcome::footer_order(&mut self.messages);
@@ -3793,7 +3819,7 @@ impl<'a> Footer<'a> {
             data.insert_temp(Id::new(RESERVED), 0.0_f32);
             data.insert_temp(Id::new(DRAWN), 0.0_f32);
         });
-        let (_, content) = scroll_part(ui, rect, self.id, &name, |ui| {
+        let (_, content, part) = scroll_part(ui, rect, self.id, &name, fit, |ui| {
             for (_, _, _, draw) in messages {
                 draw(ui);
             }
@@ -3823,6 +3849,7 @@ impl<'a> Footer<'a> {
             ui.ctx()
                 .request_discard("the message footer changed height");
         }
+        part
     }
 }
 
@@ -7908,6 +7935,126 @@ mod tests {
                 record.content_height()
             );
         }
+
+        // Migration-32 L1c: `pane_then` takes the footer's messages after the body, and a footer
+        // below a short body that was not measured with its messages takes its whole room for
+        // that pass. So with egui's reruns denied (one pass a frame), the frame of a press shows
+        // the message the press brought, whole, and never the one it ended: none → one reason
+        // (a footer that comes) → three reasons in its place (a footer measured with others).
+        let shown = Rc::new(Cell::new(0_usize));
+        let shown_in = shown.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(vec2(960.0, 640.0))
+            .build_ui(move |ui| {
+                ui.label("Title");
+                Footer::new("then_footer", ui.available_width()).pane_then(
+                    ui,
+                    Body::Content,
+                    |ui| {
+                        for (at, name) in ["Show one", "Show three"].into_iter().enumerate() {
+                            if ui.button(name).clicked() {
+                                shown_in.set(at + 1);
+                            }
+                        }
+                        shown_in.get()
+                    },
+                    |shown, footer| {
+                        let count = [0, 1, 3][shown];
+                        for line in 0..count {
+                            let words = format!("Reason {line} of {count}.");
+                            footer.reason(words.clone(), move |ui| {
+                                message(ui, Tone::Error, &words);
+                            });
+                        }
+                    },
+                );
+            });
+        super::super::theme::install(&harness.ctx);
+        harness
+            .ctx
+            .options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
+        harness.run_steps(4);
+        let id = Id::new("then_footer");
+        assert!(
+            footer_rect(&harness.ctx, id).is_none() && shown.get() == 0,
+            "pane_then: no message, no footer"
+        );
+        let painted_whole = |harness: &egui_kittest::Harness<'_>, words: &str, footer: Rect| {
+            harness
+                .output()
+                .shapes
+                .iter()
+                .any(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text == words => {
+                        let rect = Rect::from_min_size(text.pos, text.galley.size());
+                        footer.contains_rect(rect)
+                            && shape.clip_rect.expand(0.5).contains_rect(rect)
+                    }
+                    _ => false,
+                })
+        };
+        let painted_any = |harness: &egui_kittest::Harness<'_>, words: &str| {
+            harness.output().shapes.iter().any(|shape| {
+                matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text == words)
+            })
+        };
+        for (press, count, ended) in [
+            ("Show one", 1, None),
+            ("Show three", 3, Some("Reason 0 of 1.")),
+        ] {
+            // The press's own frame: hover first, then press and release, one pass each.
+            let at = access(&harness)
+                .into_iter()
+                .find(|(label, _)| label == press)
+                .map(|(_, rect)| rect.center())
+                .unwrap_or_else(|| panic!("pane_then: {press} shows"));
+            harness.event(egui::Event::PointerMoved(at));
+            harness.step();
+            for pressed in [true, false] {
+                harness.event(egui::Event::PointerButton {
+                    pos: at,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers::NONE,
+                });
+                harness.step();
+            }
+            // This pass's footer, from the pane's record (`footer_rect` reads egui's response,
+            // which keeps the last pass's rect for a widget that had one).
+            let footer = pane_record(&harness.ctx, id).and_then(|record| record.footer());
+            let body_end = access(&harness)
+                .into_iter()
+                .filter(|(label, _)| label.starts_with("Show "))
+                .map(|(_, rect)| rect.bottom())
+                .fold(f32::MIN, f32::max);
+            let whole = (0..count).all(|line| {
+                footer.is_some_and(|footer| {
+                    painted_whole(&harness, &format!("Reason {line} of {count}."), footer)
+                })
+            });
+            assert!(
+                shown.get() == count.min(2)
+                    && whole
+                    && ended.is_none_or(|ended| !painted_any(&harness, ended))
+                    && footer.is_some_and(|footer| (footer.top() - (body_end + S)).abs() <= 1.0),
+                "pane_then, one pass a frame: the frame of {press} shows its {count} reason(s) whole in the footer {footer:?} `S` below the body ({body_end}), and not {ended:?}"
+            );
+            harness.event(egui::Event::PointerGone);
+            harness.run_steps(4);
+        }
+        // With reruns allowed again, an unchanged frame draws the footer in one pass: a footer
+        // whose messages come after the body keeps its measured room and words.
+        harness
+            .ctx
+            .options_mut(|options| options.max_passes = std::num::NonZeroUsize::new(2).unwrap());
+        harness.run_steps(4);
+        let before = harness.ctx.cumulative_pass_nr();
+        harness.step();
+        assert_eq!(
+            harness.ctx.cumulative_pass_nr() - before,
+            1,
+            "pane_then: an unchanged frame is drawn in one pass"
+        );
 
         // One pane function in two `push_id` scopes (Astra re-check 3): A holds a message, B's
         // comes and goes. A's footer keeps its place, its focused Undo and its press. Two panes

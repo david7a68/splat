@@ -1380,6 +1380,14 @@ pub fn note_bottom_banner(ctx: &egui::Context) {
     ctx.data_mut(|data| data.insert_temp(banner_id(), pass));
 }
 
+/// A footer that empties forgets its measured height and the words it was measured with.
+fn forget(ui: &Ui, id: Id) {
+    ui.ctx().data_mut(|data| {
+        data.remove::<f32>(id.with("height"));
+        data.remove::<u64>(id.with("words"));
+    });
+}
+
 fn banner_below(ctx: &egui::Context) -> bool {
     let pass = ctx.cumulative_pass_nr();
     ctx.data(|data| data.get_temp::<u64>(banner_id())) == Some(pass)
@@ -1393,7 +1401,37 @@ impl Footer<'_> {
     /// height (and `S`) while the footer holds a message. The pane takes the rest of `ui`. `ui`
     /// lays out top down. Returns what `add` returns.
     pub fn pane<R>(self, ui: &mut Ui, body: Body, add: impl FnOnce(&mut Ui) -> R) -> R {
-        self.place(ui, body, ContentScroll::default(), |ui, _| add(ui))
+        self.place(
+            ui,
+            body,
+            ContentScroll::default(),
+            false,
+            |ui, _| add(ui),
+            |inner, _| inner,
+        )
+    }
+
+    /// `pane` for a body whose acts start or end its footer's messages (a form whose fields,
+    /// Save and Discard change what the footer says). `add` draws the body; then `then` gets what
+    /// `add` returned and this footer, after the body and before the footer paints, and adds the
+    /// messages from the state the body's acts left. So the frame of an act shows the message
+    /// the act brought and never one it ended, also when egui draws that frame in one pass (no
+    /// discarded pass hides it). Messages added before stay. Returns what `then` returns.
+    pub fn pane_then<R, T>(
+        self,
+        ui: &mut Ui,
+        body: Body,
+        add: impl FnOnce(&mut Ui) -> R,
+        then: impl FnOnce(R, &mut Self) -> T,
+    ) -> T {
+        self.place(
+            ui,
+            body,
+            ContentScroll::default(),
+            true,
+            |ui, _| add(ui),
+            then,
+        )
     }
 
     /// `pane` with `Body::Content`, whose scroll column behaves as `scroll` says.
@@ -1403,7 +1441,14 @@ impl Footer<'_> {
         scroll: ContentScroll,
         add: impl FnOnce(&mut Ui) -> R,
     ) -> R {
-        self.place(ui, Body::Content, scroll, |ui, _| add(ui))
+        self.place(
+            ui,
+            Body::Content,
+            scroll,
+            false,
+            |ui, _| add(ui),
+            |inner, _| inner,
+        )
     }
 
     /// A `Body::Content` pane whose body holds one editor that grows with its text: the body
@@ -1422,16 +1467,26 @@ impl Footer<'_> {
         ui: &mut Ui,
         add: impl for<'r> FnOnce(&mut Ui, EditorRegion<'r>) -> R,
     ) -> R {
-        self.place(ui, Body::Content, ContentScroll::default(), add)
+        self.place(
+            ui,
+            Body::Content,
+            ContentScroll::default(),
+            false,
+            add,
+            |inner, _| inner,
+        )
     }
 
-    fn place<R>(
+    /// The pane. `late`: messages also come after the body, from `then` (`pane_then`).
+    fn place<R, T>(
         mut self,
         ui: &mut Ui,
         body: Body,
         options: ContentScroll,
+        late: bool,
         add: impl for<'r> FnOnce(&mut Ui, EditorRegion<'r>) -> R,
-    ) -> R {
+        then: impl FnOnce(R, &mut Self) -> T,
+    ) -> T {
         debug_assert!(
             ui.layout().main_dir() == egui::Direction::TopDown,
             "a pane's message footer ends a top-down Ui"
@@ -1447,9 +1502,12 @@ impl Footer<'_> {
             .ctx()
             .data(|data| data.get_temp::<f32>(key))
             .unwrap_or(0.0);
-        let shown = !self.is_empty();
-        if !shown && stored != 0.0 {
-            ui.ctx().data_mut(|data| data.remove::<f32>(key));
+        // Whether the footer holds a message while the body draws. Messages that come after the
+        // body (`pane_then`) are known only then: until then the footer keeps the room it had in
+        // the last pass, as it does when its messages stay (it showed when it has a height).
+        let held = !self.is_empty() || (late && stored != 0.0);
+        if !held && stored != 0.0 {
+            forget(ui, id);
             ui.ctx().request_discard("the message footer emptied");
         }
         // Ruling Q-c: a pinned footer takes at most a third of the pane; a footer that follows a
@@ -1457,7 +1515,7 @@ impl Footer<'_> {
         let most = (room.height() / 3.0).floor().max(0.0);
         // Last pass's demand, whole (what the messages want, uncapped); a change is measured
         // below, and the pass is drawn again.
-        let demand = if shown { stored } else { 0.0 };
+        let demand = if held { stored } else { 0.0 };
         // The pinned footer's height.
         let height = demand.min(most);
         let pinned = room.bottom() - height;
@@ -1488,7 +1546,7 @@ impl Footer<'_> {
         body_ui.set_clip_rect(visible);
         let rows_before = super::components::rows_this_pass(ui.ctx()).len();
         // An edge (the footer, the session banner) ends the body: no registered row is cut.
-        let edge = shown || banner_below(ui.ctx());
+        let edge = held || banner_below(ui.ctx());
         // What a layer opened from the body may use: the body's room, inside the clip.
         let usable = visible.intersect(body_room);
         let mut hold_facts = None;
@@ -1631,6 +1689,14 @@ impl Footer<'_> {
             }
         };
         drop(body_ui);
+        // `pane_then`: the messages from the state the body's acts left, before the footer
+        // paints.
+        let out = then(inner, &mut self);
+        let shown = !self.is_empty();
+        if !shown && held && stored != 0.0 {
+            forget(ui, id);
+            ui.ctx().request_discard("the message footer emptied");
+        }
         // N12: an edge (the footer, the session banner) never cuts through a registered row.
         let new_cut = match scroll {
             Some(scroll) if edge && scroll.cut() => {
@@ -1676,7 +1742,27 @@ impl Footer<'_> {
                 }
                 _ => (pinned, most),
             };
-            let rect = Rect::from_min_size(pos2(room.left(), top), vec2(width, demand.min(most)));
+            // A footer below a short body that was not measured with these messages (one that an
+            // act brought in this pass, or a footer that comes) is laid out in its whole room and
+            // fitted to what it shows, in this pass, so its messages show whole at once, even in
+            // a frame of one pass; the pass is drawn again, measured. Pinned, it keeps its
+            // measured room: the body may fill the rest.
+            let words = self.words_key();
+            let words_id = id.with("words");
+            let measured =
+                demand > 0.0 && ui.ctx().data(|data| data.get_temp::<u64>(words_id)) == Some(words);
+            if !measured {
+                ui.ctx().data_mut(|data| data.insert_temp(words_id, words));
+            }
+            let fit = placement == Placement::Follows && !measured;
+            let tall = if fit {
+                ui.ctx()
+                    .request_discard("the message footer measures its new messages");
+                most
+            } else {
+                demand.min(most)
+            };
+            let rect = Rect::from_min_size(pos2(room.left(), top), vec2(width, tall));
             // Nothing in the body under the footer takes a press there, nor in the `S` above it
             // (egui gives a press to a widget a few points away): the footer comes after the body,
             // so this blank target is above the body's, and the footer's own controls above it.
@@ -1689,7 +1775,8 @@ impl Footer<'_> {
             // The kept lines take their control ids from this pane's footer and their ticket.
             ui.ctx()
                 .data_mut(|data| data.insert_temp(Id::new("design_footer_drawing"), id));
-            self.draw_messages(ui, rect, cut && new_cut.is_none(), most, stored);
+            // Laid out in its room; when fitted, as tall as what it shows, in this same pass.
+            let rect = self.draw_messages(ui, rect, cut && new_cut.is_none(), most, stored, fit);
             if rect.height() > 0.0 {
                 footer = Some(rect);
                 #[cfg(test)]
@@ -1728,7 +1815,7 @@ impl Footer<'_> {
         );
         #[cfg(not(test))]
         let _ = (footer, placement, local);
-        inner
+        out
     }
 }
 

@@ -1244,6 +1244,55 @@ impl<'a> Driver<'a> {
         seen
     }
 
+    /// One input frame of `events`, drawn in ONE layout pass (egui's reruns denied, as when the
+    /// frame's pass budget is spent), then `look` at what that first presented frame painted and
+    /// named; then reruns come back and the app settles. No discarded pass can hide a stale view
+    /// here (migration-32 L1c: a footer's facts are fresh in the frame of the act).
+    pub fn first_frame_one_pass<T>(
+        &mut self,
+        events: impl IntoIterator<Item = egui::Event>,
+        look: impl FnOnce(&Self) -> T,
+    ) -> T {
+        let passes = self.harness.ctx.options(|options| options.max_passes);
+        self.harness
+            .ctx
+            .options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
+        let receipt = super::input_frame::one_pass(&mut self.harness, events);
+        assert_eq!(
+            receipt.layout_passes, 1,
+            "{}: the frame of the act ran more than one layout pass",
+            self.scenario
+        );
+        let seen = look(self);
+        self.harness
+            .ctx
+            .options_mut(|options| options.max_passes = passes);
+        self.interactions += 1;
+        self.settle();
+        seen
+    }
+
+    /// A screen reader's Click on the visible control named `name`, as one input event.
+    pub fn click_event(&self, name: &str) -> egui::Event {
+        let target = self
+            .nodes()
+            .into_iter()
+            .find(|node| node.name == name && Self::is_control(node) && node.in_view())
+            .map(|node| node.id)
+            .unwrap_or_else(|| {
+                panic!(
+                    "{}: no visible control {name:?}.\n{}",
+                    self.scenario,
+                    self.describe()
+                )
+            });
+        egui::Event::AccessKitActionRequest(accesskit::ActionRequest {
+            target,
+            action: accesskit::Action::Click,
+            data: None,
+        })
+    }
+
     /// Text typed into the focused field and a screen reader's Click on the control named
     /// `name`, in ONE pass. `Harness::step` runs one pass per queued event, so both events go
     /// straight into the next frame's input and one checked frame runs; queued actions fail. egui
@@ -2248,7 +2297,7 @@ impl<'a> Driver<'a> {
         )
     }
 
-    fn click_field(&mut self, field: &str) {
+    pub(super) fn click_field(&mut self, field: &str) {
         let rect = self.aim(&format!("text field {field:?}"), |node| {
             Self::is_text_input(node.role)
                 && !node.disabled

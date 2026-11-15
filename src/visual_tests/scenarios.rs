@@ -9493,9 +9493,34 @@ pub mod run_folder_defect {
                 "m32-L1b-run-folder-footer",
             );
         });
-        // Migration-32 L1b: the discard's result and its Undo are the pane's footer's, built
-        // from the settings as the frame starts. Discard puts the result `S` below the clean
-        // form; its Undo brings the draft back, with the folder move's warning and no result.
+        // Migration-32 L1b: the discard's result and its Undo are the pane's footer's. Discard
+        // puts the result `S` below the clean form; its Undo brings the draft back, with the
+        // folder move's warning and no result.
+        // L1c: the footer's facts are read after the form's acts, so the first frame of an act,
+        // drawn in one pass (reruns denied), already shows them: (a stale discard result
+        // painted or named, its Undo offered, the move choices, the folder warning whole).
+        let first = |d: &Driver<'_>| {
+            let warning = d
+                .nodes()
+                .into_iter()
+                .find(|node| {
+                    node.role == egui::accesskit::Role::Label
+                        && node.name.contains("From the new folder")
+                })
+                .map(|node| node.name);
+            let footer = footer_with(d, "From the new folder");
+            (
+                d.has_containing("Rules and runs draft discarded.")
+                    || d.painted_rect_in("Rules and runs draft discarded.", egui::Rect::EVERYTHING)
+                        .is_some(),
+                d.has("Undo discard of Rules and runs"),
+                d.has("Move runs and save"),
+                warning
+                    .zip(footer)
+                    .is_some_and(|(warning, footer)| d.painted_whole_in(&warning, footer)),
+            )
+        };
+        let fresh = (false, false, true, true);
         d.aside(|d| {
             d.click(DISCARD);
             d.expect("Rules and runs draft discarded.");
@@ -9519,8 +9544,80 @@ pub mod run_folder_defect {
                     "Discard offered {undo} ({offered}); the Undo brings the draft back with the folder move's warning and ends the result"
                 ),
             );
+            // Retyping after Discard: in the frame of the typing, the discard's result and its
+            // Undo are gone (the edit ended them), and the folder warning is there, whole.
+            d.click(DISCARD);
+            d.expect("Rules and runs draft discarded.");
+            d.click_field(RUN_FOLDER);
+            d.press_ctrl(Key::A);
+            let retyped = d.first_frame_one_pass([egui::Event::Text("Elsewhere".into())], first);
+            d.observe(
+                "m32-L1c-retype-after-discard",
+                retyped == fresh,
+                format!(
+                    "The first frame of retyping after Discard (one pass): stale result, Undo offered, move choices, warning whole = {retyped:?}, want {fresh:?}"
+                ),
+            );
+            // The first folder edit of a clean form with no footer: the move choices come with
+            // their warning, whole, in that frame. (An edit ends the discard's result; the
+            // second click leaves the form clean.)
+            d.click(DISCARD);
+            d.click("Break initiative ties in roster order");
+            d.click("Break initiative ties in roster order");
+            let clean = !d.has_containing("Rules and runs draft discarded.")
+                && footer_with(d, "From the new folder").is_none()
+                && !d.has("Move runs and save");
+            d.click_field(RUN_FOLDER);
+            d.press_ctrl(Key::A);
+            let edited = d.first_frame_one_pass([egui::Event::Text("Elsewhere".into())], first);
+            d.observe(
+                "m32-L1c-first-folder-edit",
+                clean && edited == fresh,
+                format!(
+                    "From a clean form with no footer ({clean}), the first frame of the folder edit (one pass): {edited:?}, want {fresh:?}"
+                ),
+            );
         });
         d.goal("edit the run folder with no draft");
+        // L1c: a failed attempt says why in its own frame, drawn in one pass. A run file of the
+        // same name waits in the new folder, so Move runs and save fails and replaces nothing;
+        // the error is painted whole in the footer with the folder warning. The error stays
+        // until the move below succeeds (its reload ends it).
+        let campaign = d.app_mut().campaigns.active_campaign().unwrap();
+        let run_file = d.app().encounters.saved_runs()[0]
+            .path
+            .file_name()
+            .unwrap()
+            .to_owned();
+        let target = campaign.path.join("Elsewhere");
+        std::fs::create_dir_all(&target).unwrap();
+        std::fs::write(target.join(&run_file), "Another run of the same name").unwrap();
+        let press = d.click_event("Move runs and save");
+        let failed = d.first_frame_one_pass([press], |d| {
+            let error = d
+                .nodes()
+                .into_iter()
+                .find(|node| {
+                    node.role == egui::accesskit::Role::Label
+                        && node.name.starts_with("Could not move runs.")
+                })
+                .map(|node| node.name);
+            let footer = footer_with(d, "Could not move runs.");
+            (
+                error
+                    .zip(footer)
+                    .is_some_and(|(error, footer)| d.painted_whole_in(&error, footer)),
+                first(d).3,
+            )
+        });
+        std::fs::remove_file(target.join(&run_file)).unwrap();
+        d.observe(
+            "m32-L1c-failed-move",
+            failed == (true, true) && d.has_containing("Could not move runs."),
+            format!(
+                "The first frame of a failed Move runs and save (one pass): error whole, warning whole = {failed:?}"
+            ),
+        );
         // A panic ends this app, so the video stops first and nothing follows.
         d.stop_filming();
         let click = std::panic::AssertUnwindSafe(|| {

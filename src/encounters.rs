@@ -8041,112 +8041,40 @@ impl Encounters {
         };
         let draft_open = self.draft_dirty();
         let run_open = self.has_run();
-        let mut settings_saved = false;
-        let mut error = None;
-        let Some(snapshot) = &mut self.snapshot else {
+        let Some(snapshot) = &self.snapshot else {
             crate::design::spinner(ui);
             return;
         };
         design::gap(ui, design::Gap::S);
-        let rule_flags: Vec<_> = snapshot
-            .catalogue
-            .entries
-            .get(&active.id)
+        // The unread rule choices' lines, for the save row's state. Their warnings are the
+        // footer's (below).
+        let rule_lines: Vec<String> = rule_choices(snapshot, active.id)
             .into_iter()
-            .flat_map(|item| &item.entry.flags)
-            // Every flag Campaign sends here with its repair link, by its kind, never its words.
-            .filter(|flag| flag.kind == splat::content::layout::FlagKind::RuleChoice)
+            .map(|(line, _)| line)
             .collect();
         let closed_while = draft_open.then_some("Save or discard the open encounter first.");
         // FC5, FN2's sibling: the unread choice's warnings, the folder move's warning, the
         // discard's result and the reasons go in the tab's footer, so their coming and going
-        // moves no field or Save.
-        let rule_words: Vec<String> = rule_flags.iter().map(|flag| flag.message.clone()).collect();
-        // The footer's facts come from the settings as this frame starts, as the pane takes its
-        // messages before it draws the form: a change the form makes shows in the next frame,
-        // which the input that made the change draws.
-        let folder_before = snapshot.options.folder.clone();
-        let left_before = snapshot
-            .options
-            .runs_left_in(&snapshot.saved_options, &active);
-        let folder_warning = match &left_before {
-            Ok(left) if !left.is_empty() => {
-                let run_files = left.len();
-                let runs: Vec<_> = left
-                    .iter()
-                    .filter_map(|path| crate::encounter_run::Run::open(path, active.id).ok())
-                    .filter(|run| !run.state_words(true).starts_with("Ended"))
-                    .collect();
-                Some(
-                    if run_files == 1
-                        && let Some(run) = runs.first()
-                    {
-                        format!(
-                            "{} ({}) stays in {}. From the new folder, Splat will not show it or resume it.",
-                            run.name,
-                            run.state_words(true),
-                            snapshot.saved_options.folder
-                        )
-                    } else {
-                        format!(
-                            "{} {} in {}. {} are unfinished. From the new folder, Splat will not show these runs or resume them.",
-                            design::count(run_files, "saved run", "saved runs"),
-                            if run_files == 1 { "stays" } else { "stay" },
-                            snapshot.saved_options.folder,
-                            runs.len()
-                        )
-                    },
-                )
-            }
-            _ => None,
-        };
-        let discard_shown =
-            snapshot.options == snapshot.saved_options && self.discarded_options.is_some();
-        // The tab's footer: the discard's Undo, the reasons, then the notices. The pane places
-        // it `S` below the form while the form fits, and at the tab's bottom only when the form
-        // scrolls, so the form keeps its place whatever the footer holds.
+        // moves no field or Save. The pane places it `S` below the form while the form fits,
+        // and at the tab's bottom only when the form scrolls.
+        let ctx = ui.ctx().clone();
+        let modules = campaigns.modules();
         let undo_discard = std::cell::Cell::new(false);
         let undo = &undo_discard;
-        let mut footer =
-            design::Footer::new(("run_settings_footer", active.id), design::FORM_WIDTH);
-        if discard_shown && let Some(order) = self.discarded_options_order {
-            let words = "Rules and runs draft discarded.";
-            footer.result(order, words, true, move |ui| {
-                if design::draft_discarded(ui, "Rules and runs") {
-                    undo.set(true);
-                }
-            });
-        }
-        if let Some(e) = self.error.clone() {
-            footer.reason(e.clone(), move |ui| {
-                design::message(ui, Tone::Error, &e);
-            });
-        }
-        // The warning names the line; the file's path and links start at the last warning's
-        // words.
-        if let Some((last, before)) = rule_words.split_last() {
-            let (last, before, root) = (last.clone(), before.to_vec(), active.path.clone());
-            footer.reason(rule_words.join(" "), move |ui| {
-                for text in &before {
-                    design::message(ui, Tone::Warning, text);
-                }
-                design::message_with_actions(ui, Tone::Warning, &last, |ui| {
-                    file_line(ui, &root, "Campaign.md");
-                });
-            });
-        }
-        if let Some(words) = folder_warning {
-            footer.notice(words.clone(), move |ui| {
-                design::message(ui, Tone::Warning, &words);
-            });
-        }
-        if draft_open {
-            let words = "Save or discard the open encounter to change run settings.";
-            footer.notice(words, move |ui| {
-                design::message(ui, Tone::Info, words);
-            });
-        }
-        footer.pane(ui, design::Body::Content, |ui| {
+        let active = &active;
+        let this = &mut *self;
+        // L1c: the footer's messages are read from their owners after the form's acts and the
+        // acts' own effects (a save's reload, a failed attempt's error), before the footer paints
+        // (`Footer::pane_then`): the frame of an act never shows a message the act ended, and
+        // shows the one it brought.
+        design::Footer::new(("run_settings_footer", active.id), design::FORM_WIDTH).pane_then(
+            ui,
+            design::Body::Content,
+            move |ui| {
+        let mut settings_saved = false;
+        let mut error = None;
+        let mut form_left = None;
+        if let Some(snapshot) = this.snapshot.as_mut() {
         ui.vertical(|ui| {
         // The form is as wide as the tab, at most `FORM_WIDTH`.
         ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
@@ -8230,18 +8158,15 @@ impl Encounters {
                 });
             }
             let changed = snapshot.options != snapshot.saved_options;
-            // The run files the folder change leaves: read once a frame, and again only when
-            // the field changed the folder in this frame.
-            let left = if snapshot.options.folder == folder_before {
-                left_before
-            } else {
-                snapshot.options.runs_left_in(&snapshot.saved_options, &active)
-            };
+            // The run files the folder change leaves, read once a frame for the folder the
+            // fields left; the footer's warning says them (`then` below).
+            let left = snapshot.options.runs_left_in(&snapshot.saved_options, active);
+            let left_folder = snapshot.options.folder.clone();
             let run_files = left.as_ref().map_or(0, Vec::len);
             let folder_changed = snapshot.options.directory(&active).ok() != snapshot.saved_options.directory(&active).ok();
             let blocked = if run_open { Some("Close the open run to save run settings.") }
                 else if folder_changed && left.is_err() { Some("Could not read saved runs. Check the old run folder before saving.") }
-                else if !changed && rule_flags.is_empty() { Some("No changes to save.") } else { None };
+                else if !changed && rule_lines.is_empty() { Some("No changes to save.") } else { None };
             ui.vertical(|ui| {
                 // Ctrl+S saves exactly when the button it labels can: a rule repair with no
                 // other change too.
@@ -8253,7 +8178,7 @@ impl Encounters {
                     ($ui:ident) => {{
                         let ui = &mut *$ui;
                 if changed {
-                    self.discarded_options = None;
+                    this.discarded_options = None;
                     design::status(
                         ui,
                         Status {
@@ -8263,17 +8188,16 @@ impl Encounters {
                         },
                     );
                     if Action::quiet("Discard").show(ui).clicked() {
-                        self.discarded_options = Some(std::mem::replace(
+                        this.discarded_options = Some(std::mem::replace(
                             &mut snapshot.options,
                             snapshot.saved_options.clone(),
                         ));
-                        self.discarded_options_order = Some(design::ResultOrder::issue());
+                        this.discarded_options_order = Some(design::ResultOrder::issue());
                     }
                 }
-                if !changed && !rule_flags.is_empty() {
+                if !changed && !rule_lines.is_empty() {
                     // Save is the repair here: it writes the shown settings over the unread choice.
-                    let lines: Vec<_> = rule_flags.iter().map(|flag| flag.line.to_string()).collect();
-                    let lines = match lines.split_last() {
+                    let lines = match rule_lines.split_last() {
                         Some((last, [])) => format!("line {last}"),
                         Some((last, before)) => format!("lines {} and {last}", before.join(", ")),
                         None => String::new(),
@@ -8358,16 +8282,111 @@ impl Encounters {
                     }
                 }
             });
+            form_left = Some((left_folder, left));
         });
         });
-        });
-        if settings_saved {
-            self.saved = true;
-            self.reload(ui.ctx(), active.clone(), campaigns.modules().to_vec());
         }
-        if let Some(e) = error {
-            self.error = Some(e);
-        }
+        (this, settings_saved, error, form_left)
+            },
+            |(this, settings_saved, error, form_left), footer| {
+                // The acts' own effects first: a save reloads the settings (which ends the
+                // error), and a failed attempt says why.
+                if settings_saved {
+                    this.saved = true;
+                    this.reload(&ctx, active.clone(), modules.to_vec());
+                }
+                if let Some(e) = error {
+                    this.error = Some(e);
+                }
+                // Then the footer's messages, each from its owner as the acts left it: the
+                // discard's Undo while its draft is kept and the form is unchanged; the error;
+                // the unread choices' warnings with the file line; the folder move's warning;
+                // the open draft's notice.
+                let snapshot = this.snapshot.as_ref();
+                if snapshot.is_some_and(|snapshot| snapshot.options == snapshot.saved_options)
+                    && this.discarded_options.is_some()
+                    && let Some(order) = this.discarded_options_order
+                {
+                    let words = "Rules and runs draft discarded.";
+                    footer.result(order, words, true, move |ui| {
+                        if design::draft_discarded(ui, "Rules and runs") {
+                            undo.set(true);
+                        }
+                    });
+                }
+                if let Some(e) = this.error.clone() {
+                    footer.reason(e.clone(), move |ui| {
+                        design::message(ui, Tone::Error, &e);
+                    });
+                }
+                // The warning names the line; the file's path and links start at the last
+                // warning's words.
+                let rule_words: Vec<String> = snapshot
+                    .map(|snapshot| rule_choices(snapshot, active.id))
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|(_, words)| words)
+                    .collect();
+                if let Some((last, before)) = rule_words.split_last() {
+                    let (last, before, root) = (last.clone(), before.to_vec(), active.path.clone());
+                    footer.reason(rule_words.join(" "), move |ui| {
+                        for text in &before {
+                            design::message(ui, Tone::Warning, text);
+                        }
+                        design::message_with_actions(ui, Tone::Warning, &last, |ui| {
+                            file_line(ui, &root, "Campaign.md");
+                        });
+                    });
+                }
+                // The run files the form read, unless an act changed the folder after it (Discard
+                // puts the saved one back).
+                let left = snapshot.zip(form_left).map(|(snapshot, (folder, left))| {
+                    if snapshot.options.folder == folder {
+                        left
+                    } else {
+                        snapshot.options.runs_left_in(&snapshot.saved_options, active)
+                    }
+                });
+                if let Some(snapshot) = snapshot
+                    && let Some(Ok(left)) = &left
+                    && !left.is_empty()
+                {
+                    let run_files = left.len();
+                    let runs: Vec<_> = left
+                        .iter()
+                        .filter_map(|path| crate::encounter_run::Run::open(path, active.id).ok())
+                        .filter(|run| !run.state_words(true).starts_with("Ended"))
+                        .collect();
+                    let words = if run_files == 1
+                        && let Some(run) = runs.first()
+                    {
+                        format!(
+                            "{} ({}) stays in {}. From the new folder, Splat will not show it or resume it.",
+                            run.name,
+                            run.state_words(true),
+                            snapshot.saved_options.folder
+                        )
+                    } else {
+                        format!(
+                            "{} {} in {}. {} are unfinished. From the new folder, Splat will not show these runs or resume them.",
+                            design::count(run_files, "saved run", "saved runs"),
+                            if run_files == 1 { "stays" } else { "stay" },
+                            snapshot.saved_options.folder,
+                            runs.len()
+                        )
+                    };
+                    footer.notice(words.clone(), move |ui| {
+                        design::message(ui, Tone::Warning, &words);
+                    });
+                }
+                if this.draft_dirty() {
+                    let words = "Save or discard the open encounter to change run settings.";
+                    footer.notice(words, move |ui| {
+                        design::message(ui, Tone::Info, words);
+                    });
+                }
+            },
+        );
         if undo_discard.get()
             && let Some(options) = self.discarded_options.take()
             && let Some(snapshot) = self.snapshot.as_mut()
@@ -8375,6 +8394,20 @@ impl Encounters {
             snapshot.options = options;
         }
     }
+}
+
+/// The unread rule choices Campaign sends to Rules and runs with their repair link, by their kind,
+/// never their words: each one's line and warning.
+fn rule_choices(snapshot: &Snapshot, campaign: Uuid) -> Vec<(String, String)> {
+    snapshot
+        .catalogue
+        .entries
+        .get(&campaign)
+        .into_iter()
+        .flat_map(|item| &item.entry.flags)
+        .filter(|flag| flag.kind == splat::content::layout::FlagKind::RuleChoice)
+        .map(|flag| (flag.line.to_string(), flag.message.clone()))
+        .collect()
 }
 
 /// The widest a list row grows, so that its actions stay near the name they belong to.
