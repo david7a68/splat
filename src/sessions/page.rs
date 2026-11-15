@@ -6425,7 +6425,8 @@ impl Sessions {
                 &mut self.notice_order,
                 match delete_recording(&path) {
                     Ok(()) => (Tone::Success, "Recording deleted.".to_owned()),
-                    Err(error) => (Tone::Error, format!("Not deleted. {error}")),
+                    // `delete_recording` says it in plain words (`not_deleted`).
+                    Err(error) => (Tone::Error, error),
                 },
             );
             self.refresh_recordings();
@@ -7433,7 +7434,7 @@ impl Sessions {
             return;
         }
         if delete && let Some(path) = &template.path {
-            match fs::remove_file(path) {
+            match super::remove_file(path) {
                 Ok(()) => {
                     let body = self
                         .template_draft
@@ -7449,7 +7450,7 @@ impl Sessions {
                     self.template = None;
                     self.refresh();
                 }
-                Err(error) => self.template_error = Some(format!("Not deleted. {error}")),
+                Err(error) => self.template_error = Some(super::not_deleted(path, &error)),
             }
             return;
         }

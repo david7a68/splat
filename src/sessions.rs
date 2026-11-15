@@ -1209,6 +1209,37 @@ pub fn new_recording_path(folder: &Path, session: Uuid) -> PathBuf {
 }
 
 /// Remove a recording and what was made from it.
+/// A removal the system refused, in plain words from the error's kind (round 30 B7e): what was
+/// not deleted, and the recovery of the World page's file faults. Never the system's words.
+pub(crate) fn not_deleted(path: &Path, error: &std::io::Error) -> String {
+    use crate::world::file_fault::{FileFault, Kind};
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    let fault = FileFault::write(&name, error);
+    let what = match fault.kind {
+        Kind::WriteDenied => format!("Splat has no permission to delete {name}."),
+        Kind::ReadOnly => format!("The disk is read-only, so Splat cannot delete {name}."),
+        _ => format!("Splat cannot delete {name}."),
+    };
+    format!("Not deleted. {what} {}", fault.recovery())
+}
+
+#[cfg(test)]
+thread_local! {
+    /// A test's refused removals: removing a file that exists fails with this system error code.
+    pub(crate) static FAILING_REMOVES: std::cell::Cell<Option<i32>> = const { std::cell::Cell::new(None) };
+}
+
+/// Remove a file, with the system's error kept for `not_deleted`.
+pub(crate) fn remove_file(path: &Path) -> std::io::Result<()> {
+    #[cfg(test)]
+    if let Some(code) = FAILING_REMOVES.with(std::cell::Cell::get)
+        && path.exists()
+    {
+        return Err(std::io::Error::from_raw_os_error(code));
+    }
+    fs::remove_file(path)
+}
+
 pub fn delete_recording(path: &Path) -> Result<(), String> {
     for made in [
         crate::processing::transcript_path(path),
@@ -1220,10 +1251,10 @@ pub fn delete_recording(path: &Path) -> Result<(), String> {
         path.with_extension("state.txt"),
         path.to_path_buf(),
     ] {
-        match fs::remove_file(made) {
+        match remove_file(&made) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(e.to_string()),
+            Err(e) => return Err(not_deleted(&made, &e)),
         }
     }
     Ok(())
@@ -3049,6 +3080,20 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert!(rows[0].transcript && rows[0].summary);
         assert!(!rows[0].path.exists());
+        // Round 30 B7e (review F3 of PR 431): a removal the system refuses says plain words,
+        // never the system's, and the file it could not remove stays.
+        FAILING_REMOVES.with(|code| code.set(Some(13)));
+        let refused = delete_recording(&rows[0].path).unwrap_err();
+        FAILING_REMOVES.with(|code| code.set(None));
+        assert_eq!(
+            refused,
+            "Not deleted. Splat has no permission to delete evening.transcript.md. Give your user \
+             account permission to change the file and its folder."
+        );
+        assert_eq!(
+            fs::read_to_string(folder.join("evening.transcript.md")).unwrap(),
+            "Words"
+        );
         delete_recording(&rows[0].path).unwrap();
         assert!(list_recordings(dir.path(), id).is_empty());
     }
