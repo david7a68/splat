@@ -1609,18 +1609,12 @@ impl Splat {
             .as_ref()
             .is_some_and(|fact| !matches!(fact.state, timeline::RunState::Ended(_)));
         if filing && self.old_session {
-            statuses.push(Status {
-                icon: icons::WARN,
-                word: "Old session",
-                color: c.result.warning,
-            });
+            // R41: the tone that the Session and Notes footers say it in.
+            statuses.push(sessions::page::NotTonight::rail());
         }
         if self.party.sync_stopped {
-            statuses.push(Status {
-                icon: icons::SYNC_OFF,
-                word: "Sync stopped",
-                color: c.sync.pending,
-            });
+            // R41: the tone of the Party footer's notice.
+            statuses.push(party::SyncStopped::rail());
         }
         if self.party.sync_conflict() {
             statuses.push(Status {

@@ -14211,6 +14211,18 @@ pub mod session_notes {
             "Adding an event to an older session says so before it happens",
         );
         d.state("session-events-older", Sizes::Default);
+        // s30 B11 (R41): that this is not the session being played is a warning, as the rail and
+        // the Record step say it, at each size.
+        let tones = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                tones_beside(d, "What you write and add on this page goes into")
+            })
+        });
+        d.observe(
+            "s30-B11-tone-not-played",
+            tones.iter().all(|tones| tones == &["warning"]),
+            format!("Not the session being played, at 960, 1200 and 1920: {tones:?}"),
+        );
         d.observe_both(
             "iter-18-B-rest-row",
             "The rest summary and ruling share one line",
@@ -14536,6 +14548,23 @@ pub mod session_notes {
             format!("`New session` has the border of `Play it tonight`: {frames:?}"),
         );
         d.state("run-with-old-note", Sizes::Default);
+        // s30 B11 (R41): the rail's `Old session` and the Notes panel's notice of the same date
+        // take one tone, a warning, at each size.
+        let tones = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                (
+                    status_tones(d, "Old session"),
+                    tones_beside(d, "This session is dated 2025-12-25."),
+                )
+            })
+        });
+        d.observe(
+            "s30-B11-tone-old-session",
+            tones
+                .iter()
+                .all(|(rail, notes)| rail == &["warning"] && notes == &["warning"]),
+            format!("Rail and Notes panel at 960, 1200 and 1920: {tones:?}"),
+        );
         // The action bar above the dock sits an `XS` gap apart from it, and its first button
         // starts at the dock's content edge, where Amount starts (iter-19 FT6).
         d.observe_both(
