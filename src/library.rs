@@ -7336,6 +7336,13 @@ impl Library {
         let loaded = self.loaded.as_ref().unwrap();
         let note = &loaded.notes[i];
         let root = note.owner.root().expect("an editable note").to_path_buf();
+        // A package whose manifest is known to be gone (its warning says so): Save writes the
+        // draft as a new manifest, with no baseline, and never over a file (the no-clobber
+        // write). A file that came back at that path since keeps the outside-change guard: the
+        // baseline check sends it to the comparison, and the draft stays.
+        if note.manifest_gone && note_path(&root, &note.path).is_ok_and(|path| !path.exists()) {
+            file_gone = true;
+        }
         let refused = loaded.draft_refusal(i, &Entry::parse(&note.path, &self.draft));
         let result = match &refused {
             Some(error) => Err(error.clone()),
@@ -7392,6 +7399,8 @@ impl Library {
                 l.notes[i].entry = Some(entry);
                 l.notes[i].text = self.draft.clone();
                 l.notes[i].error = None;
+                // A manifest written from its draft is on disk again.
+                l.notes[i].manifest_gone = false;
                 l.invalidate();
                 self.matches = None;
                 self.scope_counts = None;
