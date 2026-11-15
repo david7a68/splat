@@ -1667,6 +1667,12 @@ mod suppressions;
 ///   whose word is always shown (K4b, FL7). The lint's `arrow-label` finds the arrow given as
 ///   an action's whole label, by name or as a literal. The name is spelled at
 ///   each use, also in an alias or a grouped import, so the text count sees every one.
+/// - `UndoStep::verb(`: an Undo with no object (`Undo remove`), whose words cannot name what it
+///   takes back even where the line has room (ruling M9). The 23 production calls move to
+///   `UndoStep::of` in their caller lanes, or stay as named exceptions; `outcome.rs` keeps its
+///   part's own examples and tests. The text count sees a call written by this path, not one
+///   through an alias of the type or a bare function reference: that gap closes when the path
+///   becomes a Clippy ban after the callers move (the inventory's closing rule).
 #[cfg(test)]
 pub(crate) type Staged = (&'static str, &'static str, &'static [(&'static str, usize)]);
 
@@ -1756,6 +1762,23 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/design/layout.rs", 1),
             ("src/design/layout/tests.rs", 1),
             ("src/sessions/page.rs", 1),
+        ],
+    ),
+    (
+        "UndoStep::verb(",
+        "Give the Undo the object its result names, `UndoStep::of(verb, object)`: a lone Undo shows it whenever it fits (M9). An Undo with no object is a named exception the lead rules on.",
+        &[
+            ("src/design/outcome.rs", 7),
+            ("src/encounters.rs", 4),
+            ("src/sessions/carry.rs", 1),
+            ("src/sessions/page.rs", 6),
+            ("src/sessions/plan.rs", 4),
+            ("src/timeline.rs", 2),
+            ("src/timeline/page.rs", 3),
+            ("src/trackers/history.rs", 1),
+            ("src/trackers/view.rs", 2),
+            ("src/world.rs", 1),
+            ("src/world/repair.rs", 1),
         ],
     ),
 ];

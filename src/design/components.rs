@@ -3031,18 +3031,23 @@ pub fn save_row_state(ui: &mut Ui, state: Status<'_>, dirty: bool, blocked: Opti
     dirty && Action::quiet("Discard").blocked(blocked).show(ui).clicked()
 }
 
-/// Names the discarded draft in an Undo message. Undo's accessible name also names the draft.
-/// Returns true when undo is pressed.
+/// Names the discarded draft in an Undo message. Its one Undo follows the footer's rule for a
+/// lone Undo (ruling M9, `UndoStep::alone`): `Undo discard of <name>` wherever it fits, else
+/// `Undo discard`; its accessible name always names the draft. Returns true when undo is
+/// pressed.
 #[deprecated(
     note = "Draw messages through `Footer::outcome`, `design::banner`, `design::row_fault` or `PagePlaceholder` (src/design/outcome.rs)."
 )]
 pub fn draft_discarded(ui: &mut Ui, name: &str) -> bool {
+    let step = super::outcome::UndoStep::of(super::outcome::Verb::Discard, name);
+    let whole = step.label();
+    let shown = step.alone(ui, super::outcome::undo_room(ui, Tone::Info, &whole));
     undo_message_capped(
         ui,
         Tone::Info,
         &format!("{name} draft discarded."),
-        "Undo discard",
-        Some(&format!("Undo discard of {name}")),
+        &shown,
+        Some(&whole),
     )
 }
 
@@ -5760,6 +5765,26 @@ mod tests {
                     "SD1-beside at {width}: message {message:?}, Undo {action:?}, icon {icon:?}"
                 );
             }
+        }
+        // Ruling M9: the legacy discard message's one Undo measures its whole form first, as a
+        // lone Undo in a footer does (`UndoStep::alone`): wide, it names the draft; narrow,
+        // where that does not fit, `Undo discard`. Its accessible name always names the draft.
+        const WHOLE: &str = "Undo discard of Bridge Ambush";
+        for (width, shown) in [(900.0, WHOLE), (200.0, "Undo discard")] {
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(vec2(width, 200.0))
+                .build_ui(|ui| {
+                    let _ = draft_discarded(ui, "Bridge Ambush");
+                });
+            super::super::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            let undos: Vec<String> = painted_texts(&harness)
+                .into_iter()
+                .map(|(text, _)| text)
+                .filter(|text| text.starts_with("Undo"))
+                .collect();
+            assert_eq!(undos, [shown], "M9 discard at {width}");
+            let _ = egui_kittest::kittest::Queryable::get_by_label(&harness, WHOLE);
         }
         // P3a, ruling R19 (proof 3): a hanging Undo keeps keyboard focus, Enter, Space and an
         // AccessKit click with the pointer anywhere; one input frame per step, counted in it.

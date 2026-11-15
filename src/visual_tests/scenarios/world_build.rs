@@ -2613,9 +2613,11 @@ pub fn facts(d: &mut Driver<'_>) {
     );
     d.state("world-problems", Sizes::All);
 
-    // Round 30 FE11, SE7, AE8: a lone tick's Undo paints `Undo tick`, as its result already
-    // names the question and the note; two ticks paint the whole form, which tells them apart.
-    // The accessible name is always the whole form. A second note with its own question.
+    // Ruling M9 (migration 32; it replaces round 30 FE11's lone `Undo tick`): a lone tick's
+    // Undo measures its whole form first and paints it where it fits, as here at 960; only a
+    // line too narrow for it gives up the object (`design::outcome` tests). Two ticks paint the
+    // whole form too, which tells them apart. The accessible name is always the whole form. A
+    // second note with its own question.
     let pact = root(d).join("Lore/Ash Pact.md");
     let pact_open = open
         .replace(id, "splat_id: 00000000-0000-4000-8000-0000000000ab")
@@ -2643,9 +2645,8 @@ pub fn facts(d: &mut Driver<'_>) {
     let one = painted(d, horn_undo);
     d.click("Open: Who signed the pact?");
     let two = (painted(d, horn_undo), painted(d, pact_undo));
-    // A second tick makes both Undos paint their whole labels, so an Undo may move from beside
-    // its result to the line below it. At 960 nothing is lost: each result's words and each
-    // Undo stay whole in view.
+    // With a second tick both Undos paint their whole labels; an Undo may sit on the line below
+    // its result. At 960 nothing is lost: each result's words and each Undo stay whole in view.
     let whole_at_960 = d.at_size(SMALL, |d| {
         let nodes = d.nodes();
         let undo_whole = |name: &str| {
@@ -2682,9 +2683,9 @@ pub fn facts(d: &mut Driver<'_>) {
     let after = painted(d, pact_undo);
     d.observe(
         "s30-FE11-undo-alone",
-        one == Some("short")
+        one == Some("whole")
             && two == (Some("whole"), Some("whole"))
-            && after == Some("short")
+            && after == Some("whole")
             && fs::read_to_string(&horn).unwrap() == open
             && fs::read_to_string(&pact).unwrap()
                 == pact_open.replacen("- [ ] Who signed", "- [x] Who signed", 1),

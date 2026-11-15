@@ -950,8 +950,9 @@ impl<'a> Driver<'a> {
     }
 
     /// Wait until a control with exactly this accessible name is drawn in the window: a sync
-    /// point before a step on that control, whatever words it paints (a lone Undo paints
-    /// `Undo <verb>`, named by its whole label). Fails by timeout as `wait_for_text` does.
+    /// point before a step on that control, whatever words it paints (a lone Undo too narrow
+    /// for its whole words paints `Undo <verb>`, named by its whole label). Fails by timeout as
+    /// `wait_for_text` does.
     pub fn wait_for_control(&mut self, name: &str) {
         let started = Instant::now();
         let timeout = if self.diagnose {
