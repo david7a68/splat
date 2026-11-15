@@ -2814,13 +2814,34 @@ pub mod campaign_content {
             clean_top,
             "Starting a draft must keep the editor's top edge"
         );
-        // Round 27 FA3: the draft's reason in the footer has the message form: a tone bar
-        // beside its words, as the footer's other messages have.
-        let reason = d.painted_rect_in("Save or discard to copy", egui::Rect::EVERYTHING);
+        // Round 27 FA3, changed by the structural phase (M2, lead rulings 1 and 2 of packets 1
+        // and 2): the draft's reason has one home, the save row (its own line, or a slot under
+        // it in a reader too narrow for the short form), so it is painted exactly once, between
+        // the toolbar and the editor, and no longer as a footer message.
+        let mut reasons = Vec::new();
+        d.each_painted_text(|text, clip| {
+            if text.galley.job.text.starts_with("Save or discard")
+                && clip.intersects(text.visual_bounding_rect())
+            {
+                reasons.push(text.visual_bounding_rect());
+            }
+        });
+        let save = d.place_of(SAVE_ENTRY);
+        let toolbar = d.place_of("Read");
+        let editor = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.role == egui::accesskit::Role::MultilineTextInput)
+            .map(|node| node.shown);
         d.observe(
             "iter-27-L-FA3",
-            reason.is_some_and(|words| d.has_tone_bar(words, crate::design::colors().result.info)),
-            format!("The Library draft's reason is a footer message with its bar: {reason:?}"),
+            reasons.len() == 1
+                && save.zip(editor).zip(toolbar).is_some_and(|((save, editor), toolbar)| {
+                    reasons[0].top() >= toolbar.bottom() - 0.5
+                        && reasons[0].top() >= save.top() - 0.5
+                        && reasons[0].bottom() <= editor.top() + 0.5
+                }),
+            format!("The Library draft's reason is painted once, on the save row {save:?} or under it, between the toolbar {toolbar:?} and the editor {editor:?}: {reasons:?}"),
         );
         d.state("entry-dirty", Sizes::Default);
         d.click(SAVE_ENTRY);

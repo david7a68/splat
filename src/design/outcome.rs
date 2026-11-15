@@ -1225,8 +1225,6 @@ pub struct Undo<A> {
     step: UndoStep,
     id: A,
     lock: Lock,
-    /// The [`SharedCause`] its lock belongs to, if any.
-    cause: Option<egui::Id>,
 }
 
 impl UndoStep {
@@ -1236,7 +1234,6 @@ impl UndoStep {
             step: self,
             id,
             lock: None,
-            cause: None,
         }
     }
 }
@@ -1252,14 +1249,6 @@ impl<A> Undo<A> {
     /// Locked while `locked`, for `reason`; the reason's line is kept while it is open.
     pub fn locked_when(mut self, locked: bool, reason: Sentence) -> Self {
         self.lock = Some((reason, locked));
-        self.cause = None;
-        self
-    }
-
-    /// Locked while `cause` holds, as one of the set of Undos it locks ([`SharedCause`]).
-    pub fn locked_by(mut self, cause: &SharedCause) -> Self {
-        self.lock = Some((cause.reason.clone(), cause.locked));
-        self.cause = Some(cause.key);
         self
     }
 }
@@ -1910,8 +1899,7 @@ impl<A> From<Said<A>> for KeptOutcome<A> {
 
 /// M2's typed adapter for a kept result that a legacy `Footer::result` closure still draws
 /// (Library's reader results, Campaign's copy result): the result's words in the success tone
-/// and its typed [`Undo`] (with its lock: `blocked`, `locked_when`, or `locked_by` a
-/// [`SharedCause`]) and choices, drawn by the same code as a `Messages` footer's kept line. Its
+/// and its typed [`Undo`] (with its lock: `blocked` or `locked_when`) and choices, drawn by the same code as a `Messages` footer's kept line. Its
 /// lock's reason is painted under it, at the message words, whenever the lock holds, and its
 /// room is kept while it is open (ruling R29); no flag can hide it (rulings R35, Q-u). The id of
 /// what the DM pressed.
@@ -1935,32 +1923,6 @@ pub fn kept_result<A>(
     typed.id(pressed?)
 }
 
-/// One cause that locks a named set of Undos together (Library's open draft over the Undos of
-/// its file changes), in one paint scope (the pane that shows the set). In each pass the first
-/// Undo of the set that is drawn in that scope says the reason, or keeps its room while the
-/// cause is open (R29); every other Undo of the set cites it: disabled, with the reason as its
-/// hover and accessible description, and no second line. The same Undo says it in the open and
-/// the locked state, so nothing moves when the cause comes or goes. A lock of its own (a file
-/// that changed after one result) is `blocked` or `locked_when`, never shared: equal words do
-/// not make one cause.
-#[derive(Clone, Debug)]
-pub struct SharedCause {
-    key: egui::Id,
-    reason: Sentence,
-    locked: bool,
-}
-
-impl SharedCause {
-    /// The cause `what` in the paint scope `scope` (a pane's own id), holding while `locked`.
-    pub fn new(scope: egui::Id, what: &'static str, locked: bool, reason: Sentence) -> Self {
-        Self {
-            key: scope.with(("design_shared_cause", what)),
-            reason,
-            locked,
-        }
-    }
-}
-
 /// A message as drawn: tone, words, Undo and choices, each with its lock. Owned: it holds no
 /// borrow, so a footer of them can sit beside a body that changes the app.
 struct Body {
@@ -1974,8 +1936,6 @@ struct Body {
     hovers: Vec<Option<String>>,
     /// The file it is about, on a line under the words (`FileLine`).
     file: Option<FileLine>,
-    /// The shared cause of its Undo's lock, if the lock is one ([`SharedCause`]).
-    undo_cause: Option<egui::Id>,
 }
 
 /// A body and the caller's ids of its Undo and of each choice, by index.
@@ -1987,9 +1947,9 @@ struct Typed<A> {
 
 impl<A> Typed<A> {
     fn new(tone: Tone, words: Sentence, undo: Option<Undo<A>>, choices: Vec<Choice<A>>) -> Self {
-        let (undo, undo_lock, undo_id, undo_cause) = match undo {
-            Some(undo) => (Some(undo.step), undo.lock, Some(undo.id), undo.cause),
-            None => (None, None, None, None),
+        let (undo, undo_lock, undo_id) = match undo {
+            Some(undo) => (Some(undo.step), undo.lock, Some(undo.id)),
+            None => (None, None, None),
         };
         let mut ids = Vec::with_capacity(choices.len());
         let (mut whats, mut locks, mut hovers) = (Vec::new(), Vec::new(), Vec::new());
@@ -2015,7 +1975,6 @@ impl<A> Typed<A> {
                 locks,
                 hovers,
                 file: None,
-                undo_cause,
             },
             undo: undo_id,
             choices: ids,
@@ -2749,19 +2708,8 @@ impl Body {
     fn reasons(&self, ui: &mut Ui) {
         // Identical reasons are one line, shown when any of their locks holds.
         let mut said: Vec<(&str, bool)> = Vec::new();
-        // A shared cause is said by the first Undo of its set drawn in this pass, in the open
-        // and the locked state alike; the others cite it.
-        let cited = self.undo.is_some()
-            && self.undo_cause.is_some_and(|key| {
-                let pass = ui.ctx().cumulative_pass_nr();
-                ui.ctx().data_mut(|data| {
-                    let claimed = data.get_temp::<u64>(key) == Some(pass);
-                    data.insert_temp(key, pass);
-                    claimed
-                })
-            });
         let locks = std::iter::once(&self.undo_lock)
-            .filter(|_| self.undo.is_some() && !cited)
+            .filter(|_| self.undo.is_some())
             .chain(&self.locks);
         for (reason, locked) in locks.flatten() {
             let reason = reason.as_str();
@@ -5132,12 +5080,13 @@ mod tests {
         assert_eq!(h.state().presses.first().map(|press| press.0), Some(1));
     }
 
-    /// M2 (packet E3): through the staged adapter, one shared cause over two Undos is said once
-    /// per pane, by the same Undo whether it is open or locked, so the control after them never
-    /// moves when the cause comes or goes; a second pane says it again for itself; two
-    /// independent locks with equal words each keep their own explanation.
+    /// M2 (packet 2, the cut of ruling 3): through the staged adapter, each locked Undo says its
+    /// own reason under its words, and its room is kept while it is open, so the control after
+    /// its results never moves when the lock comes or goes. Two panes each say it for their
+    /// Undos; two independent locks with equal words keep their own explanations. A cause shared
+    /// by several Undos is said once per Undo: that repetition is open debt (no group-owned line).
     #[test]
-    fn a_shared_cause_is_said_once_per_pane_and_moves_nothing() {
+    fn a_lock_reason_through_the_adapter_moves_nothing() {
         use egui_kittest::kittest::Queryable;
         const DRAFT: Sentence = crate::sentence!("Save or discard this draft to undo.");
         const ENDED: Sentence = crate::sentence!("A file changed on disk after this change.");
@@ -5145,17 +5094,13 @@ mod tests {
             |ui, locked: &mut bool| {
                 for pane in ["left", "right"] {
                     ui.push_id(pane, |ui| {
-                        let cause = SharedCause::new(
-                            egui::Id::new(("pane", pane)),
-                            "draft",
-                            *locked,
-                            DRAFT,
-                        );
                         for (words, step) in [
                             ("First change.", "Undo first"),
                             ("Second change.", "Undo second"),
                         ] {
-                            let undo = UndoStep::act(step).pressed_as(()).locked_by(&cause);
+                            let undo = UndoStep::act(step)
+                                .pressed_as(())
+                                .locked_when(*locked, DRAFT);
                             let _ = kept_result(ui, words, undo, Vec::new());
                         }
                         let _ = ui.button(format!("After {pane}"));
@@ -5179,12 +5124,12 @@ mod tests {
         assert_eq!(
             after(&h),
             open,
-            "a cause that comes moves no control after its set"
+            "a lock that comes moves no control after its results"
         );
         assert_eq!(
             h.query_all_by_label(DRAFT.as_str()).count(),
-            2,
-            "one line per pane, not one per Undo and not one for the app"
+            4,
+            "each locked Undo says its reason"
         );
         assert_eq!(
             h.query_all_by_label(ENDED.as_str()).count(),
@@ -5196,7 +5141,7 @@ mod tests {
         assert_eq!(
             after(&h),
             open,
-            "a cause that goes moves no control after its set"
+            "a lock that goes moves no control after its results"
         );
     }
 

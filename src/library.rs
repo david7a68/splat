@@ -742,12 +742,6 @@ const PACKAGE_REGISTRATION_UNDO: UndoStep = UndoStep::words("Undo package regist
 /// `Use the copy in encounters`: its result's Undo.
 const SOURCE_CHANGE_UNDO: UndoStep = UndoStep::words("Undo source change");
 
-/// Why the page's other actions wait while a campaign entry's draft has changes.
-static DRAFT_IN_CAMPAIGN: design::outcome::Sentence =
-    splat::sentence!("Save or discard to copy, add an entry, change packages or switch campaign.");
-/// Why the page's other actions wait while a package entry's draft has changes.
-static DRAFT_IN_PACKAGE: design::outcome::Sentence =
-    splat::sentence!("Save or discard to copy, add an entry or change packages.");
 /// Why the page's other actions wait while the open entry's file changed on disk.
 static CHANGED_FILE_FIRST: design::outcome::Sentence =
     splat::sentence!("Choose what to do with the changed file first.");
@@ -881,6 +875,17 @@ fn scope_label(ui: &egui::Ui, selected: &str, budget: f32) -> String {
 }
 
 fn section_row(ui: &mut egui::Ui, label: &str, count: usize, selected: bool) -> egui::Response {
+    section_row_counted(ui, label, count, selected, true)
+}
+
+/// `section_row`, with its count painted or not; its accessible name always holds the count.
+fn section_row_counted(
+    ui: &mut egui::Ui,
+    label: &str,
+    count: usize,
+    selected: bool,
+    painted: bool,
+) -> egui::Response {
     design::row(
         ui,
         Density::Read.row(),
@@ -904,14 +909,16 @@ fn section_row(ui: &mut egui::Ui, label: &str, count: usize, selected: bool) -> 
                 galley,
                 c.text,
             );
-            design::number(
-                ui.painter(),
-                rect.right() - design::S,
-                rect.center().y,
-                design::count(count, "", "").trim(),
-                &Type::Small.font(ui),
-                c.muted,
-            );
+            if painted {
+                design::number(
+                    ui.painter(),
+                    rect.right() - design::S,
+                    rect.center().y,
+                    design::count(count, "", "").trim(),
+                    &Type::Small.font(ui),
+                    c.muted,
+                );
+            }
         },
     )
 }
@@ -2618,17 +2625,15 @@ struct ResultPress {
 }
 
 impl ReaderResults {
-    /// `step`'s Undo, one of the set that the open entry's draft (or its changed file) locks:
-    /// one cause in the reader's pane, said once under the first of them, with its room kept
-    /// while it is open, so the lock coming or going moves nothing below it.
+    /// `step`'s Undo, locked while the open entry's draft (or its changed file) holds it. Each
+    /// Undo says the reason under its own words, its room kept while open (R29), so the lock
+    /// coming or going moves nothing below it. A reason shared by several Undos repeats: open
+    /// debt (packet 2, the cut of ruling 3).
     fn draft_lock(&self, step: UndoStep) -> design::outcome::Undo<()> {
-        let cause = design::outcome::SharedCause::new(
-            egui::Id::new("library_reader_results"),
-            "draft",
+        step.pressed_as(()).locked_when(
             self.locked.is_some(),
             self.locked.unwrap_or(&UNDO_WAITS_FOR_DRAFT).clone(),
-        );
-        step.pressed_as(()).locked_by(&cause)
+        )
     }
 
     fn any(&self) -> bool {
@@ -3180,40 +3185,49 @@ thread_local! {
     static FOLDER_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// A folder field's suggestions: each visible subfolder of `root`, and the kind's folder. They
-/// are read from disk once when the suggestions menu `menu` opens, and kept while it stays open
-/// for the same root and kind: the open menu owns them. When the menu is closed (also when its
-/// dialog or form is gone and comes back) they are dropped, so the next open reads again and
-/// shows a folder made in the meantime. A redraw with the menu closed reads nothing.
+/// A folder field's suggestions: each visible subfolder of `root`, and the kind's folder. The
+/// open suggestions menu `menu` owns them for one session: they are read from disk when it
+/// opens (`opening`, the press on its button while it is closed) and kept only while it stays
+/// open from one pass to the next for the same root and kind. A close (choosing a folder, a
+/// click outside), a form that was not drawn, or another root or kind ends the session, so the
+/// next open reads again and shows a folder made in the meantime. A draw with the menu closed
+/// reads nothing.
 fn folder_suggestions(
     ctx: &egui::Context,
     menu: egui::Id,
-    open: bool,
+    (open, opening): (bool, bool),
     root: &Path,
     kind: Option<&str>,
 ) -> std::sync::Arc<Vec<String>> {
-    type Kept = (PathBuf, Option<String>, std::sync::Arc<Vec<String>>);
+    type Session = (u64, PathBuf, Option<String>, std::sync::Arc<Vec<String>>);
     let key = menu.with("folder_suggestions");
-    if !open {
-        ctx.data_mut(|data| data.remove::<Kept>(key));
+    let pass = ctx.cumulative_pass_nr();
+    if !open && !opening {
+        ctx.data_mut(|data| data.remove::<Session>(key));
         return std::sync::Arc::default();
     }
     let kind = kind.map(str::to_owned);
-    if let Some((_, _, folders)) = ctx
-        .data(|data| data.get_temp::<Kept>(key))
-        .filter(|(at, of, _)| at == root && *of == kind)
-    {
-        return folders;
-    }
-    let mut folders = Vec::new();
-    visit_folders(root, root, &mut folders);
-    if let Some(kind) = &kind {
-        folders.push(kind_folder(kind).to_owned());
-    }
-    folders.sort();
-    folders.dedup();
-    let folders = std::sync::Arc::new(folders);
-    ctx.data_mut(|data| data.insert_temp(key, (root.to_path_buf(), kind, folders.clone())));
+    let kept = ctx
+        .data(|data| data.get_temp::<Session>(key))
+        .filter(|(at, of, by, _)| {
+            open && !opening && (*at + 1 == pass || *at == pass) && of == root && *by == kind
+        });
+    let folders = match kept {
+        Some((.., folders)) => folders,
+        None => {
+            let mut folders = Vec::new();
+            visit_folders(root, root, &mut folders);
+            if let Some(kind) = &kind {
+                folders.push(kind_folder(kind).to_owned());
+            }
+            folders.sort();
+            folders.dedup();
+            std::sync::Arc::new(folders)
+        }
+    };
+    ctx.data_mut(|data| {
+        data.insert_temp(key, (pass, root.to_path_buf(), kind, folders.clone()));
+    });
     folders
 }
 
@@ -3305,10 +3319,11 @@ pub(crate) fn folder_field(
                             );
                             design::named(ui, &response, &format!("Suggestions for {label}"));
                             let menu = egui::Popup::default_response_id(&response);
+                            let open = egui::Popup::is_id_open(ui.ctx(), menu);
                             let folders = folder_suggestions(
                                 ui.ctx(),
                                 menu,
-                                egui::Popup::is_id_open(ui.ctx(), menu) || response.clicked(),
+                                (open, response.clicked() && !open),
                                 root,
                                 kind,
                             );
@@ -4968,30 +4983,25 @@ impl Library {
     }
 
     fn draft_reason(&self) -> Option<&'static str> {
-        self.draft_lock().map(design::outcome::Sentence::as_str)
-    }
-
-    /// Why the page's other actions wait for the open entry: its changed file, or its draft.
-    fn draft_lock(&self) -> Option<&'static design::outcome::Sentence> {
         if self.disk_change.is_some() {
-            Some(&CHANGED_FILE_FIRST)
+            Some(CHANGED_FILE_FIRST.as_str())
         } else if self.dirty() {
-            Some(self.draft_words())
+            Some(self.draft_blocks().long())
         } else {
             None
         }
     }
 
-    /// The draft's reason for the open entry, whether or not it has changes now.
-    fn draft_words(&self) -> &'static design::outcome::Sentence {
+    /// What the open entry's draft blocks: the part holds the words of its reason.
+    fn draft_blocks(&self) -> design::DraftBlocks {
         let campaign = self
             .selected
             .and_then(|i| self.loaded.as_ref().map(|l| &l.notes[i].owner))
             .is_some_and(|owner| matches!(owner, Owner::Campaign(_)));
         if campaign {
-            &DRAFT_IN_CAMPAIGN
+            design::DraftBlocks::EntryInCampaign
         } else {
-            &DRAFT_IN_PACKAGE
+            design::DraftBlocks::EntryInPackage
         }
     }
     #[allow(
@@ -5606,12 +5616,7 @@ impl Library {
                                 }
                                 for &section in sections {
                                     let count = count_of(section, &counts);
-                                    // Without a search, All entries would repeat the header's
-                                    // count above the useful kinds (round 30 AI4): it shows only
-                                    // as a way back, from a search's results or an open About.
-                                    if count == 0
-                                        || (section == Section::All && !searching && !about_open)
-                                    {
+                                    if count == 0 {
                                         continue;
                                     }
                                     if section == Section::Unreadable {
@@ -5659,16 +5664,17 @@ impl Library {
                                     let selected =
                                         self.section == section && !searching && !about_open;
                                     let label = section.label();
-                                    let response = section_row(ui, label, count, selected);
+                                    // Round 30 AI4: with no search, All entries paints no
+                                    // count, which would repeat the header's; its name keeps it.
+                                    let painted = !(section == Section::All && !searching);
+                                    let response =
+                                        section_row_counted(ui, label, count, selected, painted);
                                     if response.clicked() {
                                         if about_open && !dirty {
                                             self.selected = None;
                                             self.draft.clear();
                                         }
-                                        // The selected kind, pressed again, goes back to every
-                                        // entry of the scope: no row comes or goes, so none moves.
-                                        self.section =
-                                            if selected { Section::All } else { section };
+                                        self.section = section;
                                         self.unreadable_kind = None;
                                         self.search.clear();
                                     }
@@ -7416,13 +7422,13 @@ impl Library {
                 .manifest_write
                 .as_ref()
                 .map(|write| (write.message(), write.path().to_string())),
-            locked: self.draft_lock().map(|lock| {
-                if self.disk_change.is_some() {
-                    lock
-                } else {
-                    &UNDO_WAITS_FOR_DRAFT
-                }
-            }),
+            locked: if self.disk_change.is_some() {
+                Some(&CHANGED_FILE_FIRST)
+            } else if self.dirty() {
+                Some(&UNDO_WAITS_FOR_DRAFT)
+            } else {
+                None
+            },
             page: std::mem::take(&mut self.page_results),
             ..Default::default()
         };
@@ -7819,14 +7825,14 @@ impl Library {
             "Markdown source"
         };
         let was_source = self.source;
-        let draft_words = self.draft_lock().unwrap_or(self.draft_words()).clone();
+        let blocks = self.draft_blocks();
         let mut toolbar = design::ReaderToolbar::new(
-            &mut self.source,
+            self.source,
             edit_label,
             "Markdown source",
             match &fault {
-                Some(_) => design::Availability::Body(UNREAD_EDIT),
-                None => design::Availability::Open,
+                Some(_) => design::ModeLock::BodyStatesFault(UNREAD_EDIT),
+                None => design::ModeLock::Open,
             },
         )
         .back(
@@ -7853,22 +7859,187 @@ impl Library {
         if let Some(label) = choose {
             toolbar = toolbar.action(label, None, Extra::Choose, design::Availability::Draft);
         }
-        let draft_lock = design::DraftLock::new(&draft_state, draft_words);
-        let (toolbar_press, draft_slot) = toolbar.show(ui, draft_lock);
+        // The toolbar, the file line between, and the save row with the draft's reason are one
+        // part's draw: it paints the reason itself, on the save row's line or under the toolbar.
+        let row_for = |source: bool| {
+            if editable && (source || dirty) && !conflict {
+                design::DraftRow::Save {
+                    label: "Save",
+                    width: editor_width,
+                }
+            } else {
+                design::DraftRow::None
+            }
+        };
+        let file_line = |ui: &mut egui::Ui| {
+            if let Some(root) = note.owner.root() {
+                let moved_path = self
+                    .disk_change
+                    .as_ref()
+                    .and_then(|change| change.moved_to.as_deref());
+                let shown_path = moved_path.unwrap_or(&note.path);
+                let moved_from = moved_path.map(|_| {
+                    format!(
+                        "moved from {}/",
+                        Path::new(&note.path)
+                            .parent()
+                            .unwrap_or(Path::new(""))
+                            .display()
+                    )
+                });
+                // No editor link for a file that cannot be read, whether it never read or stopped
+                // reading under a draft: an editor cannot open it either.
+                let unread = fault.is_some()
+                    || self
+                        .disk_change
+                        .as_ref()
+                        .is_some_and(|change| change.fault.is_some());
+                let obsidian = obsidian_for(root, &note.owner) && !unread;
+                // The draft's file has gone from disk: no link can show it, so the line offers its
+                // folder, as a deleted manifest's does.
+                let file_gone_now = self.disk_change.as_ref().is_some_and(|change| {
+                    change.text.is_none() && change.moved_to.is_none() && change.fault.is_none()
+                });
+                let deleted_manifest = recovery.as_ref().is_some_and(|(_, _, exists)| !exists);
+                let file_line = |ui: &mut egui::Ui| {
+                    if deleted_manifest {
+                        show_folder(ui, root);
+                    } else if file_gone_now {
+                        gone_file_parts(ui, root, shown_path);
+                    } else if let Some(from) = &moved_from {
+                        // Round 27 FD7: one statement about the path, then its links: the new
+                        // path, the muted old folder, then `Show file`.
+                        moved_file_parts(ui, root, shown_path, from, obsidian);
+                    } else {
+                        crate::world::entry_file_parts(ui, root, shown_path, obsidian);
+                    }
+                };
+                // FL1: once Save has found the file or its folder read only, the owner line says so,
+                // as long as that failure lasts (the next edit, another entry or a Save ends it).
+                let read_only = self
+                    .save_failure
+                    .as_ref()
+                    .is_some_and(|failure| failure.read_only.is_some())
+                    && note.error.is_none()
+                    && !stopped_reading;
+                let read_only_word;
+                let campaign_fault_word;
+                let owner_word = match &note.owner {
+                    Owner::Package(module) if read_only => {
+                        read_only_word = format!("{} · Read only", module.name);
+                        read_only_word.as_str()
+                    }
+                    Owner::Package(_) => package_word.as_str(),
+                    Owner::Campaign(_) if let Some(fault) = owner_fault => {
+                        campaign_fault_word = fault.words(owner_name);
+                        campaign_fault_word.as_str()
+                    }
+                    _ if read_only => "Campaign · Read only",
+                    _ => "Campaign · Editable",
+                };
+                let file_below = ui.available_width()
+                    < design::number_width(ui, owner_word, &Type::Small.font(ui))
+                        + design::number_width(ui, "Show file", &Type::Body.font(ui))
+                        + design::XXL * 2.0
+                        + if obsidian {
+                            design::number_width(ui, "Edit in Obsidian", &Type::Body.font(ui))
+                        } else {
+                            0.0
+                        };
+                // The path shortens from the front and keeps its file name whole
+                // (`…/Cinder Wolf copy.md`). When even that does not fit after the owner words and
+                // their action, the path takes its own Read row: it is measured where it would start.
+                let filename = Path::new(shown_path)
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy();
+                let shortest_path = if filename == *shown_path {
+                    filename.to_string()
+                } else {
+                    format!("…/{filename}")
+                };
+                let path_room = if deleted_manifest {
+                    design::number_width(ui, "Show folder", &Type::Body.font(ui))
+                } else {
+                    design::number_width(ui, &shortest_path, &Type::Small.font(ui))
+                        + design::L
+                        + moved_from.as_ref().map_or(0.0, |from| {
+                            design::number_width(ui, from, &Type::Small.font(ui)) + design::S
+                        })
+                        + if file_gone_now {
+                            design::number_width(ui, "Show folder", &Type::Body.font(ui))
+                        } else {
+                            crate::world::entry_file_links_width(ui, obsidian)
+                        }
+                };
+                let mut path_below = false;
+                let owner_line = |ui: &mut egui::Ui| {
+                    // In a narrow reader (Lookup open beside it at 960), the campaign choice keeps
+                    // its first word rather than a cut: `Ashen Marches · Chosen`.
+                    let short_word;
+                    let owner_word = match owner_word.strip_suffix(" for this campaign") {
+                        Some(short)
+                            if design::number_width(ui, owner_word, &Type::Small.font(ui))
+                                + design::XL
+                                > ui.available_width() =>
+                        {
+                            short_word = short.to_owned();
+                            short_word.as_str()
+                        }
+                        _ => owner_word,
+                    };
+                    if let Some(fault) = owner_fault {
+                        design::outcome::fault_status(ui, owner_name, fault);
+                    } else {
+                        design::status(
+                            ui,
+                            if read_only {
+                                Status {
+                                    icon: icons::READ_ONLY,
+                                    word: owner_word,
+                                    color: d.read_only,
+                                }
+                            } else {
+                                Status {
+                                    icon: icons::EDIT,
+                                    word: owner_word,
+                                    color: d.clean,
+                                }
+                            },
+                        );
+                    }
+                    if !file_below {
+                        if ui.available_width() >= path_room {
+                            file_line(ui);
+                        } else {
+                            path_below = true;
+                        }
+                    }
+                };
+                file_line_row(ui, file_below, owner_line);
+                if file_below || path_below {
+                    file_line_row(ui, false, file_line);
+                }
+            } else {
+                file_line_row(ui, false, |ui| {
+                    design::status(
+                        ui,
+                        Status {
+                            icon: icons::READ_ONLY,
+                            word: "Built-in · Read only",
+                            color: d.read_only,
+                        },
+                    );
+                });
+            }
+        };
+        let shown = toolbar.show(ui, &draft_state, blocks, row_for, file_line);
+        let toolbar_press = shown.press;
+        self.source = shown.source;
         if self.source != was_source {
             self.scope_notice = None;
             self.focus_repair = self.source && note.error.is_some();
         }
-        if toolbar_press == Some(design::ToolbarPress::Back) {
-            step = Some(Step::Back);
-        }
-        let extra = match toolbar_press {
-            Some(design::ToolbarPress::Action(extra)) => Some(extra),
-            _ => None,
-        };
-        let copy_clicked = matches!(extra, Some(Extra::Copy));
-        let make_clicked = matches!(extra, Some(Extra::Make));
-        let choose_clicked = matches!(extra, Some(Extra::Choose));
         // The mode's flags, after the toggle above: the pass that opens Edit Markdown draws the
         // editor's pane (its footer identity and scroll) from the start, not Read's.
         // Read: the reader's messages sit in the pane's message footer, below the body.
@@ -7876,201 +8047,6 @@ impl Library {
         let save_row = editable && (self.source || dirty);
         // Edit Markdown's save row, with the pane's message footer below the editor.
         let slot_row = save_row && !conflict;
-        // The draft's reason: in the save row's slot, or with no save row right here, under
-        // the toolbar.
-        let mut draft_slot = Some(draft_slot);
-        if !slot_row && let Some(slot) = draft_slot.take() {
-            slot.no_save_row(ui);
-        }
-        if choose_clicked && let Owner::Package(module) = &note.owner {
-            if about {
-                use_every = Some(module.clone());
-            } else if let Some(entry) = &note.entry {
-                self.use_entry = Some((module.id, entry.id));
-            }
-        }
-        if copy_clicked {
-            self.copy = Some(crate::content_workspace::CopySource {
-                entry: note.entry.as_ref().unwrap().clone(),
-                text: note.text.clone(),
-                root: note.owner.root().map(Path::to_path_buf),
-                campaign: match &note.owner {
-                    Owner::Campaign(campaign) => Some(campaign.clone()),
-                    _ => None,
-                },
-            });
-        }
-        if make_clicked && let (Owner::Campaign(campaign), Some(entry)) = (&note.owner, &note.entry)
-        {
-            match crate::world::make_npc_note(campaign, entry) {
-                Ok(id) => {
-                    self.stale = true;
-                    self.content_changed = Some(campaign.path.clone());
-                    self.open_world_npc = Some(id);
-                }
-                Err(error) => self.error = Some(error),
-            }
-        }
-        if let Some(root) = note.owner.root() {
-            let moved_path = self
-                .disk_change
-                .as_ref()
-                .and_then(|change| change.moved_to.as_deref());
-            let shown_path = moved_path.unwrap_or(&note.path);
-            let moved_from = moved_path.map(|_| {
-                format!(
-                    "moved from {}/",
-                    Path::new(&note.path)
-                        .parent()
-                        .unwrap_or(Path::new(""))
-                        .display()
-                )
-            });
-            // No editor link for a file that cannot be read, whether it never read or stopped
-            // reading under a draft: an editor cannot open it either.
-            let unread = fault.is_some()
-                || self
-                    .disk_change
-                    .as_ref()
-                    .is_some_and(|change| change.fault.is_some());
-            let obsidian = obsidian_for(root, &note.owner) && !unread;
-            // The draft's file has gone from disk: no link can show it, so the line offers its
-            // folder, as a deleted manifest's does.
-            let file_gone_now = self.disk_change.as_ref().is_some_and(|change| {
-                change.text.is_none() && change.moved_to.is_none() && change.fault.is_none()
-            });
-            let deleted_manifest = recovery.as_ref().is_some_and(|(_, _, exists)| !exists);
-            let file_line = |ui: &mut egui::Ui| {
-                if deleted_manifest {
-                    show_folder(ui, root);
-                } else if file_gone_now {
-                    gone_file_parts(ui, root, shown_path);
-                } else if let Some(from) = &moved_from {
-                    // Round 27 FD7: one statement about the path, then its links: the new
-                    // path, the muted old folder, then `Show file`.
-                    moved_file_parts(ui, root, shown_path, from, obsidian);
-                } else {
-                    crate::world::entry_file_parts(ui, root, shown_path, obsidian);
-                }
-            };
-            // FL1: once Save has found the file or its folder read only, the owner line says so,
-            // as long as that failure lasts (the next edit, another entry or a Save ends it).
-            let read_only = self
-                .save_failure
-                .as_ref()
-                .is_some_and(|failure| failure.read_only.is_some())
-                && note.error.is_none()
-                && !stopped_reading;
-            let read_only_word;
-            let campaign_fault_word;
-            let owner_word = match &note.owner {
-                Owner::Package(module) if read_only => {
-                    read_only_word = format!("{} · Read only", module.name);
-                    read_only_word.as_str()
-                }
-                Owner::Package(_) => package_word.as_str(),
-                Owner::Campaign(_) if let Some(fault) = owner_fault => {
-                    campaign_fault_word = fault.words(owner_name);
-                    campaign_fault_word.as_str()
-                }
-                _ if read_only => "Campaign · Read only",
-                _ => "Campaign · Editable",
-            };
-            let file_below = ui.available_width()
-                < design::number_width(ui, owner_word, &Type::Small.font(ui))
-                    + design::number_width(ui, "Show file", &Type::Body.font(ui))
-                    + design::XXL * 2.0
-                    + if obsidian {
-                        design::number_width(ui, "Edit in Obsidian", &Type::Body.font(ui))
-                    } else {
-                        0.0
-                    };
-            // The path shortens from the front and keeps its file name whole
-            // (`…/Cinder Wolf copy.md`). When even that does not fit after the owner words and
-            // their action, the path takes its own Read row: it is measured where it would start.
-            let filename = Path::new(shown_path)
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy();
-            let shortest_path = if filename == *shown_path {
-                filename.to_string()
-            } else {
-                format!("…/{filename}")
-            };
-            let path_room = if deleted_manifest {
-                design::number_width(ui, "Show folder", &Type::Body.font(ui))
-            } else {
-                design::number_width(ui, &shortest_path, &Type::Small.font(ui))
-                    + design::L
-                    + moved_from.as_ref().map_or(0.0, |from| {
-                        design::number_width(ui, from, &Type::Small.font(ui)) + design::S
-                    })
-                    + if file_gone_now {
-                        design::number_width(ui, "Show folder", &Type::Body.font(ui))
-                    } else {
-                        crate::world::entry_file_links_width(ui, obsidian)
-                    }
-            };
-            let mut path_below = false;
-            let owner_line = |ui: &mut egui::Ui| {
-                // In a narrow reader (Lookup open beside it at 960), the campaign choice keeps
-                // its first word rather than a cut: `Ashen Marches · Chosen`.
-                let short_word;
-                let owner_word = match owner_word.strip_suffix(" for this campaign") {
-                    Some(short)
-                        if design::number_width(ui, owner_word, &Type::Small.font(ui))
-                            + design::XL
-                            > ui.available_width() =>
-                    {
-                        short_word = short.to_owned();
-                        short_word.as_str()
-                    }
-                    _ => owner_word,
-                };
-                if let Some(fault) = owner_fault {
-                    design::outcome::fault_status(ui, owner_name, fault);
-                } else {
-                    design::status(
-                        ui,
-                        if read_only {
-                            Status {
-                                icon: icons::READ_ONLY,
-                                word: owner_word,
-                                color: d.read_only,
-                            }
-                        } else {
-                            Status {
-                                icon: icons::EDIT,
-                                word: owner_word,
-                                color: d.clean,
-                            }
-                        },
-                    );
-                }
-                if !file_below {
-                    if ui.available_width() >= path_room {
-                        file_line(ui);
-                    } else {
-                        path_below = true;
-                    }
-                }
-            };
-            file_line_row(ui, file_below, owner_line);
-            if file_below || path_below {
-                file_line_row(ui, false, file_line);
-            }
-        } else {
-            file_line_row(ui, false, |ui| {
-                design::status(
-                    ui,
-                    Status {
-                        icon: icons::READ_ONLY,
-                        word: "Built-in · Read only",
-                        color: d.read_only,
-                    },
-                );
-            });
-        }
         // Round 26 FC4: with a save row, the duplicate warning and its choices sit in the pane's
         // message footer, so Save keeps one place and the editor its top. Without one (a file
         // changed on disk) they stay above, with the other warnings.
@@ -8193,15 +8169,7 @@ impl Library {
         let mut edit_data = None;
         // Save and Discard are one row, as far apart as the pane allows.
         if slot_row {
-            let row = ui
-                .scope(|ui| {
-                    ui.set_max_width(editor_width);
-                    draft_slot
-                        .take()
-                        .expect("the save row pays the draft's reason")
-                        .save_row(ui, "Save")
-                })
-                .inner;
+            let row = shown.save.unwrap_or_default();
             save |= row.save;
             if row.discard {
                 self.result_orders.insert(
@@ -8222,7 +8190,7 @@ impl Library {
             // repair draft's parse error with its recovery, a refusal before the write, the
             // disk's failure). Then the notices: results with no Undo, the missing link Campaign
             // sent here, the other broken links, the first-heading and stat warnings. Why other
-            // actions wait is the save row's (`design::DraftSlot`), never the footer's.
+            // actions wait is painted by `design::ReaderToolbar`, never by the footer.
             let discard_shown =
                 discard_is_for(self.discarded.as_ref(), note) && self.draft == note.text;
             let vital_result = self
@@ -8311,6 +8279,46 @@ impl Library {
                 results_shown,
                 reason_tone,
             });
+        }
+        // The toolbar's press, now that the draft's reason is painted.
+        if toolbar_press == Some(design::ToolbarPress::Back) {
+            step = Some(Step::Back);
+        }
+        let extra = match toolbar_press {
+            Some(design::ToolbarPress::Action(extra)) => Some(extra),
+            _ => None,
+        };
+        let copy_clicked = matches!(extra, Some(Extra::Copy));
+        let make_clicked = matches!(extra, Some(Extra::Make));
+        let choose_clicked = matches!(extra, Some(Extra::Choose));
+        if choose_clicked && let Owner::Package(module) = &note.owner {
+            if about {
+                use_every = Some(module.clone());
+            } else if let Some(entry) = &note.entry {
+                self.use_entry = Some((module.id, entry.id));
+            }
+        }
+        if copy_clicked {
+            self.copy = Some(crate::content_workspace::CopySource {
+                entry: note.entry.as_ref().unwrap().clone(),
+                text: note.text.clone(),
+                root: note.owner.root().map(Path::to_path_buf),
+                campaign: match &note.owner {
+                    Owner::Campaign(campaign) => Some(campaign.clone()),
+                    _ => None,
+                },
+            });
+        }
+        if make_clicked && let (Owner::Campaign(campaign), Some(entry)) = (&note.owner, &note.entry)
+        {
+            match crate::world::make_npc_note(campaign, entry) {
+                Ok(id) => {
+                    self.stale = true;
+                    self.content_changed = Some(campaign.path.clone());
+                    self.open_world_npc = Some(id);
+                }
+                Err(error) => self.error = Some(error),
+            }
         }
         // Live, because Discard in this same frame changed the draft.
         if self.draft != note.text {
@@ -9915,10 +9923,13 @@ mod tests {
                 .toggled(),
             Some(egui::accesskit::Toggled::False)
         );
-        // Round 30 AI4: back from About, the list shows every entry and All entries, which
-        // would only repeat the header's count, hides again (it shows with a search or About).
-        assert!(harness.state().section == Section::All);
-        assert!(harness.query_by_label("All entries   1").is_none());
+        assert_eq!(
+            harness
+                .get_by_label("All entries   1")
+                .accesskit_node()
+                .toggled(),
+            Some(egui::accesskit::Toggled::True)
+        );
     }
 
     #[test]
@@ -10075,40 +10086,62 @@ mod tests {
         }
     }
 
-    /// Round 30 SH1: a folder field reads its folders only while its suggestions menu is open,
-    /// once per open; an unchanged redraw reads nothing.
+    /// Round 30 SH1: a folder field reads its folders once per open of its suggestions menu;
+    /// a redraw reads nothing; a close (with no closed draw between), a form that was not drawn,
+    /// another root or kind, and another menu each start a fresh read.
     #[test]
     fn folder_suggestions_read_once_per_open_menu() {
         let temp = tempfile::tempdir().unwrap();
         for folder in ["Creatures/Undead", "Spells", ".hidden"] {
             fs::create_dir_all(temp.path().join(folder)).unwrap();
         }
+        let other = tempfile::tempdir().unwrap();
         let ctx = egui::Context::default();
-        let menu = egui::Id::new("folder_menu");
         let reads = || FOLDER_READS.with(std::cell::Cell::get);
-        let show = |open| folder_suggestions(&ctx, menu, open, temp.path(), Some("spell"));
+        // One pass of the app: the menu `id`'s state this pass, at `root` with `kind`.
+        let pass = |id: &str, state: (bool, bool), root: &Path, kind: Option<&str>| {
+            let mut folders = std::sync::Arc::default();
+            let _ = ctx.run(egui::RawInput::default(), |ctx| {
+                folders = folder_suggestions(ctx, egui::Id::new(id), state, root, kind);
+            });
+            folders
+        };
+        let (closed, opening, open) = ((false, false), (false, true), (true, false));
+        let spell = Some("spell");
         let before = reads();
         for _ in 0..3 {
-            assert!(show(false).is_empty());
+            assert!(pass("a", closed, temp.path(), spell).is_empty());
         }
         assert_eq!(reads(), before, "a closed menu reads no folder");
-        let folders = show(true);
+        let folders = pass("a", opening, temp.path(), spell);
         assert_eq!(*folders, ["Creatures", "Creatures/Undead", "Spells"]);
-        let one_open = reads() - before;
-        assert!(one_open > 0);
+        let one_read = reads() - before;
+        assert!(one_read > 0);
         for _ in 0..3 {
-            assert_eq!(*show(true), *folders);
+            assert_eq!(*pass("a", open, temp.path(), spell), *folders);
         }
         assert_eq!(
             reads() - before,
-            one_open,
+            one_read,
             "an open menu's redraw reads nothing"
         );
-        // Another root is another list; closing drops it, and the next open reads again.
+        // Choosing a folder closes the menu; the next pass opens it again at once, with no
+        // closed draw between: a fresh read shows a folder made meanwhile.
         fs::create_dir(temp.path().join("Items")).unwrap();
-        show(false);
-        assert!(show(true).contains(&"Items".to_owned()));
-        assert_eq!(reads() - before, 2 * one_open + 1);
+        assert!(pass("a", opening, temp.path(), spell).contains(&"Items".to_owned()));
+        assert_eq!(reads() - before, 2 * one_read + 1);
+        // Its form was not drawn for a while (no pass of this menu): the session ended.
+        pass("b", opening, other.path(), None);
+        pass("b", open, other.path(), None);
+        fs::create_dir(temp.path().join("Rules")).unwrap();
+        assert!(pass("a", open, temp.path(), spell).contains(&"Rules".to_owned()));
+        // Another kind, and another root, are other lists.
+        let at = reads();
+        assert!(!pass("a", open, temp.path(), None).contains(&"Spells/".to_owned()));
+        assert!(reads() > at, "another kind reads again");
+        let at = reads();
+        assert!(pass("a", open, other.path(), None).is_empty());
+        assert!(reads() > at, "another root reads again");
     }
 
     #[test]
@@ -11483,7 +11516,7 @@ mod tests {
                     .any(|text| text.starts_with("The first heading says")),
                 "at {width}: the footer holds the heading warning: {painted:?}"
             );
-            let reason = DRAFT_IN_CAMPAIGN.as_str();
+            let reason = design::DraftBlocks::EntryInCampaign.long();
             assert_eq!(
                 painted
                     .iter()
