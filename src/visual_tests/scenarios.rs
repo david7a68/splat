@@ -15455,6 +15455,13 @@ pub mod session_recording {
         std::fs::remove_file(&failed).unwrap();
         d.settle();
         d.state_prepared("blocked-banner-retry", Sizes::All, |d| {
+            // Round 30 `recording-result-owner` (FG1, SG3): the recordings made since were
+            // deleted, so their `Recording saved: …` ended with them; no session shows it.
+            d.observe(
+                "round-30-saved-ends-with-its-file",
+                !d.has_containing("Recording saved:"),
+                "A saved recording's result ends when its file goes",
+            );
             d.observe(
                 "iter-9-C-ST1-blocked-availability",
                 d.is_disabled("Continue processing"),
@@ -15666,6 +15673,25 @@ pub mod session_recording {
         d.settle();
         d.click_starting("Recordings");
         d.state_prepared("recording-retry-with-input", Sizes::All, |d| {
+            // Round 30 `record-again-repeat` (FG8, SG6, AG5): two rows stopped by themselves, and
+            // `Record again` stands once, on the newest; the older keeps `Process`.
+            let offers = d
+                .nodes()
+                .iter()
+                .filter(|node| {
+                    node.role == egui::accesskit::Role::Button && node.name == "Record again"
+                })
+                .count();
+            let stopped = d
+                .nodes()
+                .iter()
+                .filter(|node| node.name.starts_with("Stopped by itself:"))
+                .count();
+            d.observe(
+                "round-30-record-again-once",
+                offers == 1 && stopped >= 2,
+                format!("Record again on {offers} rows, with {stopped} stopped rows"),
+            );
             check_one_primary(d, "Record again", "iter-9-C-ST1-retry");
             check_processing_action(d, "Process:", false);
             assert!(d.visible_text("microphone stopped"));
@@ -17447,6 +17473,22 @@ pub mod session_recording {
                     moved_before.contains(text.trim()) && !text.trim().is_empty()
                 }),
             format!("After Discard the editor holds the moved file {moved_path:?}: {bound:?}"),
+        );
+        // Round 30 `session-pane-footer-owner` (FN5, SN3, AN4): the discard is the note's, so
+        // beside the plan its result and Undo stand below the note, in the session pane's footer.
+        let editor = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name == "Note text")
+            .map(|node| node.rect);
+        let result = d.painted_rect_in("Draft discarded.", egui::Rect::EVERYTHING);
+        let undo = d.place_of("Undo discard");
+        d.observe(
+            "round-30-note-result-below-note",
+            editor.zip(result).zip(undo).is_some_and(|((editor, result), undo)| {
+                result.top() >= editor.bottom() - 0.5 && undo.top() >= editor.bottom() - 0.5
+            }),
+            format!("Draft discarded. and Undo discard below the note: editor {editor:?}, result {result:?}, undo {undo:?}"),
         );
         d.state("note-discarded", Sizes::Default);
         d.click("Undo discard");
