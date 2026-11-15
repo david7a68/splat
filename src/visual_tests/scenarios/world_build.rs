@@ -5731,7 +5731,8 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
             && guard.as_deref().is_some_and(|reason| d.has_containing(reason)),
         format!("A saved encounter with an unsaved creature (encounter dirty {encounter}, creature dirty {creature}, after {still}): Edit encounter stays on the run and Prep paints the guard's reason {guard:?}"),
     );
-    d.state("prep-edit-encounter-unsaved-creature", Sizes::All);
+    // The same painted reason as state 11 (the guard gives one sentence for both drafts), so
+    // this case has its check and no capture of its own.
 }
 
 /// AD3: a result's Undo follows its message, drawn by `undo_message`, at each size. It has the
