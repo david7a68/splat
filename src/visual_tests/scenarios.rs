@@ -15210,6 +15210,9 @@ pub mod session_notes {
         // R40: the migrated Adds to popup shows full session names. Append the state so
         // every existing capture keeps its number. No test scroll prepares the popup.
         d.press(Key::Escape);
+        // The preceding warning witness restores Session 4's file after proving it gone.
+        // Read that restored listing before selecting the session through the real menu.
+        d.app_mut().sessions.refresh();
         d.click(NAV_TIMELINE);
         let menu_boundary = |d: &mut Driver<'_>, name: &str| {
             let menu = d.place_of(&format!("{name} choices"));
