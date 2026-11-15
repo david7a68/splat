@@ -3774,7 +3774,7 @@ impl<'a> Footer<'a> {
     /// pane's end when it follows a short body (ruling Q-c). Keep the height they want, whole
     /// (the caller caps it where it places the footer); a change from `stored` draws the pass
     /// again. `fit`: the messages are laid out in `rect`, and the footer is only as tall as they
-    /// are (`scroll_part`). Returns the footer's rect.
+    /// are (`scroll_part`). Returns the footer's rect and the height its messages want.
     pub(super) fn draw_messages(
         &mut self,
         ui: &mut Ui,
@@ -3783,7 +3783,7 @@ impl<'a> Footer<'a> {
         most: f32,
         stored: f32,
         fit: bool,
-    ) -> Rect {
+    ) -> (Rect, f32) {
         // The one footer order (`outcome::footer_order`): results with a live Undo newest
         // first, reasons and notices in the caller's order, then results with no live Undo.
         super::outcome::footer_order(&mut self.messages);
@@ -3849,7 +3849,7 @@ impl<'a> Footer<'a> {
             ui.ctx()
                 .request_discard("the message footer changed height");
         }
-        part
+        (part, wanted)
     }
 }
 
@@ -8048,10 +8048,15 @@ mod tests {
                 && a.1.iter().zip(&b.1).all(|(a, b)| near(*a, *b))
                 && (a.2 - b.2).abs() <= 0.5
         };
+        // A press and release at `at`, all in the next frame's input (`Harness::event` would give
+        // each event a frame of its own).
         let click = |harness: &mut egui_kittest::Harness<'_>, at: egui::Pos2| {
-            harness.event(egui::Event::PointerMoved(at));
+            harness
+                .input_mut()
+                .events
+                .push(egui::Event::PointerMoved(at));
             for pressed in [true, false] {
-                harness.event(egui::Event::PointerButton {
+                harness.input_mut().events.push(egui::Event::PointerButton {
                     pos: at,
                     button: egui::PointerButton::Primary,
                     pressed,
@@ -8119,7 +8124,6 @@ mod tests {
                 // The next frame, one pass. Below the tall body, after four reasons, it holds a
                 // press on the first reason's painted place: there the layout before the footer
                 // moved down put another reason's control, and no control takes that press.
-                harness.event(egui::Event::PointerGone);
                 let mut at_first = None;
                 if is_tall && count == 4 {
                     let centre = reasons[0].expect("the first reason").center();
@@ -8146,8 +8150,6 @@ mod tests {
                 );
                 if let Some(centre) = at_first {
                     // A press on the same place, a frame later, is the first reason's.
-                    harness.event(egui::Event::PointerGone);
-                    harness.step();
                     click(&mut harness, centre);
                     harness.step();
                     assert_eq!(

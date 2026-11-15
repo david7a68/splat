@@ -1388,6 +1388,115 @@ fn forget(ui: &Ui, id: Id) {
     });
 }
 
+/// A pinned footer laid out in its pass before it was measured (`Footer::pane`): from a third
+/// of the pane up, then placed in that same pass.
+struct Settle {
+    id: Id,
+    layer: LayerId,
+    room: Rect,
+    width: f32,
+    /// Where it was laid out: a third of the pane, from the top of that third.
+    laid: Rect,
+    /// Its measured height, a third of the pane at most.
+    tall: f32,
+    /// The body's paint, and the footer's.
+    body: (usize, usize),
+    footer_from: usize,
+    /// Whether the footer drew a hairline at its top (a line cut).
+    footer_line: bool,
+    /// The row cut's hairline that the pass drew for the body's room, if any.
+    cut_line: Option<usize>,
+    /// A `Content` body's view, for its last whole registered row.
+    view: Option<Rect>,
+    rows_before: usize,
+    /// Content goes on below the room.
+    line_cut: bool,
+}
+
+/// Place a pinned footer that was laid out before it was measured (see `Settle`): its paint
+/// moves down to the pane's bottom, at its measured height; the body's paint stops `S` above it,
+/// at its last whole registered row there (N12), with that row cut's hairline; and the next pass
+/// keeps that cut, so it is drawn the same. Its controls stay where they were laid out until the
+/// next pass, so in this one no press on the footer reaches them. Returns the footer's rect.
+fn settle_pinned(ui: &Ui, settle: Settle) -> Rect {
+    use egui::{emath::TSTransform, layers::ShapeIdx};
+    let Settle {
+        id,
+        layer,
+        room,
+        width,
+        laid,
+        tall,
+        body,
+        footer_from,
+        footer_line,
+        cut_line,
+        view,
+        rows_before,
+        line_cut,
+    } = settle;
+    let placed = Rect::from_min_size(pos2(room.left(), room.bottom() - tall), vec2(width, tall));
+    let edge = placed.top() - S;
+    // The body's last whole registered row above the footer's edge (N12).
+    let row_cut = view.and_then(|view| {
+        let rows = super::components::rows_this_pass(ui.ctx());
+        let view = Rect::from_min_max(view.min, pos2(view.right(), edge.max(view.top())));
+        whole_row_cut(rows.get(rows_before..).unwrap_or_default(), view)
+    });
+    let limit = row_cut.unwrap_or(edge);
+    let shift = placed.top() - laid.top();
+    ui.ctx().graphics_mut(|graphics| {
+        let list = graphics.entry(layer);
+        let end = list.next_idx();
+        if shift.abs() > 0.0 {
+            list.transform_range(
+                ShapeIdx(footer_from),
+                end,
+                TSTransform::from_translation(vec2(0.0, shift)),
+            );
+        }
+        for at in body.0..body.1 {
+            list.mutate_shape(ShapeIdx(at), |shape| {
+                shape.clip_rect.max.y = shape.clip_rect.max.y.min(limit);
+            });
+        }
+        // The hairlines: the body's room's row cut goes; the footer's top line stays only for a
+        // line cut with no row cut.
+        if let Some(at) = cut_line {
+            list.reset_shape(ShapeIdx(at));
+        }
+        if footer_line && row_cut.is_some() {
+            list.reset_shape(ShapeIdx(footer_from));
+        }
+    });
+    let hairline = |y: f32| {
+        ui.painter().hline(
+            room.left()..=room.left() + width,
+            y,
+            egui::Stroke::new(
+                super::tokens::HAIRLINE_WIDTH,
+                super::tokens::colors().hairline,
+            ),
+        );
+    };
+    if let Some(cut) = row_cut {
+        hairline(cut - super::tokens::HAIRLINE_WIDTH / 2.0);
+    } else if line_cut && !footer_line {
+        hairline(placed.top() + super::tokens::HAIRLINE_WIDTH / 2.0);
+    }
+    // The next pass's body room ends `S` above the placed footer: keep this cut for it.
+    let next_room = Rect::from_min_max(room.min, pos2(room.right(), edge.max(room.top())));
+    ui.ctx().data_mut(|data| match row_cut {
+        Some(cut) => data.insert_temp(id.with("row_cut"), (next_room, cut)),
+        None => data.remove::<(Rect, f32)>(id.with("row_cut")),
+    });
+    // The controls as laid out take no press in this pass.
+    if shift.abs() > 0.0 {
+        let _ = ui.interact(laid, id.with("settling"), Sense::CLICK);
+    }
+    placed
+}
+
 fn banner_below(ctx: &egui::Context) -> bool {
     let pass = ctx.cumulative_pass_nr();
     ctx.data(|data| data.get_temp::<u64>(banner_id())) == Some(pass)
@@ -1545,6 +1654,12 @@ impl Footer<'_> {
         );
         body_ui.set_clip_rect(visible);
         let rows_before = super::components::rows_this_pass(ui.ctx()).len();
+        let layer = ui.layer_id();
+        let paint_at = |ui: &Ui| {
+            ui.ctx()
+                .graphics(|graphics| graphics.get(layer).map_or(0, |list| list.next_idx().0))
+        };
+        let body_from = paint_at(ui);
         // An edge (the footer, the session banner) ends the body: no registered row is cut.
         let edge = held || banner_below(ui.ctx());
         // What a layer opened from the body may use: the body's room, inside the clip.
@@ -1689,6 +1804,7 @@ impl Footer<'_> {
             }
         };
         drop(body_ui);
+        let body_to = paint_at(ui);
         // `pane_then`: the messages from the state the body's acts left, before the footer
         // paints.
         let out = then(inner, &mut self);
@@ -1712,6 +1828,7 @@ impl Footer<'_> {
             });
             ui.ctx().request_discard("the body's whole-row cut moved");
         }
+        let cut_line = paint_at(ui);
         if let Some(cut) = new_cut {
             // The hairline marks where the rows stop.
             ui.painter().hline(
@@ -1742,11 +1859,12 @@ impl Footer<'_> {
                 }
                 _ => (pinned, most),
             };
-            // A footer below a short body that was not measured with these messages (one that an
-            // act brought in this pass, or a footer that comes) is laid out in its whole room and
-            // fitted to what it shows, in this pass, so its messages show whole at once, even in
-            // a frame of one pass; the pass is drawn again, measured. Pinned, it keeps its
-            // measured room: the body may fill the rest.
+            // A footer that was not measured with these messages (one that an act brought in
+            // this pass, or a footer that comes) is laid out in its whole room and fitted to what
+            // it shows, in this pass, so its messages show whole at once, even in a frame of one
+            // pass; the pass is drawn again, measured. Below a short body that room starts `S`
+            // after the content; pinned, it is a third of the pane, and the footer then moves
+            // down to the pane's bottom (`settle_pinned`).
             let words = self.words_key();
             let words_id = id.with("words");
             let measured =
@@ -1754,7 +1872,12 @@ impl Footer<'_> {
             if !measured {
                 ui.ctx().data_mut(|data| data.insert_temp(words_id, words));
             }
-            let fit = placement == Placement::Follows && !measured;
+            let fit = !measured;
+            let top = if fit && placement == Placement::Pinned {
+                room.bottom() - most
+            } else {
+                top
+            };
             let tall = if fit {
                 ui.ctx()
                     .request_discard("the message footer measures its new messages");
@@ -1776,7 +1899,38 @@ impl Footer<'_> {
             ui.ctx()
                 .data_mut(|data| data.insert_temp(Id::new("design_footer_drawing"), id));
             // Laid out in its room; when fitted, as tall as what it shows, in this same pass.
-            let rect = self.draw_messages(ui, rect, cut && new_cut.is_none(), most, stored, fit);
+            let footer_from = paint_at(ui);
+            let (drawn, wanted) =
+                self.draw_messages(ui, rect, cut && new_cut.is_none(), most, stored, fit);
+            let rect = if fit && placement == Placement::Pinned {
+                settle_pinned(
+                    ui,
+                    Settle {
+                        id,
+                        layer,
+                        room,
+                        width,
+                        laid: rect,
+                        // As the next pass takes it: the stored height changes by a hairline or
+                        // more.
+                        tall: if (wanted - stored).abs() >= super::tokens::HAIRLINE_WIDTH {
+                            wanted
+                        } else {
+                            stored
+                        }
+                        .min(most),
+                        body: (body_from, body_to),
+                        footer_from,
+                        footer_line: cut && new_cut.is_none(),
+                        cut_line: new_cut.map(|_| cut_line),
+                        view: scroll.map(|scroll| scroll.viewport),
+                        rows_before,
+                        line_cut: cut,
+                    },
+                )
+            } else {
+                drawn
+            };
             if rect.height() > 0.0 {
                 footer = Some(rect);
                 #[cfg(test)]
