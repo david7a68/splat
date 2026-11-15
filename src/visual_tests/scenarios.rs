@@ -6020,11 +6020,14 @@ pub mod settings {
         d.settle();
         d.click("Add from D&D Beyond");
         d.wait_for_text("Salt Road");
-        d.click("Add Salt Road from D&D Beyond");
         // G137 at the original single open, before any Cancel, resize or test scroll: the form
-        // shows whole and the kept line names the folder Splat proposes, whole (R30, R34).
-        d.wait_for_text("Campaign name");
-        let opened = {
+        // shows whole and the kept line names the folder Splat proposes, whole (R30, R34). The
+        // open starts low: in a short window the row's Add… is near the view's bottom, so the
+        // form opens below the view and only its reveal shows it whole.
+        const LOW_OPENER: (f32, f32) = (960.0, 520.0);
+        let opened = d.act_at_size(LOW_OPENER, |d| {
+            d.click("Add Salt Road from D&D Beyond");
+            d.wait_for_text("Campaign name");
             let preview = "Will add …/Salt Road";
             let nodes = d.nodes();
             let whole = |name: &str| {
@@ -6033,7 +6036,7 @@ pub mod settings {
                     .any(|node| node.name == name && node.fully_in_view())
             };
             d.visible_text(preview) && whole(preview) && whole("Cancel") && whole("Add campaign")
-        };
+        });
         d.observe(
             "iter-30-B6-G137-first-open",
             opened,
@@ -11301,9 +11304,12 @@ pub mod signed_in {
                 opened.0, opened.1
             ),
         );
-        d.click("Add Salt Road from D&D Beyond");
-        // G138 at the original single open, before any Cancel, resize or test scroll (R34).
-        let opened = {
+        // G138 at the original single open, before any Cancel, resize or test scroll (R34). The
+        // open starts low: in a short window the row's Add… is near the view's bottom, so the
+        // form opens below the view and only its reveal shows it whole.
+        const LOW_OPENER: (f32, f32) = (960.0, 520.0);
+        let opened = d.act_at_size(LOW_OPENER, |d| {
+            d.click("Add Salt Road from D&D Beyond");
             let preview = format!("Will add …/{REMOTE_NAME}");
             let nodes = d.nodes();
             let whole = |name: &str| {
@@ -11312,7 +11318,7 @@ pub mod signed_in {
                     .any(|node| node.name == name && node.fully_in_view())
             };
             d.visible_text(&preview) && whole(&preview) && whole("Cancel")
-        };
+        });
         d.observe(
             "iter-30-B6-G138-first-open",
             opened,
