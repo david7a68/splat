@@ -1028,7 +1028,7 @@ warning icon, list warning and count in the header. A Part of target that is not
 (`Group not found`); the header counts its note once, and the count's menu opens it. A place link that
 matches more than one note also needs fixing: its list row says `Place has 2 matches`, and the header
 count and its menu include the note until `Always use this one` picks one. A note whose file name is not its name
-(`The file is Mara Vell.md, but the name is Rook Ambry.`) says `File name differs` on its list row (the fault, which fits a narrow list whole; the reader's warning names both names and offers the two renames), and the header
+(`The file is Mara Vell.md, but the name is Rook Ambry.`) says `File name differs` on its list row (the fault, which fits a narrow list whole; the reader's warning names both names and offers the two renames; while another note has the same name, the file follows, `File name differs · Rook Ambry.md`, as a same-name row's file name tells the rows apart), and the header
 count and its menu include it. A note whose `Place` chain leads back to it is in a place loop: each note in the
 loop says `Place loop` on its list row, the header count and its menu include it, and its reader says
 `Loop One is in Loop Two, and Loop Two is in Loop One. Change one of them.` A row with more than one link

@@ -1079,12 +1079,15 @@ pub(crate) enum NoteFault {
     Tables(usize),
     /// Links that need fixing.
     Links(Vec<LinkProblem>),
-    /// The note's name is not its file's name (FI2). The reader's warning names both.
-    Renamed,
+    /// The note's name is not its file's name (FI2). The reader's warning names both. The
+    /// file's name only while another note has the same name: then it tells the rows apart,
+    /// as a same-name row's file name does.
+    Renamed(Option<String>),
 }
 
 impl NoteFault {
-    fn of(item: &Item, index: &ContentIndex) -> Option<Self> {
+    fn of(at: usize, index: &ContentIndex) -> Option<Self> {
+        let item = &index.items[at];
         let entry = &item.entry;
         let problems = broken_links(item, index);
         let tables = crate::roll_table::fault_count(&entry.body);
@@ -1097,7 +1100,8 @@ impl NoteFault {
         } else if !problems.is_empty() {
             Some(Self::Links(problems))
         } else {
-            renamed_file(item, index).map(|_| Self::Renamed)
+            renamed_file(item, index)
+                .map(|stem| Self::Renamed(index.shares_name(at).then(|| format!("{stem}.md"))))
         }
     }
 
@@ -1110,8 +1114,10 @@ impl NoteFault {
             Self::Links(problems) => link_problem_words(problems),
             // The row names the fault, not a value the DM must compare with the note's name
             // (SF6); the reader's warning names both names and offers the two renames. The
-            // file's name stays out of the row, so the words fit a narrow list whole.
-            Self::Renamed => "File name differs".into(),
+            // file's name follows only when it tells two same-name rows apart, so the words
+            // fit a narrow list whole otherwise.
+            Self::Renamed(None) => "File name differs".into(),
+            Self::Renamed(Some(file)) => format!("File name differs · {file}"),
         }
     }
 }
@@ -1133,7 +1139,7 @@ impl NoteFaults {
         let mut faults = Self::default();
         for &(at, _) in index.world_groups("").values().flatten() {
             faults.notes += 1;
-            if let Some(fault) = NoteFault::of(&index.items[at], index) {
+            if let Some(fault) = NoteFault::of(at, index) {
                 faults.by_position.insert(at, fault);
                 faults.listed.push(at);
             }
@@ -5625,8 +5631,12 @@ mod tests {
             fault_of(id),
             Some(NoteFault::Links(vec![LinkProblem::PlaceNotFound]))
         );
-        assert_eq!(fault_of(mara), Some(NoteFault::Renamed));
-        assert_eq!(NoteFault::Renamed.words(), "File name differs");
+        assert_eq!(fault_of(mara), Some(NoteFault::Renamed(None)));
+        assert_eq!(NoteFault::Renamed(None).words(), "File name differs");
+        assert_eq!(
+            NoteFault::Renamed(Some("Vell.md".into())).words(),
+            "File name differs · Vell.md"
+        );
         assert_eq!(
             faults.of_note(at_path(&gate_path)).cloned(),
             Some(NoteFault::Duplicate)
