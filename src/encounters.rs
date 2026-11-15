@@ -6974,7 +6974,7 @@ impl Encounters {
         ui.checkbox(&mut draft.setup.combat_sync, SYNC_OPTION);
         // The live fact stands directly under its control, the help after it (B4, lead ruling:
         // at 960 the help, not the party's HP, is what goes below the view). With sync off, the
-        // help is itself the fact: nothing reaches D&D Beyond.
+        // fact is that nothing reaches D&D Beyond.
         if draft.setup.combat_sync {
             let sheets: Vec<_> = draft
                 .setup
@@ -6994,11 +6994,23 @@ impl Encounters {
                     }
                 });
             }
+        } else {
+            ui.add(
+                egui::Label::new(
+                    Type::Small
+                        .rich(
+                            ui,
+                            "Nothing in this encounter reaches D&D Beyond, unless you select Sync party in the run.",
+                        )
+                        .color(colors().text),
+                )
+                .wrap(),
+            );
         }
         let words = if draft.setup.combat_sync {
             "The party starts with the HP and conditions on their sheets. When connected, the run and D&D Beyond stay matched."
         } else {
-            "The party starts from their saved copies and the starting values here. Nothing in this encounter reaches D&D Beyond, unless you select Sync party in the run."
+            "The party starts from their saved copies and the starting values here."
         };
         // AD1: help under an option keeps the reader measure.
         design::help(ui, words);
