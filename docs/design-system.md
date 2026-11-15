@@ -2681,18 +2681,24 @@ line's reminders.
   in a string of `src/` or `crates/core/src/`, with the shrink-only allowlist in `src/design/lint_allowlist.txt`.
 - `design::lint::legacy` freezes the layout and host paths that the pane mechanism replaces (migration 32,
   ruling L12): closure pane hosts (`Footer::pane` and `Messages::pane` and kin), hand-placed footers, `Fills`
-  (also through the Sessions `fills` wrapper), closure virtual rows, `register_row`, clips that a caller sets,
-  raw scroll areas, scroll requests and offsets, and footers fed by more than one owner. Outside `src/design/`
-  it counts all of them; inside, only the pane hosts, hand footers and `Fills`. `src/design/legacy_hosts.tsv`
-  lists each function that calls one (`Type::name` in an `impl`), with its count and the pane's owner, and the
-  page regions that hold panes (`host-region`: the allowed host composition, frozen but not debt). The list is
-  exact. No row may grow against the merge base with `origin/main`: the test counts the base's own source again
-  (read with `git`), so a call added together with its row fails, and so does a new function around a counted
-  call. When the base cannot be read, the test fails: fetch `origin/main`, or name the base in
-  `SPLAT_LEGACY_BASE`. Only the lead raises a site, with a line `legacy-host / <capability> / <file> /
-  <function> => <reason>` in the gate's raise file (`SPLAT_STILLNESS_RAISE`). `src/design/c3_ledger.tsv` holds
-  the 85 round-31 C3 deductions with their roots and owning steps, and claims no geometry; a row is never
-  removed, its step closes it (`closed #<PR>`).
+  (also the calls of the Sessions `fills` wrapper), closure virtual rows, `register_row`, clips that a caller
+  sets, raw scroll areas, scroll requests and offsets, page regions, and footers fed by more than one owner.
+  It reads the tokens: every mention of a frozen function counts (a method or associated call, a reference, a
+  macro's argument), in the app and in `src/design/`. Only `#[test]` and `#[cfg(test)]` items count nothing,
+  and files that only `cfg(test)` module declarations load (by module path, `#[path]` resolved); a file's
+  name proves nothing. `src/design/legacy_hosts.tsv` lists each function that uses one (`Type::name` in an
+  `impl`), with its count and the pane's owner. Rows of `host-region` (the allowed host composition) and of
+  `design` (the design system's implementation boundary) are frozen, not debt. The list is exact. No row
+  may grow against the merge base with `origin/main`: the test counts the base's own source again (read with
+  `git`), so a use added together with its row fails, and so does a new function around a counted use, in
+  the app or in the design system. When the base cannot be read, the test fails: fetch `origin/main`, or
+  name the base in `SPLAT_LEGACY_BASE` (refused in the landing gate). Some uses fail with no row and no
+  raise: a frozen function named but not called (a reference, a macro's argument), a frozen path inside
+  `macro_rules!`, and an alias (`… as …`, `type … =`) of a frozen owner or function, anywhere. A raise is a
+  line `legacy-host / <capability> / <file> / <function> => <reason>` in the gate's raise file
+  (`SPLAT_STILLNESS_RAISE`), which the lead passes at landing; the test reads the line, not who wrote it.
+  `src/design/c3_ledger.tsv` holds the 85 round-31 C3 deductions with their roots and owning steps, and
+  claims no geometry; a row is never removed, its step closes it (`closed #<PR>`).
 - The gallery visual scenario shows tokens and shared choices as PNGs. Run rows, dialogs and other
   whole-screen parts appear in their own scenarios. The gallery includes clean, dirty and discarded save rows
   and the hanging Add strip.

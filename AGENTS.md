@@ -47,7 +47,8 @@ Past reviews found the same kinds of fault again and again. Check your own chang
   change that raises a count and its allowance together passes the test. Say in the PR why each raised line is
   needed (a new `allow(deprecated)`, a `Sentence::outside`, a body message place), or remove the use.
   `src/design/legacy_hosts.tsv` (the legacy host freeze) is stricter: the lint compares each site with the merge
-  base, so a raise fails unless the lead names it in the gate's raise file. Lower its rows when you migrate a site.
+  base, so a raise fails unless the gate's raise file names it (the lead passes that file at landing). Lower its
+  rows when you migrate a site; a reference, an alias or a frozen call inside `macro_rules!` fails outright.
 - **The audit's counts (G6) run in every gate.** When your change makes a task of `artifacts/dm-audit/` cost
   more or fewer acts on purpose, run `devenv shell -- audit-freeze counts` and say in the pull request why; add
   a new task with `devenv shell -- audit-freeze add`.

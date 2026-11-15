@@ -433,9 +433,9 @@ pub(crate) fn aliases(source: &str, names: &[&str]) -> Result<Vec<usize>, String
     let (tokens, lines) = lexed(source)?;
     let named = |at: &usize| ident(tokens.get(*at)).is_some_and(|word| names.contains(&word));
     let mut found = Vec::new();
-    for at in 0..tokens.len() {
+    for (at, &line) in lines.iter().enumerate() {
         if named(&at) && ident(tokens.get(at + 1)) == Some("as") {
-            found.push(lines[at]);
+            found.push(line);
         }
         if ident(tokens.get(at)) == Some("type") {
             // To the `;` that ends the alias, at its own depth.
@@ -451,7 +451,7 @@ pub(crate) fn aliases(source: &str, names: &[&str]) -> Result<Vec<usize>, String
                 })
                 .unwrap_or(tokens.len());
             if (at + 1..end).any(|next| named(&next)) {
-                found.push(lines[at]);
+                found.push(line);
             }
         }
     }
