@@ -6229,10 +6229,7 @@ mod tests {
             .unwrap();
         b_file(1);
         assert_eq!(
-            sessions
-                .planned()
-                .map(|planned| planned.chosen.name.clone())
-                .as_deref(),
+            sessions.planned_fight().as_deref(),
             Some("Bridge Ambush"),
             "the earlier Undo stays"
         );
@@ -6250,12 +6247,14 @@ mod tests {
         // that caused it is seen; it ends with its journey.
         sessions.last_check = Some(Instant::now());
         sessions.follow_plan_line();
-        sessions.end_plan_line_refusal(Some(&book.events));
+        sessions.end_plan_answers_of_lost_journeys(&book);
         assert_eq!(
             sessions.plan_line_refusal().as_deref(),
             Some(words.as_str())
         );
-        sessions.end_plan_line_refusal(Some(&[]));
+        let mut gone = Book::default();
+        gone.touch();
+        sessions.end_plan_answers_of_lost_journeys(&gone);
         assert_eq!(
             sessions.plan_line_refusal(),
             None,
@@ -6297,7 +6296,18 @@ mod tests {
         read_only(true);
         let failed = sessions.try_plan_undo();
         read_only(false);
-        assert!(failed.is_some());
+        // E2: B is not selected; its draft of its own was dropped, so the line is still in the
+        // file. The answer says so, and its next step works: Undo again once B can be written.
+        assert_eq!(
+            failed.as_deref(),
+            Some(
+                "The plan line for Shrine of Cinders was not removed from Session 1: Road. The \
+                 session note could not be saved. Press Undo again when the folder can be \
+                 written, or open that session’s notes and remove the plan line there."
+            )
+        );
+        assert_eq!(sessions.plan_line_tone(Some(b)), Some(Tone::Error), "R41");
+        assert_eq!(sessions.selected, Some(a), "R26: B is not selected");
         b_file(1);
         assert_eq!(
             sessions
@@ -6306,6 +6316,8 @@ mod tests {
             Some(true),
             "the line that stays in the file is in the plan"
         );
+        assert_eq!(sessions.try_plan_undo(), None, "Undo again works");
+        b_file(0);
         // Review 4: the plan's own `Undo add plan line`, with the journey's block closed, fails;
         // the plan's footer says why while the journey stands, and the fault ends with it.
         fs::write(&b_note.path, &text).unwrap();
@@ -6327,7 +6339,10 @@ mod tests {
             .filter(|event| event.id != road)
             .cloned()
             .collect();
-        sessions.end_plan_line_refusal(Some(&without));
+        let mut without_book = Book::default();
+        without_book.events = without;
+        without_book.touch();
+        sessions.end_plan_answers_of_lost_journeys(&without_book);
         assert_eq!(sessions.plan_line_refusal(), None, "J left");
         // Review 3, point 2: B open with unsaved words, its file renamed outside; the scan
         // finds the new file. The act is refused, and nothing writes either file.
@@ -6465,12 +6480,14 @@ mod tests {
             .unwrap();
         assert!(sessions.planned_live());
         sessions.notes.retain(|note| note.id != b);
+        sessions.notes_revision += 1;
         assert!(!sessions.planned_live());
         assert_eq!(sessions.try_plan_undo(), None);
         b_file(1);
         // Final review point 3: the campaign-change event itself ends the result: A, then B,
         // then A again, with no read of the result between.
         sessions.notes = vec![a_note.clone(), b_note.clone()];
+        sessions.notes_revision += 1;
         fs::write(&b_note.path, &text).unwrap();
         sessions
             .plan_from_timeline(&book, &road, &chosen("Shrine of Cinders"), &names)
@@ -6480,10 +6497,104 @@ mod tests {
         sessions.open_campaign(Some(&campaign("Other")));
         sessions.open_campaign(Some(&home));
         sessions.notes = vec![a_note.clone(), b_note.clone()];
+        sessions.notes_revision += 1;
         sessions.last_check = Some(Instant::now());
         assert!(!sessions.planned_live(), "the result ended at the change");
         assert_eq!(sessions.try_plan_undo(), None);
         b_file(1);
+        // E1: a refused Undo is owned by its note and journey. A's (B's note, the road) stays
+        // through an act on another note's line, failed or successful, and both readers show
+        // what is theirs; Undo of A after its source is restored takes A's words and data back
+        // together, and the other line stays.
+        let keep = book.add(Kind::Travel, Some(a));
+        let road_checks = book.event_mut(&road).unwrap().checks.clone();
+        book.event_mut(&keep).unwrap().checks = road_checks;
+        let a_file = || fs::read_to_string(&a_note.path).unwrap();
+        fs::write(&b_note.path, &text).unwrap();
+        sessions
+            .plan_from_timeline(&book, &road, &chosen("Shrine of Cinders"), &names)
+            .unwrap();
+        let as_left = b_file(1);
+        fs::write(&b_note.path, format!("{as_left}Outside.\n")).unwrap();
+        sessions.last_check = Some(Instant::now());
+        let refused = sessions.try_plan_undo_for(Some(b)).expect("A is refused");
+        let before = a_file();
+        read_only(true);
+        let failed =
+            sessions.plan_from_timeline(&book, &keep, &chosen("Shrine of Cinders"), &names);
+        read_only(false);
+        assert!(failed.is_err(), "{failed:?}");
+        assert_eq!(a_file(), before);
+        assert_eq!(
+            sessions.plan_line_refusal_for(Some(b)).as_deref(),
+            Some(refused.as_str()),
+            "a failed act on another line keeps A's answer"
+        );
+        sessions
+            .plan_from_timeline(&book, &keep, &chosen("Shrine of Cinders"), &names)
+            .unwrap();
+        assert!(a_file().contains("[[Shrine of Cinders]]"));
+        assert_eq!(
+            sessions.plan_line_refusal_for(Some(b)).as_deref(),
+            Some(refused.as_str()),
+            "a successful act on another line keeps A's answer"
+        );
+        assert!(sessions.plan_line_shown_in(Some(a)) && sessions.plan_line_shown_in(Some(b)));
+        // E5: with a refused answer kept, an unchanged frame looks up no owner.
+        let scans = || PLAN_OWNER_SCANS.with(std::cell::Cell::get);
+        sessions.follow_plan_line();
+        sessions.end_plan_answers_of_lost_journeys(&book);
+        let still = scans();
+        for _ in 0..3 {
+            sessions.follow_plan_line();
+            sessions.end_plan_answers_of_lost_journeys(&book);
+        }
+        assert_eq!(scans(), still, "no owner scan on an unchanged frame");
+        // A's source restored: its Undo is live again, and works on A alone.
+        fs::write(&b_note.path, &as_left).unwrap();
+        sessions.last_check = Some(Instant::now());
+        assert_eq!(sessions.try_plan_undo_for(Some(b)), None, "A's Undo works");
+        b_file(0);
+        assert!(
+            !sessions.plan_line_shown_in(Some(b)),
+            "A's words went with A's data"
+        );
+        assert!(
+            a_file().contains("[[Shrine of Cinders]]"),
+            "the other line's data stays"
+        );
+        assert!(sessions.plan_line_shown_in(Some(a)), "and its result");
+        // E6 (R41): an unreadable file is an error, a missing one a warning, by one rule that
+        // both readers' lines take (`Shown::outcome`).
+        sessions
+            .plan_from_timeline(&book, &road, &chosen("Shrine of Cinders"), &names)
+            .unwrap();
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = |mode| {
+                fs::set_permissions(&b_note.path, fs::Permissions::from_mode(mode)).unwrap();
+            };
+            mode(0o000);
+            let unreadable = sessions.try_plan_undo_for(Some(b));
+            mode(0o644);
+            assert!(
+                unreadable
+                    .as_deref()
+                    .is_some_and(|words| words.contains("Splat cannot read the session note.")),
+                "{unreadable:?}"
+            );
+            assert_eq!(sessions.plan_line_tone(Some(b)), Some(Tone::Error));
+        }
+        let away = dir.path().join("Away.md");
+        fs::rename(&b_note.path, &away).unwrap();
+        let gone = sessions.try_plan_undo_for(Some(b));
+        fs::rename(&away, &b_note.path).unwrap();
+        assert!(
+            gone.as_deref()
+                .is_some_and(|words| words.contains("The session note is gone from its folder.")),
+            "{gone:?}"
+        );
+        assert_eq!(sessions.plan_line_tone(Some(b)), Some(Tone::Warning));
     }
 
     #[test]
