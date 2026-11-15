@@ -416,15 +416,31 @@ impl Part {
     }
 }
 
-/// A tracker's own limit (ruling M13): the DM's only choice is not to do the act, so its answer
-/// ends at its cause, with no next step. Only these kinds can end so (`Refusal::at_limit`); a
-/// fault in the tracker rules is a `Cause` with a real step.
+/// A limit the DM cannot change (rulings M13, M15): the DM's only choice is not to do the act,
+/// so its answer ends at its cause, with no next step. Only these kinds can end so
+/// (`Refusal::at_limit`); a fault in the tracker rules is a `Cause` with a real step.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Limit {
     /// `Crowd Favor cannot go below 0.`: the tracker's `min`.
     Min { tracker: Name, min: i64 },
     /// `Each name has its roll.`: every name of the table was rolled.
     EveryNameRolled,
+    /// M15: Continue fight, or the Undo of an ending, refused by the run rule after the fight's
+    /// encounter was deleted, so no new run can start from it: `A later fight or rest was
+    /// played, and its encounter was deleted.` Only while the encounter is gone; while it exists
+    /// the refusal is `Refusal::new(…, Cause::LaterPlayed | Cause::NotOnTimeline,
+    /// Recovery::StartNewRun)`.
+    EncounterGone(RunRule),
+}
+
+/// The run rule that refused Continue fight or the Undo of an ending: Continue fight is only
+/// for the fight played last, and only for a fight on the Timeline.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RunRule {
+    /// A later fight or rest was played.
+    LaterPlayed,
+    /// The fight is not on the Timeline.
+    NotOnTimeline,
 }
 
 /// The empty next step of a refusal at a tracker's own limit. Only [`Refusal::at_limit`] makes
@@ -897,6 +913,12 @@ impl Refusal {
                 crate::sentence!("{} cannot go below {}.", tracker.as_str(), min)
             }
             Cause::AtLimit(Limit::EveryNameRolled) => crate::sentence!("Each name has its roll."),
+            Cause::AtLimit(Limit::EncounterGone(RunRule::LaterPlayed)) => {
+                crate::sentence!("A later fight or rest was played, and its encounter was deleted.")
+            }
+            Cause::AtLimit(Limit::EncounterGone(RunRule::NotOnTimeline)) => {
+                crate::sentence!("It is not on the Timeline, and its encounter was deleted.")
+            }
         };
         let next = match &self.0.recovery {
             Recovery::ByHand { file, change } => {
@@ -1358,6 +1380,29 @@ mod tests {
                     Limit::EveryNameRolled,
                 ),
                 "Nothing was rolled on Wandering. Each name has its roll.",
+                Tone::Warning,
+            ),
+            // M15: the run rule after the fight's encounter was deleted ends at its cause too.
+            (
+                Refusal::at_limit(
+                    FailedAct::NotContinued {
+                        fight: name("Bridge Ambush"),
+                    },
+                    Limit::EncounterGone(RunRule::LaterPlayed),
+                ),
+                "Bridge Ambush did not go on. A later fight or rest was played, and its \
+                 encounter was deleted.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::at_limit(
+                    FailedAct::EndingNotUndone {
+                        fight: name("Bridge Ambush"),
+                    },
+                    Limit::EncounterGone(RunRule::NotOnTimeline),
+                ),
+                "The ending of Bridge Ambush was not undone. It is not on the Timeline, and its \
+                 encounter was deleted.",
                 Tone::Warning,
             ),
             (
