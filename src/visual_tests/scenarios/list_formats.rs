@@ -804,6 +804,19 @@ pub fn run(d: &mut Driver<'_>) {
         format!("Marked roster rows {marked:?}, mark colours {tones:?}, mark {mark:?} after row 6 {last_read:?}"),
     );
     d.state("flagged-roster-at-start-fight", Sizes::All);
+    // B4 review F2: at 1920 the roster's last control, its whole target, stays in view under the
+    // 34 px back line (round 30 showed it whole; a cut border is a lost control).
+    let new_group = d.at_size((1920.0, 1080.0), |d| {
+        d.nodes()
+            .into_iter()
+            .find(|node| node.name == "New group for this encounter")
+            .map(|node| (node.fully_in_view(), node.rect, node.shown))
+    });
+    d.observe(
+        "s30-B4-F2-new-group-whole",
+        new_group.is_some_and(|(whole, ..)| whole),
+        format!("At 1920, New group for this encounter (whole, rect, shown): {new_group:?}"),
+    );
     assert_eq!(fs::read_to_string(&roster_path).unwrap(), flagged_roster);
     fs::write(&roster_path, &roster_text).unwrap();
     d.click("Back to encounters");

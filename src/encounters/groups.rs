@@ -1365,7 +1365,12 @@ pub(super) fn of_encounter(
         ui,
         "They arrive when you add them to a run of this encounter. Save encounter saves them too.",
     );
-    design::gap(ui, design::Gap::XS);
+    // `XS` sets the first group's card apart from the help. With no group, New group follows the
+    // help as any action under its text does (B4 review F2: at 1920 the space let the 34 px back
+    // line cut the roster's last control).
+    if draft.groups.iter().any(|group| group.belongs_to(draft.id)) {
+        design::gap(ui, design::Gap::XS);
+    }
     let reveal = std::mem::take(&mut draft.reveal_group);
     let Draft {
         groups,
@@ -2498,17 +2503,15 @@ impl Encounters {
             && ui
                 .ctx()
                 .input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
-        let (back_word, back_name) = if in_plan {
-            ("Plan", "Back to the plan")
-        } else {
-            ("Encounters", "Back to encounters")
-        };
+        // R38: the back line on a line of its own above the name row. The group's changes hold
+        // it first, then an unsaved creature.
+        let head = design::EditorHead::new(design::EditorKind::Group { in_plan }, &*self);
         let compact = ui.available_width() < 760.0;
 
         let focus_name = std::mem::take(&mut self.focus_name);
         let draft = self.group_draft.as_mut().expect("the editor has a draft");
         let column_right = ui.data(|data| data.get_temp::<f32>(column_right_id(&draft.path)));
-        let (mut back, mut save, mut discard) = (false, false, false);
+        let (mut save, mut discard) = (false, false);
         let mut name_right = f32::INFINITY;
         // AK1, AB2: the header is one block that ends where the members column ends. Save group
         // sits at that edge on the save row, above the member actions and beside the save state
@@ -2546,39 +2549,35 @@ impl Encounters {
         }
         .min_width(save_width)
         .blocked(state.save_blocked());
-        ui.horizontal(|ui| {
-            back = Action::quiet(icons::LEGACY_BACK)
-                .name(back_name)
-                .hint(back_word)
-                .blocked_if(dirty, "Save or discard this group first.")
-                .show(ui)
-                .clicked();
-            let gap = ui.spacing().item_spacing.x;
-            let room = (block_right.min(title_right - button.natural_width(ui) - gap)
-                - ui.cursor().left())
-            .min(ui.available_width());
-            let width = (room - 2.0 * design::S).max(Density::Scan.control());
-            let column = column_right.map_or(f32::INFINITY, |right| {
-                right - ui.cursor().left() - 2.0 * design::S
+        let (back, ()) = head.show(ui, |ui| {
+            ui.horizontal(|ui| {
+                let gap = ui.spacing().item_spacing.x;
+                let room = (block_right.min(title_right - button.natural_width(ui) - gap)
+                    - ui.cursor().left())
+                .min(ui.available_width());
+                let width = (room - 2.0 * design::S).max(Density::Scan.control());
+                let column = column_right.map_or(f32::INFINITY, |right| {
+                    right - ui.cursor().left() - 2.0 * design::S
+                });
+                let response = name_field(ui, draft, width.min(name_width(column)));
+                design::named(ui, &response, &format!("Group name: {}", draft.name));
+                if response.changed() {
+                    draft.touch();
+                }
+                // Belongs to ends where the name field ends.
+                name_right = response.rect.right();
+                if focus_name {
+                    design::focus_and_select(ui, response.id, &draft.name);
+                }
+                ui.allocate_ui_with_layout(
+                    egui::vec2(
+                        (title_right - ui.cursor().left()).max(0.0),
+                        Density::Scan.control(),
+                    ),
+                    egui::Layout::right_to_left(egui::Align::Center),
+                    |ui| save = button.show(ui).clicked(),
+                );
             });
-            let response = name_field(ui, draft, width.min(name_width(column)));
-            design::named(ui, &response, &format!("Group name: {}", draft.name));
-            if response.changed() {
-                draft.touch();
-            }
-            // Belongs to ends where the name field ends.
-            name_right = response.rect.right();
-            if focus_name {
-                design::focus_and_select(ui, response.id, &draft.name);
-            }
-            ui.allocate_ui_with_layout(
-                egui::vec2(
-                    (title_right - ui.cursor().left()).max(0.0),
-                    Density::Scan.control(),
-                ),
-                egui::Layout::right_to_left(egui::Align::Center),
-                |ui| save = button.show(ui).clicked(),
-            );
         });
         // The save row: the state and Discard at its start, Save group at the block's edge. A
         // reason that has no room on the row takes its own line below it. AK1, FK1: each reason
@@ -4655,7 +4654,10 @@ mod tests {
         assert!(!encounters.group_open_in_plan());
         assert!(encounters.group_draft.is_none());
 
-        assert!(encounters.open_group_in_plan(&path, &campaign));
+        assert_eq!(
+            encounters.open_group_in_plan(&path, &campaign),
+            crate::encounters::PlanOpen::Opened
+        );
         encounters.group_draft.as_mut().unwrap().name = "Cinder Pack".into();
         encounters.save_group_draft(&ctx, &campaign, &[]);
         assert_eq!(encounters.saved_for_plan, None, "it is linked already");
@@ -4682,11 +4684,20 @@ mod tests {
             encounters.save_group_draft(&ctx, &campaign, &[]);
             paths.push(format!("Encounter Groups/{name}.md"));
         }
-        assert!(encounters.open_group_in_plan(&paths[0], &campaign));
+        assert_eq!(
+            encounters.open_group_in_plan(&paths[0], &campaign),
+            crate::encounters::PlanOpen::Opened
+        );
         encounters.search = "wolf".into();
-        assert!(encounters.open_group_in_plan(&paths[0], &campaign));
+        assert_eq!(
+            encounters.open_group_in_plan(&paths[0], &campaign),
+            crate::encounters::PlanOpen::Opened
+        );
         assert_eq!(encounters.search, "wolf");
-        assert!(encounters.open_group_in_plan(&paths[1], &campaign));
+        assert_eq!(
+            encounters.open_group_in_plan(&paths[1], &campaign),
+            crate::encounters::PlanOpen::Opened
+        );
         assert!(encounters.search.is_empty());
         encounters.search = "scout".into();
         encounters.start_new_draft();
@@ -4841,11 +4852,11 @@ mod tests {
 
     #[test]
     fn an_encounter_draft_left_open_does_not_hide_a_plan_groups_undo() {
-        let mut encounters = Encounters {
-            draft: Some(Draft::new()),
-            ..Encounters::default()
-        };
+        let mut encounters = Encounters::default();
         encounters.new_group_in_plan();
+        // B4, E1: a new group is refused over an unsaved encounter, so the encounter draft is
+        // opened after the group; what is tested is the Undo with both open.
+        encounters.draft = Some(Draft::new());
         encounters.discarded_group = encounters.group_draft.take();
         assert!(encounters.group_discarded_in_plan());
         encounters.undo_group_discard_in_plan();
