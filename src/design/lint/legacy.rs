@@ -45,9 +45,9 @@ const CAPABILITIES: [(&str, &str); 11] = [
     ),
     // A footer placed by hand.
     ("hand-footer", "show_by_hand"),
-    // A body that manages its own room, also through the Sessions wrapper `fills(reason)`:
-    // each Sessions pane that calls it counts (only its calls: `fills` is also a variable name).
-    ("fills", "Fills::because fills()"),
+    // A body that manages its own room, also through the Sessions wrapper `fills_body`: each
+    // Sessions pane that names it counts.
+    ("fills", "Fills::because fills_body"),
     // Rows drawn by a closure for the part of a list in view.
     ("virtual-rows", "show_rows show_viewport"),
     // A row registered after it painted, for the old whole-row mask.
@@ -76,9 +76,9 @@ const CAPABILITIES: [(&str, &str); 11] = [
         "host-region",
         "CentralPanel SidePanel TopBottomPanel Column::panel",
     ),
-    // The messages of more than one owner fed into one footer: a mixed task footer. A function
-    // that feeds one counts nothing.
-    ("mixed-footer", "footer_messages"),
+    // An owner's messages fed into a footer by hand (`footer_messages`). One footer fed by more
+    // than one owner is a mixed task footer: the Settings debt of step 8.
+    ("footer-feed", "footer_messages"),
 ];
 
 /// A counted site: capability, file, function.
@@ -416,7 +416,6 @@ fn scan(files: &[(String, String)]) -> Result<Found, String> {
             }
         }
     }
-    counts.retain(|(capability, ..), count| capability != "mixed-footer" || *count > 1);
     Ok(Found { counts, escapes })
 }
 
@@ -770,15 +769,42 @@ fn the_legacy_freeze_finds_what_it_should() {
         assert!(escapes.contains(expected), "{expected}\n{escapes}");
     }
     assert_eq!(named.escapes.len(), 4, "{escapes}");
-    // `Footer::pane` through a type alias in the design system (F2): the alias fails.
+    // `Footer::pane` through a type alias in the design system (F2), or through a nested `self`
+    // import (re-check N3): each alias fails.
     let host = at(&[(
         "src/design/pane.rs",
-        "type Host<'a> = Footer<'a>;\nfn show(h: Host, ui: &mut Ui) {\n    Host::pane(h, ui, Body::Content, |_| ());\n}",
+        "type Host<'a> = Footer<'a>;\nuse crate::design::Footer::{self as Hand};\nfn show(h: Host, ui: &mut Ui) {\n    Host::pane(h, ui, Body::Content, |_| ());\n}",
     )]);
-    assert!(
-        host.escapes.len() == 1 && host.escapes[0].starts_with("src/design/pane.rs:1: an alias"),
+    let aliased: Vec<&str> = host
+        .escapes
+        .iter()
+        .map(|e| &e[..e.find(": ").unwrap()])
+        .collect();
+    assert_eq!(
+        aliased,
+        ["src/design/pane.rs:1", "src/design/pane.rs:2"],
         "{:?}",
         host.escapes
+    );
+    assert!(
+        host.escapes.iter().all(|e| e.contains(": an alias")),
+        "{:?}",
+        host.escapes
+    );
+    // The Sessions wrapper passed as a value (re-check N1) is a use, and an escape.
+    let wrapper = at(&[(
+        "src/sessions/page.rs",
+        "fn body(reason: Option<FillsReason>) -> Body {\n    reason.map(fills_body).unwrap_or(Body::Content)\n}",
+    )]);
+    assert_eq!(
+        wrapper.counts,
+        Counts::from([(site("fills", "src/sessions/page.rs", "body"), 1)])
+    );
+    assert!(
+        wrapper.escapes.len() == 1
+            && wrapper.escapes[0].contains("a fills path named but not called"),
+        "{:?}",
+        wrapper.escapes
     );
     // Words, a call with too few arguments, one feeder, a nested function, test items.
     let quiet = counts(
@@ -786,14 +812,27 @@ fn the_legacy_freeze_finds_what_it_should() {
     );
     assert_eq!(
         quiet,
-        Counts::from([(site("scroll-request", "src/a.rs", "inner"), 1)])
+        Counts::from([
+            (site("scroll-request", "src/a.rs", "inner"), 1),
+            (site("footer-feed", "src/a.rs", "draw"), 1),
+        ])
     );
-    // Two owners' messages in one footer.
+    // Two owners' messages in one footer; extracting one feeder into a helper is a new site
+    // (re-check N4).
     let mixed =
         counts("fn settings(f: &mut Footer) { a.footer_messages(f); B::footer_messages(b, f); }");
     assert_eq!(
         mixed,
-        Counts::from([(site("mixed-footer", "src/a.rs", "settings"), 2)])
+        Counts::from([(site("footer-feed", "src/a.rs", "settings"), 2)])
+    );
+    let fed = counts(
+        "fn settings(f: &mut Footer) {\n    a.footer_messages(f);\n    feed(b, f);\n}\nfn feed(b: &B, f: &mut Footer) {\n    b.footer_messages(f);\n}",
+    );
+    let grown = growth(&fed, &mixed, "", "B0");
+    assert!(
+        grown.len() == 1
+            && grown[0].contains("footer-feed / src/a.rs / feed: 1 here, 0 in the base"),
+        "{grown:?}"
     );
     // Only `cfg(test)` declarations make a file test-only, never its name (F3): `live_tests.rs`
     // loads without `cfg(test)` and counts, as does `#[path]`'s file; `gallery.rs` does not.

@@ -426,15 +426,32 @@ pub(crate) fn calls(source: &str, patterns: &[Shape]) -> Result<Vec<(usize, usiz
     Ok(found)
 }
 
-/// The line of each alias of one of `names`: a rename `name as other` (in a `use` or not) or a
-/// type alias `type T = …;` that names one. Read from the tokens, so an alias inside a
-/// macro's body is found too. `Err` when `source` does not lex.
+/// The line of each alias of one of `names`: a rename `name as other` (in a `use` or not, also
+/// `name::{self as other}`) or a type alias `type T = …;` that names one. Read from the
+/// tokens, so an alias inside a macro's body is found too. `Err` when `source` does not lex.
 pub(crate) fn aliases(source: &str, names: &[&str]) -> Result<Vec<usize>, String> {
     let (tokens, lines) = lexed(source)?;
     let named = |at: &usize| ident(tokens.get(*at)).is_some_and(|word| names.contains(&word));
     let mut found = Vec::new();
+    // The groups open around each token, innermost last.
+    let mut open = Vec::new();
     for (at, &line) in lines.iter().enumerate() {
-        if named(&at) && ident(tokens.get(at + 1)) == Some("as") {
+        match tokens[at] {
+            Token::Open(_) => open.push(at),
+            Token::Close => {
+                open.pop();
+            }
+            _ => {}
+        }
+        // `self` in a group renames the path before it: `Owner::{self as Other}`.
+        let renamed = match ident(tokens.get(at)) {
+            Some("self") => open
+                .last()
+                .filter(|&&group| group >= 3 && path_sep(&tokens, group - 2))
+                .map(|group| group - 3),
+            _ => Some(at),
+        };
+        if renamed.is_some_and(|name| named(&name)) && ident(tokens.get(at + 1)) == Some("as") {
             found.push(line);
         }
         if ident(tokens.get(at)) == Some("type") {
@@ -514,11 +531,17 @@ impl Rules {
                 prefix.pop();
             }
             syn::UseTree::Rename(rename) => {
-                prefix.push(rename.ident.to_string());
+                // `use a::Owner::{self as Other}` renames `a::Owner` itself.
+                let named = rename.ident != "self";
+                if named {
+                    prefix.push(rename.ident.to_string());
+                }
                 if names_a_ban(prefix, &self.bans) {
                     self.found.push("banned-alias");
                 }
-                prefix.pop();
+                if named {
+                    prefix.pop();
+                }
             }
             syn::UseTree::Group(group) => {
                 for tree in &group.items {
@@ -796,6 +819,8 @@ mod tests {
             // Round 29 P-1: a free function through a module that re-exports it.
             "#[allow(clippy::disallowed_methods)] fn add_row() { use crate::design::add_field_keys as keys; }",
             "use crate::design::{add_field_keys as keys, AddField};",
+            // Review of PR 446 (N3): `self` renames the path before its group.
+            "use crate::design::Footer::{self as Host};",
         ] {
             assert_eq!(rules(text), ["banned-alias"], "{text}");
         }

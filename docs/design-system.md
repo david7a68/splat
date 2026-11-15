@@ -2681,8 +2681,9 @@ line's reminders.
   in a string of `src/` or `crates/core/src/`, with the shrink-only allowlist in `src/design/lint_allowlist.txt`.
 - `design::lint::legacy` freezes the layout and host paths that the pane mechanism replaces (migration 32,
   ruling L12): closure pane hosts (`Footer::pane` and `Messages::pane` and kin), hand-placed footers, `Fills`
-  (also the calls of the Sessions `fills` wrapper), closure virtual rows, `register_row`, clips that a caller
-  sets, raw scroll areas, scroll requests and offsets, page regions, and footers fed by more than one owner.
+  (also the Sessions wrapper `fills_body`), closure virtual rows, `register_row`, clips that a caller sets, raw
+  scroll areas, scroll requests and offsets, page regions, and each owner's messages fed into a footer by hand
+  (`footer_messages`, one feeder or more; Settings' footer fed by three owners is the mixed-footer debt).
   It reads the tokens: every mention of a frozen function counts (a method or associated call, a reference, a
   macro's argument), in the app and in `src/design/`. Only `#[test]` and `#[cfg(test)]` items count nothing,
   and files that only `cfg(test)` module declarations load (by module path, `#[path]` resolved); a file's
@@ -2694,11 +2695,18 @@ line's reminders.
   the app or in the design system. When the base cannot be read, the test fails: fetch `origin/main`, or
   name the base in `SPLAT_LEGACY_BASE` (refused in the landing gate). Some uses fail with no row and no
   raise: a frozen function named but not called (a reference, a macro's argument), a frozen path inside
-  `macro_rules!`, and an alias (`… as …`, `type … =`) of a frozen owner or function, anywhere. A raise is a
+  `macro_rules!`, and an alias (`… as …`, `Owner::{self as …}`, `type … =`) of a frozen owner or function,
+  anywhere. A raise is a
   line `legacy-host / <capability> / <file> / <function> => <reason>` in the gate's raise file
   (`SPLAT_STILLNESS_RAISE`), which the lead passes at landing; the test reads the line, not who wrote it.
-  `src/design/c3_ledger.tsv` holds the 85 round-31 C3 deductions with their roots and owning steps, and
-  claims no geometry; a row is never removed, its step closes it (`closed #<PR>`).
+  The freeze guards against accidental growth in ordinary refactoring, not against a deliberate disguise
+  (ruling L13): review catches that. Its named limits: it reads syntax, not types (a `.pane` method with three
+  or more arguments counts on any type; `Self::pane` counts only in `impl Footer` and `impl Messages`); two
+  functions of one name in one file share a row; a macro from another crate or a pasted name is not seen; and a
+  live inline module with `#[path]` (such as `#[path = "."] mod live { mod shared; }`) that loads a file which
+  a test-only declaration also loads is not resolved, so that file can read as test-only. Raw width, height and
+  layout setters are not frozen yet. `src/design/c3_ledger.tsv` holds the 85 round-31 C3 deductions with their
+  roots and owning steps, and claims no geometry; a row is never removed, its step closes it (`closed #<PR>`).
 - The gallery visual scenario shows tokens and shared choices as PNGs. Run rows, dialogs and other
   whole-screen parts appear in their own scenarios. The gallery includes clean, dirty and discarded save rows
   and the hanging Add strip.
