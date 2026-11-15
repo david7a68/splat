@@ -65,13 +65,40 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("Undo separate session");
     d.expect("Session 0.md is now a separate session.");
     d.state("session-copy-repaired", Sizes::All);
+    // Round 30 `session-pane-footer-owner` (FF3): the result of the banner's act is the
+    // session's, so with plan and note side by side it stands in the session pane's footer,
+    // below the note's editor, not in the plan's column beside it.
+    let below = |d: &Driver<'_>| {
+        let nodes = d.nodes();
+        let editor = nodes
+            .iter()
+            .find(|node| node.name == "Note text")
+            .map(|node| node.rect);
+        let result = d.painted_rect_in(
+            "Session 0.md is now a separate session.",
+            eframe::egui::Rect::EVERYTHING,
+        );
+        (
+            editor
+                .zip(result)
+                .is_some_and(|(editor, result)| result.top() >= editor.bottom() - 0.5),
+            format!("editor {editor:?}, result {result:?}"),
+        )
+    };
+    let (wide, wide_at) = d.at_size((1200.0, 800.0), below);
+    let (big, big_at) = d.at_size((1920.0, 1080.0), below);
+    d.observe(
+        "round-30-session-footer-owner",
+        wide && big,
+        format!("The separate-session result stands below the note: 1200x800 {wide_at}; 1920x1080 {big_at}"),
+    );
     // iter-25-S AB2 caller: at 1920 the open-session warning and its action stay inside the
     // list measure, and the action starts at the warning's words.
     let capped = d.at_size((1920.0, 1080.0), |d| {
         let nodes = d.nodes();
         let words = nodes
             .iter()
-            .find(|node| node.name.contains("is not the session being played") && node.in_view())
+            .find(|node| node.name.contains("The session being played is") && node.in_view())
             .map(|node| node.rect);
         let action = nodes
             .iter()
