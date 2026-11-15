@@ -546,7 +546,10 @@ The scope control says `Can use` in both layouts, at the top of the category col
 whole at minimum width. Its menu is as wide as the control, so it stays in the column, `S` clear of the splitter;
 a long package name wraps. An empty search or filter names its scope (`No entries match in Can use. Try fewer
 words, or search Everything.`), and quiet `Search Everything` starts the next line at the text edge: it keeps
-the words and filters. In Everything the sentence ends at `Try fewer words.` with no action. At narrow widths, scope and category share an equal-width line directly above search. The package's About row follows search as the first list row.
+the words and filters. In Everything the sentence ends at `Try fewer words.` with no action. At narrow widths, scope and category share an equal-width line directly above search. The category is then the shared `Section`
+drop-down (`design::Dropdown`): like the category rows, it chooses no section while About is open or a search lists
+the whole scope, so choosing any section ends the search. The category rows sit in a `ScrollColumn`, and the column is
+one scroll lane wider than its rows, so a lane never takes a label's room. The package's About row follows search as the first list row.
 All entries stays in its place in every state; with an empty search it paints no count (the header has it; its
 accessible name keeps it), and with a search it shows the count as the other rows do. Empty categories and their headings stay hidden. Fixed scope names
 wrap; package names can shorten with full hover text and accessible names. The About row stays one line, with
@@ -579,8 +582,11 @@ many files need fixing: a validation message, a broken link, a duplicate identit
 once, and both files of a duplicate identity count. It has the tone of the most severe fault it counts: amber with
 the warning icon, or red with the error icon when a counted file cannot be read. A file is
 its owner and its path, so two packages that each have `Rules/Watch.md` count as two files. Its menu
-lists the messages, then a link for each file with broken links (`<path>: N broken links`) that opens it. The menu is as wide as its
-content, up to `READER_MEASURE`, and ends at the count's right edge, so it stays clear of the list's splitter.
+lists the messages, then a link for each file with broken links (`<path>: N broken links`) that opens it. The menu is as tall
+as its lines up to six controls, then it scrolls, and as wide as its content, up to `READER_MEASURE`; it ends at the
+count's right edge, so short lines stay clear of the list's splitter. Open fault: lines wider than the room between
+the reader's splitter and the count reach over the list at 960 and 1200, because `menu_popup` has no room inside
+the reader yet.
 When two owners have the same path, the message and link name the owner first (`Ashen Marches ·
 Rules/Watch.md`). Unreadable notes use CANNOT BE READ. Rows name
 their kind, path and error line; the owner line says Cannot be read. The reader's title is the file name, and its
