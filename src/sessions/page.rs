@@ -701,8 +701,8 @@ pub struct Sessions {
     note_scroll_to_top: bool,
     last_check: Option<Instant>,
     last_scan: Option<Instant>,
-    /// Row 123: a count that changes at each listing of the folder (`refresh`), so a plan line's
-    /// owner is checked against the notes only when they may have changed.
+    /// Row 123: a count that changes when a listing of the folder (`refresh`) finds other notes
+    /// (an id, a file or a label), so a plan line's owner is checked against the notes only then.
     pub(super) notes_revision: u64,
     /// The campaign's manifest changed, so what holds a copy of it must reload.
     pub manifest_changed: Option<PathBuf>,
@@ -2349,8 +2349,10 @@ impl Sessions {
         // the folder again, and a result whose folder is gone ends.
         self.end_folder_listing();
         self.folder_moves.disk_changed(|moved| moved.to.is_dir());
-        self.notes_revision += 1;
         let Some(folder) = &self.folder else {
+            if !self.notes.is_empty() {
+                self.notes_revision += 1;
+            }
             self.notes.clear();
             self.mentions.clear();
             self.templates.clear();
@@ -2371,7 +2373,12 @@ impl Sessions {
                 .map(|note| (note.id, note.path.clone(), note.label()))
                 .collect()
         };
-        self.wants_index_refresh |= place(&notes) != place(&self.notes);
+        let changed = place(&notes) != place(&self.notes);
+        self.wants_index_refresh |= changed;
+        if changed {
+            // Row 123: a plan line's owners are checked again only now.
+            self.notes_revision += 1;
+        }
         self.notes = notes;
         // A new, renamed or removed note can change which titles are shared.
         self.last_time = None;
