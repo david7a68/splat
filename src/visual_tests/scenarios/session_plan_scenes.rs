@@ -1096,9 +1096,9 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     // FC8 reads each size from the capture below, in its settled frame after its resize; a look
     // across resizes before it would scroll the reader away from what the act left in view.
     let mut at_capture = Vec::new();
-    // `Sizes::Default` captures 960, then 1200, as on main; each look is after its resize.
+    // Capture all three reviewer sizes; each look is after its resize.
     const STATUS_ENTRY: &str = ": Status away → missing.";
-    d.state_prepared("status-changed-in-lookup", Sizes::Default, |d| {
+    d.state_prepared("status-changed-in-lookup", Sizes::All, |d| {
         d.settle();
         let entry = lookup_pane(d).is_some_and(|pane| d.painted_in(pane).contains(STATUS_ENTRY));
         at_capture.push((named(d), entry));
@@ -1116,7 +1116,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         still,
         format!("At {SMALL:?}: title {title_before:?} → {title_after:?}; the field {field_before:?}, then Change {change_after:?}"),
     );
-    for (size, ((fits, detail), entry)) in [SMALL, DEFAULT].into_iter().zip(at_capture) {
+    for (size, ((fits, detail), entry)) in [SMALL, DEFAULT, LARGE].into_iter().zip(at_capture) {
         d.observe(
             "iter-28-D-FC8",
             fits,
