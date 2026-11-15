@@ -182,7 +182,10 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("From");
     d.wait_for_text("Hobb the miller says the toll collectors");
     d.state("carried-recap-in-read", Sizes::Standard);
-    footer_follows_plan(d, "round-28-S-carried-recap-footer", DEFAULT);
+    // Round 30 `session-pane-footer-owner`: beside the note, the carry's result is the
+    // session's, so it stands in the session pane's footer, under both columns, not in the
+    // plan's column (it followed the short plan there until round 30).
+    footer_under_both_columns(d, "round-28-S-carried-recap-footer", DEFAULT);
     from_gap(d, "T18.3-from", &[SMALL, DEFAULT]);
     d.click(NAV_LOOKUP);
     from_gap(d, "T18.3-from-lookup", &[SMALL]);
@@ -222,6 +225,28 @@ pub fn run(d: &mut Driver<'_>) {
 
 /// The page's footer, here the plan's, follows the plan's last row at `size`: from the row's
 /// bottom to the footer's top at most `2 × L` (G6's measure).
+/// The session pane's lowest footer reaches past the plan's column, under the note beside it,
+/// and stands below the plan's row.
+fn footer_under_both_columns(d: &mut Driver<'_>, id: &str, size: (f32, f32)) {
+    let (row, band) = d.at_size(size, |d| {
+        let row = d.place_of("More actions for Talk to Hobb the miller about the ropes");
+        let band = d
+            .footer_bands()
+            .into_iter()
+            .max_by(|a, b| a.top().total_cmp(&b.top()));
+        (row, band)
+    });
+    d.observe(
+        id,
+        row.zip(band).is_some_and(|(row, band)| {
+            band.top() >= row.bottom() && band.right() > row.right() + crate::design::L
+        }),
+        format!(
+            "At {size:?} the footer stands under plan and note: row {row:?}, footer band {band:?}"
+        ),
+    );
+}
+
 fn footer_follows_plan(d: &mut Driver<'_>, id: &str, size: (f32, f32)) {
     let (row, band) = d.at_size(size, |d| {
         let row = d.place_of("More actions for Talk to Hobb the miller about the ropes");
