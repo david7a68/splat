@@ -7841,18 +7841,15 @@ impl Library {
         if let Some(refusal) = &save_refusal {
             draft_state = draft_state.check(design::save_row::Diagnosis::refused(refusal.as_str()));
         }
-        if fault.is_some() || repair_problem.is_some() {
-            // R41 (s30 B11 F4): a deleted manifest is a missing file, a warning, as the footer
-            // and the owner's mark say it; Save still writes it again. Any other repair problem
-            // is unreadable data, an error. Neither blocks Save (B3's contract).
-            let manifest_gone = fault.is_none()
-                && note.error.is_some()
-                && recovery.as_ref().is_some_and(|(_, _, exists)| !exists);
-            draft_state = draft_state.check(if manifest_gone {
-                design::save_row::Diagnosis::gone()
-            } else {
-                design::save_row::Diagnosis::unreadable()
-            });
+        // Lead ruling (s30 B11 F4, R41): a deleted manifest is a missing file, not unreadable
+        // text: its warning stays on the owner line and in the footer, and a draft whose text
+        // Save accepts says the ready word (`Unsaved`), never `Invalid`. Any other repair
+        // problem is unreadable data: `Invalid`, an error. Neither blocks Save (B3's contract).
+        let manifest_gone = fault.is_none()
+            && note.error.is_some()
+            && recovery.as_ref().is_some_and(|(_, _, exists)| !exists);
+        if (fault.is_some() || repair_problem.is_some()) && !manifest_gone {
+            draft_state = draft_state.check(design::save_row::Diagnosis::unreadable());
         }
         if conflict {
             draft_state = draft_state.changed_on_disk();

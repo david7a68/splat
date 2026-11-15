@@ -7835,28 +7835,6 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
             "Manifest repair has a secondary border",
         );
     });
-    // s30 B11 F4 (R41): in Edit Markdown, the reader's save row says the deleted manifest's
-    // `Invalid` in its warning tone, as its footer message and the owner's mark do; Save can
-    // still write it again.
-    let gone = d.aside(|d| {
-        d.click("Edit Markdown");
-        d.settle();
-        let tones = (
-            super::status_tones(d, "Invalid"),
-            manifest_fault_tone(d, "The package manifest was deleted."),
-        );
-        d.click("Read");
-        d.settle();
-        tones
-    });
-    d.observe(
-        "s30-B11-F4-manifest-gone",
-        gone.0 == ["warning"] && gone.1 == Some("warning"),
-        format!(
-            "Edit Markdown of a deleted manifest: Invalid {:?}, footer {:?}",
-            gone.0, gone.1
-        ),
-    );
     d.click("Write the manifest again");
     d.settle();
     assert!(!d.has_containing("The package manifest was deleted"));
@@ -7918,6 +7896,43 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.wait_for_text("The package manifest was deleted");
     assert!(!folder.join("Module.md").exists());
     assert_eq!(fs::read(&path).unwrap(), readme.as_bytes());
+    // s30 B11 F4 (lead ruling, R41): with the manifest deleted, a draft of it whose text Save
+    // accepts says the ready word `Unsaved`, not `Invalid`; Save and Ctrl+S are open; the file's
+    // warning stays in the footer until Ctrl+S writes the file, and then it ends.
+    fs::remove_file(&path).unwrap();
+    d.focus_window(false);
+    d.focus_window(true);
+    d.wait_for_text("The package manifest was deleted");
+    d.click("Edit Markdown");
+    d.settle();
+    let text = d
+        .editor_text()
+        .expect("Edit Markdown shows the kept manifest");
+    d.replace_text_in("Markdown editor", &format!("{text}\nKept by the DM.\n"));
+    d.settle();
+    let before = (
+        d.visible_text("Unsaved"),
+        d.visible_text("Invalid"),
+        d.place_of("Save").is_some() && !d.is_disabled("Save"),
+        manifest_fault_tone(d, "The package manifest was deleted."),
+    );
+    d.press_ctrl(egui::Key::S);
+    d.settle();
+    let written = [path.clone(), folder.join("Module.md")]
+        .iter()
+        .any(|file| fs::read_to_string(file).is_ok_and(|text| text.contains("Kept by the DM.")));
+    let after = (
+        written,
+        d.has_containing("The package manifest was deleted"),
+        d.visible_text("Invalid"),
+    );
+    d.observe(
+        "s30-B11-F4-manifest-gone",
+        before == (true, false, true, Some("warning")) && after == (true, false, false),
+        format!(
+            "Deleted manifest, valid draft: (Unsaved, Invalid, Save open, warning) {before:?}; after Ctrl+S (written, warning, Invalid) {after:?}"
+        ),
+    );
 }
 
 pub fn package_file_changed(d: &mut Driver<'_>) {
