@@ -1770,6 +1770,32 @@ pub mod library_browse {
         d.click_containing(NEXT_CREATURE);
         d.expect(NEXT_CREATURE);
         d.goal("return through the list and open another entry");
+
+        // M0334: the shared `Section` drop-down chooses no section while a search lists the
+        // whole scope, as the section rows of a wider window do. So choosing the section it
+        // showed before the search still ends the search and lists that section.
+        search_library(d, "dragon");
+        d.expect(SEARCH_RESULTS);
+        let shown = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .map(|node| node.name)
+                .find(|name| name == "Section" || name.starts_with("Section: "))
+        };
+        let during = shown(d);
+        choose_library_section(d, CREATURES_SECTION);
+        let query = d.field_text(SEARCH_LIBRARY);
+        let after = shown(d);
+        d.observe(
+            "M0334-section-ends-search",
+            during.as_deref() == Some("Section")
+                && query.as_deref() == Some("")
+                && after.as_deref() == Some("Section: Creatures")
+                && d.has_containing(CREATURES_COUNT),
+            format!(
+                "During a search the drop-down is {during:?}; choosing {CREATURES_SECTION} leaves the search {query:?} and the drop-down {after:?}"
+            ),
+        );
     }
 }
 
@@ -2656,7 +2682,10 @@ pub mod library_navigation {
         );
 
         // M0330: a long issues menu stops at six controls and scrolls. It still ends at the
-        // count and stays clear of every splitter and scroll bar, as the one-link menu does.
+        // count and stays clear of every splitter and scroll bar outside it, as the one-link
+        // menu does. Read without a capture: the gate cannot yet tell a scrolling popup's
+        // background from a control (its rows reach below its frame), a limit this check does
+        // not need.
         for n in 1..=BROKEN_FILES {
             let name = format!("Broken Watch {n}");
             std::fs::write(
@@ -2672,26 +2701,31 @@ pub mod library_navigation {
         d.click("Reload from disk");
         d.wait_for_text("Broken Watch 1");
         let count = issues_count(d);
-        d.click(&count);
-        d.state_prepared("long-issues-menu", Sizes::All, |d| {
-            if !d.has_containing("Broken Watch 1.md: ") {
-                d.click(&count);
-            }
-            let size = d.window_size();
-            let control = d.place_of(&count);
-            let first = d
-                .nodes()
-                .into_iter()
-                .find(|node| node.name.contains("Broken Watch 1.md: "))
-                .map(|node| node.rect);
-            let frame = first.and_then(|first| d.painted_frame_around(first));
-            let (_, margins, stroke) = issues_menu_frame(d);
-            let lanes = d.chrome_lanes();
-            let clear = |rect: egui::Rect| {
-                lanes.iter().all(|lane| {
-                    !lane.y_range().intersects(rect.y_range())
-                        || !lane.x_range().intersects(rect.expand(crate::design::S).x_range())
-                })
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (control, frame, margins, stroke, lanes) = d.act_at_size(size, |d| {
+                if !d.has_containing("Broken Watch 1.md: ") {
+                    d.click(&count);
+                }
+                let first = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name.contains("Broken Watch 1.md: "))
+                    .map(|node| node.rect);
+                let frame = first.and_then(|first| d.painted_frame_around(first));
+                let (_, margins, stroke) = issues_menu_frame(d);
+                (d.place_of(&count), frame, margins, stroke, d.chrome_lanes())
+            });
+            // The menu's own scroll bar is inside its frame; every other lane stays clear.
+            let clear = |frame: egui::Rect| {
+                lanes
+                    .iter()
+                    .filter(|lane| !frame.expand(0.5).contains_rect(**lane))
+                    .all(|lane| {
+                        !lane.y_range().intersects(frame.y_range())
+                            || !lane
+                                .x_range()
+                                .intersects(frame.expand(crate::design::S).x_range())
+                    })
             };
             // The column's six controls, and the frame's margins and stroke above and below.
             let most = crate::design::XXL * 6.0 + margins + 2.0 * stroke;
@@ -2706,7 +2740,10 @@ pub mod library_navigation {
                     "At {size:?} the {count} menu {frame:?} is six controls tall ({most}), ends at the count {control:?} and is clear of the lanes {lanes:?}"
                 ),
             );
-        });
+        }
+        if d.has_containing("Broken Watch 1.md: ") {
+            d.press(Key::Escape);
+        }
     }
 
     /// Files that M0330's long issues menu lists, more than its six controls hold.

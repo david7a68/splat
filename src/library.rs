@@ -5597,7 +5597,11 @@ impl Library {
             return;
         }
         if !compact && self.disk_change.is_none() {
-            design::Column::left("library_sections", 166.0, 150.0..=280.0)
+            // M0333: the section rows keep the scroll column's lane, so the column is that
+            // much wider and the rows keep their room.
+            let lane = design::lane_width();
+            let (width, room) = (166.0 + lane, 150.0 + lane..=280.0 + lane);
+            design::Column::left("library_sections", width, room)
                 // The drag handle is on this edge, so the rows stop short of it.
                 .frame(egui::Frame::new().inner_margin(egui::Margin {
                     right: design::S as i8,
@@ -6364,9 +6368,11 @@ impl Library {
         // This control moves between columns as the reader narrows. Keep an open
         // menu attached to it when the window changes size.
         ui.scope_builder(egui::UiBuilder::new().id("library_scope_host"), |ui| {
-            let width =
+            let width = ui.available_width().min(if compact {
                 ui.available_width()
-                    .min(if compact { ui.available_width() } else { 166.0 });
+            } else {
+                166.0 + design::lane_width()
+            });
             let selected = match scope {
                 Scope::Uses => "Can use".to_owned(),
                 Scope::Builtin => "D&D 2024".to_owned(),

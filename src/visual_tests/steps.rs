@@ -165,10 +165,23 @@ pub fn library_section(d: &Driver<'_>) -> Option<eframe::egui::Rect> {
         .map(|node| node.rect)
 }
 
-/// Open the `Section` drop-down and choose the section with this label (`Creatures`).
+/// Open the `Section` drop-down and choose the section with this label (`Creatures`): the row
+/// in its open list (`Section choices`), never a control of that name elsewhere (the rail's
+/// `Encounters`).
 pub fn choose_library_section(d: &mut Driver<'_>, label: &str) {
     d.click_starting("Section");
-    d.click(label);
+    let nodes = d.nodes();
+    let row = nodes
+        .iter()
+        .find(|node| node.name == "Section choices")
+        .and_then(|list| {
+            nodes.iter().find(|node| {
+                node.name == label && node.in_view() && list.rect.contains_rect(node.rect)
+            })
+        })
+        .map(|row| row.shown)
+        .unwrap_or_else(|| panic!("no {label:?} in the open Section list.\n{}", d.describe()));
+    d.click_rect(row, &format!("Click: {label} in Section"));
 }
 
 pub fn search_library(d: &mut Driver<'_>, text: &str) {
