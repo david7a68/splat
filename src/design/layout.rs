@@ -3027,49 +3027,13 @@ impl<R: CreateReasons> InlineCreate<'_, Complete, R> {
 
     pub fn show(self, ui: &mut Ui) -> InlineCreateResponse {
         let room = form_room(ui);
-        // R30, as the add field: in the pass in which a field takes the keyboard (the form
-        // opens), the least scroll that shows the whole form: its fields, its actions and its
-        // kept line (Cancel, a reason, the preview).
-        let opening = self
-            .parts
-            .iter()
-            .any(|part| matches!(part, CreatePart::Text(field) if field.focus));
-        let form = ui.scope(|ui| {
+        ui.scope(|ui| {
             // Nothing in the form is wider than its room: a labelled field takes the
             // available width.
             ui.set_max_width(room);
             self.show_in(ui, room)
-        });
-        // The reveal holds until the whole form is in view: a pass drawn again (a footer that
-        // changed height) may drop the scroll of the pass in which it opened.
-        let pending = ui.id().with("inline_create_reveal");
-        // R30, as the add field: also when its view changes size while it is open (a resize is
-        // not the DM's own scrolling).
-        let view_key = ui.id().with("inline_create_view");
-        let view_now = ui.clip_rect().size();
-        let resized = ui
-            .data(|data| data.get_temp::<egui::Vec2>(view_key))
-            .is_some_and(|last| (last - view_now).length() > 0.5);
-        ui.data_mut(|data| data.insert_temp(view_key, view_now));
-        if opening || resized {
-            ui.data_mut(|data| data.insert_temp(pending, true));
-        }
-        if ui.data(|data| data.get_temp::<bool>(pending).unwrap_or(false)) {
-            let (top, bottom) = (form.response.rect.top(), form.response.rect.bottom());
-            let view = ui.clip_rect();
-            let shown = bottom <= view.bottom() + 0.5
-                && (top >= view.top() - 0.5 || bottom - top > view.height());
-            // In view, or (a form taller than its view) its bottom is: nothing more to do.
-            if shown {
-                ui.data_mut(|data| data.remove::<bool>(pending));
-            } else {
-                // The least scroll that shows it (`None`: the nearest edge), by every scroll area
-                // that holds the form, as the add field's reveal does (R30).
-                ui.scroll_to_rect(form.response.rect, None);
-                ui.ctx().request_repaint();
-            }
-        }
-        form.inner
+        })
+        .inner
     }
 
     fn show_in(self, ui: &mut Ui, room: f32) -> InlineCreateResponse {

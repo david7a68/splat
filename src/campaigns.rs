@@ -20,6 +20,8 @@ pub struct Campaigns {
     writable: bool,
     editing: Option<Uuid>,
     focus_name: bool,
+    /// The import form opened and shows whole once (`reveal_whole`).
+    reveal_import: bool,
     /// Edit details was pressed on Link and folder: the details form comes into view once, with
     /// its Save, in that pane (round 28: the session folder's save row stands above the pane).
     reveal_details: bool,
@@ -66,6 +68,7 @@ impl Default for Campaigns {
             writable: false,
             editing: None,
             focus_name: false,
+            reveal_import: false,
             reveal_details: false,
             form_open: false,
             add_name: String::new(),
@@ -121,9 +124,10 @@ impl Campaigns {
             self.path = candidate.to_string_lossy().into_owned();
         }
         self.remote = Some((id.into(), name.into()));
-        // The form opens with the name field taking the keyboard, so the form shows whole
-        // (the folder Splat proposes and its preview too).
+        // The form opens with the name field taking the keyboard, and shows whole (the folder
+        // Splat proposes and its preview too: G138).
         self.focus_name = true;
+        self.reveal_import = true;
     }
 
     pub fn cancel_import(&mut self) {
@@ -356,6 +360,7 @@ impl Campaigns {
             writable: true,
             editing: None,
             focus_name: false,
+            reveal_import: false,
             reveal_details: false,
             form_open: false,
             add_name: String::new(),
@@ -1285,7 +1290,8 @@ impl Campaigns {
 
     pub fn show_import_form(&mut self, ui: &mut egui::Ui, remote_id: &str) {
         if self.remote.as_ref().is_some_and(|(id, _)| id == remote_id) {
-            self.form(ui, false, true);
+            let form = ui.scope(|ui| self.form(ui, false, true)).response.rect;
+            reveal_whole(ui, form, std::mem::take(&mut self.reveal_import));
         }
     }
 
@@ -1584,6 +1590,36 @@ fn folder_preview(path: &str) -> Option<String> {
             None => name.into_owned(),
         },
     )
+}
+
+/// R30, as the add field: when the import form opens (`opening`), and when its view changes size
+/// while it is open (a resize is not the DM's own scrolling), the least scroll that shows the
+/// whole form (its fields, Add campaign, Cancel and the preview), repeated each pass until it is in
+/// view (a pass drawn again may drop a scroll), or its bottom is, for a form taller than its view.
+/// `scroll_to_rect` with no alignment is that least scroll, through the collapsing header and the
+/// pane's column, as this page's Edit details form reveals itself.
+fn reveal_whole(ui: &egui::Ui, form: egui::Rect, opening: bool) {
+    let pending = ui.id().with("import_form_reveal");
+    let view_key = ui.id().with("import_form_view");
+    let view = ui.clip_rect();
+    let resized = ui
+        .data(|data| data.get_temp::<egui::Vec2>(view_key))
+        .is_some_and(|last| (last - view.size()).length() > 0.5);
+    ui.data_mut(|data| data.insert_temp(view_key, view.size()));
+    if opening || resized {
+        ui.data_mut(|data| data.insert_temp(pending, true));
+    }
+    if !ui.data(|data| data.get_temp::<bool>(pending).unwrap_or(false)) {
+        return;
+    }
+    let shown = form.bottom() <= view.bottom() + 0.5
+        && (form.top() >= view.top() - 0.5 || form.height() > view.height());
+    if shown {
+        ui.data_mut(|data| data.remove::<bool>(pending));
+    } else {
+        ui.scroll_to_rect(form, None);
+        ui.ctx().request_repaint();
+    }
 }
 
 /// The leading words of the folder preview; they stay when the path gives way.
@@ -1946,6 +1982,7 @@ mod tests {
             writable: true,
             editing: None,
             focus_name: false,
+            reveal_import: false,
             reveal_details: false,
             form_open: false,
             add_name: String::new(),
