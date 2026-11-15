@@ -11444,7 +11444,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
     d.click(&format!(
         "Make all {count} files in ashen-marches-copy/ separate entries"
     ));
-    d.wait_for_text("Undo separate entries");
+    d.wait_for_control("Undo separate entries");
     d.expect(&format!(
         "{count} files in ashen-marches-copy/ are now separate entries."
     ));
@@ -11513,7 +11513,7 @@ pub fn package_folder_copied(d: &mut Driver<'_>) {
         "Make all {count} files in ashen-marches-copy/ separate entries"
     ));
     let batch_words = format!("{count} files in ashen-marches-copy/ are now separate entries.");
-    d.wait_for_text("Undo separate entries");
+    d.wait_for_control("Undo separate entries");
     d.expect(&batch_words);
     let wolf = copied_entries
         .iter()
