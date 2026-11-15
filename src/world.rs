@@ -1980,8 +1980,6 @@ impl IdentityNoun {
 }
 
 pub(crate) const DUPLICATE_ENTRY: &str = "These two files claim to be the same entry.";
-pub(crate) const SEPARATE_ENTRY_UNDO: crate::design::outcome::UndoStep =
-    crate::design::outcome::UndoStep::words("Undo separate entry");
 
 pub(crate) fn separate_entry_action(filename: &str) -> String {
     IdentityNoun::Entry.action(filename)

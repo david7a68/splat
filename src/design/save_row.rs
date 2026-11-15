@@ -410,6 +410,12 @@ impl<'a> DraftState<'a> {
         }
     }
 
+    /// The draft's file changed on disk: a comparison or fault body owns the pane. The typed
+    /// fact, never read from a sentence.
+    pub fn file_changed(&self) -> bool {
+        self.on_disk
+    }
+
     /// `Discard` shows while the draft has changes and the comparison does not own the pane.
     pub fn discard_shown(&self) -> bool {
         self.changed() && !self.on_disk
@@ -472,6 +478,25 @@ pub(in crate::design) fn save_row_with(
     };
     let gap = ui.spacing().item_spacing.x;
     let small = super::Type::Small.font(ui);
+    // Save's widest form (primary or secondary weight) and the widest lock sentence the draft can
+    // show (`locks_campaign`), whatever the draft holds now: the form depends on the width only.
+    let save_width = [Action::primary(save), Action::secondary(save)]
+        .into_iter()
+        .map(|action| {
+            action
+                .density(Density::Read)
+                .key("Ctrl+S")
+                .natural_width(ui)
+        })
+        .fold(0.0, f32::max);
+    let lock_width = if state.locks_campaign {
+        [SAVE_OR_DISCARD_TO_SWITCH, DISCARD_TO_SWITCH]
+            .into_iter()
+            .map(|words| super::number_width(ui, words, &small) + gap)
+            .fold(0.0, f32::max)
+    } else {
+        0.0
+    };
     let on_line = reason.and_then(|reason| {
         // The widest word and its icon, whatever the draft holds.
         let word = [
@@ -491,14 +516,11 @@ pub(in crate::design) fn save_row_with(
             super::number_width(ui, &format!("{} {}", status.icon, status.word), &small)
         })
         .fold(0.0, f32::max);
-        let lock = state
-            .lock_reason()
-            .map_or(0.0, |words| super::number_width(ui, words, &small) + gap);
         let room = ui.available_width()
-            - save_action().natural_width(ui)
+            - save_width
             - word
             - Action::quiet("Discard").natural_width(ui)
-            - lock
+            - lock_width
             - 4.0 * gap;
         let fits = |words: &str| super::number_width(ui, words, &small) <= room;
         if fits(reason.long) {
@@ -554,6 +576,64 @@ pub(in crate::design) fn save_row_with(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// M2 (B2 packet 3, F2): the save row with the toolbar's draft reason chooses its form
+    /// (long or short on its line, or the slot under it) from the width only. Across widths on
+    /// both fit boundaries, walking clean → valid dirty → invalid → clean (with and without the
+    /// campaign-switch lock), the control after the row never moves.
+    #[test]
+    fn the_reason_form_depends_on_the_width_only() {
+        let reason = |locked| RowReason {
+            long: "Save or discard to copy, add an entry or change packages.",
+            short: "Save or discard first.",
+            locked,
+        };
+        let states = |locks: bool| {
+            let base = |changed| {
+                let state = DraftState::new(DraftOrigin::Saved, changed, Primary::Draft);
+                if locks { state.locks_campaign() } else { state }
+            };
+            [
+                (base(Changed::No), false),
+                (base(Changed::Yes), true),
+                (
+                    base(Changed::Yes).check(Diagnosis::refused("Bad id.")),
+                    true,
+                ),
+                (base(Changed::No), false),
+            ]
+        };
+        let ctx = egui::Context::default();
+        crate::design::theme::install(&ctx);
+        let mut forms = std::collections::BTreeSet::new();
+        for locks in [false, true] {
+            for width in (240..=900).step_by(4) {
+                let mut tops = Vec::new();
+                for (state, locked) in states(locks) {
+                    let mut top = 0.0;
+                    for _ in 0..2 {
+                        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+                            egui::CentralPanel::default().show(ctx, |ui| {
+                                ui.set_max_width(width as f32);
+                                let _ = save_row_with(ui, &state, "Save", Some(reason(locked)));
+                                top = ui.label("After").rect.top();
+                            });
+                        });
+                    }
+                    tops.push(top);
+                }
+                forms.insert(tops[0] as i64);
+                assert!(
+                    tops.iter().all(|top| (top - tops[0]).abs() < 0.5),
+                    "at {width} (campaign lock {locks}) the control after the row moved: {tops:?}"
+                );
+            }
+        }
+        assert!(
+            forms.len() >= 2,
+            "the sweep reached the slot under the row: {forms:?}"
+        );
+    }
 
     /// The rule as a table: each row is one state and the word, weight, reason and Discard it
     /// gives. Rows name the round that ruled them.

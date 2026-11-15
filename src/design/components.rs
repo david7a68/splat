@@ -278,10 +278,10 @@ impl<'a, A: Copy> ReaderToolbar<'a, A> {
         ui: &mut Ui,
         draft: &super::DraftState<'_>,
         blocks: DraftBlocks,
-        row: impl FnOnce(bool) -> DraftRow<'a>,
+        row: impl Fn(bool) -> DraftRow<'a>,
         between: impl FnOnce(&mut Ui),
     ) -> ToolbarShown<A> {
-        let on_disk = draft.save_blocked() == Some(super::save_row::CHANGED_ON_DISK);
+        let on_disk = draft.file_changed();
         let held = draft.discard_shown() || on_disk;
         let (long, short) = if on_disk {
             (
@@ -292,6 +292,15 @@ impl<'a, A: Copy> ReaderToolbar<'a, A> {
             (blocks.long(), blocks.short())
         };
         let draft_reason = held.then_some(long);
+        let cites = self
+            .actions
+            .iter()
+            .any(|action| action.availability == Availability::Draft);
+        // With no save row, the draft's reason goes on the toolbar's own line after the actions
+        // when it fits whole there (measured before paint), else on the line under the toolbar.
+        // It is always painted: no state and no caller leaves it out.
+        let no_row_reason = (row(self.source) == DraftRow::None && cites && held).then_some(long);
+        let mut inline = false;
         let mut pressed = None;
         let mut source = self.source;
         let gap = ui.spacing().item_spacing.x;
@@ -346,6 +355,12 @@ impl<'a, A: Copy> ReaderToolbar<'a, A> {
                         pressed = Some(ToolbarPress::Action(action.id));
                     }
                 }
+                if let Some(reason) = no_row_reason
+                    && number_width(ui, reason, &Type::Small.font(ui)) + gap <= ui.available_width()
+                {
+                    blocked_reason(ui, Some(reason));
+                    inline = true;
+                }
             } else {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     let response = Action::quiet(MORE)
@@ -375,17 +390,8 @@ impl<'a, A: Copy> ReaderToolbar<'a, A> {
         for reason in said {
             blocked_reason(ui, Some(reason));
         }
-        let cites = self
-            .actions
-            .iter()
-            .any(|action| action.availability == Availability::Draft);
         let layout = row(source);
-        // With no save row, the draft's reason goes under the toolbar, unless the draft's own
-        // state says the file changed on disk: then the comparison or fault body that owns the
-        // pane states the cause and its choices in painted words, and the actions cite it on
-        // hover and as their accessible description, with no second line (lead ruling on
-        // library-file-fault 02). No caller can choose this: it comes from `DraftState` alone.
-        if layout == DraftRow::None && cites && held && !on_disk {
+        if layout == DraftRow::None && cites && held && !inline {
             blocked_reason(ui, Some(long));
         }
         between(ui);
@@ -5318,6 +5324,72 @@ pub fn draft_comparison_labeled(
 #[allow(deprecated)]
 mod tests {
     use super::*;
+
+    /// M2 (B2 packet 3, F1): no program leaves the draft's reason unpainted. A changed-on-disk
+    /// draft with no save row and nothing between (the omission) paints it on the toolbar's
+    /// line or under it; a dirty draft whose own refusal has the changed-file words (the same
+    /// words, another cause) paints the toolbar's own reason on its save row.
+    #[test]
+    fn every_toolbar_program_paints_the_draft_reason() {
+        use super::super::save_row::{Changed, Diagnosis, DraftOrigin, DraftState, Primary};
+        let painted = |state: &DraftState<'_>, row: DraftRow<'static>, width: f32| {
+            let ctx = egui::Context::default();
+            super::super::theme::install(&ctx);
+            let mut texts = Vec::new();
+            for _ in 0..3 {
+                let output = ctx.run(egui::RawInput::default(), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        ui.set_max_width(width);
+                        let toolbar = ReaderToolbar::new(
+                            false,
+                            "Edit Markdown",
+                            "Markdown source",
+                            ModeLock::Open,
+                        )
+                        .action("Copy to…", None, 1, Availability::Draft);
+                        let _ =
+                            toolbar.show(ui, state, DraftBlocks::EntryInPackage, |_| row, |_| {});
+                    });
+                });
+                texts = output
+                    .shapes
+                    .into_iter()
+                    .filter_map(|shape| match shape.shape {
+                        egui::Shape::Text(text) => Some(text.galley.job.text.clone()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+            }
+            texts
+        };
+        for width in [900.0, 300.0] {
+            let on_disk =
+                DraftState::new(DraftOrigin::Saved, Changed::Yes, Primary::Draft).changed_on_disk();
+            let texts = painted(&on_disk, DraftRow::None, width);
+            assert_eq!(
+                texts
+                    .iter()
+                    .filter(|text| *text == super::super::save_row::CHANGED_ON_DISK)
+                    .count(),
+                1,
+                "at {width}, the omission paints the reason: {texts:?}"
+            );
+            let same_words = DraftState::new(DraftOrigin::Saved, Changed::Yes, Primary::Draft)
+                .check(Diagnosis::refused(super::super::save_row::CHANGED_ON_DISK));
+            let texts = painted(
+                &same_words,
+                DraftRow::Save {
+                    label: "Save",
+                    width,
+                },
+                width,
+            );
+            assert!(
+                texts.iter().any(|text| text.starts_with("Save or discard")),
+                "at {width}, the same words with another cause paint the draft's reason: {texts:?}"
+            );
+        }
+    }
 
     /// iter-22-B SD2: a submenu opens right while it fits `S` inside the pane, else left, else
     /// as far right as fits; each branch is reached.

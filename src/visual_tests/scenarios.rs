@@ -1394,6 +1394,56 @@ pub mod library_browse {
         d.state("search-dragon", Sizes::All);
         d.goal("search for dragons");
 
+        // Round 30 AI4, ruled exactly (B2 packet 3): during a search All entries paints the
+        // number of matches, zero included, on its own line; the row keeps its place.
+        let all_row = |d: &mut Driver<'_>, query: &str| {
+            d.at_size(DEFAULT, |d| {
+                let row = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with("All entries   "))
+                    .map(|node| node.rect);
+                let heading = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name.starts_with(SEARCH_RESULTS))
+                    .map(|node| {
+                        node.name
+                            .trim_start_matches(SEARCH_RESULTS)
+                            .trim()
+                            .to_owned()
+                    });
+                let mut painted = Vec::new();
+                d.each_painted_text(|text, clip| {
+                    let rect = text.visual_bounding_rect();
+                    if clip.intersects(rect)
+                        && row.is_some_and(|row| {
+                            rect.center().y >= row.top()
+                                && rect.center().y <= row.bottom()
+                                && rect.left() > row.center().x
+                        })
+                    {
+                        painted.push(text.galley.job.text.clone());
+                    }
+                });
+                (query.to_owned(), row, heading, painted)
+            })
+        };
+        let dragons = all_row(d, "dragon");
+        d.aside(|d| search_library(d, "zzqxvw"));
+        let nothing = all_row(d, "zzqxvw");
+        d.observe(
+            "s30-B2-all-entries-count-search",
+            dragons.1.is_some()
+                && dragons.2.is_some()
+                && dragons.3.len() == 1
+                && Some(&dragons.3[0]) == dragons.2.as_ref()
+                && dragons.3[0] != "0"
+                && nothing.1.is_some()
+                && nothing.3 == ["0"],
+            format!("During a search All entries paints the matches (query, row, heading count, painted on the row): {dragons:?}, {nothing:?}"),
+        );
+        d.aside(|d| search_library(d, "dragon"));
         d.click_containing(CREATURE);
         d.expect(CREATURE);
         d.state("creature-stat-block", Sizes::AllAndHiDpi);

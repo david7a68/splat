@@ -741,6 +741,9 @@ pub(crate) fn duplicate_repair_consequence(
 const PACKAGE_REGISTRATION_UNDO: UndoStep = UndoStep::words("Undo package registration");
 /// `Use the copy in encounters`: its result's Undo.
 const SOURCE_CHANGE_UNDO: UndoStep = UndoStep::words("Undo source change");
+/// One file made a separate entry from Library's duplicate warning: its result's Undo. World's
+/// own Undo of the same act names its file (`Undo separate <file>`); this one is Library's.
+const SEPARATE_ENTRY_UNDO: UndoStep = UndoStep::words("Undo separate entry");
 
 /// Why the page's other actions wait while the open entry's file changed on disk.
 static CHANGED_FILE_FIRST: design::outcome::Sentence =
@@ -2847,7 +2850,7 @@ fn show_result(
         }
         ResultKind::Identity => {
             if let Some(words) = &results.identity {
-                let undo = results.draft_lock(crate::world::SEPARATE_ENTRY_UNDO);
+                let undo = results.draft_lock(SEPARATE_ENTRY_UNDO);
                 pressed.identity =
                     design::outcome::kept_result(ui, words, undo, Vec::new()).is_some();
             }
@@ -5673,8 +5676,26 @@ impl Library {
                                         self.section == section && !searching && !about_open;
                                     let label = section.label();
                                     // Round 30 AI4: with no search, All entries paints no
-                                    // count, which would repeat the header's; its name keeps it.
-                                    let painted = section != Section::All || searching;
+                                    // count, which would repeat the header's; its name keeps
+                                    // it. During a search it paints the number of matches,
+                                    // zero included, from the list's kept result for this
+                                    // query and scope (no new work); until that result exists,
+                                    // no count.
+                                    let (count, painted) = if section == Section::All {
+                                        let query = self.search.trim().to_lowercase();
+                                        let found = self
+                                            .matches
+                                            .as_ref()
+                                            .filter(|(_, kept, _)| {
+                                                searching
+                                                    && *kept == query
+                                                    && self.matches_scope == Some(scope)
+                                            })
+                                            .map(|(.., found)| found.len());
+                                        (found.unwrap_or(count), found.is_some())
+                                    } else {
+                                        (count, true)
+                                    };
                                     let response =
                                         section_row_counted(ui, label, count, selected, painted);
                                     if response.clicked() {

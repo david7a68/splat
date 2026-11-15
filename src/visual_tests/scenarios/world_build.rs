@@ -12517,13 +12517,20 @@ pub fn library_file_fault(d: &mut Driver<'_>) {
                 && d.has("Technical details"),
             "The draft's choices never save over the unreadable file",
         );
-        // Lead ruling (B2, library-file-fault 02): the body states the cause and its choices,
-        // so the toolbar adds no line for the draft; its waiting actions cite the body on hover
-        // and as their accessible description; the draft's editor is whole in view.
-        let toolbar_line = d.painted_rect_in(
-            crate::design::save_row::CHANGED_ON_DISK,
-            egui::Rect::EVERYTHING,
-        );
+        // B2 packet 3 (F1): the draft's reason is always painted, exactly once: here, with no
+        // save row, on the toolbar's own line after its actions when it fits whole (at 1920,
+        // so no line is added and the draft's editor keeps its whole border), else on the
+        // line under the toolbar. The waiting actions say the same words on hover and as their
+        // accessible description; the body keeps its own sentence and choices.
+        let mut reasons = Vec::new();
+        d.each_painted_text(|text, clip| {
+            if text.galley.job.text == crate::design::save_row::CHANGED_ON_DISK
+                && clip.intersects(text.visual_bounding_rect())
+            {
+                reasons.push(text.visual_bounding_rect());
+            }
+        });
+        let toolbar = d.place_of(EDIT_MARKDOWN);
         let editor = d
             .nodes()
             .into_iter()
@@ -12532,24 +12539,24 @@ pub fn library_file_fault(d: &mut Driver<'_>) {
             .descriptions()
             .iter()
             .any(|words| words == crate::design::save_row::CHANGED_ON_DISK);
+        let wide = d.window_size().0 >= 1900.0;
         d.observe(
-            "s30-B2-body-states-cause",
+            "s30-B2-disk-reason-painted",
             d.visible_text(&conflict)
                 && d.has("Try again")
-                && toolbar_line.is_none()
                 && cites
-                // At 1920 the whole editor fits the window (as on main); at 960 and 1200 it is
-                // taller than the window there too, so only its place is checked above.
-                && (d.window_size().0 < 1900.0
-                    || editor.as_ref().is_some_and(|editor| {
-                    editor.shown.min.distance(editor.rect.min) <= 0.5
-                        && editor.shown.max.distance(editor.rect.max) <= 0.5
-                        && editor.rect.bottom() + crate::design::S <= d.window_size().1
-                }))
-                && editor.is_some(),
+                && reasons.len() == 1
+                && (!wide
+                    || toolbar.is_some_and(|toolbar| {
+                        (reasons[0].center().y - toolbar.center().y).abs() <= crate::design::S
+                    }) && editor.as_ref().is_some_and(|editor| {
+                        editor.shown.min.distance(editor.rect.min) <= 0.5
+                            && editor.shown.max.distance(editor.rect.max) <= 0.5
+                            && editor.rect.bottom() + crate::design::S <= d.window_size().1
+                    })),
             format!(
-                "The body says {conflict:?} with its choices; no toolbar line ({toolbar_line:?}); \
-                 the actions cite it ({cites}); the editor is whole: {:?}",
+                "The reason is painted once {reasons:?} (on the toolbar line {toolbar:?} at 1920), \
+                 the actions cite it ({cites}), the body keeps {conflict:?}; editor {:?}",
                 editor.as_ref().map(|editor| (editor.rect, editor.shown))
             ),
         );

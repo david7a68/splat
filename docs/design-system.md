@@ -384,9 +384,13 @@ and campaign-choice actions (`Choose for this campaign`, `Choose all`). Back's p
 between entry kinds or with the count of actions after it. Back shows its key hint when the modes, Back with its key
 and a `More` fit; else it drops the hint. The actions follow Back when they fit, else they fold into quiet More
 at the row's right end. A steady reason an action waits for (no place to copy to) is painted once under the row; the
-open draft's reason is painted once in the slot under the save row, its room kept while the draft has no changes,
-or under the row when the pane has no save row. When the file changed on disk, the comparison or fault body that
-owns the pane states the cause and its choices, so the toolbar adds no line: its waiting actions cite the body on
+open draft's reason is painted once, by the same part. With a save row it stands on the save row's own line: the
+long whole sentence when it fits, else the short one (`Save or discard first.`, its hover and name the long one),
+chosen from the row's width alone (Save's wider weight, the widest state word, `Discard` and any campaign-switch
+reason counted in every state), so nothing moves when the draft becomes dirty and nothing shows while it is clean.
+Only a row too narrow for the short form keeps a slot under it, in both states. With no save row (a comparison or
+a fault owns the pane, or the entry cannot be edited) it stands on the toolbar's own line after the actions when it
+fits whole, else on the line under the toolbar; it is never left out. The waiting actions say the same words on
 hover and as their accessible description. Every toolbar action, Make NPC note and the actions in More included, is a Read control
 (28 px), so the toolbar row has one height and a campaign creature's title sits where a campaign spell's does. Lookup keeps its Back hint; its Back is a Read control (28 px), as its title line's icon buttons are, so the title line has one height with or without Back and the search field below never moves. Both use Alt+Left, and Alt+Right for Forward, which has no button. Lookup takes the key when focus is there. Beside the Library, the mouse's Back and Forward buttons act on the side under the pointer.
 
