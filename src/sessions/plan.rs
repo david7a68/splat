@@ -7034,10 +7034,48 @@ mod tests {
             "{left:?}"
         );
         b_file(1);
-        sessions.draft.as_mut().unwrap().save();
+        // The DM saves B through the page's own entry: Ctrl+S in the note's editor
+        // (`note_editor`; the failed save's "Try to save again" control and the autosave call the
+        // same `Draft::save`). Frame 1 saves; it asks for a next frame; frame 2's `poll` follows
+        // the plan lines' notes and ends the answer (a reader drawn in frame 1 would end it
+        // there).
+        let home = sessions.campaign.clone();
+        sessions.folder = Some(dir.path().to_path_buf());
+        let ctx = egui::Context::default();
+        let ctrl_s = egui::RawInput {
+            events: vec![egui::Event::Key {
+                key: egui::Key::S,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::COMMAND,
+            }],
+            ..Default::default()
+        };
+        let saved = ctx.run(ctrl_s, |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| sessions.note_editor(ui, false));
+        });
         b_file(0);
-        // The next frame's `poll` follows the plan lines' notes.
-        sessions.follow_plan_line();
+        assert!(
+            sessions.plan_line_refusal_for(Some(b)).is_some(),
+            "frame 1 saves; the answer ends in frame 2"
+        );
+        assert!(
+            saved
+                .viewport_output
+                .values()
+                .any(|viewport| viewport.repaint_delay < Duration::from_secs(1)),
+            "the save frame asks for a next frame: {:?}",
+            saved
+                .viewport_output
+                .values()
+                .map(|viewport| viewport.repaint_delay)
+                .collect::<Vec<_>>()
+        );
+        sessions.last_scan = Some(Instant::now());
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            sessions.poll(ctx, home.as_ref(), &mut book);
+        });
         assert_eq!(
             sessions.plan_line_refusal_for(Some(b)),
             None,
