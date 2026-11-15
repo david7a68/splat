@@ -69,8 +69,11 @@ impl Sheet {
         self.touch();
         &mut self.groups
     }
+    /// The next revision from one counter for every sheet, so two syncs never share one: a
+    /// reader that keeps words by revision cannot mistake a replaced sync for the old one.
     fn touch(&mut self) {
-        self.revision += 1;
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+        self.revision = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 }
 /// One class's hit dice, for a short rest.
@@ -1160,6 +1163,12 @@ impl CombatSync {
     }
     pub fn values(&self) -> &Groups {
         &self.desired
+    }
+    /// A number that changes whenever `values` or `confirmed` may have changed: every write of
+    /// the values and every new read of the sheet bumps it. A reader that prepares words from
+    /// both keeps them until it changes (R-1, round 29).
+    pub fn values_revision(&self) -> u64 {
+        self.desired.revision
     }
     pub fn set_group(&mut self, key: &str, value: Value) {
         if self.ready() && self.desired.contains_key(key) && self.desired.get(key) != Some(&value) {

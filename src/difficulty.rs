@@ -354,43 +354,164 @@ impl Rating {
     }
 }
 
-/// N7 (ruling R1, T5.7): the one difficulty line of a fight, for the encounter editor, the plan,
-/// Ready to run and Arrivals. A caller gives typed parts ([`Line::roster`] or
-/// [`Line::fight_after`]) and a measure; the order of giving way is this type's, never the
-/// caller's:
+/// N7 (rulings R1, Q-s; T5.7): the one difficulty line of a fight, for the encounter editor, the
+/// plan, Ready to run and Arrivals. A caller gives TYPED parts ([`Line::roster`] with a
+/// [`Summary`], or [`Line::fight_after`]) and a measure. The order of the words and the order of
+/// giving way are this type's, never the caller's. A name is an opaque value: the fit never
+/// splits or matches built text, so `Ghost, of the Mill` is one member however it is spelled.
 ///
-/// 1. the word's limit (`(up to 2,800)`);
-/// 2. the facts, whole: Arrivals' member count, then its side (R1); a roster's summary from its
-///    end, by whole facts and members, ending with `…` where it was cut;
-/// 3. the form's XP number (`Fight after: Low` keeps its label and its word).
+/// The words: a group's side, then its member count, then the form (`Enemies · 3 members ·
+/// Fight after: XP 450 · Low`); a roster's summary (`5 party · 2 × Cinder Wolf`), then the form.
+/// A fight with no word says `XP not known` in the word's place, and names whose input it is
+/// only where the line does not already show that member (`1 × Nameless Thing · XP not known`).
 ///
-/// The difficulty word and `Fight after:` never give way. A fight with no word says whose input
-/// is not known: `XP not known: Nameless Thing and 1 more`, the first name shortened from its
-/// end when that is all that fits; the names go only where not one of their letters fits.
-/// Nothing is cut inside a word, and the answer always fits the measure: where even the shortest
-/// form does not, it is cut at whole words with `…`.
+/// What gives way, first to last:
+///
+/// - a roster: the party part (`5 party`, the same on every row), then the word's limit, then
+///   the form's XP number, then the summary from its end, by whole members and facts, ending
+///   with `…` where it was cut (Q-s: the creatures stay longest);
+/// - Arrivals: the word's limit, then the member count, then the side, then the XP number
+///   (`Fight after: Low` keeps its label and its word; R1).
+///
+/// The difficulty word and `Fight after:` never give way. A fight with no word gives way as
+/// above, then shortens the first name from its end; the names go only where not one of their
+/// letters fits. Nothing is cut inside a word, and the answer always fits the measure: where
+/// even the shortest form does not, it is cut at whole words with `…`.
 pub struct Line<'a> {
     difficulty: &'a Difficulty,
     units: Vec<Unit<'a>>,
     label: Option<&'static str>,
 }
 
-/// Arrivals' heading of a group: its name (it stays), its member count and its side.
-pub struct FightAfter<'a> {
-    pub name: &'a str,
-    pub members: &'a str,
-    pub side: &'a str,
+/// One creature of a roster's summary: how many, and its name as the roster shows it. The name
+/// is an opaque value; it may hold any characters, commas too.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Member {
+    pub count: usize,
+    pub name: String,
 }
+
+/// A roster's summary as typed parts, in the line's order: the party count, the members, then
+/// the roster's other facts (`Changed`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Summary {
+    pub party: usize,
+    pub members: Vec<Member>,
+    pub facts: Vec<String>,
+}
+
+impl Summary {
+    /// TRANSITIONAL, at the edge only (`From<&str>`): the Encounters list still hands its Ready
+    /// row's summary as built words (`encounters::roster_summary`; the typed handoff is routed
+    /// to the Encounters package). Only a leading party count (`5 party`) is read; everything
+    /// after it is ONE opaque fact: never parsed into members, never narrowed member by member.
+    /// It is shown as it came; after the XP number (Q-s) it shortens from its end where a
+    /// separator stands (`, `, ` · `) with `…`, as the line did before typed parts, and goes last. A name such as
+    /// `Ghost, 02 × Echo` keeps its words: never reformatted, only cut from the end.
+    pub fn from_built(text: &str) -> Self {
+        let (party, rest) = match text.split_once(" · ") {
+            Some((first, rest)) => (first, rest),
+            None => (text, ""),
+        };
+        let count = party
+            .strip_suffix(" party")
+            .filter(|count| !count.is_empty() && count.chars().all(|c| c.is_ascii_digit()))
+            .and_then(|count| count.parse().ok());
+        let (party, rest) = match count {
+            Some(count) => (count, rest),
+            None => (0, text),
+        };
+        Self {
+            party,
+            members: Vec::new(),
+            facts: (!rest.is_empty())
+                .then(|| rest.to_owned())
+                .into_iter()
+                .collect(),
+        }
+    }
+}
+
+impl From<&str> for Summary {
+    fn from(text: &str) -> Self {
+        Self::from_built(text)
+    }
+}
+
+impl From<&Summary> for Summary {
+    fn from(summary: &Summary) -> Self {
+        summary.clone()
+    }
+}
+
+fn party_words(party: usize) -> String {
+    crate::design::count(party, "party", "party")
+}
+
+fn member_words(member: &Member) -> String {
+    format!("{} × {}", member.count, member.name)
+}
+
+/// Arrivals' heading line of a group, after its name (the name is the heading's own and never
+/// part of this line, so no form of the line can paint it twice; SB1): its side, its member
+/// count, and its own XP (`XP 150`). The group's own XP shows only where the fight has no form:
+/// a heading that says `Fight after: XP 450` never says a second XP number (FJ3).
+pub struct FightAfter<'a> {
+    pub side: &'a str,
+    pub members: &'a str,
+    pub worth: &'a str,
+}
+
+impl FightAfter<'_> {
+    /// The group's own facts in the line's one order: `Enemies · 3 members · XP 150`. The
+    /// Encounters list, the plan (`RunGroup::summary`) and Arrivals start a group with them.
+    pub fn facts(&self) -> String {
+        [self.side, self.members, self.worth]
+            .into_iter()
+            .filter(|words| !words.is_empty())
+            .collect::<Vec<_>>()
+            .join(" · ")
+    }
+}
+
+/// When a part gives way: its rank among every part of the line. A lower rank goes first.
+const PARTY_GOES: usize = 0;
+const LIMIT_GOES: usize = 1;
+const MEMBERS_GO: usize = 2;
+const SIDE_GOES: usize = 3;
+const WORTH_GOES: usize = 4;
+const NUMBER_GOES: usize = 10;
+/// A roster's summary units rank after the XP number, from the summary's end.
+const SUMMARY_GOES: usize = 20;
 
 struct Unit<'a> {
     /// The separator before it on the line: ` · ` between facts, `, ` between members.
     before: &'static str,
-    words: &'a str,
-    /// When it gives way: `None` never; `Some(rank)` in rank order (the summary's units rank
-    /// from its end, after every fact of a heading).
+    words: String,
+    /// When it gives way: `None` never, else its rank.
     gives: Option<usize>,
     /// A unit of a summary: the summary ends with `…` where it was cut.
     summary: bool,
+    /// The member this unit shows, by its name (an opaque value).
+    member: Option<String>,
+    /// Built words (a fact, not a member): before it goes, it shortens from its end.
+    opaque: bool,
+    _line: std::marker::PhantomData<&'a ()>,
+}
+
+/// One stage of giving way: the parts gone, and an opaque fact shortened from its end.
+#[derive(Clone, Debug, Default)]
+struct Stage {
+    gone: Vec<Give>,
+    cut: Option<(usize, String)>,
+}
+
+/// One step of giving way.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Give {
+    Unit(usize),
+    Limit,
+    Number,
 }
 
 /// What [`Line::fit`] keeps: the words before the form (with `…` where the summary was cut) and
@@ -401,16 +522,19 @@ pub struct Fitted {
     pub form: Vec<Part>,
     /// Something gave way: hover and the accessible name keep the whole line.
     pub cut: bool,
+    /// The protected answer is wider than its room: the caller wraps it at word boundaries
+    /// and never cuts it (`Line::fit_or_wrap`).
+    pub wrap: bool,
 }
 
 impl Fitted {
     /// The line as plain words.
     pub fn text(&self) -> String {
         let form: String = self.form.iter().map(|(words, _)| words.as_str()).collect();
-        if self.lead.is_empty() {
-            form
-        } else {
-            format!("{} · {form}", self.lead)
+        match (self.lead.is_empty(), form.is_empty()) {
+            (true, _) => form,
+            (false, true) => self.lead.clone(),
+            (false, false) => format!("{} · {form}", self.lead),
         }
     }
 }
@@ -433,25 +557,68 @@ fn cut_at_words(text: &str, fits: &impl Fn(&str) -> bool) -> String {
         .unwrap_or_else(|| "…".to_owned())
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Test builds: how many lines were built and how many candidate forms were measured, so
+    /// a test can see that an unchanged frame does neither (point 3 of the round 29 review).
+    pub(crate) static WORK: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+}
+
+fn count_work(built: usize, measured: usize) {
+    #[cfg(test)]
+    WORK.with(|work| {
+        let (b, m) = work.get();
+        work.set((b + built, m + measured));
+    });
+    let _ = (built, measured);
+}
+
 impl<'a> Line<'a> {
-    /// A roster's line: its summary (`5 party · 2 × Cinder Wolf, 1 × Ember Cultist`), which
-    /// may be empty (the editor's heading says the rest), then the form.
-    pub fn roster(difficulty: &'a Difficulty, summary: &'a str) -> Self {
+    /// A roster's line: its summary's typed parts (which may be empty: the editor's heading says
+    /// the rest), then the form.
+    pub fn roster(difficulty: &'a Difficulty, summary: impl Into<Summary>) -> Self {
+        count_work(1, 0);
+        let summary = summary.into();
         let mut units = Vec::new();
-        for fact in summary.split(" · ").filter(|f| !f.is_empty()) {
-            for (at, member) in fact.split(", ").enumerate() {
-                units.push(Unit {
-                    before: if at == 0 { " · " } else { ", " },
-                    words: member,
-                    gives: Some(0),
-                    summary: true,
-                });
-            }
+        if summary.party > 0 {
+            units.push(Unit {
+                before: " · ",
+                words: party_words(summary.party),
+                gives: Some(PARTY_GOES),
+                summary: false,
+                member: None,
+                opaque: false,
+                _line: std::marker::PhantomData,
+            });
+        }
+        for (at, member) in summary.members.iter().enumerate() {
+            units.push(Unit {
+                before: if at == 0 { " · " } else { ", " },
+                words: member_words(member),
+                gives: None,
+                summary: true,
+                member: Some(member.name.clone()),
+                opaque: false,
+                _line: std::marker::PhantomData,
+            });
+        }
+        for fact in &summary.facts {
+            units.push(Unit {
+                before: " · ",
+                words: fact.clone(),
+                gives: None,
+                summary: true,
+                member: None,
+                opaque: true,
+                _line: std::marker::PhantomData,
+            });
         }
         // From its end: a later unit gives way first.
         let count = units.len();
         for (at, unit) in units.iter_mut().enumerate() {
-            unit.gives = Some(2 + count - at);
+            if unit.summary {
+                unit.gives = Some(SUMMARY_GOES + count - at);
+            }
         }
         Self {
             difficulty,
@@ -460,21 +627,31 @@ impl<'a> Line<'a> {
         }
     }
 
-    /// Arrivals' line (R1): `Lost Patrol · 3 members · Enemies · Fight after: XP 450 · Low`.
-    /// The label is part of this form; a caller cannot leave it out.
+    /// Arrivals' line (R1): `Enemies · 3 members · Fight after: XP 450 · Low`, after the
+    /// group's name. The label is part of this form; a caller cannot leave it out. A fight with
+    /// no form (no party, no table) keeps the group's own facts: `Enemies · 3 members · XP 150`.
     pub fn fight_after(difficulty: &'a Difficulty, parts: FightAfter<'a>) -> Self {
-        let fact = |words, gives| Unit {
+        count_work(1, 0);
+        let fact = |words: &str, gives| Unit {
             before: " · ",
-            words,
+            words: words.to_owned(),
             gives,
             summary: false,
+            member: None,
+            opaque: false,
+            _line: std::marker::PhantomData,
+        };
+        let worth = if difficulty.parts().is_some() {
+            ""
+        } else {
+            parts.worth
         };
         Self {
             difficulty,
             units: vec![
-                fact(parts.name, None),
-                fact(parts.members, Some(0)),
-                fact(parts.side, Some(1)),
+                fact(parts.side, Some(SIDE_GOES)),
+                fact(parts.members, Some(MEMBERS_GO)),
+                fact(worth, Some(WORTH_GOES)),
             ]
             .into_iter()
             .filter(|unit| !unit.words.is_empty())
@@ -483,52 +660,152 @@ impl<'a> Line<'a> {
         }
     }
 
-    /// The longest line that `fits` (one line, plain words), in the order this type states.
-    /// `None` when the fight has no form (no party, no table, no foe).
-    pub fn fit(&self, fits: impl Fn(&str) -> bool) -> Option<Fitted> {
-        let with_label = |parts: Vec<Part>| -> Vec<Part> {
-            self.label
-                .map(|label| (label.to_owned(), false))
-                .into_iter()
-                .chain(parts)
-                .collect()
-        };
-        // The units' order of giving way.
-        let mut order: Vec<usize> = (0..self.units.len())
-            .filter(|at| self.units[*at].gives.is_some())
+    /// Every stage of giving way, in rank order. A part goes whole, except an opaque fact
+    /// (built words, `Summary::from_built`): before it goes, it shortens from its end where a
+    /// separator stands, with `…`, as the line did before typed parts (third review, point 2).
+    fn stages(&self) -> Vec<Stage> {
+        let rated = self.difficulty.rating.is_some();
+        let mut ranked: Vec<(usize, Give)> = self
+            .units
+            .iter()
+            .enumerate()
+            .filter_map(|(at, unit)| Some((unit.gives?, Give::Unit(at))))
             .collect();
-        order.sort_by_key(|at| self.units[*at].gives);
-        // Each stage of the lead: nothing gone, then one more unit gone each time.
-        let stages: Vec<&[usize]> = (0..=order.len()).map(|count| &order[..count]).collect();
-        let lead = |gone: &[usize]| -> String {
-            let mut text = String::new();
-            let mut cut = false;
-            for (at, unit) in self.units.iter().enumerate() {
-                if gone.contains(&at) {
-                    if unit.summary && !cut {
-                        cut = true;
-                        if !text.is_empty() {
-                            text.push_str(unit.before.trim_end());
-                            text.push(' ');
-                        }
-                        text.push('…');
-                    }
-                    continue;
+        if rated {
+            ranked.push((LIMIT_GOES, Give::Limit));
+            ranked.push((NUMBER_GOES, Give::Number));
+        }
+        ranked.sort_by_key(|(rank, _)| *rank);
+        let order: Vec<Give> = ranked.into_iter().map(|(_, give)| give).collect();
+        let mut stages = Vec::new();
+        for count in 0..=order.len() {
+            let gone = order[..count].to_vec();
+            stages.push(Stage {
+                gone: gone.clone(),
+                cut: None,
+            });
+            if let Some(Give::Unit(at)) = order.get(count)
+                && self.units[*at].opaque
+            {
+                // Cut only where the words have a separator (`, ` or ` · `), the places the line
+                // cut them before typed parts: nothing is read as a member, nothing is cut inside
+                // a name's words, and the separator stays before `…` (`1 × Goblin, …`).
+                let words = &self.units[*at].words;
+                let mut ends: Vec<(usize, &str)> = words
+                    .match_indices(", ")
+                    .chain(words.match_indices(" · "))
+                    .collect();
+                ends.sort_by_key(|(end, _)| std::cmp::Reverse(*end));
+                for (end, separator) in ends {
+                    stages.push(Stage {
+                        gone: gone.clone(),
+                        cut: Some((*at, format!("{}{} …", &words[..end], separator.trim_end()))),
+                    });
                 }
-                if !text.is_empty() {
-                    text.push_str(unit.before);
-                }
-                text.push_str(unit.words);
             }
-            text
+        }
+        stages
+    }
+
+    /// The words before the form, at this stage.
+    fn lead(&self, stage: &Stage) -> String {
+        let mut text = String::new();
+        let mut cut = false;
+        for (at, unit) in self.units.iter().enumerate() {
+            if stage.gone.contains(&Give::Unit(at)) {
+                if unit.summary && !cut {
+                    cut = true;
+                    if !text.is_empty() {
+                        text.push_str(unit.before.trim_end());
+                        text.push(' ');
+                    }
+                    text.push('…');
+                }
+                continue;
+            }
+            if !text.is_empty() {
+                text.push_str(unit.before);
+            }
+            match &stage.cut {
+                Some((shortened, words)) if *shortened == at => {
+                    cut = true;
+                    text.push_str(words);
+                }
+                _ => text.push_str(&unit.words),
+            }
+        }
+        text
+    }
+
+    /// Whether a member that is still on the line is this creature: equal names, nothing else.
+    fn shows(&self, stage: &Stage, name: &str) -> bool {
+        self.units.iter().enumerate().any(|(at, unit)| {
+            unit.member.as_deref() == Some(name) && !stage.gone.contains(&Give::Unit(at))
+        })
+    }
+
+    fn with_label(&self, parts: Vec<Part>) -> Vec<Part> {
+        self.label
+            .map(|label| (label.to_owned(), false))
+            .into_iter()
+            .chain(parts)
+            .collect()
+    }
+
+    /// The smallest COMPLETE line, every part that can give way gone: `Fight after: Low`, or
+    /// `Fight after: XP not known` (point 2: the room a heading reserves before its title).
+    /// `None` as `fit`.
+    pub fn shortest(&self) -> Option<Fitted> {
+        let last = self.stages().pop()?;
+        let lead = self.lead(&last);
+        let form = match (&self.difficulty.rating, &self.difficulty.missing) {
+            (Some(rating), _) => self.with_label(vec![(rating.word.text().to_owned(), true)]),
+            (None, Some(missing)) => self.with_label(vec![(missing.short().to_owned(), false)]),
+            (None, None) if self.label.is_some() => Vec::new(),
+            (None, None) => return None,
         };
-        let whole_form = |form: &Vec<Part>| form.clone();
-        let line = |gone: &[usize], form: Vec<Part>, cut: bool| Fitted {
-            lead: lead(gone),
+        Some(Fitted {
+            lead,
             form,
-            cut: cut || !gone.is_empty(),
+            cut: !last.gone.is_empty(),
+            wrap: false,
+        })
+    }
+
+    /// Point 3 of the third review (R1 at its boundary): the protected answer is never cut
+    /// with `…`. Where even [`Line::shortest`] does not fit, that answer is given whole with
+    /// `wrap`: the caller lays it out at its room, wrapping at word boundaries. Else as `fit`.
+    pub fn fit_or_wrap(&self, fits: impl Fn(&str) -> bool) -> Option<Fitted> {
+        if let Some(shortest) = self.shortest()
+            && self.label.is_some()
+            && !fits(&shortest.text())
+        {
+            count_work(0, 1);
+            return Some(Fitted {
+                wrap: true,
+                cut: true,
+                ..shortest
+            });
+        }
+        self.fit(fits)
+    }
+
+    /// The longest line that `fits` (one line, plain words), in the order this type states.
+    /// `None` when the fight has no form (no party, no table, no foe) and the line has no facts
+    /// of its own to say instead (a roster).
+    pub fn fit(&self, fits: impl Fn(&str) -> bool) -> Option<Fitted> {
+        let fits = |text: &str| {
+            count_work(0, 1);
+            fits(text)
         };
-        let last = stages.last().copied().unwrap_or(&[]);
+        let stages = self.stages();
+        let last = stages.last().cloned().unwrap_or_default();
+        let line = |stage: &Stage, form: Vec<Part>, cut: bool| Fitted {
+            lead: self.lead(stage),
+            form,
+            cut: cut || !stage.gone.is_empty() || stage.cut.is_some(),
+            wrap: false,
+        };
         let fallback = |fitted: Fitted| {
             if fits(&fitted.text()) {
                 return fitted;
@@ -537,53 +814,156 @@ impl<'a> Line<'a> {
                 lead: String::new(),
                 form: vec![(cut_at_words(&fitted.text(), &fits), false)],
                 cut: true,
+                wrap: false,
             }
         };
         match (&self.difficulty.rating, &self.difficulty.missing) {
             (Some(rating), _) => {
-                let full = with_label(rating.parts(true));
-                let no_limit = with_label(rating.parts(false));
-                // 1. The limit gives way first.
-                for (form, cut) in [(&full, false), (&no_limit, true)] {
-                    let fitted = line(&[], whole_form(form), cut);
+                let form = |stage: &Stage| {
+                    self.with_label(if stage.gone.contains(&Give::Number) {
+                        vec![(rating.word.text().to_owned(), true)]
+                    } else {
+                        rating.parts(!stage.gone.contains(&Give::Limit))
+                    })
+                };
+                for stage in &stages {
+                    let fitted = line(stage, form(stage), false);
                     if fits(&fitted.text()) {
                         return Some(fitted);
                     }
                 }
-                // 2. Then the facts, in their order.
-                for gone in &stages[1..] {
-                    let fitted = line(gone, no_limit.clone(), true);
-                    if fits(&fitted.text()) {
-                        return Some(fitted);
-                    }
-                }
-                // 3. Then the XP number: the label and the word stay.
-                let word = with_label(vec![(rating.word.text().to_owned(), true)]);
-                Some(fallback(line(last, word, true)))
+                Some(fallback(line(&last, form(&last), true)))
             }
             (None, Some(missing)) => {
-                let short = missing.short();
-                let reason = |words: String| with_label(vec![(words, false)]);
-                let compose = |gone: &[usize], words: &str| {
-                    line(gone, reason(words.to_owned()), !gone.is_empty()).text()
+                // A member that the summary still shows is not named again (AB4, FB5, SB5).
+                let unsaid = |stage: &Stage| Missing {
+                    names: missing
+                        .names
+                        .iter()
+                        .filter(|name| !self.shows(stage, name))
+                        .cloned()
+                        .collect(),
+                    ..missing.clone()
+                };
+                let reason = |words: String| self.with_label(vec![(words, false)]);
+                let whole = |stage: &Stage| {
+                    unsaid(stage)
+                        .words()
+                        .unwrap_or_else(|| missing.short().to_owned())
                 };
                 // The names whole (the first and a count), the facts giving way first.
-                if let Some(words) = missing.words() {
-                    for gone in &stages {
-                        if fits(&compose(gone, &words)) {
-                            return Some(line(gone, reason(words), !gone.is_empty()));
-                        }
+                for stage in &stages {
+                    let fitted = line(stage, reason(whole(stage)), false);
+                    if fits(&fitted.text()) {
+                        return Some(fitted);
                     }
                 }
                 // Then the first name shortened from its end, with the fewest facts.
-                let shortened = missing.fitted(|words| fits(&compose(last, words)));
-                let words = shortened.unwrap_or_else(|| short.to_owned());
-                let cut = words != missing.words().unwrap_or_default();
-                Some(fallback(line(last, reason(words), cut || !last.is_empty())))
+                let compose = |words: &str| line(&last, reason(words.to_owned()), false).text();
+                let words = unsaid(&last)
+                    .fitted(|words| fits(&compose(words)))
+                    .unwrap_or_else(|| missing.short().to_owned());
+                let cut = words != whole(&last);
+                Some(fallback(line(&last, reason(words), cut)))
+            }
+            (None, None) if self.label.is_some() => {
+                // No form: the facts alone, in the same order of giving way.
+                for stage in &stages {
+                    let fitted = line(stage, Vec::new(), false);
+                    if fits(&fitted.text()) {
+                        return Some(fitted);
+                    }
+                }
+                Some(fallback(line(&last, Vec::new(), true)))
             }
             (None, None) => None,
         }
     }
+}
+
+/// Point 3 and point 1 of the round 29 reviews: the fitted lines of one owner, kept between
+/// frames. The OWNER holds it (a loaded run keeps one for its Arrivals), so it dies with that
+/// owner and no other run can read its answers. Each line is kept under its own id with one
+/// key: its content key, its room, its font and the display scale. On a frame where the key is
+/// unchanged, the line is not built and nothing is measured; a new key replaces the entry.
+#[derive(Default)]
+pub(crate) struct Kept<K> {
+    fits: std::collections::HashMap<K, (u64, Option<Fitted>)>,
+    shortest: std::collections::HashMap<K, (u64, f32)>,
+}
+
+impl<K: std::hash::Hash + Eq + Clone> Kept<K> {
+    /// A line fitted to `room` in `font`. `content` must change whenever the line's parts do.
+    pub(crate) fn fit<'a>(
+        &mut self,
+        ui: &egui::Ui,
+        id: &K,
+        content: impl std::hash::Hash,
+        room: f32,
+        font: &egui::FontId,
+        line: impl FnOnce() -> Line<'a>,
+    ) -> Option<Fitted> {
+        let key = key(ui, (content, room.to_bits(), font));
+        if let Some((kept, answer)) = self.fits.get(id)
+            && *kept == key
+        {
+            return answer.clone();
+        }
+        let answer = line().fit_or_wrap(|text| crate::design::number_width(ui, text, font) <= room);
+        self.fits.insert(id.clone(), (key, answer.clone()));
+        answer
+    }
+
+    /// The width of [`Line::shortest`] in `font` (0 with no line).
+    pub(crate) fn shortest<'a>(
+        &mut self,
+        ui: &egui::Ui,
+        id: &K,
+        content: impl std::hash::Hash,
+        font: &egui::FontId,
+        line: impl FnOnce() -> Line<'a>,
+    ) -> f32 {
+        let key = key(ui, (content, font));
+        if let Some((kept, width)) = self.shortest.get(id)
+            && *kept == key
+        {
+            return *width;
+        }
+        count_work(0, 1);
+        let width = line().shortest().map_or(0.0, |fitted| {
+            crate::design::number_width(ui, &fitted.text(), font)
+        });
+        self.shortest.insert(id.clone(), (key, width));
+        width
+    }
+
+    /// Test builds: whether a line is kept for `id`, and a kept entry put in by hand.
+    #[cfg(test)]
+    pub(crate) fn holds(&self, id: &K) -> bool {
+        self.fits.contains_key(id) || self.shortest.contains_key(id)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn seed(&mut self, id: K) {
+        self.fits.insert(id.clone(), (0, None));
+        self.shortest.insert(id, (0, 0.0));
+    }
+
+    /// Drop the lines whose owner no longer shows them (a group no longer offered).
+    pub(crate) fn retain(&mut self, keep: impl Fn(&K) -> bool) {
+        self.fits.retain(|id, _| keep(id));
+        self.shortest.retain(|id, _| keep(id));
+    }
+}
+
+/// A line's key: its content, room and font, and the display scale (a new scale measures
+/// again).
+fn key(ui: &egui::Ui, parts: impl std::hash::Hash) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    parts.hash(&mut hasher);
+    ui.ctx().pixels_per_point().to_bits().hash(&mut hasher);
+    hasher.finish()
 }
 
 /// One part of a line in the line's own type: the word in `text`, its separators and numbers
@@ -688,54 +1068,96 @@ mod tests {
             }),
             ..Difficulty::default()
         };
-        let summary = "5 party · 2 × Cinder Wolf, 1 × Ember Cultist";
-        let ready = Line::roster(&low, summary);
+        // Typed parts (point 1): the party count and each member with its count and name.
+        let typed = |party: usize, members: &[(usize, &str)]| Summary {
+            party,
+            members: members
+                .iter()
+                .map(|(count, name)| Member {
+                    count: *count,
+                    name: (*name).to_owned(),
+                })
+                .collect(),
+            facts: Vec::new(),
+        };
+        let summary = typed(5, &[(2, "Cinder Wolf"), (1, "Ember Cultist")]);
+        let ready = Line::roster(&low, &summary);
         let at = |room| ready.fit(fits(room)).unwrap().text();
         // Room for all of it.
         let whole = "5 party · 2 × Cinder Wolf, 1 × Ember Cultist · XP 400 · Low (up to 2,800)";
         assert_eq!(at(200), whole);
         assert!(!ready.fit(fits(200)).unwrap().cut);
-        // FG1: the limit goes first, before any fact is cut.
-        assert_eq!(
-            at(whole.chars().count() - 1),
-            "5 party · 2 × Cinder Wolf, 1 × Ember Cultist · XP 400 · Low"
-        );
+        // Q-s (FB4): `5 party`, the same on every row, goes first; then the limit (FG1); then
+        // the XP number. The creatures stay longest: the row answers "what can I run?".
+        let steps = [
+            "2 × Cinder Wolf, 1 × Ember Cultist · XP 400 · Low (up to 2,800)",
+            "2 × Cinder Wolf, 1 × Ember Cultist · XP 400 · Low",
+            "2 × Cinder Wolf, 1 × Ember Cultist · Low",
+        ];
+        assert_eq!(at(whole.chars().count() - 1), steps[0]);
+        for (step, next) in steps.iter().zip(&steps[1..]) {
+            assert_eq!(at(step.chars().count() - 1), *next);
+        }
         // Then the summary from its end, by whole members and facts, with `…` (never `2…`).
-        assert_eq!(at(55), "5 party · 2 × Cinder Wolf, … · XP 400 · Low");
-        assert_eq!(at(35), "5 party · … · XP 400 · Low");
-        // Then the XP number; the word stays while it fits.
-        assert_eq!(at(10), "… · Low");
+        assert_eq!(at(39), "2 × Cinder Wolf, … · Low");
+        assert_eq!(at(20), "… · Low");
         // Review of PR 327 (c): the answer always fits; where the shortest form does not, it is
         // cut at whole words with `…`. A 40 px width (here 4 characters) stays inside it.
         for room in [4, 1] {
             let text = at(room);
             assert!(text.chars().count() <= room, "{room}: {text:?}");
         }
+        // Only a first fact that counts the party is the party fact.
+        let named_party = Line::roster(
+            &low,
+            Summary::from_built("Party Crashers · 2 × Cinder Wolf"),
+        );
+        assert_eq!(
+            named_party.fit(fits(52)).unwrap().text(),
+            "Party Crashers · 2 × Cinder Wolf · XP 400 · Low"
+        );
         // R1, the contract's counterexample: Arrivals' `Fight after` keeps its label and word;
         // the member count gives way, then the side, then the XP number. The name stays. The
         // order and the label are the type's: `fight_after` takes typed parts and no rank.
-        let arrivals = Line::fight_after(
-            &low,
-            FightAfter {
-                name: "Lost Patrol",
-                members: "3 members",
-                side: "Enemies",
-            },
-        );
+        // FJ2, FC7, FK8, FN3: the facts read side, then count, as the Encounters list and the
+        // plan say them (`FightAfter::facts`), in every form of the heading.
+        let patrol = || FightAfter {
+            side: "Enemies",
+            members: "3 members",
+            worth: "XP 150",
+        };
+        assert_eq!(patrol().facts(), "Enemies · 3 members · XP 150");
+        let arrivals = Line::fight_after(&low, patrol());
         let at = |room| arrivals.fit(fits(room)).unwrap().text();
         assert_eq!(
             at(200),
-            "Lost Patrol · 3 members · Enemies · Fight after: XP 400 · Low (up to 2,800)"
+            "Enemies · 3 members · Fight after: XP 400 · Low (up to 2,800)"
         );
-        assert_eq!(at(60), "Lost Patrol · Enemies · Fight after: XP 400 · Low");
-        assert_eq!(at(39), "Lost Patrol · Fight after: XP 400 · Low");
-        assert_eq!(at(30), "Lost Patrol · Fight after: Low");
-        // A fight with no form has no line.
+        assert_eq!(at(60), "Enemies · 3 members · Fight after: XP 400 · Low");
+        assert_eq!(at(46), "Enemies · Fight after: XP 400 · Low");
+        assert_eq!(at(34), "Fight after: XP 400 · Low");
+        assert_eq!(at(24), "Fight after: Low");
+        // SB1 (iter-29 G57): no form of the line holds the group's name, also where even the
+        // shortest form is cut: the heading draws the name once.
+        for room in [200, 60, 46, 34, 24, 10, 3] {
+            assert!(!at(room).contains("Patrol"), "{room}: {}", at(room));
+        }
+        // A fight with no form has no line on a roster.
         assert!(
-            Line::roster(&Difficulty::default(), summary)
+            Line::roster(&Difficulty::default(), &summary)
                 .fit(fits(200))
                 .is_none()
         );
+        // In Arrivals, a fight with no form (no party, no table) keeps the group's own facts,
+        // in the same order; with a form, the group's own XP never shows beside the fight's.
+        let none = Difficulty::default();
+        let facts = Line::fight_after(&none, patrol());
+        assert_eq!(
+            facts.fit(fits(200)).unwrap().text(),
+            "Enemies · 3 members · XP 150"
+        );
+        assert_eq!(facts.fit(fits(20)).unwrap().text(), "Enemies · XP 150");
+        assert!(!at(200).contains("XP 150"));
         // Review of PR 327 (b): a mixed roster's reason keeps whose input is missing: whole
         // where it fits, the facts going first, then the first name shortened; never `XP not
         // known` alone while a letter of the name fits.
@@ -747,18 +1169,261 @@ mod tests {
             }),
             ..Difficulty::default()
         };
-        let mixed = Line::roster(&unknown, summary);
+        let mixed = Line::roster(&unknown, &summary);
         let at = |room| mixed.fit(fits(room)).unwrap().text();
         assert_eq!(
             at(200),
             "5 party · 2 × Cinder Wolf, 1 × Ember Cultist · XP not known: Nameless Thing and 1 more"
         );
         assert_eq!(
-            at(55),
-            "5 party · … · XP not known: Nameless Thing and 1 more"
+            at(80),
+            "2 × Cinder Wolf, 1 × Ember Cultist · XP not known: Nameless Thing and 1 more"
+        );
+        assert_eq!(
+            at(64),
+            "2 × Cinder Wolf, … · XP not known: Nameless Thing and 1 more"
         );
         assert_eq!(at(45), "… · XP not known: Nameless Thing and 1 more");
         assert_eq!(at(32), "… · XP not known: Na… and 1 more");
+        // AB4, FB5, SB5: a name that the summary shows is not said again. Where the summary is
+        // cut so that it no longer shows the name, the reason names it.
+        let lone = Difficulty {
+            missing: Some(Missing {
+                what: Unknown::Xp,
+                at: vec![0],
+                names: vec!["Nameless Thing".into()],
+            }),
+            ..Difficulty::default()
+        };
+        let visitor = Line::roster(&lone, typed(5, &[(1, "Nameless Thing")]));
+        let at = |room| visitor.fit(fits(room)).unwrap().text();
+        assert_eq!(at(200), "5 party · 1 × Nameless Thing · XP not known");
+        assert_eq!(at(36), "1 × Nameless Thing · XP not known");
+        assert_eq!(at(32), "… · XP not known: Nameless Thing");
+        assert!(!visitor.fit(fits(200)).unwrap().cut);
+        let two = Line::roster(&unknown, typed(5, &[(1, "Nameless Thing"), (1, "Ox")]));
+        assert_eq!(
+            two.fit(fits(200)).unwrap().text(),
+            "5 party · 1 × Nameless Thing, 1 × Ox · XP not known: Wisp"
+        );
+        // FK3, SK3, FJ3 (R1): a joining group whose fight has no word still says `Fight after`,
+        // with `XP not known` in the word's place and whose XP it is.
+        let ghost = Difficulty {
+            missing: Some(Missing {
+                what: Unknown::Xp,
+                at: vec![3],
+                names: vec!["Ghost of the Mill".into()],
+            }),
+            ..Difficulty::default()
+        };
+        let joining = Line::fight_after(&ghost, patrol());
+        assert_eq!(
+            joining.fit(fits(200)).unwrap().text(),
+            "Enemies · 3 members · Fight after: XP not known: Ghost of the Mill"
+        );
+        assert_eq!(
+            joining.fit(fits(44)).unwrap().text(),
+            "Fight after: XP not known: Ghost of the Mill"
+        );
+        // Point 1 (round 29 review): typed parts. A name is an opaque value: `Ghost, of the
+        // Mill` is one member, said once, and narrowing never halves it.
+        let comma = Summary {
+            party: 5,
+            members: vec![
+                Member {
+                    count: 2,
+                    name: "Cinder Wolf".into(),
+                },
+                Member {
+                    count: 1,
+                    name: "Ghost, of the Mill".into(),
+                },
+            ],
+            facts: Vec::new(),
+        };
+        let ghost = Difficulty {
+            missing: Some(Missing {
+                what: Unknown::Xp,
+                at: vec![2],
+                names: vec!["Ghost, of the Mill".into()],
+            }),
+            ..Difficulty::default()
+        };
+        let typed = Line::roster(&ghost, &comma);
+        let at = |room| typed.fit(fits(room)).unwrap().text();
+        assert_eq!(
+            at(200),
+            "5 party · 2 × Cinder Wolf, 1 × Ghost, of the Mill · XP not known"
+        );
+        for room in (1..=80).rev() {
+            let text = at(room);
+            assert!(text.chars().count() <= room, "{room}: {text}");
+            assert!(
+                text.matches("Ghost").count() <= 1,
+                "the name once at {room}: {text}"
+            );
+            assert!(
+                !text.contains("1 × Ghost,…") && !text.contains("Ghost, …"),
+                "never half a member at {room}: {text}"
+            );
+            if text.contains("1 × Ghost") {
+                assert!(text.contains("1 × Ghost, of the Mill"), "{room}: {text}");
+            }
+        }
+        assert_eq!(
+            at(53),
+            "2 × Cinder Wolf, … · XP not known: Ghost, of the Mill"
+        );
+        assert_eq!(at(40), "… · XP not known: Ghost, of the Mill");
+        // Point 2 of the second review: BUILT words are opaque. `Ghost, 02 × Echo` is never read
+        // as members: its words stay as they came at full width, and narrowing never halves it
+        // (it gives way whole, after `5 party`, the limit and the XP number).
+        let built = Line::roster(&low, Summary::from_built("5 party · 1 × Ghost, 02 × Echo"));
+        let at = |room| built.fit(fits(room)).unwrap().text();
+        assert_eq!(
+            at(200),
+            "5 party · 1 × Ghost, 02 × Echo · XP 400 · Low (up to 2,800)"
+        );
+        // Never reformatted: whatever of the built words shows is their own start, cut where a
+        // separator stands, with `…` (point 2 of the third review), and `02` stays `02`.
+        let words = "1 × Ghost, 02 × Echo";
+        for room in (1..=70).rev() {
+            let text = at(room);
+            let shown = text
+                .split(" · ")
+                .find(|part| part.starts_with("1 ×"))
+                .unwrap_or("");
+            assert!(
+                shown.is_empty()
+                    || shown == words
+                    || shown
+                        .strip_suffix('…')
+                        .is_some_and(|cut| words.starts_with(cut.trim_end())),
+                "built words at {room}: {text}"
+            );
+            assert!(!text.contains(" 2 × Echo"), "{room}: {text}");
+        }
+        assert_eq!(at(40), "1 × Ghost, 02 × Echo · XP 400 · Low");
+        assert_eq!(at(30), "1 × Ghost, 02 × Echo · Low");
+        assert_eq!(at(20), "1 × Ghost, … · Low");
+        // Point 2 of the third review: built words shorten FROM THEIR END; a useful start stays
+        // (the leading creature), as before typed parts. They go whole only where it does not fit.
+        let long = Line::roster(
+            &low,
+            Summary::from_built("5 party · 1 × Goblin, 1 × Ashen Warden of the Ninth Gate"),
+        );
+        let at = |room| long.fit(fits(room)).unwrap().text();
+        assert_eq!(at(30), "1 × Goblin, … · Low");
+        assert_eq!(at(7), "… · Low");
+        // Point 3 of the third review: the protected answer is never cut with `…`. Where even
+        // its smallest form is wider than the room, it is given whole, to wrap at words.
+        let arrivals = Line::fight_after(&low, patrol());
+        let narrow = arrivals.fit_or_wrap(fits(10)).unwrap();
+        assert_eq!(
+            (narrow.text().as_str(), narrow.wrap),
+            ("Fight after: Low", true)
+        );
+        let room = arrivals.fit_or_wrap(fits(16)).unwrap();
+        assert_eq!(
+            (room.text().as_str(), room.wrap),
+            ("Fight after: Low", false)
+        );
+        for width in 1..=80 {
+            let fitted = arrivals.fit_or_wrap(fits(width)).unwrap();
+            assert!(
+                fitted.text().contains("Fight after: ") && !fitted.text().contains('…'),
+                "{width}: {}",
+                fitted.text()
+            );
+        }
+        // Point 2: the smallest complete line, every part that can give way gone.
+        assert_eq!(
+            Line::fight_after(&low, patrol()).shortest().unwrap().text(),
+            "Fight after: Low"
+        );
+        assert_eq!(
+            Line::fight_after(&ghost, patrol())
+                .shortest()
+                .unwrap()
+                .text(),
+            "Fight after: XP not known"
+        );
+    }
+
+    /// Point 3 (round 29 review): a kept fit builds no line and measures nothing on a frame
+    /// whose key, room and font did not change; a new key, room or font works it out again.
+    #[test]
+    fn a_kept_line_does_no_work_on_an_unchanged_frame() {
+        let low = Difficulty {
+            xp: 400,
+            rating: Some(Rating {
+                word: Word::Low,
+                budgets: [2800, 4200, 6400],
+                xp: 400,
+                characters: 5,
+                levels: (3, 3),
+                campaign_party: false,
+            }),
+            ..Difficulty::default()
+        };
+        let summary = Summary {
+            party: 5,
+            members: (0..40)
+                .map(|at| Member {
+                    count: 1,
+                    name: format!("Creature {at}"),
+                })
+                .collect(),
+            facts: Vec::new(),
+        };
+        let ctx = egui::Context::default();
+        crate::design::theme::install(&ctx);
+        let work = || WORK.with(std::cell::Cell::get);
+        let id = 7_u32;
+        let frame = |kept: &mut Kept<u32>, revision: u64, room: f32| {
+            let mut out = None;
+            let _ = ctx.run(egui::RawInput::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let font = crate::design::Type::Small.font(ui);
+                    let width =
+                        kept.shortest(ui, &id, revision, &font, || Line::roster(&low, &summary));
+                    out = Some((
+                        width,
+                        kept.fit(ui, &id, revision, room, &font, || {
+                            Line::roster(&low, &summary)
+                        }),
+                    ));
+                });
+            });
+            out.unwrap()
+        };
+        let mut run_a = Kept::default();
+        let first = frame(&mut run_a, 1, 300.0);
+        let after_first = work();
+        assert!(after_first.0 >= 1 && after_first.1 >= 1, "{after_first:?}");
+        assert_eq!(frame(&mut run_a, 1, 300.0), first);
+        assert_eq!(work(), after_first, "an unchanged frame does no work");
+        let _ = frame(&mut run_a, 1, 200.0);
+        assert!(work().1 > after_first.1, "a new room measures again");
+        let before = work();
+        let _ = frame(&mut run_a, 2, 200.0);
+        assert!(work().0 > before.0, "a new revision builds again");
+        // Point 1 of the second review: another owner (run B, loaded with the same group id and
+        // the same counters) never reads run A's answers: it works its own out.
+        let before = work();
+        let mut run_b = Kept::default();
+        let _ = frame(&mut run_b, 2, 200.0);
+        assert!(work().0 > before.0, "run B builds its own line");
+        // A changed display scale fits again.
+        let before = work();
+        ctx.set_pixels_per_point(2.0);
+        let _ = frame(&mut run_b, 2, 200.0);
+        assert!(work().1 > before.1, "a new display scale measures again");
+        // A group that is no longer offered drops its kept line.
+        run_b.retain(|kept| *kept != id);
+        let before = work();
+        let _ = frame(&mut run_b, 2, 200.0);
+        assert!(work().0 > before.0, "a dropped line is built again");
     }
 
     #[test]

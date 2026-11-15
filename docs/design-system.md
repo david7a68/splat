@@ -1269,14 +1269,20 @@ character). It has one form on every line that shows it (`Rating::parts`, drawn 
 `XP 1,050 · Moderate (up to 1,125)`. The number in brackets is the word's limit; `Above High` has none
 (`XP 2,400 · Above High`). The editor's `ROSTER 8` heading ends `· XP 1,050 · Moderate (up to 1,125)`; below 760 px
 the tab row ends at its right with the same form. A Ready to run row's summary and a planned fight's row end with it
-too. The word never gives way. Where a line has no room, the limit goes first (`XP 1,050 · Moderate`), then the
-summary before it, from its end, by whole facts and members (`5 party · 1 × Cinder Tyrant, … · XP 6,300 · High`);
-the row's hover and its accessible name keep the whole line. A fight with no word because an input is not known says
-`XP not known` in the word's place (`Difficulty::form`). With no table or no party, or nothing against the party,
-the line is as before. A row with an unfinished run shows no word. Arrivals names what the XP is for: a group's
-heading says `Fight after: XP 450 · Low`, the fight once the group joins, without the limit. R1: `Fight after` and
-its word never give way: the member count goes first, then the side, then the XP number, through the one difficulty
-line (`difficulty::Line::fight_after`); the heading never adds a line. The answer is worked out when the encounter, the saved sheets or the rules
+too. The word never gives way. Where a line has no room (Q-s), `5 party` goes first (it is the same on every row),
+then the limit (`XP 1,050 · Moderate`), then the XP number, then the creature summary from its end, by whole facts
+and members (`1 × Cinder Tyrant, … · High`): the row answers "what can I run?", so the creatures stay longest. The
+row's hover and its accessible name keep the whole line. A fight with no word because an input is not known says
+`XP not known` in the word's place (`Difficulty::form`), with whose input it is only where the line does not show
+that name already (`1 × Nameless Thing · XP not known`, never `… Nameless Thing · XP not known: Nameless Thing`).
+With no table or no party, or nothing against the party, the line is as before. A row with an unfinished run shows
+no word. Arrivals names what the XP is for: a group's heading says its side, its member count, then `Fight after:
+XP 450 · Low`, the fight once the group joins (`Enemies · 3 members · Fight after: XP 450 · Low`, the order of the
+Encounters list and the plan). R1: every group that can join says `Fight after`, also a group of allies and a fight
+with no word (`Fight after: XP not known: Ghost of the Mill`); with no form at all the heading says the group's own
+XP after its count instead. `Fight after` and its word never give way: the limit goes first, then the member count,
+then the side, then the XP number, through the one difficulty line (`difficulty::Line::fight_after`); the heading
+never adds a line. The answer is worked out when the encounter, the saved sheets or the rules
 change, and when the editor's draft changes; never on a frame with no change.
 
 A Ready row's menu has `Remove` after Edit encounter, only for an encounter with no saved run (unfinished,
@@ -1652,7 +1658,10 @@ Undo. The row's
 hover and accessible name hold every whole word. After damage to a row marked Conc, `Conc save DC 12` ends
 its second line until the next step, only in the room that the effects leave; else only in the hover and the
 accessible name. Right after the row's own `Conc` mark it says `save DC 12` (`✧ Conc · save DC 12`); the hover and
-the accessible name keep `Conc save DC 12`. In Conditions an official condition's count is on its tick, `✓ Frightened 10`, while the
+the accessible name keep `Conc save DC 12`. R27 (amended): where the DC gives way and a roll's result follows the mark, the mark reads
+`✧ Conc save due`, never a bare `Conc` and never `Conc save` before a result word (`Conc Saved` reads as a save that
+passed); where `due` would not keep the row's place, the row shows its DC and the result takes its own line. The roll's
+result is its own block after the row's laid-out line, so the mark keeps its place in the line. In Conditions an official condition's count is on its tick, `✓ Frightened 10`, while the
 grid fits its room; else it is listed under Other effects, which lists other words with their whole words. The
 tab's help says `No HP, AC or roll changes by itself. A time you type counts down at the end of that creature’s turn: Bless 10 rounds goes from 10 to 9.` An
 ended run shows them as words, and a click does nothing.
@@ -1739,7 +1748,7 @@ form that fits whole, dropping words before the result first; the result's last 
 outcome, and the damage with its `(half)`) never drop. A roll result is never cut, and it does not change a row's height while it fits: when the
 result does not fit whole after the effects and the save DC, the row without them shows it whole if it can; else
 condition words give way into the row's `N more` until it fits. State marks (Bloodied, Conc) never give way: a DM who
-does not see Conc misses a concentration save. Only when its two parts fit in none of these does it
+does not see Conc misses a concentration save; with its DC gone before a result, the mark reads `Conc save due` (R27). Only when its two parts fit in none of these does it
 take a line of its own under the conditions, at the name's edge, and that row grows by the line. The row's accessible name holds them whole. Roll words
 never move a row's columns. A save's creature targets show their roll in the AC
 cell. After `Roll damage`, each target says its own result, from the amount Enter gives it (`Saved · 1 damage
@@ -1869,7 +1878,7 @@ labels (`Undo: 2 loot rolls`), with the full action in hover and its accessible 
 secondary `Continue fight` on its own line under Read-only, blocked with `Close the open run first.` while another
 run is open. Continue fight is offered only for the fight that was played last (`README.md`, Running an encounter
 as DM). For any other ended fight the control is absent, and one muted `Small` sentence stands in its place and says
-why: `A later fight or rest was played, so this fight cannot go on. Start a new run to play it again.` It is a sentence and not a blocked
+why, the result first (R23): `This fight cannot go on: a later fight or rest was played. Start a new run to play it again.` It is a sentence and not a blocked
 button, because no step in this view makes the control work. In the ended header the sentence wraps to at most
 `15 × L` wide, so Close run and the title keep their places; on the two-line header it follows Undo on the second
 line. In History it is the line under Read-only, `S` below it and `M` above `FINAL STATE`. Neither is modal, and Undo names the step: `Undo: continue fight`. After Continue fight, the
