@@ -580,7 +580,9 @@ mod tests {
     /// M2 (B2 packet 3, F2): the save row with the toolbar's draft reason chooses its form
     /// (long or short on its line, or the slot under it) from the width only. Across widths on
     /// both fit boundaries, walking clean → valid dirty → invalid → clean (with and without the
-    /// campaign-switch lock), the control after the row never moves.
+    /// campaign-switch lock), the room the reason adds is the same in every state, so it moves
+    /// nothing. (The row's own campaign-switch sentence wraps at very narrow widths and grows
+    /// the row with or without the reason; that is the row's, measured apart here.)
     #[test]
     fn the_reason_form_depends_on_the_width_only() {
         let reason = |locked| RowReason {
@@ -611,6 +613,7 @@ mod tests {
                 let mut tops = Vec::new();
                 for (state, locked) in states(locks) {
                     let mut top = 0.0;
+                    let mut plain = 0.0;
                     for _ in 0..2 {
                         let _ = ctx.run(egui::RawInput::default(), |ctx| {
                             egui::CentralPanel::default().show(ctx, |ui| {
@@ -619,13 +622,23 @@ mod tests {
                                     egui::vec2(width as f32, 1_000.0),
                                 );
                                 ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                                    let start = ui.cursor().top();
                                     let _ = save_row_with(ui, &state, "Save", Some(reason(locked)));
-                                    top = ui.label("After").rect.top();
+                                    top = ui.label("After").rect.top() - start;
+                                });
+                                let rect = egui::Rect::from_min_size(
+                                    ui.cursor().min,
+                                    egui::vec2(width as f32, 1_000.0),
+                                );
+                                ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                                    let start = ui.cursor().top();
+                                    let _ = save_row_with(ui, &state, "Save", None);
+                                    plain = ui.label("After").rect.top() - start;
                                 });
                             });
                         });
                     }
-                    tops.push(top);
+                    tops.push(top - plain);
                 }
                 forms.insert(tops[0] as i64);
                 assert!(
