@@ -347,12 +347,15 @@ mod tests {
         let drawn = Rc::new(Cell::new(0.0));
         let before = predicted.clone();
         let after = drawn.clone();
+        let room = Rc::new(Cell::new(egui::Rect::NOTHING));
+        let bounds = room.clone();
         let mut harness = Harness::builder()
             .with_size(egui::vec2(960.0, 640.0))
             .build(move |ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     let column = Column::panel("timeline_detail_panel", PANEL_MIN_WIDTH);
                     let saved = column_widths(ctx);
+                    bounds.set(ui.available_rect_before_wrap());
                     before.set(column.width_within(ctx, ui.available_width()));
                     assert_eq!(column_widths(ctx), saved, "the width read saves nothing");
                     column.show_inside(ui, |ui| after.set(ui.max_rect().width()));
@@ -387,6 +390,14 @@ mod tests {
             harness.run();
             assert_eq!(predicted.get(), drawn.get());
         }
+        let from = pos2(room.get().right() - drawn.get(), 200.0);
+        drag(&mut harness, from, from - egui::vec2(40.0, 0.0));
+        assert_eq!(
+            drawn.get(),
+            PANEL_MIN_WIDTH + 40.0,
+            "the pointer actually resizes"
+        );
+        assert_eq!(predicted.get(), drawn.get());
     }
 
     #[test]

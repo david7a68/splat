@@ -1018,12 +1018,14 @@ fn format_owners_reject_old_fractions_and_sheet_separators() {
         "Coins · {}",
         "Darkvision: 60 ft.",
     ] {
-        let code = format!("fn overview() {{ ui.label(format!({words:?}, 1, 2)); }}");
-        assert_eq!(
-            rules("src/party.rs", &code),
-            ["sheet-label-owner"],
-            "{words}"
-        );
+        for function in ["background", "overview", "detail_intro", "details"] {
+            let code = format!("fn {function}() {{ ui.label(format!({words:?}, 1, 2)); }}");
+            assert_eq!(
+                rules("src/party.rs", &code),
+                ["sheet-label-owner"],
+                "{function}: {words}"
+            );
+        }
     }
     assert!(
         rules(
