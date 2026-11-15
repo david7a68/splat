@@ -41,7 +41,9 @@ pub mod ownership {
     pub use crate::design::results::{
         DiskChanged, Ends, FooterResult, Gone, Kept, Owner, OwnerChanged, Press, Results, Shown,
     };
-    pub use crate::design::save_row::{DraftState, Primary, SaveWeight, SaveWord};
+    pub use crate::design::save_row::{
+        Diagnosis, DraftOrigin, DraftState, Primary, SaveWeight, SaveWord,
+    };
 }
 mod difficulty;
 mod dndbeyond;

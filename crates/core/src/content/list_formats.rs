@@ -2171,7 +2171,7 @@ mod iter6_b {
     fn unread_change_names_the_value_and_a_number_repair() {
         assert_eq!(
             super::changes("HP lots", "", "").unwrap_err(),
-            "the change “HP lots” was not read. Use a number, such as HP +5."
+            "The change “HP lots” was not read. Use a number, such as HP +5."
         );
     }
 }

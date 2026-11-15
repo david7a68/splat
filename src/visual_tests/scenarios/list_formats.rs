@@ -4,7 +4,7 @@ use std::fs;
 
 /// FB2: the flagged member in the groups list, the plan and Arrivals, with its line and cause.
 const SCOUT_FAULT: &str =
-    "Scout (as Goblin Warrior) · line\u{a0}15: the change “HP lots” was not read.";
+    "Scout (as Goblin Warrior) · line\u{a0}15: The change “HP lots” was not read.";
 
 /// FB2: each summary of the flagged member is the cause alone; the example `Use a number, such
 /// as HP +5.` belongs to the editor. The found texts also hold each painted row of a wrapped
@@ -345,7 +345,7 @@ pub fn run(d: &mut Driver<'_>) {
         "A lowercase rule heading keeps its warning on the page its repair link opens",
         |d| {
             d.visible_text("Roll NPC initiative")
-                && d.has_containing("combat initiative choice “Lost initiative” is not a rule.")
+                && d.has_containing("Combat initiative choice “Lost initiative” is not a rule.")
         },
     );
     fs::write(&manifest, &saved).unwrap();
@@ -470,7 +470,7 @@ pub fn run(d: &mut Driver<'_>) {
     d.expect("Use a number, such as HP +5.");
     d.observe(
         "iter-25-B-FA1-editor",
-        !d.has_containing("Line 15: the change"),
+        !d.has_containing("Line 15: The change"),
         "The group editor's member fault is the one form, not the flag's own sentence",
     );
     d.expect("Goblin Warrior");
@@ -704,7 +704,7 @@ pub fn run(d: &mut Driver<'_>) {
     fs::write(&roster_path, &flagged_roster).unwrap();
     d.click("Reload from disk");
     open_saved_encounter(d, "Shrine of Cinders");
-    d.expect("the change “HP lots” was not read");
+    d.expect("The change “HP lots” was not read");
     assert!(d.is_disabled("Start fight"));
     assert!(!d.app_mut().encounters.has_run());
     d.expect("Edit in Obsidian");
@@ -817,13 +817,13 @@ pub fn run(d: &mut Driver<'_>) {
         .guard_campaign(&campaign.path);
     d.settle();
     assert!(d.is_disabled("Begin combat"));
-    d.expect("the change “HP lots” was not read");
+    d.expect("The change “HP lots” was not read");
     for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
         let (fits, placed) = d.at_size(size, |d| {
             let warning = d
                 .nodes()
                 .into_iter()
-                .find(|node| node.name.contains("the change “HP lots” was not read"));
+                .find(|node| node.name.contains("The change “HP lots” was not read"));
             let header = d.place_of("Begin combat").unwrap();
             let fits = warning
                 .as_ref()
@@ -842,7 +842,7 @@ pub fn run(d: &mut Driver<'_>) {
                 (Some(warning), Some(file)) if file.top() >= warning.rect.bottom() - 1.0 => {
                     super::file_links_at_message_words_by_hand(
                         d,
-                        "Ember Cultist · line 20: the change “HP lots”",
+                        "Ember Cultist · line 20: The change “HP lots”",
                         &roster_path,
                         "Encounters/Shrine of Cinders.md",
                     )
@@ -870,7 +870,7 @@ pub fn run(d: &mut Driver<'_>) {
         );
     }
     d.expect(
-        "Ember Cultist · line 20: the change “HP lots” was not read. Use a number, such as HP +5.",
+        "Ember Cultist · line 20: The change “HP lots” was not read. Use a number, such as HP +5.",
     );
     for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
         let fits = d.at_size(size, |d| {
@@ -928,7 +928,7 @@ pub fn run(d: &mut Driver<'_>) {
     let one_row = d
         .nodes()
         .iter()
-        .filter(|node| node.name.contains("the change “HP lots” was not read"))
+        .filter(|node| node.name.contains("The change “HP lots” was not read"))
         .count();
     let mut two_flagged = flagged_roster.clone();
     let first = &splat::content::layout::Document::new(&flagged_roster)
@@ -946,7 +946,7 @@ pub fn run(d: &mut Driver<'_>) {
     let warnings = d
         .nodes()
         .iter()
-        .filter(|node| node.name.contains("the change “HP lots” was not read"))
+        .filter(|node| node.name.contains("The change “HP lots” was not read"))
         .count();
     let show_file = d
         .nodes()
@@ -967,7 +967,7 @@ pub fn run(d: &mut Driver<'_>) {
                 .into_iter()
                 .filter(|node| {
                     node.role == egui::accesskit::Role::Label
-                        && node.name.contains("the change “HP lots” was not read")
+                        && node.name.contains("The change “HP lots” was not read")
                         && node.in_view()
                 })
                 .collect();
