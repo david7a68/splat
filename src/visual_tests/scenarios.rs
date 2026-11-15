@@ -22878,6 +22878,69 @@ pub mod session_plan_groups {
         );
         d.click("Edit group Split Watch");
         d.expect("Group name: Split Watch");
+
+        // B4 review F1: an unsaved group keeps its host. A new group in Session 2 with a member,
+        // left unsaved; in Session 1 the DM presses a planned group's name. The press is refused
+        // with the group's reason under that line; the draft stays Session 2's, and Save adds it
+        // to Session 2's plan only.
+        d.click("Back to the plan");
+        d.click_starting("Session 2: The Ford ·");
+        show_plan(d);
+        d.click("Add a group");
+        d.click("New group");
+        d.expect("Back to the plan");
+        d.type_text("Ash Two");
+        d.type_into(FIND_CREATURE, "wolf");
+        d.click_beside_exact("Wolf", ADD);
+        d.click_starting("Session 1: The Crossing ·");
+        let reason = crate::design::Unsaved::Group.reason();
+        let before = (
+            d.has("A group is being assembled in Session 2."),
+            d.has("Save group"),
+            d.has_containing("Ash Two"),
+        );
+        d.click_first(GROUP_RIVALS);
+        let refused = (
+            d.has("A group is being assembled in Session 2."),
+            d.has("Save group"),
+            d.has(&format!("Group name: {GROUP_RIVALS}")),
+            d.visible_text(reason),
+        );
+        d.click("Return to the session being played");
+        d.expect("Group name: Ash Two");
+        d.click("Save group");
+        d.wait_for_text("Ash Two");
+        let in_two = d.has_containing("Ash Two");
+        d.click_starting("Session 1: The Crossing ·");
+        d.expect(&format!("Add {GROUP_RIVALS} to fight"));
+        let in_one = d.has_containing("Ash Two");
+        d.observe(
+            "s30-B4-F1-group-keeps-its-host",
+            before == (true, false, false)
+                && refused == (true, false, false, true)
+                && in_two
+                && !in_one,
+            format!(
+                "Before the press (warning, Save, Ash Two in Session 1): {before:?}; after the refused press (warning, Save, Rival Team open, reason painted): {refused:?}; after Save, Ash Two in Session 2's plan {in_two}, in Session 1's {in_one}"
+            ),
+        );
+        // The same press with an unsaved encounter and no group editor: the encounter's reason
+        // is painted in the plan, not only in Encounters.
+        d.click(NAV_ENCOUNTERS);
+        d.click(NEW_ENCOUNTER);
+        d.type_text("Ford Ambush");
+        d.click(NAV_SESSIONS);
+        d.click_starting("Session 1: The Crossing ·");
+        d.click_first(GROUP_RIVALS);
+        let encounter_reason = crate::design::Unsaved::Encounter.reason();
+        d.observe(
+            "s30-B4-F1-encounter-refusal-painted",
+            d.visible_text(encounter_reason) && !d.has(&format!("Group name: {GROUP_RIVALS}")),
+            format!(
+                "With an unsaved encounter, the plan says why the group did not open: {}",
+                d.visible_text(encounter_reason)
+            ),
+        );
     }
 }
 

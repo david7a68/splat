@@ -4656,7 +4656,7 @@ mod tests {
 
         assert_eq!(
             encounters.open_group_in_plan(&path, &campaign),
-            super::PlanOpen::Opened
+            crate::encounters::PlanOpen::Opened
         );
         encounters.group_draft.as_mut().unwrap().name = "Cinder Pack".into();
         encounters.save_group_draft(&ctx, &campaign, &[]);
@@ -4686,17 +4686,17 @@ mod tests {
         }
         assert_eq!(
             encounters.open_group_in_plan(&paths[0], &campaign),
-            super::PlanOpen::Opened
+            crate::encounters::PlanOpen::Opened
         );
         encounters.search = "wolf".into();
         assert_eq!(
             encounters.open_group_in_plan(&paths[0], &campaign),
-            super::PlanOpen::Opened
+            crate::encounters::PlanOpen::Opened
         );
         assert_eq!(encounters.search, "wolf");
         assert_eq!(
             encounters.open_group_in_plan(&paths[1], &campaign),
-            super::PlanOpen::Opened
+            crate::encounters::PlanOpen::Opened
         );
         assert!(encounters.search.is_empty());
         encounters.search = "scout".into();

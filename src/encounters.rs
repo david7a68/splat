@@ -9843,7 +9843,10 @@ mod tests {
         assert!(encounters.group_draft.is_none(), "New group is refused");
         assert_eq!(encounters.error.as_deref(), Some(BLOCKED_BY_DRAFT));
         encounters.error = None;
-        assert!(encounters.open_group_in_plan("Groups/Any.md", &active));
+        assert_eq!(
+            encounters.open_group_in_plan("Groups/Any.md", &active),
+            PlanOpen::Refused(BLOCKED_BY_DRAFT)
+        );
         assert!(
             encounters.group_draft.is_none(),
             "a group is not opened over it"
