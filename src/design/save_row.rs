@@ -3,8 +3,15 @@
 //! One function decides each part from one [`DraftState`]: the word ([`DraftState::word`]),
 //! Save's weight ([`DraftState::save_weight`]), why Save waits ([`DraftState::save_blocked`]),
 //! whether `Discard` shows, and the campaign-switch reason ([`DraftState::lock_reason`]). The
-//! caller says what is true of the draft (changed or not, refused and why, changed on disk, a
-//! failed Save, who owns the primary); it never picks a word, a weight or a reason.
+//! caller says what is true of the draft (new or saved, changed or not, what Save's check found
+//! and why, changed on disk, a failed Save, who owns the primary); it never picks a word, a
+//! weight, a tone or a reason.
+//!
+//! The draft's origin ([`DraftOrigin`]) and Save's check ([`Check`]) are facts, and the word
+//! comes from them (R37, Q-m): a new draft that lacks a required part says `New` in a neutral
+//! tone, and a saved draft that an edit left without one is a refused change, `Invalid` in the
+//! warning tone of its cause. A refused change and unreadable data say `Invalid` in the error
+//! tone. An empty list alone never says `New`: only the origin does.
 //! `docs/design-system.md` (Buttons, the save row paragraph) is the rule; this is its one copy.
 //!
 //! Caller duties left: route `Ctrl+S` through [`DraftState::can_save`], so the key saves exactly
@@ -17,7 +24,8 @@
 //! ```
 //! use splat::ownership::{Changed, DraftState, Primary, SaveWeight, SaveWord};
 //! let draft = DraftState::new(Changed::Yes, Primary::Draft).refused("Another entry has this id.");
-//! assert_eq!((draft.word(), draft.save_weight()), (SaveWord::Invalid, SaveWeight::Secondary));
+//! assert!(matches!(draft.word(), SaveWord::Invalid(_)));
+//! assert_eq!(draft.save_weight(), SaveWeight::Secondary);
 //! ```
 //!
 //! The word comes from the state; a caller cannot set it, or build a state by hand:
@@ -34,22 +42,64 @@
 //! # use splat::ownership::{DraftState, Primary};
 //! let draft = DraftState::new(true, Primary::Draft); // <- a bare bool
 //! ```
-use super::{Action, Density, Status, colors, components::status, icons};
+use super::{Action, Density, Status, Tone, colors, components::status, icons};
 use eframe::egui::{self, Ui};
 use std::borrow::Cow;
 
 /// Whether the draft differs from the saved text: the same type as a revised value's change.
 pub use super::memo::Changed;
 
-/// Save's own refusal of the draft. One field holds its mode and its reason, so the last call
+/// Whether the draft's file exists yet: a fact the editor holds, not one read from the draft's
+/// contents. It changes at the first Save, and Discard or Undo restores it with the data.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DraftOrigin {
+    /// Never saved: the file does not exist yet.
+    New,
+    /// Read from, or saved to, its file.
+    Saved,
+}
+
+/// What Save's own check found wrong with the draft: the typed validation result. Each kind
+/// blocks Save with its reason. Unreadable data, the third kind, does not block Save (Save can
+/// repair it): [`DraftState::invalid`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Check<'a> {
+    /// A required part is missing (`Add a creature first.`). On a new draft this is its normal
+    /// way to start: `New`. On a saved draft an edit removed it: a refused change.
+    Incomplete(Cow<'a, str>),
+    /// A change that cannot stand (`Another entry has this id.`): `Invalid`.
+    Refused(Cow<'a, str>),
+}
+
+impl Check<'_> {
+    fn reason(&self) -> &str {
+        match self {
+            Self::Incomplete(why) | Self::Refused(why) => why,
+        }
+    }
+}
+
+/// Why a save row says `Invalid`. It gives the word's tone, so `Invalid` has the tone of its
+/// cause and no caller chooses one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InvalidCause {
+    /// A saved draft lost a required part: the warning tone.
+    Incomplete,
+    /// Save refuses a change: the error tone.
+    Refused,
+    /// The draft or its file cannot be read: the error tone.
+    Unreadable,
+}
+
+/// Save's own check of the draft. One field holds its mode and its result, so the last call
 /// decides both.
 #[derive(Clone, Debug)]
 enum Refusal<'a> {
     None,
-    /// `Invalid`, changed or not.
-    Always(Cow<'a, str>),
-    /// `Invalid` only while the draft has changes (the encounter draft's exception).
-    WhenChanged(Cow<'a, str>),
+    /// Changed or not.
+    Always(Check<'a>),
+    /// Only while the draft has changes (the encounter draft's exception).
+    WhenChanged(Check<'a>),
 }
 
 /// Who owns the one accent-filled primary action in view.
@@ -65,8 +115,10 @@ pub enum Primary {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SaveWord {
     /// Save's own check refuses the draft, changed or not, or the draft has a fault that Save
-    /// does not fix by itself.
-    Invalid,
+    /// does not fix by itself. Its tone is its cause's.
+    Invalid(InvalidCause),
+    /// A new draft that lacks a required part: nothing is wrong yet (R37).
+    New,
     /// The file changed on disk; the comparison owns the pane.
     ChangedOnDisk,
     /// The disk refused the last Save of this draft.
@@ -80,7 +132,8 @@ pub enum SaveWord {
 impl SaveWord {
     pub fn words(self) -> &'static str {
         match self {
-            Self::Invalid => "Invalid",
+            Self::Invalid(_) => "Invalid",
+            Self::New => "New",
             Self::ChangedOnDisk => "Changed on disk",
             Self::NotSaved => "Not saved",
             Self::Unsaved => "Unsaved",
@@ -92,7 +145,11 @@ impl SaveWord {
     pub fn status(self) -> Status<'static> {
         let d = colors().document;
         let (icon, color) = match self {
-            Self::Invalid | Self::NotSaved => (icons::ERROR, d.invalid),
+            Self::Invalid(InvalidCause::Incomplete) => Tone::Warning.parts(),
+            Self::Invalid(InvalidCause::Refused | InvalidCause::Unreadable) | Self::NotSaved => {
+                (icons::ERROR, d.invalid)
+            }
+            Self::New => (icons::DRAFT, d.clean),
             Self::ChangedOnDisk => (icons::WARN, d.external),
             Self::Unsaved => (icons::DRAFT, d.unsaved),
             Self::Saved => (icons::OK, d.saved),
@@ -125,6 +182,7 @@ pub const DISCARD_TO_SWITCH: &str = "Discard to switch campaign.";
 /// What is true of one draft. See the module comment.
 #[derive(Clone, Debug)]
 pub struct DraftState<'a> {
+    origin: DraftOrigin,
     changed: Changed,
     primary: Primary,
     refused: Refusal<'a>,
@@ -136,8 +194,15 @@ pub struct DraftState<'a> {
 }
 
 impl<'a> DraftState<'a> {
+    /// A draft of a file that exists: [`DraftOrigin::Saved`].
     pub fn new(changed: Changed, primary: Primary) -> Self {
+        Self::of(DraftOrigin::Saved, changed, primary)
+    }
+
+    /// A draft whose origin its editor holds.
+    pub fn of(origin: DraftOrigin, changed: Changed, primary: Primary) -> Self {
         Self {
+            origin,
             changed,
             primary,
             refused: Refusal::None,
@@ -149,22 +214,28 @@ impl<'a> DraftState<'a> {
         }
     }
 
-    /// Save's own check refuses the draft: `Invalid`, changed or not; Save waits with this reason
-    /// and is not primary.
-    pub fn refused(mut self, why: impl Into<Cow<'a, str>>) -> Self {
-        self.refused = Refusal::Always(why.into());
+    /// What Save's own check found, changed or not: Save waits with its reason and is not
+    /// primary. The word comes from the kind and the origin (see [`Check`]).
+    pub fn check(mut self, found: Check<'a>) -> Self {
+        self.refused = Refusal::Always(found);
         self
+    }
+
+    /// Save's own check refuses a change: [`Check::Refused`].
+    pub fn refused(self, why: impl Into<Cow<'a, str>>) -> Self {
+        self.check(Check::Refused(why.into()))
     }
 
     /// The encounter draft's exception to [`Self::refused`]: it says `Invalid` only while it has
     /// changes, because a clean one has nothing for Save to refuse, and its rows name the faults.
     pub fn refused_when_changed(mut self, why: impl Into<Cow<'a, str>>) -> Self {
-        self.refused = Refusal::WhenChanged(why.into());
+        self.refused = Refusal::WhenChanged(Check::Refused(why.into()));
         self
     }
 
-    /// The draft or its file has a fault that is not Save's refusal (the file cannot be read, a
-    /// repair's problem): `Invalid`. Save is not blocked by it.
+    /// Unreadable data: the draft or its file has a fault that is not Save's refusal (the file
+    /// cannot be read, a repair's problem): `Invalid` in the error tone. Save is not blocked by
+    /// it.
     pub fn invalid(mut self) -> Self {
         self.invalid = true;
         self
@@ -199,17 +270,36 @@ impl<'a> DraftState<'a> {
         self.changed == Changed::Yes
     }
 
-    fn refusal(&self) -> Option<&str> {
+    fn found(&self) -> Option<&Check<'a>> {
         match &self.refused {
             Refusal::None => None,
-            Refusal::Always(why) => Some(why.as_ref()),
-            Refusal::WhenChanged(why) => self.changed().then_some(why.as_ref()),
+            Refusal::Always(found) => Some(found),
+            Refusal::WhenChanged(found) => self.changed().then_some(found),
+        }
+    }
+
+    fn refusal(&self) -> Option<&str> {
+        self.found().map(Check::reason)
+    }
+
+    /// Why the draft is `Invalid`, if it is: unreadable data first, then Save's check. A new
+    /// draft that only lacks a required part is not invalid.
+    fn invalid_cause(&self) -> Option<InvalidCause> {
+        if self.invalid {
+            return Some(InvalidCause::Unreadable);
+        }
+        match (self.found()?, self.origin) {
+            (Check::Refused(_), _) => Some(InvalidCause::Refused),
+            (Check::Incomplete(_), DraftOrigin::Saved) => Some(InvalidCause::Incomplete),
+            (Check::Incomplete(_), DraftOrigin::New) => None,
         }
     }
 
     pub fn word(&self) -> SaveWord {
-        if self.refusal().is_some() || self.invalid {
-            SaveWord::Invalid
+        if let Some(cause) = self.invalid_cause() {
+            SaveWord::Invalid(cause)
+        } else if self.found().is_some() {
+            SaveWord::New
         } else if self.on_disk {
             SaveWord::ChangedOnDisk
         } else if self.not_saved {
@@ -314,7 +404,54 @@ mod tests {
     fn one_function_decides_the_word_the_weight_and_the_reason() {
         let yes = || DraftState::new(Changed::Yes, Primary::Draft);
         let no = || DraftState::new(Changed::No, Primary::Draft);
+        let new = || DraftState::of(DraftOrigin::New, Changed::Yes, Primary::Draft);
+        let incomplete = || Check::Incomplete("Add a creature first.".into());
         let rows = [
+            // R37, Q-m: a new draft that lacks a required part is New, and Save waits with its
+            // reason.
+            (
+                "new incomplete",
+                new().check(incomplete()),
+                SaveWord::New,
+                SaveWeight::Secondary,
+                Some("Add a creature first."),
+                true,
+            ),
+            // R37: a saved draft that an edit left without one is a refused change.
+            (
+                "saved incomplete",
+                yes().check(incomplete()),
+                SaveWord::Invalid(InvalidCause::Incomplete),
+                SaveWeight::Secondary,
+                Some("Add a creature first."),
+                true,
+            ),
+            // The origin alone does not make a draft New: a refused change of a new draft is
+            // Invalid, and a complete new draft is Unsaved.
+            (
+                "new refused",
+                new().check(incomplete()).refused("Bad id."),
+                SaveWord::Invalid(InvalidCause::Refused),
+                SaveWeight::Secondary,
+                Some("Bad id."),
+                true,
+            ),
+            (
+                "new complete",
+                new(),
+                SaveWord::Unsaved,
+                SaveWeight::Primary,
+                None,
+                true,
+            ),
+            (
+                "new unreadable",
+                new().check(incomplete()).invalid(),
+                SaveWord::Invalid(InvalidCause::Unreadable),
+                SaveWeight::Secondary,
+                Some("Add a creature first."),
+                true,
+            ),
             (
                 "clean",
                 no(),
@@ -343,7 +480,7 @@ mod tests {
             (
                 "refused",
                 yes().refused("Bad id."),
-                SaveWord::Invalid,
+                SaveWord::Invalid(InvalidCause::Refused),
                 SaveWeight::Secondary,
                 Some("Bad id."),
                 true,
@@ -351,7 +488,7 @@ mod tests {
             (
                 "refused clean",
                 no().refused("Bad id."),
-                SaveWord::Invalid,
+                SaveWord::Invalid(InvalidCause::Refused),
                 SaveWeight::Secondary,
                 Some(NO_CHANGES),
                 false,
@@ -368,7 +505,7 @@ mod tests {
             (
                 "encounter changed",
                 yes().refused_when_changed("Add a creature first."),
-                SaveWord::Invalid,
+                SaveWord::Invalid(InvalidCause::Refused),
                 SaveWeight::Secondary,
                 Some("Add a creature first."),
                 true,
@@ -377,7 +514,7 @@ mod tests {
             (
                 "fault",
                 yes().invalid(),
-                SaveWord::Invalid,
+                SaveWord::Invalid(InvalidCause::Unreadable),
                 SaveWeight::Primary,
                 None,
                 true,
@@ -413,7 +550,7 @@ mod tests {
                 "when changed, then always",
                 no().refused_when_changed("Add a creature first.")
                     .refused("Bad id."),
-                SaveWord::Invalid,
+                SaveWord::Invalid(InvalidCause::Refused),
                 SaveWeight::Secondary,
                 Some(NO_CHANGES),
                 false,
@@ -421,7 +558,7 @@ mod tests {
             (
                 "refused on disk",
                 yes().refused("Bad id.").changed_on_disk(),
-                SaveWord::Invalid,
+                SaveWord::Invalid(InvalidCause::Refused),
                 SaveWeight::Secondary,
                 Some(CHANGED_ON_DISK),
                 false,
@@ -443,6 +580,21 @@ mod tests {
                 blocked.is_none(),
                 "{name}: Ctrl+S saves exactly when Save can"
             );
+        }
+    }
+
+    /// `Invalid` takes its cause's tone; `New` is no fault (R37).
+    #[test]
+    fn the_word_takes_its_causes_tone() {
+        let warning = Tone::Warning.parts();
+        let error = Tone::Error.parts();
+        let tone = |word: SaveWord| (word.status().icon, word.status().color);
+        assert_eq!(tone(SaveWord::Invalid(InvalidCause::Incomplete)), warning);
+        assert_eq!(tone(SaveWord::Invalid(InvalidCause::Refused)).0, error.0);
+        assert_eq!(tone(SaveWord::Invalid(InvalidCause::Unreadable)).0, error.0);
+        for fault in [warning, error] {
+            assert_ne!(tone(SaveWord::New).0, fault.0, "New has no fault icon");
+            assert_ne!(tone(SaveWord::New).1, fault.1, "New has no fault colour");
         }
     }
 

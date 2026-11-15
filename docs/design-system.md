@@ -1401,7 +1401,11 @@ ends at that column's edge. Save group follows on that line and ends at the edit
 creatures column, where Save encounter ends on the encounter editor's title line: one place in both editors. Then
 the save row with the state and Discard at its start and the reasons. A reason without
 room on the save row takes its own line below it. A group draft that Save's check refuses (a member's change that
-cannot stand, a missing creature, an empty group) says `Invalid`, changed or not, and Save group is not primary;
+cannot stand, a missing creature) says `Invalid` in the error tone, changed or not, and Save group is not primary.
+A new group that lacks a required part (a name, a side, a creature) says `New` with no fault tone, and Save waits
+with its reason; a saved group that an edit left without one says `Invalid` in the warning tone (R37). The
+draft's origin, new or saved, is its own fact (`DraftOrigin`): it changes at the first save and Discard restores
+it with the text, so an empty list alone never says `New`;
 the check runs when the draft, the campaign's read or the open group changes, never on an unchanged frame. The fault
 shows at its own place: on the member's row, in the one member-fault form with its name and line
 (`Cinder Wolf · line 14: Maximum HP would become −28. It must be 1 or more.`), or beside Save; a fault with no
@@ -1418,7 +1422,7 @@ one dot-separated line. Members and XP share one heading. Keep a member summary 
 members, also in compact editors. Member names and stats sit above Count, Edit and the menu; count stays at
 the left and actions together at the right. Changes stay on one line, such as `Changed · 1 to add by hand`,
 until opened. Empty frames use one muted line, no zero count or duplicate search summary. Empty groups block
-Save group with `Add a creature first.`, and the save row says `Invalid`. The save row's reasons
+Save group with `Add a creature first.`; the save row says `New` for a new group and `Invalid` for a saved one. The save row's reasons
 (`Add a creature first.`, `Save or discard to switch campaign.`) each have one place, chosen as if both showed: at
 the save row's end, under Save, while there is room, else a line below the save row. Those
 lines are reserved whether or not their reason shows, so the first edit or the first member moves no field.

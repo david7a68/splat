@@ -18272,11 +18272,14 @@ pub mod encounter_groups {
         d.type_text("Ash Pack");
         assert!(d.is_disabled(SAVE_GROUP));
         d.expect("Add a creature first.");
-        // AH1: Save refuses the empty group, so the state says Invalid, not Unsaved.
+        // AH1, R37 (Q-m): a new group with only its name is not wrong. It says New, not Invalid
+        // and not Unsaved, while Save waits with the painted reason above.
         d.observe(
             "iter-25-B-AH1-list",
-            d.visible_text("Invalid") && !d.visible_text("Unsaved"),
-            "An empty new group says Invalid beside its blocked Save",
+            d.visible_text(&format!("{} New", crate::design::icons::DRAFT))
+                && !d.visible_text("Invalid")
+                && !d.visible_text("Unsaved"),
+            "An empty new group says New with the draft icon beside its blocked Save",
         );
         d.state("group-rejected-empty", Sizes::Default);
         // FH3, SH2: a tall window shows every result and a short one scrolls them; each `Add`
@@ -18353,6 +18356,33 @@ pub mod encounter_groups {
             "iter-18-B-ST1",
             "A dirty group opened in Encounters says why the campaign cannot change",
             |d| d.visible_text("Unsaved") && d.visible_text("Save or discard to switch campaign."),
+        );
+        // R37: a saved group that an edit empties is a refused change, not a new draft: it
+        // says Invalid, never New, and Save waits. Undo of that removal brings Unsaved back.
+        let emptied = d.aside(|d| {
+            d.click("More actions for Cinder Wolf");
+            d.click("Remove");
+            d.expect("Removed Cinder Wolf.");
+            // Invalid in the warning tone of its cause (a missing creature), not the error's.
+            let emptied = (
+                d.visible_text(&format!("{} Invalid", crate::design::icons::WARN)),
+                d.visible_text(&format!("{} New", crate::design::icons::DRAFT)),
+                d.visible_text("Unsaved"),
+                d.is_disabled(SAVE_GROUP),
+                d.visible_text("Add a creature first."),
+            );
+            d.click_first("Undo remove member");
+            d.expect("More actions for Cinder Wolf");
+            let back = d.visible_text("Unsaved") && !d.visible_text("Invalid");
+            (emptied, back)
+        });
+        d.observe(
+            "s30-B3-R37-saved-emptied",
+            emptied.0 == (true, false, false, true, true) && emptied.1,
+            format!(
+                "Emptied saved group (Invalid, New, Unsaved, Save blocked, reason) {:?}; after Undo Unsaved and not Invalid {}",
+                emptied.0, emptied.1
+            ),
         );
         // FD4 family: the group notes field ends at the members' right edge, as the encounter
         // editor's notes field ends at the roster's.

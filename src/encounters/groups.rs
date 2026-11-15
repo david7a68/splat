@@ -165,6 +165,9 @@ pub(super) struct Refusal {
     /// The one place that says this fault. Save, by its button or by the keyboard, keeps it
     /// there: no other place repeats it.
     pub(super) place: RefusalPlace,
+    /// A required part is missing (no name, no side, no creature), as against a change that
+    /// cannot stand. With the draft's origin it gives the save row's word (R37).
+    pub(super) incomplete: bool,
 }
 
 /// Where the group editor says a refusal of Save.
@@ -185,6 +188,16 @@ impl Refusal {
     /// The words the footer shows for this refusal: none when another place says it.
     pub(super) fn footer(&self) -> Option<&str> {
         (self.place == RefusalPlace::Footer).then_some(self.text.as_str())
+    }
+
+    /// The save row's typed result of this refusal.
+    fn check(&self) -> design::save_row::Check<'_> {
+        let why = self.text.as_str().into();
+        if self.incomplete {
+            design::save_row::Check::Incomplete(why)
+        } else {
+            design::save_row::Check::Refused(why)
+        }
     }
 }
 
@@ -438,6 +451,16 @@ impl GroupDraft {
             .as_ref()
             .is_some_and(|reference| reference.id == Some(encounter))
     }
+    /// Whether the group's note exists: it has a saved text (`baseline`) or not. The first
+    /// save sets it; Discard and a recovery restore it with the text, so the origin never
+    /// drifts from the data.
+    pub(super) fn origin(&self) -> design::save_row::DraftOrigin {
+        if self.baseline.is_some() {
+            design::save_row::DraftOrigin::Saved
+        } else {
+            design::save_row::DraftOrigin::New
+        }
+    }
     pub(super) fn dirty(&self) -> bool {
         self.baseline.is_none()
             || self.name != self.saved_name
@@ -641,6 +664,7 @@ impl GroupDraft {
             let in_place = |text: String, tone: Tone| Refusal {
                 text,
                 place: RefusalPlace::Member(member.id.0, tone),
+                incomplete: false,
             };
             // FA1: Save's check names a member as every view does. A draft's lines may have
             // moved since the note was read, so it names no line.
@@ -664,6 +688,7 @@ impl GroupDraft {
             let not_in_place = |cause: &str| Refusal {
                 text: fault(cause),
                 place: RefusalPlace::Footer,
+                incomplete: false,
             };
             if !(1..=MAX_COUNT).contains(&member.count) {
                 return Err(not_in_place(&format!(
@@ -698,11 +723,19 @@ impl GroupDraft {
             Err(Refusal {
                 text,
                 place: RefusalPlace::Footer,
+                incomplete: false,
+            })
+        };
+        let missing = |text: &str| {
+            Err(Refusal {
+                text: text.into(),
+                place: RefusalPlace::Footer,
+                incomplete: true,
             })
         };
         let name = self.name.trim();
         if name.is_empty() {
-            return refuse("Enter a group name.".into());
+            return missing("Enter a group name.");
         }
         // A plan links a group for any encounter by its name, so that name must mean one thing.
         // A group that belongs to an encounter is not linked, and each can have "Reinforcements".
@@ -729,13 +762,14 @@ impl GroupDraft {
             ));
         }
         if self.setup.side.trim().is_empty() {
-            return refuse("Enter a default side for this group.".into());
+            return missing("Enter a default side for this group.");
         }
         if self.setup.members.is_empty() {
             // Its reason (`Add a creature first.`) is beside Save.
             return Err(Refusal {
                 text: "This group is empty. Add at least one creature.".into(),
                 place: RefusalPlace::SaveRow,
+                incomplete: true,
             });
         }
         if self
@@ -751,6 +785,7 @@ impl GroupDraft {
             return Err(Refusal {
                 text: GONE_ENCOUNTER.into(),
                 place: RefusalPlace::BelongsTo,
+                incomplete: false,
             });
         }
         Ok(())
@@ -2478,11 +2513,18 @@ impl Encounters {
             } else {
                 design::save_row::Primary::Draft
             };
-            let mut state = design::DraftState::new(changed, primary).locks_campaign();
+            // R37: the origin is the draft's own fact (it has a saved file or not), so a new
+            // group with only its name says `New`, and a saved group an edit emptied stays a
+            // refused change.
+            let origin = self
+                .group_draft
+                .as_ref()
+                .map_or(design::save_row::DraftOrigin::Saved, GroupDraft::origin);
+            let mut state = design::DraftState::of(origin, changed, primary).locks_campaign();
             if empty {
-                state = state.refused(EMPTY_REASON);
+                state = state.check(design::save_row::Check::Incomplete(EMPTY_REASON.into()));
             } else if let Some(refusal) = &refusal {
-                state = state.refused(refusal.text.clone());
+                state = state.check(refusal.check());
             } else if self.shows_validation_error() {
                 // AH1: the last refusal still shows: Invalid, as the encounter editor says.
                 state = state.invalid();
@@ -5388,6 +5430,7 @@ mod tests {
             Err(Refusal {
                 text: GONE_ENCOUNTER.into(),
                 place: RefusalPlace::BelongsTo,
+                incomplete: false,
             })
         );
         // The keyboard's Save goes the same way as the blocked button: the refusal starts the
