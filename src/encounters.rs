@@ -8163,7 +8163,7 @@ impl Encounters {
             let left = snapshot.options.runs_left_in(&snapshot.saved_options, active);
             let left_folder = snapshot.options.folder.clone();
             let run_files = left.as_ref().map_or(0, Vec::len);
-            let folder_changed = snapshot.options.directory(&active).ok() != snapshot.saved_options.directory(&active).ok();
+            let folder_changed = snapshot.options.directory(active).ok() != snapshot.saved_options.directory(active).ok();
             let blocked = if run_open { Some("Close the open run to save run settings.") }
                 else if folder_changed && left.is_err() { Some("Could not read saved runs. Check the old run folder before saving.") }
                 else if !changed && rule_lines.is_empty() { Some("No changes to save.") } else { None };
@@ -8227,7 +8227,7 @@ impl Encounters {
                             let move_runs = Action::primary("Move runs and save").show(ui).clicked();
                             let leave_runs = Action::quiet("Save without moving").show(ui).clicked();
                             if move_runs {
-                                match snapshot.options.move_runs_and_save(&snapshot.saved_options, &active, &snapshot.campaign_text) {
+                                match snapshot.options.move_runs_and_save(&snapshot.saved_options, active, &snapshot.campaign_text) {
                                     Ok(warning) => { settings_saved = true; error = warning; },
                                     Err(e) => error = Some(e),
                                 }
@@ -8276,7 +8276,7 @@ impl Encounters {
                 };
                 if (pressed || save_key) && !run_open {
                     if folder_changed && let Err(e) = &left { error = Some(e.clone()); return; }
-                    match snapshot.options.save(&active, &snapshot.campaign_text) {
+                    match snapshot.options.save(active, &snapshot.campaign_text) {
                         Ok(()) => settings_saved = true,
                         Err(e) => error = Some(e),
                     }
