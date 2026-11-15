@@ -642,11 +642,18 @@ fn paint(
                 pos2(room.left(), middle - fitted.name.size().y / 2.0),
                 fitted.name.size(),
             );
-            // The candidate is inside `room`; the clip only keeps the last fallback's `…`
-            // off `Add` in a heading too narrow for one letter.
-            ui.painter()
-                .with_clip_rect(room.intersect(ui.clip_rect()))
-                .galley(name.min, fitted.name.clone(), metrics.current);
+            // A candidate that fits is inside `room` by its measure; only the failure form (a
+            // heading narrower than the run list keeps) is clipped there, off `Add`.
+            let clip = if fitted.fits {
+                ui.clip_rect()
+            } else {
+                room.intersect(ui.clip_rect())
+            };
+            ui.painter().with_clip_rect(clip).galley(
+                name.min,
+                fitted.name.clone(),
+                metrics.current,
+            );
             let response = ui.interact(
                 name.intersect(room),
                 ui.id().with("turn_heading_name"),
