@@ -8290,7 +8290,7 @@ mod tests {
     /// keeps `This note`.
     #[test]
     fn a_session_note_warning_names_its_note_in_every_state() {
-        use egui_kittest::kittest::Queryable;
+        use egui_kittest::kittest::{NodeT, Queryable};
         let folder = tempfile::tempdir().unwrap();
         let path = folder.path().join("Session 1 - Ash.md");
         fs::write(&path, "---\nsession_id: 1\n---\n# Ash\n").unwrap();
