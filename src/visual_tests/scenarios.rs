@@ -14825,70 +14825,47 @@ pub mod session_notes {
     /// the banner and a page's pinned result (the templates page's `Deleted …` with its Undo)
     /// share 960x640 whole, apart. After the scenario's last state.
     fn note_warnings_beside_other_editors(d: &mut Driver<'_>) {
-        // A banner message whose words start with the note's name, whole in view, with its
-        // choices, beside the event form's own field.
-        let named = |d: &Driver<'_>, cause: &str, choices: &[&str]| {
-            let words = d.nodes().into_iter().find(|node| {
-                node.fully_in_view()
-                    && node.name.starts_with("The note of Session ")
-                    && node.name.contains(cause)
-            });
-            let field = d.place_of("Title");
-            let choices_in_view = choices.iter().all(|choice| d.in_view(choice));
-            (
-                words.is_some() && field.is_some() && choices_in_view,
-                format!(
-                    "{cause}: words {:?}, the event form's Title {field:?}, choices {choices:?} in view {choices_in_view}",
-                    words.map(|node| node.name)
-                ),
-            )
-        };
+        // Round 30 B7c (review F1 of PR 409): each banner is a captured state. Its check: the
+        // note's warning is painted exactly once, its words name the note and are whole in view,
+        // and every control named (its choices, another page's own field, a pinned result's
+        // Undo) is wholly in view, not clipped.
         d.click(NAV_SESSIONS);
         d.settle();
         d.app_mut().sessions.simulate_failed_save();
         // Timeline still holds the event form the scenario opened (Rest at the mill).
         d.click(NAV_TIMELINE);
         d.expect("Rest at the mill");
-        let failed = named(
-            d,
-            "was not saved. The disk is full.",
-            &["Try to save again"],
-        );
-        let failed_wide = d.at_size(DEFAULT, |d| {
-            named(
+        d.state_prepared("note-save-failed-elsewhere", Sizes::Standard, |d| {
+            banner_whole(
                 d,
-                "was not saved. The disk is full.",
-                &["Try to save again"],
-            )
+                "round-30-note-warnings-elsewhere",
+                "was not saved.",
+                &["Try to save again", "Title"],
+            );
         });
+        d.app_mut().sessions.simulate_failed_save_ends();
         d.click("Try to save again");
         d.settle();
-        let retried = !d.has_containing("was not saved. The disk is full.");
-        let (path, away) = d.app_mut().sessions.simulate_note_gone();
-        d.settle();
-        let gone = named(
-            d,
-            "is gone from the folder.",
-            &["Save my draft as a new file", "Discard"],
-        );
-        let gone_wide = d.at_size(DEFAULT, |d| {
-            named(
-                d,
-                "is gone from the folder.",
-                &["Save my draft as a new file", "Discard"],
-            )
+        let retried = !d.nodes().iter().any(|node| {
+            node.name.starts_with("The note of Session ") && node.name.contains("was not saved.")
         });
         d.observe(
             "round-30-note-warnings-elsewhere",
-            failed.0 && failed_wide.0 && retried && gone.0 && gone_wide.0,
-            format!(
-                "960x640: {}; {}. 1200x800: {}; {}. The retry ends the failure: {retried}",
-                failed.1, gone.1, failed_wide.1, gone_wide.1
-            ),
+            retried,
+            "Try to save again ends the failure on Timeline",
         );
-        // The banner beside a pinned result, at 960x640: the templates page's delete result and
-        // its Undo, and the note's warning with its choices, each whole, the result above the
-        // banner.
+        let (path, away) = d.app_mut().sessions.simulate_note_gone();
+        d.settle();
+        d.state_prepared("note-gone-elsewhere", Sizes::Standard, |d| {
+            banner_whole(
+                d,
+                "round-30-note-warnings-elsewhere",
+                "is gone from the folder.",
+                &["Save my draft as a new file", "Discard", "Title"],
+            );
+        });
+        // The banner beside a pinned result: the templates page's delete result and its Undo,
+        // and the note's warning with its choices, each whole, the result above the banner.
         d.click(NAV_SESSIONS);
         d.click("Templates");
         d.click("New template");
@@ -14898,31 +14875,69 @@ pub mod session_notes {
         d.click("More actions for Short break");
         d.click("Delete this template");
         d.expect("Undo delete");
-        let result = d
-            .nodes()
-            .into_iter()
-            .find(|node| node.fully_in_view() && node.name.starts_with("Deleted “Short break”."));
-        let undo = d.place_of("Undo delete");
-        let banner = d.nodes().into_iter().find(|node| {
+        d.state_prepared("note-gone-beside-a-pinned-result", Sizes::Small, |d| {
+            banner_whole(
+                d,
+                "round-30-note-warning-beside-a-pinned-result",
+                "is gone from the folder.",
+                &["Save my draft as a new file", "Discard", "Undo delete"],
+            );
+            let result = d.nodes().into_iter().find(|node| {
+                node.fully_in_view() && node.name.starts_with("Deleted “Short break”.")
+            });
+            let banner = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.fully_in_view() && node.name.starts_with("The note of Session "));
+            d.observe(
+                "round-30-note-warning-beside-a-pinned-result",
+                result
+                    .as_ref()
+                    .zip(banner.as_ref())
+                    .is_some_and(|(result, banner)| result.rect.bottom() <= banner.rect.top()),
+                format!(
+                    "The pinned result {:?} stands whole above the banner {:?}",
+                    result.map(|node| node.rect),
+                    banner.map(|node| node.rect)
+                ),
+            );
+        });
+        std::fs::rename(&away, &path).unwrap();
+    }
+
+    /// The session note's warning in the bottom banner: painted exactly once (inside its clip),
+    /// its words whole in view and naming the note with `cause`, and each of `controls` (a
+    /// control by its accessible name, not a label of that name) wholly in view, not clipped.
+    fn banner_whole(d: &mut Driver<'_>, id: &str, cause: &str, controls: &[&str]) {
+        let copies = painted_starts(d, "The note of Session ", 0).len();
+        let words = d.nodes().into_iter().find(|node| {
             node.fully_in_view()
                 && node.name.starts_with("The note of Session ")
-                && node.name.contains("is gone from the folder.")
+                && node.name.contains(cause)
         });
-        let discard = d.place_of("Discard");
+        let cut: Vec<&str> = controls
+            .iter()
+            .copied()
+            .filter(|control| {
+                !d.nodes().iter().any(|node| {
+                    node.name == *control
+                        && !matches!(
+                            node.role,
+                            egui::accesskit::Role::Label | egui::accesskit::Role::TextRun
+                        )
+                        && node.fully_in_view()
+                })
+            })
+            .collect();
+        let size = d.window_size();
         d.observe(
-            "round-30-note-warning-beside-a-pinned-result",
-            result.as_ref().zip(banner.as_ref()).zip(undo.zip(discard)).is_some_and(
-                |((result, banner), (undo, _))| {
-                    result.rect.bottom() <= banner.rect.top() && undo.bottom() <= banner.rect.top()
-                },
-            ),
+            id,
+            copies == 1 && words.is_some() && cut.is_empty(),
             format!(
-                "At 960x640 the pinned result {:?} and its Undo {undo:?} stand above the banner {:?} with Discard {discard:?}",
-                result.map(|node| node.rect),
-                banner.map(|node| node.rect)
+                "At {size:?}: {copies} painted banner(s), words {:?}, not wholly in view {cut:?}",
+                words.map(|node| node.name)
             ),
         );
-        std::fs::rename(&away, &path).unwrap();
     }
 
     /// A Sessions note's link keeps focus when Lookup opens a World note beside it, and
