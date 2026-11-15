@@ -1086,13 +1086,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/encounters.rs",
             "creature_pane",
-            &[
-                Ban::Results,
-                Ban::Layout(2),
-                Ban::Pane(1),
-                Ban::RowKey(1),
-                Ban::Footer,
-            ],
+            &[Ban::Results, Ban::Layout(2), Ban::Pane(1), Ban::RowKey(1)],
         ),
         ("src/encounters.rs", "run_settings", &[Ban::Results]),
         ("src/encounters.rs", "save_draft", &[Ban::Results]),
@@ -1269,13 +1263,9 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "creature_search_with_summary",
             &[Ban::Layout(1)],
         ),
-        // The editor's columns (`Fills::because`) and the unread rows' warning in main's footer
-        // (`show_by_hand`): the typed footer holds no file line with its links.
-        (
-            "src/encounters.rs",
-            "editor_view",
-            &[Ban::Pane(2), Ban::Footer],
-        ),
+        // The editor's columns (`Fills::because`). Its unread rows' warning is a typed fault
+        // with its file line since migration-32 L2c.
+        ("src/encounters.rs", "editor_view", &[Ban::Pane(1)]),
         (
             "src/encounters.rs",
             "roster",
@@ -1721,7 +1711,6 @@ pub(crate) const LEGACY_FOOTER_LINES: &[(&str, usize)] = &[
     ("src/design/components.rs", 11),
     ("src/design/results.rs", 1),
     ("src/encounter_run/view.rs", 2),
-    ("src/encounters.rs", 2),
     ("src/library.rs", 12),
 ];
 
