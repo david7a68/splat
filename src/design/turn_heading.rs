@@ -398,23 +398,8 @@ const ORDER: [Candidate; 6] = [
     candidate(Words::Letters, Letter::Released, None),
 ];
 
-/// The private ordered selector.
-mod select {
-    /// The first candidate of a closed `order` that `legal` allows and `measure` finds a fit
-    /// for, with that fit. Linear and in order: each legal candidate is measured at most once,
-    /// and never by bisection, because a later candidate can be wider than an earlier one.
-    pub(super) fn first_fit<C: Copy, R>(
-        order: &[C],
-        legal: impl Fn(C) -> bool,
-        mut measure: impl FnMut(C) -> Option<R>,
-    ) -> Option<(C, R)> {
-        order
-            .iter()
-            .copied()
-            .filter(|candidate| legal(*candidate))
-            .find_map(|candidate| measure(candidate).map(|fit| (candidate, fit)))
-    }
-}
+/// The ordered selector (`design::fitting`), shared with the plan row's recipe.
+use super::fitting as select;
 
 /// Choose the heading's one candidate, on a change only.
 fn fit(ui: &Ui, heading: &TurnHeading<'_>, metrics: &Metrics) -> Fitted {
@@ -480,7 +465,7 @@ fn fit(ui: &Ui, heading: &TurnHeading<'_>, metrics: &Metrics) -> Fitted {
         (number_width(ui, &text, &least) <= room).then_some((text, metrics.least))
     };
     let chosen = select::first_fit(
-        &ORDER,
+        ORDER,
         |candidate| {
             candidate.keys.is_none_or(|keys| keys == heading.keys)
                 && (candidate.letter == Letter::Released || roster_fits)

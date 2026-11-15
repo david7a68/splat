@@ -793,9 +793,10 @@ fn planned_summary(
     planned_summary_on_road(ui, summary, None, difficulty);
 }
 
-/// `planned_summary` with a journey's day after the summary (`road_day`). Round 28 FE6: the day
-/// ties the fight to its journey, so it gives way last: the party's size first, then the
-/// roster's members from the end, then the day.
+/// `planned_summary` with a journey's day after the summary (`road_day`). Round 28 FE6, Q-s,
+/// R39: the day ties the fight to its journey, so it gives way last: the party's size first,
+/// then the word's limit, then the XP number, then the roster's members from the end, then the
+/// day.
 /// A planned fight's line, laid out once for its room and kept (`Kept`): what an unchanged
 /// frame paints, with no fitting and no string building.
 #[derive(Clone)]
@@ -1015,19 +1016,6 @@ fn prepare_plan_line(
         }
         text
     };
-    // The most whole facts and members before `form` that keep the lines, by halves.
-    let most = |form: &str| {
-        let (mut fits, mut over) = (0, units.len());
-        while over - fits > 1 {
-            let middle = (fits + over) / 2;
-            if rows(&with_form(&cut_at(middle), form)) <= lines {
-                fits = middle;
-            } else {
-                over = middle;
-            }
-        }
-        fits
-    };
     let (shown, parts, cut) = match missing {
         // W1-D2, X1, R31: whose input is not known, in the `XP not known` place. A candidate is
         // a set of units and the reason for EXACTLY those units (`Missing::unsaid`), and only
@@ -1080,28 +1068,64 @@ fn prepare_plan_line(
             (candidate(count, &words), form, count < units.len())
         }
         None => {
-            let full = nb(parts);
-            let short = difficulty
-                .and_then(|difficulty| difficulty.rating.as_ref())
-                .map_or_else(|| full.clone(), |rating| nb(rating.parts(false)));
-            let whole = [&full, &short]
-                .into_iter()
-                .map(|parts| (with_form(summary, &joined(parts)), parts))
-                .find(|(shown, _)| rows(shown) <= lines);
-            if let Some((shown, parts)) = whole {
-                (shown, parts.clone(), false)
-            } else {
-                // The most whole facts and members that keep the lines, by halves; with none,
-                // the form alone.
-                let form = joined(&short);
-                let fits = most(&form);
-                let shown = if fits == 0 {
-                    form
-                } else {
-                    with_form(&cut_at(fits), &form)
-                };
-                (shown, short.clone(), true)
+            // Q-s, R39: a known word. `5 party` gives way first (it is the same on every row),
+            // then the word's limit, then the XP number, then the members from their end, and
+            // the journey's day last; the word never gives way. One closed order of whole
+            // candidates (the units kept and the form), the first that keeps the lines
+            // (`design::fitting::first_fit`).
+            #[derive(Clone, Copy)]
+            enum Form {
+                /// `XP 1,050 · Moderate (up to 1,125)`
+                Full,
+                /// `XP 1,050 · Moderate`
+                NoLimit,
+                /// `Moderate`
+                Word,
             }
+            let rating = difficulty
+                .and_then(|difficulty| difficulty.rating.as_ref())
+                .expect("a known word has its rating");
+            let form_parts = |form| match form {
+                Form::Full => nb(parts.clone()),
+                Form::NoLimit => nb(rating.parts(false)),
+                Form::Word => nb(rating
+                    .parts(false)
+                    .into_iter()
+                    .filter(|(_, word)| *word)
+                    .collect()),
+            };
+            let all = units.len();
+            let party = usize::from(typed.party > 0);
+            // Without a party's size there is no candidate that drops it.
+            let order = [(all, Form::Full)]
+                .into_iter()
+                .chain((party == 1).then_some((all - 1, Form::Full)))
+                .chain([(all - party, Form::NoLimit)])
+                .chain((0..=all - party).rev().map(|count| (count, Form::Word)));
+            let shown_with = |count: usize, form: &str| {
+                if count == all {
+                    with_form(summary, form)
+                } else if count == 0 {
+                    form.to_owned()
+                } else {
+                    with_form(&cut_at(count), form)
+                }
+            };
+            let chosen = design::fitting::first_fit(
+                order,
+                |_| true,
+                |(count, form)| {
+                    let parts = form_parts(form);
+                    let shown = shown_with(count, &joined(&parts));
+                    (rows(&shown) <= lines).then_some((shown, parts))
+                },
+            );
+            let ((count, _), (shown, parts)) = chosen.unwrap_or_else(|| {
+                // Not even the word alone keeps the lines: the word alone, wrapped.
+                let parts = form_parts(Form::Word);
+                ((0, Form::Word), (joined(&parts), parts))
+            });
+            (shown, parts, count < all)
         }
     };
     let form = joined(&parts);
@@ -7405,7 +7429,7 @@ mod tests {
             summary,
             "5 party · 1 × Cinder Tyrant, 2 × Ember Cultist, 1 × Wolf"
         );
-        let (mut whole, mut cut) = (0, 0);
+        let (mut whole, mut cut, mut xp_gone) = (0, 0, 0);
         for width in (120..=640).step_by(4).map(|width| width as f32) {
             let mut heights = (0.0, 0.0);
             // The second frame has the app's fonts.
@@ -7433,7 +7457,8 @@ mod tests {
                 .shapes
                 .iter()
                 .filter_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text) if text.galley.job.text.contains("XP") => Some(
+                    // The protected word, not the XP number: under Q-s XP can give way.
+                    egui::Shape::Text(text) if text.galley.job.text.contains("Above") => Some(
                         text.galley
                             .job
                             .text
@@ -7448,16 +7473,33 @@ mod tests {
             let [line] = texts.as_slice() else {
                 panic!("at {width} px: {texts:?}");
             };
-            let facts = line
-                .strip_suffix("XP 6,300 · Above High")
-                .unwrap_or_else(|| panic!("at {width} px: {line:?}"));
+            // FB2, Q-s: the word ends the row at every width; the XP number goes only after
+            // the party's size and before any member.
+            let (facts, xp) = match line.strip_suffix("XP 6,300 · Above High") {
+                Some(facts) => (facts, true),
+                None => (
+                    line.strip_suffix("Above High")
+                        .unwrap_or_else(|| panic!("at {width} px: {line:?}")),
+                    false,
+                ),
+            };
             let facts = facts.trim_end_matches([' ', '·']);
+            let members = "1 × Cinder Tyrant, 2 × Ember Cultist, 1 × Wolf";
             if facts.replace(" · ", " ") == summary.replace(" · ", " ") {
+                assert!(
+                    xp,
+                    "at {width} px the XP gave way before the party: {line:?}"
+                );
                 whole += 1;
             } else {
                 // The summary gives way by whole facts and members, never inside one. Round 28
-                // FE6: the party's size gives way first (with no `…`), then the members from
-                // the end.
+                // FE6: the party's size gives way first (with no `…`), then (Q-s) the XP
+                // number, then the members from the end.
+                assert!(
+                    !xp || facts == members,
+                    "at {width} px a member gave way before the XP number: {line:?}"
+                );
+                xp_gone += usize::from(!xp && facts == members);
                 cut += 1;
                 let kept = facts.strip_suffix('…').unwrap_or(facts);
                 let kept = kept.trim_end_matches([' ', '·', ',']);
@@ -7474,7 +7516,10 @@ mod tests {
                 );
             }
         }
-        assert!(whole > 0 && cut > 0, "whole {whole}, cut {cut}");
+        assert!(
+            whole > 0 && cut > 0 && xp_gone > 0,
+            "whole {whole}, cut {cut}, every member beside the word alone {xp_gone}"
+        );
         // Review of PR 299: one input that is not known, at a width where the named reason fits
         // alone but not after the summary: the summary gives way, the name shows. Round 28 FB6:
         // that holds for a name the summary does not hold (a character's level); a creature the

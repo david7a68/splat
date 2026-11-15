@@ -2135,8 +2135,9 @@ below the strip. Add-strip messages stay below Add. In notes ends at the button
 text's inner edge.
 
 A planned fight's summary ends with its difficulty in the one form
-(`5 party · 2 × Ember Cultist · XP 400 · Low (up to 2,800)`), and it keeps its lines: the limit gives way first, then
-the members from their end (Encounter difficulty, above). Every `·` on the row, the summary's and the form's, has the
+(`5 party · 2 × Ember Cultist · XP 400 · Low (up to 2,800)`), and it keeps its lines as Q-s says (R39): `5 party`
+gives way first, then the limit, then the XP number, then the members from their end, and a journey's day last; the
+word never gives way (Encounter difficulty, above). Every `·` on the row, the summary's and the form's, has the
 same blank on each side: the font's own spacing around `·` is uneven, so the row moves each `·` by whole pixels. The
 opened row's `Read encounter` line does not say the difficulty again. A fight with no word because an input is not
 known ends its row with that, and whose, in the word's place: `XP not known: Nameless Thing`, or `Level not known:
