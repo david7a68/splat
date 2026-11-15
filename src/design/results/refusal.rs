@@ -1305,6 +1305,35 @@ mod tests {
                  gone from its folder. Check the session note first.",
                 Tone::Warning,
             ),
+            // The save itself found an outside change: a conflict, a warning (review of
+            // 1faf0142); a file that cannot be read is an error.
+            (
+                Refusal::new(
+                    FailedAct::LinksNotPutBack {
+                        to: name("Hobb"),
+                        within: name("Session 1: The Road"),
+                    },
+                    Cause::Conflict(File::SessionNote),
+                    Recovery::First(Step::ChooseWords(File::SessionNote)),
+                ),
+                "The links to Hobb were not put back in Session 1: The Road. The session note has \
+                 unsaved words, and its file changed on disk. Choose which words to keep in the \
+                 session note first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::LinksNotPutBack {
+                        to: name("Hobb"),
+                        within: name("Session 1: The Road"),
+                    },
+                    Cause::Unreadable(File::SessionNote),
+                    Recovery::First(Step::Check(File::SessionNote)),
+                ),
+                "The links to Hobb were not put back in Session 1: The Road. Splat cannot read \
+                 the session note. Check the session note first.",
+                Tone::Error,
+            ),
             (
                 Refusal::new(
                     FailedAct::NotDeleted {
@@ -1532,9 +1561,20 @@ mod tests {
                 Tone::Warning,
             ),
         ];
-        for (refusal, words, tone) in cases {
-            assert_eq!(refusal.words().as_str(), words);
-            assert_eq!(refusal.tone(), tone, "{words}");
-        }
+        // Every row is checked, and every wrong row is named, so one change shows all it breaks.
+        let wrong: Vec<String> = cases
+            .iter()
+            .filter(|(refusal, words, tone)| {
+                refusal.words().as_str() != *words || refusal.tone() != *tone
+            })
+            .map(|(refusal, words, tone)| {
+                format!(
+                    "{words:?} ({tone:?}): said {:?} ({:?})",
+                    refusal.words().as_str(),
+                    refusal.tone()
+                )
+            })
+            .collect();
+        assert!(wrong.is_empty(), "{}", wrong.join("\n"));
     }
 }
