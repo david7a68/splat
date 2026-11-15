@@ -9095,6 +9095,42 @@ mod tests {
         assert_eq!(fs::read(&note_b).unwrap(), original[1]);
         assert_eq!(fs::read(&note_a).unwrap(), a_linked);
         assert!(sessions.updated_links.is_none() && sessions.link_problem.is_none());
+        // (f) Review of PR 459, item 4 (the M7 caller map): a partial Undo whose failure is a
+        // save, not an edit. A and B are written; then B's folder takes no new file, and B
+        // itself does not change. Undo puts A back; B's save fails, so B stays byte for byte as
+        // the update wrote it, and only B's Undo waits. B was not edited: its typed cause is
+        // `Cause::NotSaved(File::SessionNote)`, an error, never `Cause::EditedSince` (lane N0).
+        fs::write(&note_a, &original[0]).unwrap();
+        fs::write(&note_b, &original[1]).unwrap();
+        let mut sessions = Sessions::default();
+        sessions.update_event_link_notes(vec![open(&note_a), open(&note_b)]);
+        assert_eq!(sessions.updated_links.as_ref().map(Vec::len), Some(2));
+        let b_written = fs::read(&note_b).unwrap();
+        assert_ne!(b_written, original[1], "the update wrote B");
+        fs::set_permissions(&folder_b, fs::Permissions::from_mode(0o555)).unwrap();
+        sessions.undo_event_link_notes();
+        let left = temporary_files();
+        fs::set_permissions(&folder_b, fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(left, Vec::<String>::new());
+        assert_eq!(fs::read(&note_a).unwrap(), original[0], "A is put back");
+        assert_eq!(
+            fs::read(&note_b).unwrap(),
+            b_written,
+            "B did not change: no edit is the cause"
+        );
+        let waiting: Option<Vec<_>> = sessions.updated_links.as_ref().map(|writes| {
+            writes
+                .iter()
+                .map(|write| write.before.path.clone())
+                .collect()
+        });
+        assert_eq!(waiting, Some(vec![note_b.clone()]), "only B's Undo waits");
+        let b_name = note_b.file_name().unwrap().to_string_lossy().into_owned();
+        let problem = sessions.link_problem.clone().unwrap_or_default();
+        assert!(
+            problem.contains(&b_name) && !problem.contains(&a_name),
+            "{problem}"
+        );
     }
 
     #[test]
