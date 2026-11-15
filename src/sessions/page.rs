@@ -1655,8 +1655,10 @@ impl Sessions {
             .iter()
             .map(|note| (note.id, note.link()))
             .collect();
-        // Row 123: the note's own events end a plan line's result, on every page.
+        // Row 123: the note's own events end a plan line's result, and its journey's removal
+        // ends a refused Undo's answer, on every page.
         self.follow_plan_line();
+        self.end_plan_line_refusal(Some(&book.events));
         book.poll(ctx);
     }
 

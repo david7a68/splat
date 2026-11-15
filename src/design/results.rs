@@ -185,6 +185,40 @@
 use super::components::{Footer, ResultOrder};
 use eframe::egui::Ui;
 
+mod refusal;
+pub use refusal::{Cause, FailedAct, Name, Opens, Recovery, Refusal, Thing};
+
+thread_local! {
+    /// The order of the DM's latest act that went through a store: a result recorded, an Undo
+    /// that worked or was refused, an offer used. Only [`act_order`] sets it, at the act; a draw
+    /// reads it ([`last_act`]) to rank a refused attempt's answer (ruling R33). It never ends
+    /// anything: a later act on another object pushes an older refusal down, no more.
+    static LAST_ACT: std::cell::Cell<ResultOrder> = std::cell::Cell::new(ResultOrder::default());
+}
+
+/// A new order for an act done now, which is then the latest act.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "the store is where an order is issued"
+)]
+fn act_order() -> ResultOrder {
+    let order = ResultOrder::issue();
+    LAST_ACT.with(|last| last.set(order));
+    order
+}
+
+/// The order of the DM's latest act through a store (see `LAST_ACT`).
+pub(in crate::design) fn last_act() -> ResultOrder {
+    LAST_ACT.with(std::cell::Cell::get)
+}
+
+/// A refused attempt kept on its entry: the attempt's own order (the entry keeps its ticket) and
+/// the refusal.
+struct Refused {
+    order: ResultOrder,
+    refusal: Refusal,
+}
+
 /// The object a kept result belongs to: an entry in its root, a note, a run step. The store keys
 /// every lookup and every change by the owner's scope and the owner together, so an owner whose
 /// `PartialEq` compares its id only still never meets another scope's result.
@@ -255,6 +289,7 @@ pub enum Press {
 pub struct Shown<'a, T> {
     order: ResultOrder,
     value: &'a T,
+    refused: Option<&'a Refused>,
 }
 
 impl<'a, T> Shown<'a, T> {
@@ -267,6 +302,13 @@ impl<'a, T> Shown<'a, T> {
     pub fn value(&self) -> &'a T {
         self.value
     }
+
+    /// The refusal of this entry's last attempt, while it stands
+    /// ([`Results::undo_or_refuse`]).
+    pub fn refusal(&self) -> Option<&'a Refusal> {
+        self.refused.map(|refused| &refused.refusal)
+    }
+
     /// This result as a typed footer line for this frame's pane (package M), made from its own
     /// value and carrying this entry's [`Ticket`]. The call takes the view, so the store's
     /// borrow ends here: the pane's body may change the store or its owner. The line borrows the
@@ -276,7 +318,15 @@ impl<'a, T> Shown<'a, T> {
         frame: &'f super::outcome::PaneFrame,
         make: impl FnOnce(&T) -> super::outcome::KeptOutcome<A>,
     ) -> super::outcome::KeptLine<'f, A> {
-        super::outcome::KeptLine::new(frame, Ticket { order: self.order }, make(self.value))
+        let refused = self
+            .refused
+            .map(|refused| (refused.order, refused.refusal.words()));
+        super::outcome::KeptLine::new(
+            frame,
+            Ticket { order: self.order },
+            make(self.value),
+            refused,
+        )
     }
 
     /// This result's footer line: its words, made from its own value, with its own order.
@@ -313,6 +363,12 @@ impl<T> Shown<'_, T> {
     /// This entry's ticket, for the store's own tests.
     #[cfg(test)]
     pub(in crate::design) fn ticket_for_test(&self, _frame: &super::outcome::PaneFrame) -> Ticket {
+        Ticket { order: self.order }
+    }
+
+    /// This entry's ticket, for a caller's tests of its press.
+    #[cfg(test)]
+    pub(crate) fn ticket_for_caller_test(&self) -> Ticket {
         Ticket { order: self.order }
     }
 }
@@ -412,6 +468,9 @@ struct Entry<O, T> {
     owner: O,
     order: ResultOrder,
     value: T,
+    /// The refusal of its last attempt ([`Results::undo_or_refuse`]): it ends with the entry, at
+    /// the entry's next attempt, and at [`Results::end_refusals`].
+    refused: Option<Refused>,
 }
 
 impl<O: Owner, T> Entry<O, T> {
@@ -445,17 +504,14 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
     /// Keep the result of an action done now. It gets a new order, newer than every result
     /// before it, and it ends its owner's earlier result of this kind. Call it where the action
     /// is done; Undo and then the same action again is a new action with a new order.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "the store is where an order is issued"
-    )]
     pub fn record(&mut self, value: T) {
         let owner = value.owner();
         self.entries.retain(|entry| !entry.is(&owner));
         self.entries.push(Entry {
             owner,
-            order: ResultOrder::issue(),
+            order: act_order(),
             value,
+            refused: None,
         });
     }
 
@@ -481,6 +537,7 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
         Shown {
             order: entry.order,
             value: &entry.value,
+            refused: entry.refused.as_ref(),
         }
     }
 
@@ -503,7 +560,10 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
             )
         };
         let at = self.position(owner)?;
-        Some(run(&self.entries[at].value).map(|done| (self.entries.remove(at).value, done)))
+        Some(run(&self.entries[at].value).map(|done| {
+            act_order();
+            (self.entries.remove(at).value, done)
+        }))
     }
 
     /// The Undo of the entry `ticket` names, as `undo` does by owner: it leaves only when `run`
@@ -526,9 +586,72 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
             .position(|entry| entry.order == ticket.order)
             .ok_or(ByTicket::Gone)?;
         match run(&self.entries[at].value) {
-            Ok(done) => Ok((self.entries.remove(at).value, done)),
+            Ok(done) => {
+                act_order();
+                Ok((self.entries.remove(at).value, done))
+            }
             Err(error) => Err(ByTicket::Failed(error)),
         }
+    }
+
+    /// The opt-in recorded Undo: as [`Results::undo_by`], and a refused attempt is kept. On
+    /// `Err` the entry stays with its ticket (its controls keep their ids, a press made on its
+    /// line still reaches it) and holds the refusal with a new order of its own, the attempt's,
+    /// which ranks its answer (ruling R33). Its line then opens with the refusal's words. The
+    /// refusal ends with the entry (a successful Undo, a new result of the same owner, an end
+    /// event), at the entry's next attempt, and at [`Results::end_refusals`].
+    pub fn undo_or_refuse<R>(
+        &mut self,
+        ticket: Ticket,
+        run: impl FnOnce(&T) -> Result<R, Refusal>,
+    ) -> Result<(T, R), ByTicket<()>> {
+        const {
+            assert!(
+                matches!(T::ENDS.press, Press::Undo),
+                "this kind has no Undo: its press is not `Press::Undo`"
+            )
+        };
+        let at = self
+            .entries
+            .iter()
+            .position(|entry| entry.order == ticket.order)
+            .ok_or(ByTicket::Gone)?;
+        let result = run(&self.entries[at].value);
+        let order = act_order();
+        match result {
+            Ok(done) => Ok((self.entries.remove(at).value, done)),
+            Err(refusal) => {
+                self.entries[at].refused = Some(Refused { order, refusal });
+                Err(ByTicket::Failed(()))
+            }
+        }
+    }
+
+    /// The state a result rests on changed (its file's words, its draft). `holds` revises each
+    /// value in place (its Undo may wait) and says whether its result still holds. One that does
+    /// not hold ends, unless it holds a refused attempt: that answer to the DM's act is not ended
+    /// by the change that caused it; its own events end it. Call it at the change, never each
+    /// frame.
+    pub fn source_changed(&mut self, mut holds: impl FnMut(&mut T) -> bool) {
+        self.entries
+            .retain_mut(|entry| holds(&mut entry.value) || entry.refused.is_some());
+    }
+
+    /// The refused attempt of each entry for which `ends` is true ends (its object went away;
+    /// another act on its owner). The entry itself then stays only while `holds` says its result
+    /// still holds.
+    pub fn end_refusals(
+        &mut self,
+        mut ends: impl FnMut(&T) -> bool,
+        mut holds: impl FnMut(&T) -> bool,
+    ) {
+        self.entries.retain_mut(|entry| {
+            if entry.refused.is_some() && ends(&entry.value) {
+                entry.refused = None;
+                return holds(&entry.value);
+            }
+            true
+        });
     }
 
     /// The offer `ticket` names, used up by its press; `None` when it was replaced or ended.
@@ -543,6 +666,7 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
             .entries
             .iter()
             .position(|entry| entry.order == ticket.order)?;
+        act_order();
         Some(self.entries.remove(at).value)
     }
 
@@ -555,6 +679,7 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
             )
         };
         let at = self.position(owner)?;
+        act_order();
         Some(self.entries.remove(at).value)
     }
 
@@ -733,7 +858,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "components",
             &[Ban::Results, Ban::Layout(4)],
         ),
-        ("src/design/results.rs", "record", &[Ban::Results]),
+        ("src/design/results.rs", "act_order", &[Ban::Results]),
         ("src/dndbeyond.rs", "footer_messages", &[Ban::Results]),
         ("src/dndbeyond.rs", "show_link", &[Ban::Results]),
         (
@@ -862,7 +987,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             "scenes_are_note_acts_with_their_own_undo statement",
             &[Ban::Results],
         ),
-        ("src/sessions/plan.rs", "keep_plan_line", &[Ban::Results]),
         ("src/timeline.rs", "next_result_order", &[Ban::Results]),
         ("src/sessions/plan.rs", "kept_at", &[Ban::Order]),
         ("src/trackers/history.rs", "remove", &[Ban::Results]),
@@ -1378,7 +1502,7 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/library.rs", 14),
             ("src/sessions/carry.rs", 1),
             ("src/sessions/page.rs", 1),
-            ("src/sessions/plan.rs", 7),
+            ("src/sessions/plan.rs", 6),
             ("src/timeline.rs", 1),
             ("src/trackers/history.rs", 1),
         ],

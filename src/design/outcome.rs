@@ -2114,21 +2114,62 @@ impl PaneFrame {
 pub struct KeptLine<'f, A> {
     ticket: Ticket,
     typed: Typed<A>,
+    /// The order of the entry's refused attempt, while its refusal stands: the line ranks by it
+    /// ([`kept_rank`]), and keeps the entry's ticket for its ids and presses.
+    refused: Option<ResultOrder>,
     frame: std::marker::PhantomData<&'f PaneFrame>,
 }
 
 impl<'f, A> KeptLine<'f, A> {
-    /// For `Shown::outcome` (in `results`), which holds the entry's ticket.
+    /// For `Shown::outcome` (in `results`), which holds the entry's ticket and the refusal of
+    /// its last attempt. A refused attempt's line is one answer: the refusal's words first, in
+    /// the warning tone; the result's own words follow only while its Undo is live (the caller
+    /// gives the Undo only then), because only then does the file still hold what it says; then
+    /// the Undo, once.
     pub(in crate::design) fn new(
         _frame: &'f PaneFrame,
         ticket: Ticket,
         outcome: KeptOutcome<A>,
+        refused: Option<(ResultOrder, Sentence)>,
     ) -> Self {
+        let mut typed = outcome.typed();
+        let refused = refused.map(|(order, words)| {
+            typed.body.tone = Tone::Warning;
+            let result = std::mem::replace(&mut typed.body.words, words);
+            if typed.body.undo.is_some() {
+                typed.body.words = typed.body.words.clone().then(result);
+            }
+            order
+        });
         Self {
             ticket,
-            typed: outcome.typed(),
+            typed,
+            refused,
             frame: std::marker::PhantomData,
         }
+    }
+}
+
+/// The one rank of a kept line, in a pane's footer ([`Messages`]) and under a save row
+/// ([`RowMessages`]) alike (ruling R33): the place it takes and the order it sorts by. A refused
+/// attempt's answer leads while it answers the DM's latest act through a store
+/// (`results::last_act`); a later act on any other object pushes it down to its place among the
+/// results, by its attempt's order, and never ends it. Every other kept line keeps its place: a
+/// live Undo before reasons, no Undo after the notices, newest first. A draw only reads orders.
+fn kept_rank(
+    order: ResultOrder,
+    refused: Option<ResultOrder>,
+    has_undo: bool,
+) -> (FooterRank, ResultOrder) {
+    let place = if has_undo {
+        FooterRank::Undo
+    } else {
+        FooterRank::Notice
+    };
+    match refused {
+        Some(attempt) if attempt >= super::results::last_act() => (FooterRank::Answer, attempt),
+        Some(attempt) => (place, attempt),
+        None => (place, order),
     }
 }
 
@@ -2293,15 +2334,19 @@ impl<'f, A: 'static> Messages<'f, A> {
 
     /// A kept result of this frame, newest first by the order its store issued.
     pub fn kept(&mut self, line: KeptLine<'f, A>) -> &mut Self {
-        self.kept_at(line.ticket, line.typed)
+        self.kept_at(line.ticket, line.typed, line.refused)
     }
 
-    fn kept_at(&mut self, ticket: Ticket, typed: Typed<A>) -> &mut Self {
-        let has_undo = typed.body.undo.is_some();
+    fn kept_at(
+        &mut self,
+        ticket: Ticket,
+        typed: Typed<A>,
+        refused: Option<ResultOrder>,
+    ) -> &mut Self {
+        let (rank, order) = kept_rank(ticket.order(), refused, typed.body.undo.is_some());
         let words = Cow::Owned(typed.body.words.as_str().to_owned());
-        let order = ticket.order();
         let draw = self.draw(typed, Some(ticket));
-        self.footer.add_kept(order, words, has_undo, draw);
+        self.footer.push(rank, Some(order), words, draw);
         self
     }
 
@@ -2312,7 +2357,7 @@ impl<'f, A: 'static> Messages<'f, A> {
         order: ResultOrder,
         outcome: impl Into<KeptOutcome<A>>,
     ) -> &mut Self {
-        self.kept_at(Ticket::of(order), outcome.into().typed())
+        self.kept_at(Ticket::of(order), outcome.into().typed(), None)
     }
 
     /// The pane: the body (`add`, which may change any of the app), then the footer, placed by
@@ -2397,12 +2442,11 @@ impl<'f, A: 'static> RowMessages<'f, A> {
 
     /// A kept result of this frame, newest first by the order its store issued.
     pub fn kept(&mut self, line: KeptLine<'f, A>) -> &mut Self {
-        let rank = if line.typed.body.undo.is_some() {
-            FooterRank::Undo
-        } else {
-            FooterRank::Notice
-        };
-        let order = line.ticket.order();
+        let (rank, order) = kept_rank(
+            line.ticket.order(),
+            line.refused,
+            line.typed.body.undo.is_some(),
+        );
         self.items
             .push((rank, Some(order), line.typed, Some(line.ticket)));
         self

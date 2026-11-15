@@ -1053,6 +1053,9 @@ pub fn plan_act(d: &mut Driver<'_>) {
     const PLAN_SHRINE: &str = "Plan “Shrine of Cinders”";
     const PLANNED: &str = "“Shrine of Cinders” is in tonight’s plan.";
     const OUTSIDE: &str = "Written in Obsidian.";
+    const REFUSED: &str = "The plan line for Shrine of Cinders was not removed from Session 1: \
+        The Crossing. The session note changed on disk. Open that session’s notes and remove the \
+        plan line there.";
     let campaign = d.root.join("campaigns/emberfall");
     fs::write(campaign.join("Road.md"), ROAD).unwrap();
     d.app_mut().lookup.refresh();
@@ -1132,23 +1135,54 @@ pub fn plan_act(d: &mut Driver<'_>) {
     d.app_mut().sessions.hold_disk_check();
     fs::write(&note_path, format!("{}{OUTSIDE}\n", note_file(&dir))).unwrap();
     d.click("Undo add plan line");
-    let refused = d
-        .nodes()
-        .iter()
-        .any(|node| node.name.starts_with("Plan line not removed.") && node.fully_in_view());
+    // Structural phase, M1: the refusal is the footer's first message, whole, in the warning
+    // tone, naming the fight, the session, the cause and the next step; no older success
+    // stands above it (the result's words are gone while its Undo waits).
+    let refusal_first = |d: &Driver<'_>| {
+        let nodes = d.nodes();
+        let node = nodes
+            .iter()
+            .find(|node| node.name == REFUSED && node.fully_in_view());
+        let footer: Vec<_> = d
+            .typed_messages()
+            .into_iter()
+            .filter(|(_, place, _)| *place == crate::design::outcome::MessagePlace::Footer)
+            .collect();
+        let message = node.and_then(|node| {
+            footer
+                .iter()
+                .find(|(rect, ..)| rect.contains(node.rect.center()))
+                .copied()
+        });
+        let first = message.is_some_and(|(rect, _, tone)| {
+            tone == crate::design::Tone::Warning
+                && !footer.iter().any(|(other, ..)| {
+                    other.top() < rect.top() - 0.5 && other.x_range().intersects(rect.x_range())
+                })
+        });
+        let older = nodes.iter().any(|node| node.name.contains(PLANNED));
+        (
+            first && !older,
+            format!(
+                "refusal {:?}, its message {message:?}, footer {footer:?}, older success {older}",
+                node.map(|node| node.rect)
+            ),
+        )
+    };
+    let (first, why) = refusal_first(d);
     d.observe(
         "iter-29-S1-G142-undo-fault",
-        refused && note_file(&dir).contains("[[Shrine of Cinders]]"),
-        format!(
-            "Timeline's footer says the line was not removed ({refused}), and the line stays: {:?}",
-            d.nodes()
-                .iter()
-                .filter(|node| node.name.contains("not removed"))
-                .map(|node| (node.name.clone(), node.fully_in_view()))
-                .collect::<Vec<_>>()
-        ),
+        first && note_file(&dir).contains("[[Shrine of Cinders]]"),
+        format!("Timeline's footer opens with the whole refusal, and the line stays: {why}"),
     );
-    d.state("plan-undo-failed", Sizes::Default);
+    d.state_prepared("plan-undo-failed", Sizes::All, |d| {
+        let (first, why) = refusal_first(d);
+        d.observe(
+            "s30-B1-refusal-first",
+            first,
+            format!("The capture opens its footer with the whole refusal: {why}"),
+        );
+    });
     // Final review 3, point 1: a block taller than the view. A check near the view's bottom is
     // rolled: its result's plan line comes whole into view (the reveal is the check's row, not
     // the block).
@@ -1223,7 +1257,7 @@ pub fn plan_act(d: &mut Driver<'_>) {
     d.settle();
     d.observe(
         "iter-29-S1-G142-undo-fault",
-        !d.has_containing("Plan line not removed."),
+        !d.has_containing("was not removed from Session 1"),
         "The fault ends with its journey",
     );
 }

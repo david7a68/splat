@@ -6,8 +6,8 @@ use crate::{
     design::{
         self, Action, Density, Status, Tone, Type, colors, icons,
         outcome::{
-            Choice, Fault as MessageFault, FaultMessage, KeptOutcome, MessageChoice, Messages,
-            Notice, Outcome, PaneFrame, Said, Sentence, Severity, UndoStep, Verb,
+            Choice, Fault as MessageFault, FaultMessage, KeptLine, KeptOutcome, MessageChoice,
+            Messages, Notice, Outcome, PaneFrame, Said, Sentence, Severity, UndoStep, Verb,
         },
     },
     encounter_run::fight_summary,
@@ -2212,20 +2212,105 @@ impl JourneyPlan {
 }
 
 /// Row 123: `Plan “<name>”`, done: the journey and the check it was clicked on, the note it
-/// wrote (its session and file) and that note's Undo. It lasts while the note's words are what
-/// the act left, as every note act's Undo does.
+/// wrote (its session, its label and its file) and that note's Undo. Kept in one
+/// `design::Results` store (`Travel::planned`) that both readers, the Session plan and Timeline,
+/// read. It lasts while the note's words are what the act left, as every note act's Undo does;
+/// once its Undo was refused, the refusal stays until its own events end it, and the Undo waits
+/// while the note is not as the act left it (`live`).
 struct PlannedLine {
     /// The source of the note's words that the result last held at (`follow_plan_line`): the
     /// draft's revision, or the disk generation. Taken right after the act.
     seen: NoteSource,
+    /// Whether the note holds exactly what the act left, as last seen: its Undo is shown and
+    /// can work. Only a refused entry stays while it does not.
+    live: bool,
     /// The owner: the campaign the act was made in. The result ends when the campaign changes
     /// or the session's note leaves the folder (`Sessions::planned`).
     campaign: Option<Uuid>,
     journey: String,
     chosen: checks::Planned,
     note: Uuid,
+    /// The session's label at the act (`Session 1: The Crossing`), for its answers: never the
+    /// label of the session selected now.
+    session: String,
     path: std::path::PathBuf,
     undo: NoteUndo,
+}
+
+/// The owner of the plan line's result: the campaign it was made in. One plan line's result per
+/// campaign; a new one replaces it.
+#[derive(Clone, PartialEq, Eq)]
+struct PlanLineOwner(Option<Uuid>);
+
+impl design::results::Owner for PlanLineOwner {
+    type Scope = Option<Uuid>;
+    fn scope(&self) -> &Option<Uuid> {
+        &self.0
+    }
+}
+
+impl design::results::Kept for PlannedLine {
+    type Owner = PlanLineOwner;
+    const ENDS: design::results::Ends = design::results::Ends {
+        owner_changed: design::results::OwnerChanged::Ends,
+        disk_changed: design::results::DiskChanged::Checked,
+        press: design::results::Press::Undo,
+    };
+    fn owner(&self) -> PlanLineOwner {
+        PlanLineOwner(self.campaign)
+    }
+}
+
+impl PlannedLine {
+    /// The answer to a refused Undo of this line: what was not done, to which fight, in which
+    /// session, why, and the DM's next step. A failed save says the line left the draft.
+    fn refusal(&self, fault: &ActFault, unreadable: bool) -> design::results::Refusal {
+        use design::results::{Cause, FailedAct, Name, Opens, Recovery, Refusal, Thing};
+        let what = Thing::new(
+            "plan line",
+            Name::new(self.chosen.name.as_str()).unwrap_or(Name::fallback("this fight")),
+        );
+        let from = Name::new(self.session.as_str()).unwrap_or(Name::fallback("its session"));
+        let open = Opens::SessionNotes;
+        const NOTE: &str = "session note";
+        let (act, cause, recovery) = match fault {
+            ActFault::LineChanged => (
+                FailedAct::NotRemoved { what, from },
+                Cause::Changed(NOTE),
+                Recovery::ByHand {
+                    open,
+                    change: "remove the plan line",
+                },
+            ),
+            ActFault::Changed => (
+                FailedAct::NotRemoved { what, from },
+                Cause::Conflict(NOTE),
+                Recovery::Choose { open },
+            ),
+            ActFault::Missing if unreadable => (
+                FailedAct::NotRemoved { what, from },
+                Cause::Unreadable(NOTE),
+                Recovery::CheckFile { open },
+            ),
+            ActFault::Missing => (
+                FailedAct::NotRemoved { what, from },
+                Cause::Gone(NOTE),
+                Recovery::PutBack { open },
+            ),
+            ActFault::OtherNote => (
+                FailedAct::NotRemoved { what, from },
+                Cause::Replaced(NOTE),
+                Recovery::PutBack { open },
+            ),
+            // The line left the draft; the file still holds it.
+            ActFault::NotSaved(..) => (
+                FailedAct::NotSaved { what, place: from },
+                Cause::NotSaved(NOTE),
+                Recovery::Save { open },
+            ),
+        };
+        Refusal::new(act, cause, recovery)
+    }
 }
 
 /// Row 123, point 2: a session note that no draft holds, as the periodic disk check last read
@@ -2385,11 +2470,10 @@ pub(super) struct Travel {
     /// Each journey's last Timeline act, by its event. Leaving the page ends them.
     done: checks::Results,
     /// `Plan “<name>”`: the journey, the name and the check it was clicked on, and the note's
-    /// Undo. It lasts while the note's words are what the act left, as every note act's Undo
-    /// does; a page change keeps it.
-    planned: Option<PlannedLine>,
-    /// When the line in `planned` was written: its result's footer order.
-    planned_order: design::ResultOrder,
+    /// Undo, with its order and the refusal of its last Undo. It lasts while the note's words are
+    /// what the act left, as every note act's Undo does; a page change keeps it. The one store
+    /// both readers read.
+    planned: design::Results<PlanLineOwner, PlannedLine>,
     /// The fights still to come with their days on the road, while the note, the Timeline and
     /// the campaign's fights are as they were.
     days: Option<(RoadKey, Arc<RoadDays>)>,
@@ -2400,8 +2484,6 @@ pub(super) struct Travel {
     watched: BTreeMap<Uuid, Watched>,
     /// The last generation a watched note was given.
     generation: u64,
-    /// Row 123: the plan's `Undo add plan line` failed while its journey's block was closed.
-    undo_fault: Option<checks::UndoFault>,
 }
 
 /// What Timeline's view of a session plan is read from: the campaign, the session and its file,
@@ -2988,88 +3070,96 @@ impl Sessions {
         days
     }
 
-    /// Take back the plan line of `Plan “…”`, while its owner holds and the note is as that act
-    /// left it: through the session's own draft when one is open for it, else by the note's own
-    /// checked path on its file. A failure gives the act's journey, the act and its words,
-    /// result first, for the block of that journey (row 123, point 5).
-    pub fn undo_plan_line(&mut self) -> Option<(String, checks::Act, String)> {
-        self.planned()?;
-        let mut planned = self.travel.planned.take()?;
-        // Final review point 1: a line whose own save failed and that a later save of its
-        // note wrote is taken back from the file, by the checked path: the Undo learns that from
-        // the note's draft (the open one, or one read now) before it runs.
-        let result = if let Some(draft) = self.session_draft(planned.note) {
-            // A draft that waits for a move or a choice refuses through `undo` itself.
-            planned.undo.follow_save(draft);
-            planned.undo.undo(draft)
-        } else {
-            let result = match crate::sessions::Draft::open(&planned.path) {
-                Ok(mut other) => {
-                    planned.undo.follow_save(&other);
-                    planned.undo.undo(&mut other)
-                }
-                Err(_) => Err(ActFault::Missing),
-            };
-            // What the file holds now: a draft that could not save is dropped unpublished.
-            self.read_note_again(planned.note, &planned.path);
-            result
+    /// Take back the plan line of `Plan “…”` (`ticket`: the entry its line showed), while its
+    /// owner holds and the note is as that act left it: through the session's own draft when one
+    /// is open for it, else by the note's own checked path on its file (R26: it never selects
+    /// that session or touches another draft). A refused Undo keeps the entry with its refusal
+    /// (`Results::undo_or_refuse`): both readers' lines then open with it.
+    pub fn undo_plan_line(&mut self, ticket: design::results::Ticket) {
+        let Some((note, path)) = self
+            .planned()
+            .map(|planned| (planned.note, planned.path.clone()))
+        else {
+            return;
         };
-        result.err().map(|fault| {
-            (
-                planned.journey,
-                checks::Act::Plan(planned.chosen),
-                format!("Plan line not removed. {}", fault.words()),
-            )
-        })
+        let draft = (self.selected == Some(note))
+            .then_some(self.draft.as_mut())
+            .flatten();
+        let opened = draft.is_none();
+        let _ = self.travel.planned.undo_or_refuse(ticket, |planned| {
+            // Final review point 1: a line whose own save failed and that a later save of its
+            // note wrote is taken back from the file, by the checked path: the Undo learns that
+            // from the note's draft (the open one, or one read now) before it runs.
+            let mut undo = planned.undo.clone();
+            let result = if let Some(draft) = draft {
+                // A draft that waits for a move or a choice refuses through `undo` itself.
+                undo.follow_save(draft);
+                undo.undo(draft)
+            } else {
+                match crate::sessions::Draft::open(&planned.path) {
+                    Ok(mut other) => {
+                        undo.follow_save(&other);
+                        undo.undo(&mut other)
+                    }
+                    Err(_) => Err(ActFault::Missing),
+                }
+            };
+            result.map_err(|fault| planned.refusal(&fault, planned.path.exists()))
+        });
+        if opened {
+            // What the file holds now: a draft that could not save is dropped unpublished.
+            self.read_note_again(note, &path);
+        }
+        // The refusal's cause is met at once: the Undo waits while the note is not as the act
+        // left it, and the answer stays.
+        self.follow_plan_line();
     }
 
-    /// The plan's `Undo add plan line`. A failure keeps its journey and act: that journey's open
-    /// block says why, else the plan's footer, while the journey stands (`plan_line_fault`).
-    fn plan_line_undo_pressed(&mut self) {
-        self.travel.undo_fault = None;
-        if let Some((journey, act, words)) = self.undo_plan_line()
-            && !(self.open_event.as_deref() == Some(journey.as_str())
-                && self.travel.block.failed_for(&journey, &act, words.clone()))
-        {
-            self.travel.undo_fault = Some(checks::UndoFault {
-                journey,
-                act,
-                words,
-            });
-        }
+    /// A plan line's answer, for the plan's and Timeline's tests: the words its line opens with.
+    #[cfg(test)]
+    pub fn plan_line_refusal(&mut self) -> Option<String> {
+        self.planned()?;
+        let campaign = self.campaign.as_ref().map(|campaign| campaign.id);
+        self.travel
+            .planned
+            .get(&PlanLineOwner(campaign))
+            .and_then(|shown| shown.refusal().map(|refusal| refusal.words().to_string()))
     }
 
-    /// The words of a plan line's failed Undo, while its journey stands; it ends when the
-    /// journey goes.
-    fn plan_line_fault(&mut self, book: &Book) -> Option<String> {
-        let words = self
-            .travel
-            .undo_fault
-            .as_ref()
-            .and_then(|fault| fault.standing(&book.events))
-            .map(str::to_owned);
-        if words.is_none() {
-            self.travel.undo_fault = None;
+    /// Press the plan line's Undo, for tests, by the ticket of the entry its line shows; the
+    /// refusal its line then opens with, if any.
+    #[cfg(test)]
+    pub fn try_plan_undo(&mut self) -> Option<String> {
+        let campaign = self.campaign.as_ref().map(|campaign| campaign.id);
+        let ticket = self.planned().is_some().then(|| {
+            self.travel
+                .planned
+                .get(&PlanLineOwner(campaign))
+                .map(|shown| shown.ticket_for_caller_test())
+        });
+        if let Some(Some(ticket)) = ticket {
+            self.undo_plan_line(ticket);
         }
-        words
+        self.plan_line_refusal()
     }
 
     /// Row 123, review 3, point 1: the plan line's result while its owner holds: made in this
     /// campaign, for a session whose note is still in the folder at the file it wrote. Else the
-    /// result ends here, the one place every reader and Undo pass through.
+    /// result, and any refusal of its Undo, ends here, the one place every reader and Undo pass
+    /// through.
     fn planned(&mut self) -> Option<&PlannedLine> {
         let campaign = self.campaign.as_ref().map(|campaign| campaign.id);
-        let holds = self.travel.planned.as_ref().is_some_and(|planned| {
+        let notes = &self.notes;
+        self.travel.planned.end_unreachable(|planned| {
             planned.campaign == campaign
-                && self
-                    .notes
+                && notes
                     .iter()
                     .any(|note| note.id == planned.note && note.path == planned.path)
         });
-        if !holds {
-            self.travel.planned = None;
-        }
-        self.travel.planned.as_ref()
+        self.travel
+            .planned
+            .get(&PlanLineOwner(campaign))
+            .map(|shown| shown.value())
     }
 
     /// Row 123, review 3, point 2: the draft open for `note`, found by its session, wherever its
@@ -3143,13 +3233,18 @@ impl Sessions {
 
     /// Final review point 2: whether `session`'s plan shows the plan line's result: only the
     /// plan of the note that holds the line, wherever its journey is now, while it holds.
+    /// Whether the plan line's result still holds, for tests.
+    #[cfg(test)]
+    fn planned_live(&mut self) -> bool {
+        self.follow_plan_line();
+        self.planned().is_some()
+    }
+
+    #[cfg(test)]
     fn plan_line_shown_in(&mut self, session: Option<Uuid>) -> bool {
-        self.planned_live()
-            && self
-                .travel
-                .planned
-                .as_ref()
-                .is_some_and(|planned| Some(planned.note) == session)
+        self.follow_plan_line();
+        self.planned()
+            .is_some_and(|planned| Some(planned.note) == session)
     }
 
     /// Tests: the next disk check waits its full interval from now, so a scenario's outside
@@ -3159,19 +3254,15 @@ impl Sessions {
         self.last_check = Some(Instant::now());
     }
 
-    /// Whether the plan line's result still holds. It only reads what `follow_plan_line` keeps.
-    fn planned_live(&mut self) -> bool {
-        self.follow_plan_line();
-        self.travel.planned.is_some()
-    }
-
-    /// Row 123, final review: the one place where the note's own events end the plan line's
+    /// Row 123, final review: the one place where the note's own events act on the plan line's
     /// result. `poll` calls it every frame on every page, so an edit, a save with other words, an
     /// outside change seen by the disk check, a discard or a move is met as it happens, with no
     /// view of the result drawn. At each change of the note's source (its draft's revision, or
-    /// its disk generation), the result stays only when the note holds exactly the act's words,
-    /// saved: the act's own write, or a later save of that same write. Anything else ends it
-    /// for good; reopening a view never brings it back. A quiet frame compares no words.
+    /// its disk generation), the Undo is live only when the note holds exactly the act's words,
+    /// saved: the act's own write, or a later save of that same write. A result whose Undo is not
+    /// live ends for good (reopening a view never brings it back), unless its Undo was refused:
+    /// that answer stays, with its Undo waiting, until its own events end it (the refused
+    /// attempt's life is not its Undo's). A quiet frame compares no words.
     pub(super) fn follow_plan_line(&mut self) {
         let Some((note, path, seen)) = self
             .planned()
@@ -3190,25 +3281,32 @@ impl Sessions {
         }
         #[cfg(test)]
         timeline::page::PLAN_LINE_CHECKS.with(|checks| checks.set(checks.get() + 1));
-        let Some(planned) = &mut self.travel.planned else {
-            return;
-        };
-        let holds = match source {
-            NoteSource::Draft(_) => self
-                .draft
-                .as_ref()
-                .is_some_and(|draft| !draft.unsaved() && planned.undo.live(draft)),
-            NoteSource::Disk(_) => self
-                .travel
-                .watched
-                .get(&note)
-                .is_some_and(|watched| watched.body.as_deref() == Some(planned.undo.after())),
-        };
-        if holds {
+        let draft = self.draft.as_ref();
+        let watched = &self.travel.watched;
+        self.travel.planned.source_changed(|planned| {
+            let holds = match source {
+                NoteSource::Draft(_) => {
+                    draft.is_some_and(|draft| !draft.unsaved() && planned.undo.live(draft))
+                }
+                NoteSource::Disk(_) => watched
+                    .get(&note)
+                    .is_some_and(|watched| watched.body.as_deref() == Some(planned.undo.after())),
+            };
             planned.seen = source;
-        } else {
-            self.travel.planned = None;
-        }
+            planned.live = holds;
+            holds
+        });
+    }
+
+    /// Row 123: a plan line's refused Undo ends with the journey it was for, and at the next
+    /// plan act (`events`: the Timeline's, or none for an act).
+    pub(super) fn end_plan_line_refusal(&mut self, events: Option<&[timeline::Event]>) {
+        self.travel.planned.end_refusals(
+            |planned| {
+                events.is_none_or(|events| !events.iter().any(|event| event.id == planned.journey))
+            },
+            |planned| planned.live,
+        );
     }
 
     /// Row 123: Timeline's view of the plan of `journey`'s session, for its check results'
@@ -3275,6 +3373,8 @@ impl Sessions {
         chosen: &checks::Planned,
         names: &PlanNames,
     ) -> Result<(), String> {
+        // The next act on the plan line ends its refused Undo, whatever it does.
+        self.end_plan_line_refusal(None);
         let session = book
             .events
             .iter()
@@ -3325,28 +3425,46 @@ impl Sessions {
         }
     }
 
-    /// Row 123: `Plan “<name>”`'s result and `Undo add plan line`, in the footer of Timeline's
-    /// list, from the one store the plan's footer reads (`Travel::planned`), while the note is as
-    /// the act left it.
-    pub fn plan_line_result<A: 'static>(&mut self, messages: &mut Messages<'_, A>, undo: A) {
-        if !self.planned_live() {
-            return;
+    /// Row 123: `Plan “<name>”`'s result and `Undo add plan line` as a footer line of this
+    /// frame, from the one store both readers read (`Travel::planned`): the Session plan of the
+    /// note that holds the line (`in_session`) and Timeline's list (`None`). While its Undo is
+    /// refused, the line opens with the refusal, and the Undo shows only while the note is as the
+    /// act left it. `None` when there is nothing to show there.
+    fn plan_line_kept<'f, A>(
+        &mut self,
+        frame: &'f PaneFrame,
+        in_session: Option<Option<Uuid>>,
+        undo: A,
+    ) -> Option<KeptLine<'f, A>> {
+        self.follow_plan_line();
+        let note = self.planned()?.note;
+        if in_session.is_some_and(|session| session != Some(note)) {
+            return None;
         }
-        if let Some(planned) = &self.travel.planned {
-            kept_at(
-                messages,
-                self.travel.planned_order,
-                Said::new(as_sentence(&planned.chosen.words()))
-                    .undo(UndoStep::of(Verb::Add, "plan line").pressed_as(undo)),
-            );
-        }
+        let campaign = self.campaign.as_ref().map(|campaign| campaign.id);
+        let shown = self.travel.planned.get(&PlanLineOwner(campaign))?;
+        Some(shown.outcome(frame, |planned| {
+            let said = Said::new(as_sentence(&planned.chosen.words()));
+            if planned.live {
+                said.undo(UndoStep::of(Verb::Add, "plan line").pressed_as(undo))
+                    .into()
+            } else {
+                said.into()
+            }
+        }))
     }
 
-    /// A plan line written: its result's order, and its Undo, which replaces an earlier one.
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
+    /// Timeline's footer line of the plan line's result (`plan_line_kept`).
+    pub fn plan_line_line<'f, A>(
+        &mut self,
+        frame: &'f PaneFrame,
+        undo: A,
+    ) -> Option<KeptLine<'f, A>> {
+        self.plan_line_kept(frame, None, undo)
+    }
+
+    /// A plan line written: its result, with its order and its Undo, which replaces an earlier
+    /// one. The session's label is taken now, for its answers.
     fn keep_plan_line(
         &mut self,
         journey: &str,
@@ -3355,14 +3473,21 @@ impl Sessions {
         path: std::path::PathBuf,
         undo: NoteUndo,
     ) {
-        self.travel.planned_order = design::ResultOrder::issue();
         let seen = self.note_source(note, &path);
-        self.travel.planned = Some(PlannedLine {
+        let session = self
+            .notes
+            .iter()
+            .find(|known| known.id == note)
+            .map(crate::sessions::Note::label)
+            .unwrap_or_default();
+        self.travel.planned.record(PlannedLine {
             seen,
+            live: true,
             campaign: self.campaign.as_ref().map(|campaign| campaign.id),
             journey: journey.to_owned(),
             chosen: chosen.clone(),
             note,
+            session,
             path,
             undo,
         });
@@ -3415,7 +3540,6 @@ impl Sessions {
         plan: &Plan<'_>,
     ) {
         self.travel.block.clear_problem();
-        self.travel.undo_fault = None;
         if act == checks::Act::Start {
             // The row opens on its checks, with focus where the length goes.
             self.open_event = Some(id.to_owned());
@@ -3426,6 +3550,8 @@ impl Sessions {
                 .any(|event| event.id == id && event.duration.trim().is_empty());
         }
         if let checks::Act::Plan(chosen) = &act {
+            // The next act on the plan line ends its refused Undo, whatever it does.
+            self.end_plan_line_refusal(None);
             let groups: Vec<String> = plan.groups.iter().map(|group| group.name.clone()).collect();
             if let Err(words) = self.plan_line_act(book, session, id, chosen, plan.fights, &groups)
             {
@@ -3781,24 +3907,13 @@ impl Sessions {
             self.rewards
                 .in_footer(&mut messages, note, draft.revision());
         }
-        // Row 123: a plan line's Undo that failed while its journey's block was closed, while
-        // that journey stands.
-        if let Some(words) = self.plan_line_fault(book) {
-            messages.outcome(FaultMessage::new(&PlanFault::Check(as_sentence(&words))));
-        }
         // Round 27 FE7: `Plan “<name>”`'s result and `Undo plan line`, in the plan of its
-        // journey's session, while the note is as the act left it.
-        if self.plan_line_shown_in(session)
-            && let Some(planned) = &self.travel.planned
+        // journey's session, while the note is as the act left it; a refused Undo's answer,
+        // until its own events end it. The same stored line as Timeline's footer.
+        if let Some(line) =
+            self.plan_line_kept(&frame, Some(session), pressed(FooterAct::UndoPlanLine))
         {
-            kept_at(
-                &mut messages,
-                self.travel.planned_order,
-                Said::new(as_sentence(&planned.chosen.words())).undo(
-                    UndoStep::of(Verb::Add, "plan line")
-                        .pressed_as(pressed(FooterAct::UndoPlanLine)),
-                ),
-            );
+            messages.kept(line);
         }
         // The fold measures the room the rows have with an empty footer: the pane's whole room
         // (below), so that a result coming or going never folds or unfolds the scenes.
@@ -3834,10 +3949,8 @@ impl Sessions {
         // A length that settled changed the Timeline, so the start is read again.
         let (_, journey_start) = self.journey_start(book, open_event.as_deref());
         self.travel.done.follow(book);
-        // The plan line's result ends when its note is no longer as the act left it.
-        if self.travel.planned.is_some() && !self.planned_live() {
-            self.travel.planned = None;
-        }
+        // The plan line's result follows its note.
+        self.follow_plan_line();
         let mut length_taken = checks::Taken::Nothing;
         let mut travel_act = None;
         self.rewards.see(self.draft.as_ref(), session, book);
@@ -4236,7 +4349,11 @@ impl Sessions {
                     }
                     FooterAct::Scene(act) => scene_act = Some(act),
                     FooterAct::Rewards(act) => rewards_act = Some(act),
-                    FooterAct::UndoPlanLine => self.plan_line_undo_pressed(),
+                    FooterAct::UndoPlanLine => {
+                        if let Some(ticket) = press.ticket {
+                            self.undo_plan_line(ticket);
+                        }
+                    }
                     FooterAct::File(act) => file_act(book, act, press.ticket),
                 },
                 _ => self.session_press(press, book, plan),
@@ -5911,7 +6028,7 @@ mod tests {
             .apply(a, Apply::Now, |words| Some(format!("{words}More.\n")))
             .unwrap();
         assert!(sessions.planned_live());
-        assert_eq!(sessions.undo_plan_line(), None);
+        assert_eq!(sessions.try_plan_undo(), None);
         b_file(0);
         assert!(sessions.draft.as_ref().unwrap().body.ends_with("More.\n"));
         assert!(sessions.scenes.added.is_some());
@@ -5967,10 +6084,9 @@ mod tests {
         b_file(1);
         assert_eq!(
             sessions
-                .travel
-                .planned
-                .as_ref()
-                .map(|planned| planned.chosen.name.as_str()),
+                .planned()
+                .map(|planned| planned.chosen.name.clone())
+                .as_deref(),
             Some("Bridge Ambush"),
             "the earlier Undo stays"
         );
@@ -5978,22 +6094,30 @@ mod tests {
         let changed = b_file(1).replace("[[Shrine of Cinders]]", "[[Shrine of Cinders]] (moved)");
         fs::write(&b_note.path, changed).unwrap();
         sessions.last_check = Some(Instant::now());
-        let (from, act, words) = sessions.undo_plan_line().expect("the Undo fails");
-        assert_eq!(from, road);
-        assert!(words.starts_with("Plan line not removed. "), "{words}");
-        // Review 3, point 4: Timeline's footer keeps the fault while its journey stands.
-        let fault = checks::UndoFault {
-            journey: from.clone(),
-            act: act.clone(),
-            words: words.clone(),
-        };
-        assert_eq!(fault.standing(&book.events), Some(words.as_str()));
-        assert_eq!(fault.standing(&[]), None, "the fault ends with its journey");
-        assert_eq!(act, checks::Act::Plan(chosen("Bridge Ambush")));
-        let mut block = checks::State::default();
+        let words = sessions.try_plan_undo().expect("the Undo is refused");
+        assert_eq!(
+            words,
+            "The plan line for Bridge Ambush was not removed from Session 1: Road. The session \
+             note changed on disk. Open that session’s notes and remove the plan line there."
+        );
+        // Review 3, point 4: the answer stays while its journey stands, also after the change
+        // that caused it is seen; it ends with its journey.
+        sessions.last_check = Some(Instant::now());
+        sessions.follow_plan_line();
+        sessions.end_plan_line_refusal(Some(&book.events));
+        assert_eq!(
+            sessions.plan_line_refusal().as_deref(),
+            Some(words.as_str())
+        );
+        sessions.end_plan_line_refusal(Some(&[]));
+        assert_eq!(
+            sessions.plan_line_refusal(),
+            None,
+            "it ends with its journey"
+        );
         assert!(
-            !block.failed_for(&road, &act, "x".into()),
-            "a block of another journey keeps no fault"
+            !sessions.planned_live(),
+            "with it, the result whose Undo waits"
         );
         // Review 3, point 3: a folder that cannot take a replacement file. A failed save leaves
         // the offer at Plan; a failed Undo leaves it at In the plan.
@@ -6025,7 +6149,7 @@ mod tests {
             .plan_from_timeline(&book, &road, &chosen("Shrine of Cinders"), &names)
             .unwrap();
         read_only(true);
-        let failed = sessions.undo_plan_line();
+        let failed = sessions.try_plan_undo();
         read_only(false);
         assert!(failed.is_some());
         b_file(1);
@@ -6044,27 +6168,21 @@ mod tests {
             .unwrap();
         assert_ne!(sessions.open_event.as_deref(), Some(road.as_str()));
         read_only(true);
-        sessions.plan_line_undo_pressed();
+        let said = sessions.try_plan_undo();
         read_only(false);
-        let said = sessions.plan_line_fault(&book);
         assert!(
             said.as_deref()
-                .is_some_and(|words| words.starts_with("Plan line not removed. ")),
+                .is_some_and(|words| words.starts_with("The plan line for Shrine of Cinders ")),
             "{said:?}"
         );
-        let mut without = Book::default();
-        without.events = book
+        let without: Vec<_> = book
             .events
             .iter()
             .filter(|event| event.id != road)
             .cloned()
             .collect();
-        assert_eq!(sessions.plan_line_fault(&without), None, "J left");
-        assert_eq!(
-            sessions.plan_line_fault(&book),
-            None,
-            "the fault ended with J"
-        );
+        sessions.end_plan_line_refusal(Some(&without));
+        assert_eq!(sessions.plan_line_refusal(), None, "J left");
         // Review 3, point 2: B open with unsaved words, its file renamed outside; the scan
         // finds the new file. The act is refused, and nothing writes either file.
         fs::write(&b_note.path, &text).unwrap();
@@ -6110,7 +6228,7 @@ mod tests {
         b_file(0);
         sessions.select(Some(a));
         b_file(1);
-        assert_eq!(sessions.undo_plan_line(), None);
+        assert_eq!(sessions.try_plan_undo(), None);
         b_file(0);
         // Final review point 2: planned for the journey in B while A is open. Wherever the
         // journey goes, A's plan shows neither B's result nor its Undo; B's keeps them, and B's
@@ -6129,7 +6247,7 @@ mod tests {
             assert!(sessions.plan_line_shown_in(Some(b)));
         }
         assert_eq!(checks(), before, "the result's validity is cached");
-        sessions.travel.planned = None;
+        sessions.travel.planned = design::Results::new();
         // The open session is the journey's: the act goes through its draft, as on the plan.
         fs::write(&b_note.path, &text).unwrap();
         sessions.select(Some(b));
@@ -6160,7 +6278,7 @@ mod tests {
             );
         };
         frame(&mut sessions);
-        assert!(sessions.travel.planned.is_some());
+        assert!(!sessions.travel.planned.is_empty());
         let restored = sessions.draft.as_ref().unwrap().body.clone();
         for words in [format!("{restored}x"), restored.clone()] {
             let draft = sessions.draft.as_mut().unwrap();
@@ -6177,7 +6295,7 @@ mod tests {
         );
         // Timeline's footer (`plan_line_result`) shows the result only while this holds.
         assert!(!sessions.planned_live(), "Timeline offers no result");
-        assert_eq!(sessions.undo_plan_line(), None, "no Undo");
+        assert_eq!(sessions.try_plan_undo(), None, "no Undo");
         b_file(1);
         // Review 3, point 1: another campaign ends the result, and its Undo reaches no note.
         // A live result first (the edit cycle above ended the last one).
@@ -6189,11 +6307,11 @@ mod tests {
         assert!(sessions.planned_live(), "a live result before the change");
         sessions.campaign = Some(campaign("Other"));
         assert!(!sessions.planned_live(), "another campaign ends it");
-        assert_eq!(sessions.undo_plan_line(), None);
+        assert_eq!(sessions.try_plan_undo(), None);
         b_file(1);
         // So does the session's note leaving the folder.
         sessions.campaign = Some(campaign("Marches"));
-        sessions.travel.planned = None;
+        sessions.travel.planned = design::Results::new();
         sessions.select(Some(a));
         fs::write(&b_note.path, &text).unwrap();
         sessions
@@ -6202,7 +6320,7 @@ mod tests {
         assert!(sessions.planned_live());
         sessions.notes.retain(|note| note.id != b);
         assert!(!sessions.planned_live());
-        assert_eq!(sessions.undo_plan_line(), None);
+        assert_eq!(sessions.try_plan_undo(), None);
         b_file(1);
         // Final review point 3: the campaign-change event itself ends the result: A, then B,
         // then A again, with no read of the result between.
@@ -6218,7 +6336,7 @@ mod tests {
         sessions.notes = vec![a_note.clone(), b_note.clone()];
         sessions.last_check = Some(Instant::now());
         assert!(!sessions.planned_live(), "the result ended at the change");
-        assert_eq!(sessions.undo_plan_line(), None);
+        assert_eq!(sessions.try_plan_undo(), None);
         b_file(1);
     }
 
