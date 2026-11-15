@@ -4385,7 +4385,15 @@ impl Reader {
         let change_width = change
             .as_ref()
             .map_or(0.0, |change| change.natural_width(ui));
-        let width = width.min((ui.available_width() - change_width - design::L).max(design::XXL));
+        // The label column stands before the value when the row is not stacked, so it comes off
+        // the value's room too; else Change runs past the pane's edge in a middle width.
+        let label_column = if stacked {
+            0.0
+        } else {
+            design::XXL * 3.0 + design::S + ui.spacing().item_spacing.x
+        };
+        let width = width
+            .min((ui.available_width() - label_column - change_width - design::L).max(design::XXL));
         if stacked {
             // An `S` gap above each stacked label keeps each label with its own value.
             design::gap(ui, design::Gap::S);

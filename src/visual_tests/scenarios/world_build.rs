@@ -9755,9 +9755,13 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
     };
     for size in [SMALL, DEFAULT, LARGE] {
         let form = d.at_size(size, value_form);
+        // Narrow (960): the two-line form. Wider, Lookup's row has room for one line, as World's
+        // wide reader has; either way Change is whole and level with the name's line.
         let stacked = form.is_some_and(|(name, below, change, whole)| {
-            (below.top() - name.bottom()).abs() <= 1.0
-                && (below.left() - name.left()).abs() <= 1.0
+            let one_line = name == below;
+            let two_lines = (below.top() - name.bottom()).abs() <= 1.0
+                && (below.left() - name.left()).abs() <= 1.0;
+            (two_lines || (one_line && size != SMALL))
                 && whole
                 && change.top() <= name.center().y
                 && name.center().y <= change.bottom()
@@ -9889,7 +9893,16 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
                 ));
             }
             detail.push(format!("Not found texts {not_found:?}"));
-            let change = d.place_of("Change Stat block");
+            // World's Change Stat block: Lookup, to the right, has its own of the same name.
+            let change = {
+                let lookup = d
+                    .place_of(SEARCH_LOOKUP)
+                    .map_or(f32::INFINITY, |field| field.left());
+                d.nodes()
+                    .into_iter()
+                    .find(|node| node.name == "Change Stat block" && node.rect.right() < lookup)
+                    .map(|node| node.rect)
+            };
             // Round 25 AA2: Change lines up with the name's line, not between the name and
             // `Not found`. The name line is the one-galley value, or the name alone above
             // `Not found` (stacked), each one row; Lookup's copy is right of the pane.
@@ -9903,7 +9916,15 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
                     .chain(painted(&format!("{} {name}", design::icons::WARN)))
                     .find(|(rows, _)| *rows == 1)
                     .map(|(_, rect)| rect.center().y);
-                let target = d.place_of(label).map(|rect| rect.center().y);
+                // World's Change: Lookup, to the right, has its own of the same name.
+                let lookup = d
+                    .place_of(SEARCH_LOOKUP)
+                    .map_or(f32::INFINITY, |field| field.left());
+                let target = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name == label && node.rect.right() < lookup)
+                    .map(|node| node.rect.center().y);
                 level.push((name, line, target));
             }
             let level = (
