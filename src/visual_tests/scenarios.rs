@@ -15746,8 +15746,8 @@ pub mod session_recording {
         let a_shown = d.has_containing(SAVED);
         d.app_mut().sessions.open(first);
         d.settle();
-        d.click("Record this session");
-        d.click("Start recording");
+        // Session 1's Recordings tab: its newest stopped row offers the start.
+        d.click("Record again");
         d.expect("Stop recording");
         d.click("Stop recording");
         d.settle();
@@ -15765,8 +15765,7 @@ pub mod session_recording {
         d.app_mut().sessions.open(first);
         d.settle();
         let b_stays = d.has_containing(SAVED);
-        d.click("Record this session");
-        d.click("Start recording");
+        d.click("Record again");
         d.expect("Stop recording");
         let b_ended = !d.has_containing(SAVED);
         d.click("Stop recording");

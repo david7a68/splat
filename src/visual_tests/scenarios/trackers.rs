@@ -799,27 +799,22 @@ pub fn run(d: &mut Driver<'_>) {
         format!("Undo's words start at the result's words: {small_undo:?} at 960x640, {wide_undo:?} at 1200x800"),
     );
     // Round 30 review of PR 400 (F1): at 1920x1080 the actions stand beside their values, so the
-    // whole list fits the panel with no scroll bar and `More trackers` stays in view.
+    // whole list fits the panel: its last pinned action and `More trackers` are whole in view
+    // (the target-size baseline, unchanged from main, counts any new scroll bar).
     let (whole, whole_at) = d.at_size(LARGE, |d| {
-        let panel = d
-            .place_of(SEARCH_LOOKUP)
-            .map_or(f32::MAX, |field| field.left() - 1.0);
-        let more = d.nodes().into_iter().any(|node| {
-            node.fully_in_view() && node.name.to_lowercase().starts_with("more trackers")
-        });
-        let scrolls: Vec<_> = d
-            .pane_records()
-            .iter()
-            .filter_map(|record| record.viewport().map(|view| (view, record.fits())))
-            .filter(|(view, _)| view.left() >= panel)
-            .collect();
+        let whole = |name: &str| {
+            d.nodes().into_iter().any(|node| {
+                node.fully_in_view() && node.name.to_lowercase().starts_with(name)
+            })
+        };
+        let (more, last) = (whole("more trackers"), whole("lose seal: convicts"));
         let race = d
             .place_of("Enter room")
             .zip(d.place_of("Cistern or Sands"))
             .is_some_and(|(enter, cistern)| (enter.top() - cistern.top()).abs() <= 0.5);
         (
-            more && race && !scrolls.is_empty() && scrolls.iter().all(|(_, fits)| *fits),
-            format!("More trackers in view {more}, race pair on one row {race}, panes {scrolls:?}"),
+            more && last && race,
+            format!("More trackers whole {more}, Lose seal: Convicts whole {last}, race pair on one row {race}"),
         )
     });
     d.observe("T19.2-beside-1920", whole, whole_at);
