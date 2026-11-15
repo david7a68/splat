@@ -333,10 +333,7 @@ fn before_the_session(a: &mut Audit<'_, '_>) {
         let mut words = Vec::new();
         d.each_painted_text(|text, _| {
             let line = text.galley.job.text.replace('\u{a0}', " ");
-            if let Some(word) = ["Above High", "Moderate", "High", "Low"]
-                .into_iter()
-                .find(|word| line.ends_with(&format!(" · {word}")))
-            {
+            if let Some(word) = plan_word(&line) {
                 words.push(word);
             }
         });
@@ -1512,4 +1509,18 @@ fn dm_audit_stale_library() {
         "STALE: after overwrite, the roster has row 9: {}",
         d.has_containing("9. ")
     );
+}
+
+/// The difficulty word a planned fight's painted summary line says: the word ends the line, or
+/// its limit follows it (`Low (up to 2,800)`, the one form of `docs/design-system.md`), which
+/// Q-s (R39) keeps before the party's size. The audit and the journeys read the plan with it.
+pub(crate) fn plan_word(line: &str) -> Option<&'static str> {
+    ["Above High", "Moderate", "High", "Low"]
+        .into_iter()
+        .find(|word| {
+            line.ends_with(&format!(" · {word}"))
+                || line
+                    .rsplit_once(&format!(" · {word} (up to "))
+                    .is_some_and(|(_, limit)| limit.ends_with(')') && !limit.contains(" · "))
+        })
 }

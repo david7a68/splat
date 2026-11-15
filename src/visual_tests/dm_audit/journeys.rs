@@ -1732,17 +1732,7 @@ fn week_between(a: &mut Audit<'_, '_>) {
         let mut words = Vec::new();
         d.each_painted_text(|text, _| {
             let line = text.galley.job.text.replace('\u{a0}', " ");
-            // The word ends the line, or its limit follows it (`Low (up to 2,800)`, the one
-            // form of `docs/design-system.md`): Q-s (R39) keeps the limit before the party.
-            if let Some(word) = ["Above High", "Moderate", "High", "Low"]
-                .into_iter()
-                .find(|word| {
-                    line.ends_with(&format!(" · {word}"))
-                        || line.rsplit_once(&format!(" · {word} (up to ")).is_some_and(
-                            |(_, limit)| limit.ends_with(')') && !limit.contains(" · "),
-                        )
-                })
-            {
+            if let Some(word) = super::plan_word(&line) {
                 words.push(word);
             }
         });
