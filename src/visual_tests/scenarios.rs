@@ -14745,7 +14745,8 @@ pub mod session_notes {
             )
         });
         d.click("Try to save again");
-        d.expect("Notes saved");
+        d.settle();
+        let retried = !d.has_containing("was not saved. The disk is full.");
         let (path, away) = d.app_mut().sessions.simulate_note_gone();
         d.settle();
         let gone = named(
@@ -14762,9 +14763,9 @@ pub mod session_notes {
         });
         d.observe(
             "round-30-note-warnings-elsewhere",
-            failed.0 && failed_wide.0 && gone.0 && gone_wide.0,
+            failed.0 && failed_wide.0 && retried && gone.0 && gone_wide.0,
             format!(
-                "960x640: {}; {}. 1200x800: {}; {}",
+                "960x640: {}; {}. 1200x800: {}; {}. The retry ends the failure: {retried}",
                 failed.1, gone.1, failed_wide.1, gone_wide.1
             ),
         );
