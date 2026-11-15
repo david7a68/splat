@@ -190,6 +190,13 @@ impl RosterFault {
     }
 }
 
+/// Save's checks of an encounter's changed groups as one ranked diagnosis, with the origin of
+/// the first group that only lacks a part (`owned_groups_found`).
+type OwnedGroupsFound = (
+    design::save_row::Diagnosis<'static>,
+    Option<design::save_row::DraftOrigin>,
+);
+
 /// N1: Save's checks of an encounter's changed groups, ranked: the first refused change outranks
 /// the first missing part, whose group's origin comes with it (R37).
 fn owned_groups_found(
@@ -3001,11 +3008,7 @@ pub struct Encounters {
     /// N1: Save's checks of the open encounter's changed groups, as one ranked diagnosis with
     /// the origin of the first group that only lacks a part. Keyed by the snapshot revision and
     /// the changed groups' own revisions, so an unchanged frame does not check them again.
-    owned_group_check: Option<(
-        (Uuid, Vec<u64>),
-        design::save_row::Diagnosis<'static>,
-        Option<design::save_row::DraftOrigin>,
-    )>,
+    owned_group_check: Option<((Uuid, Vec<u64>), OwnedGroupsFound)>,
     /// The open draft's difficulty, with the snapshot revision, edit epoch and draft it was
     /// worked out for.
     difficulty: Option<((Uuid, u64, Uuid), Arc<crate::difficulty::Difficulty>)>,
@@ -3303,13 +3306,13 @@ impl Encounters {
                 .map(GroupDraft::revision)
                 .collect::<Vec<_>>(),
         );
-        if let Some((cached, found, origin)) = &self.owned_group_check
+        if let Some((cached, (found, origin))) = &self.owned_group_check
             && *cached == key
         {
             return (found.clone(), *origin);
         }
         let (found, origin) = owned_groups_found(&draft.groups, snapshot, draft.id);
-        self.owned_group_check = Some((key, found.clone(), origin));
+        self.owned_group_check = Some((key, (found.clone(), origin)));
         (found, origin)
     }
     /// Whether the shown message is the last failed check of the draft.
