@@ -5938,7 +5938,7 @@ pub mod settings {
             assert_eq!(d.field_text("Campaign name").as_deref(), Some("Salt Road"));
             // G137 (FE6): before any scroll, the form shows whole (R30) and the kept line names
             // the folder Splat proposes, whole.
-            let preview = "Will add …/Salt Road";
+            let preview = "Will create …/Salt Road";
             let nodes = d.nodes();
             let in_view = |name: &str| {
                 nodes
@@ -5948,7 +5948,7 @@ pub mod settings {
             d.observe(
                 "iter-29-C-G137",
                 d.visible_text(preview) && in_view(preview) && in_view("Cancel"),
-                "`Will add …/Salt Road` whole and in view with Cancel, before any scroll",
+                "`Will create …/Salt Road` whole and in view with Cancel, before any scroll",
             );
             for _ in 0..4 {
                 let nodes = d.nodes();
@@ -11182,7 +11182,7 @@ pub mod signed_in {
         // G138 (AO2, FO7): the kept line names the folder Splat proposes, whole, at every size.
         d.state_prepared("import-remote-campaign", Sizes::All, |d| {
             // No test scroll: the form shows whole when it opens (R30).
-            let preview = format!("Will add …/{REMOTE_NAME}");
+            let preview = format!("Will create …/{REMOTE_NAME}");
             let shown = d.visible_text(&preview)
                 && d.nodes()
                     .iter()
