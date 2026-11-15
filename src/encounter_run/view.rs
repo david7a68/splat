@@ -2382,7 +2382,13 @@ impl Run {
             if custom.is_empty() {
                 design::gap(ui, design::Gap::S);
             }
-            let width = (ui.available_width() - 80.0).max(100.0);
+            // The field ends where its Add starts, and Add at the form's edge: measured, as the
+            // Encounters change form measures it (`groups::other_effect_width`), so the field's
+            // words keep the room the column gives (the column keeps its bar's lane).
+            let width = (ui.available_width()
+                - ui.spacing().item_spacing.x
+                - other_effect_add().natural_width(ui))
+            .max(100.0);
             if let Some(at) =
                 other_effects_list(ui, custom.iter().map(|(_, words)| words.as_str()), width)
             {
