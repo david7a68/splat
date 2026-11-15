@@ -922,13 +922,13 @@ mod tests {
         h.state_mut().focus_open = false;
         wheel(&mut h, 2000.0);
         h.run_steps(6);
-        let away = top(&h, "Target top");
         let open = h.get_by_label("Open").rect();
         let id = h.state().saved.as_ref().expect("a saved Response").id;
         for disabled in [false, true] {
             h.state_mut().disabled = disabled;
             h.state_mut().open_down = if disabled { 0.0 } else { 120.0 };
             h.step();
+            let away = top(&h, "Target top");
             h.state_mut().replay = true;
             let event = if disabled {
                 access_click(id)
@@ -941,7 +941,7 @@ mod tests {
             );
             h.run_steps(8);
             assert!(
-                h.state().reveal.ended() == Some(End::ByTheDm)
+                h.state().reveal.ended() == Some(End::Whole)
                     && away > HEIGHT
                     && (top(&h, "Target top") - away).abs() < 0.5,
                 "a saved Response made an act (disabled: {disabled}): {:?}, {away} then {}",
