@@ -22,6 +22,8 @@
   ],
   "column-resize": [
     ["G3/far-action","13-session-events-fill-their-column","1920x1080","Button \"Add to notes: Major event\"",1],
+    ["G3/far-action","17-session-list-hidden","1920x1080","Button \"Add to notes: Major event\"",1],
+    ["G3/far-action","18-session-note-widened","1920x1080","Button \"Add to notes: Major event\"",1],
     ["N4/quiet-action-line-start","09-roster-follows-add-panel","1200x800","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","09-roster-follows-add-panel","1920x1080","Button \"Filter creatures\"",1],
     ["N4/quiet-action-line-start","09-roster-follows-add-panel","960x640","Button \"Filter creatures\"",1]

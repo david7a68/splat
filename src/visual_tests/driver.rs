@@ -54,6 +54,8 @@ pub enum Sizes {
     StandardAndHiDpi,
     /// Only the minimum size, for a change specific to the narrow layout.
     Small,
+    /// Only the large size, for a change only a wide window has room for.
+    Large,
     /// The same two sizes, plus the default size at twice the pixel density.
     DefaultAndHiDpi,
     /// The minimum, default and large sizes.
@@ -66,6 +68,7 @@ impl Sizes {
     fn plan(self) -> &'static [((f32, f32), f32)] {
         match self {
             Self::Small => &[(SMALL, 1.0)],
+            Self::Large => &[(LARGE, 1.0)],
             Self::Default | Self::Standard => &[(SMALL, 1.0), (DEFAULT, 1.0)],
             Self::DefaultAndHiDpi | Self::StandardAndHiDpi => {
                 &[(SMALL, 1.0), (DEFAULT, 1.0), (DEFAULT, 2.0)]

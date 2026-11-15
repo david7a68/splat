@@ -70,6 +70,11 @@ past the measure, up to the pane's visible right edge, as a table in a narrow pa
 (`markdown_view::with_wide_tables`). Lookup and
 other side readers keep their tables at their own width.
 
+**Prose size.** `prose_type` gives `ProseCompact` in a column narrower than `READER_MEASURE - 60` and `Prose`
+otherwise. In a scroll area it measures the column as it is with the scroll bar's lane, whether the bar shows
+or not: the size changes the text's length, and so whether the bar shows. If the bar chose the size, a column
+near the step would change size and bar on every frame.
+
 **The run has its own scale.** `RunScale` holds a row height and type sizes, and `RunScale::fit(height, width,
 rows)` takes the largest that fits with no scrolling.
 
@@ -2011,6 +2016,16 @@ characters.
 
 The Read/Write switch sits at the right end of the note frame’s top edge at every size.
 
+The DM can hide the session list to give the session its room. In a wide page with a session open, the action at
+the page header's right end is an `icon_button_with_hint` (`SIDEBAR_SIMPLE`) named `Hide the session list` or
+`Show the session list`; its hover adds `Ctrl+\`, which does the same on the notes view. The header's actions
+that come and go are to its left, so they never move it, and it is one size in both states. The
+choice is the DM's for the app, saved with the window's state, and only the toggle changes it. With the list
+hidden, the session pane starts at the page's left edge. The list still shows when no session is open (none is
+chosen, or its file went), and the narrow page keeps its own `All sessions` link. The list's dragged width
+stays for when it shows again. Nothing is only in the list: another session's recording, processing and
+failures are also in the rail and the bottom banner.
+
 ### Notes and templates
 
 Notes are Markdown in the campaign folder. Write styles source in Reader faces: large ruled headings, italic
@@ -2020,7 +2035,11 @@ comments and a mark still being typed stay in view. Store exactly what was typed
 reads the same text. Read uses the one Reader, anchored left, at no more than READER_MEASURE
 (at most 75 characters per line).
 Write keeps the same left-aligned READER_MEASURE as Read (at most 75 characters per line), inside a
-frame no wider than READER_MEASURE plus its padding, anchored left. Spare width stays outside the frame.
+frame READER_MEASURE plus its padding wide, anchored left. Spare width stays outside the frame until the DM
+widens the note: beside the plan, the note is a `design::Column` (`Resize note column`) whose edge the DM
+drags into the room beside it. The dragged width is saved with the other column widths, and Home on the handle
+restores the measure. Write and Read, in both layouts, use the one width, and the tab row's right end (Read or
+Write) follows the frame's.
 Stored line breaks stay unchanged. Events and recordings follow column width;
 book prose keeps READER_MEASURE. The gallery's Markdown sheet shows both
 views of one note. Autosave runs two seconds after editing; show muted Saving… with the busy icon during
