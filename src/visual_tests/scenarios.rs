@@ -14714,7 +14714,7 @@ pub mod session_notes {
         // Undo) is wholly in view, not clipped.
         d.click(NAV_SESSIONS);
         d.settle();
-        d.app_mut().sessions.simulate_failed_save();
+        let read_only = d.app_mut().sessions.simulate_failed_save();
         // Timeline still holds the event form the scenario opened (Rest at the mill).
         d.click(NAV_TIMELINE);
         d.expect("Rest at the mill");
@@ -14722,13 +14722,14 @@ pub mod session_notes {
             banner_whole(
                 d,
                 "round-30-note-warnings-elsewhere",
-                "was not saved. The disk is full.",
+                "was not saved.",
                 &["Try to save again", "Title"],
             );
         });
+        crate::sessions::page::Sessions::simulate_failed_save_ends(&read_only);
         d.click("Try to save again");
         d.settle();
-        let retried = !d.has_containing("was not saved. The disk is full.");
+        let retried = !d.has_containing("was not saved.");
         d.observe(
             "round-30-note-warnings-elsewhere",
             retried,

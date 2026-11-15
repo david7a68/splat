@@ -7972,10 +7972,32 @@ impl Sessions {
         draft.save();
     }
 
-    /// The open note's save fails, as a full disk would make it.
-    pub fn simulate_failed_save(&mut self) {
+    /// The open note's save fails through the real write: its folder becomes read only, the DM
+    /// has typed, and the save runs. Every retry fails too until
+    /// `simulate_failed_save_ends`. Returns the folder.
+    #[cfg(unix)]
+    pub fn simulate_failed_save(&mut self) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt;
         let draft = self.draft.as_mut().expect("an open note");
-        draft.state = DraftState::Failed("Not saved. The disk is full.".to_owned());
+        let folder = draft
+            .path
+            .parent()
+            .expect("the session folder")
+            .to_path_buf();
+        fs::set_permissions(&folder, fs::Permissions::from_mode(0o555)).expect("read only");
+        draft
+            .body
+            .push_str("\nTyped while the folder was read only.\n");
+        draft.edited();
+        draft.save();
+        folder
+    }
+
+    /// The folder of `simulate_failed_save` can be written again.
+    #[cfg(unix)]
+    pub fn simulate_failed_save_ends(folder: &Path) {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(folder, fs::Permissions::from_mode(0o755)).expect("writable");
     }
 
     /// The open note's file leaves the folder outside Splat while the DM has unsaved words,
