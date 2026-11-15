@@ -170,9 +170,11 @@ pub(super) struct GroupDraft {
 /// F4: a group's check never meets unreadable data, so a refusal is only a refused change or a
 /// missing part. `GroupDraft::open` builds a draft only from a note that reads and parses (else
 /// it gives an error and no editor opens), and the check reads the draft's typed fields, not the
-/// file. When the file stops reading later, `Encounters::group_disk_view` takes the pane before
-/// the editor draws (the comparison of `disk::Recovery`). The test
-/// `an_empty_group_or_a_missing_creature_cannot_be_saved` holds the first half.
+/// file; `an_empty_group_or_a_missing_creature_cannot_be_saved` tests the first part. Open debt,
+/// "post-open read failure of a group file": when the file is replaced by bytes that do not read
+/// AFTER it was opened, the read fails before `disk::Recovery` records a change, so the disk view
+/// does not take over. Save's write is then refused safely, the draft is kept, and the message is
+/// a generic failed save.
 mod refusal {
     use super::{RefusalPlace, design};
 
@@ -188,6 +190,9 @@ mod refusal {
         /// The save row's typed diagnosis (`design::save_row::Diagnosis`), owned, so the cached
         /// check carries it whole to `DraftState`.
         diagnosis: design::save_row::Diagnosis<'static>,
+        /// The member's row that says this fault, by the name it shows (N2): the next step
+        /// that a pane with the row out of view names.
+        row: Option<Box<str>>,
     }
 
     impl Refusal {
@@ -203,7 +208,25 @@ mod refusal {
                 diagnosis: design::save_row::Diagnosis::refused(text.clone()),
                 text,
                 place,
+                row: None,
             }
+        }
+
+        /// A change that cannot stand in one member's row, which shows it by `row`.
+        pub(in crate::encounters) fn in_row(
+            text: impl Into<String>,
+            place: RefusalPlace,
+            row: &str,
+        ) -> Self {
+            Self {
+                row: Some(row.into()),
+                ..Self::refused(text, place)
+            }
+        }
+
+        /// The name of the member's row that says this fault, if it is a row's.
+        pub(in crate::encounters) fn row(&self) -> Option<&str> {
+            self.row.as_deref()
         }
 
         /// A required part is missing (no name, no side, no creature). With the draft's origin it
@@ -217,6 +240,7 @@ mod refusal {
                 diagnosis: design::save_row::Diagnosis::incomplete(text.clone()),
                 text,
                 place,
+                row: None,
             }
         }
 
@@ -489,6 +513,7 @@ impl GroupDraft {
 
     pub(super) fn set_new_path(&mut self, path: String) {
         self.path = path;
+        self.touch();
     }
     pub(super) fn path(&self) -> &str {
         &self.path
@@ -708,9 +733,6 @@ impl GroupDraft {
         for member in &self.setup.members {
             // The row says a missing creature as a warning, a change that cannot stand as an
             // error (`FaultKind::InvalidChange`).
-            let in_place = |text: String, tone: Tone| {
-                Refusal::refused(text, RefusalPlace::Member(member.id.0, tone))
-            };
             // FA1: Save's check names a member as every view does. A draft's lines may have
             // moved since the note was read, so it names no line.
             let changed = member
@@ -728,6 +750,9 @@ impl GroupDraft {
                 (Some(changed), _) if !changed.trim().is_empty() => changed.trim().to_owned(),
                 (_, Some(base)) => base.clone(),
                 _ => missing_member_name(None, member.creature.link.as_deref()),
+            };
+            let in_place = |text: String, tone: Tone| {
+                Refusal::in_row(text, RefusalPlace::Member(member.id.0, tone), &shown)
             };
             let fault = |cause: &str| member_fault(&shown, base.as_deref(), None, cause);
             let not_in_place = |cause: &str| Refusal::refused(fault(cause), RefusalPlace::Footer);
@@ -904,6 +929,8 @@ impl GroupDraft {
                         self.source = text;
                         self.reread_lines();
                     }
+                    // N1: the comparison text decides `dirty`, which decides what Save checks.
+                    self.touch();
                 }
             } else if !self.recovery.file_gone() {
                 *self = Self::open(root, &self.path)?;
@@ -1383,6 +1410,7 @@ impl Encounters {
                         draft.source = text;
                         draft.reread_lines();
                     }
+                    draft.touch();
                     self.save_group_draft(ui.ctx(), campaign, modules);
                 }
             } else {
@@ -1444,7 +1472,12 @@ pub(super) fn of_encounter(
         ui,
         "They arrive when you add them to a run of this encounter. Save encounter saves them too.",
     );
-    design::gap(ui, design::Gap::XS);
+    // `XS` sets the first group's card apart from the help. With no group, New group follows the
+    // help as any action under its text does (B4 review F2: at 1920 the space let the 34 px back
+    // line cut the roster's last control).
+    if draft.groups.iter().any(|group| group.belongs_to(draft.id)) {
+        design::gap(ui, design::Gap::XS);
+    }
     let reveal = std::mem::take(&mut draft.reveal_group);
     let Draft {
         groups,
@@ -1486,6 +1519,8 @@ pub(super) fn of_encounter(
                                     {
                                         if super::menu_action(ui, name, None) {
                                             group.setup.encounter = Some(EntryRef::id(id));
+                                            // N1: who owns the group is checked by Save.
+                                            group.touch();
                                         }
                                     }
                                 });
@@ -1581,6 +1616,8 @@ pub(super) fn of_encounter(
             deleted_groups.push(groups.remove(index));
         } else {
             groups[index].setup.encounter = None;
+            // N1: a group for any encounter is checked against the others' names.
+            groups[index].touch();
         }
         new_results.push(super::DraftUndo::RemovedGroup {
             index,
@@ -2584,17 +2621,15 @@ impl Encounters {
             && ui
                 .ctx()
                 .input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S));
-        let (back_word, back_name) = if in_plan {
-            ("Plan", "Back to the plan")
-        } else {
-            ("Encounters", "Back to encounters")
-        };
+        // R38: the back line on a line of its own above the name row. The group's changes hold
+        // it first, then an unsaved creature.
+        let head = design::EditorHead::new(design::EditorKind::Group { in_plan }, &*self);
         let compact = ui.available_width() < 760.0;
 
         let focus_name = std::mem::take(&mut self.focus_name);
         let draft = self.group_draft.as_mut().expect("the editor has a draft");
         let column_right = ui.data(|data| data.get_temp::<f32>(column_right_id(&draft.path)));
-        let (mut back, mut save, mut discard) = (false, false, false);
+        let (mut save, mut discard) = (false, false);
         let mut name_right = f32::INFINITY;
         // AK1, AB2: the header is one block that ends where the members column ends. Save group
         // sits at that edge on the save row, above the member actions and beside the save state
@@ -2632,39 +2667,35 @@ impl Encounters {
         }
         .min_width(save_width)
         .blocked(state.save_blocked());
-        ui.horizontal(|ui| {
-            back = Action::quiet(icons::LEGACY_BACK)
-                .name(back_name)
-                .hint(back_word)
-                .blocked_if(dirty, "Save or discard this group first.")
-                .show(ui)
-                .clicked();
-            let gap = ui.spacing().item_spacing.x;
-            let room = (block_right.min(title_right - button.natural_width(ui) - gap)
-                - ui.cursor().left())
-            .min(ui.available_width());
-            let width = (room - 2.0 * design::S).max(Density::Scan.control());
-            let column = column_right.map_or(f32::INFINITY, |right| {
-                right - ui.cursor().left() - 2.0 * design::S
+        let (back, ()) = head.show(ui, |ui| {
+            ui.horizontal(|ui| {
+                let gap = ui.spacing().item_spacing.x;
+                let room = (block_right.min(title_right - button.natural_width(ui) - gap)
+                    - ui.cursor().left())
+                .min(ui.available_width());
+                let width = (room - 2.0 * design::S).max(Density::Scan.control());
+                let column = column_right.map_or(f32::INFINITY, |right| {
+                    right - ui.cursor().left() - 2.0 * design::S
+                });
+                let response = name_field(ui, draft, width.min(name_width(column)));
+                design::named(ui, &response, &format!("Group name: {}", draft.name));
+                if response.changed() {
+                    draft.touch();
+                }
+                // Belongs to ends where the name field ends.
+                name_right = response.rect.right();
+                if focus_name {
+                    design::focus_and_select(ui, response.id, &draft.name);
+                }
+                ui.allocate_ui_with_layout(
+                    egui::vec2(
+                        (title_right - ui.cursor().left()).max(0.0),
+                        Density::Scan.control(),
+                    ),
+                    egui::Layout::right_to_left(egui::Align::Center),
+                    |ui| save = button.show(ui).clicked(),
+                );
             });
-            let response = name_field(ui, draft, width.min(name_width(column)));
-            design::named(ui, &response, &format!("Group name: {}", draft.name));
-            if response.changed() {
-                draft.touch();
-            }
-            // Belongs to ends where the name field ends.
-            name_right = response.rect.right();
-            if focus_name {
-                design::focus_and_select(ui, response.id, &draft.name);
-            }
-            ui.allocate_ui_with_layout(
-                egui::vec2(
-                    (title_right - ui.cursor().left()).max(0.0),
-                    Density::Scan.control(),
-                ),
-                egui::Layout::right_to_left(egui::Align::Center),
-                |ui| save = button.show(ui).clicked(),
-            );
         });
         // The save row: the state and Discard at its start, Save group at the block's edge. A
         // reason that has no room on the row takes its own line below it. AK1, FK1: each reason
@@ -4777,7 +4808,10 @@ mod tests {
         assert!(!encounters.group_open_in_plan());
         assert!(encounters.group_draft.is_none());
 
-        assert!(encounters.open_group_in_plan(&path, &campaign));
+        assert_eq!(
+            encounters.open_group_in_plan(&path, &campaign),
+            crate::encounters::PlanOpen::Opened
+        );
         encounters.group_draft.as_mut().unwrap().name = "Cinder Pack".into();
         encounters.save_group_draft(&ctx, &campaign, &[]);
         assert_eq!(encounters.saved_for_plan, None, "it is linked already");
@@ -4804,11 +4838,20 @@ mod tests {
             encounters.save_group_draft(&ctx, &campaign, &[]);
             paths.push(format!("Encounter Groups/{name}.md"));
         }
-        assert!(encounters.open_group_in_plan(&paths[0], &campaign));
+        assert_eq!(
+            encounters.open_group_in_plan(&paths[0], &campaign),
+            crate::encounters::PlanOpen::Opened
+        );
         encounters.search = "wolf".into();
-        assert!(encounters.open_group_in_plan(&paths[0], &campaign));
+        assert_eq!(
+            encounters.open_group_in_plan(&paths[0], &campaign),
+            crate::encounters::PlanOpen::Opened
+        );
         assert_eq!(encounters.search, "wolf");
-        assert!(encounters.open_group_in_plan(&paths[1], &campaign));
+        assert_eq!(
+            encounters.open_group_in_plan(&paths[1], &campaign),
+            crate::encounters::PlanOpen::Opened
+        );
         assert!(encounters.search.is_empty());
         encounters.search = "scout".into();
         encounters.start_new_draft();
@@ -4963,11 +5006,11 @@ mod tests {
 
     #[test]
     fn an_encounter_draft_left_open_does_not_hide_a_plan_groups_undo() {
-        let mut encounters = Encounters {
-            draft: Some(Draft::new()),
-            ..Encounters::default()
-        };
+        let mut encounters = Encounters::default();
         encounters.new_group_in_plan();
+        // B4, E1: a new group is refused over an unsaved encounter, so the encounter draft is
+        // opened after the group; what is tested is the Undo with both open.
+        encounters.draft = Some(Draft::new());
         encounters.discarded_group = encounters.group_draft.take();
         assert!(encounters.group_discarded_in_plan());
         encounters.undo_group_discard_in_plan();

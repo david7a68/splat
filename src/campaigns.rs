@@ -1213,9 +1213,11 @@ impl Campaigns {
                 // another choice: it starts below, at the message words. Only Undo is quiet.
                 // Review round 26: Undo changes the registration and can change the active
                 // campaign, so it waits for what blocks a campaign change, with the reason.
-                let undo =
-                    design::outcome::UndoStep::of(design::outcome::Verb::Register, "campaign")
-                        .pressed_as(());
+                // `Undo register campaign`: one step for the drawing and for the count.
+                let step =
+                    design::outcome::UndoStep::of(design::outcome::Verb::Register, "campaign");
+                let group = design::outcome::KeptGroup::of([&step]);
+                let undo = step.pressed_as(());
                 // The page's lock comes and goes (a run, a recording, a draft): `locked_when`, so
                 // its line keeps its room while it is open and nothing below moves. Its words
                 // come from `blocked_switch` in `src/lib.rs` as app-owned `&str` (the counted
@@ -1226,7 +1228,7 @@ impl Campaigns {
                         "Save or discard your changes to change campaigns."
                     ));
                 let undo = undo.locked_when(locked.is_some(), reason);
-                if design::outcome::kept_result(ui, &added, undo, Vec::new()).is_some() {
+                if design::outcome::kept_result(ui, &group, &added, undo, Vec::new()).is_some() {
                     let mut this = me.borrow_mut();
                     if let Err(error) = this.undo_campaign_copy() {
                         this.error = Some(error);

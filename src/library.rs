@@ -2632,6 +2632,29 @@ struct ResultPress {
 }
 
 impl ReaderResults {
+    /// The Undo step of the kept result `kind`, when it has one drawn by `kept_result`: the one
+    /// place that makes it, for its drawing and for its footer's count.
+    fn undo_step(&self, kind: ResultKind) -> Option<UndoStep> {
+        match kind {
+            ResultKind::Registration => self
+                .page
+                .registration
+                .as_ref()
+                .map(|_| PACKAGE_REGISTRATION_UNDO),
+            ResultKind::Rosters => self.page.rosters.as_ref().map(|_| SOURCE_CHANGE_UNDO),
+            ResultKind::Manifest => self
+                .manifest
+                .as_ref()
+                .map(|(_, path)| UndoStep::of(Verb::Write, path.as_str())),
+            ResultKind::Identities => self
+                .identities
+                .as_ref()
+                .map(|_| UndoStep::of(Verb::Separate, "entries")),
+            ResultKind::Identity => self.identity.as_ref().map(|_| SEPARATE_ENTRY_UNDO),
+            _ => None,
+        }
+    }
+
     /// `step`'s Undo, locked while the open entry's draft (or its changed file) holds it. Each
     /// Undo says the reason under its own words, its room kept while open (R29), so the lock
     /// coming or going moves nothing below it. A reason shared by several Undos repeats: open
@@ -2750,6 +2773,18 @@ fn show_result(
     pressed: &mut ResultPress,
 ) {
     let page = &results.page;
+    // The footer's kept results, for its one short-Undo rule: the part counts their verbs.
+    let steps: Vec<UndoStep> = results
+        .items()
+        .into_iter()
+        .filter_map(|(kind, ..)| results.undo_step(kind))
+        .collect();
+    let group = design::outcome::KeptGroup::of(&steps);
+    let step = || {
+        results
+            .undo_step(kind)
+            .expect("a kept result with an Undo has its step")
+    };
     match kind {
         ResultKind::ScopeNotice => {
             if let Some(words) = &page.scope_notice {
@@ -2778,14 +2813,16 @@ fn show_result(
                 // The Undo sits on the message line, as every Undo after a message does. After
                 // an outside change it stays there, blocked, and the reason follows at the
                 // message words. The result still happened, so its words keep the text colour.
-                let undo = PACKAGE_REGISTRATION_UNDO.pressed_as(());
+                let undo = step().pressed_as(());
                 let undo = match blocked {
                     // A lock that holds for as long as the result shows: an outside change, or
                     // another campaign that chose the copy.
                     Some(reason) => undo.blocked(reason.clone()),
                     None => undo,
                 };
-                if design::outcome::kept_result(ui, line.words(), undo, Vec::new()).is_some() {
+                if design::outcome::kept_result(ui, &group, line.words(), undo, Vec::new())
+                    .is_some()
+                {
                     pressed.page.registration = Some(*owner);
                 }
                 // The other choice starts below, at the message words. Only Undo is quiet.
@@ -2806,13 +2843,15 @@ fn show_result(
             if let Some((line, blocked)) = &page.rosters
                 && let Some((.., owner)) = &page.registration
             {
-                let undo = SOURCE_CHANGE_UNDO.pressed_as(());
+                let undo = step().pressed_as(());
                 let undo = if *blocked {
                     undo.blocked(crate::content_workspace::UNDO_ENDED_REASON)
                 } else {
                     undo
                 };
-                if design::outcome::kept_result(ui, line.words(), undo, Vec::new()).is_some() {
+                if design::outcome::kept_result(ui, &group, line.words(), undo, Vec::new())
+                    .is_some()
+                {
                     pressed.page.rosters = Some(*owner);
                 }
             }
@@ -2835,24 +2874,24 @@ fn show_result(
             }
         }
         ResultKind::Manifest => {
-            if let Some((words, path)) = &results.manifest {
-                let undo = results.draft_lock(UndoStep::of(Verb::Write, path.as_str()));
+            if let Some((words, _)) = &results.manifest {
+                let undo = results.draft_lock(step());
                 pressed.manifest =
-                    design::outcome::kept_result(ui, words, undo, Vec::new()).is_some();
+                    design::outcome::kept_result(ui, &group, words, undo, Vec::new()).is_some();
             }
         }
         ResultKind::Identities => {
             if let Some(words) = &results.identities {
-                let undo = results.draft_lock(UndoStep::of(Verb::Separate, "entries"));
+                let undo = results.draft_lock(step());
                 pressed.identities =
-                    design::outcome::kept_result(ui, words, undo, Vec::new()).is_some();
+                    design::outcome::kept_result(ui, &group, words, undo, Vec::new()).is_some();
             }
         }
         ResultKind::Identity => {
             if let Some(words) = &results.identity {
-                let undo = results.draft_lock(SEPARATE_ENTRY_UNDO);
+                let undo = results.draft_lock(step());
                 pressed.identity =
-                    design::outcome::kept_result(ui, words, undo, Vec::new()).is_some();
+                    design::outcome::kept_result(ui, &group, words, undo, Vec::new()).is_some();
             }
         }
         ResultKind::Discarded => {

@@ -658,6 +658,26 @@ impl UndoStep {
         label
     }
 
+    /// The form while no other kept result of its verb stands in its footer: `Undo tick`, with
+    /// no object and no part that tells steps apart, as nothing needs telling apart. Its
+    /// accessible name stays `label`. An act's step (`Undo: Take seal`) has no such form.
+    pub fn alone(&self) -> String {
+        match &self.step {
+            Step::Verb(verb, Some(_)) => format!("Undo {}", verb.word()),
+            _ => self.label(),
+        }
+    }
+
+    /// The verb a footer counts for `alone`: every verb's step, with or without an object, so
+    /// `Undo add scene` beside `Undo add` keeps its object.
+    fn counted(&self) -> Option<Verb> {
+        match &self.step {
+            Step::Verb(verb, _) => Some(*verb),
+            // The app's fixed words are whole in every footer: no short form to count.
+            Step::Act(_) | Step::Words(_) => None,
+        }
+    }
+
     /// The short form: `Undo discard`, `Undo remove`, `Undo:`, with the part that tells two
     /// steps apart.
     pub fn short(&self) -> String {
@@ -1909,18 +1929,44 @@ impl<A> From<Said<A>> for KeptOutcome<A> {
 /// (`library::tests::m2_legacy_reason_paths_are_counted`).
 pub fn kept_result<A>(
     ui: &mut Ui,
+    group: &KeptGroup,
     words: &str,
     undo: Undo<A>,
     choices: Vec<Choice<A>>,
 ) -> Option<A> {
-    let typed = Typed::new(
+    let mut typed = Typed::new(
         Tone::Success,
         Sentence(Cow::Owned(words.to_owned())),
         Some(undo),
         choices,
     );
+    // The footer's one short-Undo rule (`undo_alone`), counted by the part over the group.
+    let counted = typed.body.undo.as_ref().and_then(UndoStep::counted);
+    debug_assert!(
+        counted.is_none_or(|verb| group.verbs.contains(&verb)),
+        "a kept result's Undo is one of its footer's group"
+    );
+    typed.body.undo_alone = undo_alone(&group.verbs, typed.body.undo.as_ref());
     let pressed = typed.body.draw(ui, MessagePlace::Footer);
     typed.id(pressed?)
+}
+
+/// The kept results that one legacy footer shows in this pass, for the footer's one short-Undo
+/// rule: the part counts their Undos' verbs, and a lone Undo of its verb paints its short form
+/// (`Undo write`) while two of one verb paint their whole words; the accessible name is always
+/// whole. Made from every step that footer draws (`of`), in the pass that draws them; it holds
+/// no app state and ends with that pass.
+pub struct KeptGroup {
+    verbs: Vec<Verb>,
+}
+
+impl KeptGroup {
+    /// The group of `steps`: each kept result's Undo that the footer shows now.
+    pub fn of<'s>(steps: impl IntoIterator<Item = &'s UndoStep>) -> Self {
+        Self {
+            verbs: steps.into_iter().filter_map(UndoStep::counted).collect(),
+        }
+    }
 }
 
 /// A message as drawn: tone, words, Undo and choices, each with its lock. Owned: it holds no
@@ -1936,6 +1982,17 @@ struct Body {
     hovers: Vec<Option<String>>,
     /// The file it is about, on a line under the words (`FileLine`).
     file: Option<FileLine>,
+    /// No other kept result of its Undo's verb stands in its footer (`undo_alone`): the Undo
+    /// paints `UndoStep::alone`.
+    undo_alone: bool,
+}
+
+/// Whether `undo` is the only kept Undo of its verb among a footer's kept Undos (`kept`): the
+/// one rule for every footer and row of messages, so a lone `Undo tick` does not repeat its
+/// result's object, and two ticks keep the words that tell them apart.
+fn undo_alone(kept: &[Verb], undo: Option<&UndoStep>) -> bool {
+    undo.and_then(UndoStep::counted)
+        .is_some_and(|verb| kept.iter().filter(|&&kind| kind == verb).count() == 1)
 }
 
 /// A body and the caller's ids of its Undo and of each choice, by index.
@@ -1975,6 +2032,7 @@ impl<A> Typed<A> {
                 locks,
                 hovers,
                 file: None,
+                undo_alone: false,
             },
             undo: undo_id,
             choices: ids,
@@ -2280,6 +2338,8 @@ pub struct Messages<'f, A: 'static> {
     frame: std::marker::PhantomData<&'f PaneFrame>,
     /// Whether this frame's footer has its one `answer` (ruling Q-x).
     answered: bool,
+    /// The verbs of this footer's kept Undos, for `undo_alone`.
+    kept_verbs: std::rc::Rc<std::cell::RefCell<Vec<Verb>>>,
 }
 
 impl<'f, A: 'static> Messages<'f, A> {
@@ -2292,6 +2352,7 @@ impl<'f, A: 'static> Messages<'f, A> {
             sink: PressSink(std::rc::Rc::default()),
             frame: std::marker::PhantomData,
             answered: false,
+            kept_verbs: std::rc::Rc::default(),
         }
     }
 
@@ -2299,7 +2360,10 @@ impl<'f, A: 'static> Messages<'f, A> {
     /// the kept entry's ticket. A kept line's controls are scoped by its ticket.
     fn draw(&self, typed: Typed<A>, ticket: Option<Ticket>) -> impl FnOnce(&mut Ui) + 'static {
         let sink = PressSink(self.sink.0.clone());
+        let kept_verbs = self.kept_verbs.clone();
         move |ui| {
+            let mut typed = typed;
+            typed.body.undo_alone = undo_alone(&kept_verbs.borrow(), typed.body.undo.as_ref());
             let pressed = match &ticket {
                 // A global id from the ticket: egui's child ids count the children before them,
                 // so a line added above would hand this line's focus and press to another.
@@ -2358,6 +2422,9 @@ impl<'f, A: 'static> Messages<'f, A> {
 
     fn kept_at(&mut self, ticket: Ticket, typed: Typed<A>) -> &mut Self {
         let has_undo = typed.body.undo.is_some();
+        self.kept_verbs
+            .borrow_mut()
+            .extend(typed.body.undo.as_ref().and_then(UndoStep::counted));
         let words = Cow::Owned(typed.body.words.as_str().to_owned());
         let order = ticket.order();
         let draw = self.draw(typed, Some(ticket));
@@ -2477,7 +2544,14 @@ impl<'f, A: 'static> RowMessages<'f, A> {
         self.items
             .sort_by_key(|(rank, order, ..)| (*rank, order.map(std::cmp::Reverse)));
         let mut first = None;
-        for (_, _, typed, ticket) in self.items {
+        let kept: Vec<Verb> = self
+            .items
+            .iter()
+            .filter(|(.., ticket)| ticket.is_some())
+            .filter_map(|(_, _, typed, _)| typed.body.undo.as_ref().and_then(UndoStep::counted))
+            .collect();
+        for (_, _, mut typed, ticket) in self.items {
+            typed.body.undo_alone = undo_alone(&kept, typed.body.undo.as_ref());
             let pressed = match &ticket {
                 // A kept line's ids come from its ticket, as in a footer.
                 Some(ticket) => {
@@ -2859,6 +2933,9 @@ impl Body {
 
     /// Undo's label for the room after the message's icon.
     fn undo_words(&self, ui: &Ui, step: &UndoStep) -> String {
+        if self.undo_alone {
+            return step.alone();
+        }
         let label = step.label();
         let action = Action::quiet(&label)
             .icon(icons::UNDO)
@@ -4005,9 +4082,12 @@ mod tests {
                 .collect();
             (node.accesskit_node().id(), shown)
         };
+        // Two Undos of one verb (round 30: a lone one paints `Undo discard`, below), so the
+        // footer must tell them apart.
         let discard = || {
             let mut app = two();
             app.older_line = OlderLine::Discard("Bridge Ambush");
+            app.same_verb = true;
             app
         };
         let mut narrow = discard();
@@ -4025,10 +4105,46 @@ mod tests {
             ["Undo discard of Bridge Ambush"],
             "wide: the whole form"
         );
+        // Two Undos of one verb with different objects: each paints its whole form, so the
+        // short form never hides the only difference between two visible Undos (a fight
+        // planned from two sessions, lane B1).
+        let (_, other) = visible(&h, "Undo discard of Shrine of Cinders");
+        assert_eq!(
+            other,
+            ["Undo discard of Shrine of Cinders"],
+            "two of one verb: the other paints its whole form too"
+        );
+        // Round 30 FE11: the only Undo of its verb in its footer paints `Undo discard`, as its
+        // result names the object; its accessible name stays whole.
+        let mut lone = two();
+        lone.older_line = OlderLine::Discard("Bridge Ambush");
+        let h = harness_sized(lone, 960.0);
+        let (_, shown) = visible(&h, "Undo discard of Bridge Ambush");
+        assert_eq!(
+            shown,
+            ["Undo discard"],
+            "lone: the short form, the whole name"
+        );
+        // Round 30 final review F2: one verb with and without an object in one footer. The
+        // step with an object is not alone, so it keeps its object beside the other.
+        let mut mixed = two();
+        mixed.older_line = OlderLine::MixedAdd;
+        let h = harness_sized(mixed, 960.0);
+        let (_, scene) = visible(&h, "Undo add scene");
+        let (_, bare) = visible(&h, "Undo add");
+        assert_eq!(
+            (scene, bare),
+            (
+                vec!["Undo add scene".to_owned()],
+                vec!["Undo add".to_owned()]
+            ),
+            "mixed: Undo add scene beside Undo add"
+        );
         // A long object with no joining word: cut by whole words in the visible words only.
         let long = "Bridge Ambush at the Ravenholm Ironside Crossing";
         let mut narrow = two();
         narrow.older_line = OlderLine::Remove(long);
+        narrow.same_verb = true;
         narrow.narrow = Some(320.0);
         let h = harness_sized(narrow, 960.0);
         let name = format!("Undo remove {long}");
@@ -4488,6 +4604,9 @@ mod tests {
             Discard(&'static str),
             /// `Removed <name>.` with `Undo remove <name>`.
             Remove(&'static str),
+            /// `Day 2 added.` with `Undo add` (no object), and on the newer line `Scene added.`
+            /// with `Undo add scene`: one verb, with and without an object (the Session plan).
+            MixedAdd,
         }
         /// Settings' page lock (a round 26 review repair): long enough to wrap in a narrow pane.
         pub(super) const LOCK: Sentence =
@@ -4508,6 +4627,9 @@ mod tests {
             pub narrow: Option<f32>,
             /// What the older line says.
             pub older_line: OlderLine,
+            /// The newer line has the older line's verb too (about Shrine of Cinders), so two
+            /// Undos of one verb stand in the footer.
+            pub same_verb: bool,
             /// The older line has a choice whose words hold two objects from data (M3).
             pub moves: Option<[&'static str; 2]>,
             /// It also has a red choice with data, given before `Move` (the part puts it after).
@@ -4551,6 +4673,7 @@ mod tests {
             let live = app.run_live;
             let older_undo_open = app.older_undo_open;
             let older_line = app.older_line;
+            let same_verb = app.same_verb;
             let frame = PaneFrame::new(ui);
             let mut messages = Messages::new(&frame, ("pilot", pane), ui.available_width());
             for owner in ["older", "newer", "third"] {
@@ -4560,6 +4683,26 @@ mod tests {
                     let deletes = app.deletes;
                     let line = shown.outcome(&frame, |saved| {
                         match (owner, older_line) {
+                            ("newer", OlderLine::Discard(_)) if same_verb => {
+                                return KeptOutcome::Notice(
+                                    Notice::new(crate::sentence!(
+                                        "Shrine of Cinders draft discarded."
+                                    )),
+                                    UndoStep::of(Verb::Discard, "Shrine of Cinders")
+                                        .pressed_as(Act::Undo),
+                                );
+                            }
+                            ("newer", OlderLine::Remove(_)) if same_verb => {
+                                return Done::new(Verb::Remove, "Shrine of Cinders")
+                                    .undo(Act::Undo)
+                                    .into();
+                            }
+                            ("newer", OlderLine::MixedAdd) => {
+                                return KeptOutcome::Notice(
+                                    Notice::new(crate::sentence!("Scene added.")),
+                                    UndoStep::of(Verb::Add, "scene").pressed_as(Act::Undo),
+                                );
+                            }
                             (_, OlderLine::Said) | ("newer" | "third", _) => {}
                             ("older", OlderLine::Discard(name)) => {
                                 return KeptOutcome::Notice(
@@ -4569,6 +4712,12 @@ mod tests {
                             }
                             (_, OlderLine::Remove(name)) => {
                                 return Done::new(Verb::Remove, name).undo(Act::Undo).into();
+                            }
+                            ("older", OlderLine::MixedAdd) => {
+                                return KeptOutcome::Notice(
+                                    Notice::new(crate::sentence!("Day 2 added.")),
+                                    UndoStep::verb(Verb::Add).pressed_as(Act::Undo),
+                                );
                             }
                             _ => {}
                         }
@@ -5101,14 +5250,14 @@ mod tests {
                             let undo = UndoStep::act(step)
                                 .pressed_as(())
                                 .locked_when(*locked, DRAFT);
-                            let _ = kept_result(ui, words, undo, Vec::new());
+                            let _ = kept_result(ui, &KeptGroup::of([]), words, undo, Vec::new());
                         }
                         let _ = ui.button(format!("After {pane}"));
                     });
                 }
                 for words in ["Third change.", "Fourth change."] {
                     let undo = UndoStep::act(words).pressed_as(()).blocked(ENDED);
-                    let _ = kept_result(ui, words, undo, Vec::new());
+                    let _ = kept_result(ui, &KeptGroup::of([]), words, undo, Vec::new());
                 }
             },
             false,
@@ -5143,6 +5292,59 @@ mod tests {
             open,
             "a lock that goes moves no control after its results"
         );
+    }
+
+    /// The join with PR 402: a kept result drawn by the adapter follows the footer's one
+    /// short-Undo rule. A lone `Undo write …` paints `Undo write`; two writes paint their whole
+    /// words; a fixed-word step stays whole either way; every accessible name is whole.
+    #[test]
+    fn a_kept_result_follows_the_footer_short_undo_rule() {
+        const FIXED: UndoStep = UndoStep::words("Undo package registration");
+        for writes in [1, 2] {
+            let ctx = egui::Context::default();
+            crate::design::theme::install(&ctx);
+            let mut painted = Vec::new();
+            for _ in 0..3 {
+                let output = ctx.run(egui::RawInput::default(), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let steps: Vec<UndoStep> = (0..writes)
+                            .map(|at| UndoStep::of(Verb::Write, format!("File {at}.md")))
+                            .chain([FIXED])
+                            .collect();
+                        let group = KeptGroup::of(&steps);
+                        for (at, step) in steps.into_iter().enumerate() {
+                            let words = format!("Change {at}.");
+                            let _ =
+                                kept_result(ui, &group, &words, step.pressed_as(()), Vec::new());
+                        }
+                    });
+                });
+                painted = output
+                    .shapes
+                    .into_iter()
+                    .filter_map(|shape| match shape.shape {
+                        egui::Shape::Text(text) => Some(text.galley.job.text.clone()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+            }
+            let has = |words: &str| painted.iter().any(|text| text.as_str() == words);
+            if writes == 1 {
+                assert!(
+                    has("Undo write") && !has("Undo write File 0.md"),
+                    "{painted:?}"
+                );
+            } else {
+                assert!(
+                    has("Undo write File 0.md") && has("Undo write File 1.md"),
+                    "{painted:?}"
+                );
+            }
+            assert!(
+                has("Undo package registration"),
+                "fixed words stay whole: {painted:?}"
+            );
+        }
     }
 
     /// At 960 in a narrow pane the lock's reason wraps at whole words under the message words;

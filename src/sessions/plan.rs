@@ -3657,6 +3657,14 @@ impl Sessions {
                     .cloned()
             })
             .collect();
+        // B4b N2: a refusal ends when its group is no longer among this plan's groups (removed,
+        // renamed away, or its file now holds another group), read here with the groups.
+        if let Some((refused_in, id)) = self.plan_group_refused
+            && refused_in == session
+            && !planned_groups.iter().any(|group| group.id == id)
+        {
+            self.plan_group_refused = None;
+        }
         // Round 28 FD3: the heading counts the rows it stands above, as every group heading does:
         // the events, the planned fights and groups, and every scene, done or not.
         let heading = design::group_heading_text(
@@ -4190,8 +4198,23 @@ impl Sessions {
                                 self.wants_group = Some(group.path.clone()); self.group_session = self.selected;
                             }
                         });
+                        // B4 review F1: an unsaved draft refuses the open (the same value as the
+                        // owner's guard reads); the press paints why under this line and leaves
+                        // the draft's host where it is.
+                        if read_group {
+                            if plan.group_blocked.is_some() {
+                                self.plan_group_refused = Some((self.selected, group.id));
+                            } else {
+                                self.plan_group_refused = None;
+                                self.wants_group = Some(group.path.clone()); self.group_session = self.selected;
+                            }
+                        }
+                        if let Some(reason) = plan.group_blocked
+                            && self.plan_group_refused == Some((self.selected, group.id))
+                        {
+                            design::blocked_reason(ui, Some(reason));
+                        }
                         closed += ui.cursor().top() - top;
-                        if read_group { self.wants_group = Some(group.path.clone()); self.group_session = self.selected; }
                         closed += plan_rule(ui);
                     });
                     if let Some((at, _, height)) = &mut remove_group && *at == position { *height = row.response.rect.height(); }

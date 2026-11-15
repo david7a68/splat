@@ -101,6 +101,78 @@ fn check_choices_at_text(
 /// iter-25-S FD3 family: a banner's dismiss is the close icon at the message end, on its first
 /// line, with no words of its own on screen. Row 83a (N6): its centre is the centre of the
 /// words' first line, within 1 px.
+/// R38, R35 (structural B4): an Encounters editor's back line at 960, 1200 and 1920, read from
+/// the painted text after each resize. The link (accessible `name`) paints its destination
+/// `word` whole at the editor's text edge with the return arrow after it, inside the window; the
+/// name field (`field`, the start of its accessible name) is on the next line at the same edge;
+/// and while a draft holds the editor, `reason` is painted on the back line after the link.
+/// Each fault is one line; none is a pass.
+fn back_line_faults(
+    d: &mut Driver<'_>,
+    word: &str,
+    name: &str,
+    field: &str,
+    reason: Option<&str>,
+) -> Vec<String> {
+    let mut faults = Vec::new();
+    for size in [SMALL, DEFAULT, LARGE] {
+        let found = d.at_size(size, |d| {
+            let mut faults = Vec::new();
+            let (width, height) = d.window_size();
+            let window = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, height));
+            let Some(link) = d.place_of(name) else {
+                return vec![format!("{size:?}: no {name:?}")];
+            };
+            let Some(ink) = d.painted_word_rect(word, link) else {
+                return vec![format!("{size:?}: {word:?} is not painted in {link:?}")];
+            };
+            if !d.painted_whole_in(word, link) || !window.contains_rect(link) {
+                faults.push(format!("{size:?}: {word:?} not whole in view at {link:?}"));
+            }
+            let arrow = d.painted_rect_in(egui_phosphor::regular::ARROW_U_UP_LEFT, link);
+            if !arrow.is_some_and(|arrow| arrow.left() > ink.right()) {
+                faults.push(format!("{size:?}: no arrow after {word:?}: {arrow:?}"));
+            }
+            let field = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with(field))
+                .map(|node| node.rect);
+            match field {
+                Some(field) if field.top() >= link.bottom() - 0.5 => {
+                    if (field.left() - ink.left()).abs() > 1.5 {
+                        faults.push(format!(
+                            "{size:?}: {word:?} at x {} and the name field at x {}",
+                            ink.left(),
+                            field.left()
+                        ));
+                    }
+                }
+                other => faults.push(format!(
+                    "{size:?}: the name field is not on the line below {link:?}: {other:?}"
+                )),
+            }
+            let line = egui::Rect::from_x_y_ranges(link.right()..=width, link.y_range());
+            let painted =
+                reason.map(|reason| d.painted_rect_in(reason, line.expand2(egui::vec2(0.0, 8.0))));
+            match (reason, painted.flatten()) {
+                (Some(reason), None) => {
+                    faults.push(format!(
+                        "{size:?}: {reason:?} is not painted beside the link"
+                    ));
+                }
+                (Some(reason), Some(rect)) if !window.contains_rect(rect) => {
+                    faults.push(format!("{size:?}: {reason:?} is cut at {rect:?}"));
+                }
+                _ => {}
+            }
+            faults
+        });
+        faults.extend(found);
+    }
+    faults
+}
+
 fn check_dismiss_at_message_end(d: &mut Driver<'_>, id: &str, words: &str) {
     let name = crate::design::outcome::DISMISS_NAME;
     let text = d.painted_rect_in(words, egui::Rect::EVERYTHING);
@@ -3409,7 +3481,7 @@ pub mod campaign_content {
         );
         d.state("missing-campaign-manifest-needs-explicit-write", Sizes::All);
         d.click("Write Campaign.md again");
-        d.wait_for_text("Undo write Campaign.md");
+        d.wait_for_control("Undo write Campaign.md");
         assert_eq!(std::fs::read_to_string(&manifest).unwrap(), before);
         // Round 23 FA8: the discarded package draft belonged to the file that went missing. Its
         // Undo does not come back with the written file.
@@ -3421,6 +3493,13 @@ pub mod campaign_content {
                 d.visible_text(PACKAGES_DISCARDED)
             ),
         );
+        // Round 30: the write's result is the footer's only Undo of its verb, so it paints
+        // `Undo write` (its name stays whole); at 1920 this frame then differs from
+        // `packages-partial-selection` only by that short footer line. Above: the file was
+        // missing, its bytes are back as saved, and its Undo is drawn (`wait_for_control`);
+        // the state's own check paints the Undo's icon. The result's words are asserted after
+        // this state, with the failed Undo.
+        d.expect_same("the footer's one new line, a lone Undo in its short form");
         d.state_prepared("campaign-manifest-written-with-undo", Sizes::All, |d| {
             check_undo_icon(d, "Undo write Campaign.md", "iter-6-C-SD3-Campaign");
         });
@@ -3471,7 +3550,7 @@ pub mod campaign_content {
         );
         d.state("missing-campaign-manifest-without-copy", Sizes::All);
         d.click("Write a new Campaign.md");
-        d.wait_for_text("Undo write Campaign.md");
+        d.wait_for_control("Undo write Campaign.md");
         assert!(manifest.exists());
     }
 
@@ -4954,6 +5033,20 @@ pub mod encounter_build {
         d.click(SYNC_OPTION);
         d.expect("Unsaved");
         let edited_x = run_state_x(d);
+        // R38, R35 (structural B4): the encounter editor's back line; the first edit holds it,
+        // with the encounter's reason painted beside the link.
+        let faults = back_line_faults(
+            d,
+            "Encounters",
+            "Back to encounters",
+            "Encounter name",
+            Some("Save or discard the open encounter first."),
+        );
+        d.observe(
+            "s30-B4-back-line-encounter",
+            faults.is_empty(),
+            format!("The encounter editor's back line at 960, 1200 and 1920: {faults:?}"),
+        );
         d.observe(
             "iter-26-B-FB5",
             clean_x.iter().all(|x| !x.is_empty()) && clean_x == edited_x,
@@ -6974,6 +7067,30 @@ pub mod run_lookup {
         d.begin_task();
         look_up(d, &OTHER_NOTE.to_lowercase());
         d.state("lookup-with-draft-open", Sizes::All);
+        lookup_open_action_painted(d, "s30-SK8-open-words", &[SMALL, DEFAULT, LARGE]);
+        // Round 30 final review F1 (ruling R35): the locked open action's reason is painted in
+        // Lookup's pane, at every size, whether the action stands on the title line or on its
+        // own line.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let reason = "To open this in Library, save or discard the Library draft first.";
+            let painted = d.at_size(size, |d| {
+                let panel = d.place_of(LOOKUP_SPLITTER)?;
+                d.painted_rect_in(
+                    reason,
+                    egui::Rect::from_min_max(
+                        egui::pos2(panel.right(), f32::NEG_INFINITY),
+                        egui::pos2(f32::INFINITY, f32::INFINITY),
+                    ),
+                )
+            });
+            d.observe(
+                "s30-SK8-open-lock-reason",
+                painted.is_some(),
+                format!(
+                    "At {size:?}, Lookup paints the locked open action's reason at {painted:?}"
+                ),
+            );
+        }
         d.goal("try a lookup with a draft open");
         d.press(Key::Escape);
         let kept = d
@@ -14802,70 +14919,47 @@ pub mod session_notes {
     /// the banner and a page's pinned result (the templates page's `Deleted …` with its Undo)
     /// share 960x640 whole, apart. After the scenario's last state.
     fn note_warnings_beside_other_editors(d: &mut Driver<'_>) {
-        // A banner message whose words start with the note's name, whole in view, with its
-        // choices, beside the event form's own field.
-        let named = |d: &Driver<'_>, cause: &str, choices: &[&str]| {
-            let words = d.nodes().into_iter().find(|node| {
-                node.fully_in_view()
-                    && node.name.starts_with("The note of Session ")
-                    && node.name.contains(cause)
-            });
-            let field = d.place_of("Title");
-            let choices_in_view = choices.iter().all(|choice| d.in_view(choice));
-            (
-                words.is_some() && field.is_some() && choices_in_view,
-                format!(
-                    "{cause}: words {:?}, the event form's Title {field:?}, choices {choices:?} in view {choices_in_view}",
-                    words.map(|node| node.name)
-                ),
-            )
-        };
+        // Round 30 B7c (review F1 of PR 409): each banner is a captured state. Its check: the
+        // note's warning is painted exactly once, its words name the note and are whole in view,
+        // and every control named (its choices, another page's own field, a pinned result's
+        // Undo) is wholly in view, not clipped.
         d.click(NAV_SESSIONS);
         d.settle();
         d.app_mut().sessions.simulate_failed_save();
         // Timeline still holds the event form the scenario opened (Rest at the mill).
         d.click(NAV_TIMELINE);
         d.expect("Rest at the mill");
-        let failed = named(
-            d,
-            "was not saved. The disk is full.",
-            &["Try to save again"],
-        );
-        let failed_wide = d.at_size(DEFAULT, |d| {
-            named(
+        d.state_prepared("note-save-failed-elsewhere", Sizes::Standard, |d| {
+            banner_whole(
                 d,
-                "was not saved. The disk is full.",
-                &["Try to save again"],
-            )
+                "round-30-note-warnings-elsewhere",
+                "was not saved.",
+                &["Try to save again", "Title"],
+            );
         });
+        d.app_mut().sessions.simulate_failed_save_ends();
         d.click("Try to save again");
         d.settle();
-        let retried = !d.has_containing("was not saved. The disk is full.");
-        let (path, away) = d.app_mut().sessions.simulate_note_gone();
-        d.settle();
-        let gone = named(
-            d,
-            "is gone from the folder.",
-            &["Save my draft as a new file", "Discard"],
-        );
-        let gone_wide = d.at_size(DEFAULT, |d| {
-            named(
-                d,
-                "is gone from the folder.",
-                &["Save my draft as a new file", "Discard"],
-            )
+        let retried = !d.nodes().iter().any(|node| {
+            node.name.starts_with("The note of Session ") && node.name.contains("was not saved.")
         });
         d.observe(
             "round-30-note-warnings-elsewhere",
-            failed.0 && failed_wide.0 && retried && gone.0 && gone_wide.0,
-            format!(
-                "960x640: {}; {}. 1200x800: {}; {}. The retry ends the failure: {retried}",
-                failed.1, gone.1, failed_wide.1, gone_wide.1
-            ),
+            retried,
+            "Try to save again ends the failure on Timeline",
         );
-        // The banner beside a pinned result, at 960x640: the templates page's delete result and
-        // its Undo, and the note's warning with its choices, each whole, the result above the
-        // banner.
+        let (path, away) = d.app_mut().sessions.simulate_note_gone();
+        d.settle();
+        d.state_prepared("note-gone-elsewhere", Sizes::Standard, |d| {
+            banner_whole(
+                d,
+                "round-30-note-warnings-elsewhere",
+                "is gone from the folder.",
+                &["Save my draft as a new file", "Discard", "Title"],
+            );
+        });
+        // The banner beside a pinned result: the templates page's delete result and its Undo,
+        // and the note's warning with its choices, each whole, the result above the banner.
         d.click(NAV_SESSIONS);
         d.click("Templates");
         d.click("New template");
@@ -14875,31 +14969,69 @@ pub mod session_notes {
         d.click("More actions for Short break");
         d.click("Delete this template");
         d.expect("Undo delete");
-        let result = d
-            .nodes()
-            .into_iter()
-            .find(|node| node.fully_in_view() && node.name.starts_with("Deleted “Short break”."));
-        let undo = d.place_of("Undo delete");
-        let banner = d.nodes().into_iter().find(|node| {
+        d.state_prepared("note-gone-beside-a-pinned-result", Sizes::Small, |d| {
+            banner_whole(
+                d,
+                "round-30-note-warning-beside-a-pinned-result",
+                "is gone from the folder.",
+                &["Save my draft as a new file", "Discard", "Undo delete"],
+            );
+            let result = d.nodes().into_iter().find(|node| {
+                node.fully_in_view() && node.name.starts_with("Deleted “Short break”.")
+            });
+            let banner = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.fully_in_view() && node.name.starts_with("The note of Session "));
+            d.observe(
+                "round-30-note-warning-beside-a-pinned-result",
+                result
+                    .as_ref()
+                    .zip(banner.as_ref())
+                    .is_some_and(|(result, banner)| result.rect.bottom() <= banner.rect.top()),
+                format!(
+                    "The pinned result {:?} stands whole above the banner {:?}",
+                    result.map(|node| node.rect),
+                    banner.map(|node| node.rect)
+                ),
+            );
+        });
+        std::fs::rename(&away, &path).unwrap();
+    }
+
+    /// The session note's warning in the bottom banner: painted exactly once (inside its clip),
+    /// its words whole in view and naming the note with `cause`, and each of `controls` (a
+    /// control by its accessible name, not a label of that name) wholly in view, not clipped.
+    fn banner_whole(d: &mut Driver<'_>, id: &str, cause: &str, controls: &[&str]) {
+        let copies = painted_starts(d, "The note of Session ", 0).len();
+        let words = d.nodes().into_iter().find(|node| {
             node.fully_in_view()
                 && node.name.starts_with("The note of Session ")
-                && node.name.contains("is gone from the folder.")
+                && node.name.contains(cause)
         });
-        let discard = d.place_of("Discard");
+        let cut: Vec<&str> = controls
+            .iter()
+            .copied()
+            .filter(|control| {
+                !d.nodes().iter().any(|node| {
+                    node.name == *control
+                        && !matches!(
+                            node.role,
+                            egui::accesskit::Role::Label | egui::accesskit::Role::TextRun
+                        )
+                        && node.fully_in_view()
+                })
+            })
+            .collect();
+        let size = d.window_size();
         d.observe(
-            "round-30-note-warning-beside-a-pinned-result",
-            result.as_ref().zip(banner.as_ref()).zip(undo.zip(discard)).is_some_and(
-                |((result, banner), (undo, _))| {
-                    result.rect.bottom() <= banner.rect.top() && undo.bottom() <= banner.rect.top()
-                },
-            ),
+            id,
+            copies == 1 && words.is_some() && cut.is_empty(),
             format!(
-                "At 960x640 the pinned result {:?} and its Undo {undo:?} stand above the banner {:?} with Discard {discard:?}",
-                result.map(|node| node.rect),
-                banner.map(|node| node.rect)
+                "At {size:?}: {copies} painted banner(s), words {:?}, not wholly in view {cut:?}",
+                words.map(|node| node.name)
             ),
         );
-        std::fs::rename(&away, &path).unwrap();
     }
 
     /// A Sessions note's link keeps focus when Lookup opens a World note beside it, and
@@ -18250,6 +18382,13 @@ pub mod encounter_groups {
         d.expect("MEMBERS 3");
         d.expect("XP 600");
         d.state("group-editor", Sizes::All);
+        // R38 (structural B4): the back line, its word whole at the text edge, the name below.
+        let faults = back_line_faults(d, "Encounters", "Back to encounters", "Group name", None);
+        d.observe(
+            "s30-B4-back-line-group",
+            faults.is_empty(),
+            format!("The group editor's back line at 960, 1200 and 1920: {faults:?}"),
+        );
         // FD3: where FORM_WIDTH ends first, the name and Belongs to still share one edge, and it
         // is clearly apart from the members column's.
         for size in [SMALL, DEFAULT, LARGE] {
@@ -18375,8 +18514,16 @@ pub mod encounter_groups {
                         .iter()
                         .find(|node| node.name == heading && node.in_view())?
                         .rect;
+                    // The form's own column: from the heading to the right edge of its `Done`.
+                    // The Add creatures column beside it is not what follows a heading (B4: its
+                    // rows lined up with a heading at 960 once the back line moved the form).
+                    let form_right = nodes
+                        .iter()
+                        .find(|node| node.name == "Done with changes")
+                        .map_or(label.right() + 400.0, |done| done.rect.right());
                     let column = |rect: &egui::Rect| {
-                        rect.left() < label.right() + 400.0 && rect.right() > label.left()
+                        rect.left() < (label.right() + 400.0).min(form_right)
+                            && rect.right() > label.left()
                     };
                     let above = nodes
                         .iter()
@@ -20590,9 +20737,21 @@ pub mod encounter_owned_groups {
         };
         // The member first, then the group: the group's result leads; Undo of the member
         // brings Wolf back and the group stays moved.
+        let shrine_menu_in_view = |d: &mut Driver<'_>| {
+            let menu = format!("More actions for {GROUP_SHRINE}");
+            for _ in 0..20 {
+                if d.in_view(&menu) {
+                    break;
+                }
+                d.scroll_up_at(pos2(250.0, 400.0), 1);
+            }
+        };
         let member_then_group = d.aside(|d| {
             d.click("More actions for Wolf");
             d.click("Remove");
+            // B4: at 960 the editor's body is 34 px shorter (its back line), so after the footer
+            // grows the group's menu is above the view: the DM scrolls up to it.
+            shrine_menu_in_view(d);
             d.click_first(&format!("More actions for {GROUP_SHRINE}"));
             d.click("Make available to any encounter");
             d.expect("Undo move");
@@ -20607,6 +20766,7 @@ pub mod encounter_owned_groups {
         // The group first, then the member: the member's result leads; Undo of the group brings
         // it back and Wolf stays removed.
         let group_then_member = d.aside(|d| {
+            shrine_menu_in_view(d);
             d.click_first(&format!("More actions for {GROUP_SHRINE}"));
             d.click("Make available to any encounter");
             d.expect("Undo move");
@@ -21099,6 +21259,84 @@ pub mod encounter_owned_groups {
                 "No name: saved encounter (warning Invalid, New) {saved_word:?}; new encounter (New, Invalid) {new_word:?}"
             ),
         );
+        d.click("Discard");
+        if d.has("Back to encounters") {
+            d.click("Back to encounters");
+        }
+
+        // N1 (B3 re-check): who owns a group is part of Save's check. A clean saved encounter
+        // whose own group has the name of a group for any encounter: making it available to any
+        // encounter blocks Save and paints why, before any Save, in the same campaign read.
+        open_saved_encounter(d, SHRINE);
+        let field = format!("Group name: {GROUP_SHRINE}");
+        d.type_into(&field, " ");
+        d.press_ctrl(Key::A);
+        d.type_text(GROUP_GOBLINS);
+        d.click(SAVE_ENCOUNTER);
+        d.expect("Saved");
+        d.settle();
+        d.click_first(&format!("More actions for {GROUP_GOBLINS}"));
+        d.click("Make available to any encounter");
+        d.expect("Undo move");
+        let taken = format!("Another group is named {GROUP_GOBLINS}");
+        let moved = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                d.is_disabled(SAVE_ENCOUNTER) && d.visible_text(&taken)
+            })
+        });
+        d.observe(
+            "s30-B3-N1-made-available",
+            moved.iter().all(|shown| *shown),
+            format!("A taken name made available: Save blocked and {taken:?} painted at 960, 1200, 1920: {moved:?}"),
+        );
+        d.click("Undo move");
+        d.expect(&format!("Group name: {GROUP_GOBLINS}"));
+        d.click("Back to encounters");
+
+        // N2 (lead ruling, R35): a member fault keeps its cause on its row, and the footer
+        // always names the next step, once, whether the row is in view or not.
+        let file = d
+            .app_mut()
+            .campaigns
+            .active_campaign()
+            .unwrap()
+            .path
+            .join(format!("Encounter Groups/{GROUP_SHRINE}.md"));
+        let text = std::fs::read_to_string(&file).unwrap();
+        let broken = text.replacen("creatures/goblin_warrior", "creatures/no_such_creature", 1);
+        assert_ne!(broken, text);
+        std::fs::write(&file, &broken).unwrap();
+        d.click("Reload from disk");
+        d.settle();
+        open_saved_encounter(d, SHRINE);
+        d.type_into(&format!("Group notes for {GROUP_GOBLINS}"), "Hungry.");
+        let step = format!("Fix the Unknown creature row of {GROUP_GOBLINS} before you save.");
+        let said = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                let (mut steps, mut causes) = (0, 0);
+                d.each_painted_text(|text, clip| {
+                    let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                    let words = text.galley.job.text.as_str();
+                    if clip.intersects(rect) {
+                        steps += usize::from(words.contains("before you save."));
+                        causes += usize::from(words.contains("Not in this campaign’s packages"));
+                    }
+                });
+                (
+                    d.is_disabled(SAVE_ENCOUNTER),
+                    d.visible_text(&step),
+                    steps,
+                    causes,
+                )
+            })
+        });
+        d.observe(
+            "s30-B3-N2-member-step",
+            said.iter()
+                .all(|(blocked, shown, steps, causes)| *blocked && *shown && *steps == 1 && *causes <= 1),
+            format!("Member fault: (Save blocked, {step:?} painted, next-step lines, cause lines) at 960, 1200, 1920: {said:?}"),
+        );
+        std::fs::write(&file, &text).unwrap();
     }
 }
 
@@ -22177,6 +22415,20 @@ pub mod session_plan_groups {
                 "A wide group editor keeps the note beside it; smaller pages keep the Note tab",
             );
         });
+        // R38, R35 (structural B4): the plan's group editor has the same back line, and the
+        // typed name holds it with its reason painted beside the link.
+        let faults = back_line_faults(
+            d,
+            "Plan",
+            "Back to the plan",
+            "Group name",
+            Some("Save or discard this group first."),
+        );
+        d.observe(
+            "s30-B4-back-line-plan-group",
+            faults.is_empty(),
+            format!("The plan's group editor's back line at 960, 1200 and 1920: {faults:?}"),
+        );
         d.observe(
             "T14.6",
             d.has_containing("Session 1: The Crossing"),
@@ -22519,6 +22771,15 @@ pub mod session_plan_groups {
             d.focus_window(true);
             // The row's heading names the gone creature, whichever place says the fault.
             d.wait_for_text("Unknown creature");
+            // B4: at 960 the back line moves the plan's editor 34 px down, so the member row's
+            // fault is below the view on the Members tab. The DM scrolls the row into view.
+            d.click_starting("Members");
+            for _ in 0..10 {
+                if d.visible_text("not in this campaign’s packages") {
+                    break;
+                }
+                d.scroll_at(pos2(600.0, 450.0), 1);
+            }
             let member = said_once(
                 d,
                 &[
@@ -23201,7 +23462,251 @@ pub mod session_plan_groups {
         );
         d.click("Edit group Split Watch");
         d.expect("Group name: Split Watch");
+
+        // B4 review F1: an unsaved group keeps its host. A new group in Session 2 with a member,
+        // left unsaved; in Session 1 the DM presses a planned group's name. The press is refused
+        // with the group's reason under that line; the draft stays Session 2's, and Save adds it
+        // to Session 2's plan only.
+        d.click("Back to the plan");
+        d.click_starting("Session 2: The Ford ·");
+        show_plan(d);
+        d.click("Add a group");
+        d.click("New group");
+        d.expect("Back to the plan");
+        d.type_text("Ash Two");
+        d.type_into(FIND_CREATURE, "wolf");
+        d.click_beside_exact("Wolf", ADD);
+        d.click_starting("Session 1: The Crossing ·");
+        let reason = crate::design::Unsaved::Group.reason();
+        let before = (
+            d.has_containing("A group is being assembled in Session 2."),
+            d.has("Save group"),
+            d.has_containing("Ash Two"),
+        );
+        let rivals_in_view = |d: &mut Driver<'_>| {
+            for _ in 0..20 {
+                if d.in_view(GROUP_RIVALS) {
+                    break;
+                }
+                d.scroll_up_at(pos2(600.0, 400.0), 1);
+            }
+        };
+        rivals_in_view(d);
+        d.click_first(GROUP_RIVALS);
+        let refused = (
+            d.has_containing("A group is being assembled in Session 2."),
+            d.has("Save group"),
+            d.has(&format!("Group name: {GROUP_RIVALS}")),
+            d.visible_text(reason),
+        );
+        // B4b: the refused press as a captured state, its reason whole, once, under Rival Team.
+        let mut under = (true, String::new());
+        d.state_prepared("plan-group-refused", Sizes::Standard, |d| {
+            let (ok, words) = refusal_under(d, reason, GROUP_RIVALS);
+            under.0 &= ok;
+            under
+                .1
+                .push_str(&format!("{:?}: {words}; ", d.window_size()));
+        });
+        under.0 &= under.1.contains("(960.0, 640.0)") && under.1.contains("(1200.0, 800.0)");
+        d.observe("s30-B4b-refusal-under-its-group", under.0, under.1);
+        // Back to the draft's own session (the link names it while the host is kept).
+        if d.has("Return to the session being played") {
+            d.click("Return to the session being played");
+        } else {
+            d.click_starting("Session 2: The Ford ·");
+        }
+        if d.has("Group name: Ash Two") {
+            d.click("Save group");
+            d.wait_for_text("Ash Two");
+        }
+        let in_two = d.has_containing("Ash Two");
+        d.click_starting("Session 1: The Crossing ·");
+        d.expect(&format!("Add {GROUP_RIVALS} to fight"));
+        let in_one = d.has_containing("Ash Two");
+        // B4b: the host as the files say it: the saved session notes that link Ash Two.
+        d.focus_window(false);
+        d.focus_window(true);
+        let files = notes_linking(d, "Ash Two");
+        let on_disk = files.len() == 1 && files[0].contains("The Ford");
+        d.observe(
+            "s30-B4-F1-group-keeps-its-host",
+            before == (true, false, false)
+                && refused == (true, false, false, true)
+                && in_two
+                && !in_one
+                && on_disk,
+            format!(
+                "Before the press (warning, Save, Ash Two in Session 1): {before:?}; after the refused press (warning, Save, Rival Team open, reason painted): {refused:?}; after Save, Ash Two in Session 2's plan {in_two}, in Session 1's {in_one}; notes on disk that link it: {files:?}"
+            ),
+        );
+        // The same press with an unsaved encounter and no group editor: the encounter's reason
+        // is painted in the plan, not only in Encounters.
+        d.click(NAV_ENCOUNTERS);
+        d.click(NEW_ENCOUNTER);
+        d.type_text("Ford Ambush");
+        d.click(NAV_SESSIONS);
+        d.click_starting("Session 1: The Crossing ·");
+        rivals_in_view(d);
+        d.click_first(GROUP_RIVALS);
+        let encounter_reason = crate::design::Unsaved::Encounter.reason();
+        d.observe(
+            "s30-B4-F1-encounter-refusal-painted",
+            d.visible_text(encounter_reason) && !d.has(&format!("Group name: {GROUP_RIVALS}")),
+            format!(
+                "With an unsaved encounter, the plan says why the group did not open: {}",
+                d.visible_text(encounter_reason)
+            ),
+        );
+        let mut under = (true, String::new());
+        d.state_prepared("plan-encounter-refused", Sizes::Standard, |d| {
+            let (ok, words) = refusal_under(d, encounter_reason, GROUP_RIVALS);
+            under.0 &= ok;
+            under
+                .1
+                .push_str(&format!("{:?}: {words}; ", d.window_size()));
+        });
+        under.0 &= under.1.contains("(960.0, 640.0)") && under.1.contains("(1200.0, 800.0)");
+        d.observe(
+            "s30-B4b-encounter-refusal-under-its-group",
+            under.0,
+            under.1,
+        );
+
+        // B4b N2: the refusal belongs to the group, not to its file's path. Another group takes
+        // Rival Team's file: no reason under it until it is pressed. Then that group's file goes
+        // away and comes back: the plan read in between ended the refusal, so it does not come
+        // back with it.
+        let file = d.root.join(format!(
+            "campaigns/emberfall/Encounter Groups/{GROUP_RIVALS}.md"
+        ));
+        let original = std::fs::read_to_string(&file).unwrap();
+        let replaced = original.replacen(
+            original
+                .lines()
+                .find(|line| line.starts_with("splat_id: "))
+                .unwrap(),
+            &format!("splat_id: {}", crate::hermetic::new_uuid()),
+            1,
+        );
+        std::fs::write(&file, &replaced).unwrap();
+        d.focus_window(false);
+        d.focus_window(true);
+        d.settle();
+        rivals_in_view(d);
+        let reused = (d.in_view(GROUP_RIVALS), d.visible_text(encounter_reason));
+        d.click_first(GROUP_RIVALS);
+        let pressed = d.visible_text(encounter_reason);
+        std::fs::remove_file(&file).unwrap();
+        d.focus_window(false);
+        d.focus_window(true);
+        d.settle();
+        let removed = (d.in_view(GROUP_RIVALS), d.visible_text(encounter_reason));
+        std::fs::write(&file, &replaced).unwrap();
+        d.focus_window(false);
+        d.focus_window(true);
+        d.settle();
+        rivals_in_view(d);
+        let back = (d.in_view(GROUP_RIVALS), d.visible_text(encounter_reason));
+        std::fs::write(&file, &original).unwrap();
+        d.focus_window(false);
+        d.focus_window(true);
+        d.settle();
+        d.observe(
+            "s30-B4b-refusal-follows-the-group",
+            reused == (true, false) && pressed && removed == (false, false) && back == (true, false),
+            format!(
+                "(row in view, reason painted): another group at the path {reused:?}; pressed {pressed}; file removed {removed:?}; the same group back {back:?}"
+            ),
+        );
+
+        // B4b N1: with no refusal stored, no frame compares the drafts for it. The encounter is
+        // discarded (its refusal ends), then unchanged frames on Encounters do no check.
+        d.click(NAV_ENCOUNTERS);
+        d.click("Discard");
+        d.settle();
+        let checks = crate::test_support::CachedWork::start("Plan refusal end", d, |d| {
+            crate::test_support::Counts {
+                reached: d.passes(),
+                work: crate::encounters::PLAN_BLOCK_CHECKS.with(std::cell::Cell::get),
+            }
+        });
+        let idle = checks.steady(d, |d| {
+            for _ in 0..5 {
+                d.settle();
+            }
+            d.at_size(DEFAULT, |_| ());
+            d.has(NEW_ENCOUNTER)
+        });
+        d.observe(
+            "s30-B4b-no-idle-refusal-check",
+            idle.is_ok(),
+            format!("Unchanged frames with no refusal stored: {idle:?}"),
+        );
     }
+}
+
+/// B4b: `reason` is painted once, whole in its clip and in the window, under `group`'s line in
+/// the plan and above the next group's line.
+fn refusal_under(d: &Driver<'_>, reason: &str, group: &str) -> (bool, String) {
+    let mut found = Vec::new();
+    d.each_painted_text(|text, clip| {
+        if text.galley.job.text == reason {
+            let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+            found.push((rect, clip.expand(1.0).contains_rect(rect)));
+        }
+    });
+    let links: Vec<egui::Rect> = d
+        .nodes()
+        .into_iter()
+        .filter(|node| node.is_link() && node.in_view())
+        .map(|node| node.rect)
+        .collect();
+    let own = d
+        .nodes()
+        .into_iter()
+        .find(|node| node.is_link() && node.name == group && node.in_view())
+        .map(|node| node.rect);
+    let (w, h) = d.window_size();
+    let window = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, h));
+    let ok = match (found.as_slice(), own) {
+        ([(rect, whole)], Some(own)) => {
+            let next = links
+                .iter()
+                .filter(|link| link.top() > own.bottom() && (link.left() - own.left()).abs() < 2.0)
+                .map(|link| link.top())
+                .fold(f32::INFINITY, f32::min);
+            *whole
+                && window.contains_rect(*rect)
+                && rect.top() >= own.bottom() - 0.5
+                && rect.bottom() <= next + 0.5
+        }
+        _ => false,
+    };
+    (ok, format!("painted {found:?}, {group} at {own:?}"))
+}
+
+/// B4b: the saved notes that link `name` in their plan, by file name.
+fn notes_linking(d: &Driver<'_>, name: &str) -> Vec<String> {
+    fn walk(folder: &std::path::Path, link: &str, out: &mut Vec<String>) {
+        for entry in std::fs::read_dir(folder).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(&path, link, out);
+            } else if path.extension().is_some_and(|ext| ext == "md")
+                && std::fs::read_to_string(&path).is_ok_and(|text| text.contains(link))
+            {
+                out.push(path.file_name().unwrap().to_string_lossy().into_owned());
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(
+        &d.root.join("campaigns/emberfall"),
+        &format!("[[{name}]]"),
+        &mut out,
+    );
+    out
 }
 
 /// W14: an evening from the session's one page: the plan, the fights, and what they leave behind.
@@ -23346,6 +23851,7 @@ pub mod session_plan {
                 );
             }
             if lookup {
+                lookup_open_action_painted(d, "s30-FM4-open-words", &[SMALL]);
                 d.state("rewards-offered-beside-lookup", Sizes::Small);
                 d.click(NAV_LOOKUP);
             }
@@ -24136,6 +24642,30 @@ pub mod session_plan {
             d.visible_text("Hobb the miller says") && d.in_view(NEXT_TURN),
             "Lookup finds last session's note, and the run stays in view",
         );
+        // Round 30 FM13: a found note is prose in the Reader's prose role, as a rule in the
+        // same panel is (`ProseCompact` at Lookup's width), never the stat block's 13 px.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let painted = d.at_size(size, |d| {
+                let panel = d.place_of(LOOKUP_SPLITTER)?;
+                let lookup = egui::Rect::from_min_max(
+                    egui::pos2(panel.right(), f32::NEG_INFINITY),
+                    egui::pos2(f32::INFINITY, f32::INFINITY),
+                );
+                d.painted_size(lookup, "Hobb the miller says")
+            });
+            d.observe(
+                "s30-FM13-found-note-prose",
+                painted.is_some_and(|painted| {
+                    [
+                        crate::design::Type::ProseCompact,
+                        crate::design::Type::Prose,
+                    ]
+                    .iter()
+                    .any(|role| role.size() == painted)
+                }),
+                format!("At {size:?}, the found note's words are {painted:?} px"),
+            );
+        }
         // Reading a result closes the list. `N results`, which opens it again, starts a line at
         // the search field's edge.
         let first = lookup_results(d).first().map(|row| row.name.clone());
@@ -26987,6 +27517,30 @@ fn lookup_row_text_left(d: &Driver<'_>) -> Option<f32> {
 }
 
 const LOOKUP_SPLITTER: &str = "Resize Lookup column";
+
+/// Round 30 FM4, SK8: Lookup's open action paints its words, `Open in Library` or `Open in
+/// World`, inside its own target at each size, never its icon alone.
+fn lookup_open_action_painted(d: &mut Driver<'_>, id: &str, sizes: &[(f32, f32)]) {
+    for &size in sizes {
+        let (painted, detail) = d.at_size(size, |d| {
+            let found = ["Open in Library", "Open in World"]
+                .into_iter()
+                .find_map(|words| d.place_of(words).map(|rect| (words, rect)));
+            match found {
+                Some((words, rect)) => (
+                    d.painted_size(rect, words).is_some(),
+                    format!("{words} at {rect:?}"),
+                ),
+                None => (false, "no open action".to_owned()),
+            }
+        });
+        d.observe(
+            id,
+            painted,
+            format!("At {size:?}, Lookup's open action paints its words: {detail}"),
+        );
+    }
+}
 
 /// How a link with an icon paints `<icon> <words>`: whether the icon is underlined, whether the
 /// words are, and the icon's colour. An underline counts whether the text paints it or the link

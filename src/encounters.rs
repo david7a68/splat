@@ -246,13 +246,20 @@ fn owned_groups_found(
             incomplete.get_or_insert((words, group.origin()));
         } else {
             let words = named_group_words(&group.name(), refusal.text());
-            // A member's row or Belongs to already says its own fault.
-            if matches!(
-                refusal.place(),
-                groups::RefusalPlace::Footer | groups::RefusalPlace::SaveRow
-            ) {
-                refused_footer.get_or_insert(words.clone());
-            }
+            // N2 (lead ruling, R35): a fault with a place of its own (a member's row, Belongs
+            // to) keeps its cause there, and the footer always names the next step, so a blocked
+            // Save has painted words whether that place is in view or not; never the cause twice.
+            let footer = match refusal.place() {
+                groups::RefusalPlace::Footer | groups::RefusalPlace::SaveRow => words.clone(),
+                groups::RefusalPlace::Member(..) => {
+                    fix_group_row(refusal.row().unwrap_or("marked"), &group.name())
+                }
+                groups::RefusalPlace::BelongsTo => format!(
+                    "Choose who {} belongs to before you save.",
+                    group_words(&group.name())
+                ),
+            };
+            refused_footer.get_or_insert(footer);
             refused.get_or_insert(words);
         }
     }
@@ -290,6 +297,23 @@ thread_local! {
 #[cfg(test)]
 pub(crate) fn owned_group_work() -> (usize, usize) {
     OWNED_GROUP_WORK.with(std::cell::Cell::get)
+}
+
+/// The next step for a group's member row that blocks Save (N2): `Fix the Cinder Wolf row of
+/// Ash Hounds before you save.`
+fn fix_group_row(row: &str, group: &str) -> String {
+    format!(
+        "Fix the {row} row of {} before you save.",
+        group_words(group)
+    )
+}
+
+/// A group as a sentence names it: its name, or `the new group` while it has none.
+fn group_words(name: &str) -> String {
+    match name.trim() {
+        "" => "the new group".to_owned(),
+        name => name.to_owned(),
+    }
 }
 
 /// A group's refusal as the encounter's Save says it: `Group <name>: <words>`.
@@ -3262,13 +3286,43 @@ fn edit_input(ctx: &egui::Context) -> bool {
 }
 
 const BLOCKED_BY_RUN: &str = "Close the open run first.";
-const BLOCKED_BY_DRAFT: &str = "Save or discard the open encounter first.";
+/// The open encounter's draft holds the page (the same words as its back line's reason).
+const BLOCKED_BY_DRAFT: &str = design::Unsaved::Encounter.reason();
 /// The rail's words for this page's drafts; the rail opens Encounters for each (FF2).
 pub const ENCOUNTER_DRAFT: &str = "Encounter draft";
 pub const GROUP_DRAFT: &str = "Group draft";
 pub const CREATURE_DRAFT: &str = "Creature draft";
 pub const RUN_SETTINGS_DRAFT: &str = "Run settings draft";
-const BLOCKED_BY_CREATURE: &str = "Save or discard the changes to this creature first.";
+const BLOCKED_BY_CREATURE: &str = design::Unsaved::Creature.reason();
+#[cfg(test)]
+thread_local! {
+    /// B4b N1: how often `plan_group_blocked` compared the drafts, on this thread.
+    pub(crate) static PLAN_BLOCK_CHECKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// What a plan or run route that opens a draft got (B4 review F1): the caller gives the draft
+/// its host only when it is `Opened`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PlanOpen {
+    Opened,
+    /// An unsaved draft refuses it, with that draft's reason; every draft is kept.
+    Refused(&'static str),
+    /// The file cannot be read; Encounters says why.
+    Failed,
+}
+
+/// R38: the drafts that hold an Encounters editor's back line, from the same values that Save
+/// and the replacement guards read.
+impl design::DraftOwner for Encounters {
+    fn unsaved(&self, draft: design::Unsaved) -> bool {
+        match draft {
+            design::Unsaved::Group => self.group_draft.as_ref().is_some_and(GroupDraft::dirty),
+            design::Unsaved::Encounter => self.draft.as_ref().is_some_and(Draft::dirty),
+            design::Unsaved::Creature => self.creature_dirty(),
+        }
+    }
+}
+
 impl Encounters {
     pub fn refocus_draft(&mut self) {
         self.focus_name = true;
@@ -3775,8 +3829,20 @@ impl Encounters {
             run.show_arrivals();
         }
     }
-    /// Assemble a group where the plan is, with the session's note still beside it.
-    pub fn new_group_in_plan(&mut self) {
+    /// B4, E1: an unsaved draft (encounter, group or creature) holds the open drafts: a plan or
+    /// run route that would replace one is refused with that draft's reason, and every draft is
+    /// kept. The reason when refused.
+    fn replacement_held(&mut self) -> Option<&'static str> {
+        let reason = design::first_unsaved(self)?.reason();
+        self.error = Some(reason.to_owned());
+        Some(reason)
+    }
+    /// Assemble a group where the plan is, with the session's note still beside it. Refused,
+    /// with every draft kept, while one is unsaved.
+    pub fn new_group_in_plan(&mut self) -> PlanOpen {
+        if let Some(reason) = self.replacement_held() {
+            return PlanOpen::Refused(reason);
+        }
         self.clear_notice();
         self.group_draft = Some(GroupDraft::new());
         self.discarded_group = None;
@@ -3787,9 +3853,15 @@ impl Encounters {
         self.expanded = None;
         self.error = None;
         self.message = None;
+        PlanOpen::Opened
     }
-    /// Returns false when the group cannot be read. Encounters says why.
-    pub fn open_group_in_plan(&mut self, path: &str, active: &Campaign) -> bool {
+    /// Open a group in the plan. `Failed` when it cannot be read (Encounters says why);
+    /// `Refused` while a draft is unsaved, with that draft's reason, every draft kept. The caller
+    /// gives the group its host only on `Opened`.
+    pub fn open_group_in_plan(&mut self, path: &str, active: &Campaign) -> PlanOpen {
+        if let Some(reason) = self.replacement_held() {
+            return PlanOpen::Refused(reason);
+        }
         self.clear_notice();
         match GroupDraft::open(&active.path, path) {
             Ok(draft) => {
@@ -3807,11 +3879,11 @@ impl Encounters {
                 self.expanded = None;
                 self.error = None;
                 self.message = None;
-                true
+                PlanOpen::Opened
             }
             Err(error) => {
                 self.error = Some(error);
-                false
+                PlanOpen::Failed
             }
         }
     }
@@ -3860,17 +3932,37 @@ impl Encounters {
                 .collect()
         })
     }
-    /// Why a group cannot be assembled from the plan now.
-    pub fn plan_group_blocked(&self) -> Option<&'static str> {
-        self.draft_dirty().then_some(BLOCKED_BY_DRAFT).or(self
-            .snapshot
-            .is_none()
-            .then_some("Still reading this campaign."))
+    /// The stable id of the plan's group at `path`, if the campaign has it.
+    pub fn plan_group_id(&self, path: &str) -> Option<Uuid> {
+        self.snapshot
+            .as_ref()?
+            .groups
+            .iter()
+            .find(|group| group.path == path)
+            .map(|group| group.id)
     }
-    pub fn new_from_plan(&mut self, session: Option<Uuid>) {
+    /// Why a group cannot be assembled from the plan now.
+    /// The unsaved draft that refuses it says which it is, from the back lines' recipe (R38):
+    /// the encounter, its group or a creature, each with its own reason.
+    pub fn plan_group_blocked(&self) -> Option<&'static str> {
+        #[cfg(test)]
+        PLAN_BLOCK_CHECKS.with(|checks| checks.set(checks.get() + 1));
+        design::first_unsaved(self)
+            .map(design::Unsaved::reason)
+            .or(self
+                .snapshot
+                .is_none()
+                .then_some("Still reading this campaign."))
+    }
+    /// A new fight from the plan. Refused, with every draft kept, while one is unsaved.
+    pub fn new_from_plan(&mut self, session: Option<Uuid>) -> PlanOpen {
+        if let Some(reason) = self.replacement_held() {
+            return PlanOpen::Refused(reason);
+        }
         self.start_new_draft();
         self.from_session = session;
         self.plan_on_save = true;
+        PlanOpen::Opened
     }
     fn start_new_draft(&mut self) {
         self.clear_notice();
@@ -6092,7 +6184,6 @@ impl Encounters {
         });
         let dirty = self.encounter_dirty();
         let creature_dirty = self.creature_dirty();
-        let mut back = false;
         let mut save = false;
         let mut discard = false;
         let mut run_it = false;
@@ -6193,10 +6284,17 @@ impl Encounters {
             state
         };
         self.save_refused = dirty && !state.can_save();
+        // R38: the back line on a line of its own above the name row. The encounter's changes
+        // hold it first, then an unsaved creature.
+        let head = design::EditorHead::new(
+            design::EditorKind::Encounter {
+                from_session: self.from_session.is_some(),
+            },
+            &*self,
+        );
         let draft_ref = self.draft.as_mut().expect("the editor has a draft");
         let focus_name = &mut self.focus_name;
         let focus_search_after_name = &mut self.focus_search;
-        let from_session = self.from_session;
         // FA9, FI9: in a wide window the name field ends at the roster column's edge and the
         // header's actions at the Add participants column's edge, so neither stretches to the
         // window's edge. The roster's edge is the one its pane drew last.
@@ -6208,151 +6306,143 @@ impl Encounters {
                 .unwrap_or(f32::INFINITY)
         };
         let (roster_right, header_right) = (edge(ROSTER_PANE), edge(ADD_PANE));
-        ui.horizontal_wrapped(|ui| {
-            let back_name = if from_session.is_some() {
-                "Back to session"
-            } else {
-                "Back to encounters"
-            };
-            // X51, SB1: Save and Start keep their width on line one, and the name field takes
-            // the rest. The actions are measured, as they are drawn. They take a line of their
-            // own only when the saved name does not fit beside them: the saved name, not the
-            // typed one, so nothing moves while the DM types.
-            let gap = ui.spacing().item_spacing.x;
-            let start_word = if unfinished.is_some() {
-                "Resume"
-            } else {
-                START_FIGHT
-            };
-            // Each button is measured in its wider form, primary or secondary (the weight
-            // changes with the draft), and rounded up to the pixel: a button given exactly its
-            // natural width can lose its last letter to rounding.
-            let button = |word: &str| {
-                Action::primary(word)
-                    .natural_width(ui)
-                    .max(Action::secondary(word).natural_width(ui))
-                    .ceil()
-            };
-            let actions = button("Save encounter")
-                + gap
-                + button(start_word)
-                + if unfinished.is_some() {
-                    Action::quiet(icons::EXPAND)
-                        .density(Density::Read)
-                        .natural_width(ui)
-                        .ceil()
-                        + gap
+        let (back, ()) = head.show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                // X51, SB1: Save and Start keep their width on line one, and the name field takes
+                // the rest. The actions are measured, as they are drawn. They take a line of their
+                // own only when the saved name does not fit beside them: the saved name, not the
+                // typed one, so nothing moves while the DM types.
+                let gap = ui.spacing().item_spacing.x;
+                let start_word = if unfinished.is_some() {
+                    "Resume"
                 } else {
-                    0.0
-                }
-                + if has_run {
-                    design::number_width(ui, BLOCKED_BY_RUN, &Type::Small.font(ui)).ceil()
-                        + design::L
-                        + gap
-                } else {
-                    0.0
+                    START_FIGHT
                 };
-            let saved_name =
-                design::number_width(ui, &draft_ref.saved_name, &Type::Heading.font(ui));
-            back = Action::quiet(icons::LEGACY_BACK)
-                .name(back_name)
-                .hint(back_name)
-                .blocked(
-                    dirty
-                        .then_some("Save or discard this encounter first.")
-                        .or(creature_dirty.then_some(BLOCKED_BY_CREATURE)),
-                )
-                .show(ui)
-                .clicked();
-            // The field's margins are outside its desired width.
-            let rest = ui.available_rect_before_wrap().width() - actions - 2.0 * design::S - gap;
-            let stack_actions = rest < saved_name.max(Density::Scan.control());
-            let width = if stack_actions {
-                (ui.available_rect_before_wrap().width() - 2.0 * design::S)
-                    .max(Density::Scan.control())
-            } else {
-                rest
-            }
-            // The field's margins are outside its desired width.
-            .min(
-                (roster_right - ui.cursor().left() - 2.0 * design::S).max(Density::Scan.control()),
-            );
-            let response = name_field(ui, draft_ref, width);
-            design::named(ui, &response, &format!("{NAME_FIELD}: {}", draft_ref.name));
-            if std::mem::take(focus_name) {
-                design::focus_and_select(ui, response.id, &draft_ref.name);
-            }
-            if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                *focus_search_after_name = true;
-            }
-            let action_width = if stack_actions {
-                ui.max_rect().width()
-            } else {
-                ui.available_rect_before_wrap()
-                    .width()
-                    .min(header_right - ui.cursor().left())
-                    .max(0.0)
-            };
-            ui.allocate_ui_with_layout(
-                egui::vec2(action_width, Density::Scan.control()),
-                egui::Layout::right_to_left(egui::Align::Center),
-                |ui| {
-                    let start_blocked =
-                        roster_reason
-                            .as_deref()
-                            .or(empty_group.as_deref())
-                            .or(has_run
+                // Each button is measured in its wider form, primary or secondary (the weight
+                // changes with the draft), and rounded up to the pixel: a button given exactly its
+                // natural width can lose its last letter to rounding.
+                let button = |word: &str| {
+                    Action::primary(word)
+                        .natural_width(ui)
+                        .max(Action::secondary(word).natural_width(ui))
+                        .ceil()
+                };
+                let actions = button("Save encounter")
+                    + gap
+                    + button(start_word)
+                    + if unfinished.is_some() {
+                        Action::quiet(icons::EXPAND)
+                            .density(Density::Read)
+                            .natural_width(ui)
+                            .ceil()
+                            + gap
+                    } else {
+                        0.0
+                    }
+                    + if has_run {
+                        design::number_width(ui, BLOCKED_BY_RUN, &Type::Small.font(ui)).ceil()
+                            + design::L
+                            + gap
+                    } else {
+                        0.0
+                    };
+                let saved_name =
+                    design::number_width(ui, &draft_ref.saved_name, &Type::Heading.font(ui));
+                // The field's margins are outside its desired width.
+                let rest =
+                    ui.available_rect_before_wrap().width() - actions - 2.0 * design::S - gap;
+                let stack_actions = rest < saved_name.max(Density::Scan.control());
+                let width = if stack_actions {
+                    (ui.available_rect_before_wrap().width() - 2.0 * design::S)
+                        .max(Density::Scan.control())
+                } else {
+                    rest
+                }
+                // The field's margins are outside its desired width.
+                .min(
+                    (roster_right - ui.cursor().left() - 2.0 * design::S)
+                        .max(Density::Scan.control()),
+                );
+                let response = name_field(ui, draft_ref, width);
+                design::named(ui, &response, &format!("{NAME_FIELD}: {}", draft_ref.name));
+                if std::mem::take(focus_name) {
+                    design::focus_and_select(ui, response.id, &draft_ref.name);
+                }
+                if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                    *focus_search_after_name = true;
+                }
+                let action_width = if stack_actions {
+                    ui.max_rect().width()
+                } else {
+                    ui.available_rect_before_wrap()
+                        .width()
+                        .min(header_right - ui.cursor().left())
+                        .max(0.0)
+                };
+                ui.allocate_ui_with_layout(
+                    egui::vec2(action_width, Density::Scan.control()),
+                    egui::Layout::right_to_left(egui::Align::Center),
+                    |ui| {
+                        let start_blocked =
+                            roster_reason
+                                .as_deref()
+                                .or(empty_group.as_deref())
+                                .or(has_run
+                                    .then_some(BLOCKED_BY_RUN)
+                                    .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
+                                    .or(loading.then_some("Still reading this campaign."))
+                                    .or(draft_ref
+                                        .setup
+                                        .roster
+                                        .is_empty()
+                                        .then_some("Add participants first.")));
+                        if unfinished.is_some() {
+                            row_menu(ui, &draft_ref.name, |ui| {
+                                start_another =
+                                    menu_action(ui, "Start another fight", start_blocked);
+                            });
+                        }
+                        let word = start_word;
+                        // Unsaved changes own the primary: Resume waits until they are saved or
+                        // discarded.
+                        run_it = if has_run || dirty {
+                            Action::secondary(word)
+                        } else {
+                            Action::primary(word)
+                        }
+                        .blocked(if unfinished.is_some() {
+                            has_run
                                 .then_some(BLOCKED_BY_RUN)
                                 .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
                                 .or(loading.then_some("Still reading this campaign."))
-                                .or(draft_ref
-                                    .setup
-                                    .roster
-                                    .is_empty()
-                                    .then_some("Add participants first.")));
-                    if unfinished.is_some() {
-                        row_menu(ui, &draft_ref.name, |ui| {
-                            start_another = menu_action(ui, "Start another fight", start_blocked);
-                        });
-                    }
-                    let word = start_word;
-                    // Unsaved changes own the primary: Resume waits until they are saved or
-                    // discarded.
-                    run_it = if has_run || dirty {
-                        Action::secondary(word)
-                    } else {
-                        Action::primary(word)
-                    }
-                    .blocked(if unfinished.is_some() {
-                        has_run
-                            .then_some(BLOCKED_BY_RUN)
-                            .or(creature_dirty.then_some(BLOCKED_BY_CREATURE))
-                            .or(loading.then_some("Still reading this campaign."))
-                    } else {
-                        start_blocked
-                    })
-                    .hint(if unfinished.is_some() {
-                        "Save this encounter and resume its unfinished run."
-                    } else {
-                        "Save this encounter and start a run."
-                    })
-                    .show(ui)
-                    .clicked();
-                    if has_run {
-                        blocked_reason(ui, Some(BLOCKED_BY_RUN));
-                        design::gap(ui, design::Gap::L);
-                    }
-                    save = match state.save_weight() {
-                        design::save_row::SaveWeight::Primary => Action::primary("Save encounter"),
-                        design::save_row::SaveWeight::Secondary => {
-                            Action::secondary("Save encounter")
+                        } else {
+                            start_blocked
+                        })
+                        .hint(if unfinished.is_some() {
+                            "Save this encounter and resume its unfinished run."
+                        } else {
+                            "Save this encounter and start a run."
+                        })
+                        .show(ui)
+                        .clicked();
+                        if has_run {
+                            blocked_reason(ui, Some(BLOCKED_BY_RUN));
+                            design::gap(ui, design::Gap::L);
                         }
-                    }
-                    .blocked(state.save_blocked())
-                    .show(ui)
-                    .clicked();
-                },
-            );
+                        save = match state.save_weight() {
+                            design::save_row::SaveWeight::Primary => {
+                                Action::primary("Save encounter")
+                            }
+                            design::save_row::SaveWeight::Secondary => {
+                                Action::secondary("Save encounter")
+                            }
+                        }
+                        .blocked(state.save_blocked())
+                        .show(ui)
+                        .clicked();
+                    },
+                );
+            });
         });
         ui.horizontal(|ui| {
             ui.set_min_height(Density::Read.control());
@@ -6397,9 +6487,12 @@ impl Encounters {
                 // FB6: while Save is blocked, Discard is the one way out.
                 blocked_reason(ui, state.lock_reason());
             }
+            // The creature's reason has one home: the back line paints it while it holds Back;
+            // while the encounter's changes hold Back, this row says it for Start and Save.
+            let creature_here = creature_dirty && head.held_by() != Some(design::Unsaved::Creature);
             blocked_reason(
                 ui,
-                creature_dirty
+                creature_here
                     .then_some(BLOCKED_BY_CREATURE)
                     .or(loading.then_some("Still reading this campaign."))
                     .or(
@@ -7158,32 +7251,45 @@ impl Encounters {
     /// what the party has left while they choose what to put against it.
     fn sync_option(ui: &mut egui::Ui, draft: &mut Draft, snapshot: &Snapshot, party: &Party) {
         ui.checkbox(&mut draft.setup.combat_sync, SYNC_OPTION);
+        // The live fact stands directly under its control, the help after it (B4, lead ruling:
+        // at 960 the help, not the party's HP, is what goes below the view). With sync off, the
+        // fact is that nothing reaches D&D Beyond.
+        if draft.setup.combat_sync {
+            let sheets: Vec<_> = draft
+                .setup
+                .roster
+                .iter()
+                .filter_map(|slot| slot_sheet(slot, snapshot, party))
+                .collect();
+            if let Some(line) = crate::party::party_line(&sheets, party.connected()) {
+                ui.horizontal_wrapped(|ui| {
+                    ui.add(
+                        egui::Label::new(Type::Small.rich(ui, line).color(colors().text)).wrap(),
+                    );
+                    if !party.connected() && design::link(ui, "Connect to sync").clicked() {
+                        ui.ctx().data_mut(|data| {
+                            data.insert_temp(egui::Id::new("open_account_settings"), true)
+                        });
+                    }
+                });
+            }
+        } else {
+            ui.add(
+                egui::Label::new(
+                    Type::Small
+                        .rich(ui, "Nothing in this encounter reaches D&D Beyond.")
+                        .color(colors().text),
+                )
+                .wrap(),
+            );
+        }
         let words = if draft.setup.combat_sync {
             "The party starts with the HP and conditions on their sheets. When connected, the run and D&D Beyond stay matched."
         } else {
-            "The party starts from their saved copies and the starting values here. Nothing in this encounter reaches D&D Beyond, unless you select Sync party in the run."
+            "The party starts from their saved copies and the starting values here. To sync a fight, select Sync party in the run."
         };
         // AD1: help under an option keeps the reader measure.
         design::help(ui, words);
-        if !draft.setup.combat_sync {
-            return;
-        }
-        let sheets: Vec<_> = draft
-            .setup
-            .roster
-            .iter()
-            .filter_map(|slot| slot_sheet(slot, snapshot, party))
-            .collect();
-        if let Some(line) = crate::party::party_line(&sheets, party.connected()) {
-            ui.horizontal_wrapped(|ui| {
-                ui.add(egui::Label::new(Type::Small.rich(ui, line).color(colors().text)).wrap());
-                if !party.connected() && design::link(ui, "Connect to sync").clicked() {
-                    ui.ctx().data_mut(|data| {
-                        data.insert_temp(egui::Id::new("open_account_settings"), true)
-                    });
-                }
-            });
-        }
     }
 
     #[allow(
@@ -9980,6 +10086,64 @@ mod tests {
             fs::read_dir(dir.path().join("Encounters")).unwrap().count(),
             before
         );
+
+        // B4, E1: the plan's and the run's routes that would replace the open drafts are refused
+        // in the owner while one is unsaved, each with that draft's reason, and keep every draft.
+        let kept = encounters.draft.as_ref().map(|draft| draft.id);
+        encounters.error = None;
+        encounters.new_from_plan(None);
+        assert_eq!(
+            encounters.draft.as_ref().map(|d| d.id),
+            kept,
+            "New fight keeps it"
+        );
+        assert_eq!(encounters.error.as_deref(), Some(BLOCKED_BY_DRAFT));
+        encounters.error = None;
+        assert_eq!(
+            encounters.new_group_in_plan(),
+            PlanOpen::Refused(BLOCKED_BY_DRAFT)
+        );
+        assert!(encounters.group_draft.is_none(), "New group is refused");
+        assert_eq!(encounters.error.as_deref(), Some(BLOCKED_BY_DRAFT));
+        encounters.error = None;
+        assert_eq!(
+            encounters.open_group_in_plan("Groups/Any.md", &active),
+            PlanOpen::Refused(BLOCKED_BY_DRAFT)
+        );
+        assert!(
+            encounters.group_draft.is_none(),
+            "a group is not opened over it"
+        );
+        assert_eq!(encounters.draft.as_ref().map(|d| d.id), kept);
+        assert_eq!(encounters.error.as_deref(), Some(BLOCKED_BY_DRAFT));
+        // A changed group holds them too, with the group's own reason.
+        let mut encounters = fresh();
+        encounters.group_draft = Some(GroupDraft::new());
+        let group = encounters.group_draft.as_ref().map(GroupDraft::id);
+        let group_reason = PlanOpen::Refused(design::Unsaved::Group.reason());
+        assert_eq!(
+            encounters.open_group_in_plan("Groups/Any.md", &active),
+            group_reason
+        );
+        assert_eq!(encounters.new_group_in_plan(), group_reason);
+        assert_eq!(encounters.new_from_plan(None), group_reason);
+        assert_eq!(encounters.group_draft.as_ref().map(GroupDraft::id), group);
+        assert!(
+            encounters.draft.is_none(),
+            "no new fight over the changed group"
+        );
+        assert_eq!(
+            encounters.error.as_deref(),
+            Some(design::Unsaved::Group.reason())
+        );
+        // With nothing unsaved, New fight opens its draft.
+        let mut encounters = fresh();
+        encounters.new_from_plan(None);
+        assert!(
+            encounters.draft.is_some(),
+            "a new fight opens with nothing unsaved"
+        );
+        assert_eq!(encounters.error, None);
     }
 
     #[test]
