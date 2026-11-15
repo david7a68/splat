@@ -11559,6 +11559,17 @@ mod tests {
         played.record_run(&fact(), None, true);
         played.record_run(&later, None, true);
         editor.snapshot = Some(Snapshot::load(&campaign, &[]).unwrap());
+        // Ruling L9, early review F1 of PR 444: the revision of the saved-run facts, which the
+        // Add results' words key by, holds on a poll with no change, and moves when the run
+        // list is read again or a run opens.
+        editor.note_run_facts();
+        let facts = editor.saved_runs_revision();
+        editor.note_run_facts();
+        assert_eq!(
+            editor.saved_runs_revision(),
+            facts,
+            "no change, no new revision"
+        );
         editor.follow_continue_rule(&played);
         assert_eq!(
             editor.history_blocked,
@@ -11568,6 +11579,12 @@ mod tests {
         taken["id"] = serde_json::json!(later.id);
         fs::write(&path, serde_json::to_vec_pretty(&taken).unwrap()).unwrap();
         editor.read_runs_again(&campaign);
+        editor.note_run_facts();
+        assert_ne!(
+            editor.saved_runs_revision(),
+            facts,
+            "the run list read again is new facts"
+        );
         editor.open_saved_run(&path, &campaign);
         editor.follow_continue_rule(&played);
         assert_eq!(
@@ -11577,7 +11594,15 @@ mod tests {
         fs::write(&path, &bytes).unwrap();
         editor.snapshot = None;
 
+        editor.note_run_facts();
+        let no_run = editor.saved_runs_revision();
         editor.run = Some(editor.start_run(&campaign, &[]).unwrap());
+        editor.note_run_facts();
+        assert_ne!(
+            editor.saved_runs_revision(),
+            no_run,
+            "an open run's facts are over the list"
+        );
         let current = editor.run().unwrap().live_info().unwrap().id;
         editor.open_saved_run(&path, &campaign);
         assert_eq!(editor.run().unwrap().live_info().unwrap().id, current);

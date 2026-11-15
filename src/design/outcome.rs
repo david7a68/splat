@@ -2026,10 +2026,10 @@ impl<A> Typed<A> {
         self.body.words.as_str()
     }
 
-    /// Whether it has an Undo, for a test of a retained projection.
+    /// Whether its Undo's lock holds, for a test of a retained projection.
     #[cfg(test)]
-    pub(in crate::design) fn has_undo(&self) -> bool {
-        self.body.undo.is_some()
+    pub(in crate::design) fn undo_locked(&self) -> bool {
+        holding(&self.body.undo_lock).is_some()
     }
 }
 
@@ -2283,6 +2283,12 @@ impl<'f, A> KeptLine<'f, A> {
     ) -> Self {
         let (typed, refused) = prepare(outcome, refused);
         Self::prepared(frame, ticket, typed, refused)
+    }
+
+    /// Its ticket, for a test of `Results::present`.
+    #[cfg(test)]
+    pub(in crate::design) fn ticket(&self) -> &Ticket {
+        &self.ticket
     }
 
     /// A line from what [`prepare`] made: for `Results::present`, which keeps the prepared

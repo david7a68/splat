@@ -3358,8 +3358,10 @@ impl Sessions {
 
     /// The revision of the timed recording words (`Recording saved`, `Hearing sound`): it
     /// changes when one of them comes or goes, as of the last owner update, for a reader that
-    /// keeps them.
-    pub fn recording_revision(&self) -> design::memo::Revision {
+    /// keeps them. The rail and the page read the words each frame from constant state and
+    /// keep no line yet, so only the tests read it; the retained footer (PR 2b) is its reader.
+    #[cfg(test)]
+    pub(crate) fn recording_revision(&self) -> design::memo::Revision {
         self.timed_words.0.revision()
     }
 
@@ -10057,6 +10059,10 @@ mod tests {
         harness.step();
         assert_eq!(saved(&harness), Some("Recording saved"), "the stop says it");
         let stopped = harness.state().0.saved_at.map(|(_, at)| at).unwrap();
+        // Ruling L9: the owner update (`poll`'s `settle_timed`) ends the word, and until then
+        // asks for a repaint at the time left; the rail reads no clock. The words' revision
+        // changes at the end, not on a frame with no change.
+        let said = harness.state().0.recording_revision();
         crate::frame_clock::set(stopped + 7.5);
         harness.step();
         assert_eq!(
@@ -10064,12 +10070,27 @@ mod tests {
             Some("Recording saved"),
             "7.5 s of frames later"
         );
-        crate::frame_clock::set(stopped + 8.5);
+        assert!(
+            (harness.output().viewport_output[&egui::ViewportId::ROOT]
+                .repaint_delay
+                .as_secs_f64()
+                - 0.5)
+                .abs()
+                < 1e-3,
+            "a repaint is asked for at the word's end"
+        );
+        assert_eq!(harness.state().0.recording_revision(), said);
+        crate::frame_clock::set(stopped + 8.0);
         harness.step();
         assert_eq!(
             saved(&harness),
             None,
-            "8.5 s of frames later the word has ended"
+            "8 s of frames later the word has ended"
+        );
+        assert_ne!(
+            harness.state().0.recording_revision(),
+            said,
+            "its end is a change of the timed words"
         );
     }
 

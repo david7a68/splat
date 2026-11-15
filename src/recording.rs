@@ -881,7 +881,9 @@ mod tests {
     }
 
     /// Round 30 B7d: `Hearing sound` ends `HEARD_FOR` after the last sound by the frame clock,
-    /// so a test's frames decide when the word turns to `Quiet`.
+    /// so a test's frames decide when the word turns to `Quiet`. Ruling L9: it ends in the
+    /// owner update (`expire`, on every frame, simulated capture too), which says the time left
+    /// for a repaint; the reader reads no clock.
     #[test]
     fn hearing_ends_by_the_frame_clock() {
         let dir = tempfile::tempdir().unwrap();
@@ -890,14 +892,21 @@ mod tests {
         crate::frame_clock::set(10.0);
         recorder.simulate_health(Health::Hearing);
         crate::frame_clock::set(14.5);
+        let left = recorder.expire();
         assert!(
             recorder.heard_just_now(),
             "4.5 s of frames later it still hears"
         );
-        crate::frame_clock::set(15.5);
+        assert!(
+            left.is_some_and(|left| (left.as_secs_f64() - 0.5).abs() < 1e-9),
+            "a repaint at its end, 0.5 s on: {left:?}"
+        );
+        crate::frame_clock::set(15.0);
+        assert!(recorder.heard_just_now(), "no reader ends it");
+        assert_eq!(recorder.expire(), None);
         assert!(
             !recorder.heard_just_now(),
-            "5.5 s of frames later it is quiet"
+            "5 s of frames later the owner update has made it quiet"
         );
     }
 

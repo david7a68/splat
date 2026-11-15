@@ -7745,6 +7745,116 @@ mod tests {
     #[test]
     fn long_rest_added_on_plan_restores_and_undo_removes_its_ruling() {
         timeline::page::check_long_rest_add(&PLAN_KINDS);
+        // Early review F1 of PR 444 (ruling L9): the Add result of a long rest names the fights
+        // that keep their saved HP. Its kept line follows the saved runs' facts by their own
+        // revision: the DM deletes the saved run (the book does not change), and the clause
+        // goes in the next frame while the rest's result and its Undo stay; Undo of the
+        // deletion brings the clause back.
+        use crate::design::memo::{Changed, Revised};
+        use crate::encounter_run::{SavedRunInfo, Standing};
+        use egui_kittest::kittest::Queryable;
+        let (session, run) = (Uuid::new_v4(), Uuid::new_v4());
+        let mut book = Book::default();
+        book.add(Kind::Encounter, Some(session));
+        book.events[0].title = "Bridge".into();
+        book.events[0].run = Some(run);
+        let saved = SavedRunInfo {
+            path: PathBuf::from("bridge-run.json"),
+            id: Some(run),
+            source: None,
+            encounter: "Bridge".into(),
+            label: "Round 2".into(),
+            standing: Standing::Unfinished,
+            setup: false,
+            saved_at: None,
+            unsent: Vec::new(),
+        };
+        let page = Sessions {
+            selected: Some(session),
+            ..Default::default()
+        };
+        type State = (Sessions, Book, Revised<Vec<SavedRunInfo>>);
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(design::FORM_WIDTH, 640.0))
+            .build_state(
+                |ctx, (page, book, runs): &mut State| {
+                    let mut group = |_: &mut egui::Ui| {};
+                    let plan = Plan {
+                        fights: &[],
+                        saved_runs: runs,
+                        saved_runs_revision: runs.revision(),
+                        groups: &[],
+                        group_blocked: None,
+                        group_open: false,
+                        group_discarded: false,
+                        group_discarded_name: String::new(),
+                        group_discarded_order: None,
+                        arrivals_open: false,
+                        group_editor: std::cell::RefCell::new(&mut group),
+                        blocked: None,
+                        run_directory: None,
+                        open_run: None,
+                        open_state: String::new(),
+                        open_encounter: None,
+                        party: &[],
+                        tables: &[],
+                    };
+                    page.settle_timed(ctx, book);
+                    egui::CentralPanel::default()
+                        .show(ctx, |ui| page.plan_pane(ui, book, &plan, None));
+                },
+                (page, book, Revised::new(vec![saved.clone()])),
+            );
+        design::theme::install(&harness.ctx);
+        harness.run_steps(2);
+        harness.get_by_label("Add Long rest").click();
+        harness.run_steps(3);
+        let keeps = |harness: &egui_kittest::Harness<'_, State>| {
+            harness
+                .query_all_by_label_contains("Bridge keeps its saved HP.")
+                .next()
+                .is_some()
+        };
+        let rest_stands = |harness: &egui_kittest::Harness<'_, State>| {
+            harness.query_by_label("Undo add").is_some()
+                && harness
+                    .query_all_by_label_contains("Long rest added.")
+                    .next()
+                    .is_some()
+        };
+        assert!(
+            rest_stands(&harness) && keeps(&harness),
+            "the rest's result names the fight that keeps its HP"
+        );
+        let book_revision = harness.state().1.revision();
+        harness.state_mut().2.revise(|runs| {
+            runs.clear();
+            Changed::Yes
+        });
+        harness.step();
+        assert_eq!(
+            harness.state().1.revision(),
+            book_revision,
+            "deleting a saved run leaves the book as it was"
+        );
+        assert!(
+            !keeps(&harness),
+            "a deleted saved run keeps no HP: the clause goes"
+        );
+        assert!(
+            rest_stands(&harness),
+            "the unrelated deletion leaves the rest's result and its Undo"
+        );
+        harness.state_mut().2.revise(|runs| {
+            runs.push(saved.clone());
+            Changed::Yes
+        });
+        harness.step();
+        assert_eq!(harness.state().1.revision(), book_revision);
+        assert!(
+            keeps(&harness) && rest_stands(&harness),
+            "Undo of the deletion brings the clause back"
+        );
     }
 
     #[test]

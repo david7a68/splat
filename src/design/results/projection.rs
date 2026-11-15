@@ -115,10 +115,12 @@ impl<O, A, I> Projection<O, A, I> {
         self.line.as_ref().map(|line| line.typed.words())
     }
 
-    /// Whether its line has an Undo, for a test.
+    /// Whether its line's Undo is locked, for a test.
     #[cfg(test)]
-    pub(crate) fn has_undo(&self) -> bool {
-        self.line.as_ref().is_some_and(|line| line.typed.has_undo())
+    pub(crate) fn undo_locked(&self) -> bool {
+        self.line
+            .as_ref()
+            .is_some_and(|line| line.typed.undo_locked())
     }
 }
 
@@ -323,16 +325,4 @@ pub(super) fn count(_: impl FnOnce(&mut Work)) {}
 #[cfg(test)]
 pub(crate) fn work() -> Work {
     WORK.with(std::cell::Cell::get)
-}
-
-/// This thread's projection work so far, for `test_support::CachedWork`: `reached` is the
-/// lookups, `work` the bytes of the lines built, the entries visited and the words handed past
-/// what one shown line needs (a caller passes `handed` it allows per frame).
-#[cfg(test)]
-pub(crate) fn work_counts() -> crate::test_support::Counts {
-    let work = work();
-    crate::test_support::Counts {
-        reached: work.lookups,
-        work: work.bytes + work.visits,
-    }
 }
