@@ -2271,6 +2271,32 @@ impl design::results::Kept for PlannedLine {
     }
 }
 
+/// A plan line's result words and its Undo step. Alone in its footer: `“Shrine of Cinders” is
+/// in tonight’s plan.` and `Undo add plan line`. Beside other plan lines (`several`: each line's
+/// fight and session), each names its session, so the DM can tell which note a control changes:
+/// `“Shrine of Cinders” is in the plan of Session 1: Road.` and `Undo add plan line for Shrine of
+/// Cinders in Session 1: Road`; when fight and session still meet twice, the check it was
+/// clicked on tells them apart.
+fn plan_line_words(planned: &PlannedLine, several: &[(String, String)]) -> (Sentence, UndoStep) {
+    let step = UndoStep::of(Verb::Add, "plan line");
+    if several.is_empty() {
+        return (as_sentence(&planned.chosen.words()), step);
+    }
+    let (name, session) = (&planned.chosen.name, &planned.session);
+    let words = as_sentence(&format!("“{name}” is in the plan of {session}."));
+    let twice = several
+        .iter()
+        .filter(|(other, at)| other == name && at == session)
+        .count()
+        > 1;
+    let apart = if twice {
+        format!("for {name} in {session}, check {}", planned.chosen.check.0)
+    } else {
+        format!("for {name} in {session}")
+    };
+    (words, step.tell_apart(apart))
+}
+
 /// Where a refused plan Undo ran: the selected session's open draft, or a draft of its own on
 /// the file, dropped after the attempt (R26: it never selects that session).
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -2521,13 +2547,22 @@ pub(super) struct Travel {
     /// The Timeline revision that the plan lines' journeys were last checked against
     /// (`end_plan_answers_of_lost_journeys`).
     journeys_seen: Option<crate::design::memo::Revision>,
+    /// What the plan lines' results were last followed at (`follow_plan_line`): the campaign,
+    /// the selection, the open draft's revision and the disk check. Any change of the store or
+    /// of a watched note's words forgets it.
+    followed: Option<FollowKey>,
 }
+
+/// See `Travel::followed`.
+type FollowKey = (Option<Uuid>, Option<Uuid>, Option<u64>, Option<Instant>);
 
 #[cfg(test)]
 thread_local! {
     /// Tests: how many times a plan line's owners (notes, journeys) were looked up. An
     /// unchanged frame looks up none.
     pub(super) static PLAN_OWNER_SCANS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Tests: how many times the plan lines' results were walked to follow their notes.
+    pub(super) static PLAN_FOLLOW_WALKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// What Timeline's view of a session plan is read from: the campaign, the session and its file,
@@ -3157,6 +3192,7 @@ impl Sessions {
             };
             result.map_err(|fault| planned.refusal(&fault, place, planned.path.exists()))
         });
+        self.travel.followed = None;
         if place == UndoPlace::OwnDraft {
             // What the file holds now: a draft that could not save is dropped unpublished.
             self.read_note_again(note, &path);
@@ -3245,11 +3281,25 @@ impl Sessions {
         PLAN_OWNER_SCANS.with(|scans| scans.set(scans.get() + 1));
         let notes = &self.notes;
         self.travel.planned.end_unreachable(|planned| {
-            planned.campaign == campaign
-                && notes
-                    .iter()
-                    .any(|note| note.id == planned.note && note.path == planned.path)
+            planned.campaign == campaign && notes.iter().any(|note| note.id == planned.note)
         });
+        // A note found at another file (a move or a rename in its folder): a refused Undo's
+        // answer is the note's, so it follows the note, and its Undo waits until the next check
+        // of the note's words. A result with no refusal ends at the move, as before. No draft is
+        // touched.
+        self.travel.planned.source_changed(|planned| {
+            let Some(note) = notes.iter().find(|note| note.id == planned.note) else {
+                return true;
+            };
+            if note.path == planned.path {
+                return true;
+            }
+            let from = std::mem::replace(&mut planned.path, note.path.clone());
+            planned.undo.moved(&from, &note.path);
+            planned.live = false;
+            false
+        });
+        self.travel.followed = None;
     }
 
     /// Row 123, review 3, point 2: the draft open for `note`, found by its session, wherever its
@@ -3308,6 +3358,7 @@ impl Sessions {
             return;
         }
         self.travel.generation += 1;
+        self.travel.followed = None;
         let tick = self.last_check;
         self.travel.watched.insert(
             note,
@@ -3355,6 +3406,19 @@ impl Sessions {
     pub(super) fn follow_plan_line(&mut self) {
         self.reconcile_plan_owners();
         let campaign = self.campaign.as_ref().map(|campaign| campaign.id);
+        // Nothing to look at unless the store, the selection, the open draft's words or the disk
+        // check changed since the last look: an unchanged frame walks no entry.
+        let key = (
+            campaign,
+            self.selected,
+            self.draft.as_ref().map(crate::sessions::Draft::revision),
+            self.last_check,
+        );
+        if self.travel.followed == Some(key) {
+            return;
+        }
+        #[cfg(test)]
+        PLAN_FOLLOW_WALKS.with(|walks| walks.set(walks.get() + 1));
         let held: Vec<(Uuid, std::path::PathBuf, NoteSource)> = self
             .travel
             .planned
@@ -3377,6 +3441,9 @@ impl Sessions {
             changed |= source != seen;
             sources.push((note, source));
         }
+        // Reading a note above can change a watched generation, which forgets the last look:
+        // keep this look only now.
+        self.travel.followed = Some(key);
         if !changed {
             return;
         }
@@ -3423,6 +3490,7 @@ impl Sessions {
             |planned| !book.events.iter().any(|event| event.id == planned.journey),
             |planned| planned.live,
         );
+        self.travel.followed = None;
     }
 
     /// Row 123: an act on the plan line of `note` and `journey` ends that line's refused Undo,
@@ -3432,6 +3500,7 @@ impl Sessions {
             |planned| planned.note == note && planned.journey == journey,
             |planned| planned.live,
         );
+        self.travel.followed = None;
     }
 
     /// Row 123: Timeline's view of the plan of `journey`'s session, for its check results'
@@ -3571,19 +3640,24 @@ impl Sessions {
             .newest_first(&campaign)
             .filter(|shown| in_session.is_none_or(|session| session == Some(shown.value().note)))
             .collect();
-        let several = shown.len() > 1;
+        let several: Vec<(String, String)> = if shown.len() > 1 {
+            shown
+                .iter()
+                .map(|shown| {
+                    let planned = shown.value();
+                    (planned.chosen.name.clone(), planned.session.clone())
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
         shown
             .into_iter()
             .map(|shown| {
                 shown.outcome(frame, |planned| {
-                    let said = Said::new(as_sentence(&planned.chosen.words()));
+                    let (words, step) = plan_line_words(planned, &several);
+                    let said = Said::new(words);
                     if planned.live {
-                        let step = UndoStep::of(Verb::Add, "plan line");
-                        let step = if several {
-                            step.tell_apart(format!("for {}", planned.chosen.name))
-                        } else {
-                            step
-                        };
                         said.undo(step.pressed_as(undo.clone())).into()
                     } else {
                         said.into()
@@ -3619,6 +3693,7 @@ impl Sessions {
             .find(|known| known.id == note)
             .map(crate::sessions::Note::label)
             .unwrap_or_default();
+        self.travel.followed = None;
         self.travel.planned.record(PlannedLine {
             seen,
             live: true,
@@ -6534,16 +6609,56 @@ mod tests {
             "a successful act on another line keeps A's answer"
         );
         assert!(sessions.plan_line_shown_in(Some(a)) && sessions.plan_line_shown_in(Some(b)));
-        // E5: with a refused answer kept, an unchanged frame looks up no owner.
+        // N1: the same fight in two sessions: Timeline's two lines and their Undos name their
+        // sessions.
+        let labels: Vec<(String, String)> = {
+            let campaign = sessions.campaign.as_ref().map(|campaign| campaign.id);
+            let shown: Vec<_> = sessions.travel.planned.newest_first(&campaign).collect();
+            let several: Vec<(String, String)> = shown
+                .iter()
+                .map(|shown| {
+                    let planned = shown.value();
+                    (planned.chosen.name.clone(), planned.session.clone())
+                })
+                .collect();
+            shown
+                .iter()
+                .map(|shown| {
+                    let (words, step) = plan_line_words(shown.value(), &several);
+                    (words.to_string(), step.label())
+                })
+                .collect()
+        };
+        assert_eq!(
+            labels,
+            [
+                (
+                    "“Shrine of Cinders” is in the plan of Session 2: Keep.".to_owned(),
+                    "Undo add plan line for Shrine of Cinders in Session 2: Keep".to_owned()
+                ),
+                (
+                    "“Shrine of Cinders” is in the plan of Session 1: Road.".to_owned(),
+                    "Undo add plan line for Shrine of Cinders in Session 1: Road".to_owned()
+                ),
+            ]
+        );
+        // E5: with a refused answer kept, an unchanged frame looks up no owner and walks no
+        // entry; an unchanged timed listing of the folder changes no revision.
         let scans = || PLAN_OWNER_SCANS.with(std::cell::Cell::get);
+        let walks = || PLAN_FOLLOW_WALKS.with(std::cell::Cell::get);
         sessions.follow_plan_line();
         sessions.end_plan_answers_of_lost_journeys(&book);
-        let still = scans();
+        let (still, walked) = (scans(), walks());
         for _ in 0..3 {
             sessions.follow_plan_line();
             sessions.end_plan_answers_of_lost_journeys(&book);
         }
         assert_eq!(scans(), still, "no owner scan on an unchanged frame");
+        assert_eq!(
+            walks(),
+            walked,
+            "no walk of the entries on an unchanged frame"
+        );
         // A's source restored: its Undo is live again, and works on A alone.
         fs::write(&b_note.path, &as_left).unwrap();
         sessions.last_check = Some(Instant::now());
@@ -6563,6 +6678,39 @@ mod tests {
         sessions
             .plan_from_timeline(&book, &road, &chosen("Shrine of Cinders"), &names)
             .unwrap();
+        // E1: a refused answer is its note's: a rename of the note's file inside its folder,
+        // found by a listing, keeps it; an unrelated dirty draft stays as it was.
+        let as_left = b_file(1);
+        fs::write(&b_note.path, format!("{as_left}Outside.\n")).unwrap();
+        sessions.last_check = Some(Instant::now());
+        let refused = sessions.try_plan_undo_for(Some(b)).expect("refused");
+        sessions.select(Some(a));
+        let dirty = format!(
+            "{}Typed, not saved.\n",
+            sessions.draft.as_ref().unwrap().body
+        );
+        sessions.draft.as_mut().unwrap().body = dirty.clone();
+        sessions.draft.as_mut().unwrap().edited();
+        let renamed = dir.path().join("Renamed road.md");
+        fs::rename(&b_note.path, &renamed).unwrap();
+        sessions.notes[1].path = renamed.clone();
+        sessions.notes_revision += 1;
+        assert_eq!(
+            sessions.plan_line_refusal_for(Some(b)).as_deref(),
+            Some(refused.as_str()),
+            "the rename keeps A's answer"
+        );
+        assert_eq!(sessions.draft.as_ref().unwrap().body, dirty);
+        assert!(
+            sessions.draft.as_ref().unwrap().unsaved(),
+            "the dirty draft is not saved"
+        );
+        fs::rename(&renamed, &b_note.path).unwrap();
+        sessions.notes[1].path = b_note.path.clone();
+        sessions.notes_revision += 1;
+        sessions.draft.as_mut().unwrap().body = dirty.replace("Typed, not saved.\n", "");
+        sessions.draft.as_mut().unwrap().save();
+        fs::write(&b_note.path, &as_left).unwrap();
         {
             use std::os::unix::fs::PermissionsExt;
             let mode = |mode| {

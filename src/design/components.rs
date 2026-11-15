@@ -3423,8 +3423,8 @@ impl<'a> Footer<'a> {
         most: f32,
         stored: f32,
     ) {
-        // The one footer order (ruling R42): the newest act's line leads, then results with a
-        // live Undo, reasons, notices and results with no Undo.
+        // The one footer order (`outcome::footer_order`): results with a live Undo newest
+        // first, reasons and notices in the caller's order, then results with no live Undo.
         super::outcome::footer_order(&mut self.messages);
         if cut && rect.height() > 0.0 {
             // The cut body's last line reads as a list that goes on, not as a drawing fault.
@@ -6434,12 +6434,11 @@ mod tests {
             words(&["A again.", "B.", "Reason.", "Notice."]),
             "A again leads B"
         );
-        // Results with no live Undo follow the notices, newest first; but the newest act's line
-        // leads, whatever its kind (ruling R42).
+        // Results with no live Undo follow the notices, newest first.
         let (old, new) = (ResultOrder::issue(), ResultOrder::issue());
         assert_eq!(
             painted(&[("Old.", old, false), ("New.", new, false), ("B.", b, true)]),
-            words(&["New.", "B.", "Reason.", "Notice.", "Old."]),
+            words(&["B.", "Reason.", "Notice.", "New.", "Old."]),
             "plain results"
         );
     }

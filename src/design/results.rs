@@ -1634,9 +1634,6 @@ mod tests {
         fn key(&self) -> (super::super::components::FooterRank, Option<ResultOrder>) {
             (self.0, self.1)
         }
-        fn lead(&mut self) {
-            self.0 = super::super::components::FooterRank::Answer;
-        }
     }
 
     fn done(note: Note, words: &'static str) -> Done {
@@ -1710,7 +1707,7 @@ mod tests {
         // M1: the recorded Undo. A refused attempt keeps the entry and its ticket, holds the
         // refusal with an order of its own, and outlives the change that caused it.
         use super::super::components::FooterRank;
-        use super::super::outcome::footer_order;
+        use super::super::outcome::{footer_order, refusal_rank};
         results.record(done(A, "A."));
         let a = results.get(&A).unwrap().order();
         let refusal = |cause| {
@@ -1754,44 +1751,52 @@ mod tests {
             ["A."],
             "B ended, A's answer stays"
         );
-        // R42, in one feed: the line of the newest act leads, whatever its kind; an act that
-        // leaves no line moves nothing.
+        // R42 as amended, in one feed: standing lines keep their places; answers stand newest
+        // first in their group; a refusal leads only while it is the footer's newest answer, then
+        // it stands with the results with no Undo, by its attempt's order, and stays.
         let order = |lines: &mut Vec<Line>| {
             footer_order(lines);
             lines.iter().map(|line| line.2).collect::<Vec<_>>()
         };
         let older = Some(a);
-        let mut feed = vec![
-            Line(FooterRank::Undo, older, "older success with Undo"),
-            Line(FooterRank::Reason, None, "reason"),
-            Line(FooterRank::Notice, Some(attempt), "A refused, Undo waits"),
-        ];
+        let feed = |newest: Option<ResultOrder>, more: Vec<Line>| {
+            let mut lines = vec![
+                Line(FooterRank::Undo, older, "older success with Undo"),
+                Line(FooterRank::Reason, None, "standing fault"),
+                Line(FooterRank::Notice, None, "standing notice"),
+                Line(refusal_rank(attempt, newest), Some(attempt), "A refused"),
+            ];
+            lines.extend(more);
+            lines
+        };
         assert_eq!(
-            order(&mut feed),
-            ["A refused, Undo waits", "older success with Undo", "reason"],
-            "A's refusal is the newest act"
+            order(&mut feed(Some(attempt), Vec::new())),
+            [
+                "A refused",
+                "older success with Undo",
+                "standing fault",
+                "standing notice"
+            ],
+            "A's refusal is the newest answer: it leads"
         );
-        // A later Add Day leaves no line here: nothing moves.
-        let mut feed = vec![
-            Line(FooterRank::Undo, older, "older success with Undo"),
-            Line(FooterRank::Notice, Some(attempt), "A refused, Undo waits"),
-        ];
+        // A later act that leaves no line here moves nothing.
         let _ = act_order();
-        assert_eq!(order(&mut feed)[0], "A refused, Undo waits");
-        // A later success with no Undo leads; A's refusal goes down and stays.
+        assert_eq!(order(&mut feed(Some(attempt), Vec::new()))[0], "A refused");
+        // A later success with no Undo is the newest answer: A goes below it, and stays; the
+        // standing lines keep their places above both.
         results.record(done(B, "B."));
         let b = results.get(&B).unwrap().order();
-        let mut feed = vec![
-            Line(FooterRank::Undo, older, "older success with Undo"),
-            Line(FooterRank::Notice, Some(attempt), "A refused, Undo waits"),
-            Line(FooterRank::Notice, Some(b), "B, no Undo"),
-        ];
         assert_eq!(
-            order(&mut feed),
+            order(&mut feed(
+                Some(b),
+                vec![Line(FooterRank::Notice, Some(b), "B, no Undo")]
+            )),
             [
-                "B, no Undo",
                 "older success with Undo",
-                "A refused, Undo waits"
+                "standing fault",
+                "standing notice",
+                "B, no Undo",
+                "A refused"
             ]
         );
         assert!(

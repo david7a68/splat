@@ -1,9 +1,9 @@
 //! A refused act's answer, typed (mechanism M1 of the structural phase): what was not done to
 //! which named thing, why, and what the DM can do next. Every part is required and none is free
-//! text a caller writes. The thing, the file, the act and the recovery are bounded enums whose
-//! words this part writes; a name is never blank; only an outside cause (an error of the system)
-//! is a [`Sentence`], and it cannot stand in for the thing or the recovery. The tone comes from
-//! the cause, in one place ([`Refusal::tone`], ruling R41).
+//! text a caller writes. The thing, the file, the act, the cause and the recovery are bounded
+//! enums whose words this part writes, and a name is never blank. The tone comes from the cause,
+//! in one place ([`Refusal::tone`], ruling R41). A caller that needs a cause from outside the app
+//! adds a bounded diagnosis here, with its tone.
 //!
 //! A [`Refusal`] reaches a footer only through a [`Results`](super::Results) store: an opt-in
 //! recorded Undo ([`Results::undo_or_refuse`](super::Results::undo_or_refuse)) keeps it on the
@@ -136,12 +136,15 @@ impl Name {
 pub enum Kind {
     /// A session plan's line for a fight: `plan line`.
     PlanLine,
+    /// A session's recording: `recording`.
+    Recording,
 }
 
 impl Kind {
     fn noun(self) -> &'static str {
         match self {
             Self::PlanLine => "plan line",
+            Self::Recording => "recording",
         }
     }
 }
@@ -165,6 +168,8 @@ impl Thing {
 pub enum File {
     /// A session's note.
     SessionNote,
+    /// A session's recording file.
+    Recording,
 }
 
 impl File {
@@ -172,6 +177,7 @@ impl File {
     fn noun(self) -> &'static str {
         match self {
             Self::SessionNote => "session note",
+            Self::Recording => "recording file",
         }
     }
 
@@ -179,6 +185,7 @@ impl File {
     fn opens(self) -> &'static str {
         match self {
             Self::SessionNote => "that session’s notes",
+            Self::Recording => "that session’s recordings folder",
         }
     }
 
@@ -186,6 +193,7 @@ impl File {
     fn file(self) -> &'static str {
         match self {
             Self::SessionNote => "that session’s note file",
+            Self::Recording => "that recording file",
         }
     }
 }
@@ -195,12 +203,15 @@ impl File {
 pub enum Change {
     /// `remove the plan line`
     RemovePlanLine,
+    /// `delete the recording file`
+    DeleteRecording,
 }
 
 impl Change {
     fn words(self) -> &'static str {
         match self {
             Self::RemovePlanLine => "remove the plan line",
+            Self::DeleteRecording => "delete the recording file",
         }
     }
 }
@@ -215,10 +226,13 @@ pub enum FailedAct {
     /// The change is in the open draft of `place`, and the draft was not saved: `The plan line
     /// for Bell was taken out of the draft of Session 1, and the draft was not saved.`
     LeftDraft { what: Thing, place: Name },
+    /// Nothing changed: `The recording for Session 1 was not deleted from Session 1: The
+    /// Crossing.`
+    NotDeleted { what: Thing, from: Name },
 }
 
-/// Why the act was refused: a typed diagnosis, which also gives the tone (R41). Only an error of
-/// the system comes from outside, checked by [`Sentence::outside`].
+/// Why the act was refused: a typed diagnosis, which also gives the tone (R41). The part writes
+/// every cause; a new kind of cause is a new variant, with its tone.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Cause {
     /// `The session note changed on disk.` A warning.
@@ -233,8 +247,6 @@ pub enum Cause {
     Unreadable(File),
     /// `The session note could not be saved.` An error.
     NotSaved(File),
-    /// An error of the system, as it came. An error.
-    Outside(Sentence),
 }
 
 /// The DM's next step: a bounded operation on a real target, whose words this part writes.
@@ -280,7 +292,7 @@ impl Refusal {
             Cause::Changed(_) | Cause::Conflict(_) | Cause::Gone(_) | Cause::Replaced(_) => {
                 Tone::Warning
             }
-            Cause::Unreadable(_) | Cause::NotSaved(_) | Cause::Outside(_) => Tone::Error,
+            Cause::Unreadable(_) | Cause::NotSaved(_) => Tone::Error,
         }
     }
 
@@ -299,6 +311,12 @@ impl Refusal {
                 what.name.as_str(),
                 place.as_str()
             ),
+            FailedAct::NotDeleted { what, from } => crate::sentence!(
+                "The {} for {} was not deleted from {}.",
+                what.kind.noun(),
+                what.name.as_str(),
+                from.as_str()
+            ),
         };
         let cause = match &self.cause {
             Cause::Changed(file) => crate::sentence!("The {} changed on disk.", file.noun()),
@@ -314,7 +332,6 @@ impl Refusal {
             Cause::NotSaved(file) => {
                 crate::sentence!("The {} could not be saved.", file.noun())
             }
-            Cause::Outside(words) => words.clone(),
         };
         let next = match self.recovery {
             Recovery::ByHand { file, change } => {
