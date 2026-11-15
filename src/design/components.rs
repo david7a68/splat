@@ -2633,11 +2633,10 @@ pub fn inline_status_link<'a>(ui: &mut Ui, state: impl Into<Tinted<'a>>) -> Resp
 
 /// A label over a large value, with no box. The label stays on one line.
 pub fn stat_tile(ui: &mut Ui, label: &str, value: &str) {
-    let c = colors();
     ui.vertical(|ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
-        ui.add(egui::Label::new(Type::Small.rich(ui, label).color(c.muted)).truncate());
-        ui.label(Type::NumeralLarge.rich(ui, value).color(c.text));
+        super::fact::tile_label_line(ui, label);
+        ui.label(Type::NumeralLarge.rich(ui, value).color(colors().text));
     });
 }
 

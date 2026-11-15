@@ -191,7 +191,7 @@ that hosts reveals (R34, R44, R46); the Settings pane's column (the import form)
 | Segmented | `segmented`, `counted_tab` | Words with an underline, no pill. Each segment is as wide as its words in their widest state (`Strong`), and its words start `S` from its left edge, so nothing moves when the choice changes |
 | List row | `row`, `two_line_row` | Fixed height for `show_rows`; paints hover in the current frame |
 | Status | `status`, `wrapped_status`, `status_link`, `Status`, `rail_status_detail`, `KindStatus`, `StatusKind` | Icon, word and colour; a `KindStatus` paints its icon and its word apart, in the colours its `StatusKind` decides (no free colour): `Recording` paints only its record icon in the `recording` token, its words and time in the text colour (R5); `status_link` opens where the DM can act. A status that wraps (`wrapped_status`, `status_link`, `rail_status_detail`) paints its icon and its word where a one-line status paints them; every line after the first starts at the word, never under the icon |
-| Stat tile | `stat_tile` | Sentence-case muted `Small` label over a large value, no box |
+| Stat tile | `stat_tile`, `roll_tile`, `tile_label` | Sentence-case muted `Small` label over a large value, no box; a value that rolls is `roll_tile`; a label that holds its own number says `Str: 8` (`tile_label`, the fact form) |
 | HP | `hp_bar`, `hp_readout`, `hp_state`, `combat_sync::fraction` | Fixed slots; separate temporary HP. Every displayed HP fraction is compact (`62/62`), through one formatter; stored text and service payloads keep their format |
 | Empty state | `empty_state` | Icon, serif title with no full stop (`Nothing planned yet`), purpose and one next step at the top of an empty pane or page, with normal padding; it starts at one y on every page (the Encounters page steps past its header without an extra item gap) |
 | Heading | `heading(ui, Heading::Group / Label / Section)` | A heading adds its own space: `Heading::above` (`L`; `XL` for a serif `Section`) from the item before it, none when it is first in its column, and `XS` under it, so a heading belongs to what follows. `Group`: `Label` capitals, nonzero count muted, no rule; serif `Section` headings belong to readers and stat blocks. Clippy refuses the old `group_heading` and `group_label` outside `src/design/` (staged); the old `reader::section_heading` is gone |
@@ -2485,7 +2485,12 @@ readable, and offer Add for transcript markers rather than placing them automati
 ## Party
 
 A sheet’s labelled fact has one form, `Label: value`. Multiple values follow the colon, joined by
-` · ` (`Coins: 12 cp · 40 sp`). The sheet’s `sheet_label` helper draws these lines; callers supply no separator.
+` · ` (`Coins: 12 cp · 40 sp`). The shared part `design::fact` draws these lines (ruling M5); callers supply no
+separator. Where a line wraps, each middle dot moves to the next line with the value after it, so no line ends at
+a dot; the accessible name has plain spaces. A stat tile whose label holds its own number takes the same form,
+`Str: 8` over `+1` (`design::tile_label`), and a tile whose value rolls is `design::roll_tile`, with the same
+label line as `stat_tile`. Party's local copies (`sheet_label`, `roll_metric`, the ability label) are counted in
+`design::results::STAGED` until they move.
 
 Overview uses one group-heading style, with `L` above sheet groups. Saving throws and skills start at tile
 edges, in two or three columns; skills sort A to Z and fill columns top to bottom. Skills use muted Small words `Proficient`, `Expertise` and `Half` after the skill name. Paired cells share the
