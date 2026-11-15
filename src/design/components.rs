@@ -1848,7 +1848,7 @@ impl<T> AddFieldForm<'_, T, WithActions> {
 /// bottom of its result's room) inside the view. Its bottom wins when the block is taller than
 /// the view: the result is the answer to the act, and cut feedback is the worse fault. Already
 /// in view, nothing moves. The scroll is the block's own: no spacing is added to it.
-pub(super) fn reveal_least(ui: &Ui, block: std::ops::RangeInclusive<f32>) {
+fn reveal_least(ui: &Ui, block: std::ops::RangeInclusive<f32>) {
     let view = ui.clip_rect();
     let (top, bottom) = (*block.start(), *block.end());
     let ppp = ui.ctx().pixels_per_point();

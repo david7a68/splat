@@ -18,8 +18,7 @@
     ["G1b/pressed-control-moved","15-missing-campaign-manifest-needs-explicit-write","960x640","Button \"Close repair\"",1],
     ["G1b/pressed-control-moved","15-missing-campaign-manifest-needs-explicit-write","960x640","Button \"Discard\"",5],
     ["G1b/pressed-control-moved","15-missing-campaign-manifest-needs-explicit-write","960x640","Button \"Save repaired note\"",2],
-    ["G1b/pressed-control-moved","15-missing-campaign-manifest-needs-explicit-write","960x640","CheckBox \"Use Ash Wraith\"",2],
-    ["G1b/pressed-control-moved","17-campaign-manifest-write-undone","960x640","Button \"Undo write Campaign.md\"",1]
+    ["G1b/pressed-control-moved","15-missing-campaign-manifest-needs-explicit-write","960x640","CheckBox \"Use Ash Wraith\"",2]
   ],
   "column-resize": [
     ["G3/far-action","13-session-events-fill-their-column","1920x1080","Button \"Add to notes: Major event\"",1],
