@@ -555,6 +555,9 @@ enum Step {
     Verb(Verb, Option<String>),
     /// An act the DM named: `Undo: Take seal`.
     Act(String),
+    /// The app's own fixed words for a step that is not a verb and an object:
+    /// `Undo package registration`. Never cut.
+    Words(&'static str),
 }
 
 /// What an Undo takes back, typed: a verb, an optional object, and the joining word the verb's
@@ -606,6 +609,36 @@ impl UndoStep {
         }
     }
 
+    /// The app's own fixed words for a step that is not a verb and an object
+    /// (`Undo package registration`), made once as a `const` step that each place showing it
+    /// uses: its visible form, its short form and its accessible name are these words, whole at
+    /// every width. A literal that does not start with `Undo ` and a word does not compile in a
+    /// `const`.
+    ///
+    /// ```
+    /// const STEP: splat::outcome::UndoStep = splat::outcome::UndoStep::words("Undo source change");
+    /// ```
+    /// ```compile_fail
+    /// const STEP: splat::outcome::UndoStep = splat::outcome::UndoStep::words("Source change");
+    /// ```
+    pub const fn words(label: &'static str) -> Self {
+        let b = label.as_bytes();
+        assert!(
+            b.len() > 5
+                && b[0] == b'U'
+                && b[1] == b'n'
+                && b[2] == b'd'
+                && b[3] == b'o'
+                && b[4] == b' '
+                && b[5].is_ascii_lowercase(),
+            "an Undo's words start with `Undo ` and a word"
+        );
+        Self {
+            step: Step::Words(label),
+            tell_apart: None,
+        }
+    }
+
     /// The part that tells this step from another of the same words: `2`, `in Ruins`. A fit
     /// never drops it.
     pub fn tell_apart(mut self, part: impl Into<String>) -> Self {
@@ -640,7 +673,8 @@ impl UndoStep {
     fn counted(&self) -> Option<Verb> {
         match &self.step {
             Step::Verb(verb, _) => Some(*verb),
-            Step::Act(_) => None,
+            // The app's fixed words are whole in every footer: no short form to count.
+            Step::Act(_) | Step::Words(_) => None,
         }
     }
 
@@ -668,6 +702,7 @@ impl UndoStep {
                 }),
             ),
             Step::Act(label) => ("Undo:".to_owned(), Some(label.clone())),
+            Step::Words(label) => ((*label).to_owned(), None),
         }
     }
 
@@ -679,7 +714,7 @@ impl UndoStep {
     pub fn fit(&self, ui: &Ui, width: f32) -> String {
         let font = Type::Strong.font(ui);
         let whole = self.label();
-        if number_width(ui, &whole, &font) <= width {
+        if matches!(self.step, Step::Words(_)) || number_width(ui, &whole, &font) <= width {
             return whole;
         }
         if let Step::Verb(verb, Some(_)) = &self.step
@@ -1879,6 +1914,58 @@ impl<A> From<Done<A>> for KeptOutcome<A> {
 impl<A> From<Said<A>> for KeptOutcome<A> {
     fn from(said: Said<A>) -> Self {
         Self::Said(said)
+    }
+}
+
+/// M2's typed adapter for a kept result that a legacy `Footer::result` closure still draws
+/// (Library's reader results, Campaign's copy result): the result's words in the success tone
+/// and its typed [`Undo`] (with its lock: `blocked` or `locked_when`) and choices, drawn by the same code as a `Messages` footer's kept line. Its
+/// lock's reason is painted under it, at the message words, whenever the lock holds, and its
+/// room is kept while it is open (ruling R29); no flag can hide it (rulings R35, Q-u). The id of
+/// what the DM pressed.
+///
+/// The words are the caller's: this is the staged path for callers whose results are not yet
+/// in a `Results` store. It is named debt: Library's and Campaign's calls are counted exactly
+/// (`library::tests::m2_legacy_reason_paths_are_counted`).
+pub fn kept_result<A>(
+    ui: &mut Ui,
+    group: &KeptGroup,
+    words: &str,
+    undo: Undo<A>,
+    choices: Vec<Choice<A>>,
+) -> Option<A> {
+    let mut typed = Typed::new(
+        Tone::Success,
+        Sentence(Cow::Owned(words.to_owned())),
+        Some(undo),
+        choices,
+    );
+    // The footer's one short-Undo rule (`undo_alone`), counted by the part over the group.
+    let counted = typed.body.undo.as_ref().and_then(UndoStep::counted);
+    debug_assert!(
+        counted.is_none_or(|verb| group.verbs.contains(&verb)),
+        "a kept result's Undo is one of its footer's group"
+    );
+    typed.body.undo_alone = undo_alone(&group.verbs, typed.body.undo.as_ref());
+    let pressed = typed.body.draw(ui, MessagePlace::Footer);
+    typed.id(pressed?)
+}
+
+/// The kept results that one legacy footer shows in this pass, for the footer's one short-Undo
+/// rule: the part counts their Undos' verbs, and a lone Undo of its verb paints its short form
+/// (`Undo write`) while two of one verb paint their whole words; the accessible name is always
+/// whole. Made from every step that footer draws (`of`), in the pass that draws them; it holds
+/// no app state and ends with that pass.
+pub struct KeptGroup {
+    verbs: Vec<Verb>,
+}
+
+impl KeptGroup {
+    /// The group of `steps`: each kept result's Undo that the footer shows now.
+    pub fn of<'s>(steps: impl IntoIterator<Item = &'s UndoStep>) -> Self {
+        Self {
+            verbs: steps.into_iter().filter_map(UndoStep::counted).collect(),
+        }
     }
 }
 
@@ -3410,6 +3497,39 @@ mod tests {
     use super::*;
     use eframe::egui;
     use egui_kittest::{Harness, kittest::Queryable};
+
+    /// M2's staged adapter is named debt: no file outside `src/design/` uses it but the two
+    /// that `library::tests::m2_legacy_reason_paths_are_counted` counts exactly.
+    #[test]
+    fn kept_result_is_used_only_where_counted() {
+        let mut found = Vec::new();
+        let mut stack = vec![std::path::PathBuf::from("src")];
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    if !path.ends_with("design") {
+                        stack.push(path);
+                    }
+                } else if path.extension().is_some_and(|ext| ext == "rs")
+                    && whole_word(&std::fs::read_to_string(&path).unwrap(), "kept_result")
+                {
+                    found.push(path.to_string_lossy().replace('\\', "/"));
+                }
+            }
+        }
+        found.sort();
+        assert_eq!(found, ["src/campaigns.rs", "src/library.rs"]);
+    }
+
+    /// Whether `text` holds `word` as a whole identifier (not `kept_results`).
+    fn whole_word(text: &str, word: &str) -> bool {
+        let ident = |c: char| c.is_alphanumeric() || c == '_';
+        text.match_indices(word).any(|(at, _)| {
+            !text[..at].chars().next_back().is_some_and(ident)
+                && !text[at + word.len()..].chars().next().is_some_and(ident)
+        })
+    }
 
     #[allow(
         clippy::disallowed_methods,
@@ -5236,6 +5356,124 @@ mod tests {
         h.run_steps(2);
         assert_eq!(h.state().acted, [Ok("Folder saved")]);
         assert_eq!(h.state().presses.first().map(|press| press.0), Some(1));
+    }
+
+    /// M2 (packet 2, the cut of ruling 3): through the staged adapter, each locked Undo says its
+    /// own reason under its words, and its room is kept while it is open, so the control after
+    /// its results never moves when the lock comes or goes. Two panes each say it for their
+    /// Undos; two independent locks with equal words keep their own explanations. A cause shared
+    /// by several Undos is said once per Undo: that repetition is open debt (no group-owned line).
+    #[test]
+    fn a_lock_reason_through_the_adapter_moves_nothing() {
+        use egui_kittest::kittest::Queryable;
+        const DRAFT: Sentence = crate::sentence!("Save or discard this draft to undo.");
+        const ENDED: Sentence = crate::sentence!("A file changed on disk after this change.");
+        let mut h = Harness::new_ui_state(
+            |ui, locked: &mut bool| {
+                for pane in ["left", "right"] {
+                    ui.push_id(pane, |ui| {
+                        for (words, step) in [
+                            ("First change.", "Undo first"),
+                            ("Second change.", "Undo second"),
+                        ] {
+                            let undo = UndoStep::act(step)
+                                .pressed_as(())
+                                .locked_when(*locked, DRAFT);
+                            let _ = kept_result(ui, &KeptGroup::of([]), words, undo, Vec::new());
+                        }
+                        let _ = ui.button(format!("After {pane}"));
+                    });
+                }
+                for words in ["Third change.", "Fourth change."] {
+                    let undo = UndoStep::act(words).pressed_as(()).blocked(ENDED);
+                    let _ = kept_result(ui, &KeptGroup::of([]), words, undo, Vec::new());
+                }
+            },
+            false,
+        );
+        h.set_size(egui::vec2(600.0, 900.0));
+        h.run_steps(3);
+        let after = |h: &Harness<'_, bool>| {
+            ["After left", "After right"].map(|name| h.get_by_label(name).rect().top())
+        };
+        let open = after(&h);
+        *h.state_mut() = true;
+        h.run_steps(3);
+        assert_eq!(
+            after(&h),
+            open,
+            "a lock that comes moves no control after its results"
+        );
+        assert_eq!(
+            h.query_all_by_label(DRAFT.as_str()).count(),
+            4,
+            "each locked Undo says its reason"
+        );
+        assert_eq!(
+            h.query_all_by_label(ENDED.as_str()).count(),
+            2,
+            "equal words of independent causes are two explanations"
+        );
+        *h.state_mut() = false;
+        h.run_steps(3);
+        assert_eq!(
+            after(&h),
+            open,
+            "a lock that goes moves no control after its results"
+        );
+    }
+
+    /// The join with PR 402: a kept result drawn by the adapter follows the footer's one
+    /// short-Undo rule. A lone `Undo write …` paints `Undo write`; two writes paint their whole
+    /// words; a fixed-word step stays whole either way; every accessible name is whole.
+    #[test]
+    fn a_kept_result_follows_the_footer_short_undo_rule() {
+        const FIXED: UndoStep = UndoStep::words("Undo package registration");
+        for writes in [1, 2] {
+            let ctx = egui::Context::default();
+            crate::design::theme::install(&ctx);
+            let mut painted = Vec::new();
+            for _ in 0..3 {
+                let output = ctx.run(egui::RawInput::default(), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let steps: Vec<UndoStep> = (0..writes)
+                            .map(|at| UndoStep::of(Verb::Write, format!("File {at}.md")))
+                            .chain([FIXED])
+                            .collect();
+                        let group = KeptGroup::of(&steps);
+                        for (at, step) in steps.into_iter().enumerate() {
+                            let words = format!("Change {at}.");
+                            let _ =
+                                kept_result(ui, &group, &words, step.pressed_as(()), Vec::new());
+                        }
+                    });
+                });
+                painted = output
+                    .shapes
+                    .into_iter()
+                    .filter_map(|shape| match shape.shape {
+                        egui::Shape::Text(text) => Some(text.galley.job.text.clone()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+            }
+            let has = |words: &str| painted.iter().any(|text| text.as_str() == words);
+            if writes == 1 {
+                assert!(
+                    has("Undo write") && !has("Undo write File 0.md"),
+                    "{painted:?}"
+                );
+            } else {
+                assert!(
+                    has("Undo write File 0.md") && has("Undo write File 1.md"),
+                    "{painted:?}"
+                );
+            }
+            assert!(
+                has("Undo package registration"),
+                "fixed words stay whole: {painted:?}"
+            );
+        }
     }
 
     /// At 960 in a narrow pane the lock's reason wraps at whole words under the message words;
