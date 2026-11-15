@@ -979,11 +979,11 @@ pub(crate) struct Run {
     no_saved_undo: Option<&'static str>,
     /// The file's Undo steps could not be read. The run says so until the DM dismisses it.
     undo_unread: bool,
-    /// Why Prep's `Edit encounter` did not open this run's encounter (it is gone, or the
-    /// editor cannot give way). This run owns it: the next press of `Edit encounter` ends it,
-    /// and it ends with the run (closing it, another run, a campaign change). A plain reason
-    /// for now; it can move to the typed refusal of lane B1.
-    pub(crate) prep_refusal: Option<String>,
+    /// Why Prep's `Edit encounter` did not open this run's encounter. This run owns it: the
+    /// next press of `Edit encounter` ends it, and it ends with the run (closing it, another
+    /// run, a campaign change). A draft refusal also ends when no draft blocks any more (the
+    /// app checks it while one is stored).
+    pub(crate) prep_refusal: Option<PrepRefusal>,
     pub content: Option<Arc<crate::lookup::ContentIndex>>,
     /// A link the DM followed in the side panel.
     pub lookup_request: Option<usize>,
@@ -5052,6 +5052,25 @@ pub enum Standing {
     /// The file is not a run this campaign can open. It can belong to another campaign that
     /// shares the folder, so the page offers nothing that would change it.
     Unreadable,
+}
+
+/// Why Prep's `Edit encounter` did not open the run's encounter.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum PrepRefusal {
+    /// An unsaved draft holds the editor (the shared recipe's kind, so the words are always
+    /// that draft's). It ends when no draft blocks.
+    Draft(crate::design::Unsaved),
+    /// Another cause, such as an encounter that is gone: its words.
+    Other(String),
+}
+
+impl PrepRefusal {
+    pub(crate) fn reason(&self) -> &str {
+        match self {
+            Self::Draft(draft) => draft.reason(),
+            Self::Other(words) => words,
+        }
+    }
 }
 
 /// R41: why the campaign's run folder cannot be listed. This one value gives the footer

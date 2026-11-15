@@ -113,15 +113,21 @@ const REVEAL_DRAWS: u8 = 3;
 /// A plan notice that the DM must check: a deleted run that kept a problem, a rewards fault.
 enum PlanFault {
     Check(Sentence),
+    /// A fault whose cause gives its own tone (R41: an unreadable run folder is an error).
+    Toned(Sentence, Severity),
 }
 
 impl MessageFault for PlanFault {
     fn severity(&self) -> Severity {
-        Severity::NeedsFixing
+        match self {
+            Self::Check(_) => Severity::NeedsFixing,
+            Self::Toned(_, severity) => *severity,
+        }
     }
     fn cause(&self) -> Sentence {
-        let Self::Check(words) = self;
-        words.clone()
+        match self {
+            Self::Check(words) | Self::Toned(words, _) => words.clone(),
+        }
     }
 }
 
@@ -2522,8 +2528,9 @@ struct RewardsSeen {
 pub(super) struct Rewards {
     done: BTreeMap<(Uuid, String), RewardsDone>,
     /// What an act could not do: the note, the fight, the whole words (with the fight's name,
-    /// read at the act), and the draft's revision it met. A change of the note ends it.
-    fault: Option<(Uuid, String, String, u64)>,
+    /// read at the act), the draft's revision it met, and its tone (R41: a run folder's cause
+    /// keeps its own). A change of the note ends it.
+    fault: Option<(Uuid, String, String, u64, Severity)>,
     seen: Option<RewardsSeen>,
     /// Whether `Add rewards` fits on a played row: by the title, its lead icon, the row's width
     /// and the action's. Worked out when one of them changes, not each frame.
@@ -2640,10 +2647,13 @@ impl Rewards {
     /// fight by the name the act read. Results with their Undo go newest first among the
     /// footer's results; the fault is a notice until the note changes.
     fn in_footer(&self, messages: &mut Messages<'_, super::SessionAct>, note: Uuid, revision: u64) {
-        if let Some((id, _, words, met)) = &self.fault
+        if let Some((id, _, words, met, severity)) = &self.fault
             && (*id, *met) == (note, revision)
         {
-            messages.outcome(FaultMessage::new(&PlanFault::Check(as_sentence(words))));
+            messages.outcome(FaultMessage::new(&PlanFault::Toned(
+                as_sentence(words),
+                *severity,
+            )));
         }
         for ((id, event), done) in &self.done {
             if *id != note {
@@ -2773,23 +2783,25 @@ impl Sessions {
                         crate::encounter_run::find_run_typed(directory, campaign.id, run)
                             .map_err(|fault| match fault {
                                 crate::encounter_run::FindRunFault::Folder(folder) => {
-                                    folder.message()
+                                    (folder.message(), folder.severity())
                                 }
                                 crate::encounter_run::FindRunFault::File(_) => {
-                                    REWARDS_BLOCKED.to_owned()
+                                    (REWARDS_BLOCKED.to_owned(), Severity::NeedsFixing)
                                 }
                             })
                             .and_then(|path| {
-                                crate::encounter_run::rewards(&path, campaign.id)
-                                    .map_err(|_| REWARDS_BLOCKED.to_owned())
+                                crate::encounter_run::rewards(&path, campaign.id).map_err(|_| {
+                                    (REWARDS_BLOCKED.to_owned(), Severity::NeedsFixing)
+                                })
                             })
                     }
-                    _ => Err(REWARDS_BLOCKED.to_owned()),
+                    _ => Err((REWARDS_BLOCKED.to_owned(), Severity::NeedsFixing)),
                 };
                 let found = match read {
                     Ok(found) => found,
-                    Err(why) => {
-                        rewards.fault = Some((note, event, fault(&why), draft.revision()));
+                    Err((why, severity)) => {
+                        rewards.fault =
+                            Some((note, event, fault(&why), draft.revision(), severity));
                         return;
                     }
                 };
@@ -2843,14 +2855,26 @@ impl Sessions {
                     self.caret_to_show = Some(shown);
                 }
                 if let Some(why) = refused {
-                    rewards.fault = Some((note, event, fault(why), draft.revision()));
+                    rewards.fault = Some((
+                        note,
+                        event,
+                        fault(why),
+                        draft.revision(),
+                        Severity::NeedsFixing,
+                    ));
                     return;
                 }
                 (event, result.map(drop))
             }
         };
         if let Err(failed) = result {
-            rewards.fault = Some((note, event, fault(failed.words()), draft.revision()));
+            rewards.fault = Some((
+                note,
+                event,
+                fault(failed.words()),
+                draft.revision(),
+                Severity::NeedsFixing,
+            ));
         }
     }
 }
@@ -8149,6 +8173,33 @@ mod tests {
         assert_eq!(read(), before);
         assert!(shown(&harness, "Splat cannot find the run folder "));
         assert!(!shown(&harness, REWARDS_BLOCKED));
+        let tone = |harness: &egui_kittest::Harness<'_, (Sessions, Book)>| {
+            harness
+                .state()
+                .0
+                .rewards
+                .fault
+                .as_ref()
+                .map(|fault| fault.4)
+        };
+        assert_eq!(
+            tone(&harness),
+            Some(Severity::NeedsFixing),
+            "missing: a warning"
+        );
+        // R41 (round 30 review F4): a folder that cannot be read (here a file stands where it
+        // should be) says so, as an error in the footer too.
+        fs::write(&runs, "not a folder").unwrap();
+        harness.get_by_label("Add rewards: Shrine").click();
+        harness.run_steps(2);
+        assert_eq!(read(), before);
+        assert!(shown(&harness, "Splat cannot read the run folder "));
+        assert_eq!(
+            tone(&harness),
+            Some(Severity::CannotRead),
+            "unreadable: an error"
+        );
+        fs::remove_file(&runs).unwrap();
         fs::rename(&aside, &runs).unwrap();
 
         // A run that cannot be read: nothing is written, and the row says why.

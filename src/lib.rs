@@ -2432,10 +2432,25 @@ impl Splat {
             match self.encounters.edit_from_plan(id, None, &campaign) {
                 Ok(()) => self.page = Page::Encounters,
                 Err(reason) => {
+                    // The draft that refused it, by kind, so its words never go stale.
+                    let refusal = match crate::design::first_unsaved(&self.encounters) {
+                        Some(draft) => encounter_run::PrepRefusal::Draft(draft),
+                        None => encounter_run::PrepRefusal::Other(reason),
+                    };
                     if let Some(run) = self.encounters.run_mut() {
-                        run.prep_refusal = Some(reason);
+                        run.prep_refusal = Some(refusal);
                     }
                 }
+            }
+        }
+        // Round 30 review F3: a draft refusal ends when no draft blocks (saved, discarded, the
+        // editor closed); it follows the draft that blocks now. Only while one is stored.
+        if self.encounters.run().is_some_and(|run| {
+            matches!(run.prep_refusal, Some(encounter_run::PrepRefusal::Draft(_)))
+        }) {
+            let now = crate::design::first_unsaved(&self.encounters);
+            if let Some(run) = self.encounters.run_mut() {
+                run.prep_refusal = now.map(encounter_run::PrepRefusal::Draft);
             }
         }
         if ctx

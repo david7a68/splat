@@ -5755,8 +5755,9 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         d.has("Back to run") && d.has(SAVE_ENCOUNTER),
         "With nothing unsaved, Prep's Edit encounter opens the encounter's editor",
     );
-    const DRAFT_WORDS: &str = "Rook waits by the well.";
-    d.type_into("Read-aloud and notes", DRAFT_WORDS);
+    // Only the name changes, so Prep stays empty and keeps its action after a save.
+    const DRAFT_WORDS: &str = " at the well";
+    d.type_into("Encounter name", DRAFT_WORDS);
     d.click("Back to run");
     fight_tab(d, "Prep");
     d.click("Edit encounter");
@@ -5782,8 +5783,24 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         kept_words,
         "The unsaved words are still in the encounter's editor",
     );
-    d.click("Discard");
+    // Round 30 review F3: the refusal names a blocker, so it ends when the blocker does. Save
+    // the encounter, go back to the run: Prep shows its action and no old reason.
+    d.click(SAVE_ENCOUNTER);
     d.settle();
+    d.click("Back to run");
+    fight_tab(d, "Prep");
+    d.settle();
+    let clean = !d.app_mut().encounters.encounter_dirty();
+    d.observe(
+        "s30-AP1-refusal-ends-on-save",
+        clean
+            && d.visible_text("No prep notes yet")
+            && d.has("Edit encounter")
+            && guard.as_deref().is_some_and(|reason| !d.has_containing(reason)),
+        format!("After Save on Encounters (clean {clean}), Prep shows Edit encounter without the old reason {guard:?}"),
+    );
+    d.click("Edit encounter");
+    d.expect("Back to run");
     d.click("More actions for Rook Ambry");
     d.click("Make it yours");
     d.settle();

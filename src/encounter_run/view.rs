@@ -3245,8 +3245,8 @@ impl Run {
                                 }
                                 // R35: why the press did not open it, under the action, until
                                 // the next press. The run owns it and ends with the run.
-                                if let Some(reason) = &self.prep_refusal {
-                                    design::blocked_reason(ui, Some(reason));
+                                if let Some(refusal) = &self.prep_refusal {
+                                    design::blocked_reason(ui, Some(refusal.reason()));
                                 }
                             },
                         ),
