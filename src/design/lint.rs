@@ -421,11 +421,34 @@ fn format_rules(path: &str, text: &str, last_line: usize) -> Vec<&'static str> {
                 self.found.extend(nested.found);
             }
         }
+        fn visit_path(&mut self, path: &'ast syn::Path) {
+            if path
+                .segments
+                .last()
+                .is_some_and(|segment| segment.ident == "CHOICES_ROLE")
+                && path
+                    .segments
+                    .last()
+                    .is_some_and(|segment| segment.ident.span().start().line <= self.last_line)
+                && !self.path.ends_with("src/design/popups.rs")
+                && !self.path.ends_with("src/visual_tests/ergonomics.rs")
+            {
+                self.found.push("popup-marker-owner");
+            }
+            syn::visit::visit_path(self, path);
+        }
         fn visit_lit_str(&mut self, literal: &'ast syn::LitStr) {
             if literal.span().start().line > self.last_line {
                 return;
             }
             let words = literal.value();
+            if words == ["Dropdown", "choices"].join(" ")
+                && !self.path.ends_with("src/design/popups.rs")
+                && !self.path.ends_with("src/visual_tests/ergonomics.rs")
+            {
+                self.found.push("popup-marker-owner");
+            }
+
             let fraction = words.split_once('/').is_some_and(|(left, right)| {
                 let left = left.trim_end();
                 let right = right.trim_start();
@@ -857,6 +880,15 @@ fn no_lint_level_frees_raw_calls_outside_the_source() {
 #[test]
 fn format_owners_reject_old_fractions_and_sheet_separators() {
     let rules = |path: &str, code: &str| format_rules(path, code, usize::MAX);
+    for code in [
+        r#"fn f() { let _ = Dropdown::CHOICES_ROLE; }"#,
+        r#"fn f() { let _ = "Dropdown choices"; }"#,
+    ] {
+        assert_eq!(rules("src/party.rs", code), ["popup-marker-owner"]);
+        assert!(rules("src/design/popups.rs", code).is_empty());
+        assert!(rules("src/visual_tests/ergonomics.rs", code).is_empty());
+    }
+
     for words in [
         "HP {}/{}",
         "{hp} / {max}",

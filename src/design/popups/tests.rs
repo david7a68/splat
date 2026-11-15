@@ -61,12 +61,19 @@ struct Text {
     rect: Rect,
     elided: bool,
     fonts: Vec<egui::FontId>,
+    lines: Vec<String>,
 }
 
 fn texts(output: &egui::FullOutput) -> Vec<Text> {
     fn walk(shape: &egui::Shape, out: &mut Vec<Text>) {
         match shape {
             egui::Shape::Text(text) => out.push(Text {
+                lines: text
+                    .galley
+                    .rows
+                    .iter()
+                    .map(|row| row.glyphs.iter().map(|glyph| glyph.chr).collect())
+                    .collect(),
                 words: text.galley.job.text.clone(),
                 rect: text.visual_bounding_rect(),
                 elided: text.galley.elided,
@@ -266,8 +273,8 @@ fn the_list_is_as_wide_as_its_control_and_stays_in_its_pane() {
             }
         }
     }
-    // A header above two panes owns only this strip. Twelve session choices must scroll
-    // inside it, with at least five whole choices visible and the window unchanged.
+    // The Timeline header owns the list's x-range, above and below its control. Twelve
+    // sessions scroll inside it; the control near its right edge must not pull the menu out.
     for size in [
         vec2(960.0, 640.0),
         vec2(1200.0, 800.0),
@@ -279,27 +286,28 @@ fn the_list_is_as_wide_as_its_control_and_stays_in_its_pane() {
         let current = Cell::new(0);
         let draw = |events| {
             frame(&ctx, size, events, |ui| {
-                let bounded = Rect::from_min_max(
-                    pos2(ui.clip_rect().left(), 44.0),
-                    pos2(ui.clip_rect().right(), 280.0),
-                );
+                let bounded = Rect::from_min_max(pos2(8.0, 44.0), pos2(400.0, size.y - 8.0));
                 room.set(bounded);
-                ui.allocate_exact_size(vec2(0.0, 244.0), Sense::hover());
-                let mut dropdown = Dropdown::new(SIDE, "Session for new events")
-                    .choice(0, "No session".to_owned());
-                for number in 1..=12 {
-                    dropdown = dropdown.choice(number, format!("Session {number}: Ferry Watch"));
-                }
-                let mut chosen = current.get();
-                let shown = dropdown.within(bounded).width(220.0).show(ui, &mut chosen);
-                current.set(chosen);
-                control.set(shown.response.rect);
+                ui.allocate_exact_size(vec2(0.0, 172.0), Sense::hover());
+                ui.horizontal(|ui| {
+                    ui.allocate_exact_size(vec2(300.0, 0.0), Sense::hover());
+                    let mut dropdown = Dropdown::new(SIDE, "Session for new events")
+                        .choice(0, "No session".to_owned());
+                    for number in 1..=12 {
+                        dropdown =
+                            dropdown.choice(number, format!("Session {number}: Ferry Watch"));
+                    }
+                    let mut chosen = current.get();
+                    let shown = dropdown.within(bounded).width(122.0).show(ui, &mut chosen);
+                    current.set(chosen);
+                    control.set(shown.response.rect);
+                });
             })
         };
         draw(Vec::new());
         draw(click(control.get().center()));
         draw(Vec::new());
-        let open = draw(Vec::new());
+        draw(Vec::new());
         assert!(egui::Popup::is_id_open(&ctx, list()));
         let popup = list_rect(&ctx);
         assert!(
@@ -308,24 +316,29 @@ fn the_list_is_as_wide_as_its_control_and_stays_in_its_pane() {
             room.get()
         );
         assert!(
-            popup.bottom() <= control.get().top(),
-            "the header menu opens above"
+            popup.top() >= control.get().bottom(),
+            "the menu opens below"
         );
-        let whole = texts(&open)
+        let whole = ctx
+            .data(|data| data.get_temp::<Vec<Id>>(list().with("rows")))
+            .unwrap()
             .iter()
-            .filter(|text| {
-                (text.words == "No session" || text.words.starts_with("Session "))
-                    && popup.contains_rect(text.rect)
-            })
+            .filter_map(|id| ctx.read_response(*id))
+            .filter(|row| popup.contains_rect(row.rect))
             .count();
         assert!(
             whole >= 5,
-            "{size:?}: only {whole} whole choices fit in {popup:?}"
+            "{size:?}: only {whole} whole row targets in {popup:?}"
         );
-        assert!(
-            popup.height() < 13.0 * Density::Read.control(),
-            "the list scrolls internally"
-        );
+        if size.y == 640.0 {
+            let metrics = ctx
+                .data(|data| data.get_temp::<std::sync::Arc<RowMetrics>>(list().with("metrics")))
+                .unwrap();
+            assert!(
+                popup.height() < metrics.top,
+                "the long menu scrolls internally"
+            );
+        }
         let before = control.get();
         for _ in 0..12 {
             draw(key(Key::ArrowDown));
@@ -344,6 +357,79 @@ fn the_list_is_as_wide_as_its_control_and_stays_in_its_pane() {
             "opening and scrolling moves no control"
         );
     }
+    // A short room gives only one whole row on either side. A stale room or a room with
+    // less than one row closes through the same cleanup as Escape, returning the keyboard.
+    let ctx = context();
+    let room = Cell::new(Rect::from_min_max(pos2(0.0, 0.0), pos2(960.0, 640.0)));
+    let control = Cell::new(Rect::NOTHING);
+    let current = Cell::new(0);
+    let draw = |events| {
+        frame(&ctx, vec2(960.0, 640.0), events, |ui| {
+            ui.allocate_exact_size(vec2(0.0, 240.0), Sense::hover());
+            control.set(
+                dropdown(
+                    ui,
+                    &current,
+                    Setup {
+                        many: Some(13),
+                        room: Some(room.get()),
+                        ..Setup::default()
+                    },
+                )
+                .response
+                .rect,
+            );
+        })
+    };
+    draw(Vec::new());
+    let rect = control.get();
+    room.set(Rect::from_min_max(
+        pos2(0.0, rect.top() - 44.0),
+        pos2(960.0, rect.bottom() + 44.0),
+    ));
+    draw(click(rect.center()));
+    draw(Vec::new());
+    draw(Vec::new());
+    let popup = list_rect(&ctx);
+    assert!(room.get().contains_rect(popup));
+    assert!(
+        !popup.intersects(control.get()),
+        "the menu never covers its control"
+    );
+    assert!(
+        popup.height() <= 40.0,
+        "the scroll minimum cannot enlarge the menu: {popup:?}"
+    );
+    let rows = ctx
+        .data(|data| data.get_temp::<Vec<Id>>(list().with("rows")))
+        .unwrap();
+    assert!(
+        rows.iter()
+            .filter_map(|id| ctx.read_response(*id))
+            .any(|row| popup.contains_rect(row.rect))
+    );
+    room.set(Rect::from_min_max(
+        pos2(0.0, rect.top() - 20.0),
+        pos2(960.0, rect.bottom() + 20.0),
+    ));
+    draw(Vec::new());
+    assert!(!egui::Popup::is_id_open(&ctx, list()));
+    assert_eq!(focused(&ctx), Some(SIDE.id()));
+    assert_eq!(
+        ctx.data(|data| data.get_temp::<Option<usize>>(list().with("reveal_index"))),
+        Some(None)
+    );
+    room.set(Rect::from_min_max(pos2(0.0, 0.0), pos2(960.0, 640.0)));
+    draw(click(rect.center()));
+    draw(Vec::new());
+    assert!(egui::Popup::is_id_open(&ctx, list()));
+    room.set(Rect::from_min_max(pos2(0.0, 0.0), pos2(960.0, 100.0)));
+    draw(Vec::new());
+    assert!(
+        !egui::Popup::is_id_open(&ctx, list()),
+        "a stale room cannot open beyond its edge"
+    );
+    assert_eq!(focused(&ctx), Some(SIDE.id()));
 }
 
 /// In a real pane: a 316 px column ending at a splitter, a scrolled body with the drop-down near
@@ -1429,6 +1515,64 @@ fn a_menu_of_long_choices_stays_beside_its_splitter() {
             draw(Vec::new());
         }
     }
+    // An overwide word gets one ellipsis, never several broken pieces. The accessible
+    // choice still names every original word, and ordinary words stay whole.
+    {
+        const FULL: &str = "Copper watch ExtraordinarilyUnmistakableSessionName";
+        let ctx = context();
+        let control = Cell::new(Rect::NOTHING);
+        let current = Cell::new(0);
+        let draw = |events| {
+            frame(&ctx, vec2(960.0, 640.0), events, |ui| {
+                let mut chosen = current.get();
+                control.set(
+                    Dropdown::new(SIDE, "Words")
+                        .choice(0, FULL)
+                        .within(Rect::from_min_max(pos2(0.0, 0.0), pos2(140.0, 640.0)))
+                        .width(110.0)
+                        .show(ui, &mut chosen)
+                        .response
+                        .rect,
+                );
+                current.set(chosen);
+            })
+        };
+        draw(Vec::new());
+        draw(click(control.get().center()));
+        draw(Vec::new());
+        let open = draw(Vec::new());
+        let popup = list_rect(&ctx);
+        let rows: Vec<_> = texts(&open)
+            .into_iter()
+            .filter(|text| popup.contains_rect(text.rect) && text.words.starts_with("Copper"))
+            .collect();
+        assert_eq!(rows.len(), 1);
+        let painted = &rows[0];
+        assert!(
+            painted.words.contains('…'),
+            "one overwide word is shortened: {}",
+            painted.words
+        );
+        for word in painted
+            .lines
+            .iter()
+            .flat_map(|line| line.split_whitespace())
+        {
+            assert!(
+                word == "Copper" || word == "watch" || word.ends_with('…'),
+                "a word was broken: {word}"
+            );
+        }
+        assert!(
+            open.platform_output
+                .accesskit_update
+                .unwrap()
+                .nodes
+                .iter()
+                .any(|(_, node)| node.label() == Some(FULL)),
+            "the row's accessible name remains exact"
+        );
+    }
 }
 
 /// R40: closed choices, typed values and the empty-folder words share regular weight even
@@ -1503,4 +1647,74 @@ fn chosen_values_use_regular_weight_and_keep_full_choice_words() {
             }),
         "the popup is a named group, not a target over its own choices"
     );
+}
+
+#[test]
+fn closed_dropdowns_measure_no_choice_rows_and_open_metrics_follow_inputs() {
+    let ctx = context();
+    let current = Cell::new(0);
+    let width = Cell::new(180.0);
+    let changed = Cell::new(false);
+    let control = Cell::new(Rect::NOTHING);
+    let draw = |events| {
+        frame(&ctx, vec2(960.0, 640.0), events, |ui| {
+            let mut menu = Dropdown::new(SIDE, "Many choices").choice(
+                0,
+                if changed.get() {
+                    "Changed label"
+                } else {
+                    "Choice zero"
+                },
+            );
+            for number in 1..500 {
+                menu = menu.choice(number, format!("Choice {number}"));
+            }
+            let mut chosen = current.get();
+            control.set(menu.width(width.get()).show(ui, &mut chosen).response.rect);
+            current.set(chosen);
+        })
+    };
+    ROW_METRICS_MADE.with(|made| made.set(0));
+    for _ in 0..3 {
+        draw(Vec::new());
+    }
+    assert_eq!(
+        ROW_METRICS_MADE.with(Cell::get),
+        0,
+        "closed choices are never measured"
+    );
+    draw(click(control.get().center()));
+    draw(Vec::new());
+    let first = ROW_METRICS_MADE.with(Cell::get);
+    assert_eq!(first, 500);
+    draw(Vec::new());
+    assert_eq!(
+        ROW_METRICS_MADE.with(Cell::get),
+        first,
+        "unchanged open metrics are reused"
+    );
+    changed.set(true);
+    draw(Vec::new());
+    assert_eq!(ROW_METRICS_MADE.with(Cell::get), first + 500);
+    width.set(240.0);
+    draw(Vec::new());
+    assert_eq!(ROW_METRICS_MADE.with(Cell::get), first + 1000);
+    ctx.style_mut(|style| {
+        style
+            .text_styles
+            .insert(Type::Body.style(), egui::FontId::proportional(19.0));
+    });
+    draw(Vec::new());
+    assert_eq!(
+        ROW_METRICS_MADE.with(Cell::get),
+        first + 1500,
+        "font changes invalidate the cache"
+    );
+    draw(key(Key::Escape));
+    draw(Vec::new());
+    let closed = ROW_METRICS_MADE.with(Cell::get);
+    for _ in 0..3 {
+        draw(Vec::new());
+    }
+    assert_eq!(ROW_METRICS_MADE.with(Cell::get), closed);
 }

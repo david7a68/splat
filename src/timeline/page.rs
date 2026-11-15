@@ -682,6 +682,7 @@ impl TimelinePage {
         ui: &mut egui::Ui,
         sessions: &[SessionLink],
         current: Option<Uuid>,
+        room: egui::Rect,
     ) {
         ui.label(Type::Small.rich(ui, "Adds to").color(colors().muted));
         let mut chosen = current;
@@ -695,6 +696,7 @@ impl TimelinePage {
             );
         }
         let shown = dropdown
+            .within(room)
             .width(design::READER_MEASURE / 4.0)
             .show(ui, &mut chosen);
         // Keep the established control name; Dropdown's current text value holds the full
@@ -705,7 +707,13 @@ impl TimelinePage {
         }
     }
 
-    fn filters(&mut self, ui: &mut egui::Ui, sessions: &[SessionLink], current: Option<Uuid>) {
+    fn filters(
+        &mut self,
+        ui: &mut egui::Ui,
+        sessions: &[SessionLink],
+        current: Option<Uuid>,
+        room: egui::Rect,
+    ) {
         let before = (self.filter, self.search.clone(), self.session);
         let tabs = |ui: &mut egui::Ui, filter: &mut Filter| {
             design::segmented(
@@ -738,6 +746,7 @@ impl TimelinePage {
                 160.0,
             );
             design::Dropdown::new(SESSION_FILTER, "Show one session")
+                .within(room)
                 .choice(None, "All sessions")
                 .choices(
                     sessions
@@ -746,7 +755,7 @@ impl TimelinePage {
                 )
                 .width(150.0)
                 .show(ui, &mut self.session);
-            self.new_events_line(ui, sessions, current);
+            self.new_events_line(ui, sessions, current, room);
         });
         if before != (self.filter, self.search.clone(), self.session) {
             self.reset_detail = true;
@@ -1883,7 +1892,21 @@ impl TimelinePage {
             .as_ref()
             .is_some_and(|id| book.events.iter().any(|event| event.id == *id));
         if !(narrow && event_open) {
-            self.filters(ui, sessions, current);
+            // The header is drawn before the body splits. Use the app's current width
+            // decision, including pending keyboard resize, rather than last pass's panel.
+            let mut room = ui.clip_rect();
+            if !narrow && event_open {
+                let natural = design::side_panel_width(page_width);
+                let content_width = page_width.min(design::LIST_MEASURE + natural);
+                let detail = design::Column::panel("timeline_detail_panel", natural)
+                    .width_within(ui.ctx(), content_width);
+                room.max.x = room.right().min(
+                    ui.max_rect().left() + content_width
+                        - detail
+                        - ui.style().interaction.resize_grab_radius_side,
+                );
+            }
+            self.filters(ui, sessions, current, room);
         }
         design::gap(ui, design::Gap::XS);
         // Beside Lookup or Notes at a small window, two columns would crush the list.
