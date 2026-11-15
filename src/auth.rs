@@ -44,7 +44,7 @@ impl Session {
             serde_json::from_slice(&bytes).map_err(|_| "Invalid sign-in claims.")?;
         let user = claims["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"]
             .as_str()
-            .ok_or("Session has no account ID.")?;
+            .ok_or("Sign-in has no account ID.")?;
         if user.parse::<u64>().ok().is_none_or(|n| n == 0) {
             return Err("Invalid sign-in account ID.".into());
         }
@@ -116,10 +116,10 @@ fn cookie_header(cookie: &str) -> Result<header::HeaderValue, String> {
             .bytes()
             .all(|b| b.is_ascii_graphic() && !matches!(b, b';' | b',' | b'"' | b'\\'))
     {
-        return Err("Paste only the CobaltSession cookie value.".into());
+        return Err("Paste only the sign-in cookie value.".into());
     }
     let mut value = header::HeaderValue::from_str(&format!("CobaltSession={cookie}"))
-        .map_err(|_| "The session cookie is not valid.".to_owned())?;
+        .map_err(|_| "The sign-in cookie is not valid.".to_owned())?;
     value.set_sensitive(true);
     Ok(value)
 }
@@ -260,7 +260,10 @@ mod tests {
             "value\r\nX-Header: secret",
             "two values",
         ] {
-            assert!(cookie_header(cookie).is_err());
+            assert_eq!(
+                cookie_header(cookie).unwrap_err(),
+                "Paste only the sign-in cookie value."
+            );
         }
     }
 }

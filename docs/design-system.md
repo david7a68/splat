@@ -2533,7 +2533,7 @@ repair. Account help and trust text keep READER_MEASURE in column and stacked la
 The account form replaces status and Connect… link. Use Connect, Not connected and Signed out of D&D Beyond.
 A failed Connect says `Connect failed` with the error icon and colour, on the page and in the rail; `Not connected`
 is only the quiet idle state. Its cause sits in Connect's reason slot, `S` left of Connect, where the DM pressed; it
-wraps there and never moves Connect. While the cookie field is empty, the slot says `Paste your session cookie
+wraps there and never moves Connect. While the cookie field is empty, the slot says `Paste your sign-in cookie
 first.` instead.
 Show one Connecting state, with Cancel aligned to the column. Connect stays at the cookie field's right edge
 and is primary when a cookie is entered, no campaign form is open and no run owns primary. Keyring warnings

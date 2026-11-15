@@ -14331,7 +14331,7 @@ mod tests {
                             amount.request_focus();
                         }
                         if page.settings {
-                            let cookie = Action::secondary("Paste session cookie").show(ui);
+                            let cookie = Action::secondary("Paste sign-in cookie").show(ui);
                             if std::mem::take(&mut page.focus_cookie) {
                                 cookie.request_focus();
                             }
@@ -14379,7 +14379,7 @@ mod tests {
             let expected = if key.is_some() {
                 "Amount"
             } else {
-                "Paste session cookie"
+                "Paste sign-in cookie"
             };
             assert_eq!(
                 focused_name(&harness).as_deref(),

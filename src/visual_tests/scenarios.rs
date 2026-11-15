@@ -4276,7 +4276,7 @@ pub mod party {
         d.observe(
             "iter-14-B-FD1-opens",
             d.page_title().as_deref() == Some("Settings")
-                && d.focused_name().as_deref() == Some("Paste session cookie"),
+                && d.focused_name().as_deref() == Some("Paste sign-in cookie"),
             "Connect D&D Beyond on the warning opens Settings with the cookie field focused",
         );
         d.click(NAV_PARTY);
@@ -4427,22 +4427,22 @@ pub mod party {
         d.observe(
             "P26",
             d.page_title().as_deref() == Some("Settings")
-                && d.focused_name().as_deref() == Some("Paste session cookie"),
+                && d.focused_name().as_deref() == Some("Paste sign-in cookie"),
             "Connect to refresh opens Settings with the cookie field focused",
         );
-        d.click("Paste session cookie");
-        d.wait_for_text("Paste session cookie");
+        d.click("Paste sign-in cookie");
+        d.wait_for_text("Paste sign-in cookie");
         d.observe(
             "Coverage",
-            d.focused_name().as_deref() == Some("Paste session cookie"),
+            d.focused_name().as_deref() == Some("Paste sign-in cookie"),
             "The cookie field is focused before capture",
         );
         d.state_prepared("connect-to-refresh", Sizes::Default, |d| {
-            d.click("Paste session cookie");
+            d.click("Paste sign-in cookie");
             d.settle();
             d.observe(
                 "iter-5-P13",
-                d.focused_name().as_deref() == Some("Paste session cookie"),
+                d.focused_name().as_deref() == Some("Paste sign-in cookie"),
                 "The cookie field is focused after each capture resize",
             );
         });
@@ -5434,9 +5434,9 @@ pub mod settings {
     const REMOVE_CAMPAIGN: &str = "More actions for Quiet Harbor";
     const REMOVE_TITLE: &str = "Remove Quiet Harbor?";
     const NOT_CONNECTED: &str = "Not connected";
-    const COOKIE_HELP: &str = "How to get your session cookie";
+    const COOKIE_HELP: &str = "How to get your sign-in cookie";
     const COOKIE_HELP_TEXT: &str = "Sign in to D&D Beyond in your browser";
-    const COOKIE_FIELD: &str = "Paste session cookie";
+    const COOKIE_FIELD: &str = "Paste sign-in cookie";
     const SYNTHETIC_COOKIE: &str = "synthetic-not-a-real-cookie";
     const CONNECT: &str = "Connect";
     const DISCONNECT: &str = "Disconnect";
@@ -5461,7 +5461,7 @@ pub mod settings {
             "Connect keeps its reason beside the button",
             |d| {
                 let button = d.place_of(CONNECT).unwrap();
-                let reason = d.place_of("Paste your session cookie first.").unwrap();
+                let reason = d.place_of("Paste your sign-in cookie first.").unwrap();
                 (button.left() - reason.right() - crate::design::S).abs() < 1.0
             },
         );
@@ -5598,11 +5598,11 @@ pub mod settings {
         let connect_before = d.place_of(CONNECT);
         let (emptied, back) = d.aside(|d| {
             d.clear_text_in(COOKIE_FIELD);
-            let emptied = d.visible_text("Paste your session cookie first.")
+            let emptied = d.visible_text("Paste your sign-in cookie first.")
                 && !d.visible_text(OFFLINE_ERROR);
             d.type_into(COOKIE_FIELD, SYNTHETIC_COOKIE);
             let back =
-                d.visible_text(OFFLINE_ERROR) && !d.visible_text("Paste your session cookie");
+                d.visible_text(OFFLINE_ERROR) && !d.visible_text("Paste your sign-in cookie");
             (emptied, back)
         });
         d.observe(
@@ -11635,7 +11635,7 @@ pub mod signed_in {
         d.click("Connect to sync");
         d.observe(
             "Sign in recovery",
-            d.focused_name().as_deref() == Some("Paste session cookie"),
+            d.focused_name().as_deref() == Some("Paste sign-in cookie"),
             "Sign in again opens Settings with the cookie field focused",
         );
         d.state("sign-in-from-run", Sizes::Default);
@@ -11661,7 +11661,7 @@ pub mod signed_in {
             "iter-12-R4",
             "Sign-in recovery shows the cookie field without unexplained locked actions",
             |d| {
-                d.in_view("Paste session cookie")
+                d.in_view("Paste sign-in cookie")
                     && (!d.in_view("Edit details")
                         || d.in_view("Close the run to change campaigns."))
             },
