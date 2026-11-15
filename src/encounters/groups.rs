@@ -1709,18 +1709,6 @@ pub(super) fn change_mark() -> String {
     format!("{}\u{a0}", icons::CHANGED)
 }
 
-/// G135: let `ui` paint a `line_start` hang (`LINE_START_REACH`) left of its text edge, as far as
-/// `outer`, the clip of what encloses it, allows. A panel or a scroll area inside a pane clips
-/// at its own edge; the pane's body clip already holds the hang's room.
-fn keep_hang_room(ui: &mut egui::Ui, outer: egui::Rect) {
-    let mut clip = ui.clip_rect();
-    clip.min.x = clip
-        .min
-        .x
-        .min((ui.max_rect().left() - design::LINE_START_REACH).max(outer.left()));
-    ui.set_clip_rect(clip);
-}
-
 /// What separates a detail line from the change link after it.
 const CHANGE_SEPARATOR: &str = " · ";
 
@@ -1735,23 +1723,11 @@ fn link_fits_after(ui: &egui::Ui, detail: &str, word: &str, width: f32) -> bool 
         <= width
 }
 
-/// The change link on a row of its own (G135): its words start at the text edge and the pencil
-/// hangs left of it, as a quiet action that starts a line (N4, `Action::line_start`). The hang
-/// is less than `LINE_START_REACH`, so the pane's body clip keeps it.
+/// The change link on a row of its own (G135): only its words, at the text edge. A quiet action
+/// that starts a line outside a message has no icon (N4, `Action::line_start`), so nothing hangs
+/// into the margin.
 fn change_link_line_start(ui: &mut egui::Ui, word: &str) -> bool {
-    let hang = design::number_width(ui, &change_mark(), &Type::Small.font(ui));
-    let at = ui.cursor().min - egui::vec2(hang, 0.0);
-    let mut row = ui.new_child(
-        egui::UiBuilder::new()
-            .max_rect(egui::Rect::from_min_size(
-                at,
-                egui::vec2(ui.available_width() + hang, design::XL),
-            ))
-            .layout(egui::Layout::left_to_right(egui::Align::Center)),
-    );
-    let opened = change_link(&mut row, word);
-    ui.advance_cursor_after_rect(row.min_rect());
-    opened
+    design::small_link(ui, word).clicked()
 }
 
 /// The change link at the end of a detail line: the muted pencil, then the words as a `Small`
@@ -2886,9 +2862,6 @@ impl Encounters {
             }
             return false;
         }
-        // G135: the members column keeps the room of a `line_start` hang left of its text edge
-        // that the pane gives (its body clip); egui's inner panel would clip at its own edge.
-        let outer = ui.clip_rect();
         let width = design::side_panel_width(ui.ctx().content_rect().width())
             .max(ui.available_width() - ROSTER_MAX_WIDTH)
             .min(ADD_PANE_MAX_WIDTH);
@@ -2921,7 +2894,6 @@ impl Encounters {
             }))
             .show_inside(ui, |ui| {
                 ui.set_max_width(ui.available_width().min(ROSTER_MAX_WIDTH));
-                keep_hang_room(ui, outer);
                 members_pane(ui, draft, snapshot, expanded, name_right, refused)
             })
             .inner
@@ -3038,7 +3010,6 @@ fn members_pane(
     refused: Option<RefusalPlace>,
 ) -> bool {
     let top = ui.cursor().top();
-    let outer = ui.clip_rect();
     let mut gone_shown = false;
     // FH3: the column leaves the scroll bar's lane free whether or not the bar shows, so the
     // name field, `Edit` and `⋯` keep their x when a long list (a replacement search) scrolls.
@@ -3050,8 +3021,6 @@ fn members_pane(
             let mut clip = ui.clip_rect();
             clip.min.y = clip.min.y.max(top);
             ui.set_clip_rect(clip);
-            // G135: an own-row change link's pencil hangs left of the text edge.
-            keep_hang_room(ui, outer);
             let column = ui.scope(|ui| {
                 ui.set_width(width.min(ui.available_width()));
                 gone_shown = group_fields(ui, draft, snapshot, expanded, None, name_right, refused);
@@ -3347,6 +3316,8 @@ fn members(
             + 1;
         let identity = member.id.0;
         let row_top = ui.cursor().top();
+        // Where the row says its fault (G122): the DM reads it there when it is whole on screen.
+        let mut fault_said: Option<egui::Rect> = None;
         // The row's widgets key by the member's identity, not its place.
         ui.push_id(member.id.0, |ui| {
             let entry = snapshot
@@ -3526,12 +3497,20 @@ fn members(
                     line,
                     "not in this campaign’s packages",
                 );
+                // The actions start under the message's words: the words end there.
+                let mut words_end = None;
                 let repair = ui.scope(|ui| {
                     design::message_with_actions(ui, Tone::Warning, &words, |ui| {
+                        words_end = Some(ui.min_rect().top());
                         design::help(ui, MISSING_MEMBER_HELP);
                         packages_repair(ui)
                     })
                 });
+                let block = repair.response.rect;
+                fault_said = Some(egui::Rect::from_x_y_ranges(
+                    block.x_range(),
+                    block.top()..=words_end.unwrap_or(block.bottom()).min(block.bottom()),
+                ));
                 repair.response.on_hover_text(member.creature.label());
                 if repair.inner {
                     ui.data_mut(|data| {
@@ -3557,7 +3536,14 @@ fn members(
             }
             if let Some(entry) = entry {
                 let fault = |cause: &str| member_fault(&name, Some(&entry.name), line, cause);
+                let before = ui.cursor().top();
                 change_faults(ui, &member.overrides, entry, &side, is_open, &fault);
+                if ui.cursor().top() > before {
+                    fault_said = Some(egui::Rect::from_x_y_ranges(
+                        ui.min_rect().x_range(),
+                        before..=ui.cursor().top(),
+                    ));
+                }
                 // The open form edits one member's changes: a change it writes is an edit. The form
                 // says so itself; nothing here copies the changes (review of PR 299).
                 if is_open {
@@ -3580,9 +3566,11 @@ fn members(
             design::rule(ui);
         });
         if refused == Some(identity) {
-            let row =
-                egui::Rect::from_x_y_ranges(ui.min_rect().x_range(), row_top..=ui.cursor().top());
-            refused_shown = ui.is_visible() && ui.clip_rect().contains_rect(row);
+            // The fault's own words where the row says them, else the whole row.
+            let said = fault_said.unwrap_or_else(|| {
+                egui::Rect::from_x_y_ranges(ui.min_rect().x_range(), row_top..=ui.cursor().top())
+            });
+            refused_shown = ui.is_visible() && ui.clip_rect().contains_rect(said);
         }
     }
     // A move, a removal or a replacement changes the members: the comparison runs again.

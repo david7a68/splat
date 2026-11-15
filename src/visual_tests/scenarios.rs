@@ -731,7 +731,22 @@ pub(super) fn said_once(
         });
         count
     };
-    // The driver's window is 960 between states: the compact editor, with its tabs.
+    // The driver's window is 960 between states. Where the editor still has two columns there
+    // (the Encounters page), Lookup beside it makes it compact, with its tabs.
+    let tabs = |d: &Driver<'_>| {
+        d.nodes().into_iter().any(|node| {
+            node.name.starts_with("Add creatures")
+                && !node.disabled
+                && !matches!(
+                    node.role,
+                    egui::accesskit::Role::Label | egui::accesskit::Role::TextRun
+                )
+        })
+    };
+    let lookup = !tabs(d);
+    if lookup {
+        d.press_ctrl(Key::K);
+    }
     d.click_starting("Add creatures");
     let tab = (said(d), d.visible_text(beside), tones_beside(d, beside));
     if let Some(save) = d.place_of("Save group") {
@@ -741,12 +756,34 @@ pub(super) fn said_once(
     d.press_ctrl(Key::S);
     let key = (said(d), d.visible_text(beside), tones_beside(d, beside));
     d.click_starting("Members");
+    // Where the place is cut at the column's end (a member row at the bottom of the plan's
+    // editor), both are painted and the save row is right to say it: the column scrolls, a
+    // little at a time, until the place is whole. Then only the place says it.
+    let cut = said(d) > 1;
+    for _ in 0..8 {
+        if said(d) <= 1 {
+            break;
+        }
+        if let Some(at) = d.painted_rect_in(field, egui::Rect::EVERYTHING) {
+            d.scroll_points_at(at.center(), 40.0);
+        }
+    }
     let place = (said(d), d.visible_text(field), d.visible_text(beside));
+    let mut painted = Vec::new();
+    d.each_painted_text(|text, _| {
+        let words = text.galley.job.text.as_str();
+        if about.iter().any(|about| words.contains(about)) {
+            painted.push(words.chars().take(90).collect::<String>());
+        }
+    });
+    if lookup {
+        d.press_ctrl(Key::K);
+    }
     let once = (1, true, vec![tone]);
     (
         tab == once && button == once && key == once && place == (1, true, false),
         format!(
-            "Add creatures tab {tab:?}; after Save group {button:?}; after Ctrl+S {key:?}; Members {place:?}"
+            "Add creatures tab {tab:?}; after Save group {button:?}; after Ctrl+S {key:?}; Members (cut at first: {cut}) {place:?}: {painted:?}"
         ),
     )
 }
@@ -795,19 +832,30 @@ pub(super) fn change_link_whole(d: &Driver<'_>) -> (bool, String) {
         .into_iter()
         .find(|node| node.name == "How many of Rival Captain")
         .map(|node| node.rect);
+    let own_row = link
+        .zip(stats)
+        .is_some_and(|(link, stats)| link.top() >= stats.bottom() - 0.5);
     let placed = link
         .zip(stats)
         .zip(count)
         .is_some_and(|((link, stats), count)| {
-            let own_row = link.top() >= stats.bottom() - 0.5;
             let edge = !own_row || (link.left() - stats.left()).abs() <= 0.5;
             edge && link.width() >= crate::design::XL
                 && link.height() >= crate::design::XL
                 && link.bottom() <= count.top()
         });
+    // On its own row the link has no pencil (N4: a quiet action that starts a line outside a
+    // message has no icon); after the stats, its pencil is painted whole.
+    let pencil_right = if own_row {
+        pencil.is_none()
+    } else {
+        pencil == Some(true)
+    };
     (
-        d.visible_text(LINK) && d.visible_text(STATS) && pencil == Some(true) && placed,
-        format!("link {link:?}, stats {stats:?}, Count {count:?}, pencil whole {pencil:?}"),
+        d.visible_text(LINK) && d.visible_text(STATS) && pencil_right && placed,
+        format!(
+            "link {link:?}, stats {stats:?}, own row {own_row}, Count {count:?}, pencil whole {pencil:?}"
+        ),
     )
 }
 
@@ -19513,9 +19561,11 @@ pub mod encounter_owned_groups {
                 format!("One message says the gone encounter: {said} painted"),
             );
             let edges = group_field_edges(d, GROUP_ORPHAN);
+            // As before this state took all sizes: FD3 holds at 960 and 1200 (at 1920 the
+            // fields end at FORM_WIDTH, `iter-19-B-FD3-wide`).
             d.observe(
                 "iter-19-B-FD3",
-                group_fields_end_at_column(edges),
+                d.window_size().0 > 1900.0 || group_fields_end_at_column(edges),
                 format!(
                     "The group name field and Belongs to end at the notes field's right edge: {edges:?}"
                 ),
@@ -19571,7 +19621,7 @@ pub mod encounter_owned_groups {
             let (member, member_detail) = said_once(
                 d,
                 &["not in this campaign’s packages"],
-                "Cinder Wolf: not in this campaign’s packages.",
+                "Unknown creature: not in this campaign’s packages.",
                 "not in this campaign’s packages",
                 "warning",
             );
@@ -19584,6 +19634,9 @@ pub mod encounter_owned_groups {
         });
         d.observe("iter-29-BC5-G122-off-screen", once, detail);
         d.observe("iter-29-BC5-G122-member-off-screen", member, member_detail);
+        // The proof pressed the compact editor's tabs beside Lookup; Lookup closed after it, so
+        // those tabs gave way to the two columns.
+        d.expect_moves("iter-29 G122 proof: Lookup closed after the press on the editor's tabs");
         let inset = notes_inset(
             d,
             &format!("Group notes for {GROUP_ORPHAN}"),
@@ -21634,7 +21687,7 @@ pub mod session_plan_groups {
         // by the mouse and the keyboard. The file and the group are put back after.
         let (gone, member) = d.aside(|d| {
             let arena = d.root.join(format!(
-                "Encounters/{}.md",
+                "campaigns/emberfall/Encounters/{}.md",
                 crate::visual_tests::fixture::RUN_ARENA
             ));
             let text = std::fs::read_to_string(&arena).unwrap();
@@ -21664,7 +21717,7 @@ pub mod session_plan_groups {
             let member = said_once(
                 d,
                 &["not in this campaign’s packages"],
-                "Cinder Wolf: not in this campaign’s packages.",
+                "Unknown creature: not in this campaign’s packages.",
                 "not in this campaign’s packages",
                 "warning",
             );
