@@ -2475,13 +2475,32 @@ impl Splat {
             self.page = Page::Run;
         }
         if std::mem::take(&mut self.sessions.wants_new_group) {
-            self.encounters.new_group_in_plan();
+            // The plan's New group is blocked by the same value; a refusal keeps every draft.
+            let _ = self.encounters.new_group_in_plan();
         }
         if let Some(path) = self.sessions.wants_group.take()
             && let Some(campaign) = &active
-            && !self.encounters.open_group_in_plan(&path, campaign)
         {
-            self.page = Page::Encounters;
+            match self.encounters.open_group_in_plan(&path, campaign) {
+                encounters::PlanOpen::Opened => {}
+                // B4 review F1: the plan paints why under the group's line.
+                encounters::PlanOpen::Refused(_) => {
+                    self.sessions.plan_group_refused = Some((self.sessions.selected_id(), path));
+                }
+                encounters::PlanOpen::Failed => self.page = Page::Encounters,
+            }
+        }
+        // The end events of the plan's refusal, delivered every frame on any page: nothing
+        // unsaved refuses any more (saved, discarded, campaign changed), or another session is
+        // selected.
+        if self.encounters.plan_group_blocked().is_none()
+            || self
+                .sessions
+                .plan_group_refused
+                .as_ref()
+                .is_some_and(|(session, _)| *session != self.sessions.selected_id())
+        {
+            self.sessions.plan_group_refused = None;
         }
         self.encounters.planned_groups = self.sessions.tonight_links();
         // The editor's way back belongs to its route: leaving the editor another way ends it.
@@ -2532,7 +2551,8 @@ impl Splat {
             }
         }
         if std::mem::take(&mut self.sessions.wants_new_fight) {
-            self.encounters.new_from_plan(self.sessions.selected_id());
+            // Refused while a draft is unsaved; Encounters shows that draft and why.
+            let _ = self.encounters.new_from_plan(self.sessions.selected_id());
             self.page = Page::Encounters;
         }
         if let Some(id) = self.sessions.wants_edit_encounter.take()
@@ -2604,11 +2624,11 @@ impl Splat {
             if let Some(path) = group
                 && let Some(campaign) = &active
             {
-                self.encounters.open_group_in_plan(&path, campaign);
+                let _ = self.encounters.open_group_in_plan(&path, campaign);
                 self.page = Page::Encounters;
             }
             if new_group {
-                self.encounters.new_group_in_plan();
+                let _ = self.encounters.new_group_in_plan();
                 self.page = Page::Encounters;
             }
         }
