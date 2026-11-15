@@ -87,6 +87,7 @@ pub fn roll_tile(ui: &mut Ui, label: &str, value: &str, link: &RollLink) -> Resp
 mod tests {
     use super::*;
     use egui_kittest::kittest::NodeT;
+    use splat::content::dice_text::D20;
 
     /// M5: one form for every fact, in words and in the accessible name: the colon, then the
     /// values joined by the middle dot. A tile label that holds its own number takes the same
@@ -156,5 +157,33 @@ mod tests {
             }
         }
         assert!(wraps > 0, "some widths wrap the fact");
+        // The rolling tile has the stat tile's label line and value type; only its value rolls.
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(400.0, 200.0))
+            .build_ui(|ui| {
+                ui.horizontal(|ui| {
+                    super::super::stat_tile(ui, &tile_label("Str", 8), "−1");
+                    let link = RollLink::d20(D20::Check, 2, "Dexterity");
+                    let _ = roll_tile(ui, &tile_label("Dex", 14), "+2", &link);
+                });
+            });
+        super::super::theme::install(&harness.ctx);
+        harness.run();
+        let style = |words: &str| {
+            harness
+                .output()
+                .shapes
+                .iter()
+                .find_map(|clipped| match &clipped.shape {
+                    egui::Shape::Text(text) if text.galley.job.text == words => {
+                        let format = &text.galley.job.sections[0].format;
+                        Some((format.font_id.clone(), text.fallback_color))
+                    }
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("{words} is painted"))
+        };
+        assert_eq!(style("Str: 8"), style("Dex: 14"), "one label line");
+        assert_eq!(style("−1").0, style("+2").0, "one value type");
     }
 }
