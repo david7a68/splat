@@ -2899,6 +2899,13 @@ pub struct Encounters {
     /// A Save or a start was refused for the draft at `validation_path`, so its check runs again
     /// when that draft or the campaign changes. It ends with another draft.
     refusal_watch: bool,
+    /// B4c: the plan refusal's check, keyed by the snapshot revision and `plan_epoch`: whether
+    /// the refusal for that group still stands. An unchanged frame does not compare the drafts.
+    plan_refusal_check: Option<((Option<Uuid>, u64, Uuid), bool)>,
+    /// Bumped on each frame with an editing input and the frame after it, while a plan refusal
+    /// is stored (as `edit_epoch`, for every page).
+    plan_epoch: u64,
+    plan_edited_last_frame: bool,
     /// Bumped on each frame that can change a draft (an editing input) and the frame after it,
     /// because a click's change lands late in its frame.
     edit_epoch: u64,
@@ -3113,7 +3120,8 @@ pub const RUN_SETTINGS_DRAFT: &str = "Run settings draft";
 const BLOCKED_BY_CREATURE: &str = design::Unsaved::Creature.reason();
 #[cfg(test)]
 thread_local! {
-    /// B4b N1: how often `plan_group_blocked` compared the drafts, on this thread.
+    /// B4b N1, B4c F1: how often a draft was compared for being unsaved (`DraftOwner::unsaved`),
+    /// on this thread.
     pub(crate) static PLAN_BLOCK_CHECKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
@@ -3132,6 +3140,8 @@ pub enum PlanOpen {
 /// and the replacement guards read.
 impl design::DraftOwner for Encounters {
     fn unsaved(&self, draft: design::Unsaved) -> bool {
+        #[cfg(test)]
+        PLAN_BLOCK_CHECKS.with(|checks| checks.set(checks.get() + 1));
         match draft {
             design::Unsaved::Group => self.group_draft.as_ref().is_some_and(GroupDraft::dirty),
             design::Unsaved::Encounter => self.draft.as_ref().is_some_and(Draft::dirty),
@@ -3720,6 +3730,38 @@ impl Encounters {
                 .collect()
         })
     }
+    /// B4c: whether the plan's refusal for `group` still stands: a draft is unsaved and the
+    /// campaign still has the group. Read only while a refusal is stored; the drafts are
+    /// compared again only when the campaign was read again or a frame had an editing input
+    /// (or follows one: a click's change lands late in its frame).
+    pub fn plan_refusal_stands(&mut self, ctx: &egui::Context, group: Uuid) -> bool {
+        let edited = edit_input(ctx);
+        let edited_before = std::mem::replace(&mut self.plan_edited_last_frame, edited);
+        if edited || edited_before {
+            self.plan_epoch += 1;
+        }
+        let key = (
+            self.snapshot.as_ref().map(|snapshot| snapshot.revision),
+            self.plan_epoch,
+            group,
+        );
+        if let Some((cached, stands)) = self.plan_refusal_check
+            && cached == key
+        {
+            return stands;
+        }
+        let stands = self.plan_group_blocked().is_some()
+            && self
+                .snapshot
+                .as_ref()
+                .is_some_and(|snapshot| snapshot.groups.iter().any(|g| g.id == group));
+        self.plan_refusal_check = Some((key, stands));
+        stands
+    }
+    /// No plan refusal is stored: its check is forgotten, so a new one compares afresh.
+    pub fn forget_plan_refusal(&mut self) {
+        self.plan_refusal_check = None;
+    }
     /// The stable id of the plan's group at `path`, if the campaign has it.
     pub fn plan_group_id(&self, path: &str) -> Option<Uuid> {
         self.snapshot
@@ -3733,8 +3775,6 @@ impl Encounters {
     /// The unsaved draft that refuses it says which it is, from the back lines' recipe (R38):
     /// the encounter, its group or a creature, each with its own reason.
     pub fn plan_group_blocked(&self) -> Option<&'static str> {
-        #[cfg(test)]
-        PLAN_BLOCK_CHECKS.with(|checks| checks.set(checks.get() + 1));
         design::first_unsaved(self)
             .map(design::Unsaved::reason)
             .or(self

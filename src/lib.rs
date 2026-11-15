@@ -2494,13 +2494,19 @@ impl Splat {
             }
         }
         // The end events of the plan's refusal, on any page, read only while one is stored
-        // (B4b N1: no draft is compared on a frame with nothing to end): another session is
-        // selected, or nothing unsaved refuses any more (saved, discarded, campaign changed).
-        if let Some((session, _)) = self.sessions.plan_group_refused
-            && (session != self.sessions.selected_id()
-                || self.encounters.plan_group_blocked().is_none())
-        {
-            self.sessions.plan_group_refused = None;
+        // (B4b N1): another session is selected; nothing unsaved refuses any more (saved,
+        // discarded, campaign changed); or a new read of the campaign lost the group (B4c F2,
+        // also while the plan is not drawn). B4c F1: an unchanged frame compares no draft.
+        match self.sessions.plan_group_refused {
+            Some((session, group))
+                if session != self.sessions.selected_id()
+                    || !self.encounters.plan_refusal_stands(ctx, group) =>
+            {
+                self.sessions.plan_group_refused = None;
+                self.encounters.forget_plan_refusal();
+            }
+            Some(_) => {}
+            None => self.encounters.forget_plan_refusal(),
         }
         self.encounters.planned_groups = self.sessions.tonight_links();
         // The editor's way back belongs to its route: leaving the editor another way ends it.

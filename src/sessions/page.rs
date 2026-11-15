@@ -799,8 +799,9 @@ pub struct Sessions {
     /// group can take). The plan paints the refusing reason under that group's line. It ends at
     /// the next press of a group's name; when the plan's groups are read and that group is not
     /// among them (removed, renamed away, its file replaced by another group); and, in
-    /// `lib.rs` while it is stored, when nothing unsaved refuses any more or another session
-    /// is selected.
+    /// `lib.rs` while it is stored, when nothing unsaved refuses any more, another session is
+    /// selected, or a new read of the campaign lost the group (B4c; that check is cached by
+    /// `Encounters::plan_refusal_stands`, so an unchanged frame compares no draft).
     pub plan_group_refused: Option<(Option<Uuid>, Uuid)>,
     /// Notes that kept a group's old name, because they could not be written.
     rename_problem: Option<String>,
