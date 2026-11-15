@@ -148,25 +148,33 @@ Add loses one staged `ResultOrder::issue` and one `outcome_at` (their `STAGED_AL
 ## 7. The retained footer (layout PR 2b)
 
 `Messages` keeps its lines as typed data (`FooterLine`: rank, act order, the typed message, a kept line's
-ticket); nothing is lowered to a closure. The pane draws them through `TypedFooter`, which keeps one plan
-per footer id in egui's memory: the lines' one order (`footer_order`'s rule), the accessible name, the room
-the lines take (`bare`) and the room their open locks' reasons want (`reserved`).
+ticket); nothing is lowered to a closure. The pane draws them through `TypedFooter`, which keeps a plan per
+footer: the lines' one order (`footer_order`'s rule), the accessible name, each Undo's short form
+(`undo_alone`), the room the lines take (`bare`), the room their open locks' reasons want (`reserved`) and
+the room each of those reasons keeps (`rooms`).
 
 - **When the plan is made.** By the pass that draws the lines, so its measure is the paint's own (the
   typography, wraps, actions and reasons that are drawn), and only when the lines changed (compared as data
-  with the last ones: a compare as large as their words, counted), or the width, the scale or the style. An
-  unchanged frame sorts, names and measures nothing (`FooterWork` counts plans, sorted lines, named bytes and
-  reason probes), and the pane knows the footer's demand before it draws (`Footer::planned`).
+  with the last ones, with the state their file lines draw from: a link pressed for a file that is gone adds a
+  reason line), or the width, the scale or the style. An unchanged frame sorts, names, counts Undo verbs and
+  lays out no reservation (an empty widget-like rect takes each reservation's kept room); `FooterWork` counts
+  plans, sorted lines, named bytes, reason probes, verb comparisons and reservation layouts. The pane knows an
+  **unchanged** footer's demand before it draws (`Footer::planned`). A **changed** footer's first frame still
+  paints at its last height and measures, as before; its placement in that same frame comes with PR 456 (L1c).
 - **Reasons' room (R29), per footer.** A fresh plan decides `give_up` from its own numbers and the room where
-  the footer stands; a pass that makes a plan measures with the footer's own last decision (`id.with("give_up")`).
-  No state is shared between panes: the legacy closures' flags (`GIVE_UP`, `RESERVED`, `DRAWN`) stay for the
-  legacy footer only (`Reasons::Legacy`).
+  the footer stands; a pass that makes a plan measures with the footer's own last decision, kept with its
+  plan. No state is shared between panes: the legacy closures' flags (`GIVE_UP`, `RESERVED`, `DRAWN`) stay
+  for the legacy footer only (`Reasons::Legacy`).
+- **Lifetime.** The plans of one context live in one store (`FooterPlans`). A footer that no frame drew since
+  the last one has ended (its pane closed, its owner changed), and its plan, with its lines, is dropped when a
+  footer next draws: the store holds the footers of about two frames.
 - **Presses.** One press slot per `Messages` per pass, taken by `pane`; nothing keeps a press across passes, so
   a press is acted on once, also when egui draws the frame again or declines to.
 - **The old path.** `Footer::legacy_reason`, `legacy_notice`, `legacy_kept`, `legacy_kept_line` (and the
   staged `result`) are banned by Clippy, listed per function (`Ban::Footer`, exact) and counted per file
-  (`STAGED`). First callers moved: Rules and runs (its discard joins the page's `kept` store), Settings and
-  Link and folder (Campaigns, the account, D&D Beyond).
+  (`LEGACY_FOOTER_LINES`) in every call form, read as tokens with the L0 freeze's machinery (a method, an
+  associated call, a reference: ruling L13). First callers moved: Rules and runs (its discard joins the page's
+  `kept` store), Settings and Link and folder (Campaigns, the account, D&D Beyond).
 - **Limits.** Building `Messages` each frame (the caller's words) and comparing them stays O(the footer's
   words); a caller that keeps owner revisions could skip both, which is later work. Fonts changed with
   `set_fonts` are not part of the plan's key (only width, scale and style).

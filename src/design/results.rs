@@ -1717,37 +1717,23 @@ mod suppressions;
 #[cfg(test)]
 pub(crate) type Staged = (&'static str, &'static str, &'static [(&'static str, usize)]);
 
+/// Layout PR 2b: every use of the legacy footer's closure lines (`suppressions::FOOTER_LINES`),
+/// by file, in every call form (a method, an associated call, a reference: ruling L13), read as
+/// tokens (`suppressions::footer_line_uses`). Clippy bans them, each calling function lists
+/// `Ban::Footer`, and these counts can only shrink: give the footer typed data instead
+/// (`outcome::Messages`).
+#[cfg(test)]
+pub(crate) const LEGACY_FOOTER_LINES: &[(&str, usize)] = &[
+    ("src/design/components.rs", 11),
+    ("src/design/results.rs", 1),
+    ("src/encounter_run/view.rs", 2),
+    ("src/encounters.rs", 2),
+    ("src/library.rs", 12),
+];
+
 /// See [`Staged`]: the pattern, what to use instead, and the count of each file.
 #[cfg(test)]
 pub(crate) const STAGED: &[Staged] = &[
-    // Layout PR 2b: a footer line lowered to a closure is the legacy footer's (`clippy.toml`
-    // bans the four entries; a function that already holds an allow for another ban is caught
-    // here). Give the footer typed data: `outcome::Messages`.
-    (
-        ".legacy_reason(",
-        "Give the footer a typed line: `outcome::Messages::outcome` (layout PR 2b).",
-        &[
-            ("src/design/components.rs", 10),
-            ("src/encounter_run/view.rs", 1),
-            ("src/encounters.rs", 2),
-            ("src/library.rs", 4),
-        ],
-    ),
-    (
-        ".legacy_notice(",
-        "Give the footer a typed line: `outcome::Messages::outcome` (layout PR 2b).",
-        &[("src/design/components.rs", 1), ("src/library.rs", 7)],
-    ),
-    (
-        ".legacy_kept(",
-        "Give the footer a kept result as a `KeptLine`: `Shown::outcome`, `Messages::kept`.",
-        &[],
-    ),
-    (
-        ".legacy_kept_line(",
-        "Give the footer a kept result as a `KeptLine`: `Shown::outcome`, `Messages::kept`.",
-        &[("src/encounter_run/view.rs", 1), ("src/library.rs", 1)],
-    ),
     (
         "Outcome::Refused(",
         "Answer a refused act with a typed `Refusal` on its entry (`Results::undo_or_refuse`): it names the thing, the cause and a next step, and ranks as an act (M1).",
@@ -2724,6 +2710,29 @@ mod tests {
             }
         }
         assert!(faults.is_empty(), "{}", faults.join("\n"));
+    }
+
+    /// Layout PR 2b, ruling L13: the legacy footer's closure lines only shrink, counted in every
+    /// call form.
+    #[test]
+    fn legacy_footer_lines_only_shrink() {
+        let mut files = Vec::new();
+        collect(std::path::Path::new("src"), &mut files);
+        let mut found: Vec<(String, usize)> = files
+            .iter()
+            .map(|(path, text)| (path.clone(), suppressions::footer_line_uses(text)))
+            .filter(|(_, uses)| *uses > 0)
+            .collect();
+        found.sort();
+        let listed: Vec<(String, usize)> = LEGACY_FOOTER_LINES
+            .iter()
+            .map(|(path, uses)| ((*path).to_owned(), *uses))
+            .collect();
+        assert_eq!(
+            found, listed,
+            "a footer line lowered to a closure is the legacy footer's: give the footer typed \
+             data (`outcome::Messages`); a removed use lowers its row"
+        );
     }
 
     /// Every suppression of `clippy::disallowed_methods` is a row of `STAGED_ALLOWS` (see
