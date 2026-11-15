@@ -416,6 +416,16 @@ impl<'a> AddWaits<'a> {
     }
 }
 
+/// A group whose members' changes make another creature says `Changed`, with its muted pencil,
+/// after its members (FJ5). The no-break space keeps the two on one line.
+fn changed_mark(group: &super::RunGroup) -> Option<String> {
+    group
+        .members
+        .iter()
+        .any(|member| member.overrides.changes_creature())
+        .then(|| format!("{}\u{a0}Changed", icons::CHANGED))
+}
+
 fn arrival_add_word(group: &super::RunGroup) -> String {
     if group.warnings.is_empty() {
         "Add".to_owned()
@@ -3757,7 +3767,7 @@ impl Run {
                 // widens nothing and no Add moves under the DM's pointer. The heading never holds
                 // the status (FB12): it gives that room to its `Fight after` line.
                 let status = self.group_status(group, self.group_joined(group));
-                let widest = self.widest_status(group);
+                let widest = self.widest_status();
                 let small = Type::Small.font(ui);
                 let status = if design::number_width(ui, &status, &small)
                     > design::number_width(ui, &widest, &small)
@@ -3765,6 +3775,11 @@ impl Run {
                     status
                 } else {
                     widest
+                };
+                // With its `Changed`, which the member line shows after the members.
+                let status = match changed_mark(group) {
+                    Some(mark) => format!("{status} · {mark}"),
+                    None => status,
                 };
                 let totals = group.facts(true);
                 let heading = design::number_width(
@@ -3819,21 +3834,9 @@ impl Run {
         self.arrival_lines.retain(|id| offered.contains(id));
     }
 
-    /// The widest join status a group can show (FI5): `Added in round NN`, with `Changed`.
-    fn widest_status(&self, group: &super::RunGroup) -> String {
-        let changed = group
-            .members
-            .iter()
-            .any(|member| member.overrides.changes_creature());
-        format!(
-            "Added in round {}{}",
-            self.state.round.max(10),
-            if changed {
-                format!(" · {} Changed", icons::CHANGED)
-            } else {
-                String::new()
-            }
-        )
+    /// The widest join status a group can show (FI5): `Added in round NN`.
+    fn widest_status(&self) -> String {
+        format!("Added in round {}", self.state.round.max(10))
     }
 
     /// Returns the group the DM chooses to add. Those in tonight's plan come first.
@@ -3976,13 +3979,10 @@ impl Run {
     }
 
     /// What a group's row says about it before its members: when it joined (`joined`, from
-    /// `group_joined`), whose encounter it is for, and `Changed`.
+    /// `group_joined`), or whose encounter it is for. `Changed` follows the members
+    /// (`changed_mark`).
     fn group_status(&self, group: &super::RunGroup, joined: Option<u64>) -> String {
-        let changed = group
-            .members
-            .iter()
-            .any(|member| member.overrides.changes_creature());
-        let mut status = if let Some(round) = joined {
+        if let Some(round) = joined {
             if round == 0 {
                 // Short enough for the member slot at 960, in the run's own phase word, so a
                 // first join in setup needs no line of its own (review 2).
@@ -4001,14 +4001,7 @@ impl Run {
             crate::encounters::ENCOUNTER_DELETED.to_owned()
         } else {
             String::new()
-        };
-        if changed {
-            if !status.is_empty() {
-                status.push_str(" · ");
-            }
-            status.push_str(&format!("{} Changed", icons::CHANGED));
         }
-        status
     }
 
     /// Returns true when the DM chooses to add this group.
@@ -4241,16 +4234,22 @@ impl Run {
             above: summary_above,
         } = self.arrival_summary(ui, group, beside, full);
         let width = if summary_above { full } else { beside };
-        let members = members.to_string();
-        // FB12, AM8: the status's one place in every group is here, before its members; the
-        // heading never holds it.
+        // `Changed` follows the members, in the one order of a roster's summary
+        // (`difficulty::Summary`: members, then `Changed`), so the member line never starts
+        // with its pencil (N5). A break may come before its `·`, never after it.
+        let members = match changed_mark(group) {
+            Some(mark) => format!("{members} ·\u{a0}{mark}"),
+            None => members.to_string(),
+        };
+        // FB12, AM8: the join status's one place in every group is here, before its members;
+        // the heading never holds it.
         let status_shown = status.as_str();
         // A status that cannot fit the member slot whole takes a full-width line above the
         // members and controls, where it wraps at its spaces. FB1: a group that has joined
         // decides by its widest join status too, so a second join that changes the words never
         // changes the row's shape.
         // A group that joined can show `Added in round N` again; its row keeps that room.
-        let widest = self.widest_status(group);
+        let widest = self.widest_status();
         // FI5: any group can join, so every row keeps the shape of the widest words it can show,
         // `Added in round NN` (or its own longer status). Joining then moves no row, and its
         // `Added in round N` sits on the members' line.

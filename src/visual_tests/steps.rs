@@ -234,11 +234,20 @@ pub fn add_group(name: &str) -> String {
     format!("Add {name} to the initiative list")
 }
 
+/// An Arrivals group's drag handle: its heading row. Its name may go on (`. Changed.`).
+fn arrival_handle(d: &Driver<'_>, group: &str) -> Option<eframe::egui::Rect> {
+    let name = format!("Drag {group} to the initiative list");
+    d.nodes()
+        .into_iter()
+        .find(|node| node.name.starts_with(&name))
+        .map(|node| node.rect)
+}
+
 /// The texts painted in an Arrivals group's heading (its drag handle's row: the title and the
 /// `Fight after` line beside it), joined by ` | `, no-break spaces read as spaces. `None` when
 /// the panel shows no such group.
 pub fn arrival_heading(d: &Driver<'_>, group: &str) -> Option<String> {
-    let heading = d.place_of(&format!("Drag {group} to the initiative list"))?;
+    let heading = arrival_handle(d, group)?;
     let mut words = Vec::new();
     d.each_painted_text(|text, clip| {
         let rect = eframe::egui::Rect::from_min_size(text.pos, text.galley.size());
@@ -253,7 +262,7 @@ pub fn arrival_heading(d: &Driver<'_>, group: &str) -> Option<String> {
 /// on its member line (below the heading, left of its Add, down to the Add's bottom). `None`
 /// when the panel shows no such group.
 pub fn status_places(d: &Driver<'_>, group: &str, status: &str) -> Option<(usize, usize)> {
-    let heading = d.place_of(&format!("Drag {group} to the initiative list"))?;
+    let heading = arrival_handle(d, group)?;
     let add = d.place_of(&add_group(group))?;
     let (mut in_heading, mut on_members) = (0, 0);
     d.each_painted_text(|text, clip| {
