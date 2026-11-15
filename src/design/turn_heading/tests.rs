@@ -497,7 +497,7 @@ fn the_selector_takes_the_first_fit_in_order() {
         );
     }
     let skip = select::first_fit(
-        &ORDER,
+        ORDER,
         |width| width != 60,
         |width| (width <= 65).then_some(()),
     );

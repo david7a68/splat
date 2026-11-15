@@ -7731,6 +7731,19 @@ pub mod run_absent_player {
         d.click_row(PLAYER);
         d.click("Absent");
         d.state("back-with-no-initiative", Sizes::All);
+        // SP2 (`undo-action-words-fit`): the header's Undo keeps its verb and the state when the
+        // name gives way (`Undo: mark present`), never `Undo` alone, at every size.
+        let label = format!("Undo: mark {PLAYER} present");
+        for size in [SMALL, DEFAULT, LARGE] {
+            let painted = d.at_size(size, |d| d.place_of(&label).map(|rect| d.painted_in(rect)));
+            d.observe(
+                "SP2-undo-keeps-its-words",
+                painted
+                    .as_deref()
+                    .is_some_and(|words| words.contains("mark") && words.contains("present")),
+                format!("At {size:?} the header's Undo paints {painted:?}"),
+            );
+        }
         let last = roster_places(d).last().map(|row| row.0.clone());
         d.observe(
             "Absent player",

@@ -7109,8 +7109,17 @@ pub(super) fn undo_forms(
         .collect();
     let bare = if let Some((verb, ..)) = move_parts(action) {
         vec![verb.to_owned()]
-    } else if let Some((before, _)) = target.and_then(|target| split_target(action, target)) {
-        act_words(before)
+    } else if let Some((before, after)) = target.and_then(|target| split_target(action, target)) {
+        // SP2 (`undo-action-words-fit`): a step whose words go on after its target (`mark
+        // Brannoch Vale present`) keeps its verb and its state without the name: `mark
+        // present`, as a short footer Undo keeps its verb (`UndoStep::short`). `U` and the
+        // name give way before these words; `Undo` alone comes only after them.
+        let mut words = act_words(before);
+        let rest = after.trim();
+        if words.is_empty() && !rest.is_empty() {
+            words.push(format!("{} {rest}", before.trim()).trim().to_owned());
+        }
+        words
     } else {
         undo_compact(label).into_iter().collect()
     };
@@ -12436,6 +12445,13 @@ mod tests {
                     forms.target
                 );
                 assert_eq!(forms.bare, ["Undo: move"]);
+                // SP2: a step whose words go on after its target keeps its verb and state.
+                for state in ["present", "absent"] {
+                    let presence = format!("Undo: mark {} {state}", p.name);
+                    let forms =
+                        undo_forms(&presence, Some(&p.name), false, std::slice::from_ref(&p));
+                    assert_eq!(forms.bare, [format!("Undo: mark {state}")]);
+                }
                 // An arrival named by its group alone has no member to give up.
                 let plain = "Move Shrine Reserve before Brannoch Vale";
                 let plain_width = design::number_width(ui, plain, &font);
