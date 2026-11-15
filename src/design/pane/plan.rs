@@ -436,8 +436,7 @@ impl BlockPlan {
                             None => (unit.from, unit.to),
                         });
                     }
-                } else if !self.at_or_before(unit.to, top) && !self.at_or_after(unit.from, bottom)
-                {
+                } else if !self.at_or_before(unit.to, top) && !self.at_or_after(unit.from, bottom) {
                     mask.too_tall.get_or_insert(TooTall {
                         owner,
                         block: at,
@@ -451,11 +450,13 @@ impl BlockPlan {
         if mask.eligible.is_none() && n > 0 && !self.at_or_after(top, read.extent()) {
             // L7: no unit is whole. The unit under the view's top, and the one after it: the next
             // part of its section, or the next block's first unit.
-            let under = Reader::first(0, n, |at| !self.at_or_before(read.top(at + 1), top))
-                .min(n - 1);
+            let under =
+                Reader::first(0, n, |at| !self.at_or_before(read.top(at + 1), top)).min(n - 1);
             let units = self.units(&read, under, view);
             let here = match units {
-                [Some(heading), Some(row)] if self.at_or_before(heading.to, top) => [Some(row), None],
+                [Some(heading), Some(row)] if self.at_or_before(heading.to, top) => {
+                    [Some(row), None]
+                }
                 units => units,
             };
             let above = here[0].expect("a block has a unit");

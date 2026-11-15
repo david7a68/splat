@@ -2228,7 +2228,8 @@ mod row_cut_tests {
             }
             if let Some((from, to)) = mask.eligible {
                 assert!(
-                    grid(plan, from) >= grid(plan, offset) && grid(plan, to) <= grid(plan, offset + view),
+                    grid(plan, from) >= grid(plan, offset)
+                        && grid(plan, to) <= grid(plan, offset + view),
                     "plan-i1 {case}: eligible {from}..{to} lies in the view {offset}+{view} at scale {}",
                     plan.scale()
                 );
@@ -2289,7 +2290,13 @@ mod row_cut_tests {
         let rows = BlockPlan::of_heights(&[(40.0, None), (40.0, None)], 4.0);
         let pixels = i1(&rows, 0.5, 40.0, "scale 4");
         assert_eq!(
-            (pixels.whole.is_empty(), pixels.eligible, pixels.no_whole.map(|gap| (gap.above.offset, gap.below.and_then(|below| below.offset)))),
+            (
+                pixels.whole.is_empty(),
+                pixels.eligible,
+                pixels
+                    .no_whole
+                    .map(|gap| (gap.above.offset, gap.below.and_then(|below| below.offset)))
+            ),
             (true, None, Some((Some(0.0), Some(40.0)))),
             "plan-grid: two pixels above the view at scale 4 leave the first row not whole: {pixels:?}"
         );
@@ -2327,9 +2334,9 @@ mod row_cut_tests {
         let heading_whole = i1(&two_line, 0.0, 35.0, "heading over a tall row");
         assert!(
             heading_whole.eligible == Some((0.0, 34.0))
-                && heading_whole
-                    .too_tall
-                    .is_some_and(|tall| (tall.block, tall.part, tall.height) == (0, Part::Row, 40.0)),
+                && heading_whole.too_tall.is_some_and(
+                    |tall| (tall.block, tall.part, tall.height) == (0, Part::Row, 40.0)
+                ),
             "plan-l6: the heading is whole and the row is too tall: {heading_whole:?}"
         );
 
@@ -2358,7 +2365,10 @@ mod row_cut_tests {
         );
         for (at, route) in [(0, 0.0), (1, 80.0)] {
             assert_eq!(
-                (pair.offset_showing(at, 100.0, 40.0), i1(&pair, route, 100.0, "route").whole),
+                (
+                    pair.offset_showing(at, 100.0, 40.0),
+                    i1(&pair, route, 100.0, "route").whole
+                ),
                 (Some(route), at..at + 1),
                 "plan-l7: the route {route} shows block {at} whole"
             );
@@ -2369,7 +2379,11 @@ mod row_cut_tests {
         let empty = BlockPlan::of_heights(&[(54.0, Some(34.0))], 1.0);
         let parts = i1(&empty, 10.0, 35.0, "split section");
         assert_eq!(
-            (parts.eligible, parts.too_tall, parts.no_whole.map(|gap| (gap.above, gap.below))),
+            (
+                parts.eligible,
+                parts.too_tall,
+                parts.no_whole.map(|gap| (gap.above, gap.below))
+            ),
             (
                 None,
                 None,
@@ -2409,12 +2423,20 @@ mod row_cut_tests {
             );
         }
         let many: Vec<(f32, Option<f32>)> = (0..100_000)
-            .map(|at| if at % 50 == 0 { (74.0, Some(34.0)) } else { (40.0, None) })
+            .map(|at| {
+                if at % 50 == 0 {
+                    (74.0, Some(34.0))
+                } else {
+                    (40.0, None)
+                }
+            })
             .collect();
         let large = BlockPlan::of_heights(&many, 1.0);
         let most = (0..200)
             .flat_map(|at| [(at as f32 * 20_011.5, 300.0), (at as f32 * 20_011.5, 35.0)])
-            .map(|(offset, view)| i1(&large, offset.min(large.max_offset(view)), view, "large").read)
+            .map(|(offset, view)| {
+                i1(&large, offset.min(large.max_offset(view)), view, "large").read
+            })
             .max()
             .unwrap_or(0);
         assert!(
