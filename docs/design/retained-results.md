@@ -36,7 +36,8 @@ sentences). It does not grow with the event list or the notes. It is counted (`h
 2b's to remove. Everything else on an unchanged frame is constant and counted (`visits`): `refresh`
 compares three values; `present` finds its entry by the place kept with the line (valid while the
 revision stands), not by a search; `expire` keeps the oldest act for the store's revision and visits no
-entry before the next end (at an end it visits each entry once). `set_locks` visits every entry, so an
+entry before the next end (at an end it visits each entry once, and finds the next end among those
+that stay). `set_locks` visits every entry, so an
 owner calls it when the lock's source changed, not each frame (no first owner has a lock). Other legacy
 footer work of these panes (other results, the removal line) is outside this claim.
 
@@ -100,7 +101,8 @@ another file is another owner key, so its Add shows no more and ends by its life
 that `fights_that_keep_hp` reads: which read of the run list it is (a revision that `take_run_list`
 advances: a reload, a deleted or restored run) and the open run's id and whether it is running. Their
 revision is the second input of both Add keys (`Plan::saved_runs_revision`, `TimelinePage::set_saved_runs`).
-The work is constant per frame (a revision and the open run's timeline fact), never the run list.
+The work is constant per frame (a revision, and the open run's id and running flag through
+`Run::keeps_saved_hp`, with no string copied), never the run list.
 
 Footer construction (`list_messages`, `plan_messages`) keeps only `refresh` (a revision compare on an
 unchanged frame) and `present`. The per-frame `day_numbers`, event searches, `fights_that_keep_hp` and the
@@ -142,3 +144,29 @@ Add loses one staged `ResultOrder::issue` and one `outcome_at` (their `STAGED_AL
 - A frame-bound line ends the store's borrow; the types do not stop the pane's body from changing the
   store between `present` and the footer's paint (as today). The truth claim is for the frame's start.
 - Every other result owner keeps the frame-bound path; the footer renderer is PR 2b.
+
+## 7. The retained footer (layout PR 2b)
+
+`Messages` keeps its lines as typed data (`FooterLine`: rank, act order, the typed message, a kept line's
+ticket); nothing is lowered to a closure. The pane draws them through `TypedFooter`, which keeps one plan
+per footer id in egui's memory: the lines' one order (`footer_order`'s rule), the accessible name, the room
+the lines take (`bare`) and the room their open locks' reasons want (`reserved`).
+
+- **When the plan is made.** By the pass that draws the lines, so its measure is the paint's own (the
+  typography, wraps, actions and reasons that are drawn), and only when the lines changed (compared as data
+  with the last ones: a compare as large as their words, counted), or the width, the scale or the style. An
+  unchanged frame sorts, names and measures nothing (`FooterWork` counts plans, sorted lines, named bytes and
+  reason probes), and the pane knows the footer's demand before it draws (`Footer::planned`).
+- **Reasons' room (R29), per footer.** A fresh plan decides `give_up` from its own numbers and the room where
+  the footer stands; a pass that makes a plan measures with the footer's own last decision (`id.with("give_up")`).
+  No state is shared between panes: the legacy closures' flags (`GIVE_UP`, `RESERVED`, `DRAWN`) stay for the
+  legacy footer only (`Reasons::Legacy`).
+- **Presses.** One press slot per `Messages` per pass, taken by `pane`; nothing keeps a press across passes, so
+  a press is acted on once, also when egui draws the frame again or declines to.
+- **The old path.** `Footer::legacy_reason`, `legacy_notice`, `legacy_kept`, `legacy_kept_line` (and the
+  staged `result`) are banned by Clippy, listed per function (`Ban::Footer`, exact) and counted per file
+  (`STAGED`). First callers moved: Rules and runs (its discard joins the page's `kept` store), Settings and
+  Link and folder (Campaigns, the account, D&D Beyond).
+- **Limits.** Building `Messages` each frame (the caller's words) and comparing them stays O(the footer's
+  words); a caller that keeps owner revisions could skip both, which is later work. Fonts changed with
+  `set_fonts` are not part of the plan's key (only width, scale and style).

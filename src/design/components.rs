@@ -3341,7 +3341,7 @@ pub const PART_INSET: f32 = FOCUS_WIDTH + HAIRLINE_WIDTH;
 /// `fit`: the part is laid out in `rect` but is only as tall as what it shows (up to `rect`): a
 /// footer drawn in its whole room before it was measured (`pane::Footer::pane`). Returns what
 /// `add` returns, the content's height, and the part's rect.
-fn scroll_part<R>(
+pub(super) fn scroll_part<R>(
     ui: &mut Ui,
     rect: Rect,
     id: Id,
@@ -3532,7 +3532,35 @@ type FooterMessage<'a> = (
 pub struct Footer<'a> {
     id: Id,
     width: f32,
+    /// The legacy lines: each lowered to a closure (`result`, `legacy_reason`, `legacy_notice`,
+    /// `legacy_kept`, `legacy_kept_line`). Banned and counted (`clippy.toml`, `Ban::Footer`).
     messages: Vec<FooterMessage<'a>>,
+    /// A typed footer's lines (`outcome::Messages`): data, drawn in the order of the footer's
+    /// retained plan (layout PR 2b).
+    typed: Option<Box<dyn FooterLines + 'a>>,
+}
+
+/// A typed footer's lines, as the pane places and draws them (`outcome::Messages`).
+pub(super) trait FooterLines {
+    fn is_empty(&self) -> bool;
+    /// Before the pane places the footer: its whole demand at `width`, when its retained plan
+    /// was made from these lines at this width, scale and style. Then the pane knows the
+    /// footer's height before it draws, and the footer draws from the plan.
+    fn planned(&mut self, ui: &Ui, id: Id, width: f32) -> Option<f32>;
+    /// Draw the lines in `rect`, as `Footer::draw_messages` does: from the plan, or measuring
+    /// them and making the plan. `fit`: the footer is only as tall as what it shows. Returns the
+    /// footer's rect and the height its lines want.
+    #[allow(clippy::too_many_arguments)]
+    fn draw(
+        &mut self,
+        ui: &mut Ui,
+        id: Id,
+        rect: Rect,
+        cut: bool,
+        most: f32,
+        stored: f32,
+        fit: bool,
+    ) -> (Rect, f32);
 }
 
 impl<'a> Footer<'a> {
@@ -3543,7 +3571,24 @@ impl<'a> Footer<'a> {
             id: Id::new(id),
             width,
             messages: Vec::new(),
+            typed: None,
         }
+    }
+
+    /// A typed footer (`outcome::Messages`): its lines are data, not closures.
+    pub(super) fn typed(id: Id, width: f32, lines: Box<dyn FooterLines + 'a>) -> Self {
+        Self {
+            id,
+            width,
+            messages: Vec::new(),
+            typed: Some(lines),
+        }
+    }
+
+    /// A typed footer's whole demand at `width`, when its retained plan holds (`FooterLines`).
+    pub(super) fn planned(&mut self, ui: &Ui, width: f32) -> Option<f32> {
+        let id = self.id;
+        self.typed.as_mut()?.planned(ui, id, width)
     }
 
     /// A result, made by the action done at `order`. `has_undo` is true while its Undo is live:
@@ -3574,7 +3619,7 @@ impl<'a> Footer<'a> {
     #[deprecated(
         note = "Give the footer a typed `Outcome` with `Footer::outcome` (src/design/outcome.rs)."
     )]
-    pub fn reason(
+    pub fn legacy_reason(
         &mut self,
         words: impl Into<std::borrow::Cow<'a, str>>,
         draw: impl FnOnce(&mut Ui) + 'a,
@@ -3588,7 +3633,7 @@ impl<'a> Footer<'a> {
     #[deprecated(
         note = "Give the footer a typed `Outcome` with `Footer::outcome` (src/design/outcome.rs)."
     )]
-    pub fn notice(
+    pub fn legacy_notice(
         &mut self,
         words: impl Into<std::borrow::Cow<'a, str>>,
         draw: impl FnOnce(&mut Ui) + 'a,
@@ -3739,9 +3784,20 @@ impl<'a> Footer<'a> {
         limit
     }
 
+    /// Take `from`'s typed lines (a footer of the same id): `outcome::Messages::pane_then` gives
+    /// the pane its lines after the body.
+    pub(super) fn take_typed(&mut self, from: Footer<'a>) {
+        self.typed = from.typed;
+    }
+
+    /// Whether the footer's lines are typed (`outcome::Messages`), measured by their plan.
+    pub(super) fn is_typed(&self) -> bool {
+        self.typed.is_some()
+    }
+
     /// Whether the footer holds a message.
     pub(super) fn is_empty(&self) -> bool {
-        self.messages.is_empty()
+        self.messages.is_empty() && self.typed.as_ref().is_none_or(|typed| typed.is_empty())
     }
 
     /// A key of the messages' words, in the caller's order: a footer measured with other words
@@ -3784,6 +3840,9 @@ impl<'a> Footer<'a> {
         stored: f32,
         fit: bool,
     ) -> (Rect, f32) {
+        if let Some(typed) = self.typed.as_mut() {
+            return typed.draw(ui, self.id, rect, cut, most, stored, fit);
+        }
         // The one footer order (`outcome::footer_order`): results with a live Undo newest
         // first, reasons and notices in the caller's order, then results with no live Undo.
         super::outcome::footer_order(&mut self.messages);
@@ -6544,7 +6603,7 @@ mod tests {
                             });
                         }
                         if count > 1 {
-                            footer.reason("Line 3 opens a list.", |ui| {
+                            footer.legacy_reason("Line 3 opens a list.", |ui| {
                                 message(ui, Tone::Error, "Line 3 opens a list.");
                             });
                         }
@@ -6802,10 +6861,10 @@ mod tests {
                 .with_size(vec2(960.0, 640.0))
                 .build_ui(move |ui| {
                     let mut footer = Footer::new("order_footer", ui.available_width());
-                    footer.notice("Notice.", |ui| {
+                    footer.legacy_notice("Notice.", |ui| {
                         ui.label("Notice.");
                     });
-                    footer.reason("Reason.", |ui| {
+                    footer.legacy_reason("Reason.", |ui| {
                         ui.label("Reason.");
                     });
                     for (words, order, undo) in &results {
@@ -6993,7 +7052,7 @@ mod tests {
                                     let _ = ui.button(format!("Undo extra {at}"));
                                 });
                             }
-                            footer.reason(REASON, |ui| {
+                            footer.legacy_reason(REASON, |ui| {
                                 message(ui, Tone::Error, REASON);
                             });
                         }
@@ -7520,7 +7579,7 @@ mod tests {
                             .build_ui(move |ui| {
                                 ui.label("Title");
                                 let mut footer = Footer::new("shape_footer", ui.available_width());
-                                footer.reason(REASON, |ui| {
+                                footer.legacy_reason(REASON, |ui| {
                                     message(ui, Tone::Error, REASON);
                                 });
                                 let body = match shape {
@@ -7597,7 +7656,7 @@ mod tests {
                                     Shape::Nested => {
                                         let mut inner =
                                             Footer::new("inner_footer", ui.available_width());
-                                        inner.reason("Inner reason.", |ui| {
+                                        inner.legacy_reason("Inner reason.", |ui| {
                                             message(ui, Tone::Warning, "Inner reason.");
                                         });
                                         inner.pane(ui, Body::Content, |ui| {
@@ -7753,7 +7812,7 @@ mod tests {
                     .build_ui(move |ui| {
                         ui.label("Title");
                         let mut footer = Footer::new("small_footer", ui.available_width());
-                        footer.reason(REASON, |ui| {
+                        footer.legacy_reason(REASON, |ui| {
                             message(ui, Tone::Error, REASON);
                         });
                         footer.pane(ui, Body::Content, |ui| {
@@ -7823,7 +7882,7 @@ mod tests {
                         let mut footer = Footer::new("qc_footer", ui.available_width());
                         for at in 0..reasons_in.get() {
                             let words = format!("Reason {at} of this footer.");
-                            footer.reason(words.clone(), move |ui| {
+                            footer.legacy_reason(words.clone(), move |ui| {
                                 message(ui, Tone::Error, &words);
                             });
                         }
@@ -7940,11 +7999,12 @@ mod tests {
         // that was not measured with its messages is laid out and placed in that same pass. So
         // with egui's reruns denied (one pass a frame), the frame of a press shows the messages
         // it brought, whole, never the ones it ended, and the next frame moves nothing: none →
-        // one reason (a footer that comes) → four in its place (a footer that grew). Below a
+        // one reason (a footer that comes) → three in its place (a footer that grew). Below a
         // short body the footer follows it by `S`; below a tall body (review of PR 456) it is
         // pinned at the pane's bottom, a third of the pane at most, with no body line under it,
         // and a press in that first frame reaches no footer control (their places from the
         // layout before the footer moved down are not targets).
+        const PRESS_WORDS: [&str; 4] = ["Press 0", "Press 1", "Press 2", "Press 3"];
         let shown = Rc::new(Cell::new(0_usize));
         let pressed = Rc::new(Cell::new(None::<usize>));
         let tall = Rc::new(Cell::new(false));
@@ -7953,34 +8013,41 @@ mod tests {
             .with_size(vec2(960.0, 640.0))
             .build_ui(move |ui| {
                 ui.label("Title");
-                let pressed = pressed_in.clone();
-                Footer::new("then_footer", ui.available_width()).pane_then(
-                    ui,
-                    Body::Content,
-                    |ui| {
-                        for (at, name) in ["Show one", "Show four"].into_iter().enumerate() {
-                            if ui.button(name).clicked() {
-                                shown_in.set(at + 1);
-                            }
-                        }
-                        if tall_in.get() {
-                            rows(ui, 60);
-                        }
-                        shown_in.get()
-                    },
-                    move |shown, footer| {
-                        let count = [0, 1, 4][shown];
-                        for line in 0..count {
-                            let words = format!("Reason {line} of {count}.");
-                            let pressed = pressed.clone();
-                            footer.reason(words.clone(), move |ui| {
-                                if ui.button(&words).clicked() {
-                                    pressed.set(Some(line));
+                // The typed footer (layout PR 2b): each reason a notice with its choice.
+                use super::super::outcome::{Choice, MessageChoice, Messages, Notice, PaneFrame};
+                const PRESS: [&str; 4] = PRESS_WORDS;
+                let frame = PaneFrame::new(ui);
+                let paned = Messages::<usize>::new(&frame, "then_footer", ui.available_width())
+                    .pane_then(
+                        ui,
+                        Body::Content,
+                        |ui| {
+                            for (at, name) in ["Show one", "Show three"].into_iter().enumerate() {
+                                if ui.button(name).clicked() {
+                                    shown_in.set(at + 1);
                                 }
-                            });
-                        }
-                    },
-                );
+                            }
+                            if tall_in.get() {
+                                rows(ui, 60);
+                            }
+                            shown_in.get()
+                        },
+                        |shown, messages| {
+                            let count = [0, 1, 3][shown];
+                            for line in 0..count {
+                                messages.outcome(
+                                    Notice::new(crate::sentence!("Reason {} of {}.", line, count))
+                                        .choice(Choice::new(
+                                            MessageChoice::Choice(PRESS[line]),
+                                            line,
+                                        )),
+                                );
+                            }
+                        },
+                    );
+                if let Some(press) = paned.pressed {
+                    pressed_in.set(Some(press.id));
+                }
             });
         super::super::theme::install(&harness.ctx);
         harness
@@ -8079,7 +8146,7 @@ mod tests {
                 .room();
             for (press, count, ended) in [
                 ("Show one", 1, None),
-                ("Show four", 4, Some("Reason 0 of 1.")),
+                ("Show three", 3, Some("Reason 0 of 1.")),
             ] {
                 // The press's own frame: hover first, then press and release, one pass each.
                 let at = access(&harness)
@@ -8121,25 +8188,31 @@ mod tests {
                         && placed,
                     "pane_then (tall {is_tall}), one pass a frame: the frame of {press} shows its {count} reason(s) whole in the footer {footer:?} (body ends {body_end}, lowest body line {body_low}, pane {room:?}), and not {ended:?}: {reasons:?}"
                 );
-                // The next frame, one pass. Below the tall body, after four reasons, it holds a
-                // press on the first reason's painted place: there the layout before the footer
-                // moved down put another reason's control, and no control takes that press.
+                // The next frame, one pass. Below the tall body, after three reasons, it holds a
+                // press on the first choice's place as laid out before the footer moved down: no
+                // control takes that press.
                 let mut at_first = None;
-                if is_tall && count == 4 {
-                    let centre = reasons[0].expect("the first reason").center();
-                    let other = (1..count).any(|line| {
-                        egui_kittest::kittest::Queryable::query_by_label(
-                            &harness,
-                            &format!("Reason {line} of {count}."),
-                        )
-                        .is_some_and(|node| node.rect().contains(centre))
-                    });
+                if is_tall && count == 3 {
+                    // The first choice's place as laid out (its accessible rect in this frame);
+                    // the footer moved down, so it is painted elsewhere now.
+                    let laid =
+                        egui_kittest::kittest::Queryable::query_by_label(&harness, PRESS_WORDS[0])
+                            .expect("the first choice")
+                            .rect()
+                            .center();
+                    let first_painted = painted(&harness, PRESS_WORDS[0])
+                        .expect("the first choice is painted")
+                        .0;
                     assert!(
-                        other,
-                        "pane_then fixture: in the first frame, another reason's control was laid out under the first reason's painted place {centre:?}"
+                        !first_painted.expand(4.0).contains(laid),
+                        "pane_then fixture: the footer moved: the first choice laid out at {laid:?}, painted at {first_painted:?}"
                     );
-                    click(&mut harness, centre);
-                    at_first = Some(centre);
+                    let now = (0..count).find(|now| {
+                        painted(&harness, PRESS_WORDS[*now])
+                            .is_some_and(|(rect, _)| rect.expand(4.0).contains(laid))
+                    });
+                    click(&mut harness, laid);
+                    at_first = Some((laid, now));
                 }
                 harness.step();
                 let next = view(&harness, count);
@@ -8148,14 +8221,15 @@ mod tests {
                     "pane_then (tall {is_tall}): the frame after {press} moves nothing ({first:?} then {next:?}), and a press in it reaches no footer control: {:?}",
                     pressed.get()
                 );
-                if let Some(centre) = at_first {
-                    // A press on the same place, a frame later, is the first reason's.
+                if let Some((centre, now)) = at_first {
+                    // A press on the same place, a frame later, is the choice painted there now,
+                    // if any.
                     click(&mut harness, centre);
                     harness.step();
                     assert_eq!(
                         pressed.get(),
-                        Some(0),
-                        "pane_then: a frame later, the first reason's control takes its press"
+                        now,
+                        "pane_then: a frame later, a press at {centre:?} is the choice painted there"
                     );
                     pressed.set(None);
                     misfire_checked = true;
@@ -8192,7 +8266,7 @@ mod tests {
                     let mut footer = Footer::new("shared_footer", ui.available_width());
                     if message {
                         let undone = &undone_in;
-                        footer.reason(REASON, move |ui| {
+                        footer.legacy_reason(REASON, move |ui| {
                             if ui.button(format!("Undo {side}")).clicked() {
                                 let (a, b) = undone.get();
                                 undone.set(if side == 0 { (a + 1, b) } else { (a, b + 1) });
@@ -8294,7 +8368,7 @@ mod tests {
                 .with_size(vec2(960.0, 640.0))
                 .build_ui(move |ui| {
                     let mut footer = Footer::new("inline_footer", ui.available_width());
-                    footer.reason(REASON, |ui| {
+                    footer.legacy_reason(REASON, |ui| {
                         message(ui, Tone::Error, REASON);
                     });
                     footer.pane(ui, Body::Content, |ui| {
@@ -8352,7 +8426,7 @@ mod tests {
             .build_ui(move |ui| {
                 if present_in.get() {
                     let mut footer = Footer::new("toggled_footer", ui.available_width());
-                    footer.reason(REASON, |ui| {
+                    footer.legacy_reason(REASON, |ui| {
                         message(ui, Tone::Error, REASON);
                     });
                     footer.pane(ui, Body::Content, |ui| ui.label("A row"));

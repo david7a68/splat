@@ -253,7 +253,9 @@ pub fn run(d: &mut Driver<'_>) {
                 .filter(|node| node.name.contains("Combat initiative choice") && node.in_view())
                 .map(|node| node.name)
                 .collect::<Vec<_>>();
-            super::file_links_at_message_words_by_hand(
+            // Migration-32 L2b: Rules and runs' footer is typed, with the fault's own file line
+            // (its links named with the file).
+            super::file_links_at_message_words(
                 d,
                 "Line 23: Combat initiative",
                 &campaign.path.join("Campaign.md"),

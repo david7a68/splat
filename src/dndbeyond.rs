@@ -395,18 +395,23 @@ impl DndBeyond {
         clippy::disallowed_methods,
         reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
     )]
-    /// The messages own their words, so the pane's body can change this list while the footer
-    /// waits for it (`Footer::pane`).
-    pub fn footer_messages(&self, footer: &mut crate::design::Footer<'_>, link: bool) {
-        if let Some(error) = self.error.clone() {
-            footer.reason(error.clone(), move |ui| {
-                crate::design::message(ui, crate::design::Tone::Error, &error);
-            });
+    /// The messages are typed data, so the pane's body can change this list while the footer
+    /// waits for it (`Messages::pane`).
+    pub fn footer_messages<A: 'static>(
+        &self,
+        messages: &mut crate::design::outcome::Messages<'_, A>,
+        link: bool,
+    ) {
+        if let Some(error) = &self.error {
+            messages.outcome(crate::design::outcome::FaultMessage::new(
+                &crate::campaigns::NotDone::words(error),
+            ));
         }
-        if link && let Some((message, order)) = self.message.clone() {
-            footer.result(order, message.clone(), false, move |ui| {
-                crate::design::message(ui, crate::design::Tone::Success, &message);
-            });
+        if link && let Some((message, order)) = &self.message {
+            messages.outcome_at(
+                *order,
+                crate::design::outcome::Said::new(crate::campaigns::footer_words(message)),
+            );
         }
     }
 

@@ -32,6 +32,7 @@ pane-host	src/campaign_content.rs	CampaignContent::show	1	Campaign
 pane-host	src/design/outcome.rs	Messages::pane	1	design
 pane-host	src/design/outcome.rs	Messages::pane_content	1	design
 pane-host	src/design/outcome.rs	Messages::pane_editor	1	design
+pane-host	src/design/outcome.rs	Messages::pane_then	1	design	the typed footer's lines after the body (L1c; raised)
 pane-host	src/encounter_run/view.rs	Run::ended_view	1	Run
 pane-host	src/encounter_run/view.rs	Run::live_view	1	Run
 pane-host	src/encounter_run/view.rs	Run::reference_tab	2	Run

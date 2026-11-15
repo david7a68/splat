@@ -47,6 +47,11 @@ pub(crate) enum Ban {
     /// its ticket; the number of calls in the item, counted in its tokens as `Layout` is, also in
     /// an item allowed for another ban.
     ByOwner(u16),
+    /// Layout PR 2b: a footer line lowered to a closure (`Footer::legacy_reason`,
+    /// `legacy_notice`, `legacy_kept`, `legacy_kept_line`): the legacy footer's. A typed footer
+    /// (`outcome::Messages`) holds data. Staged out; the calls are also counted per file
+    /// (`STAGED`).
+    Footer,
 }
 
 impl Ban {
@@ -54,7 +59,7 @@ impl Ban {
     /// not list it is refused even when the row lists another ban. (`Results`, `Words` and
     /// `Body` match ordinary calls too: `::issue_count_title`, `outside_after`, `.show(`; they
     /// need a token-exact match first.)
-    pub(crate) const EXACT: [Ban; 3] = [Ban::Sentence, Ban::Order, Ban::Answer];
+    pub(crate) const EXACT: [Ban; 4] = [Ban::Sentence, Ban::Order, Ban::Answer, Ban::Footer];
 
     /// The bans an allowed item may call exactly once (`Messages::answer`: ruling Q-x's one
     /// answer to the DM's last act, one call site).
@@ -76,6 +81,12 @@ impl Ban {
                 "__checked",
             ],
             Self::Order => &["outcome_at"],
+            Self::Footer => &[
+                ".legacy_reason(",
+                ".legacy_notice(",
+                ".legacy_kept(",
+                ".legacy_kept_line(",
+            ],
             Self::Answer => &[".answer(", "Messages::answer"],
             Self::Body => &["banner", "row_fault", ".show(", "RowMessages::new"],
             // Counted in the item's tokens instead (`check`).
@@ -450,7 +461,7 @@ pub(crate) fn check(files: &[(String, String)], table: &[(&str, &str, &[Ban])]) 
                     }
                 }
                 None => faults.push(format!(
-                    "{path}:{}: a suppression of `clippy::disallowed_methods` on `{}` that `design::results::STAGED_ALLOWS` does not list. Use `design::Results`, `Footer::kept` and `design::save_row` instead.",
+                    "{path}:{}: a suppression of `clippy::disallowed_methods` on `{}` that `design::results::STAGED_ALLOWS` does not list. Use `design::Results`, `Footer::legacy_kept` and `design::save_row` instead.",
                     suppression.line, suppression.item
                 )),
             }

@@ -790,6 +790,13 @@ impl crate::design::results::Kept for StepResult {
     }
 }
 
+// How many timeline facts (`Run::timeline_fact`, which copies the run's name) this thread made,
+// for a test that an unchanged poll copies none.
+#[cfg(test)]
+thread_local! {
+    pub(crate) static TIMELINE_FACTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 pub(crate) struct Run {
     pub name: String,
     id: Uuid,
@@ -3307,8 +3314,17 @@ impl Run {
         self.notice = Some(words);
     }
 
+    /// The run's id, and whether it is running (past Setup, not ended): what a kept result
+    /// that names the fights keeping their saved HP reads of the open run
+    /// (`Encounters::saved_runs_revision`). No string is copied.
+    pub fn keeps_saved_hp(&self) -> (Uuid, bool) {
+        (self.id, matches!(self.state.phase, Phase::Running))
+    }
+
     /// What the timeline records about this run.
     pub fn timeline_fact(&self) -> crate::timeline::RunFact {
+        #[cfg(test)]
+        TIMELINE_FACTS.with(|made| made.set(made.get() + 1));
         crate::timeline::RunFact {
             id: self.id,
             copied_from: self.recovery.copied_from,

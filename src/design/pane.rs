@@ -1607,10 +1607,20 @@ impl Footer<'_> {
         let (id, width) = self.id_and_width(room.width());
         claim(ui, id);
         let key = id.with("height");
-        let stored = ui
-            .ctx()
-            .data(|data| data.get_temp::<f32>(key))
-            .unwrap_or(0.0);
+        // A typed footer whose retained plan holds knows its demand now (layout PR 2b); else the
+        // last pass's demand, which this pass measures again. A footer whose messages come after
+        // the body (`pane_then`) is planned after it.
+        let planned = if late { None } else { self.planned(ui, width) };
+        let stored = match planned {
+            Some(demand) => {
+                ui.ctx().data_mut(|data| data.insert_temp(key, demand));
+                demand
+            }
+            None => ui
+                .ctx()
+                .data(|data| data.get_temp::<f32>(key))
+                .unwrap_or(0.0),
+        };
         // Whether the footer holds a message while the body draws. Messages that come after the
         // body (`pane_then`) are known only then: until then the footer keeps the room it had in
         // the last pass, as it does when its messages stay (it showed when it has a height).
@@ -1813,6 +1823,16 @@ impl Footer<'_> {
             forget(ui, id);
             ui.ctx().request_discard("the message footer emptied");
         }
+        // Typed lines that came after the body: their retained plan, now (it holds when they are
+        // the last pass's lines at this width).
+        let planned = if late && shown {
+            self.planned(ui, width)
+        } else {
+            planned
+        };
+        if late && let Some(demand) = planned {
+            ui.ctx().data_mut(|data| data.insert_temp(key, demand));
+        }
         // N12: an edge (the footer, the session banner) never cuts through a registered row.
         let new_cut = match scroll {
             Some(scroll) if edge && scroll.cut() => {
@@ -1865,13 +1885,20 @@ impl Footer<'_> {
             // pass; the pass is drawn again, measured. Below a short body that room starts `S`
             // after the content; pinned, it is a third of the pane, and the footer then moves
             // down to the pane's bottom (`settle_pinned`).
-            let words = self.words_key();
-            let words_id = id.with("words");
-            let measured =
-                demand > 0.0 && ui.ctx().data(|data| data.get_temp::<u64>(words_id)) == Some(words);
-            if !measured {
-                ui.ctx().data_mut(|data| data.insert_temp(words_id, words));
-            }
+            // A typed footer is measured when its retained plan holds (layout PR 2b); a legacy one
+            // when it was measured with these words.
+            let measured = if self.is_typed() {
+                planned.is_some()
+            } else {
+                let words = self.words_key();
+                let words_id = id.with("words");
+                let measured = demand > 0.0
+                    && ui.ctx().data(|data| data.get_temp::<u64>(words_id)) == Some(words);
+                if !measured {
+                    ui.ctx().data_mut(|data| data.insert_temp(words_id, words));
+                }
+                measured
+            };
             let fit = !measured;
             let top = if fit && placement == Placement::Pinned {
                 room.bottom() - most
