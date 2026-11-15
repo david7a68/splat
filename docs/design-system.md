@@ -2059,7 +2059,7 @@ Timeline's list footer, newest first among their results, whatever session the p
 (round 27 FE7). Several plan lines stand side by side; each then names its session (`“<name>” is in the plan of
 Session 1: Road.`, `Undo add plan line for <name> in Session 1: Road`). When a line reads like another (the same fight
 in a session of the same label), the entry keeps, from its act, what tells it apart: its journey's label, then a
-number (`Session 1: Road (Travel (2))`); the Undo's fit keeps that part whole, and no label holds a file path. A new
+number, joined by the middle dot (`Session 1: Road · Travel`, `Session 1: Road · Travel · 2`); the Undo's fit keeps that part whole, and no label holds a file path. A new
 plan line for the same note and journey replaces it; one for another note or journey never ends it. It ends when the
 note changes after the act (an edit, even one typed and deleted again before a save; a save with other words; an
 outside change; a discard), when the campaign changes, when the session's note leaves the folder or moves to another

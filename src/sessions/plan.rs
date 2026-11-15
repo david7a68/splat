@@ -2232,7 +2232,7 @@ struct PlannedLine {
     session: String,
     /// What tells this line apart from a line that reads alike (the same fight in a session of
     /// the same label), made at `record` and kept on the entry: its journey's label, then a
-    /// number (`Day 1 (2)`). `None` when no other line reads alike then.
+    /// number (`Travel · 2`). `None` when no other line reads alike then.
     apart: Option<String>,
     /// Its number among lines that read alike and share the journey's label (1 for the first).
     ordinal: u32,
@@ -2294,10 +2294,10 @@ fn plan_line_words(planned: &PlannedLine, several: bool) -> (Sentence, UndoStep)
     (words, step.tell_apart(format!("for {name} in {place}")))
 }
 
-/// The session's label, then what tells the line apart: `Session 1: Road (Day 1 (2))`.
+/// The session's label, then what tells the line apart: `Session 1: Road · Travel · 2`.
 fn plan_line_place(planned: &PlannedLine) -> String {
     match &planned.apart {
-        Some(apart) => format!("{} ({apart})", planned.session),
+        Some(apart) => format!("{} · {apart}", planned.session),
         None => planned.session.clone(),
     }
 }
@@ -3754,7 +3754,7 @@ impl Sessions {
         let (apart, ordinal) = match (alike.is_empty(), same) {
             (true, _) => (None, 1),
             (false, None) => (Some(journey_label.clone()), 1),
-            (false, Some(last)) => (Some(format!("{journey_label} ({})", last + 1)), last + 1),
+            (false, Some(last)) => (Some(format!("{journey_label} · {}", last + 1)), last + 1),
         };
         self.travel.forget_look();
         self.travel.planned.record(PlannedLine {
