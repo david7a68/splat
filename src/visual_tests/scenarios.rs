@@ -6592,6 +6592,7 @@ pub mod empty {
         // the account section is below the form.
         let below = |d: &Driver<'_>| {
             let add = d.place_of(ADD_CAMPAIGN).expect("Add campaign is on screen");
+            let preview = format!("Will create …/{NEW_FOLDER}");
             let mut tops: Vec<(String, i32)> = d
                 .nodes()
                 .iter()
@@ -6603,7 +6604,7 @@ pub mod empty {
                     !node.name.is_empty()
                         && node.name != ADD_REASON
                         && node.name != "Cancel"
-                        && !node.name.starts_with("Will create ")
+                        && node.name != preview
                 })
                 .map(|node| (node.name.clone(), node.rect.top().round() as i32))
                 .collect();
