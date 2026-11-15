@@ -2543,7 +2543,7 @@ pub fn facts(d: &mut Driver<'_>) {
             && d.visible_text("“Can a horn ring be sold?” ticked in Horn Rings."),
         "The box ticks that line of its note, and the question leaves the list",
     );
-    d.state("question-ticked", Sizes::Default);
+    d.state("question-ticked", Sizes::All);
     d.click("Undo tick \u{201c}Can a horn ring be sold?\u{201d} in Horn Rings");
     d.observe(
         "T15.5",
