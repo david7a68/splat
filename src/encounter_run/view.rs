@@ -7116,7 +7116,8 @@ pub(super) fn undo_forms(
         // name give way before these words; `Undo` alone comes only after them.
         let mut words = act_words(before);
         let rest = after.trim();
-        if words.is_empty() && !rest.is_empty() {
+        // A name-first step (`Brannoch Vale absent`) has no verb to keep: none.
+        if words.is_empty() && !before.trim().is_empty() && !rest.is_empty() {
             words.push(format!("{} {rest}", before.trim()).trim().to_owned());
         }
         words

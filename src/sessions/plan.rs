@@ -6182,7 +6182,12 @@ mod tests {
                     });
                 });
                 painted = output.shapes.iter().find_map(|shape| match &shape.shape {
-                    egui::Shape::Text(text) if text.galley.job.text.contains("XP") => {
+                    // The day gives way last (R39), and Q-s may drop the XP number: the
+                    // summary is the line with the day.
+                    egui::Shape::Text(text)
+                        if text.galley.job.text.contains("XP")
+                            || text.galley.job.text.contains("Day 2") =>
+                    {
                         Some(text.galley.job.text.replace(['\u{a0}', '\n'], " "))
                     }
                     _ => None,
