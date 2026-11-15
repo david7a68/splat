@@ -27,6 +27,8 @@ const EVENT_TITLE: design::FieldName = crate::field_id!("event_title");
 const EVENT_PLACE: design::FieldName = crate::field_id!("event_place");
 const EVENT_KIND: design::FieldName = crate::field_id!("timeline_event_kind");
 const EVENT_SESSION: design::FieldName = crate::field_id!("timeline_event_session");
+const NEW_EVENTS_SESSION: design::FieldId =
+    crate::field_id!("timeline_new_events_session").once(design::Once::PageSearch);
 const PLACE_AFTER: design::FieldName = crate::field_id!("timeline_place_after");
 /// The page's own view choice: which session it shows. It is the page's state, not saved
 /// object data.
@@ -679,43 +681,46 @@ impl TimelinePage {
 
     /// Where a new event goes, said before it happens. An encounter run goes there too.
     ///
-    /// Kept on `egui::ComboBox`: its narrow control shows the chosen session's short form
-    /// (`Session 1`) while its list shows the whole names, and `design::Dropdown` shows only the
-    /// chosen row's own words (a gap sent to the part's owner).
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
+    /// The closed control keeps the short session name; its menu and accessible value keep
+    /// the whole name. The Dropdown part owns the regular weight.
     fn new_events_line(
         &mut self,
         ui: &mut egui::Ui,
         sessions: &[SessionLink],
         current: Option<Uuid>,
+        room: egui::Rect,
     ) {
         ui.label(Type::Small.rich(ui, "Adds to").color(colors().muted));
-        let label = current
-            .and_then(|id| sessions.iter().find(|session| session.id == id))
-            .map_or("No session", |session| short_session(&session.label));
         let mut chosen = current;
-        let inner = egui::ComboBox::from_id_salt("timeline_new_events_session")
-            .truncate()
-            .selected_text(label)
+        let mut dropdown = design::Dropdown::new(NEW_EVENTS_SESSION, "Session for new events")
+            .choice(None, "No session");
+        for session in sessions {
+            dropdown = dropdown.choice_with_short_label(
+                Some(session.id),
+                session.label.as_str(),
+                short_session(&session.label),
+            );
+        }
+        // This header's room starts on its row: its menu opens below, never above it.
+        let mut room = room;
+        room.min.y = room.top().max(ui.cursor().top());
+        let shown = dropdown
+            .within(room)
             .width(design::READER_MEASURE / 4.0)
-            .icon(design::combo_icon)
-            .show_ui(ui, |ui| {
-                design::choice_value(ui, &mut chosen, None, "No session");
-                for session in sessions {
-                    design::choice_wrapped_value(ui, &mut chosen, Some(session.id), &session.label);
-                }
-            });
-        design::named(ui, &inner.response, "Session for new events");
-        inner.response.on_hover_text(label);
+            .show(ui, &mut chosen);
+        design::named(ui, &shown.response, "Session for new events");
         if chosen != current {
             self.new_events_to = Some(chosen);
         }
     }
 
-    fn filters(&mut self, ui: &mut egui::Ui, sessions: &[SessionLink], current: Option<Uuid>) {
+    fn filters(
+        &mut self,
+        ui: &mut egui::Ui,
+        sessions: &[SessionLink],
+        current: Option<Uuid>,
+        room: egui::Rect,
+    ) {
         let before = (self.filter, self.search.clone(), self.session);
         let tabs = |ui: &mut egui::Ui, filter: &mut Filter| {
             design::segmented(
@@ -747,7 +752,10 @@ impl TimelinePage {
                 "Search",
                 160.0,
             );
+            let mut menu_room = room;
+            menu_room.min.y = menu_room.top().max(ui.cursor().top());
             design::Dropdown::new(SESSION_FILTER, "Show one session")
+                .within(menu_room)
                 .choice(None, "All sessions")
                 .choices(
                     sessions
@@ -756,7 +764,7 @@ impl TimelinePage {
                 )
                 .width(150.0)
                 .show(ui, &mut self.session);
-            self.new_events_line(ui, sessions, current);
+            self.new_events_line(ui, sessions, current, room);
         });
         if before != (self.filter, self.search.clone(), self.session) {
             self.reset_detail = true;
@@ -1874,7 +1882,29 @@ impl TimelinePage {
             .as_ref()
             .is_some_and(|id| book.events.iter().any(|event| event.id == *id));
         if !(narrow && event_open) {
-            self.filters(ui, sessions, current);
+            // The header is drawn before the body splits. Use the app's current width
+            // decision, including pending keyboard and pointer resize, rather than the
+            // previous pass's panel.
+            let mut room = ui.clip_rect();
+            // The header knows its current clip, not the list footer drawn later. Long
+            // menus keep the part's height cap and inner scroll, as the old ComboBox did.
+            if !narrow && event_open {
+                let natural = design::side_panel_width(page_width);
+                let content_width = page_width.min(design::LIST_MEASURE + natural);
+                let detail = design::Column::panel("timeline_detail_panel", natural).width_within(
+                    ui.ctx(),
+                    egui::Rect::from_min_size(
+                        ui.max_rect().min,
+                        egui::vec2(content_width, ui.available_height()),
+                    ),
+                );
+                room.max.x = room.right().min(
+                    ui.max_rect().left() + content_width
+                        - detail
+                        - ui.style().interaction.resize_grab_radius_side,
+                );
+            }
+            self.filters(ui, sessions, current, room);
         }
         design::gap(ui, design::Gap::XS);
         // Beside Lookup or Notes at a small window, two columns would crush the list.

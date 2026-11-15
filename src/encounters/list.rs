@@ -1028,7 +1028,7 @@ fn history_summary(
             let max = row
                 .max_hp
                 .map_or_else(|| "?".to_owned(), |hp| hp.to_string());
-            format!("HP {hp}/{max}")
+            format!("HP {}", crate::combat_sync::fraction(hp, max))
         };
         let temp_words = |row: &crate::encounter_run::FightRow| {
             (row.temporary_hp > 0).then(|| format!("{} +{}", icons::TEMP_HP, row.temporary_hp))

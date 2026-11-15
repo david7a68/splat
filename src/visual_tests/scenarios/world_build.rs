@@ -5690,6 +5690,24 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
             "{PACKAGE_NPC} rows {joined}; no Save checkbox {one_save}; the package note is unchanged"
         ),
     );
+    // Append the popup witness after the original Add and its checks: resizing or focusing
+    // this extra menu must never change the scroll seen by those existing steps. A separate
+    // NPC has no stat block and has not joined this run, so its form can open without Undo.
+    const POPUP_NPC: &str = "Popup witness";
+    entry(d, "NPCs/Popup witness.md", POPUP_NPC, "npc", "");
+    reload(d);
+    show(d, POPUP_NPC);
+    d.wait_for_text(POPUP_NPC);
+    d.click(&format!("Add {POPUP_NPC} to the fight"));
+    d.type_into("Stat block", "Guard");
+    d.click("Guard");
+    d.state_prepared("add-to-fight-side-menu-boundary", Sizes::Small, |d| {
+        if !d.has("Side choices") {
+            d.click_starting("Side:");
+        }
+    });
+    d.press(Key::Escape);
+    d.click("Cancel");
     close_run(d);
     // Round 30 AP1, kept last: when the run's encounter is gone, Edit encounter does not
     // leave the run; Prep says why under the action. The reason belongs to that run: it ends
