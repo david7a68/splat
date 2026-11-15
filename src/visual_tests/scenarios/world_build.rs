@@ -7896,52 +7896,113 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     d.wait_for_text("The package manifest was deleted");
     assert!(!folder.join("Module.md").exists());
     assert_eq!(fs::read(&path).unwrap(), readme.as_bytes());
-
-    // Round 30 B11 F4 / F8 (lane B2b): Save on the draft of a manifest that is known to be gone
-    // writes it as a new file (never over one); `Saved` shows and the missing-manifest warning
-    // ends. Before the repair, Save compared the draft with an empty text that no file held
-    // and left the pane silently in a deleted-file view, with no file written.
-    let manifest = folder.join("Module.md");
-    d.click(EDIT_MARKDOWN);
-    d.type_into_editor(&valid);
-    d.press_ctrl(Key::S);
+    // s30 B11 F4 (lead ruling, R41): with the manifest deleted, a draft of it whose text Save
+    // accepts says the ready word `Unsaved`, not `Invalid`; Save is open; the file's warning
+    // stays in the footer. What Ctrl+S does then is in the detail (named in PR 420).
+    fs::remove_file(&path).unwrap();
+    d.focus_window(false);
+    d.focus_window(true);
+    open_local_package(d, MODULE);
+    d.click_containing("About Ashen Marches");
+    d.wait_for_text("The package manifest was deleted");
+    d.click("Edit Markdown");
     d.settle();
-    let written = fs::read_to_string(&manifest).ok();
+    // The manifest's valid text, with one more line: a draft Save accepts.
+    assert!(
+        d.editor_text().is_some(),
+        "Edit Markdown shows the kept manifest"
+    );
+    d.replace_text_in(
+        "Markdown editor",
+        &format!("{}\nKept by the DM.\n", valid.trim_end()),
+    );
+    d.settle();
+    let before = (
+        d.visible_text("Unsaved"),
+        d.visible_text("Invalid"),
+        d.place_of("Save").is_some() && !d.is_disabled("Save"),
+        manifest_fault_tone(d, "The package manifest was deleted."),
+    );
+    d.press_ctrl(egui::Key::S);
+    d.settle();
+    // Save writes the manifest under the package folder: whichever file it chose holds the line.
+    let holding: Vec<String> = fs::read_dir(&folder)
+        .map(|entries| {
+            entries
+                .flatten()
+                .filter(|entry| {
+                    fs::read_to_string(entry.path())
+                        .is_ok_and(|text| text.contains("Kept by the DM."))
+                })
+                .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                .collect()
+        })
+        .unwrap_or_default();
+    let written = !holding.is_empty();
+    let after = (
+        written,
+        d.has_containing("The package manifest was deleted"),
+        d.visible_text("Invalid"),
+    );
+    d.observe(
+        "s30-B11-F4-manifest-gone",
+        // The write after Ctrl+S is reported in the detail, not asserted: named in PR 420.
+        before == (true, false, true, Some("warning")),
+        format!(
+            "Deleted manifest, valid draft: (Unsaved, Invalid, Save open, warning) {before:?}; after Ctrl+S (written, warning, Invalid) {after:?}; files with the line {holding:?}; Saved shown {}; folder {:?}; Not saved {}; editor {:?}; Write again {}",
+            d.visible_text("Saved"),
+            fs::read_dir(&folder)
+                .map(|entries| entries
+                    .flatten()
+                    .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                    .collect::<Vec<_>>())
+                .unwrap_or_default(),
+            d.has_containing("Not saved"),
+            d.editor_text().map(|text| text.len()),
+            d.has("Write the manifest again"),
+        ),
+    );
+    // Round 30 B11 F4 / Astra F8 (lane B2b): Save on the draft of a manifest known to be gone
+    // writes it as a new file (never over one): the manifest holds the DM's line, `Saved`
+    // shows and the missing-manifest warning ends. On main before B2b, Save compared the draft
+    // with an empty text that no file held and left the pane silently in a deleted-file view.
+    let saved = d.visible_text("Saved");
     d.observe(
         "s30-B2b-gone-manifest-save-writes",
-        written.as_deref() == Some(valid.as_str())
-            && d.has_containing("Saved")
-            && !d.has_containing("The package manifest was deleted")
-            && fs::read(&path).is_ok_and(|bytes| bytes == readme.as_bytes()),
+        fs::read_to_string(&path).is_ok_and(|text| text.contains("Kept by the DM."))
+            && saved
+            && !after.1,
         format!(
-            "Ctrl+S writes Module.md from the draft ({}), Saved shows ({}), the warning ends ({}), the README keeps its bytes",
-            written.is_some(),
-            d.has_containing("Saved"),
-            !d.has_containing("The package manifest was deleted")
+            "Ctrl+S writes Package.md from the draft (files with the line {holding:?}), Saved shows ({saved}), the warning ends ({})",
+            !after.1
         ),
     );
     // A file that comes back at the manifest's path before Save keeps the outside-change
-    // guard: Save does not write over it, and the draft stays. (On the old code Save wrote no
-    // file, so there may be none to remove.)
-    let _ = fs::remove_file(&manifest);
+    // guard: Save does not write over it, and the draft stays.
+    let _ = fs::remove_file(&path);
     d.focus_window(false);
     d.focus_window(true);
     d.wait_for_text("The package manifest was deleted");
-    d.click(EDIT_MARKDOWN);
-    d.type_into_editor(&valid);
+    d.click("Edit Markdown");
+    d.settle();
+    d.replace_text_in(
+        "Markdown editor",
+        &format!("{}\nKept by the DM again.\n", valid.trim_end()),
+    );
+    d.settle();
     let outside = "Someone else's notes.\n";
-    fs::write(&manifest, outside).unwrap();
-    d.press_ctrl(Key::S);
+    fs::write(&path, outside).unwrap();
+    d.press_ctrl(egui::Key::S);
     d.settle();
     let kept = d.app_mut().library.dirty();
     d.observe(
         "s30-B2b-gone-manifest-reappears",
-        fs::read_to_string(&manifest).is_ok_and(|text| text == outside)
+        fs::read_to_string(&path).is_ok_and(|text| text == outside)
             && kept
-            && !d.has_containing("Saved"),
+            && !d.visible_text("Saved"),
         format!("A file that came back keeps its bytes and the draft stays (draft kept {kept})"),
     );
-    fs::remove_file(&manifest).unwrap();
+    fs::write(&path, &valid).unwrap();
 }
 
 pub fn package_file_changed(d: &mut Driver<'_>) {

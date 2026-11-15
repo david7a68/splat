@@ -1315,6 +1315,41 @@ fn note_width<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
     .inner
 }
 
+/// A session that is not tonight's: the session being played is dated before today, or the open
+/// session is not the one being played. Nothing is lost while it waits for the DM's act, but a
+/// forgotten `New session` files tonight's notes and audio in the wrong place, and the rail
+/// already marks it as a warning; so every place that says it is a warning (R41; the design
+/// system's "the warning that this is not the session being played or that its date has
+/// passed"). This is the one value that the Session footer, the Notes panel's footer, the Record
+/// step and the rail's `Old session` read.
+pub(crate) struct NotTonight;
+
+impl NotTonight {
+    /// The tone of every place that says it.
+    const TONE: Tone = Tone::Warning;
+
+    /// A footer's notice of it, in its tone.
+    fn notice<A>(words: Sentence) -> Notice<A> {
+        match Self::TONE {
+            Tone::Warning => Notice::warning(words),
+            _ => Notice::new(words),
+        }
+    }
+
+    /// The rail's mark while a run files itself under a session dated before today.
+    pub(crate) fn rail() -> Status<'static> {
+        let (icon, color) = match Self::TONE {
+            Tone::Warning => (icons::WARN, colors().result.warning),
+            _ => (icons::INFO, colors().result.info),
+        };
+        Status {
+            icon,
+            word: "Old session",
+            color,
+        }
+    }
+}
+
 /// The words for a note that looks like last week's. A forgotten `New session` puts
 /// tonight's notes and audio there, and neither has a way to move afterward.
 fn dated_before_today(note: &Note, today: &str) -> Option<String> {
@@ -3791,7 +3826,7 @@ impl Sessions {
             let tone = if other.is_empty() {
                 Tone::Info
             } else {
-                Tone::Warning
+                NotTonight::TONE
             };
             // The choices start at the message text.
             design::message_with_actions(ui, tone, &words, |ui| {
@@ -4889,7 +4924,7 @@ impl Sessions {
                 }
                 if let Some(date) = dated {
                     messages.outcome(
-                        Notice::new(crate::sentence!(
+                        NotTonight::notice(crate::sentence!(
                             "This session is dated {}. Play it tonight, or start a new one.",
                             date
                         ))
@@ -6528,7 +6563,7 @@ impl Sessions {
         let writing = self.tab != Tab::Recordings && !self.reading_note;
         if writing && self.selected == self.current() && note.date.as_str() < today.as_str() {
             messages.outcome(
-                Notice::new(crate::sentence!(
+                NotTonight::notice(crate::sentence!(
                     "This session is dated {}. Play it tonight, or start a new one.",
                     note.date
                 ))
@@ -6555,7 +6590,7 @@ impl Sessions {
                         "Go to it"
                     }
                 });
-            let mut notice = Notice::new(words);
+            let mut notice = NotTonight::notice(words);
             if let Some(next) = next {
                 notice = notice.choice(Choice::new(
                     MessageChoice::Choice(next),

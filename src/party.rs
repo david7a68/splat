@@ -575,7 +575,7 @@ impl Party {
         connected: bool,
         linked: bool,
     ) -> design::outcome::Messages<'f, PartyPress> {
-        use design::outcome::{Choice, FaultMessage, Lost, MessageChoice, Notice, Said};
+        use design::outcome::{Choice, FaultMessage, Lost, MessageChoice, Said};
         let reader = &self.reader;
         let mut messages =
             design::outcome::Messages::new(frame, "party_page_footer", design::LIST_MEASURE);
@@ -655,7 +655,7 @@ impl Party {
             }
         }
         if self.sync_stopped {
-            messages.outcome(Notice::new(SYNC_STOPPED).choice(Choice::new(
+            messages.outcome(SyncStopped::notice().choice(Choice::new(
                 MessageChoice::Dismiss(Lost::Nothing),
                 PartyPress::DismissStopped,
             )));
@@ -1013,6 +1013,36 @@ const CONNECT: &str = "Connect D&D Beyond";
 const SYNC_STOPPED: design::outcome::Sentence = crate::sentence!(
     "Combat sync stopped when the connection to D&D Beyond ended. Changes not yet sent did not reach D&D Beyond. Connect in Settings, and sync starts again."
 );
+
+/// Combat sync stopped. It waits for the DM to connect, and the rail marks it on every page as a
+/// warning, so every place that says it is a warning (R41). This is the one value that the
+/// Party footer and the rail read.
+pub(crate) struct SyncStopped;
+
+impl SyncStopped {
+    /// The tone of every place that says it.
+    const TONE: design::Tone = design::Tone::Warning;
+
+    /// The Party footer's notice, in its tone.
+    fn notice<A>() -> design::outcome::Notice<A> {
+        match Self::TONE {
+            design::Tone::Warning => design::outcome::Notice::warning(SYNC_STOPPED),
+            _ => design::outcome::Notice::new(SYNC_STOPPED),
+        }
+    }
+
+    /// The rail's mark, a link to Party, in its tone.
+    pub(crate) fn rail() -> Status<'static> {
+        Status {
+            icon: icons::SYNC_OFF,
+            word: "Sync stopped",
+            color: match Self::TONE {
+                design::Tone::Warning => colors().result.warning,
+                _ => colors().result.info,
+            },
+        }
+    }
+}
 
 /// What a sheet says a character has left, for a DM who plans an encounter around it.
 #[derive(Default)]
