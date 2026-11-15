@@ -389,7 +389,10 @@ fn row_galleys(
         // Egui's fallback splits an overwide word. Shorten only such words first, so the
         // ordinary wrapping path can break at word boundaries and fitting text stays exact.
         let mut fitted = None;
-        for word in words.split_whitespace() {
+        let mut start = 0;
+        let mut copied = 0;
+        for token in words.split_inclusive(char::is_whitespace) {
+            let word = token.trim_end_matches(char::is_whitespace);
             if number_width(ui, word, &font) > room {
                 let short = one_line(ui, word, font.clone(), color, room);
                 let short: String = short
@@ -397,9 +400,15 @@ fn row_galleys(
                     .iter()
                     .flat_map(|row| row.glyphs.iter().map(|glyph| glyph.chr))
                     .collect();
-                let value = fitted.get_or_insert_with(|| words.to_owned());
-                *value = value.replace(word, &short);
+                let value = fitted.get_or_insert_with(String::new);
+                value.push_str(&words[copied..start]);
+                value.push_str(&short);
+                copied = start + word.len();
             }
+            start += token.len();
+        }
+        if let Some(value) = &mut fitted {
+            value.push_str(&words[copied..]);
         }
         ui.fonts_mut(|fonts| {
             fonts.layout(
