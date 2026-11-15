@@ -101,6 +101,78 @@ fn check_choices_at_text(
 /// iter-25-S FD3 family: a banner's dismiss is the close icon at the message end, on its first
 /// line, with no words of its own on screen. Row 83a (N6): its centre is the centre of the
 /// words' first line, within 1 px.
+/// R38, R35 (structural B4): an Encounters editor's back line at 960, 1200 and 1920, read from
+/// the painted text after each resize. The link (accessible `name`) paints its destination
+/// `word` whole at the editor's text edge with the return arrow after it, inside the window; the
+/// name field (`field`, the start of its accessible name) is on the next line at the same edge;
+/// and while a draft holds the editor, `reason` is painted on the back line after the link.
+/// Each fault is one line; none is a pass.
+fn back_line_faults(
+    d: &mut Driver<'_>,
+    word: &str,
+    name: &str,
+    field: &str,
+    reason: Option<&str>,
+) -> Vec<String> {
+    let mut faults = Vec::new();
+    for size in [SMALL, DEFAULT, LARGE] {
+        let found = d.at_size(size, |d| {
+            let mut faults = Vec::new();
+            let (width, height) = d.window_size();
+            let window = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, height));
+            let Some(link) = d.place_of(name) else {
+                return vec![format!("{size:?}: no {name:?}")];
+            };
+            let Some(ink) = d.painted_word_rect(word, link) else {
+                return vec![format!("{size:?}: {word:?} is not painted in {link:?}")];
+            };
+            if !d.painted_whole_in(word, link) || !window.contains_rect(link) {
+                faults.push(format!("{size:?}: {word:?} not whole in view at {link:?}"));
+            }
+            let arrow = d.painted_rect_in(egui_phosphor::regular::ARROW_U_UP_LEFT, link);
+            if !arrow.is_some_and(|arrow| arrow.left() > ink.right()) {
+                faults.push(format!("{size:?}: no arrow after {word:?}: {arrow:?}"));
+            }
+            let field = d
+                .nodes()
+                .into_iter()
+                .find(|node| node.name.starts_with(field))
+                .map(|node| node.rect);
+            match field {
+                Some(field) if field.top() >= link.bottom() - 0.5 => {
+                    if (field.left() - ink.left()).abs() > 1.5 {
+                        faults.push(format!(
+                            "{size:?}: {word:?} at x {} and the name field at x {}",
+                            ink.left(),
+                            field.left()
+                        ));
+                    }
+                }
+                other => faults.push(format!(
+                    "{size:?}: the name field is not on the line below {link:?}: {other:?}"
+                )),
+            }
+            let line = egui::Rect::from_x_y_ranges(link.right()..=width, link.y_range());
+            let painted =
+                reason.map(|reason| d.painted_rect_in(reason, line.expand2(egui::vec2(0.0, 8.0))));
+            match (reason, painted.flatten()) {
+                (Some(reason), None) => {
+                    faults.push(format!(
+                        "{size:?}: {reason:?} is not painted beside the link"
+                    ));
+                }
+                (Some(reason), Some(rect)) if !window.contains_rect(rect) => {
+                    faults.push(format!("{size:?}: {reason:?} is cut at {rect:?}"));
+                }
+                _ => {}
+            }
+            faults
+        });
+        faults.extend(found);
+    }
+    faults
+}
+
 fn check_dismiss_at_message_end(d: &mut Driver<'_>, id: &str, words: &str) {
     let name = crate::design::outcome::DISMISS_NAME;
     let text = d.painted_rect_in(words, egui::Rect::EVERYTHING);
@@ -4860,6 +4932,20 @@ pub mod encounter_build {
         d.click(SYNC_OPTION);
         d.expect("Unsaved");
         let edited_x = run_state_x(d);
+        // R38, R35 (structural B4): the encounter editor's back line; the first edit holds it,
+        // with the encounter's reason painted beside the link.
+        let faults = back_line_faults(
+            d,
+            "Encounters",
+            "Back to encounters",
+            "Encounter name",
+            Some("Save or discard this encounter first."),
+        );
+        d.observe(
+            "s30-B4-back-line-encounter",
+            faults.is_empty(),
+            format!("The encounter editor's back line at 960, 1200 and 1920: {faults:?}"),
+        );
         d.observe(
             "iter-26-B-FB5",
             clean_x.iter().all(|x| !x.is_empty()) && clean_x == edited_x,
@@ -17921,6 +18007,13 @@ pub mod encounter_groups {
         d.expect("MEMBERS 3");
         d.expect("XP 600");
         d.state("group-editor", Sizes::All);
+        // R38 (structural B4): the back line, its word whole at the text edge, the name below.
+        let faults = back_line_faults(d, "Encounters", "Back to encounters", "Group name", None);
+        d.observe(
+            "s30-B4-back-line-group",
+            faults.is_empty(),
+            format!("The group editor's back line at 960, 1200 and 1920: {faults:?}"),
+        );
         // FD3: where FORM_WIDTH ends first, the name and Belongs to still share one edge, and it
         // is clearly apart from the members column's.
         for size in [SMALL, DEFAULT, LARGE] {
@@ -21719,6 +21812,20 @@ pub mod session_plan_groups {
                 "A wide group editor keeps the note beside it; smaller pages keep the Note tab",
             );
         });
+        // R38, R35 (structural B4): the plan's group editor has the same back line, and the
+        // typed name holds it with its reason painted beside the link.
+        let faults = back_line_faults(
+            d,
+            "Plan",
+            "Back to the plan",
+            "Group name",
+            Some("Save or discard this group first."),
+        );
+        d.observe(
+            "s30-B4-back-line-plan-group",
+            faults.is_empty(),
+            format!("The plan's group editor's back line at 960, 1200 and 1920: {faults:?}"),
+        );
         d.observe(
             "T14.6",
             d.has_containing("Session 1: The Crossing"),

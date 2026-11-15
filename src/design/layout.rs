@@ -2180,12 +2180,12 @@ impl BackLine {
                 ui.set_min_size(vec2(width, height));
                 let response = link.draw(ui);
                 if let Some(reason) = self.lock.reason() {
-                    ui.add_space((L - gap).max(0.0));
+                    space(ui, (L - gap).max(0.0));
                     ui.allocate_ui_with_layout(
                         vec2(room, height),
                         Layout::top_down(Align::Min),
                         |ui| {
-                            ui.add_space(offset);
+                            space(ui, offset);
                             ui.add(
                                 egui::Label::new(Type::Small.rich(ui, reason).color(text)).wrap(),
                             );
