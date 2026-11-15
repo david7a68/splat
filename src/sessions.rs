@@ -444,20 +444,40 @@ pub(crate) fn storage_scans() -> usize {
     STORAGE_SCANS.with(std::cell::Cell::get)
 }
 
+/// A scan before a storage move that the system refused, in plain words from the error's kind
+/// (round 30 B7e): the file or folder by its name, and the recovery. Never the system's words.
+fn scan_fault(path: &Path, error: &std::io::Error) -> String {
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    format!(
+        "Not moved. {}",
+        crate::world::file_fault::FileFault::read(&name, error).message()
+    )
+}
+
+#[cfg(test)]
+thread_local! {
+    /// A test's refused scan: reading the session folder fails with this system error code.
+    pub(crate) static FAILING_SCAN: std::cell::Cell<Option<i32>> = const { std::cell::Cell::new(None) };
+}
+
 /// Files owned by session storage. Other campaign notes stay where they are.
 pub(crate) fn storage_files(folder: &Path) -> Result<Vec<PathBuf>, String> {
     #[cfg(test)]
     STORAGE_SCANS.with(|scans| scans.set(scans.get() + 1));
+    #[cfg(test)]
+    if let Some(code) = FAILING_SCAN.with(std::cell::Cell::get) {
+        return Err(scan_fault(folder, &std::io::Error::from_raw_os_error(code)));
+    }
     fn files(root: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
         if !root.exists() {
             return Ok(());
         }
-        for item in fs::read_dir(root).map_err(|error| error.to_string())? {
-            let item = item.map_err(|error| error.to_string())?;
+        for item in fs::read_dir(root).map_err(|error| scan_fault(root, &error))? {
+            let item = item.map_err(|error| scan_fault(root, &error))?;
             let path = item.path();
             if item
                 .file_type()
-                .map_err(|error| error.to_string())?
+                .map_err(|error| scan_fault(&path, &error))?
                 .is_symlink()
             {
                 return Err(format!(
@@ -483,11 +503,10 @@ pub(crate) fn storage_files(folder: &Path) -> Result<Vec<PathBuf>, String> {
     if folder.join(NOTE_PATHS).exists() {
         out.push(folder.join(NOTE_PATHS));
     }
-    for file in fs::read_dir(folder).map_err(|e| e.to_string())? {
-        let path = file.map_err(|e| e.to_string())?.path();
+    for file in fs::read_dir(folder).map_err(|error| scan_fault(folder, &error))? {
+        let path = file.map_err(|error| scan_fault(folder, &error))?.path();
         if path.extension().is_some_and(|ext| ext == "md") && !out.contains(&path) {
-            let text = fs::read_to_string(&path)
-                .map_err(|e| format!("{}: {e}. Move this file by hand first.", path.display()))?;
+            let text = fs::read_to_string(&path).map_err(|error| scan_fault(&path, &error))?;
             if text.lines().any(|line| {
                 line.starts_with("session_id:") || line.starts_with("timeline_version:")
             }) {
@@ -4087,6 +4106,26 @@ mod tests {
                 path.display()
             );
         }
+        // Review F1 of PR 431: the scan before a move says plain words: a folder it may not
+        // read, and a note that is not text. Nothing moves, and the bytes stay.
+        FAILING_SCAN.with(|code| code.set(Some(13)));
+        let refused = move_storage(&campaign, "Nights").unwrap_err();
+        FAILING_SCAN.with(|code| code.set(None));
+        assert_eq!(
+            refused,
+            "Not moved. Splat has no permission to read Evenings. Give your user account \
+             permission to read the file."
+        );
+        fs::write(new.join("Bad.md"), [0xff, 0xfe, b'\n']).unwrap();
+        let refused = move_storage(&campaign, "Nights").unwrap_err();
+        assert_eq!(
+            refused,
+            "Not moved. Splat cannot read Bad.md as text. Splat reads notes as UTF-8 text. Open \
+             the file in a text editor and save it as UTF-8 text, or restore it from a backup."
+        );
+        assert_eq!(fs::read(new.join("Bad.md")).unwrap(), [0xff, 0xfe, b'\n']);
+        assert!(!dir.path().join("Nights").exists());
+        assert_eq!(folder(&campaign).unwrap(), new);
     }
 
     #[test]
