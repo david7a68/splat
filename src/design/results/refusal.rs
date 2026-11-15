@@ -6,8 +6,8 @@
 //! adds a bounded diagnosis here, with its tone.
 //!
 //! Ruling M7 (migration 32): an attempted act that failed is a refusal, whatever page it is on:
-//! Start fight and Continue fight, Carry over, the plan's scenes, a tracker's history, World's and
-//! Lookup's Add to fight, and the plan's links and run files. Each has its act, its causes and its
+//! Start fight and Continue fight, Carry over, the plan's scenes, a tracker's acts and its
+//! history, World's and Lookup's Add to fight, and the plan's links and run files. Each has its act, its causes and its
 //! next steps here. A standing fault or a notice is not a refusal: it uses `FaultMessage` or
 //! `Notice`.
 //!
@@ -122,6 +122,29 @@
 //! ```compile_fail
 //! use splat::ownership::Rows;
 //! let rows = Rows::default(); // <- rows with no row in them
+//! ```
+//!
+//! Ruling M13: a refusal at the tracker's own limit ends at its cause, and only
+//! `Refusal::at_limit` can end a refusal with no next step. The twin:
+//!
+//! ```
+//! use splat::ownership::{FailedAct, Limit, Name, Refusal};
+//! let refusal = Refusal::at_limit(
+//!     FailedAct::NotRecorded { act: Name::new("Lose favor").unwrap() },
+//!     Limit::Min { tracker: Name::new("Crowd Favor").unwrap(), min: 0 },
+//! );
+//! assert_eq!(
+//!     refusal.words().as_str(),
+//!     "Nothing was recorded for Lose favor. Crowd Favor cannot go below 0.",
+//! );
+//! ```
+//! ```compile_fail
+//! use splat::ownership::{AtLimit, Cause, FailedAct, File, Name, Recovery, Refusal};
+//! let refusal = Refusal::new(
+//!     FailedAct::NotRecorded { act: Name::new("Lose favor").unwrap() },
+//!     Cause::Changed(File::Trackers),
+//!     Recovery::AtLimit(AtLimit(())), // <- no next step for another cause
+//! );
 //! ```
 //!
 //! A blank name is no name; the caller gives a typed fallback instead:
@@ -286,6 +309,8 @@ pub enum File {
     Trackers,
     /// A saved run's file.
     RunFile,
+    /// The house rule notes in play, which define the trackers.
+    HouseRuleNote,
 }
 
 impl File {
@@ -298,6 +323,7 @@ impl File {
             Self::Timeline => "Timeline.md",
             Self::Trackers => "Trackers.md",
             Self::RunFile => "The run file",
+            Self::HouseRuleNote => "A house rule note",
         }
     }
 
@@ -310,6 +336,7 @@ impl File {
             Self::Timeline => "Timeline.md",
             Self::Trackers => "Trackers.md",
             Self::RunFile => "the run file",
+            Self::HouseRuleNote => "the house rule notes",
         }
     }
 
@@ -322,6 +349,7 @@ impl File {
             Self::Timeline => "the Timeline page",
             Self::Trackers => "Trackers.md",
             Self::RunFile => "that session’s runs folder",
+            Self::HouseRuleNote => "the house rule notes",
         }
     }
 }
@@ -333,6 +361,18 @@ pub enum Part {
     Entry,
     /// `The entry before it`: where an entry goes back.
     EntryBefore,
+    /// `That notice`: the due notice the DM pressed, in `Trackers.md`.
+    Notice,
+    /// `That name`: a name of a tracker's table, in its house rule note.
+    TrackerName,
+    /// `That action`: a tracker's action, in its house rule note.
+    Action,
+    /// `That mark`: a mark of a tracker, in its house rule note.
+    Mark,
+    /// `That table`: a roll table, in its house rule note.
+    Table,
+    /// `The day count`: the days of the story, from the Timeline.
+    DayCount,
 }
 
 impl Part {
@@ -341,9 +381,40 @@ impl Part {
         match self {
             Self::Entry => "That entry",
             Self::EntryBefore => "The entry before it",
+            Self::Notice => "That notice",
+            Self::TrackerName => "That name",
+            Self::Action => "That action",
+            Self::Mark => "That mark",
+            Self::Table => "That table",
+            Self::DayCount => "The day count",
+        }
+    }
+
+    /// Where it changed: on disk, or in its note.
+    fn changed(self) -> &'static str {
+        match self {
+            Self::Entry | Self::EntryBefore | Self::Notice => "changed on disk",
+            Self::TrackerName | Self::Action | Self::Mark | Self::Table => "changed in its note",
+            Self::DayCount => "changed",
         }
     }
 }
+
+/// A tracker's own limit (ruling M13): the DM's only choice is not to do the act, so its answer
+/// ends at its cause, with no next step. Only these kinds can end so (`Refusal::at_limit`); a
+/// fault in the tracker rules is a `Cause` with a real step.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Limit {
+    /// `Crowd Favor cannot go below 0.`: the tracker's `min`.
+    Min { tracker: Name, min: i64 },
+    /// `Each name has its roll.`: every name of the table was rolled.
+    EveryNameRolled,
+}
+
+/// The empty next step of a refusal at a tracker's own limit. Only [`Refusal::at_limit`] makes
+/// one, so no other cause can end with no step.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AtLimit(());
 
 /// A change the DM makes by hand.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -390,6 +461,12 @@ pub enum FailedAct {
     LinksNotChanged { to: Name },
     /// The Undo of a links update: `The links to Hobb were not put back in Session 1.`
     LinksNotPutBack { to: Name, within: Name },
+    /// A tracker's act: `Nothing was recorded for Take seal.`
+    NotRecorded { act: Name },
+    /// A tracker's roll: `Nothing was rolled on Wandering.`
+    NotRolled { table: Name },
+    /// The Undo of a tracker's act: `Nothing was undone for Take seal.`
+    NotUndone { act: Name },
 }
 
 /// Why the act was refused: a typed diagnosis, which also gives the tone (R41). The part writes
@@ -439,6 +516,17 @@ pub enum Cause {
     /// `Session 1 changed after its links were updated.` A warning: the Undo would lose that
     /// change.
     EditedSince(Name),
+    /// `That notice is no longer due.` A warning.
+    NoLongerDue,
+    /// A fault in the tracker rules: `Rivals has no line for Party.` A warning.
+    NoLine { tracker: Name, line: Name },
+    /// A fault in the tracker rules: `No tracker in play has the key “rivals”.` A warning.
+    UnknownTracker(Name),
+    /// A fault in the tracker rules: `A change of Rivals has no add or set.` A warning.
+    NoAmount(Name),
+    /// The tracker's own limit (M13): `Crowd Favor cannot go below 0.` A warning. With a step it
+    /// is only extra words; with none, only `Refusal::at_limit` builds it.
+    AtLimit(Limit),
 }
 
 /// A step in the app the DM takes before the act can work. The part writes its words.
@@ -464,6 +552,9 @@ pub enum Step {
     Resolve(Name),
     /// `Choose the group in each note`
     ChooseGroups,
+    /// A fault in the tracker rules, fixed where the tracker is defined: `Add Party to the per
+    /// list of Rivals in its house rule note`
+    AddLine { tracker: Name, line: Name },
 }
 
 impl Step {
@@ -482,6 +573,11 @@ impl Step {
             Self::Remove(name) => format!("Remove {}", name.as_str()),
             Self::Resolve(name) => format!("Resolve {}", name.as_str()),
             Self::ChooseGroups => "Choose the group in each note".to_owned(),
+            Self::AddLine { tracker, line } => format!(
+                "Add {} to the per list of {} in its house rule note",
+                line.as_str(),
+                tracker.as_str()
+            ),
         }
     }
 }
@@ -517,6 +613,8 @@ pub enum Recovery {
     Instead(Way),
     /// `Start a new run to play it again.` Continue fight is for the last fight played.
     StartNewRun,
+    /// No next step, at the tracker's own limit (M13): only `Refusal::at_limit` makes it.
+    AtLimit(AtLimit),
 }
 
 /// A refused act's answer: what was not done, why, and the next step. Its fields are private, it
@@ -545,6 +643,17 @@ impl Refusal {
         }))
     }
 
+    /// A refusal at the tracker's own limit (ruling M13): `Nothing was recorded for Lose favor.
+    /// Crowd Favor cannot go below 0.` It ends at its cause: the DM's only choice is not to do
+    /// the act. Its uses are counted (`design::results::STAGED`).
+    pub fn at_limit(act: FailedAct, limit: Limit) -> Self {
+        Self(Box::new(Parts {
+            act,
+            cause: Cause::AtLimit(limit),
+            recovery: Recovery::AtLimit(AtLimit(())),
+        }))
+    }
+
     /// The tone of its answer, from its diagnosis (R41): a file that cannot be read or written
     /// is an error; a file that changed, went or holds another note, and a rule of the app that
     /// the act did not meet, are a warning.
@@ -566,7 +675,12 @@ impl Refusal {
             | Cause::CreatureDeleted(_)
             | Cause::NeedsChoice(_)
             | Cause::Ambiguous(_)
-            | Cause::EditedSince(_) => Tone::Warning,
+            | Cause::EditedSince(_)
+            | Cause::NoLongerDue
+            | Cause::NoLine { .. }
+            | Cause::UnknownTracker(_)
+            | Cause::NoAmount(_)
+            | Cause::AtLimit(_) => Tone::Warning,
             Cause::Unreadable(_)
             | Cause::NotSaved(_)
             | Cause::NotChanged(_)
@@ -628,6 +742,15 @@ impl Refusal {
                 to.as_str(),
                 place(within)
             ),
+            FailedAct::NotRecorded { act } => {
+                crate::sentence!("Nothing was recorded for {}.", place(act))
+            }
+            FailedAct::NotRolled { table } => {
+                crate::sentence!("Nothing was rolled on {}.", place(table))
+            }
+            FailedAct::NotUndone { act } => {
+                crate::sentence!("Nothing was undone for {}.", place(act))
+            }
         };
         let cause = match &self.0.cause {
             Cause::Changed(file) => crate::sentence!("{} changed on disk.", file.subject()),
@@ -647,7 +770,9 @@ impl Refusal {
             Cause::LineChanged(file) => {
                 crate::sentence!("That line of {} changed on disk.", file.object())
             }
-            Cause::PartChanged(part) => crate::sentence!("{} changed on disk.", part.subject()),
+            Cause::PartChanged(part) => {
+                crate::sentence!("{} {}.", part.subject(), part.changed())
+            }
             Cause::PartGone(part, file) => {
                 crate::sentence!("{} is no longer in {}.", part.subject(), file.object())
             }
@@ -679,6 +804,20 @@ impl Refusal {
             Cause::EditedSince(note) => {
                 crate::sentence!("{} changed after its links were updated.", note.as_str())
             }
+            Cause::NoLongerDue => crate::sentence!("That notice is no longer due."),
+            Cause::NoLine { tracker, line } => {
+                crate::sentence!("{} has no line for {}.", tracker.as_str(), line.as_str())
+            }
+            Cause::UnknownTracker(key) => {
+                crate::sentence!("No tracker in play has the key “{}”.", key.as_str())
+            }
+            Cause::NoAmount(tracker) => {
+                crate::sentence!("A change of {} has no add or set.", tracker.as_str())
+            }
+            Cause::AtLimit(Limit::Min { tracker, min }) => {
+                crate::sentence!("{} cannot go below {}.", tracker.as_str(), min)
+            }
+            Cause::AtLimit(Limit::EveryNameRolled) => crate::sentence!("Each name has its roll."),
         };
         let next = match &self.0.recovery {
             Recovery::ByHand { file, change } => {
@@ -687,6 +826,8 @@ impl Refusal {
             Recovery::First(step) => crate::sentence!("{} first.", step.words()),
             Recovery::Instead(way) => crate::sentence!("{} instead.", way.words()),
             Recovery::StartNewRun => crate::sentence!("Start a new run to play it again."),
+            // M13: the answer ends at its cause.
+            Recovery::AtLimit(_) => return act.then(cause),
         };
         act.then(cause).then(next)
     }
@@ -1022,6 +1163,157 @@ mod tests {
                 ),
                 "The run of Bridge Ambush was not put back into Session 2: The Crossing. The run \
                  file is gone from its folder. Check the run file first.",
+                Tone::Warning,
+            ),
+            // A tracker's act, roll and Undo (S0, ruling M13). At the tracker's own limit the
+            // answer ends at its cause; a fault in the tracker rules gets where to fix it.
+            (
+                Refusal::at_limit(
+                    FailedAct::NotRecorded {
+                        act: name("Lose favor"),
+                    },
+                    Limit::Min {
+                        tracker: name("Crowd Favor"),
+                        min: 0,
+                    },
+                ),
+                "Nothing was recorded for Lose favor. Crowd Favor cannot go below 0.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::at_limit(
+                    FailedAct::NotRolled {
+                        table: name("Wandering"),
+                    },
+                    Limit::EveryNameRolled,
+                ),
+                "Nothing was rolled on Wandering. Each name has its roll.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotRecorded {
+                        act: name("Rivals +1"),
+                    },
+                    Cause::NoLine {
+                        tracker: name("Rivals"),
+                        line: name("Party"),
+                    },
+                    Recovery::First(Step::AddLine {
+                        tracker: name("Rivals"),
+                        line: name("Party"),
+                    }),
+                ),
+                "Nothing was recorded for Rivals +1. Rivals has no line for Party. Add Party to \
+                 the per list of Rivals in its house rule note first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotRecorded {
+                        act: name("Rivals +1"),
+                    },
+                    Cause::UnknownTracker(name("rivals")),
+                    Recovery::First(Step::Check(File::HouseRuleNote)),
+                ),
+                "Nothing was recorded for Rivals +1. No tracker in play has the key “rivals”. \
+                 Check the house rule notes first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotRecorded {
+                        act: name("Rivals +1"),
+                    },
+                    Cause::NoAmount(name("Rivals")),
+                    Recovery::First(Step::Check(File::HouseRuleNote)),
+                ),
+                "Nothing was recorded for Rivals +1. A change of Rivals has no add or set. Check \
+                 the house rule notes first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotRecorded {
+                        act: name("Feast day"),
+                    },
+                    Cause::NoLongerDue,
+                    Recovery::First(Step::Check(File::Trackers)),
+                ),
+                "Nothing was recorded for Feast day. That notice is no longer due. Check \
+                 Trackers.md first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotRecorded {
+                        act: name("Feast day"),
+                    },
+                    Cause::PartChanged(Part::Mark),
+                    Recovery::First(Step::Check(File::HouseRuleNote)),
+                ),
+                "Nothing was recorded for Feast day. That mark changed in its note. Check the \
+                 house rule notes first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotRecorded {
+                        act: name("Feast day"),
+                    },
+                    Cause::PartChanged(Part::DayCount),
+                    Recovery::First(Step::Check(File::Timeline)),
+                ),
+                "Nothing was recorded for Feast day. The day count changed. Check Timeline.md \
+                 first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotRecorded {
+                        act: name("Feast day"),
+                    },
+                    Cause::Unreadable(File::Timeline),
+                    Recovery::First(Step::FixTimeline),
+                ),
+                "Nothing was recorded for Feast day. Splat cannot read Timeline.md. Fix \
+                 Timeline.md on the Timeline page first.",
+                Tone::Error,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotRecorded {
+                        act: name("Take seal"),
+                    },
+                    Cause::Changed(File::HouseRuleNote),
+                    Recovery::First(Step::Check(File::HouseRuleNote)),
+                ),
+                "Nothing was recorded for Take seal. A house rule note changed on disk. Check the \
+                 house rule notes first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotUndone {
+                        act: name("Take seal"),
+                    },
+                    Cause::Changed(File::Trackers),
+                    Recovery::First(Step::Check(File::Trackers)),
+                ),
+                "Nothing was undone for Take seal. Trackers.md changed on disk. Check Trackers.md \
+                 first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotUndone {
+                        act: name("Take seal"),
+                    },
+                    Cause::DependsOn(name("Wandering, 0:40 to 1:19 roll")),
+                    Recovery::First(Step::Remove(name("Wandering, 0:40 to 1:19 roll"))),
+                ),
+                "Nothing was undone for Take seal. Wandering, 0:40 to 1:19 roll depends on it. \
+                 Remove Wandering, 0:40 to 1:19 roll first.",
                 Tone::Warning,
             ),
         ];
