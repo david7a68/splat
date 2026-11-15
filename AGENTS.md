@@ -46,6 +46,8 @@ Past reviews found the same kinds of fault again and again. Check your own chang
 - **A raised lint count is a decision.** `src/design/lint_allowlist.txt` counts can only shrink on their own, but a
   change that raises a count and its allowance together passes the test. Say in the PR why each raised line is
   needed (a new `allow(deprecated)`, a `Sentence::outside`, a body message place), or remove the use.
+  `src/design/legacy_hosts.tsv` (the legacy host freeze) is stricter: the lint compares each site with the merge
+  base, so a raise fails unless the lead names it in the gate's raise file. Lower its rows when you migrate a site.
 - **The audit's counts (G6) run in every gate.** When your change makes a task of `artifacts/dm-audit/` cost
   more or fewer acts on purpose, run `devenv shell -- audit-freeze counts` and say in the pull request why; add
   a new task with `devenv shell -- audit-freeze add`.
