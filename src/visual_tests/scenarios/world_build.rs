@@ -5617,6 +5617,7 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     d.wait_for_text("Watch House");
     d.click(start);
     d.expect(&format!("{RUN_HEADING}Fight with Rook Ambry"));
+    d.click("Close Lookup");
     fight_tab(d, "Prep");
     d.expect("Edit encounter");
     let note = encounters.join("Fight with Rook Ambry.md");
@@ -5640,6 +5641,7 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     d.wait_for_text("Watch House");
     d.click(start);
     d.expect(&format!("{RUN_HEADING}Fight with Rook Ambry"));
+    d.click("Close Lookup");
     fight_tab(d, "Prep");
     d.expect("Edit encounter");
     d.observe(

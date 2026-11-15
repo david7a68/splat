@@ -262,14 +262,24 @@ fn missing_folders(
         let moved_out = d.root.join("Runs kept aside");
         fs::rename(&run_folder, &moved_out).unwrap();
         std::os::unix::fs::symlink(blocker.join("Encounter Runs"), &run_folder).unwrap();
+        // R41: this cause is "cannot read" (an error), not "cannot find" (a warning), in the
+        // lists and in the footer's sentence, with plain words for the cause.
+        let unreadable = |d: &Driver<'_>| {
+            d.has("Splat cannot read the run folder, so it cannot show unfinished runs.")
+                && d.has("Splat cannot read the run folder, so it cannot show ended fights.")
+                && d.has_containing("Splat cannot read the run folder ")
+                && !d.has_containing("cannot find the run folder")
+                && !d.has_containing("os error")
+                && !d.has_containing("No unfinished runs")
+        };
         d.click("Reload from disk");
         d.settle();
-        let reloaded = unread(d);
+        let reloaded = unreadable(d);
         d.app_mut().encounters.refresh_now(campaign, &modules);
         d.settle();
         d.observe(
             "iter-25-B-AB1-parent",
-            reloaded && unread(d),
+            reloaded && unreadable(d),
             format!("A run folder under a parent that is not a folder says it cannot be read after a reload ({reloaded}) and a refresh"),
         );
         fs::remove_file(&run_folder).unwrap();
