@@ -14729,8 +14729,9 @@ pub mod session_notes {
         d.click(NAV_SESSIONS);
         d.settle();
         d.app_mut().sessions.simulate_failed_save();
+        // Timeline still holds the event form the scenario opened (Rest at the mill).
         d.click(NAV_TIMELINE);
-        d.click_starting("Rest at the mill ·");
+        d.expect("Rest at the mill");
         let failed = named(
             d,
             "was not saved. The disk is full.",
