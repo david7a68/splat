@@ -2292,8 +2292,8 @@ mod tests {
             egui::Event::Paste("Salt".into()),
             egui::Event::Ime(egui::ImeEvent::Commit("Salt".into())),
         ] {
+            // The form opened in the harness's first frame; the event comes in the next.
             let mut h = scrolled(400.0);
-            h.step();
             h.event(event.clone());
             h.step();
             let typed = h.get_by_label("Add campaign").rect().top();
