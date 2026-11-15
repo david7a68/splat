@@ -18357,33 +18357,6 @@ pub mod encounter_groups {
             "A dirty group opened in Encounters says why the campaign cannot change",
             |d| d.visible_text("Unsaved") && d.visible_text("Save or discard to switch campaign."),
         );
-        // R37: a saved group that an edit empties is a refused change, not a new draft: it
-        // says Invalid, never New, and Save waits. Undo of that removal brings Unsaved back.
-        let emptied = d.aside(|d| {
-            d.click("More actions for Cinder Wolf");
-            d.click("Remove");
-            d.expect("Removed Cinder Wolf.");
-            // Invalid in the warning tone of its cause (a missing creature), not the error's.
-            let emptied = (
-                d.visible_text(&format!("{} Invalid", crate::design::icons::WARN)),
-                d.visible_text(&format!("{} New", crate::design::icons::DRAFT)),
-                d.visible_text("Unsaved"),
-                d.is_disabled(SAVE_GROUP),
-                d.visible_text("Add a creature first."),
-            );
-            d.click_first("Undo remove member");
-            d.expect("More actions for Cinder Wolf");
-            let back = d.visible_text("Unsaved") && !d.visible_text("Invalid");
-            (emptied, back)
-        });
-        d.observe(
-            "s30-B3-R37-saved-emptied",
-            emptied.0 == (true, false, false, true, true) && emptied.1,
-            format!(
-                "Emptied saved group (Invalid, New, Unsaved, Save blocked, reason) {:?}; after Undo Unsaved and not Invalid {}",
-                emptied.0, emptied.1
-            ),
-        );
         // FD4 family: the group notes field ends at the members' right edge, as the encounter
         // editor's notes field ends at the roster's.
         for size in [SMALL, DEFAULT, LARGE] {
@@ -19410,6 +19383,30 @@ pub mod encounter_groups {
             focused && edited && restored && idle.is_ok(),
             format!(
                 "Count field focused {focused}; after the edit the line went {edited}; restored {restored}; idle {idle:?}"
+            ),
+        );
+        // R37 (B3): a saved group that an edit empties is a refused change, not a new draft:
+        // it says Invalid in the warning tone of its cause, never New, and Save waits with the
+        // reason. At the scenario's end: the editor keeps one member result, so this removes
+        // both members and does not come back.
+        d.click("More actions for Cinder Wolf");
+        d.click("Remove");
+        d.expect("Removed Cinder Wolf.");
+        d.click("More actions for Unknown creature");
+        d.click("Remove");
+        d.expect("Removed Unknown creature.");
+        let emptied = (
+            d.visible_text(&format!("{} Invalid", crate::design::icons::WARN)),
+            d.visible_text(&format!("{} New", crate::design::icons::DRAFT)),
+            d.visible_text("Unsaved"),
+            d.is_disabled(SAVE_GROUP),
+            d.visible_text("Add a creature first."),
+        );
+        d.observe(
+            "s30-B3-R37-saved-emptied",
+            emptied == (true, false, false, true, true),
+            format!(
+                "Emptied saved group (warning Invalid, New, Unsaved, Save blocked, reason): {emptied:?}"
             ),
         );
     }
