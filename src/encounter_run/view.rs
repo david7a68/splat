@@ -5273,8 +5273,10 @@ impl Run {
                 let words = fault.words();
                 // One file names every unread row, so its name and actions show once, after
                 // the last warning about it.
+                // R41 (lead ruling, s30 B11): an unread roster row is an error, in the editor's
+                // tone (`unread_row_tone`), here as there.
                 if index < last {
-                    design::small_message(ui, Tone::Warning, &words);
+                    design::small_message(ui, crate::encounters::unread_row_tone(), &words);
                     continue;
                 }
                 ui.scope(|ui| {
@@ -5297,7 +5299,11 @@ impl Run {
                                 vec2(message_width, 0.0),
                                 Layout::top_down(Align::Min),
                                 |ui| {
-                                    design::small_message(ui, Tone::Warning, &words);
+                                    design::small_message(
+                                        ui,
+                                        crate::encounters::unread_row_tone(),
+                                        &words,
+                                    );
                                 },
                             );
                             ui.add_space(design::L - gap);
@@ -5307,7 +5313,9 @@ impl Run {
                         // The file line starts at the warning's words, as every message's
                         // actions do, and its name wraps whole rather than being cut.
                         let words_left =
-                            design::small_message(ui, Tone::Warning, &words).rect.left();
+                            design::small_message(ui, crate::encounters::unread_row_tone(), &words)
+                                .rect
+                                .left();
                         let inset = words_left - ui.cursor().left();
                         ui.horizontal_top(|ui| {
                             ui.add_space(inset);
@@ -5587,11 +5595,13 @@ impl Run {
         } else {
             format!("{} Absent · ", icons::ABSENT)
         };
-        // FF1: a row from an unread roster line marks its own fault first, in the warning tone,
-        // so the DM need not match the notice's name by reading. The notice keeps the cause.
+        // FF1: a row from an unread roster line marks its own fault first, in its tone (R41: an
+        // error, `unread_row_mark`), so the DM need not match the notice's name by reading. The
+        // notice keeps the cause.
+        let (fault_icon, fault_color) = crate::encounters::unread_row_mark();
         let fault = self
             .roster_fault_line(&p.key)
-            .map(|line| format!("{} Line {line} not read", icons::WARN));
+            .map(|line| format!("{fault_icon} Line {line} not read"));
         let absent = match &fault {
             Some(fault) => format!("{fault} · {absent}"),
             None => absent,
@@ -5669,7 +5679,7 @@ impl Run {
                 .collect::<Vec<_>>()
                 .join(" ·\u{a0}");
             let status = match &fault {
-                Some(fault) => Some((fault.replace(' ', "\u{a0}"), colors().result.warning)),
+                Some(fault) => Some((fault.replace(' ', "\u{a0}"), fault_color)),
                 None => {
                     hp_word(&p).map(|(icon, word, color)| (format!("{icon}\u{a0}{word}"), color))
                 }

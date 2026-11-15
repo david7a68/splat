@@ -899,6 +899,59 @@ pub(super) fn said_once(
     )
 }
 
+/// s30 B11 F6: the save row's fallback for a fault whose own place is out of view (the
+/// compact `Add creatures` tab): painted once, whole, in `tone`, before and after a press of the
+/// blocked Save group and after Ctrl+S. `about` are the words of any painted text that speaks of
+/// the fault. Unlike `said_once`, it asks nothing of the Members tab, where a row below the view
+/// keeps the fallback.
+pub(super) fn fallback_said_once(
+    d: &mut Driver<'_>,
+    about: &[&str],
+    beside: &str,
+    tone: &str,
+) -> (bool, String) {
+    let said = |d: &Driver<'_>| {
+        let mut count = 0;
+        d.each_painted_text(|text, _| {
+            let words = text.galley.job.text.as_str();
+            count += usize::from(about.iter().any(|about| words.contains(about)));
+        });
+        count
+    };
+    let tabs = |d: &Driver<'_>| {
+        d.nodes().into_iter().any(|node| {
+            node.name.starts_with("Add creatures")
+                && !node.disabled
+                && !matches!(
+                    node.role,
+                    egui::accesskit::Role::Label | egui::accesskit::Role::TextRun
+                )
+        })
+    };
+    let lookup = !tabs(d);
+    if lookup {
+        d.press_ctrl(Key::K);
+    }
+    d.click_starting("Add creatures");
+    let look = |d: &Driver<'_>| (said(d), d.visible_text(beside), tones_beside(d, beside));
+    let tab = look(d);
+    if let Some(save) = d.place_of("Save group") {
+        d.click_rect(save, "Click: Save group, blocked");
+    }
+    let button = look(d);
+    d.press_ctrl(Key::S);
+    let key = look(d);
+    d.click_starting("Members");
+    if lookup {
+        d.press_ctrl(Key::K);
+    }
+    let once = (1, true, vec![tone]);
+    (
+        tab == once && button == once && key == once,
+        format!("Add creatures tab {tab:?}; after Save group {button:?}; after Ctrl+S {key:?}"),
+    )
+}
+
 /// `said_once` for a group whose encounter is gone.
 pub(super) fn gone_encounter_said_once(d: &mut Driver<'_>) -> (bool, String) {
     said_once(
@@ -983,6 +1036,29 @@ pub(super) fn painted_paragraph(d: &Driver<'_>, words: &str) -> Option<egui::Rec
 }
 
 /// The tones of the bars beside each visible painted paragraph whose text passes `wanted`.
+/// The tone of each painted status `<icon> <word>` in view (a save row's `Invalid`, a rail mark),
+/// by its word's colour: `warning`, `error` or `none` (R41: one fault has one tone).
+pub(super) fn status_tones(d: &Driver<'_>, word: &str) -> Vec<&'static str> {
+    let colors = crate::design::colors();
+    let mut tones = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+        let job = &text.galley.job;
+        if !clip.intersects(rect) || job.sections.len() != 3 || !job.text.ends_with(word) {
+            return;
+        }
+        let color = job.sections[2].format.color;
+        tones.push(if color == colors.result.warning {
+            "warning"
+        } else if color == colors.result.error || color == colors.document.invalid {
+            "error"
+        } else {
+            "none"
+        });
+    });
+    tones
+}
+
 fn tones_where(d: &Driver<'_>, wanted: impl Fn(&str) -> bool) -> Vec<&'static str> {
     let mut paragraphs = Vec::new();
     d.each_painted_text(|text, clip| {
@@ -3145,6 +3221,25 @@ pub mod campaign_content {
             format!("An unchanged invalid repair says Invalid, and Save is blocked; No changes is painted {clean} times"),
         );
         d.state("repair-open", Sizes::Default);
+        // s30 B11 (R41): the note does not parse, so it cannot be read: an error in the body's
+        // message, in the repair's `Invalid` and in the footer's cause, at each size.
+        let tones = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                [
+                    tones_beside(d, "Notes/Broken.md cannot be read."),
+                    status_tones(d, "Invalid"),
+                    tones_beside(d, "Line 3 opens a list with ["),
+                ]
+            })
+        });
+        d.observe(
+            "s30-B11-tone-repair",
+            tones
+                .iter()
+                .flatten()
+                .all(|place| place.as_slice() == ["error"]),
+            format!("Body, Invalid and footer at 960, 1200 and 1920: {tones:?}"),
+        );
         d.observe(
             "Repair says why",
             d.visible_text("Line 3 opens a list"),
@@ -3480,7 +3575,23 @@ pub mod campaign_content {
                 })
             },
         );
-        d.state("missing-campaign-manifest-needs-explicit-write", Sizes::All);
+        d.state_prepared(
+            "missing-campaign-manifest-needs-explicit-write",
+            Sizes::All,
+            |d| {
+                // s30 B11 (R41): a missing file is a warning, as the missing manifests and
+                // folders are.
+                let tones = tones_beside(d, "Campaign.md is missing.");
+                d.observe(
+                    "s30-B11-tone-missing-campaign",
+                    tones == ["warning"],
+                    format!(
+                        "At {:?}, Campaign.md is missing: {tones:?}",
+                        d.window_size()
+                    ),
+                );
+            },
+        );
         d.click("Write Campaign.md again");
         d.wait_for_control("Undo write Campaign.md");
         assert_eq!(std::fs::read_to_string(&manifest).unwrap(), before);
@@ -6256,7 +6367,22 @@ pub mod settings {
             format!("Gaps after temporary HP: {gaps:?}"),
         );
         party_body_takes_presses(d, "iter-27-C-press-stopped", STOPPED);
-        d.state("sync-stopped-recovery", Sizes::All);
+        d.state_prepared("sync-stopped-recovery", Sizes::All, |d| {
+            // s30 B11 (R41): the rail's `Sync stopped` and the Party footer's notice of it take
+            // one tone, a warning.
+            let (rail, footer) = (
+                status_tones(d, "Sync stopped"),
+                tones_beside(d, "Combat sync stopped when the connection"),
+            );
+            d.observe(
+                "s30-B11-tone-sync-stopped",
+                rail == ["warning"] && footer == ["warning"],
+                format!(
+                    "At {:?}, the rail {rail:?} and the Party footer {footer:?}",
+                    d.window_size()
+                ),
+            );
+        });
         assert!(d.in_view("Dismiss this message"));
         d.click("Dismiss this message");
         party_body_takes_presses(d, "iter-27-C-press-stopped-dismissed", "");
@@ -14257,6 +14383,18 @@ pub mod session_notes {
             "Adding an event to an older session says so before it happens",
         );
         d.state("session-events-older", Sizes::Default);
+        // s30 B11 (R41): that this is not the session being played is a warning, as the rail and
+        // the Record step say it, at each size.
+        let tones = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                tones_beside(d, "What you write and add on this page goes into")
+            })
+        });
+        d.observe(
+            "s30-B11-tone-not-played",
+            tones.iter().all(|tones| tones == &["warning"]),
+            format!("Not the session being played, at 960, 1200 and 1920: {tones:?}"),
+        );
         d.observe_both(
             "iter-18-B-rest-row",
             "The rest summary and ruling share one line",
@@ -14582,6 +14720,23 @@ pub mod session_notes {
             format!("`New session` has the border of `Play it tonight`: {frames:?}"),
         );
         d.state("run-with-old-note", Sizes::Default);
+        // s30 B11 (R41): the rail's `Old session` and the Notes panel's notice of the same date
+        // take one tone, a warning, at each size.
+        let tones = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                (
+                    status_tones(d, "Old session"),
+                    tones_beside(d, "This session is dated 2025-12-25."),
+                )
+            })
+        });
+        d.observe(
+            "s30-B11-tone-old-session",
+            tones
+                .iter()
+                .all(|(rail, notes)| rail == &["warning"] && notes == &["warning"]),
+            format!("Rail and Notes panel at 960, 1200 and 1920: {tones:?}"),
+        );
         // The action bar above the dock sits an `XS` gap apart from it, and its first button
         // starts at the dock's content edge, where Amount starts (iter-19 FT6).
         d.observe_both(
@@ -18734,6 +18889,38 @@ pub mod encounter_groups {
             "At the minimum window, an open form says in view that its change cannot stand",
         );
         d.state("group-invalid-change", Sizes::Default);
+        // s30 B11 (R41; lead ruling): Save refuses the MOST SEVERE member fault, then the first
+        // in member order: Cinder Wolf's change that cannot stand (an error) outranks the
+        // creature that is not in the packages (a warning) before it. The save row's `Invalid`,
+        // the refused row's own fault and any words beside Save take its tone, at each size.
+        let tones = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                (
+                    status_tones(d, "Invalid"),
+                    tones_beside(d, "Maximum HP would become −28"),
+                    tones_beside(d, "A creature here cannot be saved. See its row."),
+                )
+            })
+        });
+        d.observe(
+            "s30-B11-tone-member-refusal",
+            tones.iter().all(|(word, row, beside)| {
+                word == &["error"] && row == &["error"] && beside.iter().all(|tone| *tone == "error")
+            }),
+            format!("Invalid, the refused row and the words beside Save at 960, 1200 and 1920: {tones:?}"),
+        );
+        // s30 B11 F6 (Astra re-check): with both faults kept and Cinder Wolf's error row out of
+        // view (the compact Add creatures tab), the save row says the chosen fault once, whole,
+        // in the error tone, by the mouse and the keyboard alike.
+        let (mixed, mixed_detail) = d.aside(|d| {
+            fallback_said_once(
+                d,
+                &["would become −28", "cannot be saved. See its row"],
+                "A creature here cannot be saved. See its row.",
+                "error",
+            )
+        });
+        d.observe("s30-B11-F6-mixed-fallback", mixed, mixed_detail);
         // The fault sits under the Maximum HP field at its left edge, once, and the preview
         // beside the field takes the error colour.
         for size in [SMALL, DEFAULT] {
@@ -20457,6 +20644,17 @@ pub mod encounter_owned_groups {
                 d.visible_text(gone) && said == 1,
                 format!("One message says the gone encounter: {said} painted"),
             );
+            // s30 B11 (R41): a gone encounter is a missing thing, so a warning; the save row's
+            // `Invalid` and the message under Belongs to take that one tone.
+            let (word, cause) = (status_tones(d, "Invalid"), tones_beside(d, gone));
+            d.observe(
+                "s30-B11-tone-gone-encounter",
+                word == ["warning"] && cause == ["warning"],
+                format!(
+                    "At {:?}, Invalid {word:?} and the gone encounter's message {cause:?}",
+                    d.window_size()
+                ),
+            );
             // Lead, round 29 (the band at 960): the cause's place is on the save row, so the
             // gap from the save row's word to the first field is main's at every size.
             let band = d
@@ -20552,6 +20750,44 @@ pub mod encounter_owned_groups {
         });
         d.observe("iter-29-BC5-G122-off-screen", once, detail);
         d.observe("iter-29-BC5-G122-member-off-screen", member, member_detail);
+        // s30 B11 F3 (R41, lead ruling): a member whose creature file is there and cannot be
+        // read is unreadable, an error, as the encounter roster says it; a deleted file stays a
+        // warning (above). The member row and the save row's `Invalid` take the error.
+        let unread = d.aside(|d| {
+            d.type_into(&format!("Group name: {GROUP_ORPHAN}"), " 2");
+            d.click("Belongs to: Deleted encounter");
+            d.click("Any encounter");
+            let wolf = d
+                .root
+                .join("modules/ashen-marches/Creatures/Cinder Wolf.md");
+            let text = std::fs::read_to_string(&wolf).unwrap();
+            let broken = text.replace("splat_name: Cinder Wolf", "splat_name: [Cinder Wolf");
+            assert_ne!(broken, text);
+            std::fs::write(&wolf, broken).unwrap();
+            d.focus_window(false);
+            d.focus_window(true);
+            // The row's heading names the creature it cannot find, whatever its cause.
+            d.wait_for_text("Unknown creature");
+            let tones = (
+                status_tones(d, "Invalid"),
+                tones_where(d, |words| words.contains("Its file cannot be read.")),
+                tones_where(d, |words| words.contains("Not in this campaign’s packages")),
+            );
+            std::fs::write(&wolf, text).unwrap();
+            d.focus_window(false);
+            d.focus_window(true);
+            d.click("Discard");
+            d.expect("Deleted encounter");
+            tones
+        });
+        d.observe(
+            "s30-B11-F3-unreadable-member",
+            unread.0 == ["error"] && unread.1 == ["error"] && unread.2.is_empty(),
+            format!(
+                "An unreadable creature file: Invalid {:?}, the member row {:?}, a missing-creature line {:?}",
+                unread.0, unread.1, unread.2
+            ),
+        );
         let inset = notes_inset(
             d,
             &format!("Group notes for {GROUP_ORPHAN}"),
