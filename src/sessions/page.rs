@@ -6461,7 +6461,8 @@ impl Sessions {
                 &mut self.notice_order,
                 match delete_recording(&path) {
                     Ok(()) => (Tone::Success, "Recording deleted.".to_owned()),
-                    Err(error) => (Tone::Error, format!("Not deleted. {error}")),
+                    // `delete_recording` says it in plain words (`not_deleted`).
+                    Err(error) => (Tone::Error, error),
                 },
             );
             self.refresh_recordings();
@@ -7469,7 +7470,7 @@ impl Sessions {
             return;
         }
         if delete && let Some(path) = &template.path {
-            match fs::remove_file(path) {
+            match super::remove_file(path) {
                 Ok(()) => {
                     let body = self
                         .template_draft
@@ -7485,7 +7486,7 @@ impl Sessions {
                     self.template = None;
                     self.refresh();
                 }
-                Err(error) => self.template_error = Some(format!("Not deleted. {error}")),
+                Err(error) => self.template_error = Some(super::not_deleted(path, &error)),
             }
             return;
         }
@@ -8566,9 +8567,28 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("Copy.md");
         let before = format!("---\nsession_id: {}\n---\nDM's words\n", Uuid::new_v4());
-        fs::write(&path, before).unwrap();
+        fs::write(&path, &before).unwrap();
+        // Round 30 B7e: a refused write says plain words, never the system's, and leaves the
+        // file's bytes as they were.
+        let failing = |code: Option<i32>| super::super::FAILING_WRITES.with(|c| c.set(code));
+        failing(Some(13));
+        assert_eq!(
+            super::super::new_identity(&path).err().as_deref(),
+            Some(
+                "Not saved. No permission to save. Give your user account permission to change the file and its folder."
+            )
+        );
+        failing(None);
+        assert_eq!(fs::read_to_string(&path).unwrap(), before);
         let undo = super::super::new_identity(&path).unwrap();
         let after = fs::read(&path).unwrap();
+        failing(Some(28));
+        assert_eq!(
+            undo.undo().err().as_deref(),
+            Some("Not saved. Disk is full. Free some space on the disk, then try again.")
+        );
+        failing(None);
+        assert_eq!(fs::read(&path).unwrap(), after);
         let mut sessions = Sessions {
             folder: Some(dir.path().into()),
             ..Default::default()

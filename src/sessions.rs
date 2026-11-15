@@ -98,7 +98,7 @@ pub fn save_folder(campaign: &Campaign, name: &str) -> Result<PathBuf, String> {
 }
 fn write_folder(campaign: &Campaign, name: &str) -> Result<PathBuf, String> {
     let path = resolve(campaign, name)?;
-    fs::create_dir_all(&path).map_err(|e| format!("Could not create session folder: {e}"))?;
+    fs::create_dir_all(&path).map_err(|error| not_created(&error))?;
     let document = CampaignDocument::load(campaign)?;
     let mut map = serde_yaml_ng::Mapping::new();
     map.insert("directory".into(), Value::String(name.trim().to_owned()));
@@ -269,7 +269,7 @@ pub(crate) struct IdentityUndo {
 }
 
 pub(crate) fn new_identity(path: &Path) -> Result<IdentityUndo, String> {
-    let before = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let before = fs::read_to_string(path).map_err(|error| not_read(&error))?;
     let after = patch_fields(
         &before,
         &[(
@@ -280,7 +280,7 @@ pub(crate) fn new_identity(path: &Path) -> Result<IdentityUndo, String> {
     if fs::read_to_string(path).ok().as_deref() != Some(before.as_str()) {
         return Err("This session changed on disk. Reload before trying again.".into());
     }
-    replace_file(path, &after)?;
+    replace_file_io(path, &after).map_err(|error| not_saved(&error))?;
     Ok(IdentityUndo {
         path: path.into(),
         before,
@@ -302,7 +302,7 @@ impl IdentityUndo {
         if fs::read_to_string(&self.path).ok().as_deref() != Some(self.after.as_str()) {
             return Err("This session changed on disk. Undo did not replace it.".into());
         }
-        replace_file(&self.path, &self.before)
+        replace_file_io(&self.path, &self.before).map_err(|error| not_saved(&error))
     }
 }
 
@@ -444,20 +444,40 @@ pub(crate) fn storage_scans() -> usize {
     STORAGE_SCANS.with(std::cell::Cell::get)
 }
 
+/// A scan before a storage move that the system refused, in plain words from the error's kind
+/// (round 30 B7e): the file or folder by its name, and the recovery. Never the system's words.
+fn scan_fault(path: &Path, error: &std::io::Error) -> String {
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    format!(
+        "Not moved. {}",
+        crate::world::file_fault::FileFault::read(&name, error).message()
+    )
+}
+
+#[cfg(test)]
+thread_local! {
+    /// A test's refused scan: reading the session folder fails with this system error code.
+    pub(crate) static FAILING_SCAN: std::cell::Cell<Option<i32>> = const { std::cell::Cell::new(None) };
+}
+
 /// Files owned by session storage. Other campaign notes stay where they are.
 pub(crate) fn storage_files(folder: &Path) -> Result<Vec<PathBuf>, String> {
     #[cfg(test)]
     STORAGE_SCANS.with(|scans| scans.set(scans.get() + 1));
+    #[cfg(test)]
+    if let Some(code) = FAILING_SCAN.with(std::cell::Cell::get) {
+        return Err(scan_fault(folder, &std::io::Error::from_raw_os_error(code)));
+    }
     fn files(root: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
         if !root.exists() {
             return Ok(());
         }
-        for item in fs::read_dir(root).map_err(|error| error.to_string())? {
-            let item = item.map_err(|error| error.to_string())?;
+        for item in fs::read_dir(root).map_err(|error| scan_fault(root, &error))? {
+            let item = item.map_err(|error| scan_fault(root, &error))?;
             let path = item.path();
             if item
                 .file_type()
-                .map_err(|error| error.to_string())?
+                .map_err(|error| scan_fault(&path, &error))?
                 .is_symlink()
             {
                 return Err(format!(
@@ -483,11 +503,10 @@ pub(crate) fn storage_files(folder: &Path) -> Result<Vec<PathBuf>, String> {
     if folder.join(NOTE_PATHS).exists() {
         out.push(folder.join(NOTE_PATHS));
     }
-    for file in fs::read_dir(folder).map_err(|e| e.to_string())? {
-        let path = file.map_err(|e| e.to_string())?.path();
+    for file in fs::read_dir(folder).map_err(|error| scan_fault(folder, &error))? {
+        let path = file.map_err(|error| scan_fault(folder, &error))?.path();
         if path.extension().is_some_and(|ext| ext == "md") && !out.contains(&path) {
-            let text = fs::read_to_string(&path)
-                .map_err(|e| format!("{}: {e}. Move this file by hand first.", path.display()))?;
+            let text = fs::read_to_string(&path).map_err(|error| scan_fault(&path, &error))?;
             if text.lines().any(|line| {
                 line.starts_with("session_id:") || line.starts_with("timeline_version:")
             }) {
@@ -564,20 +583,45 @@ pub(crate) fn move_storage(
     let result = (|| {
         for (source, target) in &pairs {
             if let Some(parent) = target.parent() {
-                fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+                fs::create_dir_all(parent).map_err(|error| {
+                    TransferFault::Refused {
+                        source: (*source).clone(),
+                        read: false,
+                        error,
+                    }
+                    .words(false)
+                })?;
             }
-            transfer_file(source, target, false, || {})?;
+            transfer_file(source, target, false, || {}).map_err(|fault| fault.words(false))?;
             copied.push(target.clone());
         }
         save_folder(campaign, name)
     })();
     if let Err(error) = result {
+        // The files that moved go back; one that cannot says where it stays, and the setting
+        // keeps the old folder.
         let mut errors = vec![error];
+        let mut stranded = false;
         for target in copied.into_iter().rev() {
             let source = old.join(target.strip_prefix(&new).expect("storage target"));
-            if let Err(error) = transfer_file(&target, &source, false, || {}) {
-                errors.push(error);
+            if let Err(fault) = transfer_file(&target, &source, false, || {}) {
+                stranded = true;
+                errors.push(fault.words(true));
             }
+        }
+        if stranded {
+            let folder_name = |path: &Path| {
+                path.file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned()
+            };
+            errors.push(format!(
+                "The session folder is still {}. Move the files named above back into it, or \
+                 choose {} again.",
+                folder_name(&old),
+                folder_name(&new)
+            ));
         }
         return Err(errors.join(" "));
     }
@@ -611,49 +655,266 @@ pub(crate) fn rename_no_replace(source: &Path, target: &Path) -> std::io::Result
     }
 }
 
+/// Why a file did not move, and where it is now (round 30 B7e): the step that failed, both
+/// paths, and the system's error, whose words never reach the DM. [`TransferFault::words`]
+/// says where the file is and what the DM does next, in plain words from the error's kind
+/// (through the World page's file faults, `world::file_fault`).
+#[derive(Debug)]
+pub(crate) enum TransferFault {
+    /// Refused before anything moved: the file is still at `source`. `read` when reading it
+    /// for a copy failed.
+    Refused {
+        source: PathBuf,
+        read: bool,
+        error: std::io::Error,
+    },
+    /// The copy is at `target` and the original could not be removed: it is in both folders.
+    BothKept {
+        source: PathBuf,
+        target: PathBuf,
+        error: std::io::Error,
+    },
+    /// The file moved to `target`, but writing its folder through to the disk failed.
+    Moved {
+        target: PathBuf,
+        error: std::io::Error,
+    },
+    /// The original changed while it was copied: both files were kept.
+    Changed { source: PathBuf, target: PathBuf },
+    /// The original is gone (moved or deleted outside Splat after the scan): it is no longer in
+    /// its folder, and its place is not known. `copy` is a copy this transfer wrote first.
+    Gone {
+        source: PathBuf,
+        copy: Option<PathBuf>,
+    },
+}
+
+impl TransferFault {
+    /// What happened and where the file is now. `back` for the return of a file that a
+    /// refused storage move had already moved.
+    pub(crate) fn words(&self, back: bool) -> String {
+        use crate::world::file_fault::FileFault;
+        let name = |path: &Path| {
+            path.file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned()
+        };
+        let folder = |path: &Path| path.parent().map_or_else(String::new, &name);
+        let fault = |read: bool, error: &std::io::Error| {
+            let fault = if read {
+                FileFault::read("", error)
+            } else {
+                FileFault::write("", error)
+            };
+            format!("{}. {}", fault.cause(), fault.recovery())
+        };
+        let moved = if back { "moved back" } else { "moved" };
+        match self {
+            Self::Refused {
+                source,
+                read,
+                error,
+            } => format!(
+                "{} was not {moved}. It is still in {}. {}",
+                name(source),
+                folder(source),
+                fault(*read, error)
+            ),
+            Self::BothKept {
+                source,
+                target,
+                error,
+            } => format!(
+                "{} was copied to {} but not removed from {}, so it is in both. {} Then delete \
+                 the copy you do not need.",
+                name(source),
+                folder(target),
+                folder(source),
+                fault(false, error)
+            ),
+            Self::Moved { target, error } => format!(
+                "{} is now in {}, but Splat could not finish writing that folder. {}",
+                name(target),
+                folder(target),
+                fault(false, error)
+            ),
+            Self::Changed { source, target } => format!(
+                "{} changed during the move. Both files were kept, in {} and {}.",
+                source.display(),
+                folder(source),
+                folder(target)
+            ),
+            // Only what is known to exist: the original is not where it was, and the copy this
+            // transfer wrote, if any.
+            Self::Gone { source, copy } => {
+                let mut words = format!(
+                    "{} was not {moved}: it is no longer in {}. It was moved or deleted outside \
+                     Splat.",
+                    name(source),
+                    folder(source)
+                );
+                if let Some(copy) = copy {
+                    words.push_str(&format!(" A copy is in {}.", folder(copy)));
+                }
+                words
+            }
+        }
+    }
+}
+
+/// Where a test's failing transfer fails.
+#[cfg(test)]
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum FailAt {
+    /// Before anything moves.
+    Start,
+    /// After the file moved, at the folder's sync.
+    Sync,
+    /// After the copy is written, at the removal of the original.
+    Remove,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// A test's failing transfers: the first `n` succeed, then each fails at this step with
+    /// this system error code.
+    pub(crate) static FAILING_TRANSFERS: std::cell::Cell<Option<(u32, i32, FailAt)>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// The test's failure for this transfer at `at`, if it is set there.
+#[cfg(test)]
+fn failing_transfer(at: &str) -> Option<std::io::Error> {
+    let (left, code, step) = FAILING_TRANSFERS.with(std::cell::Cell::get)?;
+    let here = matches!(
+        (step, at),
+        (FailAt::Start, "start") | (FailAt::Sync, "sync") | (FailAt::Remove, "remove")
+    );
+    if !here {
+        return None;
+    }
+    if left == 0 {
+        Some(std::io::Error::from_raw_os_error(code))
+    } else {
+        FAILING_TRANSFERS.with(|failing| failing.set(Some((left - 1, code, step))));
+        None
+    }
+}
+
 fn transfer_file(
     source: &Path,
     target: &Path,
     force_copy: bool,
     before_delete: impl FnOnce(),
-) -> Result<(), String> {
+) -> Result<(), TransferFault> {
+    let refused = |read: bool| {
+        let source = source.to_owned();
+        move |error| TransferFault::Refused {
+            source,
+            read,
+            error,
+        }
+    };
+    // A step on the original itself: one that finds it gone does not say where it is.
+    let refused_source = |read: bool| {
+        let source = source.to_owned();
+        move |error: std::io::Error| {
+            if error.kind() == std::io::ErrorKind::NotFound {
+                TransferFault::Gone { source, copy: None }
+            } else {
+                TransferFault::Refused {
+                    source,
+                    read,
+                    error,
+                }
+            }
+        }
+    };
+    let gone_after_copy = || TransferFault::Gone {
+        source: source.to_owned(),
+        copy: Some(target.to_owned()),
+    };
+    let moved = || {
+        let target = target.to_owned();
+        move |error| TransferFault::Moved { target, error }
+    };
+    #[cfg(test)]
+    if let Some(error) = failing_transfer("start") {
+        return Err(refused_source(false)(error));
+    }
+    let gone = || std::io::Error::from(std::io::ErrorKind::NotFound);
+    let source_folder = source.parent().ok_or_else(gone).map_err(refused(false))?;
+    let target_folder = target.parent().ok_or_else(gone).map_err(refused(false))?;
+    let sync = |folder: &Path| {
+        #[cfg(test)]
+        if let Some(error) = failing_transfer("sync") {
+            return Err(error);
+        }
+        sync_folder_io(folder)
+    };
     #[cfg(target_os = "linux")]
     if !force_copy {
         // RENAME_NOREPLACE protects an arriving sync file.
         match rename_no_replace(source, target) {
             Ok(()) => {
-                sync_folder(source.parent().ok_or("Missing source folder")?)?;
-                sync_folder(target.parent().ok_or("Missing target folder")?)?;
+                sync(source_folder).map_err(moved())?;
+                sync(target_folder).map_err(moved())?;
                 return Ok(());
             }
             Err(error) if error.raw_os_error() != Some(libc::EXDEV) => {
-                return Err(format!("Could not move {}: {error}", source.display()));
+                return Err(refused_source(false)(error));
             }
             Err(_) => {}
         }
     }
-    let bytes = fs::read(source).map_err(|e| format!("{}: {e}", source.display()))?;
-    let mut output =
-        tempfile::NamedTempFile::new_in(target.parent().ok_or("Missing target folder")?)
-            .map_err(|e| e.to_string())?;
+    let bytes = fs::read(source).map_err(refused_source(true))?;
+    let mut output = tempfile::NamedTempFile::new_in(target_folder).map_err(refused(false))?;
     output
         .write_all(&bytes)
         .and_then(|()| output.as_file().sync_all())
-        .map_err(|e| e.to_string())?;
+        .map_err(refused(false))?;
     output
         .persist_noclobber(target)
-        .map_err(|e| e.to_string())?;
-    sync_folder(target.parent().ok_or("Missing target folder")?)?;
+        .map_err(|error| refused(false)(error.error))?;
+    let both = |error| TransferFault::BothKept {
+        source: source.to_owned(),
+        target: target.to_owned(),
+        error,
+    };
+    sync(target_folder).map_err(both)?;
     before_delete();
-    if fs::read(source).ok().as_deref() != Some(bytes.as_slice()) {
-        return Err(format!(
-            "{} changed during the move. Both files were kept.",
-            source.display()
-        ));
+    match fs::read(source) {
+        Ok(now) if now == bytes => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Err(gone_after_copy());
+        }
+        _ => {
+            return Err(TransferFault::Changed {
+                source: source.to_owned(),
+                target: target.to_owned(),
+            });
+        }
     }
-    fs::remove_file(source).map_err(|e| e.to_string())?;
-    sync_folder(source.parent().ok_or("Missing source folder")?)?;
-    sync_folder(target.parent().ok_or("Missing target folder")?)
+    let removed = {
+        #[cfg(test)]
+        if let Some(error) = failing_transfer("remove") {
+            Err(error)
+        } else {
+            fs::remove_file(source)
+        }
+        #[cfg(not(test))]
+        fs::remove_file(source)
+    };
+    match removed {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Err(gone_after_copy());
+        }
+        Err(error) => return Err(both(error)),
+    }
+    sync(source_folder).map_err(moved())?;
+    sync(target_folder).map_err(moved())
 }
 
 fn require_folder(folder: &Path) -> Result<(), String> {
@@ -686,12 +947,8 @@ pub fn create_note(folder: &Path, new: &NewNote<'_>) -> Result<Note, String> {
     Ok(note)
 }
 
-fn write_new(path: &Path, text: &str) -> Result<(), String> {
-    write_new_io(path, text).map_err(|e| e.to_string())
-}
-
-/// `write_new` with the system error kept, so a note's save can say what happened in plain
-/// words (`not_saved`).
+/// A new file, never replacing one, with the system error kept, so the caller can say what
+/// happened in plain words (`not_created`).
 fn write_new_io(path: &Path, text: &str) -> std::io::Result<()> {
     #[cfg(test)]
     if let Some(code) = FAILING_WRITES.with(std::cell::Cell::get) {
@@ -882,13 +1139,13 @@ pub fn create_template(folder: &Path, name: &str, body: &str) -> Result<Template
     match fs::create_dir(&templates) {
         Ok(()) => {}
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
-        Err(error) => return Err(format!("Could not create the folder: {error}")),
+        Err(error) => return Err(not_created(&error)),
     }
     let path = templates.join(format!("{name}.md"));
     if path.exists() {
         return Err(format!("A template named “{name}” already exists."));
     }
-    write_new(&path, body)?;
+    write_new_io(&path, body).map_err(|error| not_created(&error))?;
     Ok(Template {
         name,
         path: Some(path),
@@ -1006,6 +1263,37 @@ pub fn new_recording_path(folder: &Path, session: Uuid) -> PathBuf {
 }
 
 /// Remove a recording and what was made from it.
+/// A removal the system refused, in plain words from the error's kind (round 30 B7e): what was
+/// not deleted, and the recovery of the World page's file faults. Never the system's words.
+pub(crate) fn not_deleted(path: &Path, error: &std::io::Error) -> String {
+    use crate::world::file_fault::{FileFault, Kind};
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    let fault = FileFault::write(&name, error);
+    let what = match fault.kind {
+        Kind::WriteDenied => format!("Splat has no permission to delete {name}."),
+        Kind::ReadOnly => format!("The disk is read-only, so Splat cannot delete {name}."),
+        _ => format!("Splat cannot delete {name}."),
+    };
+    format!("Not deleted. {what} {}", fault.recovery())
+}
+
+#[cfg(test)]
+thread_local! {
+    /// A test's refused removals: removing a file that exists fails with this system error code.
+    pub(crate) static FAILING_REMOVES: std::cell::Cell<Option<i32>> = const { std::cell::Cell::new(None) };
+}
+
+/// Remove a file, with the system's error kept for `not_deleted`.
+pub(crate) fn remove_file(path: &Path) -> std::io::Result<()> {
+    #[cfg(test)]
+    if let Some(code) = FAILING_REMOVES.with(std::cell::Cell::get)
+        && path.exists()
+    {
+        return Err(std::io::Error::from_raw_os_error(code));
+    }
+    fs::remove_file(path)
+}
+
 pub fn delete_recording(path: &Path) -> Result<(), String> {
     for made in [
         crate::processing::transcript_path(path),
@@ -1017,10 +1305,10 @@ pub fn delete_recording(path: &Path) -> Result<(), String> {
         path.with_extension("state.txt"),
         path.to_path_buf(),
     ] {
-        match fs::remove_file(made) {
+        match remove_file(&made) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(e.to_string()),
+            Err(e) => return Err(not_deleted(&made, &e)),
         }
     }
     Ok(())
@@ -2629,6 +2917,16 @@ mod tests {
         assert!(create_note(&gone, &new_note(1, "", "Words")).is_err());
         assert!(create_template(&gone, "Notes", "Words").is_err());
         assert!(!gone.exists());
+        // Round 30 B7e: a new template the disk refuses says plain words, never the system's,
+        // and leaves no file.
+        FAILING_WRITES.with(|code| code.set(Some(28)));
+        let refused = create_template(dir.path(), "Notes", "Words").unwrap_err();
+        FAILING_WRITES.with(|code| code.set(None));
+        assert_eq!(
+            refused,
+            "Not created. Disk is full. Free some space on the disk, then try again."
+        );
+        assert!(!dir.path().join(TEMPLATES).join("Notes.md").exists());
     }
 
     #[test]
@@ -2713,9 +3011,83 @@ mod tests {
             fs::write(&source, "DM's edit").unwrap()
         })
         .unwrap_err();
-        assert!(error.contains("Both files were kept"));
-        assert_eq!(fs::read_to_string(source).unwrap(), "DM's edit");
-        assert_eq!(fs::read_to_string(target).unwrap(), "Before");
+        assert!(error.words(false).contains("Both files were kept"));
+        assert_eq!(fs::read_to_string(&source).unwrap(), "DM's edit");
+        assert_eq!(fs::read_to_string(&target).unwrap(), "Before");
+        // Round 30 B7e: a transfer the system refuses says plain words from the error's kind,
+        // never the system's, and moves nothing.
+        let other = dir.path().join("other.md");
+        let fail = |at: Option<(u32, i32, FailAt)>| FAILING_TRANSFERS.with(|f| f.set(at));
+        fail(Some((0, 28, FailAt::Start)));
+        let refused = transfer_file(&source, &other, true, || {}).unwrap_err();
+        fail(None);
+        let words = refused.words(false);
+        assert!(
+            words.starts_with("source.md was not moved. It is still in ")
+                && words.ends_with("Disk is full. Free some space on the disk, then try again."),
+            "{words}"
+        );
+        assert_eq!(fs::read_to_string(&source).unwrap(), "DM's edit");
+        assert!(!other.exists());
+        // Round 30 B7e (review F2 of PR 431): a late failure says where the file is now.
+        let (from, to) = (dir.path().join("From"), dir.path().join("To"));
+        fs::create_dir_all(&from).unwrap();
+        fs::create_dir_all(&to).unwrap();
+        // The move is done, and writing the folder through fails: the file is in To.
+        fs::write(from.join("a.md"), "A").unwrap();
+        fail(Some((0, 28, FailAt::Sync)));
+        let late = transfer_file(&from.join("a.md"), &to.join("a.md"), false, || {}).unwrap_err();
+        fail(None);
+        assert_eq!(
+            late.words(false),
+            "a.md is now in To, but Splat could not finish writing that folder. Disk is full. \
+             Free some space on the disk, then try again."
+        );
+        assert!(to.join("a.md").exists() && !from.join("a.md").exists());
+        // The copy is written, and the original cannot be removed: it is in both folders.
+        fs::write(from.join("b.md"), "B").unwrap();
+        fail(Some((0, 13, FailAt::Remove)));
+        let both = transfer_file(&from.join("b.md"), &to.join("b.md"), true, || {}).unwrap_err();
+        fail(None);
+        assert_eq!(
+            both.words(false),
+            "b.md was copied to To but not removed from From, so it is in both. No permission to \
+             save. Give your user account permission to change the file and its folder. Then \
+             delete the copy you do not need."
+        );
+        assert_eq!(fs::read_to_string(from.join("b.md")).unwrap(), "B");
+        assert_eq!(fs::read_to_string(to.join("b.md")).unwrap(), "B");
+        // Review F2 of PR 431 (re-check): an original that is gone says only what is known.
+        // Gone before the move:
+        fail(Some((0, 2, FailAt::Start)));
+        let gone = transfer_file(&from.join("c.md"), &to.join("c.md"), false, || {}).unwrap_err();
+        fail(None);
+        assert_eq!(
+            gone.words(false),
+            "c.md was not moved: it is no longer in From. It was moved or deleted outside Splat."
+        );
+        // Gone while it was copied: the copy is in To.
+        fs::write(from.join("d.md"), "D").unwrap();
+        let gone = transfer_file(&from.join("d.md"), &to.join("d.md"), true, || {
+            fs::remove_file(from.join("d.md")).unwrap()
+        })
+        .unwrap_err();
+        assert_eq!(
+            gone.words(false),
+            "d.md was not moved: it is no longer in From. It was moved or deleted outside Splat. \
+             A copy is in To."
+        );
+        assert_eq!(fs::read_to_string(to.join("d.md")).unwrap(), "D");
+        // Gone when the original is removed after the copy:
+        fs::write(from.join("e.md"), "E").unwrap();
+        fail(Some((0, 2, FailAt::Remove)));
+        let gone = transfer_file(&from.join("e.md"), &to.join("e.md"), true, || {}).unwrap_err();
+        fail(None);
+        assert_eq!(
+            gone.words(true),
+            "e.md was not moved back: it is no longer in From. It was moved or deleted outside \
+             Splat. A copy is in To."
+        );
     }
 
     #[test]
@@ -2793,6 +3165,20 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert!(rows[0].transcript && rows[0].summary);
         assert!(!rows[0].path.exists());
+        // Round 30 B7e (review F3 of PR 431): a removal the system refuses says plain words,
+        // never the system's, and the file it could not remove stays.
+        FAILING_REMOVES.with(|code| code.set(Some(13)));
+        let refused = delete_recording(&rows[0].path).unwrap_err();
+        FAILING_REMOVES.with(|code| code.set(None));
+        assert_eq!(
+            refused,
+            "Not deleted. Splat has no permission to delete evening.transcript.md. Give your user \
+             account permission to change the file and its folder."
+        );
+        assert_eq!(
+            fs::read_to_string(folder.join("evening.transcript.md")).unwrap(),
+            "Words"
+        );
         delete_recording(&rows[0].path).unwrap();
         assert!(list_recordings(dir.path(), id).is_empty());
     }
@@ -3812,10 +4198,64 @@ mod tests {
         assert_eq!(move_storage(&campaign, "Evenings").unwrap().0, new);
         assert_eq!(folder(&campaign).unwrap(), new);
         for (path, bytes) in relative.iter().zip(originals) {
-            assert_eq!(fs::read(new.join(path)).unwrap(), bytes);
+            assert_eq!(fs::read(new.join(path)).unwrap(), bytes.clone());
             assert!(!old.join(path).exists());
         }
         assert!(old.join("Other.md").exists());
+        // Round 30 B7e: a move the system refuses after one file moved: the move and its
+        // rollback say plain words, never the system's; the folder setting stays; every file
+        // keeps its bytes in one of the two folders.
+        let kept: Vec<_> = relative
+            .iter()
+            .map(|path| fs::read(new.join(path)).unwrap())
+            .collect();
+        FAILING_TRANSFERS.with(|failing| failing.set(Some((1, 13, FailAt::Start))));
+        let refused = move_storage(&campaign, "Mornings").unwrap_err();
+        FAILING_TRANSFERS.with(|failing| failing.set(None));
+        // Review F2 of PR 431: the refused move and the refused return each say where their
+        // file is now, and the setting's folder is named.
+        assert!(
+            refused.contains("was not moved. It is still in Evenings. No permission to save.")
+                && refused.contains("was not moved back. It is still in Mornings. No permission")
+                && refused.contains(
+                    "The session folder is still Evenings. Move the files named above back into \
+                     it, or choose Mornings again."
+                )
+                && !refused.contains("os error")
+                && !refused.contains("Permission denied"),
+            "{refused}"
+        );
+        assert_eq!(folder(&campaign).unwrap(), new);
+        let mornings = dir.path().join("Mornings");
+        for (path, bytes) in relative.iter().zip(kept) {
+            let here = fs::read(new.join(path)).ok();
+            let there = fs::read(mornings.join(path)).ok();
+            assert!(
+                here.as_ref() == Some(&bytes) || there.as_ref() == Some(&bytes),
+                "{} kept its bytes",
+                path.display()
+            );
+        }
+        // Review F1 of PR 431: the scan before a move says plain words: a folder it may not
+        // read, and a note that is not text. Nothing moves, and the bytes stay.
+        FAILING_SCAN.with(|code| code.set(Some(13)));
+        let refused = move_storage(&campaign, "Nights").unwrap_err();
+        FAILING_SCAN.with(|code| code.set(None));
+        assert_eq!(
+            refused,
+            "Not moved. Splat has no permission to read Evenings. Give your user account \
+             permission to read the file."
+        );
+        fs::write(new.join("Bad.md"), [0xff, 0xfe, b'\n']).unwrap();
+        let refused = move_storage(&campaign, "Nights").unwrap_err();
+        assert_eq!(
+            refused,
+            "Not moved. Splat cannot read Bad.md as text. Splat reads notes as UTF-8 text. Open \
+             the file in a text editor and save it as UTF-8 text, or restore it from a backup."
+        );
+        assert_eq!(fs::read(new.join("Bad.md")).unwrap(), [0xff, 0xfe, b'\n']);
+        assert!(!dir.path().join("Nights").exists());
+        assert_eq!(folder(&campaign).unwrap(), new);
     }
 
     #[test]
