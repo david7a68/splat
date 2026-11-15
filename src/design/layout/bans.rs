@@ -350,7 +350,8 @@ pub(crate) fn calls(source: &str, patterns: &[Shape]) -> Result<Vec<(usize, usiz
     let (mut tokens, mut lines) = (Vec::new(), Vec::new());
     flatten(stream, &mut tokens, &mut lines);
     let mut found = Vec::new();
-    for at in 0..tokens.len() {
+    // `flatten` gives each token its line.
+    for (at, &line) in lines.iter().enumerate() {
         for (index, shape) in patterns.iter().enumerate() {
             let hit = match shape {
                 Shape::Assoc(owner, name) => {
@@ -390,7 +391,7 @@ pub(crate) fn calls(source: &str, patterns: &[Shape]) -> Result<Vec<(usize, usiz
                 }
             };
             if hit {
-                found.push((lines[at], index));
+                found.push((line, index));
             }
         }
     }

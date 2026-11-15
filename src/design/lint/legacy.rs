@@ -294,7 +294,7 @@ fn counts(files: &[(String, String)]) -> Result<Counts, String> {
     Ok(counts)
 }
 
-/// The manifest's rows (`capability	file	function	count	owner	note`) by site.
+/// The manifest's rows (capability, file, function, count, owner, note; split at tabs) by site.
 fn manifest(text: &str) -> Result<Counts, Vec<String>> {
     let (mut rows, mut faults) = (Counts::new(), Vec::new());
     for (at, line) in text.lines().enumerate() {
