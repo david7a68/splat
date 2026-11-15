@@ -5898,22 +5898,37 @@ pub mod encounter_run {
         d.click("Roll NPC initiative another way");
         d.state("npc-roll-menu", Sizes::Default);
         // iter-27-R FJ4: the choice that plain `Roll NPCs` uses has a check, the others keep
-        // its slot empty, so each choice's words start at one x.
+        // its slot empty, so each choice's words start at one x. Read in each choice's own row
+        // (M-R0.3: the shared `design::choice` paints the check and the words apart).
+        use crate::encounter_settings::Grouping;
+        let names = [
+            Grouping::Identical,
+            Grouping::Individual,
+            Grouping::BySide,
+            Grouping::Explicit,
+        ]
+        .map(Grouping::label);
+        let rows: Vec<(String, egui::Rect)> = d
+            .nodes()
+            .into_iter()
+            .filter(|node| names.contains(&node.name.as_str()))
+            .map(|node| (node.name, node.rect))
+            .collect();
         let mut checked = Vec::new();
         let mut starts = Vec::new();
-        d.each_painted_text(|text, _| {
-            let job = &text.galley.job;
-            if job
-                .text
-                .starts_with(&format!("{} ", crate::design::icons::OK))
-                && job.sections.len() == 2
-            {
-                if job.sections[0].format.color.a() > 0 {
-                    checked.push(job.text.clone());
+        for (name, row) in &rows {
+            d.each_painted_text(|text, _| {
+                let centre = text.visual_bounding_rect().center();
+                if !row.contains(centre) {
+                    return;
                 }
-                starts.push(text.pos.x.round());
-            }
-        });
+                if text.galley.job.text == *name {
+                    starts.push(text.pos.x.round());
+                } else if text.galley.job.text == crate::design::icons::OK {
+                    checked.push(name.clone());
+                }
+            });
+        }
         d.observe(
             "iter-27-R-FJ4",
             starts.len() == 3
@@ -9517,7 +9532,21 @@ pub mod party_from_run {
         d.click(END_ENCOUNTER);
         d.click(END_NOW);
         d.expect(ENDED);
-        d.state("ended", Sizes::Default);
+        // SM11, AM14 (M-R0.3): with no sync choices too, Combat log is Prep's peer: the same
+        // closed section, at one x (it was a muted label, with its log open under it).
+        d.state_prepared("ended", Sizes::Default, |d| {
+            let peers = ["Prep", "Combat log"].map(|name| {
+                d.nodes()
+                    .into_iter()
+                    .find(|node| node.name == name)
+                    .map(|node| (node.role, node.rect.left().round()))
+            });
+            d.observe(
+                "m-r0-3-SM11",
+                peers[0].is_some() && peers[0] == peers[1],
+                format!("Prep and Combat log (role, left): {peers:?}"),
+            );
+        });
         d.review("T4.5", "the ended view, to compare with live and setup");
         d.click_containing(UNDO_ENDING);
         d.expect(CURRENT_TURN);
@@ -22435,13 +22464,18 @@ pub mod run_loot {
         d.expect("Outcome: ");
         d.expect("120 gp in a locked coffer");
         d.state("ended-with-loot", Sizes::All);
-        d.observe(
-            "iter-23-R-FJ10",
-            d.has_containing("Fight prepared from the saved encounter.")
-                && !d.has_containing("DM run prepared")
-                && !d.has_containing("Rules are resolved by the DM"),
-            "The Log's first line speaks to the DM in the app's words",
-        );
+        // The Log is a closed section beside Prep (SM11, AM14); the DM opens it to read it.
+        d.aside(|d| {
+            d.click("Combat log");
+            d.observe(
+                "iter-23-R-FJ10",
+                d.has_containing("Fight prepared from the saved encounter.")
+                    && !d.has_containing("DM run prepared")
+                    && !d.has_containing("Rules are resolved by the DM"),
+                "The Log's first line speaks to the DM in the app's words",
+            );
+            d.click("Combat log");
+        });
         d.observe(
             "T14.8",
             d.has(ROLL_ENCOUNTER) && d.has("Roll gems for Vault Guard"),

@@ -6201,17 +6201,9 @@ impl Run {
                                         ..egui::Margin::ZERO
                                     })
                                     .show(ui, |ui| {
-                                        if choosing {
-                                            design::section(ui, "Combat log", |ui| {
-                                                self.log_tab(ui)
-                                            });
-                                        } else {
-                                            design::heading(
-                                                ui,
-                                                design::Heading::Label("Combat log"),
-                                            );
-                                            self.log_tab(ui);
-                                        }
+                                        // SM11, AM14: Prep's peer, so one form, closed, with
+                                        // or without choices to make.
+                                        design::section(ui, "Combat log", |ui| self.log_tab(ui));
                                     });
                             });
                     }
