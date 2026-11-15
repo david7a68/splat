@@ -10917,10 +10917,12 @@ mod tests {
         harness.run_steps(1);
         harness.key_press(Key::Enter);
         harness.run_steps(2);
+        // Nothing pressed: no refusal either (the run's own check refuses a roll with no bonus).
+        let pressed = (run.borrow().state.participants.len(), run.borrow().error.clone());
         assert_eq!(
-            run.borrow().state.participants.len(),
-            rows,
-            "m-r0-R35-enter: Enter adds nothing while Add waits"
+            pressed,
+            (rows, None),
+            "m-r0-R35-enter: Enter presses nothing while Add waits"
         );
         harness
             .get_by_label("Initiative total for Mist Riders")
