@@ -2281,6 +2281,15 @@ thread_local! {
     pub(crate) static LOG_KEY_SHARES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+/// How a field whose act writes a Log line leaves with its act (`Reader::log_field_opens`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LogAct {
+    /// The act puts its row back in the field's place (Status).
+    Replaces,
+    /// A picker under the row that closes with its act (Place, Part of).
+    Picker,
+}
+
 /// The room a Log act's new entry takes under the body (ruling R30, D-2): a Log heading and one
 /// entry of at most two prose lines. A fixed size from tokens and line heights, never from the
 /// content.
@@ -3579,9 +3588,13 @@ impl Reader {
     }
 
     /// A field whose act writes a Log line opens in this pass (Status, Place, Part of): the
-    /// one helper for all three.
-    fn log_field_opens(&mut self) {
-        self.log_opening = true;
+    /// one helper for all three. All three keep the Log room under the body while open. A field
+    /// that its act replaces in place (Status: `Change` comes back where the field was) also
+    /// scrolls that room into view in this pass. A picker does not: it closes with its act and
+    /// gives back its own height, more than the room, so a scroll at its opening would be
+    /// undone by the scroll area's clamp and move `Change` down.
+    fn log_field_opens(&mut self, field: LogAct) {
+        self.log_opening = field == LogAct::Replaces;
         self.opening_field = None;
     }
 
@@ -4734,7 +4747,7 @@ impl Reader {
                         ..Default::default()
                     });
                     if key == "in" {
-                        self.log_field_opens();
+                        self.log_field_opens(LogAct::Picker);
                     }
                 }
             });
@@ -4786,7 +4799,7 @@ impl Reader {
                         focus: true,
                         ..Default::default()
                     });
-                    self.log_field_opens();
+                    self.log_field_opens(LogAct::Picker);
                 }
             });
         }
@@ -5118,7 +5131,7 @@ impl Reader {
                 // the entry opened: the other reader or Obsidian may have changed it since.
                 status(&item.entry).clone_into(&mut self.status);
                 self.status_editing = true;
-                self.log_field_opens();
+                self.log_field_opens(LogAct::Replaces);
                 self.status_select = true;
             }
         }

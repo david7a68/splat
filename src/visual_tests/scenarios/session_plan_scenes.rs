@@ -1554,13 +1554,20 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     );
 
     // D-2 (a) for Place, in World's reader at 960: `Change` on Place opens its picker, and the
-    // room for the Log entry comes into view in that pass. `Clear value` writes
-    // `Place … → not set.` into that room. The room holds two lines and this entry needs one, so
+    // room for the Log entry comes into view in that pass. Choosing `Riverside Mill` writes
+    // `Place Ashfall Keep → Riverside Mill.` into that room. The room holds two lines and this entry needs one, so
     // the content gives that line back: `Change` may move by one line, never more and never
     // out of view (ruling R30's amendment; weaker than "moves nothing").
     d.set_base(SMALL);
     // The note was deleted above (state 07); it comes back with its place set.
     fs::write(&path, &before).unwrap();
+    entry(
+        d,
+        "Locations/Riverside Mill.md",
+        "Riverside Mill",
+        "location",
+        "",
+    );
     d.app_mut().lookup.refresh();
     d.settle();
     if d.has("Close Lookup") {
@@ -1572,7 +1579,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     d.settle();
     d.expect("Change Place");
     d.click("Change Place");
-    d.expect("Clear value");
+    d.expect("Find a location");
     let world_reader = |d: &Driver<'_>| {
         d.place_of("Resize World notes column").map(|splitter| {
             egui::Rect::from_min_max(
@@ -1585,11 +1592,12 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         |d: &Driver<'_>| world_reader(d).and_then(|pane| d.painted_word_rect(VARRA_BLACK, pane));
     let _ = place_title;
     let before_clear = d.place_of("Change Place");
-    d.click("Clear value");
+    d.type_text("Riverside");
+    d.click("Riverside Mill");
     d.expect("Undo change to Place");
     let after_clear = d.place_of("Change Place");
     let in_view = d.in_view("Change Place");
-    const PLACE_ENTRY: &str = "→ not set.";
+    const PLACE_ENTRY: &str = "→ Riverside Mill.";
     let mut place_capture = Vec::new();
     d.state_prepared("place-cleared-log-in-view", Sizes::Default, |d| {
         d.settle();
