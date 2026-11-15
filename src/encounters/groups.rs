@@ -6060,6 +6060,7 @@ mod tests {
                             ui.available_width(),
                             &campaign.path,
                             None,
+                            None,
                         );
                         let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
                             let Encounters {
