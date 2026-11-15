@@ -606,32 +606,67 @@ pub(crate) fn file_line(ui: &mut egui::Ui, root: &std::path::Path, relative: &st
     ui.horizontal_wrapped(|ui| crate::world::entry_file_links(ui, &path, true));
 }
 
-/// The encounter file's unread rows, one message each: an unread roster row in its error tone
-/// (`unread_row_tone`, R41), any other flag of the file as a warning. The last message says what
-/// to do, and the file's path and links start at its words, as every message's actions do.
-fn unread_roster_rows(
-    ui: &mut egui::Ui,
-    root: &std::path::Path,
-    path: &str,
-    notes: &[(String, Tone)],
+/// The encounter file's flags (`unread_notes`), the unread roster rows among them (`faults`) and
+/// the file's path in the campaign.
+struct UnreadRows {
+    notes: Vec<(String, Tone)>,
     faults: usize,
-) {
-    let Some(((last, last_tone), before)) = notes.split_last() else {
-        return;
-    };
-    for (note, tone) in before {
-        design::message(ui, *tone, note);
+    path: String,
+}
+
+/// One flag as a footer fault, and the file line the last one holds.
+struct UnreadFault {
+    fault: EncounterFault,
+    file: Option<String>,
+}
+
+impl UnreadFault {
+    /// The fault, with its file's line (`Edit in Obsidian`, `Show file`) under `root`.
+    fn file_in(&self, root: &std::path::Path) -> design::outcome::FaultMessage<FooterPress> {
+        let message = design::outcome::FaultMessage::new(&self.fault);
+        match &self.file {
+            Some(path) => message.file(design::outcome::FileLine::new(root, path).edit().show()),
+            None => message,
+        }
     }
-    if faults == 0 {
-        design::message(ui, *last_tone, last);
-        return;
+}
+
+impl UnreadRows {
+    /// One fault each: an unread roster row in its error tone (`unread_row_tone`, R41), any
+    /// other flag as a warning. With unread roster rows, the last fault says what to do and
+    /// holds the file's line, whose path and links start at its words.
+    fn faults(self) -> Vec<UnreadFault> {
+        let Self {
+            mut notes,
+            faults,
+            path,
+        } = self;
+        let Some((last, last_tone)) = notes.pop() else {
+            return Vec::new();
+        };
+        let mut found: Vec<UnreadFault> = notes
+            .into_iter()
+            .map(|(note, tone)| UnreadFault {
+                fault: EncounterFault::FileFlag(note, tone),
+                file: None,
+            })
+            .collect();
+        found.push(if faults == 0 {
+            UnreadFault {
+                fault: EncounterFault::FileFlag(last, last_tone),
+                file: None,
+            }
+        } else {
+            UnreadFault {
+                fault: EncounterFault::FileFlag(
+                    format!("{last} {}", fix_roster_rows(faults)),
+                    unread_row_tone(),
+                ),
+                file: Some(path),
+            }
+        });
+        found
     }
-    design::message_with_actions(
-        ui,
-        unread_row_tone(),
-        &format!("{last} {}", fix_roster_rows(faults)),
-        |ui| file_line(ui, root, path),
-    );
 }
 
 fn roster_fault_reason(path: &str, faults: &[RosterFault]) -> Option<String> {
@@ -1512,22 +1547,6 @@ fn editor_panes_width(ui: &egui::Ui) -> f32 {
     };
     ui.available_width()
         .min(ROSTER_MAX_WIDTH + add_width + design::S)
-}
-
-/// A pane's body between where the cursor is and its message footer's top (`bottom`, from
-/// `Footer::show`). Panels and scroll areas inside it end there: egui keeps a `Ui`'s own bottom
-/// below what it already holds, so the pane's `Ui` alone does not stop them.
-pub(super) fn body_above(ui: &mut egui::Ui, bottom: f32) -> egui::Ui {
-    let top = ui.cursor().top();
-    let rect = egui::Rect::from_min_max(
-        egui::pos2(ui.max_rect().left(), top),
-        egui::pos2(ui.max_rect().right(), bottom.max(top)),
-    );
-    ui.new_child(
-        egui::UiBuilder::new()
-            .max_rect(rect)
-            .layout(egui::Layout::top_down(egui::Align::Min)),
-    )
 }
 
 fn editor_save_state(
@@ -2475,25 +2494,36 @@ fn replace_missing_creature(
     let query = search.to_lowercase();
     // The five, kept for this picker and worked out again only when the words or the
     // campaign's encounters (a new read: `Snapshot::revision`) change: a repaint ranks nothing
-    // (review of PR 450, P2).
-    let ranked_key = key.with("ranked");
-    let found = match ui
-        .ctx()
-        .data(|data| data.get_temp::<ReplacementKept>(ranked_key))
-        .filter(|kept| kept.snapshot == snapshot.revision && kept.query == query)
-    {
-        Some(kept) => kept.found,
+    // (review of PR 450, P2). They live while the picker is drawn (`ReplacementPickers`).
+    let frame = ui.ctx().cumulative_frame_nr();
+    let kept = ui.ctx().data_mut(|data| {
+        let pickers = data.get_temp_mut_or_default::<ReplacementPickers>(replacement_pickers_id());
+        pickers.sweep(frame);
+        pickers
+            .kept
+            .get_mut(&key)
+            .filter(|kept| kept.snapshot == snapshot.revision && kept.query == query)
+            .map(|kept| {
+                kept.drawn = frame;
+                kept.found.clone()
+            })
+    });
+    let found = match kept {
+        Some(found) => found,
         None => {
             let found = std::sync::Arc::new(replacement_indices(&snapshot.creatures, &query));
             ui.ctx().data_mut(|data| {
-                data.insert_temp(
-                    ranked_key,
-                    ReplacementKept {
-                        snapshot: snapshot.revision,
-                        query: query.clone(),
-                        found: found.clone(),
-                    },
-                );
+                data.get_temp_mut_or_default::<ReplacementPickers>(replacement_pickers_id())
+                    .kept
+                    .insert(
+                        key,
+                        ReplacementKept {
+                            snapshot: snapshot.revision,
+                            query: query.clone(),
+                            found: found.clone(),
+                            drawn: frame,
+                        },
+                    );
             });
             found
         }
@@ -2562,12 +2592,49 @@ fn replacement_indices(creatures: &[Creature], query: &str) -> Vec<usize> {
     found.into_iter().map(|(.., at)| at).take(5).collect()
 }
 
-/// One replacement picker's five, with the read of the encounters and the words they are for.
+/// One replacement picker's five, with the read of the encounters and the words they are for,
+/// and the frame that last drew the picker.
 #[derive(Clone)]
 struct ReplacementKept {
     snapshot: Uuid,
     query: String,
     found: std::sync::Arc<Vec<usize>>,
+    drawn: u64,
+}
+
+/// Every replacement picker's five in one context, by the picker's id (its row's). A picker
+/// that no frame drew since the last one has closed (its row folded, its draft or the page
+/// gone): the store's sweep, once per frame when a picker draws, drops its five. So the store
+/// holds the pickers of the last frame that drew one, not every row ever opened (review of
+/// PR 466, P3).
+#[derive(Clone, Default)]
+struct ReplacementPickers {
+    kept: std::collections::HashMap<egui::Id, ReplacementKept>,
+    swept: Option<u64>,
+}
+
+impl ReplacementPickers {
+    fn sweep(&mut self, frame: u64) {
+        if self.swept == Some(frame) {
+            return;
+        }
+        self.swept = Some(frame);
+        self.kept.retain(|_, kept| kept.drawn + 1 >= frame);
+    }
+}
+
+fn replacement_pickers_id() -> egui::Id {
+    egui::Id::new("encounters_replacement_pickers")
+}
+
+/// The number of replacement pickers whose five one context keeps, for a test of their end.
+#[cfg(test)]
+fn kept_replacement_pickers(ctx: &egui::Context) -> usize {
+    ctx.data_mut(|data| {
+        data.get_temp_mut_or_default::<ReplacementPickers>(replacement_pickers_id())
+            .kept
+            .len()
+    })
 }
 
 // Creatures the replacement picker visited on this thread, for a test that a repaint visits
@@ -3129,6 +3196,9 @@ enum EncounterFault {
     SeparationFailed(String),
     /// A warning of a group's file that no member row states.
     FileWarning(String),
+    /// A flag of the encounter's file (`unread_notes`) in its tone: an unread roster row is an
+    /// error (R41, `unread_row_tone`), any other flag a warning.
+    FileFlag(String, Tone),
     /// The draft cannot be saved as it is: a missing creature, an empty group. The DM fixes
     /// it in the editor.
     Invalid(String),
@@ -3149,10 +3219,12 @@ impl design::outcome::Fault for EncounterFault {
     fn severity(&self) -> design::outcome::Severity {
         match self {
             Self::Failed(_) => design::outcome::Severity::NotSaved,
+            Self::FileFlag(_, Tone::Error) => design::outcome::Severity::CannotRead,
             Self::RunFolder(fault) => fault.severity(),
             Self::RunDeletedUnsent(_)
             | Self::SeparationFailed(_)
             | Self::FileWarning(_)
+            | Self::FileFlag(..)
             | Self::Invalid(_) => design::outcome::Severity::NeedsFixing,
         }
     }
@@ -3172,6 +3244,8 @@ impl design::outcome::Fault for EncounterFault {
                 .unwrap_or(crate::sentence!("The note was not changed.")),
             Self::FileWarning(words) => design::outcome::Sentence::outside(words.as_str())
                 .unwrap_or(crate::sentence!("The group’s file has a problem.")),
+            Self::FileFlag(words, _) => design::outcome::Sentence::outside(words.as_str())
+                .unwrap_or(crate::sentence!("The encounter’s file has a problem.")),
             Self::Invalid(words) => design::outcome::Sentence::outside(words.as_str())
                 .unwrap_or(crate::sentence!("Save cannot write this draft yet.")),
         }
@@ -4955,77 +5029,84 @@ impl Encounters {
                 }
             });
         });
-        // A refused Save's reason sits in the pane's footer, so the fields keep their place.
-        let mut footer = design::Footer::new(
+        // A refused Save's reason sits in the pane's footer (typed: migration-32 L2c), so the
+        // fields keep their place. The pane's body fills its room: the creature's text is a
+        // Markdown editor as tall as the room under the fields.
+        let frame = design::outcome::PaneFrame::new(ui);
+        let mut messages = design::outcome::Messages::<design::outcome::NoPress>::new(
+            &frame,
             ("creature_footer", editor.path.clone()),
             ui.available_width(),
         );
         if let Some(error) = editor.error.clone() {
-            footer.legacy_reason(error.clone(), move |ui| {
-                design::message(ui, Tone::Error, &error);
-            });
+            messages.outcome(design::outcome::FaultMessage::new(&EncounterFault::Failed(
+                error,
+            )));
         }
-        let bottom = footer.show_by_hand(ui);
-        let mut body = body_above(ui, bottom);
-        let ui = &mut body;
-        // As wide as the pane: a form's fixed width would push the scroll bar past its edge.
-        // AK2, FK3: `text_input` takes the frame's width, so the field ends where Save does.
-        design::field(ui, "Name", None, None, |ui| {
-            let width = ui.available_width();
-            design::line_field(
-                ui,
-                CREATURE_NAME.of(design::TextKey::from_data(editor.path.clone())),
-                "Name",
-                &mut editor.fields.name,
-                "Name",
-                width,
-            )
-        });
-        let focus_hp = std::mem::take(&mut editor.focus);
-        ui.horizontal(|ui| {
-            design::field(ui, "Hit points", None, None, |ui| {
-                let response = design::number_field(
+        let body = design::pane::Body::Fills(design::pane::Fills::because(
+            design::pane::FillsReason::MarkdownEditor,
+        ));
+        let _ = messages.pane(ui, body, |ui| {
+            // As wide as the pane: a form's fixed width would push the scroll bar past its edge.
+            // AK2, FK3: `text_input` takes the frame's width, so the field ends where Save does.
+            design::field(ui, "Name", None, None, |ui| {
+                let width = ui.available_width();
+                design::line_field(
                     ui,
-                    "Hit points",
-                    &mut editor.fields.hp,
-                    "HP",
-                    56.0,
-                    Density::Read.control(),
-                );
-                if focus_hp {
-                    design::focus_and_select(ui, response.id, &editor.fields.hp);
-                }
+                    CREATURE_NAME.of(design::TextKey::from_data(editor.path.clone())),
+                    "Name",
+                    &mut editor.fields.name,
+                    "Name",
+                    width,
+                )
             });
-            design::field(ui, "Armor class", None, None, |ui| {
-                design::number_field(
-                    ui,
-                    "Armor class",
-                    &mut editor.fields.armor_class,
-                    "AC",
-                    56.0,
-                    Density::Read.control(),
-                );
-            });
-        });
-        // The file's source, closed until wanted: the common changes have fields above.
-        design::quiet_section(ui, "Its text, as Markdown", |ui| {
-            let room = ui.available_height();
-            egui::ScrollArea::vertical()
-                .id_salt("creature_text")
-                .max_height(room)
-                .auto_shrink([false, true])
-                .show(ui, |ui| {
-                    let output = egui::TextEdit::multiline(&mut editor.fields.body)
-                        .font(egui::TextStyle::Monospace)
-                        .desired_width(ui.available_width() - 2.0 * design::S - design::M)
-                        .margin(egui::vec2(design::S, design::S))
-                        .show(ui);
-                    if let Some(note) = crate::markdown_source::pressed_note_link(ui, &output, None)
-                    {
-                        crate::markdown_view::send_note_link(ui.ctx(), note, None);
+            let focus_hp = std::mem::take(&mut editor.focus);
+            ui.horizontal(|ui| {
+                design::field(ui, "Hit points", None, None, |ui| {
+                    let response = design::number_field(
+                        ui,
+                        "Hit points",
+                        &mut editor.fields.hp,
+                        "HP",
+                        56.0,
+                        Density::Read.control(),
+                    );
+                    if focus_hp {
+                        design::focus_and_select(ui, response.id, &editor.fields.hp);
                     }
-                    design::named(ui, &output.response, "Creature text");
                 });
+                design::field(ui, "Armor class", None, None, |ui| {
+                    design::number_field(
+                        ui,
+                        "Armor class",
+                        &mut editor.fields.armor_class,
+                        "AC",
+                        56.0,
+                        Density::Read.control(),
+                    );
+                });
+            });
+            // The file's source, closed until wanted: the common changes have fields above.
+            design::quiet_section(ui, "Its text, as Markdown", |ui| {
+                let room = ui.available_height();
+                egui::ScrollArea::vertical()
+                    .id_salt("creature_text")
+                    .max_height(room)
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| {
+                        let output = egui::TextEdit::multiline(&mut editor.fields.body)
+                            .font(egui::TextStyle::Monospace)
+                            .desired_width(ui.available_width() - 2.0 * design::S - design::M)
+                            .margin(egui::vec2(design::S, design::S))
+                            .show(ui);
+                        if let Some(note) =
+                            crate::markdown_source::pressed_note_link(ui, &output, None)
+                        {
+                            crate::markdown_view::send_note_link(ui.ctx(), note, None);
+                        }
+                        design::named(ui, &output.response, "Creature text");
+                    });
+            });
         });
         if save {
             Some(CreatureStep::Save)
@@ -5676,6 +5757,7 @@ impl Encounters {
         width: f32,
         root: &std::path::Path,
         groups_reason: Option<(EncounterFault, String)>,
+        unread: Option<UnreadRows>,
     ) -> design::outcome::Messages<'f, FooterPress> {
         use design::outcome::FaultMessage;
         self.record_member_results();
@@ -5730,6 +5812,13 @@ impl Encounters {
             // says the cause (an empty group, a blank name or side, a member's row), in its own
             // typed tone (R41).
             messages.outcome(FaultMessage::new(&reason));
+        }
+        // The encounter file's flags last, one fault each; the last one says what to do and
+        // holds the file's line with its links.
+        if let Some(unread) = unread {
+            for fault in unread.faults() {
+                messages.outcome(fault.file_in(root));
+            }
         }
         messages
     }
@@ -6499,8 +6588,8 @@ impl Encounters {
             .as_ref()
             .map(|snapshot| &snapshot.known_creature_names)
             .unwrap_or(&no_names);
-        // Drawn below the header, so a fault does not move the name field or its actions.
-        let unread_rows = self.draft.as_ref().map(|draft| {
+        // In the footer, so a fault does not move the name field or its actions.
+        let unread_rows = self.draft.as_ref().and_then(|draft| {
             let faults = Entry::parse(&draft.path, &draft.source)
                 .map(|entry| roster_faults(&entry, names))
                 .unwrap_or_default();
@@ -6510,7 +6599,11 @@ impl Encounters {
             // move there; nothing is copied.
             let rows: Arc<Vec<RosterFault>> = Arc::new(faults);
             ui.data_mut(|data| data.insert_temp(roster_fault_rows_id(draft.id), rows));
-            (notes, count, draft.path.clone())
+            (!notes.is_empty()).then(|| UnreadRows {
+                notes,
+                faults: count,
+                path: draft.path.clone(),
+            })
         });
         let dirty = self.encounter_dirty();
         let creature_dirty = self.creature_dirty();
@@ -6898,32 +6991,6 @@ impl Encounters {
         self.refresh_validation_error(false, edit_input(ui.ctx()));
         // Shared, so an unchanged frame copies no list of names.
         let difficulty = self.draft_difficulty();
-        // The encounter file's unread rows: a warning whose file line has its path and links.
-        // It keeps main's footer (gap: the typed footer holds no file line with links), placed
-        // at the page's bottom, at most a third of the page and scrolled inside that, so it never
-        // moves a pane heading or a row and never pushes the panes out of reach (review of
-        // PR 347). One counted `Ban::Pane` (`show_by_hand`).
-        let mut unread = design::Footer::new(
-            (
-                "encounter_unread_rows",
-                self.draft.as_ref().map(|draft| draft.results_key.id()),
-            ),
-            ui.available_width(),
-        );
-        if let Some((notes, faults, path)) = unread_rows.filter(|(notes, ..)| !notes.is_empty()) {
-            let root = active.path.clone();
-            let words = notes
-                .iter()
-                .map(|(note, _)| note.as_str())
-                .collect::<Vec<_>>()
-                .join(" ");
-            unread.legacy_reason(words, move |ui| {
-                unread_roster_rows(ui, &root, &path, &notes, faults);
-            });
-        }
-        let bottom = unread.show_by_hand(ui);
-        let mut body = body_above(ui, bottom);
-        let ui = &mut body;
         // FA2, AB1: the editor's results and Save's reason sit in one footer pinned below the
         // panes, so none of them moves the roster, its rows or the search. Results with a live
         // Undo come first, then reasons. The roster and Add participants are columns, each with
@@ -6935,6 +7002,7 @@ impl Encounters {
             ui.available_width(),
             &active.path,
             groups_footer.filter(|_| dirty),
+            unread_rows,
         );
         let paned = messages.pane(
             ui,
@@ -8653,6 +8721,43 @@ mod tests {
             "the list's first five"
         );
         assert_eq!(visited() - before, 5, "it stops at the fifth");
+        // Review of PR 466, P3: a closed picker's five go. Five rows' pickers in turn, each
+        // ranking its words, then none open: the store keeps no closed row's five.
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(600.0, 600.0))
+            .build_ui_state(
+                |ui, (snapshot, open): &mut (Snapshot, Option<u8>)| {
+                    if let Some(row) = *open {
+                        ui.push_id(row, |ui| {
+                            let _ = replace_missing_creature(ui, snapshot, 1, "Missing");
+                        });
+                    }
+                },
+                (Snapshot::load(&active, &[]).unwrap(), None),
+            );
+        crate::design::theme::install(&harness.ctx);
+        for row in 1..=5 {
+            harness.state_mut().1 = Some(row);
+            harness.run_steps(2);
+            harness
+                .get_by_label("Replacement creature")
+                .type_text("fen");
+            harness.run_steps(2);
+            assert_eq!(
+                kept_replacement_pickers(&harness.ctx),
+                1,
+                "row {row}'s picker open: its five, and no closed row's"
+            );
+            harness.state_mut().1 = None;
+            harness.run_steps(2);
+        }
+        harness.state_mut().1 = Some(1);
+        harness.run_steps(2);
+        assert_eq!(
+            kept_replacement_pickers(&harness.ctx),
+            1,
+            "five rows closed in turn, one open again: one picker's five"
+        );
     }
 
     #[test]
@@ -8850,23 +8955,37 @@ mod tests {
             let ctx = egui::Context::default();
             design::theme::install(&ctx);
             let mut bounds = egui::Rect::NOTHING;
-            let output = ctx.run(Default::default(), |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    // The encounter editor's column at 960.
-                    let column =
-                        egui::Rect::from_min_size(ui.cursor().min, egui::vec2(440.0, 2000.0));
-                    ui.scope_builder(egui::UiBuilder::new().max_rect(column), |ui| {
-                        bounds = ui.max_rect();
-                        unread_roster_rows(
-                            ui,
-                            std::path::Path::new("/campaign"),
-                            path,
-                            &notes,
-                            faults,
-                        );
+            // Migration-32 L2c: the editor's typed footer (`editor_messages`), as it draws the
+            // file's flags; a few frames, so the footer's plan is made and drawn.
+            let mut output = Default::default();
+            for _ in 0..3 {
+                output = ctx.run(Default::default(), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        // The encounter editor's column at 960.
+                        let column =
+                            egui::Rect::from_min_size(ui.cursor().min, egui::vec2(440.0, 2000.0));
+                        ui.scope_builder(egui::UiBuilder::new().max_rect(column), |ui| {
+                            bounds = ui.max_rect();
+                            let frame = design::outcome::PaneFrame::new(ui);
+                            let mut messages = design::outcome::Messages::<FooterPress>::new(
+                                &frame,
+                                "unread",
+                                ui.available_width(),
+                            );
+                            let unread = UnreadRows {
+                                notes: notes.clone(),
+                                faults,
+                                path: path.to_owned(),
+                            };
+                            for fault in unread.faults() {
+                                messages.outcome(fault.file_in(std::path::Path::new("/campaign")));
+                            }
+                            let _ = messages.pane(ui, design::Body::Content, |_| ());
+                        });
                     });
                 });
-            });
+            }
+            let output: egui::FullOutput = output;
             assert!(bounds.width() <= 440.0 + 0.5, "{bounds:?}");
             let painted: Vec<(String, egui::Rect)> = output
                 .shapes
@@ -8918,10 +9037,25 @@ mod tests {
                     "an earlier warning comes first and has no instruction: {text}"
                 );
             }
-            let shown = find(path);
+            // The typed file line (design system, "A file line that follows a warning"): the
+            // path whole when it fits its line, else cut in the middle, its start and end kept
+            // (the whole path is its hover and its name).
+            let head = &path[..path.len().min(10)];
+            let shown: Vec<_> = painted
+                .iter()
+                .filter(|(text, _)| {
+                    text == path
+                        || (text.contains('…')
+                            && text.starts_with(head)
+                            && path.ends_with(text.rsplit('…').next().unwrap_or_default()))
+                })
+                .collect();
             assert_eq!(shown.len(), 1, "the path is painted once");
-            let (text, place) = shown[0];
-            assert_eq!(text, path, "the path is whole, with no ellipsis");
+            let (text, place) = (&shown[0].0, shown[0].1);
+            assert!(
+                text == path || path.len() > 60,
+                "a short path is whole, with no ellipsis: {text}"
+            );
             assert!(
                 (place.left() - last.left()).abs() <= 0.5
                     && place.top() >= last.bottom()
@@ -9629,12 +9763,17 @@ mod tests {
         use egui_kittest::kittest::{NodeT, Queryable};
         let dir = tempfile::tempdir().unwrap();
         creature(dir.path(), "Wolf", false);
-        let mut editor = CreatureEditor::open(dir.path(), "Wolf.md").unwrap();
-        let mut harness = egui_kittest::Harness::new(move |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                Encounters::creature_pane(ui, &mut editor);
-            });
-        });
+        let editor = CreatureEditor::open(dir.path(), "Wolf.md").unwrap();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(480.0, 600.0))
+            .build_state(
+                |ctx, editor: &mut CreatureEditor| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        Encounters::creature_pane(ui, editor);
+                    });
+                },
+                editor,
+            );
         design::theme::install(&harness.ctx);
         harness.run_steps(2);
         harness.get_by_label("Done with this creature");
@@ -9659,6 +9798,52 @@ mod tests {
             !texts
                 .iter()
                 .any(|text| text.contains("No changes to save."))
+        );
+        // Migration-32 L2c: a refused Save's reason is a typed fault in the pane's footer, at
+        // the pane's bottom: the fields keep their place, and an unchanged frame makes no plan,
+        // sorts, names, fits or lays out nothing.
+        let name_top = |harness: &egui_kittest::Harness<'_, CreatureEditor>| {
+            harness
+                .query_all_by_label("Name")
+                .map(|node| node.rect().top())
+                .fold(f32::INFINITY, f32::min)
+        };
+        let before = name_top(&harness);
+        const REFUSED: &str = "Splat could not write Wolf.md.";
+        harness.state_mut().error = Some(REFUSED.to_owned());
+        harness.run_steps(4);
+        let reason = harness
+            .query_all_by_role_and_label(egui::accesskit::Role::Label, REFUSED)
+            .next()
+            .expect("the reason is painted")
+            .rect();
+        assert_eq!(name_top(&harness), before, "the fields keep their place");
+        assert!(
+            reason.top()
+                >= harness
+                    .get_by_label("Its text, as Markdown")
+                    .rect()
+                    .bottom()
+                && reason.bottom() <= 600.0,
+            "the reason sits in the footer, under the creature's text: {reason:?}"
+        );
+        let quiet = crate::design::outcome::footer_work();
+        harness.run_steps(4);
+        let after = crate::design::outcome::footer_work();
+        assert!(
+            after.compared > quiet.compared,
+            "the frames drew the footer"
+        );
+        assert_eq!(
+            (
+                after.plans - quiet.plans,
+                after.sorted - quiet.sorted,
+                after.named - quiet.named,
+                after.undo_fits - quiet.undo_fits,
+                after.laid - quiet.laid,
+            ),
+            (0, 0, 0, 0, 0),
+            "an unchanged frame of the creature's footer"
         );
     }
 
@@ -10074,6 +10259,7 @@ mod tests {
                             &frame,
                             ui.available_width(),
                             &campaign.path,
+                            None,
                             None,
                         );
                         let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
@@ -11046,8 +11232,13 @@ mod tests {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     // The kept result in the editor's own footer; its Undo goes by its ticket.
                     let frame = design::outcome::PaneFrame::new(ui);
-                    let messages =
-                        editor.editor_messages(&frame, ui.available_width(), &campaign.path, None);
+                    let messages = editor.editor_messages(
+                        &frame,
+                        ui.available_width(),
+                        &campaign.path,
+                        None,
+                        None,
+                    );
                     let paned = messages.pane(ui, design::pane::Body::Content, |ui| {
                         if !editor.encounter_disk_view(ui, &campaign, &[]) {}
                     });
@@ -11704,7 +11895,10 @@ mod tests {
              view above the warnings' region {region:?} ({} warnings)",
             warnings.len()
         );
-        let show_file = harness.get_by_label("Show file").accesskit_node().id();
+        // The typed file line names its link with the file (`Show file: <path>`).
+        let show_file_name = format!("Show file: {path}");
+        let show_file_link = || By::new().label(show_file_name.as_str());
+        let show_file = harness.get(show_file_link()).accesskit_node().id();
         harness.event(egui::Event::AccessKitActionRequest(
             egui::accesskit::ActionRequest {
                 target: show_file,
@@ -11713,10 +11907,30 @@ mod tests {
             },
         ));
         harness.run_steps(4);
-        let link = harness.get_by_label("Show file").rect();
+        let link = harness.get(show_file_link()).rect();
         assert!(
             whole(link),
             "the file line’s Show file is reached by the footer’s scroll: {link:?}"
+        );
+        // Migration-32 L2c: the unread rows are typed faults in the editor's one footer; an
+        // unchanged frame makes no plan, sorts, names, fits or lays out nothing.
+        let quiet = crate::design::outcome::footer_work();
+        harness.run_steps(4);
+        let after = crate::design::outcome::footer_work();
+        assert!(
+            after.compared > quiet.compared,
+            "the frames drew the footer"
+        );
+        assert_eq!(
+            (
+                after.plans - quiet.plans,
+                after.sorted - quiet.sorted,
+                after.named - quiet.named,
+                after.undo_fits - quiet.undo_fits,
+                after.laid - quiet.laid,
+            ),
+            (0, 0, 0, 0, 0),
+            "an unchanged frame of the editor's footer, 30 unread rows in it"
         );
         // A warning that comes and goes, at 960 and in the narrow layout (880).
         // Each pane heading or tab by what it names (its count may change), and its top.
