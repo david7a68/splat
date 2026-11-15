@@ -2281,6 +2281,72 @@ thread_local! {
     pub(crate) static LOG_KEY_SHARES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+/// How a field whose act writes a Log line leaves with its act (`Reader::log_field_opens`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LogAct {
+    /// The act puts its row back in the field's place (Status).
+    Replaces,
+    /// A picker under the row that closes with its act (Place, Part of).
+    Picker,
+}
+
+/// The room a Log act's new entry takes under the body (ruling R30, D-2): a Log heading and one
+/// entry of at most two prose lines. A fixed size from tokens and line heights, never from the
+/// content.
+fn log_room(ui: &egui::Ui) -> f32 {
+    let prose =
+        ui.fonts_mut(|fonts| fonts.row_height(&crate::design::reader::prose_type(ui).font(ui)));
+    design::L + Type::Heading.line() + design::S + 2.0 * prose
+}
+
+/// What the act's result and its Undo take from the pane's view when they come into its footer:
+/// the view's clip shrinks by this, its scroll does not (a pane fault, known), so the opening
+/// scroll shows the room this much above the view's bottom.
+fn log_result_room() -> f32 {
+    design::S + 2.0 * Density::Read.control()
+}
+
+/// The Log room under the body while a Log act's field is open (`log_room`): the one raw space
+/// of D-2, as tall as `log_room`. Its rect, for the opening scroll.
+#[allow(
+    clippy::disallowed_methods,
+    reason = "staged: raw space that a design part replaces (design::results::STAGED_ALLOWS)"
+)]
+fn log_room_space(ui: &mut egui::Ui) -> egui::Rect {
+    let top = ui.cursor().top();
+    let height = log_room(ui);
+    ui.add_space(height);
+    egui::Rect::from_min_max(
+        egui::pos2(ui.max_rect().left(), top),
+        egui::pos2(ui.max_rect().right(), top + height),
+    )
+}
+
+/// Scroll the enclosing column the least, at once, so that `rect` is whole inside `view` (the
+/// pane's clip). A rect taller than the view is not scrolled to: then its top would leave.
+fn scroll_least(ui: &egui::Ui, view: egui::Rect, rect: egui::Rect) {
+    if let Some(delta) = least_scroll(view, rect) {
+        ui.scroll_with_delta_animation(
+            egui::vec2(0.0, delta),
+            egui::style::ScrollAnimation::none(),
+        );
+    }
+}
+
+/// The least scroll (`scroll_with_delta`'s sign) that puts `rect` whole inside `view`; `None`
+/// when it is already, or when it is taller than the view.
+fn least_scroll(view: egui::Rect, rect: egui::Rect) -> Option<f32> {
+    if rect.height() > view.height() {
+        None
+    } else if rect.bottom() > view.bottom() {
+        Some(view.bottom() - rect.bottom())
+    } else if rect.top() < view.top() {
+        Some(view.top() - rect.top())
+    } else {
+        None
+    }
+}
+
 /// Lookup's and the World page's reader, and its controls for the item on show.
 /// What a reader holds for the DM that no reset of the reader may drop: the DM's typed words,
 /// and the results whose end events are their own (`Kept::ENDS`). Lookup's Clear and World's
@@ -2381,6 +2447,12 @@ pub struct Reader {
     pub form_shown_elsewhere: Option<Uuid>,
     /// The note whose edit form this reader drew, and the pass it drew it in.
     form_drawn: Option<(Uuid, u64)>,
+    /// A field whose act writes a Log line (Status, Place, Part of) opened in this pass: the
+    /// end of this draw brings the reader's end and its Log room into view (D-2). Nothing of
+    /// it is kept after that pass.
+    log_opening: bool,
+    /// Where that field drew in the same pass.
+    opening_field: Option<egui::Rect>,
 }
 
 /// A reader's `Add to fight`: what joins the open run, by the run's own add
@@ -3434,6 +3506,11 @@ impl Reader {
             // The reader's gap now follows these words, not an empty value block.
             empty_value_block = false;
         }
+        // Ruling R30: while a field whose act writes a Log line is open, the room for one new
+        // Log entry and the act's result stands under the body, where the entry will go, so
+        // the entry lands in room already in view and nothing moves (D-2).
+        let log_room_open = self.log_act_open();
+        let mut room_at = None;
         if item.is_note() {
             // In Lookup, a plain note's prose has the reader's gap below the kind line, as every
             // entry's has. World's plain note follows its file line directly.
@@ -3442,6 +3519,9 @@ impl Reader {
             }
             let followed = style::measure(ui, |ui| {
                 style::markdown(ui, &item.entry.body);
+                if log_room_open {
+                    room_at = Some(log_room_space(ui));
+                }
                 related(ui, item, index)
             });
             go = go.or(followed);
@@ -3468,6 +3548,9 @@ impl Reader {
                 index,
                 empty_value_block,
                 |ui| {
+                    if log_room_open {
+                        room_at = Some(log_room_space(ui));
+                    }
                     if let Some(trackers) = trackers {
                         crate::trackers::history::show(ui, trackers, &item.entry);
                     }
@@ -3490,7 +3573,38 @@ impl Reader {
             }
             go = go.or(Some(followed));
         }
+        // The opening event's own scroll, in the pass the field opens and draws: the least that
+        // shows the field and the Log room under the body, only when the field stays whole.
+        if std::mem::take(&mut self.log_opening)
+            && let (Some(field), Some(room)) = (self.opening_field.take(), room_at)
+        {
+            let shown = egui::Rect::from_min_max(
+                field.min,
+                egui::pos2(field.right(), room.bottom() + log_result_room()),
+            );
+            scroll_least(ui, ui.clip_rect(), shown);
+        }
         go
+    }
+
+    /// A field whose act writes a Log line opens in this pass (Status, Place, Part of): the
+    /// one helper for all three. All three keep the Log room under the body while open. A field
+    /// that its act replaces in place (Status: `Change` comes back where the field was) also
+    /// scrolls that room into view in this pass. A picker does not: it closes with its act and
+    /// gives back its own height, more than the room, so a scroll at its opening would be
+    /// undone by the scroll area's clamp and move `Change` down.
+    fn log_field_opens(&mut self, field: LogAct) {
+        self.log_opening = field == LogAct::Replaces;
+        self.opening_field = None;
+    }
+
+    /// Whether a field is open whose act writes a Log line: Status, Place or Part of.
+    fn log_act_open(&self) -> bool {
+        self.status_editing
+            || self
+                .picker
+                .as_ref()
+                .is_some_and(|picker| matches!(picker.key, "in" | "part_of"))
     }
 
     fn make_entry_control(
@@ -4632,6 +4746,9 @@ impl Reader {
                         focus: true,
                         ..Default::default()
                     });
+                    if key == "in" {
+                        self.log_field_opens(LogAct::Picker);
+                    }
                 }
             });
             if key == "in" && self.place_choices_open {
@@ -4682,6 +4799,7 @@ impl Reader {
                         focus: true,
                         ..Default::default()
                     });
+                    self.log_field_opens(LogAct::Picker);
                 }
             });
         }
@@ -4730,6 +4848,9 @@ impl Reader {
             .field;
         if std::mem::take(&mut picker.focus) {
             response.request_focus();
+        }
+        if self.log_opening {
+            self.opening_field = Some(response.rect);
         }
         let matches = if key == "creature" {
             index.creatures_matching(&picker.search, 5)
@@ -5010,6 +5131,7 @@ impl Reader {
                 // the entry opened: the other reader or Obsidian may have changed it since.
                 status(&item.entry).clone_into(&mut self.status);
                 self.status_editing = true;
+                self.log_field_opens(LogAct::Replaces);
                 self.status_select = true;
             }
         }
@@ -5022,6 +5144,9 @@ impl Reader {
                 None,
                 None,
             );
+            if self.log_opening {
+                self.opening_field = Some(response.rect);
+            }
             // Change puts the keyboard in the field with its words selected, so the DM types
             // the new value at once. A pass that still holds Change's click takes the keyboard
             // from a field that was not clicked, so the request waits for a pass with no click.
@@ -6450,6 +6575,62 @@ mod tests {
     }
 
     /// Section 4.1 of the session-cycle design for `Add to Log`'s write, and its Undo.
+    /// D-2: opening a field whose act writes a Log line (Status, Place: one helper) brings the
+    /// field and the Log room into view in the opening pass, by the least scroll; when they
+    /// cannot both be in view, or are already, nothing scrolls; nothing of the opening is kept
+    /// after its pass, so later passes move nothing.
+    #[test]
+    fn a_log_field_opens_with_its_room_in_view_once() {
+        use egui_kittest::kittest::Queryable;
+        let view = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(500.0, 500.0));
+        let span = |top: f32, bottom: f32| {
+            egui::Rect::from_min_max(egui::pos2(0.0, top), egui::pos2(500.0, bottom))
+        };
+        // The room ends 40 below the view: scroll up by 40, the field stays whole in view.
+        assert_eq!(least_scroll(view, span(200.0, 540.0)), Some(-40.0));
+        // Already in view: nothing.
+        assert_eq!(least_scroll(view, span(200.0, 480.0)), None);
+        // Field and room taller than the view: nothing, the field keeps its place.
+        assert_eq!(least_scroll(view, span(100.0, 640.0)), None);
+
+        // Through the real draw: the opening is consumed in its own pass, for Status and Place.
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = sample_campaign(dir.path());
+        create_entry(&campaign, "Gate", "location").unwrap();
+        let hob = create_entry(&campaign, "Hob", "npc").unwrap();
+        let path = dir.path().join("NPCs/Hob.md");
+        let text = fs::read_to_string(&path).unwrap();
+        let text = text.replacen("---\n", "---\nsplat_in: '[[Gate]]'\n", 1);
+        fs::write(&path, text).unwrap();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let at = index
+            .position(hob)
+            .unwrap_or_else(|| panic!("fixture: {:?}", index.broken_world));
+        for change in ["Change Status", "Change Place"] {
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(egui::vec2(520.0, 600.0))
+                .build_ui_state(
+                    |ui, reader: &mut Reader| {
+                        reader.read_with(ui, &index.items[at], &index, Some(&campaign), None);
+                    },
+                    Reader::default(),
+                );
+            crate::design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            harness.get_by_label(change).click();
+            harness.run_steps(2);
+            let reader = harness.state();
+            assert!(
+                reader.log_act_open(),
+                "{change}: the field is open, with its room"
+            );
+            assert!(
+                !reader.log_opening && reader.opening_field.is_none(),
+                "{change}: nothing of the opening is kept after its pass"
+            );
+        }
+    }
+
     #[test]
     fn a_log_line_follows_the_disk_and_a_failed_write_keeps_the_words() {
         use std::os::unix::fs::PermissionsExt;
