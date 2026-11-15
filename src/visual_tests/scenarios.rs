@@ -10002,6 +10002,7 @@ pub mod gallery {
 pub mod column_resize {
     use super::*;
     use crate::design::{PANEL_MIN_WIDTH, RAIL_DRAG_MAX_WIDTH, RAIL_WIDTH, S};
+    use crate::sessions::page::{HIDE_LIST, SHOW_LIST};
 
     const CHECK: &str = "Column resize";
     const MEMBER: &str = "Brannoch Vale";
@@ -10075,7 +10076,7 @@ pub mod column_resize {
     fn the_session_fills_its_column(d: &mut Driver<'_>) {
         d.click(NAV_SESSIONS);
         new_session(d, "Room to spare");
-        let page = right_of(d, "New session");
+        let page = right_of(d, HIDE_LIST);
         d.observe(
             CHECK,
             (right_of(d, "Record this session") - page).abs() <= S,
@@ -10087,10 +10088,107 @@ pub mod column_resize {
         d.state("session-fills-its-column", Sizes::All);
     }
 
+    /// The DM hides the session list, and the session takes its room. Last in the scenario, so
+    /// no earlier state changes its number.
+    fn the_session_list_hides(d: &mut Driver<'_>) {
+        d.set_base(DEFAULT);
+        d.click(NAV_SESSIONS);
+        d.expect(HIDE_LIST);
+        // The list's row and the pane's title both start with the session's name.
+        let named = |d: &Driver<'_>, role: egui::accesskit::Role| {
+            d.nodes()
+                .into_iter()
+                .find(|node| {
+                    node.role == role && node.name.starts_with("Session 1: Room to spare ·")
+                })
+                .map(|node| node.rect)
+        };
+        let row = |d: &Driver<'_>| named(d, egui::accesskit::Role::Button);
+        let title = |d: &Driver<'_>| named(d, egui::accesskit::Role::Label).map(|rect| rect.left());
+        let (list_row, title_left, toggle) = (row(d), title(d), d.place_of(HIDE_LIST));
+        d.click(HIDE_LIST);
+        d.expect(SHOW_LIST);
+        d.observe(
+            CHECK,
+            row(d).is_none() && list_row.is_some(),
+            "A hidden list leaves the page; it stood beside the session before",
+        );
+        d.observe(
+            CHECK,
+            title(d)
+                .zip(title_left)
+                .is_some_and(|(now, before)| now < before - crate::design::XXL),
+            format!(
+                "The session takes the list's room: its title at {:?}, from {title_left:?}",
+                title(d)
+            ),
+        );
+        d.observe(
+            CHECK,
+            toggle.is_some() && d.place_of(SHOW_LIST) == toggle,
+            format!(
+                "The toggle keeps its place: {:?}, from {toggle:?}",
+                d.place_of(SHOW_LIST)
+            ),
+        );
+        d.state("session-list-hidden", Sizes::All);
+
+        // The note takes the room beside it when the DM drags its edge, and the tab row's end
+        // (Read) follows the frame's.
+        // Only a wide window has room beside the note.
+        const NOTE_EDGE: &str = "session_note_frame";
+        d.set_base(LARGE);
+        let frame = |d: &Driver<'_>| d.input_frame("Note text").map(|(frame, _)| frame);
+        let natural = frame(d).expect("the note frame is visible");
+        let edge = d.column_edge(NOTE_EDGE);
+        d.drag_column_edge(edge, edge + 300.0);
+        d.settle();
+        let wide = frame(d).expect("the note frame is visible");
+        d.observe(
+            CHECK,
+            near(wide.width(), natural.width() + 300.0) && near(wide.left(), natural.left()),
+            format!("The note widens into the gap: {wide:?}, from {natural:?}"),
+        );
+        d.observe(
+            CHECK,
+            near(right_of(d, "Read"), wide.right()),
+            format!(
+                "The tab row ends with the frame: Read at {}, the frame at {}",
+                right_of(d, "Read"),
+                wide.right()
+            ),
+        );
+        d.state_changed_at("session-note-widened", "session-list-hidden", Sizes::Large);
+        // Home on the handle gives the reader's measure back.
+        d.harness_focus_nothing();
+        assert!(d.tab_to("Resize note column"));
+        d.press(Key::Home);
+        d.observe(
+            CHECK,
+            frame(d).is_some_and(|now| near(now.width(), natural.width())),
+            format!(
+                "Home restores the note's width: {:?}, from {natural:?}",
+                frame(d)
+            ),
+        );
+        d.set_base(DEFAULT);
+        // Ctrl+\ shows it again, as wide as it was.
+        d.press_ctrl(Key::Backslash);
+        d.expect(HIDE_LIST);
+        d.observe(
+            CHECK,
+            row(d).is_some() && row(d) == list_row,
+            format!(
+                "The list comes back as it was: {:?}, from {list_row:?}",
+                row(d)
+            ),
+        );
+    }
+
     /// Write and Read share a prose measure; spare width stays outside the Write frame.
     fn the_session_tabs_fill_their_column(d: &mut Driver<'_>) {
         d.set_base(LARGE);
-        let page = right_of(d, "New session");
+        let page = right_of(d, HIDE_LIST);
         d.type_into_editor(&"The party crossed the old bridge at dusk. ".repeat(30));
         let write = d.longest_visible_line();
         d.state_prepared("session-write-keeps-prose-measure", Sizes::All, |d| {
@@ -10428,6 +10526,7 @@ pub mod column_resize {
         });
         d.press(Key::Home);
         assert!(near(entries_edge(d), edge));
+        the_session_list_hides(d);
     }
 }
 
@@ -15721,10 +15820,14 @@ pub mod session_notes {
         // The card's link, right of the Sessions page, and the card's next line of words.
         let card_link = |d: &Driver<'_>| {
             let nodes = d.nodes();
+            // The page's last header action: the list's toggle where the page is wide.
             let page_right = nodes
                 .iter()
-                .find(|node| node.name == "New session")
-                .map(|node| node.rect.right())?;
+                .filter(|node| {
+                    ["New session", crate::sessions::page::HIDE_LIST].contains(&node.name.as_str())
+                })
+                .map(|node| node.rect.right())
+                .reduce(f32::max)?;
             let link = nodes
                 .iter()
                 .filter(|node| {
