@@ -170,7 +170,7 @@ impl Tables {
                     // R36: the cause after the file's name is a sentence: a capital first.
                     message: format!(
                         "{path}: {} Built-in {} stand in until it is fixed.",
-                        capital_first(&error.replacen(
+                        splat::content::layout::cause_words(&error.replacen(
                             "the table",
                             &format!("the {label} table"),
                             1
@@ -238,15 +238,6 @@ pub fn roll(tables: &Tables) -> Result<Generated, String> {
         tables,
         &mut Random::seeded(crate::hermetic::new_uuid().as_u128() as u64),
     )
-}
-
-/// Words with their first letter as a capital (R36: a cause after a file's name).
-fn capital_first(words: &str) -> String {
-    let mut chars = words.chars();
-    chars
-        .next()
-        .map(|first| first.to_uppercase().chain(chars).collect())
-        .unwrap_or_default()
 }
 
 #[cfg(test)]

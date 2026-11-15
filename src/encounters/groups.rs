@@ -970,20 +970,11 @@ pub(crate) fn member_fault(
         // `line 15` wraps whole.
         text.push_str(&format!(" · line\u{a0}{line}"));
     }
-    format!("{text}: {}", cause_words(cause))
-}
-
-/// R36: a cause after its place (`… · line 13: Not in this campaign’s packages.`) is a
-/// sentence of its own: it starts with a capital and ends with one full stop. The member-fault
-/// form is the one place that writes it, so no caller capitalizes its cause.
-pub(crate) fn cause_words(cause: &str) -> String {
-    let cause = cause.trim().trim_end_matches('.');
-    let mut chars = cause.chars();
-    let capital: String = chars
-        .next()
-        .map(|first| first.to_uppercase().chain(chars).collect())
-        .unwrap_or_default();
-    format!("{capital}.")
+    // R36: the cause starts with a capital (`layout::cause_words`) and ends with one full stop.
+    format!(
+        "{text}: {}.",
+        splat::content::layout::cause_words(cause.trim().trim_end_matches('.'))
+    )
 }
 
 fn missing_member_name(changed: Option<&str>, link: Option<&str>) -> String {

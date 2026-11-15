@@ -232,7 +232,10 @@ fn unread_roster_row(ui: &mut egui::Ui, fault: &RosterFault) {
 }
 
 fn row_fault_words(name: &str, line: usize, problem: &str) -> String {
-    format!("{name} · line {line}: {problem}")
+    format!(
+        "{name} · line {line}: {}",
+        splat::content::layout::cause_words(problem)
+    )
 }
 
 /// Read rejected rows from a fresh parse, before catalogue reference resolution.
