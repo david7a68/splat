@@ -7937,33 +7937,46 @@ mod tests {
         }
 
         // Migration-32 L1c: `pane_then` takes the footer's messages after the body, and a footer
-        // below a short body that was not measured with its messages takes its whole room for
-        // that pass. So with egui's reruns denied (one pass a frame), the frame of a press shows
-        // the message the press brought, whole, and never the one it ended: none → one reason
-        // (a footer that comes) → three reasons in its place (a footer measured with others).
+        // that was not measured with its messages is laid out and placed in that same pass. So
+        // with egui's reruns denied (one pass a frame), the frame of a press shows the messages
+        // it brought, whole, never the ones it ended, and the next frame moves nothing: none →
+        // one reason (a footer that comes) → four in its place (a footer that grew). Below a
+        // short body the footer follows it by `S`; below a tall body (review of PR 456) it is
+        // pinned at the pane's bottom, a third of the pane at most, with no body line under it,
+        // and a press in that first frame reaches no footer control (their places from the
+        // layout before the footer moved down are not targets).
         let shown = Rc::new(Cell::new(0_usize));
-        let shown_in = shown.clone();
+        let pressed = Rc::new(Cell::new(None::<usize>));
+        let tall = Rc::new(Cell::new(false));
+        let (shown_in, pressed_in, tall_in) = (shown.clone(), pressed.clone(), tall.clone());
         let mut harness = egui_kittest::Harness::builder()
             .with_size(vec2(960.0, 640.0))
             .build_ui(move |ui| {
                 ui.label("Title");
+                let pressed = pressed_in.clone();
                 Footer::new("then_footer", ui.available_width()).pane_then(
                     ui,
                     Body::Content,
                     |ui| {
-                        for (at, name) in ["Show one", "Show three"].into_iter().enumerate() {
+                        for (at, name) in ["Show one", "Show four"].into_iter().enumerate() {
                             if ui.button(name).clicked() {
                                 shown_in.set(at + 1);
                             }
                         }
+                        if tall_in.get() {
+                            rows(ui, 60);
+                        }
                         shown_in.get()
                     },
-                    |shown, footer| {
-                        let count = [0, 1, 3][shown];
+                    move |shown, footer| {
+                        let count = [0, 1, 4][shown];
                         for line in 0..count {
                             let words = format!("Reason {line} of {count}.");
+                            let pressed = pressed.clone();
                             footer.reason(words.clone(), move |ui| {
-                                message(ui, Tone::Error, &words);
+                                if ui.button(&words).clicked() {
+                                    pressed.set(Some(line));
+                                }
                             });
                         }
                     },
@@ -7973,43 +7986,70 @@ mod tests {
         harness
             .ctx
             .options_mut(|options| options.max_passes = std::num::NonZeroUsize::MIN);
-        harness.run_steps(4);
         let id = Id::new("then_footer");
-        assert!(
-            footer_rect(&harness.ctx, id).is_none() && shown.get() == 0,
-            "pane_then: no message, no footer"
-        );
-        let painted_whole = |harness: &egui_kittest::Harness<'_>, words: &str, footer: Rect| {
+        let painted = |harness: &egui_kittest::Harness<'_>, words: &str| {
             harness
                 .output()
                 .shapes
                 .iter()
-                .any(|shape| match &shape.shape {
-                    egui::Shape::Text(text) if text.galley.job.text == words => {
-                        let rect = Rect::from_min_size(text.pos, text.galley.size());
-                        footer.contains_rect(rect)
-                            && shape.clip_rect.expand(0.5).contains_rect(rect)
-                    }
-                    _ => false,
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text == words => Some((
+                        Rect::from_min_size(text.pos, text.galley.size()),
+                        shape.clip_rect,
+                    )),
+                    _ => None,
                 })
         };
-        let painted_any = |harness: &egui_kittest::Harness<'_>, words: &str| {
-            harness.output().shapes.iter().any(|shape| {
-                matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text == words)
-            })
+        // What one frame shows: the footer (this pass's, from the pane's record: `footer_rect`
+        // reads egui's response, which keeps the last pass's rect for a widget that had one),
+        // each reason's painted rect when it is whole inside the footer, and the lowest body
+        // line painted (its part inside its clip).
+        let view = |harness: &egui_kittest::Harness<'_>, count: usize| {
+            let footer = pane_record(&harness.ctx, id).and_then(|record| record.footer());
+            let reasons: Vec<Option<Rect>> = (0..count)
+                .map(|line| {
+                    painted(harness, &format!("Reason {line} of {count}.")).and_then(
+                        |(rect, clip)| {
+                            footer
+                                .is_some_and(|footer| {
+                                    footer.contains_rect(rect)
+                                        && clip.expand(0.5).contains_rect(rect)
+                                })
+                                .then_some(rect)
+                        },
+                    )
+                })
+                .collect();
+            let body_low = harness
+                .output()
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text.starts_with("Line ") => {
+                        let rect = Rect::from_min_size(text.pos, text.galley.size())
+                            .intersect(shape.clip_rect);
+                        rect.is_positive().then_some(rect.bottom())
+                    }
+                    _ => None,
+                })
+                .fold(f32::MIN, f32::max);
+            (footer, reasons, body_low)
         };
-        for (press, count, ended) in [
-            ("Show one", 1, None),
-            ("Show three", 3, Some("Reason 0 of 1.")),
-        ] {
-            // The press's own frame: hover first, then press and release, one pass each.
-            let at = access(&harness)
-                .into_iter()
-                .find(|(label, _)| label == press)
-                .map(|(_, rect)| rect.center())
-                .unwrap_or_else(|| panic!("pane_then: {press} shows"));
+        let same = |a: &(Option<Rect>, Vec<Option<Rect>>, f32),
+                    b: &(Option<Rect>, Vec<Option<Rect>>, f32)| {
+            let near = |a: Option<Rect>, b: Option<Rect>| match (a, b) {
+                (Some(a), Some(b)) => {
+                    (a.min - b.min).length() <= 0.5 && (a.max - b.max).length() <= 0.5
+                }
+                (a, b) => a.is_none() && b.is_none(),
+            };
+            near(a.0, b.0)
+                && a.1.len() == b.1.len()
+                && a.1.iter().zip(&b.1).all(|(a, b)| near(*a, *b))
+                && (a.2 - b.2).abs() <= 0.5
+        };
+        let click = |harness: &mut egui_kittest::Harness<'_>, at: egui::Pos2| {
             harness.event(egui::Event::PointerMoved(at));
-            harness.step();
             for pressed in [true, false] {
                 harness.event(egui::Event::PointerButton {
                     pos: at,
@@ -8017,31 +8057,112 @@ mod tests {
                     pressed,
                     modifiers: egui::Modifiers::NONE,
                 });
-                harness.step();
             }
-            // This pass's footer, from the pane's record (`footer_rect` reads egui's response,
-            // which keeps the last pass's rect for a widget that had one).
-            let footer = pane_record(&harness.ctx, id).and_then(|record| record.footer());
-            let body_end = access(&harness)
-                .into_iter()
-                .filter(|(label, _)| label.starts_with("Show "))
-                .map(|(_, rect)| rect.bottom())
-                .fold(f32::MIN, f32::max);
-            let whole = (0..count).all(|line| {
-                footer.is_some_and(|footer| {
-                    painted_whole(&harness, &format!("Reason {line} of {count}."), footer)
-                })
-            });
-            assert!(
-                shown.get() == count.min(2)
-                    && whole
-                    && ended.is_none_or(|ended| !painted_any(&harness, ended))
-                    && footer.is_some_and(|footer| (footer.top() - (body_end + S)).abs() <= 1.0),
-                "pane_then, one pass a frame: the frame of {press} shows its {count} reason(s) whole in the footer {footer:?} `S` below the body ({body_end}), and not {ended:?}"
-            );
+        };
+        let mut misfire_checked = false;
+        for is_tall in [false, true] {
+            tall.set(is_tall);
+            shown.set(0);
             harness.event(egui::Event::PointerGone);
-            harness.run_steps(4);
+            harness.run_steps(6);
+            assert!(
+                footer_rect(&harness.ctx, id).is_none(),
+                "pane_then (tall {is_tall}): no message, no footer"
+            );
+            let room = pane_record(&harness.ctx, id)
+                .expect("the pane's record")
+                .room();
+            for (press, count, ended) in [
+                ("Show one", 1, None),
+                ("Show four", 4, Some("Reason 0 of 1.")),
+            ] {
+                // The press's own frame: hover first, then press and release, one pass each.
+                let at = access(&harness)
+                    .into_iter()
+                    .find(|(label, _)| label == press)
+                    .map(|(_, rect)| rect.center())
+                    .unwrap_or_else(|| panic!("pane_then: {press} shows"));
+                harness.event(egui::Event::PointerMoved(at));
+                harness.step();
+                for down in [true, false] {
+                    harness.event(egui::Event::PointerButton {
+                        pos: at,
+                        button: egui::PointerButton::Primary,
+                        pressed: down,
+                        modifiers: egui::Modifiers::NONE,
+                    });
+                    harness.step();
+                }
+                let first = view(&harness, count);
+                let (footer, reasons, body_low) = &first;
+                let body_end = access(&harness)
+                    .into_iter()
+                    .filter(|(label, _)| label.starts_with("Show "))
+                    .map(|(_, rect)| rect.bottom())
+                    .fold(f32::MIN, f32::max);
+                let placed = footer.is_some_and(|footer| {
+                    if is_tall {
+                        (footer.bottom() - room.bottom()).abs() <= 1.0
+                            && footer.height() <= (room.height() / 3.0).floor() + 1.0
+                            && *body_low <= footer.top() - S + 0.5
+                    } else {
+                        (footer.top() - (body_end + S)).abs() <= 1.0
+                    }
+                });
+                assert!(
+                    shown.get() == count.min(2)
+                        && reasons.iter().all(Option::is_some)
+                        && ended.is_none_or(|ended| painted(&harness, ended).is_none())
+                        && placed,
+                    "pane_then (tall {is_tall}), one pass a frame: the frame of {press} shows its {count} reason(s) whole in the footer {footer:?} (body ends {body_end}, lowest body line {body_low}, pane {room:?}), and not {ended:?}: {reasons:?}"
+                );
+                // The next frame, one pass. Below the tall body, after four reasons, it holds a
+                // press on the first reason's painted place: there the layout before the footer
+                // moved down put another reason's control, and no control takes that press.
+                harness.event(egui::Event::PointerGone);
+                let mut at_first = None;
+                if is_tall && count == 4 {
+                    let centre = reasons[0].expect("the first reason").center();
+                    let other = (1..count).any(|line| {
+                        egui_kittest::kittest::Queryable::query_by_label(
+                            &harness,
+                            &format!("Reason {line} of {count}."),
+                        )
+                        .is_some_and(|node| node.rect().contains(centre))
+                    });
+                    assert!(
+                        other,
+                        "pane_then fixture: in the first frame, another reason's control was laid out under the first reason's painted place {centre:?}"
+                    );
+                    click(&mut harness, centre);
+                    at_first = Some(centre);
+                }
+                harness.step();
+                let next = view(&harness, count);
+                assert!(
+                    same(&first, &next) && pressed.get().is_none(),
+                    "pane_then (tall {is_tall}): the frame after {press} moves nothing ({first:?} then {next:?}), and a press in it reaches no footer control: {:?}",
+                    pressed.get()
+                );
+                if let Some(centre) = at_first {
+                    // A press on the same place, a frame later, is the first reason's.
+                    harness.event(egui::Event::PointerGone);
+                    harness.step();
+                    click(&mut harness, centre);
+                    harness.step();
+                    assert_eq!(
+                        pressed.get(),
+                        Some(0),
+                        "pane_then: a frame later, the first reason's control takes its press"
+                    );
+                    pressed.set(None);
+                    misfire_checked = true;
+                }
+                harness.event(egui::Event::PointerGone);
+                harness.run_steps(4);
+            }
         }
+        assert!(misfire_checked, "pane_then: the press check ran");
         // With reruns allowed again, an unchanged frame draws the footer in one pass: a footer
         // whose messages come after the body keeps its measured room and words.
         harness

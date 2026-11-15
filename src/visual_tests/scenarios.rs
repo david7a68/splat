@@ -9630,9 +9630,9 @@ pub mod run_folder_defect {
             let retyped = d.first_frame_one_pass([egui::Event::Text("Elsewhere".into())], first);
             d.observe(
                 "m32-L1c-retype-after-discard",
-                retyped == fresh,
+                retyped == (fresh, fresh),
                 format!(
-                    "The first frame of retyping after Discard (one pass): stale result, Undo offered, move choices, warning whole = {retyped:?}, want {fresh:?}"
+                    "The first frame of retyping after Discard and the next (one pass each): stale result, Undo offered, move choices, warning whole = {retyped:?}, want {fresh:?}"
                 ),
             );
             // The first folder edit of a clean form with no footer: the move choices come with
@@ -9649,9 +9649,85 @@ pub mod run_folder_defect {
             let edited = d.first_frame_one_pass([egui::Event::Text("Elsewhere".into())], first);
             d.observe(
                 "m32-L1c-first-folder-edit",
-                clean && edited == fresh,
+                clean && edited == (fresh, fresh),
                 format!(
-                    "From a clean form with no footer ({clean}), the first frame of the folder edit (one pass): {edited:?}, want {fresh:?}"
+                    "From a clean form with no footer ({clean}), the first frame of the folder edit and the next (one pass each): {edited:?}, want {fresh:?}"
+                ),
+            );
+            // Review of PR 456: the same in a form taller than its pane, whose footer is pinned at
+            // the pane's bottom. In the first frame of the folder edit the warning is whole in the
+            // footer at the pane's bottom (a third of the pane at most) with no form line under
+            // it, and the next frame (no input, one pass) moves nothing. At 960x320 the clean form
+            // already scrolls.
+            d.click(DISCARD);
+            d.click("Break initiative ties in roster order");
+            d.click("Break initiative ties in roster order");
+            let pinned = |d: &Driver<'_>| {
+                let record = d
+                    .pane_records()
+                    .into_iter()
+                    .max_by(|a, b| a.room().area().total_cmp(&b.room().area()))?;
+                // Pinned: the form is taller than the pane's room.
+                let (room, footer) = (record.room(), record.footer().filter(|_| !record.fits())?);
+                let warning = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| {
+                        node.role == egui::accesskit::Role::Label
+                            && node.name.contains("From the new folder")
+                    })?
+                    .name;
+                let painted = d.painted_rect_in(&warning, footer)?;
+                let mut lowest_form_line = f32::MIN;
+                d.each_painted_text(|text, clip| {
+                    let rect = egui::Rect::from_min_size(text.pos, text.galley.size())
+                        .intersect(clip);
+                    if rect.is_positive()
+                        && rect.left() >= room.left()
+                        && rect.top() >= room.top()
+                        && text.galley.job.text != warning
+                    {
+                        lowest_form_line = lowest_form_line.max(rect.bottom());
+                    }
+                });
+                Some((
+                    room,
+                    footer,
+                    painted,
+                    d.painted_whole_in(&warning, footer),
+                    lowest_form_line,
+                ))
+            };
+            let tall = d.act_at_size((960.0, 320.0), |d| {
+                let scrolls = d.pane_records().iter().any(|record| !record.fits());
+                d.click_field(RUN_FOLDER);
+                d.press_ctrl(Key::A);
+                let frames =
+                    d.first_frame_one_pass([egui::Event::Text("Elsewhere".into())], pinned);
+                (scrolls, frames)
+            });
+            let near = |a: egui::Rect, b: egui::Rect| {
+                (a.min - b.min).length() <= 0.5 && (a.max - b.max).length() <= 0.5
+            };
+            let held = match &tall.1 {
+                (Some(first), Some(next)) => {
+                    let (room, footer, painted, whole, lowest) = *first;
+                    (footer.bottom() - room.bottom()).abs() <= 1.0
+                        && footer.height() <= (room.height() / 3.0).floor() + 1.0
+                        && whole
+                        && lowest <= footer.top() - crate::design::S + 0.5
+                        && near(footer, next.1)
+                        && near(painted, next.2)
+                        && next.3
+                }
+                _ => false,
+            };
+            d.observe(
+                "m32-L1c-tall-form",
+                tall.0 && held,
+                format!(
+                    "A form taller than its pane ({}) at 960x320: the first frame of the folder edit and the next (one pass each), pinned: (room, footer, warning, warning whole, lowest form line) = {:?}",
+                    tall.0, tall.1
                 ),
             );
         });
@@ -9690,9 +9766,9 @@ pub mod run_folder_defect {
         std::fs::remove_file(target.join(&run_file)).unwrap();
         d.observe(
             "m32-L1c-failed-move",
-            failed == (true, true) && d.has_containing("Could not move runs."),
+            failed == ((true, true), (true, true)) && d.has_containing("Could not move runs."),
             format!(
-                "The first frame of a failed Move runs and save (one pass): error whole, warning whole = {failed:?}"
+                "The first frame of a failed Move runs and save and the next (one pass each): error whole, warning whole = {failed:?}"
             ),
         );
         // A panic ends this app, so the video stops first and nothing follows.

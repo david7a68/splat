@@ -1246,13 +1246,15 @@ impl<'a> Driver<'a> {
 
     /// One input frame of `events`, drawn in ONE layout pass (egui's reruns denied, as when the
     /// frame's pass budget is spent), then `look` at what that first presented frame painted and
-    /// named; then reruns come back and the app settles. No discarded pass can hide a stale view
-    /// here (migration-32 L1c: a footer's facts are fresh in the frame of the act).
+    /// named, and again at the next frame (no input, one pass); then reruns come back and the
+    /// app settles. No discarded pass can hide a stale view here, and the second look shows what
+    /// the first frame's view became (migration-32 L1c: a footer's facts are fresh, and placed,
+    /// in the frame of the act).
     pub fn first_frame_one_pass<T>(
         &mut self,
         events: impl IntoIterator<Item = egui::Event>,
-        look: impl FnOnce(&Self) -> T,
-    ) -> T {
+        look: impl Fn(&Self) -> T,
+    ) -> (T, T) {
         let passes = self.harness.ctx.options(|options| options.max_passes);
         self.harness
             .ctx
@@ -1263,13 +1265,20 @@ impl<'a> Driver<'a> {
             "{}: the frame of the act ran more than one layout pass",
             self.scenario
         );
-        let seen = look(self);
+        let first = look(self);
+        let receipt = super::input_frame::one_pass(&mut self.harness, []);
+        assert_eq!(
+            receipt.layout_passes, 1,
+            "{}: the frame after the act ran more than one layout pass",
+            self.scenario
+        );
+        let next = look(self);
         self.harness
             .ctx
             .options_mut(|options| options.max_passes = passes);
         self.interactions += 1;
         self.settle();
-        seen
+        (first, next)
     }
 
     /// A screen reader's Click on the visible control named `name`, as one input event.
