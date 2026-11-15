@@ -1547,7 +1547,7 @@ pub mod library_browse {
                 }
             });
             // At 960 the categories are the `Section` drop-down, with no rows.
-            let compact = d.window_size().0 < 1000.0 && d.place_of("Section").is_some();
+            let compact = d.window_size().0 < 1000.0 && library_section(d).is_some();
             d.observe(
                 "s30-B2-all-entries-count",
                 (compact && row.is_none())
@@ -1764,14 +1764,38 @@ pub mod library_browse {
             "frame times are not stable while scenarios share the CPU",
         );
 
-        d.click("Section");
-
-        d.click(&format!("Library section: {CREATURES_SECTION}"));
+        choose_library_section(d, CREATURES_SECTION);
         d.expect(CREATURES_COUNT);
         d.state("creature-list", Sizes::Default);
         d.click_containing(NEXT_CREATURE);
         d.expect(NEXT_CREATURE);
         d.goal("return through the list and open another entry");
+
+        // M0334: the shared `Section` drop-down chooses no section while a search lists the
+        // whole scope, as the section rows of a wider window do. So choosing the section it
+        // showed before the search still ends the search and lists that section.
+        search_library(d, "dragon");
+        d.expect(SEARCH_RESULTS);
+        let shown = |d: &Driver<'_>| {
+            d.nodes()
+                .into_iter()
+                .map(|node| node.name)
+                .find(|name| name == "Section" || name.starts_with("Section: "))
+        };
+        let during = shown(d);
+        choose_library_section(d, CREATURES_SECTION);
+        let query = d.field_text(SEARCH_LIBRARY);
+        let after = shown(d);
+        d.observe(
+            "M0334-section-ends-search",
+            during.as_deref() == Some("Section")
+                && query.as_deref() == Some("")
+                && after.as_deref() == Some("Section: Creatures")
+                && d.has_containing(CREATURES_COUNT),
+            format!(
+                "During a search the drop-down is {during:?}; choosing {CREATURES_SECTION} leaves the search {query:?} and the drop-down {after:?}"
+            ),
+        );
     }
 }
 
@@ -1785,8 +1809,7 @@ pub mod creature_filter {
     const SEARCH_RESULTS: &str = "SEARCH RESULTS";
 
     pub fn run(d: &mut Driver<'_>) {
-        d.click("Section");
-        d.click("Library section: Creatures");
+        choose_library_section(d, "Creatures");
         d.expect(CREATURES_COUNT);
         d.begin_task();
 
@@ -1947,7 +1970,7 @@ pub mod library_author {
                     d.expect(name);
                 }
                 let scope = d.place_of("What the Library shows: Ashen Marches").unwrap();
-                let category = d.place_of("Section").unwrap();
+                let category = library_section(d).unwrap();
                 let search = d.place_of("Search the Library").unwrap();
                 let about = d.place_of("About Ashen Marches").unwrap();
                 scope.bottom().max(category.bottom()) <= search.top()
@@ -2422,6 +2445,17 @@ pub mod library_navigation {
                     "The menu {frame:?} ends at the count {count:?}, its words {words:?} keep one line, and it is clear of the lanes {lanes:?}"
                 ),
             );
+            // M0330 (migration-32, the L0 pressure caller): the menu is as tall as its one link,
+            // so no empty band of the scroll column's height is left below it.
+            let (margin, _, stroke) = issues_menu_frame(d);
+            let below = link.zip(frame).map(|(link, frame)| frame.bottom() - link.bottom());
+            d.observe(
+                "M0330-issues-menu-fits",
+                below.is_some_and(|below| below >= 0.0 && below <= margin + stroke + 1.0),
+                format!(
+                    "The one-link menu {frame:?} ends {below:?} below its link {link:?}: its frame's margin {margin} and stroke {stroke}, no empty band"
+                ),
+            );
         });
         d.click("Rules/Ash Exposure.md: 1 broken link");
         d.wait_for_text("Captain Varra knows the road through the ash fields.");
@@ -2521,7 +2555,31 @@ pub mod library_navigation {
         }
         d.click("Read Captain Varra");
         d.wait_for_text("The last commander of the Emberfall watch.");
-        d.state("reference-outside-package", Sizes::All);
+        // M0355 (round 31 reader-toolbar-icon-form): the toolbar's actions have one form, their
+        // words: none paints an icon. Back is navigation and keeps its arrow.
+        d.state_prepared("reference-outside-package", Sizes::All, |d| {
+            let size = d.window_size();
+            let forms: Vec<(&str, bool)> = ["Copy to…", "Make NPC note"]
+                .into_iter()
+                .filter_map(|name| {
+                    let rect = d.place_of(name)?;
+                    let icon = d
+                        .painted_in(rect)
+                        .chars()
+                        .any(|c| ('\u{e000}'..='\u{f8ff}').contains(&c));
+                    Some((name, icon))
+                })
+                .collect();
+            // At 960 both fold into More; elsewhere both show.
+            let folded = forms.is_empty() && d.place_of("More").is_some();
+            d.observe(
+                "M0355-toolbar-one-form",
+                folded || (forms.len() == 2 && forms.iter().all(|(_, icon)| !icon)),
+                format!(
+                    "At {size:?} the toolbar's actions (name, paints an icon): {forms:?}; folded into More: {folded}"
+                ),
+            );
+        });
         let toolbar = d
             .nodes()
             .into_iter()
@@ -2646,6 +2704,92 @@ pub mod library_navigation {
                 "Each copy result shows in its own file's reader: A hidden in B {a_hidden_in_b}, B alone {b_alone}, A alone {a_alone}; Undo A restores A {a_back} and keeps B's files {b_kept} and result {b_result_kept}"
             ),
         );
+
+        // M0330: a long issues menu stops at six controls and scrolls, and still ends at the
+        // count. Read without a capture: the gate cannot yet tell a scrolling popup's
+        // background from a control (its rows reach below its frame). Known fault, not this
+        // check's claim: lines wider than the room between the reader's splitter and the count
+        // make the menu reach over the list at 960 and 1200 (`menu_popup` has no room inside
+        // the reader yet); the detail names each lane it crosses.
+        for n in 1..=BROKEN_FILES {
+            let name = format!("Broken Watch {n}");
+            std::fs::write(
+                b_folder.join(format!("Rules/{name}.md")),
+                format!(
+                    "{}\n[[Missing watch post {n}]]\n",
+                    crate::library::note_text(&name, "rule", None)
+                ),
+            )
+            .unwrap();
+        }
+        d.click("Packages");
+        d.click("Reload from disk");
+        d.wait_for_text("Broken Watch 1");
+        let count = issues_count(d);
+        for size in [SMALL, DEFAULT, LARGE] {
+            let (control, frame, margins, stroke, lanes) = d.act_at_size(size, |d| {
+                if !d.has_containing("Broken Watch 1.md: ") {
+                    d.click(&count);
+                }
+                let first = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name.contains("Broken Watch 1.md: "))
+                    .map(|node| node.rect);
+                let frame = first.and_then(|first| d.painted_frame_around(first));
+                let (_, margins, stroke) = issues_menu_frame(d);
+                (d.place_of(&count), frame, margins, stroke, d.chrome_lanes())
+            });
+            // The lanes outside the menu that it reaches over (its own scroll bar is inside).
+            let crossed: Vec<egui::Rect> = frame.map_or_else(Vec::new, |frame| {
+                lanes
+                    .into_iter()
+                    .filter(|lane| {
+                        !frame.expand(0.5).contains_rect(*lane)
+                            && lane.y_range().intersects(frame.y_range())
+                            && lane.x_range().intersects(frame.x_range())
+                    })
+                    .collect()
+            });
+            // The column's six controls, and the frame's margins and stroke above and below.
+            let most = crate::design::XXL * 6.0 + margins + 2.0 * stroke;
+            d.observe(
+                "M0330-long-issues-menu",
+                control.zip(frame).is_some_and(|(control, frame)| {
+                    (frame.height() - most).abs() <= 1.0
+                        && (frame.right() - control.right()).abs() <= crate::design::S
+                }),
+                format!(
+                    "At {size:?} the {count} menu {frame:?} is six controls tall ({most}) and ends at the count {control:?}; known fault, lanes it reaches over: {crossed:?}"
+                ),
+            );
+        }
+        if d.has_containing("Broken Watch 1.md: ") {
+            d.press(Key::Escape);
+        }
+    }
+
+    /// Files that M0330's long issues menu lists, more than its six controls hold.
+    const BROKEN_FILES: usize = 12;
+
+    /// The Library header's file count (`13 files need fixing`), by its accessible name.
+    fn issues_count(d: &Driver<'_>) -> String {
+        d.nodes()
+            .into_iter()
+            .map(|node| node.name)
+            .find(|name| name.ends_with(" files need fixing"))
+            .unwrap_or_else(|| "files need fixing".to_owned())
+    }
+
+    /// A menu frame's bottom margin, its top and bottom margins together, and its stroke.
+    fn issues_menu_frame(d: &Driver<'_>) -> (f32, f32, f32) {
+        let style = d.app_style();
+        let margin = style.spacing.menu_margin;
+        (
+            f32::from(margin.bottom),
+            margin.sum().y,
+            style.visuals.window_stroke.width,
+        )
     }
 }
 
@@ -6549,8 +6693,7 @@ pub mod dialogs {
     pub fn run(d: &mut Driver<'_>) {
         go_library(d);
         d.begin_task();
-        d.click("Section");
-        d.click(&format!("Library section: {CREATURES_SECTION}"));
+        choose_library_section(d, CREATURES_SECTION);
         d.expect(CREATURE);
         d.click(COPY_TO);
         d.expect(COPY_TITLE);
@@ -11606,6 +11749,36 @@ pub mod library_scope {
                 && !d.has_containing("No entries match"),
             "Search Everything keeps the words, sets the scope to Everything and lists the matches",
         );
+
+        // M3 (round 31 `creature-search-order`): Library's entry search lists the creatures that
+        // `wolf` finds in the one creature order, as Lookup and the encounter search list them
+        // (`encounter_build::WOLF_ORDER`): Werewolf before Winter Wolf, at each size.
+        search_library(d, encounter_build::MONSTER);
+        d.state_prepared("search-creature-order", Sizes::All, |d| {
+            let size = d.window_size();
+            // The entry list: left of its splitter, so the open entry's own lines do not count.
+            let list = d.place_of("Resize Library entries column").map_or(
+                egui::Rect::NOTHING,
+                |splitter| {
+                    egui::Rect::from_min_max(
+                        egui::pos2(f32::NEG_INFINITY, f32::NEG_INFINITY),
+                        egui::pos2(splitter.left(), f32::INFINITY),
+                    )
+                },
+            );
+            let wolves = encounter_build::wolves_listed(d, list, |name, wolf| {
+                name.strip_prefix(wolf)
+                    .is_some_and(|detail| detail.starts_with(" · "))
+            });
+            d.observe(
+                "M3-creature-search-order",
+                wolves == encounter_build::WOLF_ORDER,
+                format!(
+                    "At {size:?} Library lists {wolves:?} for {}",
+                    encounter_build::MONSTER
+                ),
+            );
+        });
     }
 
     const BUILT_IN: &str = "Built-in · Read only";
@@ -12755,8 +12928,7 @@ pub mod nav_table {
         go_library(d);
         d.open_combo_at(LIBRARY_PACKAGE_DROPDOWN);
         d.click(EVERYTHING);
-        d.click("Section");
-        d.click(&format!("Library section: {SECTION}"));
+        choose_library_section(d, SECTION);
         d.expect(ENTRY_ROW);
         let entry_top = d.scroll_position_of_reader(ENTRY);
         d.scroll_at(pos2(720.0, 400.0), 2);
@@ -26622,8 +26794,7 @@ pub mod session_plan {
 
         // A save on Encounters reaches the Library, so its next save is not a false conflict.
         go_library(d);
-        d.click("Section");
-        d.click("Library section: Encounters");
+        choose_library_section(d, "Encounters");
         d.click_containing("Ford of Ash");
         d.click(EDIT_MARKDOWN);
         d.type_into_editor("More tactics.\n");

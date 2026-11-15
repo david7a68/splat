@@ -1007,12 +1007,13 @@ fn place(
 
 /// A package's About line count, in Campaign's form: `All entries chosen`, `5 of 6 entries
 /// chosen`, `No entries chosen`. Round 27 FA6: a ticked box counts as chosen, whoever ticked
-/// it, so the entries the DM's choices need (ticked and locked in Campaign) count too.
+/// it, so the entries the DM's choices need (ticked and locked in Campaign) count too. The
+/// partial count is the one shared form (`design::outcome::chosen_count`, M0306).
 fn chosen_count(chosen: usize, needed: usize, total: usize) -> String {
     match (chosen + needed).min(total) {
         0 => "No entries chosen".into(),
         ticked if ticked == total => "All entries chosen".into(),
-        ticked => format!("{ticked} of {total} entries chosen"),
+        ticked => design::outcome::chosen_count(ticked, total, "entries"),
     }
 }
 
@@ -1128,7 +1129,9 @@ impl Note {
     }
     /// How the row matches, as `matching::with_other` ranks it, or None if it does not. Plain
     /// words match the name (in any order, or with a typo), path or section, or a creature's
-    /// facts. `habitat:forest` and the other fact terms match creatures only.
+    /// facts. `habitat:forest` and the other fact terms match creatures only. A creature's name
+    /// ranks in the one creature order (M3, `Typed::creature`), as Lookup and the encounter
+    /// search rank it; every other kind keeps its word tiers.
     fn search_rank(
         &self,
         section: Section,
@@ -1150,7 +1153,13 @@ impl Note {
         let other = self.path.to_lowercase().contains(words)
             || self.section().label().to_lowercase().contains(words)
             || facets.is_some_and(|facets| query.words_in(self.name(), facets));
-        with_other(typed.name(&self.name().to_lowercase()), other)
+        let name = self.name().to_lowercase();
+        let name = if self.entry.as_ref().is_some_and(|e| e.kind == "creature") {
+            typed.creature(&name, crate::matching::words(&name))
+        } else {
+            typed.name(&name)
+        };
+        with_other(name, other)
     }
 }
 #[derive(Default)]
@@ -2937,6 +2946,10 @@ const LIBRARY_SEARCH: design::FieldId =
     crate::field_id!("library_search").once(design::Once::PageSearch);
 const NEW_ENTRY_FOLDER: design::FieldId =
     crate::field_id!("new_entry_folder").once(design::Once::CreateForm);
+const LIBRARY_SECTION: design::FieldId =
+    crate::field_id!("library_section").once(design::Once::PageSearch);
+const NEW_ENTRY_NAME: design::FieldId =
+    crate::field_id!("new_entry_name").once(design::Once::CreateForm);
 const NEW_ENTRY_KIND: design::FieldId =
     crate::field_id!("new_entry_kind").once(design::Once::CreateForm);
 const NEW_ENTRY_PLACE: design::FieldId =
@@ -4275,10 +4288,6 @@ impl Library {
     pub fn refocus_draft(&mut self) {
         self.focus_markdown = true;
     }
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: calls `ResultOrder::issue`, `Footer::result` or `save_row_state` (design::results::STAGED_ALLOWS)"
-    )]
     fn register_copy(&mut self, campaigns: &mut Campaigns) -> Result<(), String> {
         let source = self
             .copied_package
@@ -5048,10 +5057,6 @@ impl Library {
             design::DraftBlocks::EntryInPackage
         }
     }
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     pub fn show(&mut self, ui: &mut egui::Ui, campaigns: &mut Campaigns) {
         // The New entry form's error ends with the form, however it closed.
         if !self.new_form {
@@ -5317,10 +5322,13 @@ impl Library {
                                 .fold(design::XL, f32::max)
                                 .min(design::READER_MEASURE)
                                 .ceil();
-                            // The scroll column keeps its lane beside the widest line.
+                            // The scroll column keeps its lane beside the widest line. It is as
+                            // tall as its lines up to six controls, so one link leaves no empty
+                            // band below it (M0330) and a long list scrolls.
                             ui.set_width(width + design::lane_width());
                             design::ScrollColumn::new("library_file_issues")
                                 .max_height(design::XXL * 6.0)
+                                .fit_height()
                                 .show(ui, |ui| {
                                     for message in loaded
                                         .diagnostics
@@ -5593,7 +5601,11 @@ impl Library {
             return;
         }
         if !compact && self.disk_change.is_none() {
-            design::Column::left("library_sections", 166.0, 150.0..=280.0)
+            // M0333: the section rows keep the scroll column's lane, so the column is that
+            // much wider and the rows keep their room.
+            let lane = design::lane_width();
+            let (width, room) = (166.0 + lane, 150.0 + lane..=280.0 + lane);
+            design::Column::left("library_sections", width, room)
                 // The drag handle is on this edge, so the rows stop short of it.
                 .frame(egui::Frame::new().inner_margin(egui::Margin {
                     right: design::S as i8,
@@ -5634,115 +5646,114 @@ impl Library {
                         self.unreadable_kind = None;
                         self.source = false;
                     }
-                    egui::ScrollArea::vertical()
-                        .id_salt("section_list")
-                        .show(ui, |ui| {
-                            ui.spacing_mut().item_spacing.y = 0.0;
-                            for &(group, sections) in Section::GROUPS {
-                                // Keep the empty encounter section discoverable, but hide an unused fallback.
-                                if sections
-                                    .iter()
-                                    .all(|section| count_of(*section, &counts) == 0)
-                                {
+                    // M0333: the shared scroll column keeps its lane, so a count never moves
+                    // when the bar comes or goes.
+                    design::ScrollColumn::new("section_list").show(ui, |ui| {
+                        ui.spacing_mut().item_spacing.y = 0.0;
+                        for &(group, sections) in Section::GROUPS {
+                            // Keep the empty encounter section discoverable, but hide an unused fallback.
+                            if sections
+                                .iter()
+                                .all(|section| count_of(*section, &counts) == 0)
+                            {
+                                continue;
+                            }
+                            if !group.is_empty() {
+                                design::heading(
+                                    ui,
+                                    design::Heading::Group {
+                                        title: group,
+                                        count: sections
+                                            .iter()
+                                            .map(|section| count_of(*section, &counts))
+                                            .sum(),
+                                    },
+                                );
+                            }
+                            for &section in sections {
+                                let count = count_of(section, &counts);
+                                if count == 0 {
                                     continue;
                                 }
-                                if !group.is_empty() {
-                                    design::heading(
-                                        ui,
-                                        design::Heading::Group {
-                                            title: group,
-                                            count: sections
-                                                .iter()
-                                                .map(|section| count_of(*section, &counts))
-                                                .sum(),
-                                        },
-                                    );
-                                }
-                                for &section in sections {
-                                    let count = count_of(section, &counts);
-                                    if count == 0 {
-                                        continue;
-                                    }
-                                    if section == Section::Unreadable {
-                                        for kind in Section::GROUPS
+                                if section == Section::Unreadable {
+                                    for kind in Section::GROUPS
+                                        .iter()
+                                        .flat_map(|(_, sections)| sections.iter())
+                                        .copied()
+                                    {
+                                        let count = loaded
+                                            .notes
                                             .iter()
-                                            .flat_map(|(_, sections)| sections.iter())
-                                            .copied()
-                                        {
-                                            let count = loaded
-                                                .notes
-                                                .iter()
-                                                .filter(|note| {
-                                                    note.error.is_some()
-                                                        && loaded.in_scope(note, scope)
-                                                        && note.unreadable_kind() == kind
-                                                })
-                                                .count();
-                                            if count == 0 {
-                                                continue;
-                                            }
-                                            let label = if kind == Section::Unreadable {
-                                                "Entries"
-                                            } else {
-                                                kind.label()
-                                            };
-                                            if section_row(
-                                                ui,
-                                                label,
-                                                count,
-                                                !about_open
-                                                    && self.section == section
-                                                    && self.unreadable_kind == Some(kind)
-                                                    && !searching,
-                                            )
-                                            .clicked()
-                                            {
-                                                self.section = section;
-                                                self.unreadable_kind = Some(kind);
-                                                self.matches = None;
-                                                self.search.clear();
-                                            }
-                                        }
-                                        continue;
-                                    }
-                                    let selected =
-                                        self.section == section && !searching && !about_open;
-                                    let label = section.label();
-                                    // Round 30 AI4: with no search, All entries paints no
-                                    // count, which would repeat the header's; its name keeps
-                                    // it. During a search it paints the number of matches,
-                                    // zero included, from the list's kept result for this
-                                    // query and scope (no new work); until that result exists,
-                                    // no count.
-                                    let (count, painted) = if section == Section::All {
-                                        let query = self.search.trim().to_lowercase();
-                                        let found = self
-                                            .matches
-                                            .as_ref()
-                                            .filter(|(_, kept, _)| {
-                                                searching
-                                                    && *kept == query
-                                                    && self.matches_scope == Some(scope)
+                                            .filter(|note| {
+                                                note.error.is_some()
+                                                    && loaded.in_scope(note, scope)
+                                                    && note.unreadable_kind() == kind
                                             })
-                                            .map(|(.., found)| found.len());
-                                        (found.unwrap_or(count), found.is_some())
-                                    } else {
-                                        (count, true)
-                                    };
-                                    let response =
-                                        section_row_counted(ui, label, count, selected, painted);
-                                    if response.clicked() {
-                                        if about_open && !dirty {
-                                            self.selected = None;
-                                            self.draft.clear();
+                                            .count();
+                                        if count == 0 {
+                                            continue;
                                         }
-                                        self.section = section;
-                                        self.unreadable_kind = None;
-                                        self.search.clear();
+                                        let label = if kind == Section::Unreadable {
+                                            "Entries"
+                                        } else {
+                                            kind.label()
+                                        };
+                                        if section_row(
+                                            ui,
+                                            label,
+                                            count,
+                                            !about_open
+                                                && self.section == section
+                                                && self.unreadable_kind == Some(kind)
+                                                && !searching,
+                                        )
+                                        .clicked()
+                                        {
+                                            self.section = section;
+                                            self.unreadable_kind = Some(kind);
+                                            self.matches = None;
+                                            self.search.clear();
+                                        }
                                     }
+                                    continue;
+                                }
+                                let selected = self.section == section && !searching && !about_open;
+                                let label = section.label();
+                                // Round 30 AI4: with no search, All entries paints no
+                                // count, which would repeat the header's; its name keeps
+                                // it. During a search it paints the number of matches,
+                                // zero included, from the list's kept result for this
+                                // query and scope (no new work); until that result exists,
+                                // no count.
+                                let (count, painted) = if section == Section::All {
+                                    let query = self.search.trim().to_lowercase();
+                                    let found = self
+                                        .matches
+                                        .as_ref()
+                                        .filter(|(_, kept, _)| {
+                                            searching
+                                                && *kept == query
+                                                && self.matches_scope == Some(scope)
+                                        })
+                                        .map(|(.., found)| found.len());
+                                    (found.unwrap_or(count), found.is_some())
+                                } else {
+                                    (count, true)
+                                };
+                                let response =
+                                    section_row_counted(ui, label, count, selected, painted);
+                                if response.clicked() {
+                                    if about_open && !dirty {
+                                        self.selected = None;
+                                        self.draft.clear();
+                                    }
+                                    self.section = section;
+                                    self.unreadable_kind = None;
+                                    self.search.clear();
                                 }
                             }
-                        });
+                        }
+                    });
                 });
         }
         // A query always searches the whole scope. Clearing it returns to the selected section.
@@ -5794,8 +5805,9 @@ impl Library {
                 .collect();
             if !parsed.words.is_empty() {
                 // Best first: the exact name, then a prefix, then a whole word, then each word in
-                // any order. A path, section or fact match comes next, and a typo comes last. The
-                // sort is stable, so the list's order stays inside each rank.
+                // any order (a creature's whole word and a word that only holds the search are one
+                // tier, M3). A path, section or fact match comes next, and a typo comes last. The
+                // sort is stable, so the list's order (by name) stays inside each rank and origin.
                 found.sort_by_key(|&(rank, i)| {
                     (
                         rank,
@@ -5868,20 +5880,40 @@ impl Library {
                         ui.allocate_ui_with_layout(egui::vec2(half, 0.0), egui::Layout::top_down(egui::Align::Min), |ui| {
                             Self::scope_menu(ui, compact, campaigns, &mut self.scope, &mut self.section, &mut self.search);
                         });
-                        let combo = egui::ComboBox::from_id_salt("library_section")
-                            .icon(design::combo_icon).width(half).truncate()
-                            .selected_text(match self.section { _ if about_open => "About", Section::All => "All", Section::Characters => "Characters", _ => self.section.label() })
-                            .show_ui(ui, |ui| {
-                                for &(_, sections) in Section::GROUPS {
-                                    for &section in sections {
-                                        if count_of(section, &counts) == 0 { continue; }
-                                        let response = design::choice(ui, self.section == section && !about_open, section.label());
-                                        design::named(ui, &response, &format!("Library section: {}", section.label()));
-                                        if response.clicked() { if about_open && !dirty { self.selected = None; self.draft.clear(); } self.section = section; self.search.clear(); }
-                                    }
+                        // M0334: the shared drop-down. As the section rows of a wider window do,
+                        // it shows no chosen section while About is open or a search lists the
+                        // whole scope, so choosing any section ends the search.
+                        let short = |section: Section| match section {
+                            Section::All => "All",
+                            Section::Characters => "Characters",
+                            _ => section.label(),
+                        };
+                        let mut sections = Section::GROUPS
+                            .iter()
+                            .flat_map(|(_, sections)| sections.iter().copied())
+                            .filter(|section| count_of(*section, &counts) > 0);
+                        if let Some(first) = sections.next() {
+                            let mut chosen = (!about_open && !searching).then_some(self.section);
+                            let mut dropdown = design::Dropdown::new(LIBRARY_SECTION, "Section")
+                                .choice_with_short_label(Some(first), first.label(), short(first));
+                            for section in sections {
+                                dropdown = dropdown.choice_with_short_label(
+                                    Some(section),
+                                    section.label(),
+                                    short(section),
+                                );
+                            }
+                            if dropdown.width(half).show(ui, &mut chosen).changed
+                                && let Some(section) = chosen
+                            {
+                                if about_open && !dirty {
+                                    self.selected = None;
+                                    self.draft.clear();
                                 }
-                            });
-                        design::named(ui, &combo.response, "Section");
+                                self.section = section;
+                                self.search.clear();
+                            }
+                        }
                     });
                 }
                 let width = ui.available_width();
@@ -6341,9 +6373,11 @@ impl Library {
         // This control moves between columns as the reader narrows. Keep an open
         // menu attached to it when the window changes size.
         ui.scope_builder(egui::UiBuilder::new().id("library_scope_host"), |ui| {
-            let width =
+            let width = ui.available_width().min(if compact {
                 ui.available_width()
-                    .min(if compact { ui.available_width() } else { 166.0 });
+            } else {
+                166.0 + design::lane_width()
+            });
             let selected = match scope {
                 Scope::Uses => "Can use".to_owned(),
                 Scope::Builtin => "D&D 2024".to_owned(),
@@ -6981,7 +7015,14 @@ impl Library {
                     .color(colors().muted),
             );
             ui.vertical(|ui| {
-                let response = design::text_field(ui, "Entry name", &mut self.new_name, None, None);
+                let response = design::labelled_field(
+                    ui,
+                    NEW_ENTRY_NAME,
+                    "Entry name",
+                    &mut self.new_name,
+                    None,
+                    None,
+                );
                 // The create attempt's error ends when the DM changes the name.
                 if response.changed() {
                     self.new_error = None;
@@ -7974,13 +8015,10 @@ impl Library {
             icons::LEGACY_BACK,
             "Return to the entry before this link. During a draft, read it in Lookup.",
         );
+        // M0355 (round 31 reader-toolbar-icon-form): every toolbar action has one form, its
+        // words; Back is navigation and keeps its arrow.
         if can_copy {
-            toolbar = toolbar.action(
-                "Copy to…",
-                Some(icons::COPY),
-                Extra::Copy,
-                copy_availability,
-            );
+            toolbar = toolbar.action("Copy to…", None, Extra::Copy, copy_availability);
         }
         if can_make {
             toolbar = toolbar.action(
