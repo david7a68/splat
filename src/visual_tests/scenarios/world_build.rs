@@ -5558,6 +5558,29 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
             format!("At {size:?}, the long name and its Add to fight: {detail}"),
         );
     }
+    // Round 30 AP1: Prep's sentence names Edit encounter, and Prep offers it, also for a
+    // fight that Lookup's Start fight saved a moment ago. The run's own record of its
+    // encounter decides, not Lookup's index (which did not hold this encounter yet).
+    for size in [SMALL, DEFAULT, LARGE] {
+        let offered = d.at_size(size, |d| {
+            !d.visible_text("Add read-aloud text or notes when you edit the encounter.")
+                || d.in_view("Edit encounter")
+        });
+        d.observe(
+            "s30-AP1-offered",
+            offered,
+            format!("At {size:?}, Prep's sentence that names Edit encounter has the action"),
+        );
+    }
+    let large_prep = d.at_size(LARGE, |d| {
+        d.visible_text("Add read-aloud text or notes when you edit the encounter.")
+            && d.in_view("Edit encounter")
+    });
+    d.observe(
+        "s30-AP1-offered-1920",
+        large_prep,
+        "At 1920, Prep shows its sentence and Edit encounter for the fight Lookup started",
+    );
     d.state("npc-long-name-add-to-fight", Sizes::All);
     // Review of PR 355: a package's NPC with no stat block joins through the form that asks for
     // one, and its package note is not written.
@@ -5585,6 +5608,44 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         format!(
             "{PACKAGE_NPC} rows {joined}; no Save checkbox {one_save}; the package note is unchanged"
         ),
+    );
+    close_run(d);
+    // Round 30 AP1, kept last: when the run's encounter is gone, Edit encounter does not
+    // leave the run; Prep says why under the action. The reason belongs to that run: it ends
+    // when the run closes, so the run opened again shows the action without it.
+    show(d, "Rook Ambry");
+    d.wait_for_text("Watch House");
+    d.click(start);
+    d.expect(&format!("{RUN_HEADING}Fight with Rook Ambry"));
+    fight_tab(d, "Prep");
+    d.expect("Edit encounter");
+    let note = encounters.join("Fight with Rook Ambry.md");
+    let text = fs::read_to_string(&note).unwrap();
+    fs::remove_file(&note).unwrap();
+    d.click("Edit encounter");
+    d.settle();
+    const GONE: &str = "This encounter is no longer in the campaign.";
+    d.observe(
+        "s30-AP1-refused",
+        d.has(&format!("{RUN_HEADING}Fight with Rook Ambry"))
+            && d.has("Edit encounter")
+            && d.has_containing(GONE),
+        "Edit encounter for a deleted encounter stays on the run, and Prep says why under it",
+    );
+    d.state("prep-edit-encounter-gone", Sizes::All);
+    fs::write(&note, text).unwrap();
+    // A setup nobody touched leaves no save, so the next run of this encounter is a new run.
+    close_run(d);
+    show(d, "Rook Ambry");
+    d.wait_for_text("Watch House");
+    d.click(start);
+    d.expect(&format!("{RUN_HEADING}Fight with Rook Ambry"));
+    fight_tab(d, "Prep");
+    d.expect("Edit encounter");
+    d.observe(
+        "s30-AP1-refusal-ends",
+        !d.has_containing(GONE),
+        "The reason ended with its run: the next run of the encounter shows Edit encounter without it",
     );
     close_run(d);
 }
