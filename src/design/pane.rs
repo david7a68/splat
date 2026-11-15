@@ -1457,8 +1457,8 @@ struct Stop {
 /// so it is drawn the same; a line cut's hairline at the footer's top. Nothing moves: the footer
 /// was drawn once, in its place. The edge holds for presses and for a screen reader as for the
 /// paint (review of PR 456, P2): each body widget that reaches below it takes presses only above
-/// it from now on (egui keeps a widget's last press area; re-registered for hover only, so its
-/// focus order, its accessible node and its id stay), and one wholly below it is hidden from a
+/// it from now on (re-registered with its rect cut at the edge, for hover only: egui keeps the
+/// last rect, so its press area ends there, and its focus order, accessible node and id stay), and one wholly below it is hidden from a
 /// screen reader. The focused control keeps both: the next pass, in the new room, brings it whole
 /// into view (`reveal_focus`: the room changed under it). Returns whether content goes on below
 /// the body's room.
@@ -1494,11 +1494,16 @@ fn stop_body(ui: &mut Ui, stop: Stop) -> bool {
             .collect()
     });
     if !below.is_empty() {
-        let mut edge = ui.new_child(egui::UiBuilder::new().id_salt(id.with("stop_body")));
-        edge.disable();
-        edge.set_clip_rect(ui.clip_rect().intersect(Rect::everything_above(limit)));
+        // Its rect cut at the edge: egui keeps the last rect given for an id, and its press area
+        // is that rect inside the clip (empty for a widget wholly below the edge).
+        let edge = ui.new_child(
+            egui::UiBuilder::new()
+                .id_salt(id.with("stop_body"))
+                .disabled(),
+        );
+        let above = Rect::everything_above(limit);
         for widget in &below {
-            let _ = edge.interact(widget.rect, widget.id, Sense::hover());
+            let _ = edge.interact(widget.rect.intersect(above), widget.id, Sense::hover());
             if widget.rect.top() >= limit {
                 ui.ctx()
                     .accesskit_node_builder(widget.id, |node| node.set_hidden());
