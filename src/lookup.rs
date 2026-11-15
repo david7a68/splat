@@ -313,9 +313,16 @@ fn origin(private: bool, from_sheet: bool) -> Origin {
 }
 
 impl Item {
-    /// How the name fits a search, with the words split at load.
+    /// How the name fits a search, with the words split at load. A creature ranks in the one
+    /// creature order (M3, `Typed::creature`), as every creature search ranks it; every other
+    /// kind keeps its word tiers.
     fn name_rank(&self, typed: &Typed) -> Option<Rank> {
-        typed.name_with_words(&self.lower, self.name_words.iter().map(String::as_str))
+        let words = self.name_words.iter().map(String::as_str);
+        if self.entry.kind == "creature" {
+            typed.creature(&self.lower, words)
+        } else {
+            typed.name_with_words(&self.lower, words)
+        }
     }
 
     fn origin(&self) -> Origin {
@@ -1384,21 +1391,36 @@ impl ContentIndex {
         output
     }
 
+    /// Creatures of packages the campaign does not use whose names the lower-case `query` finds
+    /// as typed (no typo), for the encounter search's `Use it`: the best five in the one
+    /// creature order (M3, `Typed::creature`), then by origin, as every creature list ranks
+    /// them. Ranked before the five are taken, so the exact name is never left out.
     pub fn unused_creatures(&self, query: &str) -> Vec<(Uuid, Uuid, String, String)> {
         if query.trim().is_empty() {
             return Vec::new();
         }
-        self.items
+        let typed = Typed::new(query);
+        let mut found: Vec<(Rank, Origin, usize)> = self
+            .creatures
             .iter()
-            .filter(|item| {
-                item.entry.kind == "creature"
-                    && !item.private
-                    && item.lower.contains(query)
+            .filter_map(|&at| {
+                let item = &self.items[at];
+                let unused = !item.private
                     && self
                         .usable
                         .as_ref()
-                        .is_some_and(|usable| !usable.contains(&item.entry.id))
+                        .is_some_and(|usable| !usable.contains(&item.entry.id));
+                let rank = unused
+                    .then(|| item.name_rank(&typed))
+                    .flatten()
+                    .filter(|rank| !rank.typo)?;
+                Some((rank, item.origin(), at))
             })
+            .collect();
+        found.sort_unstable();
+        found
+            .into_iter()
+            .map(|(.., at)| &self.items[at])
             .filter_map(|item| {
                 // Owner IDs come from the loaded package manifest, kept in the index.
                 self.package_owners.get(&item.entry.id).map(|&owner| {
@@ -1510,20 +1532,24 @@ impl ContentIndex {
         self.mentions.get(&id).map_or(&[], Vec::as_slice)
     }
 
-    /// Creatures by name, best first as `matching::Typed::name` ranks them.
+    /// Creatures by name, best first in the one creature order (M3, `Typed::creature`), then
+    /// by origin, as Lookup and the encounter editor list them.
     pub fn creatures_matching(&self, query: &str, limit: usize) -> Vec<usize> {
         let query = query.trim().to_lowercase();
         if query.is_empty() {
             return Vec::new();
         }
         let typed = Typed::new(&query);
-        let mut found: Vec<(Rank, usize)> = self
+        let mut found: Vec<(Rank, Origin, usize)> = self
             .creatures
             .iter()
-            .filter_map(|&at| Some((self.items[at].name_rank(&typed)?, at)))
+            .filter_map(|&at| {
+                let item = &self.items[at];
+                Some((item.name_rank(&typed)?, item.origin(), at))
+            })
             .collect();
         found.sort_unstable();
-        found.into_iter().take(limit).map(|(_, at)| at).collect()
+        found.into_iter().take(limit).map(|(.., at)| at).collect()
     }
 
     /// NPCs, locations as a tree, other types, then notes by folder.
@@ -1614,7 +1640,9 @@ impl ContentIndex {
 
     /// Best first: exact name, then a prefix, then a word, then anywhere in the name, then
     /// each word of the search in any order. Then the section's name, then a note's words. A
-    /// typo comes last: in a name, and then, last of all, in a note's words.
+    /// typo comes last: in a name, and then, last of all, in a note's words. A creature's name
+    /// ranks in the one creature order (M3: a word and anywhere are one tier); results of one
+    /// rank, of any kind, sort by origin and then by name.
     pub(crate) fn search(&self, query: &str) -> Vec<usize> {
         self.search_typos(query)
             .into_iter()
@@ -4583,6 +4611,132 @@ mod tests {
         let wolves = index.search("wolf");
         assert_eq!(index.items[wolves[0]].entry.name, "Wolf");
         assert!(wolves.len() > 1);
+        // M3, mixed kinds: a creature ranks in the one creature order (a word and a name that
+        // only holds the search are one tier), every other kind keeps its word tiers, and
+        // results of one tier sort by origin (the campaign's first) and then by name.
+        let creature = |name: &str| {
+            splat::content::formats::fixture(
+                "Fixture.md",
+                &format!(
+                    "splat_id: {}\nsplat_kind: creature\nsplat_name: {name}\nsplat_creature: {{}}\n",
+                    Uuid::new_v4()
+                ),
+                "",
+            )
+            .expect("schema-2 fixture")
+        };
+        let (_dir, campaign) = campaign_with(&[
+            ("Creatures/Ashwolf.md", &creature("Ashwolf")),
+            ("Bad Wolf.md", "# Bad Wolf\n\nA story.\n"),
+            ("Werewolf Lore.md", "# Werewolf Lore\n\nSilver.\n"),
+        ]);
+        // A package that the campaign does not use, for `unused_creatures`: five names that hold
+        // `fenstalker` sort before the exact name.
+        let fens = tempfile::tempdir().unwrap();
+        let book = Uuid::new_v4();
+        std::fs::write(
+            fens.path().join("Module.md"),
+            splat::content::formats::fixture(
+                "Module.md",
+                &format!(
+                    "splat_id: {book}\nsplat_kind: package\nsplat_name: Fen Book\nsplat_namespace: fen_book\n"
+                ),
+                "\n# Fen Book\n",
+            )
+            .expect("schema-2 fixture"),
+        )
+        .unwrap();
+        std::fs::create_dir(fens.path().join("Creatures")).unwrap();
+        for name in [
+            "Ancient Fenstalker",
+            "Bog Fenstalker",
+            "Cave Fenstalker",
+            "Dread Fenstalker",
+            "Elder Fenstalker",
+            "Fenstalker",
+        ] {
+            std::fs::write(
+                fens.path().join(format!("Creatures/{name}.md")),
+                creature(name),
+            )
+            .unwrap();
+        }
+        let modules = [Module {
+            id: book,
+            name: "Fen Book".into(),
+            path: fens.path().to_owned(),
+        }];
+        let index = ContentIndex::load(&modules, Some(&campaign)).unwrap();
+        let kinds: Vec<(&str, &str)> = index
+            .search("wolf")
+            .into_iter()
+            .map(|at| &index.items[at].entry)
+            .map(|entry| (entry.name.as_str(), entry.kind.as_str()))
+            .filter(|(name, _)| {
+                [
+                    "Wolf",
+                    "Ashwolf",
+                    "Bad Wolf",
+                    "Dire Wolf",
+                    "Werewolf",
+                    "Winter Wolf",
+                    "Werewolf Lore",
+                ]
+                .contains(name)
+            })
+            .collect();
+        let names: Vec<&str> = kinds.iter().map(|(name, _)| *name).collect();
+        assert_eq!(
+            names,
+            [
+                // The exact name.
+                "Wolf",
+                // One tier: the campaign's creature that holds the search inside a word, and its
+                // note that holds it as a word, by name; then the book's creatures, by name.
+                "Ashwolf",
+                "Bad Wolf",
+                "Dire Wolf",
+                "Werewolf",
+                "Winter Wolf",
+                // A note's name that holds the search inside a word keeps its later tier.
+                "Werewolf Lore",
+            ],
+            "{kinds:?}"
+        );
+        assert_ne!(
+            kinds[1].1, kinds[2].1,
+            "the tie is between two kinds: {kinds:?}"
+        );
+        // F1 (review of PR 450): the encounter search's `Use it` offers an unused package's
+        // creatures in the same order, ranked before it takes five, so the exact name is first
+        // also after five names that hold it. The campaign's own Ashwolf is in use, never offered.
+        let unused = |query: &str| -> Vec<String> {
+            index
+                .unused_creatures(query)
+                .into_iter()
+                .map(|(_, _, name, _)| name)
+                .collect()
+        };
+        assert_eq!(
+            unused("fenstalker"),
+            [
+                "Fenstalker",
+                "Ancient Fenstalker",
+                "Bog Fenstalker",
+                "Cave Fenstalker",
+                "Dread Fenstalker",
+            ]
+        );
+        assert_eq!(
+            unused("wolf"),
+            [
+                "Wolf",
+                "Dire Wolf",
+                "Giant Wolf Spider",
+                "Werewolf",
+                "Winter Wolf"
+            ]
+        );
     }
     #[test]
     fn words_find_a_name_in_any_order_and_with_a_typo() {
@@ -4661,6 +4815,14 @@ mod tests {
             .map(|at| index.items[at].entry.name.clone())
             .collect();
         assert_eq!(names[0], "Wolf");
+        // M3: World's creature pickers list the one creature order: Werewolf before Winter
+        // Wolf, as Lookup and the encounter editor list them.
+        let held: Vec<&str> = names
+            .iter()
+            .map(String::as_str)
+            .filter(|name| ["Dire Wolf", "Werewolf", "Winter Wolf"].contains(name))
+            .collect();
+        assert_eq!(held, ["Dire Wolf", "Werewolf", "Winter Wolf"]);
         let typo = names
             .iter()
             .position(|name| !name.to_lowercase().contains("wolf"));
