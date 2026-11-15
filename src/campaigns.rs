@@ -2330,30 +2330,6 @@ mod tests {
             (after - before).abs() < 0.5 && !h.state().reveal_running() && !in_view(&h, 300.0),
             "a resize after the DM typed moved the form: Add campaign {before} then {after}"
         );
-        // After the reveal ended, the DM scrolls the form away and types in its focused name
-        // field: egui's caret follow still brings the field back (R46 keeps caret navigation).
-        let mut h = scrolled(400.0);
-        h.run_steps(8);
-        assert_eq!(h.state().reveal_ended(), Some(design::reveal::End::Whole));
-        wheel(&mut h, 600.0);
-        h.run_steps(6);
-        let name = |h: &egui_kittest::Harness<'_, Campaigns>| {
-            h.query_all_by_label("Campaign name")
-                .find(|node| node.is_focused())
-                .map(|node| node.rect())
-        };
-        let away = name(&h).expect("the focused name field");
-        assert!(
-            away.top() > 400.0,
-            "the wheel did not take the field away: {away:?}"
-        );
-        h.event(egui::Event::Text("e".into()));
-        h.run_steps(4);
-        let back = name(&h).expect("the focused name field");
-        assert!(
-            back.top() >= -0.5 && back.bottom() <= 400.5,
-            "typing in the field scrolled out of view did not bring it back: {back:?}"
-        );
         // Untouched, a smaller window does not bring the reveal back (R34: it never repeats):
         // the form stays where it is, with no second scroll.
         let mut h = scrolled(400.0);

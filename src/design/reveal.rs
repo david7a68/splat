@@ -1336,6 +1336,20 @@ mod tests {
         h.step();
         assert_eq!(h.state().reveal.ended(), Some(End::ByTheDm), "(b)");
         still_after(&mut h, "(b)");
+        // A new request after the DM's input (a caret follow, a focus scroll) still lands.
+        wheel(&mut h, 3000.0);
+        h.run_steps(40);
+        assert!(
+            top(&h, "Page end") > HEIGHT,
+            "(b): the wheel did not go back up"
+        );
+        h.state_mut().jump = true;
+        h.run_steps(2);
+        let end = h.get_by_label("Page end").rect();
+        assert!(
+            end.top() >= -0.5 && end.bottom() <= HEIGHT + 0.5,
+            "(b): a new request after the reveal ended did not land: {end:?}"
+        );
         // (c) The open's own move and a raw request to the page's end in one pass: the reveal's
         // offset wins and the form shows whole; nothing moves after.
         let mut h = harness(quiet());
