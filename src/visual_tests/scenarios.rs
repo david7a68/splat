@@ -6234,7 +6234,7 @@ pub mod settings {
         let opened = d.act_at_size(LOW_OPENER, |d| {
             d.click("Add Salt Road from D&D Beyond");
             d.wait_for_text("Campaign name");
-            let preview = "Will add …/Salt Road";
+            let preview = "Will create …/Salt Road";
             let nodes = d.nodes();
             let whole = |name: &str| {
                 nodes
@@ -6246,7 +6246,7 @@ pub mod settings {
         d.observe(
             "iter-30-B6-G137-first-open",
             opened,
-            "At the first open, `Will add …/Salt Road`, Add campaign and Cancel whole and in view",
+            "At the first open, `Will create …/Salt Road`, Add campaign and Cancel whole and in view",
         );
         d.state_prepared("add-from-remote", Sizes::All, |d| {
             // The DM's open act at each size: a reveal never starts again on a resize (R34).
@@ -11554,7 +11554,7 @@ pub mod signed_in {
         const LOW_OPENER: (f32, f32) = (960.0, 520.0);
         let opened = d.act_at_size(LOW_OPENER, |d| {
             d.click("Add Salt Road from D&D Beyond");
-            let preview = format!("Will add …/{REMOTE_NAME}");
+            let preview = format!("Will create …/{REMOTE_NAME}");
             let nodes = d.nodes();
             let whole = |name: &str| {
                 nodes
@@ -11566,7 +11566,7 @@ pub mod signed_in {
         d.observe(
             "iter-30-B6-G138-first-open",
             opened,
-            format!("At the first open, `Will add …/{REMOTE_NAME}` and Cancel whole and in view"),
+            format!("At the first open, `Will create …/{REMOTE_NAME}` and Cancel whole and in view"),
         );
         // Round 23 AM2/FM7: quiet Cancel starts the form's last row at the labels' text edge.
         let (add, labels) = d.at_size(DEFAULT, |d| {
