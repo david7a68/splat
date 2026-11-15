@@ -1,8 +1,8 @@
 # Library results onto the typed footer (M-L0.4 design note, ruling M14)
 
-Lane M-L0. Base: `origin/main` f21f2473 (PR 457 in); PR 463 (M-L0.3) is in review and changes only the
-three Undo labels this note moves anyway. Built against PR 452's typed footer (head c8921177). Code starts
-after PR 452 lands and this note is accepted.
+Lane M-L0. Base: `origin/main` f21f2473 (PR 457 in). PR 463 (M-L0.3) no longer holds the three M9 Undo
+labels (Astra's BLOCK, lead's ruling): they move here, onto the typed footer (§1, §7 proofs 6 to 8). Built
+against PR 452's typed footer (head c8921177). Code starts after PR 452 lands and this note is accepted.
 
 ## 1. What must hold
 
@@ -12,8 +12,11 @@ after PR 452 lands and this note is accepted.
   `legacy_reason`, `legacy_notice`, `legacy_kept`, `legacy_kept_line`) in `library.rs` reach 0.
 - No new `ByOwner` row (M12). The existing ones (`apply_page_press` 3, `undo_package_registration` 1) go to
   0, because every press comes back with its `Ticket`.
-- Words, tones, Undo labels (M9 forms of PR 463) and footer order stay as the DM sees them now. Each
-  changed line has its witness.
+- Words, tones and footer order stay as the DM sees them now. Each changed line has its witness.
+- M9: the three Library Undos that name no object today gain it, through the typed footer's kept Undo
+  (`UndoStep::of` in `outcome_of`; `Messages::kept` fits it with `alone` or `fit` in the Undo's own room,
+  `undo_room`, and keeps the whole label as its name): `Undo copy <entry>` (Copy), `Undo unregister
+  <package>` (Unregistered), `Undo remove <name>` (Removed). No label is fitted in `library.rs`.
 
 ## 2. Parts of PR 452 this relies on
 
@@ -127,6 +130,24 @@ kind group. I propose one, as Encounters does.
 5. 4b: words and places at 960, 1200 and 1920: the existing Library states (library-navigation,
    library-author, package-delete-entry, remove-package-in-use, library-file-fault) are the witnesses;
    any moved line is named from the head PNG beside the base PNG.
+
+The three M9 labels (4b), with Astra's three failing cases of PR 463 as their proofs:
+
+6. Boundary width: in a pane whose footer line fits the whole label but whose Undo room (the message
+   inset, the Undo icon and padding, the `LIST_MEASURE` cap) does not, the visible label is the fitted form
+   and the paint cuts nothing (no `…`). The test sweeps the width across that boundary for
+   `Undo unregister Ashen Marches`. Mutant: fit against the footer's full width (PR 463's way) → the full
+   label is kept and the paint cuts it.
+7. Accessible name after shortening: at the narrowest width the visible words drop the object
+   (`Undo unregister`), and the AccessKit name stays `Undo unregister Ashen Marches`, as does the hover.
+   Mutant: name the action by its visible words → the name loses the package.
+8. Quiet frames: with all three Undos shown and nothing changed, a frame clones no name, builds no step and
+   measures no label: PR 452's footer work counters (plans, sorted lines, named bytes, probes) stay 0, and
+   `outcome_of` runs only when its kind's data or the store's revision changed. Mutant: build the label in
+   the draw → the counters rise.
+   The visible witnesses stay in their states: `dependency-copy-reconnected` (library-navigation),
+   `package-unregistered-with-undo` (remove-package-in-use), `deleted-draft-let-go` (package-delete-entry),
+   at 960, 1200 and 1920.
 
 ## 8. Risks named
 
