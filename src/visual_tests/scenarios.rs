@@ -9678,8 +9678,8 @@ pub mod run_folder_defect {
                     })?
                     .name;
                 let painted = d.painted_rect_in(&warning, footer)?;
-                // The form's painted words in the room, not the footer's own (its words and its
-                // icon, clipped inside it).
+                // The form's painted words in the room: the body's clip starts at the room's top,
+                // the footer's own (its words and icon) at the footer's top.
                 let mut lowest_form_line = f32::MIN;
                 d.each_painted_text(|text, clip| {
                     let rect = egui::Rect::from_min_size(text.pos, text.galley.size())
@@ -9687,7 +9687,7 @@ pub mod run_folder_defect {
                     if rect.is_positive()
                         && rect.left() >= room.left()
                         && rect.top() >= room.top()
-                        && !footer.expand(1.0).contains_rect(clip)
+                        && clip.top() < footer.top() - 1.0
                     {
                         lowest_form_line = lowest_form_line.max(rect.bottom());
                     }
