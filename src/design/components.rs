@@ -742,11 +742,6 @@ impl<'a> Action<'a> {
         self.icon.map_or(0.0, |_| ICON_SLOT)
     }
 
-    /// The least width the caller gave (`min_width`), or 0.
-    pub(in crate::design) fn least_width(&self) -> f32 {
-        self.min_width.unwrap_or_default()
-    }
-
     /// The width before any text is cut, using the same parts as the painted button.
     pub fn natural_width(&self, ui: &Ui) -> f32 {
         let icon = self.icon_width();

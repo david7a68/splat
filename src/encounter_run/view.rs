@@ -36,7 +36,7 @@ pub(crate) const FIGHT_AFTER: &str = "Fight after: ";
 /// Two lines of controls in a frame.
 pub(super) const DOCK_HEIGHT: f32 = 36.0 + 4.0 + 28.0 + 8.0;
 /// The dock's width from which Damage has its key hint, and Temp HP and Roll their full forms.
-pub(super) const DOCK_ALL_WORDS_FROM: f32 = 500.0;
+pub(super) const DOCK_ALL_WORDS_FROM: f32 = design::turn_heading::ADD_WORDS_FROM;
 /// FK1 (iter-27-R): the dock's name slot, one width in every fight and for every row, so the
 /// controls after it keep one x. A name that `Heading` does not hold on one line wraps in it.
 pub(super) const DOCK_NAME_WIDTH: f32 = 8.0 * design::L;
@@ -3112,16 +3112,11 @@ impl Run {
     /// panel's tabs, so that the DM finds it when something arrives. It takes the height of
     /// the controls in its row. Narrow layouts keep the icon and the word Add.
     pub(super) fn add_to_fight(&self, words: bool, density: Density) -> Action<'static> {
-        let action = if words {
-            Action::secondary("Add to fight").icon(icons::ADD)
-        } else {
-            Action::secondary("Add").icon(icons::ADD)
-        };
-        action
-            .name("Add to fight")
-            .hint("Add an encounter group or a creature (Ctrl+G)")
-            .density(density)
-            .selected(self.panel == Panel::Groups && !self.hide_panel)
+        design::turn_heading::add_to_fight(
+            words,
+            density,
+            self.panel == Panel::Groups && !self.hide_panel,
+        )
     }
 
     /// One row, with participant controls on the left and fight controls on the right.
@@ -7546,37 +7541,9 @@ fn dock_name_fit(ui: &egui::Ui, text: &str, room: f32) -> Option<Arc<Galley>> {
         .then_some(galley)
 }
 
+/// Whole words of a name that fit, then `…`, as the turn heading shortens it.
 pub(super) fn dock_name(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> String {
-    let fitted = design::words_that_fit(ui, name, font, width);
-    if fitted == name {
-        return fitted;
-    }
-    let fitted = fitted.trim_end_matches('…');
-    let last = name.split_whitespace().last().unwrap_or(name);
-    if !last.chars().all(|c| c.is_ascii_digit()) && last.chars().count() != 1 {
-        let mut words: Vec<_> = fitted.split_whitespace().collect();
-        while words
-            .last()
-            .is_some_and(|word| ["of", "the", "de", "von"].contains(word))
-        {
-            words.pop();
-        }
-        while words.len() > 1
-            && design::number_width(ui, &format!("{}…", words.join(" ")), font) > width
-        {
-            words.pop();
-        }
-        return format!("{}…", words.join(" "));
-    }
-    let prefix_room = width - design::number_width(ui, &format!("… {last}"), font);
-    let prefix = design::words_that_fit(ui, name, font, prefix_room);
-    let prefix = prefix.trim_end_matches('…');
-    let candidate = format!("{prefix}… {last}");
-    if design::number_width(ui, &candidate, font) <= width {
-        candidate
-    } else {
-        format!("… {last}")
-    }
+    design::turn_heading::whole_words_name(ui, name, font, width)
 }
 
 pub(super) fn presence_action(present: bool) -> (&'static str, &'static str) {
@@ -8021,7 +7988,7 @@ struct RowLayout {
 }
 
 pub(super) fn header_height(scale: RunScale) -> f32 {
-    (scale.hp * 1.6).max(36.0)
+    design::TurnHeading::height(scale)
 }
 
 impl RowLayout {
