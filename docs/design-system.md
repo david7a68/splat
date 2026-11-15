@@ -575,7 +575,10 @@ directly below that space, at the message text edge: they depend on the saved fi
 edits. Show the chosen and total entries (`5 of 6 entries chosen`, `All entries chosen`) and `Choose all`, the name Campaign gives the same action. A ticked box counts as chosen, whoever ticked it: the DM's choices and the entries
 they need together, as Campaign's package row counts them
 with Undo. Its result
-and Undo sit in the pane's message footer, like manifest-write results (see Files and recovery). Omit the entry breadcrumb and Engine support. Empty package counts have no separator.
+and Undo sit in the pane's message footer, like manifest-write results (see Files and recovery). `Undo package
+choice` puts the campaign's choices back and leaves only when that write works: a campaign file that cannot be read or
+written keeps the result and its Undo, with the error, so the DM can try again; choices changed since end it with
+`Campaign choices changed. Keep them and edit the package choices in Campaign.`, as a reload would. Omit the entry breadcrumb and Engine support. Empty package counts have no separator.
 
 Nonzero file status links sit in the page header before Packages and New entry. The validation count says how
 many files need fixing: a validation message, a broken link, a duplicate identity or more than one count a file
@@ -619,7 +622,8 @@ Other readable files stay available.
 
 A deleted draft says `This entry’s file was deleted on disk. Your draft is safe until you choose.` and shows YOUR
 DRAFT, `Save my draft again` and red `Remove entry and lose draft`. Its result says what was lost: `Ash Exposure
-removed. Its draft was discarded. Ember Cultist now needs a missing entry.`, with `Undo remove`. Its file line keeps
+removed. Its draft was discarded. Ember Cultist now needs a missing entry.`, with `Undo remove Ash Exposure` (the
+whole label where its line has room, else `Undo remove`: ruling M9). Its file line keeps
 the path and offers `Show folder` for the nearest folder still there: no link offers the missing file, and no
 Edit in Obsidian. The message names entries that need the deleted note. Undo remove gives back the draft, the
 entry's campaign use and the header count as one step. A moved draft shows the new path, then the muted old folder (`moved from Rules/`), then
@@ -804,7 +808,9 @@ Every Library result takes it too: package use, a manifest write, `<file> is now
 separate entries, a discarded draft, the offer to change links after a rename and its result, a copied package's
 registration with `Use the copy in encounters`, a package entry's `<entry> links to <name>, which is in this campaign only. Another campaign that uses <package>
 will not find it.` with its copy
-action and result, and the page's `Error:`. One message place per reader, in Read and in Edit Markdown: the columns,
+action and result, and the page's `Error:`. Opening an entry outside the scope (from a link) widens the scope to
+Everything and says so in the same place, `Scope is now Everything, to show <name>.`, an info notice with no Undo; it
+stays until the DM changes the scope or searches, goes Back or Forward, or changes mode. One message place per reader, in Read and in Edit Markdown: the columns,
 the tabs, the file line, the title and the body never move. The editor starts directly below the save row. Its order: a result that carries a live Undo comes first (Discard's, the heading and stat
 fixes', a write's), because a broken file's reason never clears after Discard or Reload; then Save's reason (a repair
 draft's parse error with a broken manifest's recovery, a refusal before the write, the disk's failure); then the
@@ -812,7 +818,7 @@ notices: results with no Undo, the link Campaign sent the DM to fix, each broken
 With none of these, the footer says why other actions wait for the draft, as an info message
 with its bar and icon, the form of the footer's other messages. So no result, reason, warning, Discard or
 Undo moves the editor's top. With no entry
-open, they sit in the footer below the empty reader, with Remove's `Undo remove`, and below a form that takes the
+open, they sit in the footer below the empty reader, with Remove's `Undo remove <name>`, and below a form that takes the
 reader's place. A file that changed on disk keeps its messages above the comparison, which owns the pane. The link offer after a
 rename and its result belong to the renamed entry: they show only in its reader, stay hidden while another entry is
 open, and end on its next link update or saved edit (a saved edit ends the earlier offer whatever it offers), on
@@ -935,8 +941,10 @@ campaign and Find the folder… beside the message. Only Technical details shows
 among the message's choices, and while it is open the message's words end with `Package reference: <id>.`.
 Removing an unavailable package has Undo and offers each affected encounter as a choice; the message's icon
 centres on its first line. Unregister keeps the last folder in Settings. Library
-offers Undo unregister in its success result, which sits in the pane's message footer (below the form that takes the
-reader's place), so the scope, the search and the list never move; Campaign offers Register it again.
+offers `Undo unregister <package>` (the whole label where its line has room, else `Undo unregister`: ruling M9) in
+its success result, which sits in the pane's message footer (below the form that takes the reader's place), so the
+scope, the search and the list never move; a failed Undo keeps the result and its Undo, with the error. Campaign
+offers Register it again.
 
 Missing-package recovery searches beside known package folders. A unique match gets bordered secondary Use
 this folder before Find the folder…; these repairs are bordered secondary. Remove from this campaign is a red

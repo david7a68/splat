@@ -12,11 +12,12 @@
 //! file it linked and the path it copied. Scope is `()`: a campaign switch hides none of them;
 //! each kind's own end events decide (see `docs/notes/library-results.md` §4).
 #![warn(deprecated)] // Its parent allows old message functions; this file does not.
-use super::{DependencyUndo, FileId, IdentityUndo, LetGo, OwnerKey, SelectionUndo};
+use super::{DependencyUndo, FileId, IdentityUndo, LetGo, OwnerKey, Scope, SelectionUndo};
 use crate::content_workspace::{ContentEdits, ManifestWrite};
 use crate::design::{
     self,
-    results::{DiskChanged, Ends, FooterResult, Kept, Owner, OwnerChanged, Press},
+    outcome::{KeptLine, KeptOutcome, PaneFrame},
+    results::{DiskChanged, Ends, FooterResult, Kept, Owner, OwnerChanged, Press, Ticket},
 };
 use crate::persistence::Module;
 use std::path::PathBuf;
@@ -93,12 +94,15 @@ pub(super) type HeadingFix = (FileId, String, String);
 pub(super) type StatFix = (FileId, String, String, String);
 /// A discarded draft: its file (owner and path) and the words Discard dropped.
 pub(super) type DiscardedDraft = (OwnerKey, String, String);
+/// Why the scope widened: the entry it shows, by name, and the scope it widened to. The notice
+/// stands while the list keeps that scope and has no query (M-L0.4b).
+pub(super) type ScopeWidened = (String, Scope);
 
 /// The Library's kept results, behind the one boundary that changes data and mark together.
 #[derive(Default)]
 pub(super) struct LibraryKept {
     marks: design::Results<KeptOwner, KeptMark>,
-    scope_notice: Option<String>,
+    scope_notice: Option<ScopeWidened>,
     unregistered: Option<Module>,
     package_use: Option<SelectionUndo>,
     manifest: Option<ManifestWrite>,
@@ -136,7 +140,7 @@ macro_rules! slot {
 
 impl LibraryKept {
     slot! {
-        ScopeNotice: scope_notice: String => scope_notice, set_scope_notice, take_scope_notice;
+        ScopeNotice: scope_notice: ScopeWidened => scope_notice, set_scope_notice, take_scope_notice;
         Unregistered: unregistered: Module => unregistered, set_unregistered, take_unregistered;
         PackageUse: package_use: SelectionUndo => package_use, set_package_use, take_package_use;
         Manifest: manifest: ManifestWrite => manifest, set_manifest, take_manifest;
@@ -205,11 +209,40 @@ impl LibraryKept {
             .map(|shown| shown.footer(|_| words()))
     }
 
+    /// The kind of the result `ticket` names, while that result stands: a press on its line acts
+    /// on it, in the frame of the press. A result replaced (a newer act of its kind) or ended
+    /// since its line was drawn has another order, or none: `None`, and nothing is done.
+    pub(super) fn kind_by(&self, ticket: &Ticket) -> Option<KeptKind> {
+        self.marks.get_by(ticket).map(|shown| shown.value().0.kind)
+    }
+
+    /// The typed footer line of the one-result kind `kind`, made by `make` from its data (with
+    /// the order its act issued, and its ticket), or `None` when it has no mark or `make` none.
+    /// `make` runs only when it has one.
+    pub(super) fn outcome<'f, A>(
+        &self,
+        frame: &'f PaneFrame,
+        kind: KeptKind,
+        make: impl FnOnce() -> Option<KeptOutcome<A>>,
+    ) -> Option<KeptLine<'f, A>> {
+        let shown = self.marks.get(&KeptOwner::of(kind))?;
+        let outcome = make()?;
+        Some(shown.outcome(frame, |_| outcome))
+    }
+
     /// The footer line of one copy.
     pub(super) fn copy_line(&self, undo: &DependencyUndo) -> Option<FooterResult> {
         self.marks
             .get(&KeptOwner::copy(undo))
             .map(|shown| shown.footer(|_| undo.result.clone()))
+    }
+
+    /// The ticket of the result of `kind`, for the tests of a press by ticket.
+    #[cfg(test)]
+    pub(super) fn ticket_of(&self, kind: KeptKind) -> Option<Ticket> {
+        self.marks
+            .get(&KeptOwner::of(kind))
+            .map(|shown| shown.ticket_for_caller_test())
     }
 
     /// The order each mark's act issued, newest first, for the tests of the footer order.

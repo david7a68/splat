@@ -1148,6 +1148,10 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Extras(1), Ban::Footer],
         ),
         ("src/library.rs", "field_key", &[Ban::RowKey(1)]),
+        // M17 (M-L0.4b): the page's error, the system's or the workspace's words.
+        ("src/library.rs", "cause", &[Ban::Words]),
+        // M17 (M-L0.4b): a manifest write's words, which start with the file's path from disk.
+        ("src/library.rs", "outcome_of", &[Ban::Words]),
         ("src/library.rs", "reader_messages", &[Ban::Footer]),
         ("src/party.rs", "sheet_view", &[Ban::Body]),
         // R24: a value block's save row shows its own messages (the Session folder's).
