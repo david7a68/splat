@@ -1046,8 +1046,9 @@ fn begin_shrine(d: &mut Driver<'_>) {
 /// open: the line stays, the footer says why (state `plan-undo-failed`), and the fault ends with
 /// its journey. The suite runs in a namespace where a folder's permission bits do not stop a
 /// save, so the Undo fails the way a changed note makes it fail: the note changes outside Splat
-/// just before the press (`hold_disk_check` keeps the next disk check from ending the result
-/// first).
+/// just before the press (`hold_disk_check` holds every disk check until
+/// `release_disk_check` after the press, whatever the time between frames, so no poll reads the
+/// change first).
 pub fn plan_act(d: &mut Driver<'_>) {
     const FORD: &str = "Ford crossing";
     const PLAN_SHRINE: &str = "Plan “Shrine of Cinders”";
@@ -1135,6 +1136,8 @@ pub fn plan_act(d: &mut Driver<'_>) {
     d.app_mut().sessions.hold_disk_check();
     fs::write(&note_path, format!("{}{OUTSIDE}\n", note_file(&dir))).unwrap();
     d.click("Undo add plan line");
+    d.app_mut().sessions.release_disk_check();
+    d.settle();
     // Structural phase, M1: the refusal is the footer's first message, whole, in the warning
     // tone, naming the fight, the session, the cause and the next step; no older success
     // stands above it (the result's words are gone while its Undo waits).

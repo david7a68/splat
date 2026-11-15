@@ -3373,10 +3373,17 @@ impl Sessions {
         session.is_some_and(|note| self.plan_entry(Some(note), |_| ()).is_some())
     }
 
-    /// Tests: the next disk check waits its full interval from now, so a scenario's outside
-    /// change meets the DM's next press before `poll` reads it.
+    /// Tests: no disk check runs until `release_disk_check`, however long the frames take
+    /// (the last check is set an hour ahead; `poll` reads the time since it as zero), so a
+    /// scenario's outside change meets the DM's next press before `poll` reads it.
     #[cfg(test)]
     pub fn hold_disk_check(&mut self) {
+        self.last_check = Some(Instant::now() + Duration::from_secs(3600));
+    }
+
+    /// Tests: the disk checks run again, from now.
+    #[cfg(test)]
+    pub fn release_disk_check(&mut self) {
         self.last_check = Some(Instant::now());
     }
 
