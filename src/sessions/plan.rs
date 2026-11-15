@@ -8403,18 +8403,26 @@ mod tests {
             harness.output().viewport_output[&egui::ViewportId::ROOT].repaint_delay
         };
         let start = crate::design::results::projection_work();
-        for (at, left) in [(29.0, 1.0), (29.75, 0.25)] {
+        let stands = |harness: &egui_kittest::Harness<'_, (Sessions, Book)>| {
+            (
+                harness.query_by_label("Undo add").is_some(),
+                harness.query_all_by_label(&words).next().is_some(),
+            )
+        };
+        // egui asks for the repaint one predicted frame early, so it lands at the end.
+        let dt = f64::from(harness.ctx.input(|input| input.predicted_dt));
+        for (at, left) in [(29.0, 1.0), (29.5, 0.5)] {
             crate::frame_clock::set(added_at + at);
             harness.step();
-            assert!(
-                harness.query_by_label("Undo add").is_some()
-                    && harness.query_by_label(&words).is_some(),
+            assert_eq!(
+                stands(&harness),
+                (true, true),
                 "{at} s of frames later the words and the Undo stand"
             );
+            let delay = repaint(&harness).as_secs_f64();
             assert!(
-                (repaint(&harness).as_secs_f64() - left).abs() < 1e-3,
-                "{at} s: the owner asks for a repaint at the end, {left} s on, not {:?}",
-                repaint(&harness)
+                (delay - (left - dt)).abs() < 1e-3,
+                "{at} s: the owner asks for a repaint at the end, {left} s on, not {delay}"
             );
         }
         let held = footer(&harness).expect("the result's footer is drawn");
@@ -8427,9 +8435,9 @@ mod tests {
         // The exact end: `frame_clock::passed` holds at 30 s.
         crate::frame_clock::set(added_at + 30.0);
         harness.step();
-        assert!(
-            harness.query_by_label("Undo add").is_none()
-                && harness.query_by_label(&words).is_none(),
+        assert_eq!(
+            stands(&harness),
+            (false, false),
             "30 s of frames later the words and the Undo are gone in one frame"
         );
         assert!(

@@ -2162,14 +2162,16 @@ mod tests {
         };
         let a = add(&mut harness, 100.0);
         let start = crate::design::results::projection_work();
-        for (at, left) in [(129.0, 1.0), (129.75, 0.25)] {
+        // egui asks for the repaint one predicted frame early, so it lands at the end.
+        let dt = f64::from(harness.ctx.input(|input| input.predicted_dt));
+        for (at, left) in [(129.0, 1.0), (129.5, 0.5)] {
             crate::frame_clock::set(at);
             harness.step();
             assert_eq!(shows(&harness), (true, true), "{at}: it stands");
+            let delay = repaint(&harness).as_secs_f64();
             assert!(
-                (repaint(&harness).as_secs_f64() - left).abs() < 1e-3,
-                "{at}: a repaint is asked for at the end, {left} s on, not {:?}",
-                repaint(&harness)
+                (delay - (left - dt)).abs() < 1e-3,
+                "{at}: a repaint is asked for at the end, {left} s on, not {delay}"
             );
         }
         let held = footer(&harness).expect("the result's footer is drawn");

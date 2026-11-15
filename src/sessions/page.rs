@@ -10070,14 +10070,14 @@ mod tests {
             Some("Recording saved"),
             "7.5 s of frames later"
         );
+        // egui asks for the repaint one predicted frame early, so it lands at the end.
+        let dt = f64::from(harness.ctx.input(|input| input.predicted_dt));
+        let delay = harness.output().viewport_output[&egui::ViewportId::ROOT]
+            .repaint_delay
+            .as_secs_f64();
         assert!(
-            (harness.output().viewport_output[&egui::ViewportId::ROOT]
-                .repaint_delay
-                .as_secs_f64()
-                - 0.5)
-                .abs()
-                < 1e-3,
-            "a repaint is asked for at the word's end"
+            (delay - (0.5 - dt)).abs() < 1e-3,
+            "a repaint is asked for at the word's end, 0.5 s on, not {delay}"
         );
         assert_eq!(harness.state().0.recording_revision(), said);
         crate::frame_clock::set(stopped + 8.0);
