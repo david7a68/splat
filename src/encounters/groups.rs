@@ -4835,11 +4835,11 @@ mod tests {
 
     #[test]
     fn an_encounter_draft_left_open_does_not_hide_a_plan_groups_undo() {
-        let mut encounters = Encounters {
-            draft: Some(Draft::new()),
-            ..Encounters::default()
-        };
+        let mut encounters = Encounters::default();
         encounters.new_group_in_plan();
+        // B4, E1: a new group is refused over an unsaved encounter, so the encounter draft is
+        // opened after the group, as the Encounters page does.
+        encounters.draft = Some(Draft::new());
         encounters.discarded_group = encounters.group_draft.take();
         assert!(encounters.group_discarded_in_plan());
         encounters.undo_group_discard_in_plan();
