@@ -8311,11 +8311,7 @@ mod tests {
             harness.run_steps(2);
             let shown: Vec<String> = harness
                 .query_all_by_label_contains("The note of ")
-                .map(|node| {
-                    node.label()
-                        .map(|label| label.to_string())
-                        .unwrap_or_default()
-                })
+                .map(|node| node.accesskit_node().label().unwrap_or_default())
                 .collect();
             let unnamed = harness
                 .query_all_by_label_contains("This note ")
