@@ -5934,12 +5934,12 @@ mod tests {
             "two panes: {tall:?} {mixed:?}"
         );
         assert!(
-            mixed[0] < mixed[1] - 1.0,
-            "the short pane gives its reservation up: {mixed:?}"
-        );
-        assert!(
             (mixed[1] - tall[1]).abs() < 0.5,
             "the tall pane keeps its own, as beside another tall pane: {mixed:?} {tall:?}"
+        );
+        assert!(
+            mixed[0] < mixed[1] - 1.0,
+            "the short pane gives its reservation up: {mixed:?}"
         );
 
         // Ruling L9 (attack finding 2): a press is acted on once, by its ticket, also when its
