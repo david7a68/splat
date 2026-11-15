@@ -354,9 +354,9 @@ pub fn components(ui: &mut egui::Ui) {
             .blocked(Some("Save or discard to change packages."))
             .show(ui);
         space(ui, L);
-        blocked_reason(ui, Some("Paste your session cookie first."));
+        blocked_reason(ui, Some("Paste your sign-in cookie first."));
         let _ = Action::secondary("Connect")
-            .blocked(Some("Paste your session cookie first."))
+            .blocked(Some("Paste your sign-in cookie first."))
             .show(ui);
     });
     design_group(ui, "Save rows");

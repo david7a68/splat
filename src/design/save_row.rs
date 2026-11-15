@@ -68,7 +68,7 @@
 //!
 //! ```compile_fail
 //! # use splat::ownership::Diagnosis;
-//! let found = Diagnosis { refused: None, incomplete: None, unreadable: true }; // <- by hand
+//! let found = Diagnosis { refused: None, missing: None, incomplete: None, unreadable: true }; // <- by hand
 //! ```
 use super::{Action, Density, Status, Tone, colors, components::status, icons};
 use eframe::egui::{self, Ui};
@@ -99,11 +99,15 @@ pub enum DraftOrigin {
 ///   refused change. Save waits with the reason.
 /// - [`Diagnosis::refused`]: a change that cannot stand (`Another entry has this id.`):
 ///   `Invalid`, and Save waits with the reason.
+/// - [`Diagnosis::missing`]: a change that names a thing that is gone (a deleted encounter, a
+///   creature this campaign cannot find): `Invalid` in the warning tone (R41), and Save waits
+///   with the reason. It ranks after a refused change and before a missing part.
 /// - [`Diagnosis::unreadable`]: the draft or its file cannot be read (a repair's problem):
 ///   `Invalid`, but Save is not blocked by it, since Save can repair it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Diagnosis<'a> {
     refused: Option<Cow<'a, str>>,
+    missing: Option<Cow<'a, str>>,
     incomplete: Option<Cow<'a, str>>,
     unreadable: bool,
 }
@@ -113,6 +117,7 @@ impl<'a> Diagnosis<'a> {
     pub fn valid() -> Self {
         Self {
             refused: None,
+            missing: None,
             incomplete: None,
             unreadable: false,
         }
@@ -132,6 +137,14 @@ impl<'a> Diagnosis<'a> {
         }
     }
 
+    /// A change that names a thing that is gone: a warning (R41), and Save waits.
+    pub fn missing(why: impl Into<Cow<'a, str>>) -> Self {
+        Self {
+            missing: Some(why.into()),
+            ..Self::valid()
+        }
+    }
+
     pub fn unreadable() -> Self {
         Self {
             unreadable: true,
@@ -139,30 +152,77 @@ impl<'a> Diagnosis<'a> {
         }
     }
 
+    /// The kind that ranks first, by the one rule: unreadable data, a refused change, a thing
+    /// that is gone, then a missing part. `None` when nothing is wrong.
+    pub fn cause(&self) -> Option<InvalidCause> {
+        if self.unreadable {
+            Some(InvalidCause::Unreadable)
+        } else if self.refused.is_some() {
+            Some(InvalidCause::Refused)
+        } else if self.missing.is_some() {
+            Some(InvalidCause::Missing)
+        } else if self.incomplete.is_some() {
+            Some(InvalidCause::Incomplete)
+        } else {
+            None
+        }
+    }
+
+    /// Whether this diagnosis's first-ranked fault outranks `other`'s, by the one rule of
+    /// [`Self::cause`]. Equals do not outrank each other, so a caller that keeps the first of
+    /// equals keeps the order of report among them (lead ruling, s30 B11: a group names its most
+    /// severe member fault, then the first in member order).
+    pub fn outranks(&self, other: &Diagnosis<'_>) -> bool {
+        let rank = |cause: Option<InvalidCause>| match cause {
+            None => 0,
+            Some(InvalidCause::Incomplete) => 1,
+            Some(InvalidCause::Missing) => 2,
+            Some(InvalidCause::Refused) => 3,
+            Some(InvalidCause::Unreadable) => 4,
+        };
+        rank(self.cause()) > rank(other.cause())
+    }
+
+    /// The tone of the first-ranked fault (R41): every place that says this fault (the save
+    /// row's word, a field's message, the footer) paints it in this tone. `None` when nothing
+    /// is wrong.
+    pub fn tone(&self) -> Option<Tone> {
+        self.cause().map(InvalidCause::tone)
+    }
+
     /// Both diagnoses. Each kind keeps its own reason (the later report's, when both name one),
     /// so no kind hides another, and the rank does not depend on the order of the calls.
     pub fn and(self, other: Self) -> Self {
         Self {
             refused: other.refused.or(self.refused),
+            missing: other.missing.or(self.missing),
             incomplete: other.incomplete.or(self.incomplete),
             unreadable: self.unreadable || other.unreadable,
         }
     }
 
-    /// The reason Save waits, by the rank: a refused change before a missing part. Unreadable
-    /// data does not block Save.
+    /// The reason Save waits, by the rank: a refused change, a thing that is gone, then a
+    /// missing part. Unreadable data does not block Save.
     pub fn blocking(&self) -> Option<&str> {
-        self.refused.as_deref().or(self.incomplete.as_deref())
+        self.refused
+            .as_deref()
+            .or(self.missing.as_deref())
+            .or(self.incomplete.as_deref())
     }
 
-    /// Whether the one fault is a missing part (no refused change, no unreadable data).
+    /// Whether the one fault is a missing part (no refused change, nothing gone, no unreadable
+    /// data).
     pub fn only_incomplete(&self) -> bool {
-        self.incomplete.is_some() && self.refused.is_none() && !self.unreadable
+        self.incomplete.is_some()
+            && self.refused.is_none()
+            && self.missing.is_none()
+            && !self.unreadable
     }
 
     pub fn into_owned(self) -> Diagnosis<'static> {
         Diagnosis {
             refused: self.refused.map(|why| Cow::Owned(why.into_owned())),
+            missing: self.missing.map(|why| Cow::Owned(why.into_owned())),
             incomplete: self.incomplete.map(|why| Cow::Owned(why.into_owned())),
             unreadable: self.unreadable,
         }
@@ -179,6 +239,20 @@ pub enum InvalidCause {
     Refused,
     /// The draft or its file cannot be read: the error tone.
     Unreadable,
+    /// The change names a thing that is gone (a deleted encounter, a creature this campaign
+    /// cannot find): the warning tone (R41).
+    Missing,
+}
+
+impl InvalidCause {
+    /// The one tone of this cause, wherever it is said (R41, R37): the status word takes it,
+    /// and so does each message of the same fault.
+    pub fn tone(self) -> Tone {
+        match self {
+            Self::Incomplete | Self::Missing => Tone::Warning,
+            Self::Refused | Self::Unreadable => Tone::Error,
+        }
+    }
 }
 
 /// Who owns the one accent-filled primary action in view.
@@ -224,10 +298,13 @@ impl SaveWord {
     pub fn status(self) -> Status<'static> {
         let d = colors().document;
         let (icon, color) = match self {
-            Self::Invalid(InvalidCause::Incomplete) => Tone::Warning.parts(),
-            Self::Invalid(InvalidCause::Refused | InvalidCause::Unreadable) | Self::NotSaved => {
-                (icons::ERROR, d.invalid)
-            }
+            // The word takes its cause's tone (R37, R41): the one value that also paints the
+            // cause's own message.
+            Self::Invalid(cause) => match cause.tone() {
+                Tone::Error => (icons::ERROR, d.invalid),
+                tone => tone.parts(),
+            },
+            Self::NotSaved => (icons::ERROR, d.invalid),
             Self::New => (icons::DRAFT, d.clean),
             Self::ChangedOnDisk => (icons::WARN, d.external),
             Self::Unsaved => (icons::DRAFT, d.unsaved),
@@ -352,13 +429,20 @@ impl<'a> DraftState<'a> {
         self.kind(|found| found.refused.as_deref())
     }
 
+    fn missing(&self) -> Option<&str> {
+        self.kind(|found| found.missing.as_deref())
+    }
+
     fn incomplete(&self) -> Option<&str> {
         self.kind(|found| found.incomplete.as_deref())
     }
 
-    /// Why Save's check blocks Save, by the rank: a refused change before a missing part.
+    /// Why Save's check blocks Save, by the rank: a refused change, a thing that is gone, then
+    /// a missing part.
     fn refusal(&self) -> Option<&str> {
-        self.refused().or_else(|| self.incomplete())
+        self.refused()
+            .or_else(|| self.missing())
+            .or_else(|| self.incomplete())
     }
 
     pub fn word(&self) -> SaveWord {
@@ -366,6 +450,8 @@ impl<'a> DraftState<'a> {
             SaveWord::Invalid(InvalidCause::Unreadable)
         } else if self.refused().is_some() {
             SaveWord::Invalid(InvalidCause::Refused)
+        } else if self.missing().is_some() {
+            SaveWord::Invalid(InvalidCause::Missing)
         } else if self.incomplete().is_some() {
             match self.origin {
                 DraftOrigin::Saved => SaveWord::Invalid(InvalidCause::Incomplete),
@@ -410,6 +496,12 @@ impl<'a> DraftState<'a> {
         }
     }
 
+    /// The draft's file changed on disk: a comparison or fault body owns the pane. The typed
+    /// fact, never read from a sentence.
+    pub fn file_changed(&self) -> bool {
+        self.on_disk
+    }
+
     /// `Discard` shows while the draft has changes and the comparison does not own the pane.
     pub fn discard_shown(&self) -> bool {
         self.changed() && !self.on_disk
@@ -438,19 +530,98 @@ pub struct SaveRow {
 /// The save row of `state`, as wide as the `Ui`: the word, `Discard` and any lock reason at the
 /// left, `save` (its words, such as `Save` or `Save changes`) at the right with `Ctrl+S`.
 pub fn save_row(ui: &mut Ui, state: &DraftState<'_>, save: &str) -> SaveRow {
+    save_row_with(ui, state, save, None)
+}
+
+/// Why other actions of the pane wait for this draft (M2, the reader toolbar's draft reason):
+/// a long and a short whole form, both the toolbar part's own words, and whether it holds.
+#[derive(Clone, Copy, Debug)]
+pub(in crate::design) struct RowReason<'r> {
+    pub long: &'r str,
+    pub short: &'r str,
+    pub locked: bool,
+}
+
+/// `save_row`, with `reason` in the room between the left parts and Save: the long form when it
+/// fits whole, else the short one, measured before paint from the fonts with `Discard` and the
+/// widest word, so the choice does not change when the draft becomes dirty. Painted while it
+/// holds; nothing while open. Only a row too narrow for the short form keeps a slot under it,
+/// in both states (R29), so nothing moves while the DM types.
+pub(in crate::design) fn save_row_with(
+    ui: &mut Ui,
+    state: &DraftState<'_>,
+    save: &str,
+    reason: Option<RowReason<'_>>,
+) -> SaveRow {
+    let save_action = || {
+        match state.save_weight() {
+            SaveWeight::Primary => Action::primary(save),
+            SaveWeight::Secondary => Action::secondary(save),
+        }
+        .density(Density::Read)
+        .blocked(state.save_blocked())
+        .key("Ctrl+S")
+    };
+    let gap = ui.spacing().item_spacing.x;
+    let small = super::Type::Small.font(ui);
+    // Save's widest form (primary or secondary weight) and the widest lock sentence the draft can
+    // show (`locks_campaign`), whatever the draft holds now: the form depends on the width only.
+    let save_width = [Action::primary(save), Action::secondary(save)]
+        .into_iter()
+        .map(|action| {
+            action
+                .density(Density::Read)
+                .key("Ctrl+S")
+                .natural_width(ui)
+        })
+        .fold(0.0, f32::max);
+    let lock_width = if state.locks_campaign {
+        [SAVE_OR_DISCARD_TO_SWITCH, DISCARD_TO_SWITCH]
+            .into_iter()
+            .map(|words| super::number_width(ui, words, &small) + gap)
+            .fold(0.0, f32::max)
+    } else {
+        0.0
+    };
+    let on_line = reason.and_then(|reason| {
+        // The widest word and its icon, whatever the draft holds.
+        let word = [
+            SaveWord::Invalid(InvalidCause::Incomplete),
+            SaveWord::Invalid(InvalidCause::Refused),
+            SaveWord::Invalid(InvalidCause::Unreadable),
+            SaveWord::New,
+            SaveWord::ChangedOnDisk,
+            SaveWord::NotSaved,
+            SaveWord::Unsaved,
+            SaveWord::Saved,
+            SaveWord::NoChanges,
+        ]
+        .into_iter()
+        .map(|word| {
+            let status = word.status();
+            super::number_width(ui, &format!("{} {}", status.icon, status.word), &small)
+        })
+        .fold(0.0, f32::max);
+        let room = ui.available_width()
+            - save_width
+            - word
+            - Action::quiet("Discard").natural_width(ui)
+            - lock_width
+            - 4.0 * gap;
+        let fits = |words: &str| super::number_width(ui, words, &small) <= room;
+        if fits(reason.long) {
+            Some(reason.long)
+        } else if fits(reason.short) {
+            Some(reason.short)
+        } else {
+            None
+        }
+    });
     let mut pressed = SaveRow::default();
     ui.horizontal(|ui| {
         ui.set_min_height(Density::Scan.control());
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            pressed.save = match state.save_weight() {
-                SaveWeight::Primary => Action::primary(save),
-                SaveWeight::Secondary => Action::secondary(save),
-            }
-            .density(Density::Read)
-            .blocked(state.save_blocked())
-            .key("Ctrl+S")
-            .show(ui)
-            .clicked();
+            pressed.save = save_action().show(ui).clicked();
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                 status(ui, state.word().status());
                 if state.discard_shown() {
@@ -459,15 +630,114 @@ pub fn save_row(ui: &mut Ui, state: &DraftState<'_>, save: &str) -> SaveRow {
                 if let Some(reason) = state.lock_reason() {
                     super::blocked_reason(ui, Some(reason));
                 }
+                if let Some(reason) = reason
+                    && reason.locked
+                    && let Some(words) = on_line
+                {
+                    let response =
+                        ui.label(super::Type::Small.rich(ui, words).color(colors().muted));
+                    if words != reason.long {
+                        super::named(ui, &response, reason.long);
+                        let _ = response.on_hover_text(reason.long);
+                    }
+                }
             });
         });
     });
+    // Too narrow for the short form: a slot under the row, its room kept while open.
+    if let Some(reason) = reason
+        && on_line.is_none()
+    {
+        if reason.locked {
+            super::blocked_reason(ui, Some(reason.long));
+        } else {
+            ui.scope_builder(egui::UiBuilder::new().invisible(), |ui| {
+                super::blocked_reason(ui, Some(reason.long));
+            });
+        }
+    }
     pressed
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// M2 (B2 packet 3, F2): the save row with the toolbar's draft reason chooses its form
+    /// (long or short on its line, or the slot under it) from the width only. Across widths on
+    /// both fit boundaries, walking clean → valid dirty → invalid → clean (with and without the
+    /// campaign-switch lock), the room the reason adds is the same in every state, so it moves
+    /// nothing. (The row's own campaign-switch sentence wraps at very narrow widths and grows
+    /// the row with or without the reason; that is the row's, measured apart here.)
+    #[test]
+    fn the_reason_form_depends_on_the_width_only() {
+        let reason = |locked| RowReason {
+            long: "Save or discard to copy, add an entry or change packages.",
+            short: "Save or discard first.",
+            locked,
+        };
+        let states = |locks: bool| {
+            let base = |changed| {
+                let state = DraftState::new(DraftOrigin::Saved, changed, Primary::Draft);
+                if locks { state.locks_campaign() } else { state }
+            };
+            [
+                (base(Changed::No), false),
+                (base(Changed::Yes), true),
+                (
+                    base(Changed::Yes).check(Diagnosis::refused("Bad id.")),
+                    true,
+                ),
+                (base(Changed::No), false),
+            ]
+        };
+        let ctx = egui::Context::default();
+        crate::design::theme::install(&ctx);
+        let mut forms = std::collections::BTreeSet::new();
+        for locks in [false, true] {
+            for width in (240..=900).step_by(4) {
+                let mut tops = Vec::new();
+                for (state, locked) in states(locks) {
+                    let mut top = 0.0;
+                    let mut plain = 0.0;
+                    for _ in 0..2 {
+                        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+                            egui::CentralPanel::default().show(ctx, |ui| {
+                                let rect = egui::Rect::from_min_size(
+                                    ui.cursor().min,
+                                    egui::vec2(width as f32, 1_000.0),
+                                );
+                                ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                                    let start = ui.cursor().top();
+                                    let _ = save_row_with(ui, &state, "Save", Some(reason(locked)));
+                                    top = ui.label("After").rect.top() - start;
+                                });
+                                let rect = egui::Rect::from_min_size(
+                                    ui.cursor().min,
+                                    egui::vec2(width as f32, 1_000.0),
+                                );
+                                ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                                    let start = ui.cursor().top();
+                                    let _ = save_row_with(ui, &state, "Save", None);
+                                    plain = ui.label("After").rect.top() - start;
+                                });
+                            });
+                        });
+                    }
+                    tops.push(top - plain);
+                }
+                forms.insert(tops[0] as i64);
+                assert!(
+                    tops.iter().all(|top| (top - tops[0]).abs() < 0.5),
+                    "at {width} (campaign lock {locks}) the control after the row moved: {tops:?}"
+                );
+            }
+        }
+        assert!(
+            forms.len() >= 2,
+            "the sweep reached the slot under the row: {forms:?}"
+        );
+    }
 
     /// The rule as a table: each row is one state and the word, weight, reason and Discard it
     /// gives. Rows name the round that ruled them.
@@ -541,6 +811,28 @@ mod tests {
             (
                 "refused and incomplete in one diagnosis",
                 new().check(incomplete().and(Diagnosis::refused("Bad id."))),
+                SaveWord::Invalid(InvalidCause::Refused),
+                SaveWeight::Secondary,
+                Some("Bad id."),
+                true,
+            ),
+            // R41: a change that names a thing that is gone is Invalid in any origin (a new
+            // draft too), and it ranks after a refused change and before a missing part.
+            (
+                "new missing",
+                new()
+                    .check(incomplete())
+                    .check(Diagnosis::missing("Its encounter was deleted.")),
+                SaveWord::Invalid(InvalidCause::Missing),
+                SaveWeight::Secondary,
+                Some("Its encounter was deleted."),
+                true,
+            ),
+            (
+                "missing, then refused",
+                yes()
+                    .check(Diagnosis::missing("Its encounter was deleted."))
+                    .check(Diagnosis::refused("Bad id.")),
                 SaveWord::Invalid(InvalidCause::Refused),
                 SaveWeight::Secondary,
                 Some("Bad id."),
@@ -734,6 +1026,45 @@ mod tests {
         assert_eq!(tone(SaveWord::Invalid(InvalidCause::Incomplete)), warning);
         assert_eq!(tone(SaveWord::Invalid(InvalidCause::Refused)).0, error.0);
         assert_eq!(tone(SaveWord::Invalid(InvalidCause::Unreadable)).0, error.0);
+        assert_eq!(tone(SaveWord::Invalid(InvalidCause::Missing)), warning);
+        // One value: the diagnosis gives its cause, and the word and every message of the fault
+        // take that cause's tone (R41).
+        for (found, cause) in [
+            (Diagnosis::incomplete("a"), InvalidCause::Incomplete),
+            (Diagnosis::missing("a"), InvalidCause::Missing),
+            (Diagnosis::refused("a"), InvalidCause::Refused),
+            (Diagnosis::unreadable(), InvalidCause::Unreadable),
+            (
+                Diagnosis::missing("a").and(Diagnosis::incomplete("b")),
+                InvalidCause::Missing,
+            ),
+            (
+                Diagnosis::missing("a").and(Diagnosis::refused("b")),
+                InvalidCause::Refused,
+            ),
+        ] {
+            assert_eq!(found.cause(), Some(cause), "{found:?}");
+            assert_eq!(found.tone(), Some(cause.tone()), "{found:?}");
+            assert_eq!(
+                tone(SaveWord::Invalid(cause)).0,
+                cause.tone().parts().0,
+                "{cause:?}: the word's icon is its cause's"
+            );
+        }
+        assert_eq!(Diagnosis::valid().tone(), None);
+        // The rank of `cause` orders whole diagnoses too; equals do not outrank each other.
+        let ranked = [
+            Diagnosis::valid(),
+            Diagnosis::incomplete("a"),
+            Diagnosis::missing("a"),
+            Diagnosis::refused("a"),
+            Diagnosis::unreadable(),
+        ];
+        for (i, low) in ranked.iter().enumerate() {
+            for (j, high) in ranked.iter().enumerate() {
+                assert_eq!(high.outranks(low), j > i, "{high:?} over {low:?}");
+            }
+        }
         for fault in [warning, error] {
             assert_ne!(tone(SaveWord::New).0, fault.0, "New has no fault icon");
             assert_ne!(tone(SaveWord::New).1, fault.1, "New has no fault colour");

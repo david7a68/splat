@@ -187,14 +187,14 @@ eye during long sessions.
 | List row | `row`, `two_line_row` | Fixed height for `show_rows`; paints hover in the current frame |
 | Status | `status`, `wrapped_status`, `status_link`, `Status`, `rail_status_detail`, `KindStatus`, `StatusKind` | Icon, word and colour; a `KindStatus` paints its icon and its word apart, in the colours its `StatusKind` decides (no free colour): `Recording` paints only its record icon in the `recording` token, its words and time in the text colour (R5); `status_link` opens where the DM can act. A status that wraps (`wrapped_status`, `status_link`, `rail_status_detail`) paints its icon and its word where a one-line status paints them; every line after the first starts at the word, never under the icon |
 | Stat tile | `stat_tile` | Sentence-case muted `Small` label over a large value, no box |
-| HP | `hp_bar`, `hp_readout`, `hp_state` | Fixed slots; separate temporary HP |
+| HP | `hp_bar`, `hp_readout`, `hp_state`, `combat_sync::fraction` | Fixed slots; separate temporary HP. Every displayed HP fraction is compact (`62/62`), through one formatter; stored text and service payloads keep their format |
 | Empty state | `empty_state` | Icon, serif title with no full stop (`Nothing planned yet`), purpose and one next step at the top of an empty pane or page, with normal padding; it starts at one y on every page (the Encounters page steps past its header without an extra item gap) |
 | Heading | `heading(ui, Heading::Group / Label / Section)` | A heading adds its own space: `Heading::above` (`L`; `XL` for a serif `Section`) from the item before it, none when it is first in its column, and `XS` under it, so a heading belongs to what follows. `Group`: `Label` capitals, nonzero count muted, no rule; serif `Section` headings belong to readers and stat blocks. Clippy refuses the old `group_heading` and `group_label` outside `src/design/` (staged); the old `reader::section_heading` is gone |
 | Gap | `gap(ui, Gap::…)` | Space between two things is one step of the scale (`XS` to `XXL`); no other amount exists. Clippy refuses `Ui::add_space` and `Ui::allocate_space` outside `src/design/` (staged, counted by function in `STAGED_ALLOWS` as `Ban::Extras`). A change of `item_spacing` through `spacing_mut` is not refused: a reviewer reads it, and the gate's alignment and stillness checks see its effects |
-| Choice | `choice`, `choice_value`, `choice_wrapped`, `choice_wrapped_value` | One choice of a menu, drop-down or list. The selected one shows the check (`icons::OK`) in a fixed column, so every choice's words start at one x. Clippy refuses egui's `selectable_value`, `selectable_label`, `Button::selectable`, `Button::selected` and `SelectableLabel::new` outside `src/design/` (staged). Not this part, each with its own: a radio, a checkbox, the toggle (`Action::selected`) and tabs (`segmented`, `counted_tab`, `overflow_tabs`). `choice_wrapped` is the same row in a list whose rows wrap (the drop-down's): its words wrap inside the row, never cut, and a blocked choice shows its reason under them and takes no press or keyboard focus. **Width:** a choice never takes more width than its column gives. In a column it takes the column's width (`choice` cuts its words with an ellipsis, `choice_wrapped` wraps them); on a line it takes its words' width, at most the rest of the line. While egui measures an auto-sized menu, a choice asks for its words' width inside the menu's room, so the menu is as wide as its widest choice and never wider than its room. **Words:** `choice` and `choice_value` take only the app's fixed words (`&'static str`); words from the user's data (a name, a path, a title, a session's label) do not compile there and go through `choice_wrapped` or `choice_wrapped_value` |
+| Choice | `choice`, `choice_value`, `choice_wrapped`, `choice_wrapped_value` | One choice of a menu, drop-down or list. The selected one shows the check (`icons::OK`) in a fixed column, so every choice's words start at one x. Clippy refuses egui's `selectable_value`, `selectable_label`, `Button::selectable`, `Button::selected` and `SelectableLabel::new` outside `src/design/` (staged). Not this part, each with its own: a radio, a checkbox, the toggle (`Action::selected`) and tabs (`segmented`, `counted_tab`, `overflow_tabs`). `choice_wrapped` is the same row in a list whose rows wrap (the drop-down's): its words wrap at word boundaries. Only a word wider than the menu’s room ends in an ellipsis; accessibility keeps the full label. A blocked choice shows its reason under them and takes no press or keyboard focus. **Width:** a choice never takes more width than its column gives. In a column it takes the column's width (`choice` cuts its words with an ellipsis, `choice_wrapped` wraps them); on a line it takes its words' width, at most the rest of the line. While egui measures an auto-sized menu, a choice asks for its words' width inside the menu's room, so the menu is as wide as its widest choice and never wider than its room. **Words:** `choice` and `choice_value` take only the app's fixed words (`&'static str`); words from the user's data (a name, a path, a title, a session's label) do not compile there and go through `choice_wrapped` or `choice_wrapped_value` |
 | Submenu | `menu_submenu` | Match quiet Read actions: `S` horizontal padding, Strong type and Read height. Ends with the icon set's muted caret (`icons::NEXT`), as sections and dropdowns do, never egui's solid triangle. Opens right of its menu when it fits inside the opening pane with `S` to spare, else left; in a pane too narrow for either (a 316 px column), below its own row (above it when it does not fit below), so it never covers the row that opened it and the parent menu stays reachable; never over a splitter or scroll bar |
 | Row menu | `row_menu` | Quiet `⋯` at the right end of the row's content, never at the pane's edge when the row is narrower than the pane, named `More actions for <name>`; holds Remove and Delete. Opens under the `⋯`, and ends at its right edge when it would cross the pane's splitter or scroll bar |
-| Drop-down | `Dropdown` (`new`, `choice`, `blocked_choice`, `choices`, `width`, `blocked`, `command`, `show`) | One choice from a list: a field-like control with the chosen label, cut at its end, whole on hover and in its accessible name; a caret; `Read` height. Its list opens under it (above it when it does not fit below), as wide as it, inside the body that owns it: a pane's body room above its footer (`pane::body_room`), else the visible part of its `Ui`; a list taller than its room scrolls inside itself. Rows are at least `Read` height and wrap their words inside the list (never cut), with the chosen row's check mark in an icon slot. A blocked choice shows its reason on its row and takes no press and no keyboard focus. Enter or Space opens the list on the chosen row, the arrow keys and Tab move, the focused row always in view; Enter or Space chooses, Escape closes; focus then goes back to the control. A blocked or disabled drop-down closes its list and takes no selection or command; it shows a lock and says why on hover and in its accessible description. One command may follow the choices below a rule (`Add campaign`). Its id comes from a `FieldId`. `clippy.toml` bans `egui::ComboBox` outside `src/design/` |
+| Drop-down | `Dropdown` (`new`, `choice`, `choice_with_short_label`, `blocked_choice`, `choices`, `width`, `blocked`, `command`, `show`, `editable_value`, `selected_words`) | One choice from a list: a field-like control with the chosen label, cut at its end, whole on hover and in its accessible name; a caret; `Read` height. Its list opens under it (above it when it does not fit below), as wide as it, inside the body that owns it: a pane's body room above its footer (`pane::body_room`), else the visible part of its `Ui`; a list taller than its room scrolls inside itself. Rows are at least `Read` height and wrap their words inside the list (never cut), with the chosen row's check mark in an icon slot. A blocked choice shows its reason on its row and takes no press and no keyboard focus. Enter or Space opens the list on the chosen row, the arrow keys and Tab move, the focused row always in view; Enter or Space chooses, Escape closes; focus then goes back to the control. A blocked or disabled drop-down closes its list and takes no selection or command; it shows a lock and says why on hover and in its accessible description. One command may follow the choices below a rule (`Add campaign`). Its id comes from a `FieldId`. `clippy.toml` bans `egui::ComboBox` outside `src/design/` |
 | Tip | `rich_tip`, `TipLine` | A tooltip of typed lines (a `Strong` title, `Body` words, a `Small` muted detail, words with their own colours), up to 360 px wide, on hover and while the control has keyboard focus. The lines are also the control's accessible description. Words alone stay `on_hover_text`; `clippy.toml` bans egui's drawn tooltips outside `src/design/` |
 | Drag source | `drag_source`, `Ghost` | A grip that carries a payload while dragged (none when the item cannot move), with the grabbing cursor and a ghost by the pointer: the icon and words in the accent colour on a raised plate, `M` right of the pointer, kept inside the window, on the tooltip layer. A drop target reads the payload with `dnd_release_payload` |
 | Image viewer | `popups::image_viewer`, `ImageSize` | An image in a modal over a rail-coloured backdrop, with Close (Esc) and its name; a click on the image closes it. The caller says the size: `Known` (from the file's header) sizes the modal before the texture loads, fitted to the window and never grown; `Unknown` waits for the texture |
@@ -217,6 +217,20 @@ has one muted line below its heading, with no zero count or full empty state. Ta
 counts. Roster, Members and Recordings use an underlined tab with a muted, nonzero count. Overflow tabs use a quiet
 caret menu without a button border; it names and underlines the selected page when that page is inside. Fight and Packages
 menus put the caret after the word. Keep remains the default focus when closing could lose work.
+
+A drop-down menu stays inside its owning pane and clip. A header above a split passes the
+list pane’s current room through `Dropdown::within`; it cannot widen the part’s room. Timeline's
+header rooms use the current header clip and start on the control's row, so their menus open
+below with the part's height cap and inner scroll. A long session menu can cover the list footer
+while open; a deferred menu API would bound it. An explicit room prefers the full label's one-line width,
+clamped to that room; default-room menus retain their width policy. A short
+room shows the whole rows it can hold and scrolls inside. Below one row, the menu closes and
+returns the keyboard to its control. Open row metrics follow the words, fonts, width and scale;
+a closed control does no row measurement.
+
+A closed drop-down shows its chosen value in regular `Body` weight. The `Dropdown` part owns
+that font, including editable and empty values; callers supply no weight. A short chosen label may
+paint in the control while the menu, hover and accessible value keep the full label.
 
 Header actions have at most one bordered secondary button, for `New …`. Other header actions are quiet and
 come first. Only one accent-filled primary action can be visible. An open run's strip owns primary `Next turn`
@@ -379,9 +393,20 @@ Lookup has no file line: there an empty value block draws nothing, and the prose
 the kind line, as a spell's does, and so does a plain note's prose. Lookup's reader keeps the app's row spacing whether a search or a link
 opened the entry. Library draws no value block. `design::reader` holds the typographic parts. Library shows quiet Back whenever it has reading
 history. Every way to open another entry records the entry it leaves: a link, a list row, the About row and the header
-count's menu. Back returns to the entry just left in one action, and a new entry ends Forward. Its toolbar stays on one line: Read and Edit Markdown at the left, then visible copy, creation and
-campaign-choice actions (`Choose for this campaign`, `Choose all`), then Back. Drop Back's key hint first; fold Copy, Make NPC note and the campaign choice into quiet More when needed, with
-Back before More. Every toolbar action, Make NPC note and the actions in More included, is a Read control
+count's menu. Back returns to the entry just left in one action, and a new entry ends Forward. Its toolbar stays on one line and is one closed part (`design::ReaderToolbar`, ruling R38): Read and the source
+mode at the left, keeping the room of the wider source label (`Markdown source`), then Back, then the copy, creation
+and campaign-choice actions (`Choose for this campaign`, `Choose all`). Back's place is fixed: it does not move
+between entry kinds or with the count of actions after it. Back shows its key hint when the modes, Back with its key
+and a `More` fit; else it drops the hint. The actions follow Back when they fit, else they fold into quiet More
+at the row's right end. A steady reason an action waits for (no place to copy to) is painted once under the row; the
+open draft's reason is painted once, by the same part. With a save row it stands on the save row's own line: the
+long whole sentence when it fits, else the short one (`Save or discard first.`, its hover and name the long one),
+chosen from the row's width alone (Save's wider weight, the widest state word, `Discard` and any campaign-switch
+reason counted in every state), so nothing moves when the draft becomes dirty and nothing shows while it is clean.
+Only a row too narrow for the short form keeps a slot under it, in both states. With no save row (a comparison or
+a fault owns the pane, or the entry cannot be edited) it stands on the toolbar's own line after the actions when it
+fits whole, else on the line under the toolbar; it is never left out. The waiting actions say the same words on
+hover and as their accessible description. Every toolbar action, Make NPC note and the actions in More included, is a Read control
 (28 px), so the toolbar row has one height and a campaign creature's title sits where a campaign spell's does. Lookup keeps its Back hint; its Back is a Read control (28 px), as its title line's icon buttons are, so the title line has one height with or without Back and the search field below never moves. Both use Alt+Left, and Alt+Right for Forward, which has no button. Lookup takes the key when focus is there. Beside the Library, the mouse's Back and Forward buttons act on the side under the pointer.
 
 Library omits `Library / <kind>` above the title. Its kind line does not repeat the package name: where two
@@ -510,7 +535,8 @@ whole at minimum width. Its menu is as wide as the control, so it stays in the c
 a long package name wraps. An empty search or filter names its scope (`No entries match in Can use. Try fewer
 words, or search Everything.`), and quiet `Search Everything` starts the next line at the text edge: it keeps
 the words and filters. In Everything the sentence ends at `Try fewer words.` with no action. At narrow widths, scope and category share an equal-width line directly above search. The package's About row follows search as the first list row.
-Hide All entries without a search. Empty categories and their headings stay hidden. Fixed scope names
+All entries stays in its place in every state; with an empty search it paints no count (the header has it; its
+accessible name keeps it), and with a search it shows the count as the other rows do. Empty categories and their headings stay hidden. Fixed scope names
 wrap; package names can shorten with full hover text and accessible names. The About row stays one line, with
 or without its mark, so a fault moves no row below it. The row always keeps `About`, the word that says what it opens; a
 name that does not fit after it shortens by whole words (`⚠ About Ashen…`). Both the scope menu and
@@ -709,7 +735,11 @@ play, and a campaign with none, show nothing here. The rows are worked out when 
 definition changes, and a collapsed section draws nothing.
 
 A copy starts with the original name selected. Destination and dependency preview update with its fields. Copy
-to… requires a campaign or package destination and states that reason on hover. Create copy saves in one step.
+to… requires a campaign or package destination (one places policy with New entry). While it waits for one, its
+reason is painted in `Small` muted words under the reader's toolbar, in the same pane, from the same value that
+disables it (ruling R35; `design::ReaderToolbar`); hover and the accessible description say it too. A disabled
+control outside a menu always has its reason in painted words in the same pane; a cause that blocks several
+controls is still said once at its cause, such as the save row. Create copy saves in one step.
 Edit the copy selects it and opens Markdown editing. An open encounter draft keeps Add to its encounter as the
 primary completion action. Completion names the destination, with path on hover. A renamed copy changes its
 first H1 only when it matches the source name.
@@ -813,7 +843,9 @@ Fix it here or in World.`), so no edit moves the editor. The cause shows once on
 closed, the message ends with it (`… Fix it here or in World. Line 3 opens a list …`) and the footer does not
 repeat it. While it is open, the repair's messages are in the page's footer: its result with a live Undo
 (`Broken.md draft discarded.` with `Undo discard`), then its cause, named by the path the message uses
-(`Notes/Broken.md: Line 3 opens a list …`), so two notes of one name in different folders stay apart. Discard returns to the unreadable file, so its cause follows the result; the next edit ends the
+(`Notes/Broken.md: Line 3 opens a list …`), so two notes of one name in different folders stay apart. The note
+cannot be read, so the message, the repair's `Invalid` and that cause are all errors (R41), from the repair's one
+diagnosis. Discard returns to the unreadable file, so its cause follows the result; the next edit ends the
 result. In a short window the repair editor gives way: the save row and a few package rows keep their size, and
 the editor's top never moves. Below the repair's save row, an `L` gap and the package list's one hairline
 separate the repair from the list; the repair adds no second rule. Invalid YAML uses plain words and marks the line to fix.
@@ -844,7 +876,7 @@ one that cannot be read), as the About row does; the message above names the fau
 says it in words (`Manifest deleted · 5 of 6 chosen`). A package's heading shares the
 centre line of its mode and its `Choose all` (or `Include future additions`) and `Choose none` actions.
 
-A missing Campaign.md states whether Splat holds the last read copy and counts its packages and rules. Writing
+A missing Campaign.md is a warning, as a missing manifest or folder is (R41). It states whether Splat holds the last read copy and counts its packages and rules. Writing
 held text requires an explicit action. With no copy, `Write a new Campaign.md` sits beside the explanation
 that the DM can write a new one with the default packages (`Campaign.md is missing, and Splat has no copy. You can
 write a new one with the default packages.`). A missing or changed Campaign.md ends `Undo discard` of the package
@@ -1402,8 +1434,11 @@ action moves when a long list starts to scroll. The group editor's header starts
 ends at that column's edge. Save group follows on that line and ends at the editor's right edge, above the Add
 creatures column, where Save encounter ends on the encounter editor's title line: one place in both editors. Then
 the save row with the state and Discard at its start and the reasons. A reason without
-room on the save row takes its own line below it. A group draft that Save's check refuses (a member's change that
-cannot stand, a missing creature) says `Invalid` in the error tone, changed or not, and Save group is not primary.
+room on the save row takes its own line below it. A group draft that Save's check refuses says `Invalid`, changed
+or not, in the tone of its cause, and Save group is not primary: the error tone for a member's change that cannot
+stand, the warning tone for a thing that is gone (a creature this campaign cannot find, a deleted encounter; R41).
+The cause's own words (under Belongs to, on the member's row, beside Save, in the footer) take the same tone, from
+the same diagnosis value.
 A new group that lacks a required part (a name, a side, a creature) says `New` with no fault tone, and Save waits
 with its reason; a saved group that an edit left without one says `Invalid` in the warning tone (R37). The
 draft's origin, new or saved, is its own fact (`DraftOrigin`): it changes at the first save and Discard restores
@@ -1867,15 +1902,17 @@ Encounters list draw a member fault with its repair (`Campaign → Packages` or 
 below it at the words when there is no room. A message action without an icon is never a link.
 
 Join status parts on one line with dot separators beside the group name when they fit, else before the first member. Use a separate line only when neither has room. `Changed` keeps its muted pencil. Member names stay intact. A line never ends with a separator: the `·` moves to the next line with the part after it. Keep `at`
-with its total in arrival messages. Live group notices name only the group and its initiative totals. Member names and roll details stay in Log. Arrival faults use the shared message form (icon and bar in the fault's tone, text-colour words) and the tone recorded for that fault. The same fault keeps its tone in the editor, the Encounters list, Arrivals and the session plan: an invalid value, such as `Maximum HP would become −28. It must be 1 or more.`, is an error; a member that is missing, unread or has no maximum HP is a warning. Every view draws each member fault in its own tone. The group adds its own reason (`No members can join.`) as a warning message only when no member fault shows; with faults, `0 of N can join` and the faults already say it. Live initiative notices name who joins and the total. Before the current turn,
+with its total in arrival messages. Live group notices name only the group and its initiative totals. Member names and roll details stay in Log. Arrival faults use the shared message form (icon and bar in the fault's tone, text-colour words) and the tone recorded for that fault. The same fault keeps its tone in the editor, the Encounters list, Arrivals and the session plan: an invalid value, such as `Maximum HP would become −28. It must be 1 or more.`, is an error, and so is a member row or a creature file that cannot be read (R41); a member that is missing (not in this campaign's packages) or that cannot join (a D&D Beyond link, no maximum HP) is a warning. Every view draws each member fault in its own tone. The group adds its own reason (`No members can join.`) as a warning message only when no member fault shows; with faults, `0 of N can join` and the faults already say it. Live initiative notices name who joins and the total. Before the current turn,
 add acts next round. Tied arrivals name both participants and offer Move before with Undo, before the first
 member of a shared-roll block. Keep tie details in Arrivals and Log, outside the Undo label.
 
 ### Saving and closing
 
-Recovery copies keep the encounter name and preserve the other file. Start their second line with `Copy 2`, before `Closed last`, round and state. Only file names keep the UTC save-time suffix.
+Recovery copies keep the encounter name and preserve the other file. Start their second line with `Copy 2`, before round and state. Only file names keep the UTC save-time suffix.
 The last closed run owns primary Resume, unless the encounter's editor holds unsaved changes (then `Save
-encounter` is primary). `Closed last` (the run closed last, also in Setup; it says what the value is) follows a copy number; Changed on disk marks a preserved disk version, after the copy number when present. Keep last-change wording from the close dialog. Saved rows use relative time today and yesterday,
+encounter` is primary). It is the first row after an open run. The order is said once, in the heading, from the rows as
+arranged (`Arranged::in_progress_order`), and only with two or more closed rows: `IN PROGRESS 2 · last closed first`, or
+`IN PROGRESS 3 · open run first, then last closed first` when the open run leads; no row carries an order word. Changed on disk marks a preserved disk version, after the copy number when present. Keep last-change wording from the close dialog. Saved rows use relative time today and yesterday,
 then a short UTC date. Edit stays for recovery copies whose encounter exists; reserve an empty slot otherwise.
 Measure actions before assigning paused-row text width. Saved time follows turn without a full stop. State
 words come from one function: Setup, Setup · Paused, Round 2, Round 2 · Paused, Ended · Round 2. An open run
@@ -1890,7 +1927,7 @@ between character sync blocks. Each block's heading has one form whatever its st
 colour, ` · `, then the status icon and word in the status colour (`Brannoch Vale · ⚠ HP conflict`, `Kestrel Dunmoor ·
 ⟳ Sync pending`). Below the sync blocks, the closed `Prep` and `Combat log` sections share one left
 edge. Signed-out conflicts offer Connect to refresh before Show file. Ended sign-in
-uses muted recovery text; failed Connect retains error state. Sync stopped links to Party and states recovery.
+uses muted recovery text; failed Connect retains error state. Sync stopped links to Party and states recovery. It is a warning in the rail and in Party's footer notice alike (R41).
 
 An ended view has one control that takes the ending away. While the ending is the newest Undo step, that is
 `Undo: end encounter`, and no other control shows. Otherwise it is secondary `Continue fight` with the run icon,
@@ -2396,7 +2433,8 @@ plan's one footer holds both. `Recording saved: …` is its recording's: it show
 file stands, and a recording that starts in that session, a campaign change or its Dismiss ends it: `Recording saved: …`, `Recording
 deleted.`, `Added to the notes.`, `<file> is now a separate session.`, where an open run stays or moved, `No entry
 is named …`, `Draft discarded.` or `Reloaded from disk.` with their Undo, the warning that this is not the session
-being played or that its date has passed, and the chosen input that is not connected. The line below the title
+being played or that its date has passed (a warning wherever it shows: this footer, the Notes panel's footer, the
+Record step and the rail's `Old session`; R41), and the chosen input that is not connected. The line below the title
 holds this session's recording state, which keeps one height from Record to Stop, and the Record step. Another
 session's recording state (`● Recording 12:04 in Session 1: …`) is in the bottom banner, so it moves nothing on the
 page; while the banner says that recording stopped saving audio, it does not say it again. (It stays out of the
@@ -2425,6 +2463,9 @@ and pasting with nothing focused still go to notes. Mark automatically written w
 readable, and offer Add for transcript markers rather than placing them automatically.
 
 ## Party
+
+A sheet’s labelled fact has one form, `Label: value`. Multiple values follow the colon, joined by
+` · ` (`Coins: 12 cp · 40 sp`). The sheet’s `sheet_label` helper draws these lines; callers supply no separator.
 
 Overview uses one group-heading style, with `L` above sheet groups. Saving throws and skills start at tile
 edges, in two or three columns; skills sort A to Z and fill columns top to bottom. Skills use muted Small words `Proficient`, `Expertise` and `Half` after the skill name. Paired cells share the
@@ -2556,7 +2597,7 @@ repair. Account help and trust text keep READER_MEASURE in column and stacked la
 The account form replaces status and Connect… link. Use Connect, Not connected and Signed out of D&D Beyond.
 A failed Connect says `Connect failed` with the error icon and colour, on the page and in the rail; `Not connected`
 is only the quiet idle state. Its cause sits in Connect's reason slot, `S` left of Connect, where the DM pressed; it
-wraps there and never moves Connect. While the cookie field is empty, the slot says `Paste your session cookie
+wraps there and never moves Connect. While the cookie field is empty, the slot says `Paste your sign-in cookie
 first.` instead.
 Show one Connecting state, with Cancel aligned to the column. Connect stays at the cookie field's right edge
 and is primary when a cookie is entered, no campaign form is open and no run owns primary. Keyring warnings

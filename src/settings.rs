@@ -185,7 +185,7 @@ impl Settings {
             Account::KeyringWarning => {
                 self.session = session();
                 self.warning = Some(
-                    "Connected, but the session could not be saved in the desktop keyring.".into(),
+                    "Connected, but your sign-in could not be saved in the desktop keyring.".into(),
                 );
             }
             Account::RefreshFailing => {
@@ -324,7 +324,7 @@ impl Settings {
                     Err(mpsc::TryRecvError::Disconnected) => {
                         self.busy = false;
                         self.connect_failed = false;
-                        self.error = Some("The session worker stopped. Restart Splat.".into());
+                        self.error = Some("The sign-in worker stopped. Restart Splat.".into());
                         break;
                     }
                 }
@@ -547,7 +547,7 @@ impl Settings {
                 if design::message_with_action(
                     ui,
                     Tone::Warning,
-                    "Your desktop keyring did not save the session. Unlock the keyring, then connect again.",
+                    "Your desktop keyring did not save your sign-in. Unlock the keyring, then connect again.",
                     "Connect again",
                 ) {
                     self.focus_sign_in();
@@ -575,17 +575,33 @@ impl Settings {
                     .open_url(egui::OpenUrl::new_tab("https://www.dndbeyond.com/sign-in"));
             }
             ui.scope_builder(egui::UiBuilder::new().id("account_cookie_help"), |ui| {
-                design::section(ui, "How to get your session cookie", |ui| {
+                design::section(ui, "How to get your sign-in cookie", |ui| {
                     ui.label("1. Sign in to D&D Beyond in your browser.");
                     ui.label(
                         "2. Open developer tools (F12), then Application or Storage → Cookies.",
                     );
-                    ui.label("3. Select dndbeyond.com and copy the value of CobaltSession.");
+                    let mut instruction = egui::text::LayoutJob::default();
+                    for (words, style) in [
+                        ("3. Select dndbeyond.com and copy the value of ", Type::Body),
+                        ("CobaltSession", Type::Mono),
+                        (".", Type::Body),
+                    ] {
+                        instruction.append(
+                            words,
+                            0.0,
+                            egui::TextFormat {
+                                font_id: style.font(ui),
+                                color: colors().text,
+                                ..Default::default()
+                            },
+                        );
+                    }
+                    ui.label(instruction);
                     ui.label("4. Paste only the value below and select Connect.");
                 });
             });
-            let cookie_width = design::small_field(ui, "Session cookie", None, None, |ui| {
-                let hint = design::placeholder(ui, "Paste session cookie");
+            let cookie_width = design::small_field(ui, "Sign-in cookie", None, None, |ui| {
+                let hint = design::placeholder(ui, "Paste sign-in cookie");
                 let width = 420.0_f32.min(ui.available_width() - 2.0 * design::S);
                 let response = SESSION_COOKIE.single_line(ui, &mut self.cookie_input, |edit| {
                     edit.password(true)
@@ -594,7 +610,7 @@ impl Settings {
                         .margin(egui::vec2(design::S, 5.0))
                         .desired_width(width)
                 });
-                design::named(ui, &response, "Paste session cookie");
+                design::named(ui, &response, "Paste sign-in cookie");
                 self.focus_cookie |= ui
                     .ctx()
                     .data_mut(|data| data.remove_temp::<bool>(egui::Id::new("focus_cookie")))
@@ -615,7 +631,7 @@ impl Settings {
                     .cookie_input
                     .trim()
                     .is_empty()
-                    .then_some("Paste your session cookie first.");
+                    .then_some("Paste your sign-in cookie first.");
                 // Round 27 FA1: the reason slot left of Connect holds a failed Connect's cause
                 // while Connect is open. It lives until the next Connect, Disconnect or a working
                 // sign-in, as before; while the cookie field is empty, the slot names that step.
@@ -682,7 +698,7 @@ impl Settings {
             });
             small(
                 ui,
-                "Splat sends your session cookie only to D&D Beyond. With the box ticked, Splat signs in again when it starts.",
+                "Splat sends your sign-in cookie only to D&D Beyond. With the box ticked, Splat signs in again when it starts.",
             );
         }
         if matches!(
@@ -778,6 +794,21 @@ mod tests {
             1,
             "the status shows once"
         );
+    }
+
+    #[test]
+    fn a_keyring_warning_names_the_sign_in() {
+        use egui_kittest::kittest::Queryable;
+        let mut settings = Settings::default();
+        settings.simulate(Account::KeyringWarning);
+        let mut harness = egui_kittest::Harness::new_ui_state(
+            |ui, settings: &mut Settings| settings.show_account(ui, true, true),
+            settings,
+        );
+        design::theme::install(&harness.ctx);
+        harness.run();
+        harness.get_by_label("Your desktop keyring did not save your sign-in. Unlock the keyring, then connect again.");
+        harness.get_by_label("Connect again");
     }
 
     #[test]

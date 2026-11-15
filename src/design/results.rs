@@ -829,7 +829,11 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         ),
         ("src/campaigns.rs", "at", &[Ban::Results]),
         ("src/campaigns.rs", "default", &[Ban::Results]),
-        ("src/campaigns.rs", "footer_messages", &[Ban::Results]),
+        (
+            "src/campaigns.rs",
+            "footer_messages",
+            &[Ban::Results, Ban::Words],
+        ),
         ("src/campaigns.rs", "form", &[Ban::Results]),
         (
             "src/campaigns.rs",
@@ -940,7 +944,7 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/library.rs",
             "editor_pane",
-            &[Ban::Results, Ban::Layout(1), Ban::Extras(1)],
+            &[Ban::Results, Ban::Extras(1)],
         ),
         ("src/library.rs", "field_key", &[Ban::RowKey(1)]),
         ("src/library.rs", "give_new_identity", &[Ban::Results]),
@@ -1128,7 +1132,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             // `ByOwner`: `checks::Results::undo(id, book)`, not the footer store's; counted by name.
             &[Ban::Layout(1), Ban::ByOwner(1)],
         ),
-        ("src/timeline/page.rs", "new_events_line", &[Ban::Layout(1)]),
         ("src/trackers/view.rs", "amount_field", &[Ban::RowKey(3)]),
         ("src/world/repair.rs", "source_editor", &[Ban::RowKey(1)]),
         // Package M (round 28): the escapes of `design::outcome`, and its own helpers.
@@ -1266,7 +1269,6 @@ pub(crate) const STAGED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
             &[Ban::Extras(2)],
         ),
         ("src/library.rs", "duplicate_choices", &[Ban::Extras(2)]),
-        ("src/library.rs", "kept_undo_message", &[Ban::Extras(2)]),
         ("src/library.rs", "recovery_action", &[Ban::Extras(2)]),
         ("src/library.rs", "repair_notice", &[Ban::Extras(1)]),
         ("src/library.rs", "use_checkbox", &[Ban::Extras(1)]),
@@ -1417,7 +1419,7 @@ pub(crate) const OWNED_ALLOWS: &[(&str, &str, &[suppressions::Ban])] = {
         (
             "src/visual_tests/ergonomics.rs",
             "a_menu_over_a_column_splitter_is_an_app_fault",
-            &[Ban::Layout(2)],
+            &[Ban::Layout(3)],
         ),
         (
             "src/visual_tests/ergonomics.rs",
@@ -1767,6 +1769,15 @@ mod tests {
         let shown = results.get_by(&Ticket { order: a }).unwrap();
         assert_eq!(shown.order(), a, "the ticket stays");
         assert_eq!(shown.refusal(), Some(&changed()));
+        // Review N7: an answer told apart from one that reads alike joins its place with the
+        // middle dot, as its result and its Undo do (R45: no brackets).
+        assert_eq!(
+            changed()
+                .words_told_apart(Name::new("Travel · 2").as_ref())
+                .as_str(),
+            "The plan line for Bell was not removed from Session 1 · Travel · 2. The session \
+             note changed on disk. Open that session’s notes and remove the plan line there."
+        );
         let attempt = shown.refused.unwrap().order;
         assert!(
             attempt > a && attempt > b,

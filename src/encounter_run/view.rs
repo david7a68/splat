@@ -444,7 +444,10 @@ fn pending_words(sync: &crate::combat_sync::CombatSync) -> String {
             };
             let removed = field(Some(value), "removedHitPoints");
             if removed != field(sheet, "removedHitPoints") {
-                add(format!("{}/{max} HP", (max - removed.unwrap_or(0)).max(0)));
+                add(format!(
+                    "{} HP",
+                    crate::combat_sync::fraction((max - removed.unwrap_or(0)).max(0), max)
+                ));
             }
             let temporary = field(Some(value), "temporaryHitPoints");
             if temporary != field(sheet, "temporaryHitPoints") {
@@ -3210,38 +3213,49 @@ impl Run {
         clippy::disallowed_methods,
         reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
     )]
-    fn notes_tab(&self, ui: &mut egui::Ui) {
+    fn notes_tab(&mut self, ui: &mut egui::Ui) {
         let (prep, technical) = self.prep();
+        let mut pressed = false;
         egui::ScrollArea::vertical()
             .id_salt("run_encounter_notes")
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 if prep.is_empty() {
-                    design::empty_state(
-                        ui,
-                        icons::SESSIONS,
-                        "No prep notes yet",
-                        "Add read-aloud text or notes when you edit the encounter.",
-                        |ui| {
-                            if let Some(item) = self.content.as_ref().and_then(|index| {
-                                index.items.iter().find(|item| {
-                                    Some(item.entry.id) == self.source
-                                        && item.entry.kind == "encounter"
-                                })
-                            }) && Action::quiet("Edit encounter")
-                                .line_start()
-                                .show(ui)
-                                .clicked()
-                            {
-                                ui.ctx().data_mut(|data| {
-                                    data.insert_temp(
-                                        egui::Id::new("edit_run_encounter"),
-                                        item.entry.path.clone(),
-                                    )
-                                });
-                            }
-                        },
-                    );
+                    // Round 30 AP1: a sentence that names an act offers it. The run's own
+                    // record of its encounter decides, not Lookup's index, which can lag behind
+                    // a fight made a moment ago. With no saved encounter, it says why.
+                    match self.source {
+                        Some(id) => design::empty_state(
+                            ui,
+                            icons::SESSIONS,
+                            "No prep notes yet",
+                            "Add read-aloud text or notes when you edit the encounter.",
+                            |ui| {
+                                if Action::quiet("Edit encounter")
+                                    .line_start()
+                                    .show(ui)
+                                    .clicked()
+                                {
+                                    pressed = true;
+                                    ui.ctx().data_mut(|data| {
+                                        data.insert_temp(egui::Id::new("edit_run_encounter"), id);
+                                    });
+                                }
+                                // R35: why the press did not open it, under the action, until
+                                // the next press. The run owns it and ends with the run.
+                                if let Some(refusal) = &self.prep_refusal {
+                                    design::blocked_reason(ui, Some(refusal.reason()));
+                                }
+                            },
+                        ),
+                        None => design::empty_state(
+                            ui,
+                            icons::SESSIONS,
+                            "No prep notes",
+                            "This fight did not start from a saved encounter, so it has no prep notes.",
+                            |_| {},
+                        ),
+                    }
                 } else {
                     design::heading(ui, design::Heading::Label(READ_ALOUD));
                     style::markdown(ui, prep);
@@ -3253,6 +3267,9 @@ impl Run {
                     });
                 }
             });
+        if pressed {
+            self.prep_refusal = None;
+        }
     }
 
     /// The campaign's encounter groups. A group is dragged to the initiative list, or added
@@ -4602,7 +4619,7 @@ impl Run {
                     ("ARMOR CLASS", unknown(p.armor_class)),
                     (
                         "HIT POINTS",
-                        format!("{} / {}", unknown(p.hp), unknown(p.max_hp)),
+                        crate::combat_sync::fraction(unknown(p.hp), unknown(p.max_hp)),
                     ),
                     ("INITIATIVE", unknown(p.initiative)),
                 ],
@@ -5020,7 +5037,7 @@ impl Run {
                         ui,
                         icons::SESSIONS,
                         "No log entries yet",
-                        "Begin combat or add a note to record what happens.",
+                        "Begin combat, or add a note on the Correct tab, to record what happens.",
                         |_| {},
                     );
                 }
@@ -5259,8 +5276,10 @@ impl Run {
                 let words = fault.words();
                 // One file names every unread row, so its name and actions show once, after
                 // the last warning about it.
+                // R41 (lead ruling, s30 B11): an unread roster row is an error, in the editor's
+                // tone (`unread_row_tone`), here as there.
                 if index < last {
-                    design::small_message(ui, Tone::Warning, &words);
+                    design::small_message(ui, crate::encounters::unread_row_tone(), &words);
                     continue;
                 }
                 ui.scope(|ui| {
@@ -5283,7 +5302,11 @@ impl Run {
                                 vec2(message_width, 0.0),
                                 Layout::top_down(Align::Min),
                                 |ui| {
-                                    design::small_message(ui, Tone::Warning, &words);
+                                    design::small_message(
+                                        ui,
+                                        crate::encounters::unread_row_tone(),
+                                        &words,
+                                    );
                                 },
                             );
                             ui.add_space(design::L - gap);
@@ -5293,7 +5316,9 @@ impl Run {
                         // The file line starts at the warning's words, as every message's
                         // actions do, and its name wraps whole rather than being cut.
                         let words_left =
-                            design::small_message(ui, Tone::Warning, &words).rect.left();
+                            design::small_message(ui, crate::encounters::unread_row_tone(), &words)
+                                .rect
+                                .left();
                         let inset = words_left - ui.cursor().left();
                         ui.horizontal_top(|ui| {
                             ui.add_space(inset);
@@ -5563,21 +5588,22 @@ impl Run {
             _ => icons::GROUP,
         };
         let mut numbers = format!(
-            "{side_icon} {} · HP {}/{}",
+            "{side_icon} {} · HP {}",
             style::human_label(&p.side),
-            display(p.hp),
-            display(p.max_hp)
+            crate::combat_sync::fraction(display(p.hp), display(p.max_hp))
         );
         let absent = if p.present {
             String::new()
         } else {
             format!("{} Absent · ", icons::ABSENT)
         };
-        // FF1: a row from an unread roster line marks its own fault first, in the warning tone,
-        // so the DM need not match the notice's name by reading. The notice keeps the cause.
+        // FF1: a row from an unread roster line marks its own fault first, in its tone (R41: an
+        // error, `unread_row_mark`), so the DM need not match the notice's name by reading. The
+        // notice keeps the cause.
+        let (fault_icon, fault_color) = crate::encounters::unread_row_mark();
         let fault = self
             .roster_fault_line(&p.key)
-            .map(|line| format!("{} Line {line} not read", icons::WARN));
+            .map(|line| format!("{fault_icon} Line {line} not read"));
         let absent = match &fault {
             Some(fault) => format!("{fault} · {absent}"),
             None => absent,
@@ -5655,7 +5681,7 @@ impl Run {
                 .collect::<Vec<_>>()
                 .join(" ·\u{a0}");
             let status = match &fault {
-                Some(fault) => Some((fault.replace(' ', "\u{a0}"), colors().result.warning)),
+                Some(fault) => Some((fault.replace(' ', "\u{a0}"), fault_color)),
                 None => {
                     hp_word(&p).map(|(icon, word, color)| (format!("{icon}\u{a0}{word}"), color))
                 }
@@ -7676,7 +7702,10 @@ fn row_name(p: &Participant, turn: TurnMark, sync: Option<SyncState>) -> String 
     let mut parts = vec![
         p.name.clone(),
         p.side.clone(),
-        format!("HP {}/{}", display(p.hp), display(p.max_hp)),
+        format!(
+            "HP {}",
+            crate::combat_sync::fraction(display(p.hp), display(p.max_hp))
+        ),
         format!("Temp {}", p.temporary_hp),
         format!("AC {}", display(p.armor_class)),
         format!("Initiative {}", display(p.initiative)),
@@ -14293,7 +14322,7 @@ mod tests {
                             amount.request_focus();
                         }
                         if page.settings {
-                            let cookie = Action::secondary("Paste session cookie").show(ui);
+                            let cookie = Action::secondary("Paste sign-in cookie").show(ui);
                             if std::mem::take(&mut page.focus_cookie) {
                                 cookie.request_focus();
                             }
@@ -14341,7 +14370,7 @@ mod tests {
             let expected = if key.is_some() {
                 "Amount"
             } else {
-                "Paste session cookie"
+                "Paste sign-in cookie"
             };
             assert_eq!(
                 focused_name(&harness).as_deref(),

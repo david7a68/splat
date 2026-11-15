@@ -113,15 +113,21 @@ const REVEAL_DRAWS: u8 = 3;
 /// A plan notice that the DM must check: a deleted run that kept a problem, a rewards fault.
 enum PlanFault {
     Check(Sentence),
+    /// A fault whose cause gives its own tone (R41: an unreadable run folder is an error).
+    Toned(Sentence, Severity),
 }
 
 impl MessageFault for PlanFault {
     fn severity(&self) -> Severity {
-        Severity::NeedsFixing
+        match self {
+            Self::Check(_) => Severity::NeedsFixing,
+            Self::Toned(_, severity) => *severity,
+        }
     }
     fn cause(&self) -> Sentence {
-        let Self::Check(words) = self;
-        words.clone()
+        match self {
+            Self::Check(words) | Self::Toned(words, _) => words.clone(),
+        }
     }
 }
 
@@ -668,6 +674,21 @@ fn plan_row_with(
     });
     design::register_row(ui, row.response.rect);
 }
+
+/// Why a played fight's summary cannot show: its run folder's cause (R41, in Encounters' words
+/// and tone), or another cause in words.
+#[derive(Debug)]
+pub(crate) enum FightFault {
+    Folder(crate::encounter_run::RunFolderFault),
+    Other(String),
+}
+
+/// The open played fight's summary, with the run's file as last found (or why not), by its run.
+pub(crate) type KeptFight = (
+    Uuid,
+    Option<Result<std::path::PathBuf, crate::encounter_run::FindRunFault>>,
+    Result<crate::encounter_run::FightSummary, FightFault>,
+);
 
 /// A paused run needs its state here; the whole saved-run record stays in Encounters.
 fn plan_saved_status(saved: &crate::encounter_run::SavedRunInfo) -> String {
@@ -2294,6 +2315,35 @@ fn plan_line_words(planned: &PlannedLine, several: bool) -> (Sentence, UndoStep)
     (words, step.tell_apart(format!("for {name} in {place}")))
 }
 
+/// What tells a new plan line apart from the lines that read alike (`alike`: each one's journey
+/// label, number and stored words): nothing when there is none; else its journey's label; else,
+/// when another alike line has that label, the label and the next number. The words are then
+/// compared with the stored words of every alike line, and the number goes on until no line has
+/// them (review N6: a journey titled `Travel · 2` meets the numbered `Travel · 2`). Lines already
+/// kept never change their words.
+fn told_apart(journey_label: &str, alike: &[(&str, u32, Option<&str>)]) -> (Option<String>, u32) {
+    if alike.is_empty() {
+        return (None, 1);
+    }
+    let same = alike
+        .iter()
+        .filter(|(label, ..)| *label == journey_label)
+        .map(|(_, ordinal, _)| *ordinal)
+        .max();
+    let (mut apart, mut ordinal) = match same {
+        None => (journey_label.to_owned(), 1),
+        Some(last) => (format!("{journey_label} · {}", last + 1), last + 1),
+    };
+    while alike
+        .iter()
+        .any(|(.., taken)| *taken == Some(apart.as_str()))
+    {
+        ordinal += 1;
+        apart = format!("{journey_label} · {ordinal}");
+    }
+    (Some(apart), ordinal)
+}
+
 /// The session's label, then what tells the line apart: `Session 1: Road · Travel · 2`.
 fn plan_line_place(planned: &PlannedLine) -> String {
     match &planned.apart {
@@ -2656,8 +2706,9 @@ struct RewardsSeen {
 pub(super) struct Rewards {
     done: BTreeMap<(Uuid, String), RewardsDone>,
     /// What an act could not do: the note, the fight, the whole words (with the fight's name,
-    /// read at the act), and the draft's revision it met. A change of the note ends it.
-    fault: Option<(Uuid, String, String, u64)>,
+    /// read at the act), the draft's revision it met, and its tone (R41: a run folder's cause
+    /// keeps its own). A change of the note ends it.
+    fault: Option<(Uuid, String, String, u64, Severity)>,
     seen: Option<RewardsSeen>,
     /// Whether `Add rewards` fits on a played row: by the title, its lead icon, the row's width
     /// and the action's. Worked out when one of them changes, not each frame.
@@ -2774,10 +2825,13 @@ impl Rewards {
     /// fight by the name the act read. Results with their Undo go newest first among the
     /// footer's results; the fault is a notice until the note changes.
     fn in_footer(&self, messages: &mut Messages<'_, super::SessionAct>, note: Uuid, revision: u64) {
-        if let Some((id, _, words, met)) = &self.fault
+        if let Some((id, _, words, met, severity)) = &self.fault
             && (*id, *met) == (note, revision)
         {
-            messages.outcome(FaultMessage::new(&PlanFault::Check(as_sentence(words))));
+            messages.outcome(FaultMessage::new(&PlanFault::Toned(
+                as_sentence(words),
+                *severity,
+            )));
         }
         for ((id, event), done) in &self.done {
             if *id != note {
@@ -2900,16 +2954,34 @@ impl Sessions {
                 };
                 let reference =
                     timeline::reference(&book.events[at], timeline::day_numbers(&book.events)[at]);
+                // R41 (round 30): a run folder's cause says itself (missing, unreadable);
+                // `REWARDS_BLOCKED` is for the run's own file.
                 let read = match (&plan.run_directory, &self.campaign) {
                     (Some(directory), Some(campaign)) => {
-                        crate::encounter_run::find_run(directory, campaign.id, run)
-                            .and_then(|path| crate::encounter_run::rewards(&path, campaign.id))
+                        crate::encounter_run::find_run_typed(directory, campaign.id, run)
+                            .map_err(|fault| match fault {
+                                crate::encounter_run::FindRunFault::Folder(folder) => {
+                                    (folder.message(), folder.severity())
+                                }
+                                crate::encounter_run::FindRunFault::File(_) => {
+                                    (REWARDS_BLOCKED.to_owned(), Severity::NeedsFixing)
+                                }
+                            })
+                            .and_then(|path| {
+                                crate::encounter_run::rewards(&path, campaign.id).map_err(|_| {
+                                    (REWARDS_BLOCKED.to_owned(), Severity::NeedsFixing)
+                                })
+                            })
                     }
-                    _ => Err(String::new()),
+                    _ => Err((REWARDS_BLOCKED.to_owned(), Severity::NeedsFixing)),
                 };
-                let Ok(found) = read else {
-                    rewards.fault = Some((note, event, fault(REWARDS_BLOCKED), draft.revision()));
-                    return;
+                let found = match read {
+                    Ok(found) => found,
+                    Err((why, severity)) => {
+                        rewards.fault =
+                            Some((note, event, fault(&why), draft.revision(), severity));
+                        return;
+                    }
                 };
                 let earlier = self.folder.as_deref().map_or_else(
                     || vec![None],
@@ -2961,14 +3033,26 @@ impl Sessions {
                     self.caret_to_show = Some(shown);
                 }
                 if let Some(why) = refused {
-                    rewards.fault = Some((note, event, fault(why), draft.revision()));
+                    rewards.fault = Some((
+                        note,
+                        event,
+                        fault(why),
+                        draft.revision(),
+                        Severity::NeedsFixing,
+                    ));
                     return;
                 }
                 (event, result.map(drop))
             }
         };
         if let Err(failed) = result {
-            rewards.fault = Some((note, event, fault(failed.words()), draft.revision()));
+            rewards.fault = Some((
+                note,
+                event,
+                fault(failed.words()),
+                draft.revision(),
+                Severity::NeedsFixing,
+            ));
         }
     }
 }
@@ -3732,7 +3816,7 @@ impl Sessions {
             .map(crate::sessions::Note::label)
             .unwrap_or_default();
         let campaign = self.campaign.as_ref().map(|campaign| campaign.id);
-        let alike: Vec<(bool, u32)> = self
+        let alike: Vec<(&str, u32, Option<&str>)> = self
             .travel
             .planned
             .newest_first(&campaign)
@@ -3742,18 +3826,15 @@ impl Sessions {
                     && other.chosen.name == chosen.name
                     && other.session == session
             })
-            .map(|other| (other.journey_label == journey_label, other.ordinal))
+            .map(|other| {
+                (
+                    other.journey_label.as_str(),
+                    other.ordinal,
+                    other.apart.as_deref(),
+                )
+            })
             .collect();
-        let same = alike
-            .iter()
-            .filter(|(same, _)| *same)
-            .map(|(_, ordinal)| *ordinal)
-            .max();
-        let (apart, ordinal) = match (alike.is_empty(), same) {
-            (true, _) => (None, 1),
-            (false, None) => (Some(journey_label.clone()), 1),
-            (false, Some(last)) => (Some(format!("{journey_label} · {}", last + 1)), last + 1),
-        };
+        let (apart, ordinal) = told_apart(&journey_label, &alike);
         self.travel.forget_look();
         self.travel.planned.record(PlannedLine {
             seen,
@@ -4215,7 +4296,7 @@ impl Sessions {
                 order: design::ResultOrder::issue(),
                 id: id.clone(),
                 label: index.map_or_else(String::new, |at| book.events[at].label(days[at])),
-                at: Instant::now(),
+                at: crate::frame_clock::now(),
                 count: book.events.len(),
             });
             self.open_event = None;
@@ -5282,7 +5363,7 @@ impl Sessions {
                 .iter()
                 .position(|event| event.id == just.id)
                 .map(|at| book.events[at].label(days[at]));
-            if just.at.elapsed() >= UNDO_ADD_FOR
+            if crate::frame_clock::passed(just.at, UNDO_ADD_FOR)
                 || just.count != book.events.len()
                 || current.as_ref() != Some(&just.label)
             {
@@ -5417,21 +5498,51 @@ impl Sessions {
         rewards: Option<bool>,
     ) -> bool {
         let mut add_rewards = false;
-        let path = plan.run_directory.as_ref().and_then(|directory| {
-            crate::encounter_run::find_run(directory, self.campaign.as_ref()?.id, run).ok()
-        });
-        if self.fight.as_ref().map(|(id, _)| *id) != Some(run) {
-            let result = match (&path, &self.campaign) {
-                (Some(path), Some(campaign)) => fight_summary(path, campaign.id),
-                _ => Err("The run folder is not available.".to_owned()),
+        // R41 (round 30 review F2): the run's file as the folder says now, with the folder's
+        // cause typed. The kept summary belongs to this run AND this answer: when the answer
+        // changes (the folder comes back, goes, or the file moves), the summary is read again.
+        let found = match (&plan.run_directory, &self.campaign) {
+            (Some(directory), Some(campaign)) => Some(crate::encounter_run::find_run_typed(
+                directory,
+                campaign.id,
+                run,
+            )),
+            _ => None,
+        };
+        let path = found
+            .as_ref()
+            .and_then(|found| found.as_ref().ok())
+            .cloned();
+        if self
+            .fight
+            .as_ref()
+            .is_none_or(|(id, kept, _)| *id != run || *kept != found)
+        {
+            let result = match (&found, &self.campaign) {
+                (Some(Ok(path)), Some(campaign)) => {
+                    fight_summary(path, campaign.id).map_err(FightFault::Other)
+                }
+                (Some(Err(crate::encounter_run::FindRunFault::Folder(folder))), _) => {
+                    Err(FightFault::Folder(folder.clone()))
+                }
+                (Some(Err(crate::encounter_run::FindRunFault::File(words))), _) => {
+                    Err(FightFault::Other(words.clone()))
+                }
+                _ => Err(FightFault::Other(
+                    "The run folder is not available.".to_owned(),
+                )),
             };
-            self.fight = Some((run, result));
+            self.fight = Some((run, found, result));
         }
-        let Some((_, result)) = &self.fight else {
+        let Some((_, _, result)) = &self.fight else {
             return false;
         };
         match result {
-            Err(error) => {
+            // R41: the folder's cause in Encounters' words and tone.
+            Err(FightFault::Folder(folder)) => {
+                design::message(ui, folder.tone(), &folder.message());
+            }
+            Err(FightFault::Other(error)) => {
                 design::message(
                     ui,
                     Tone::Info,
@@ -5444,7 +5555,7 @@ impl Sessions {
                 let mut widest = 0.0_f32;
                 for row in in_party_order(&summary.rows, plan.party) {
                     let first = row.name.split_whitespace().next().unwrap_or(&row.name);
-                    let hp = format!("{}/{}", known(row.hp), known(row.max_hp));
+                    let hp = crate::combat_sync::fraction(known(row.hp), known(row.max_hp));
                     let mut detail = format!("{}: {hp} HP", row.name);
                     if row.temporary_hp > 0 {
                         detail.push_str(&format!(" · {}", design::temp_hp_text(row.temporary_hp)));
@@ -5641,6 +5752,7 @@ mod tests {
             encounter: name.into(),
             label: "Round 2".into(),
             standing: crate::encounter_run::Standing::Unfinished,
+            setup: false,
             saved_at: None,
             unsent: vec![],
         }
@@ -6941,6 +7053,42 @@ mod tests {
         });
         assert_eq!(painted.len(), 2, "{painted:?}");
         assert_ne!(painted[0], painted[1], "{painted:?}");
+        // Review N6: a third alike line, from a journey titled like another line's numbered
+        // words (`Travel · 2`), gets words of its own; the kept lines keep theirs.
+        let kept = |sessions: &Sessions, notes: &[Uuid]| -> Vec<Option<String>> {
+            let campaign = sessions.campaign.as_ref().map(|campaign| campaign.id);
+            sessions
+                .travel
+                .planned
+                .newest_first(&campaign)
+                .filter(|shown| notes.contains(&shown.value().note))
+                .map(|shown| shown.value().apart.clone())
+                .collect()
+        };
+        let before = kept(&sessions, &[b, twin.id]);
+        let third = new_note(1, "Road");
+        let third_road = book.add(Kind::Travel, Some(third.id));
+        book.event_mut(&third_road).unwrap().checks = book.event_mut(&road).unwrap().checks.clone();
+        book.event_mut(&third_road).unwrap().title = "Travel · 2".into();
+        sessions.notes.push(third.clone());
+        sessions.notes_revision += 1;
+        sessions
+            .plan_from_timeline(&book, &third_road, &chosen("Shrine of Cinders"), &names)
+            .unwrap();
+        let all = kept(&sessions, &[b, twin.id, third.id]);
+        assert_eq!(all.len(), 3, "{all:?}");
+        assert!(
+            all[0].is_some() && !all[1..].contains(&all[0]),
+            "the third line's words are its own: {all:?}"
+        );
+        assert_eq!(all[1..], before[..], "the kept lines keep their words");
+        assert_eq!(
+            told_apart(
+                "Travel · 2",
+                &[("Travel", 1, None), ("Travel", 2, Some("Travel · 2"))]
+            ),
+            (Some("Travel · 2 · 2".to_owned()), 2)
+        );
     }
 
     #[test]
@@ -7001,6 +7149,7 @@ mod tests {
             encounter: "Bridge Ambush".into(),
             label: "Round 2".into(),
             standing: Standing::Unfinished,
+            setup: false,
             saved_at: None,
             unsent: vec!["Kestrel".into()],
         };
@@ -8068,7 +8217,7 @@ mod tests {
             order: design::ResultOrder::issue(),
             id,
             label,
-            at: Instant::now(),
+            at: crate::frame_clock::now(),
             count,
         };
         harness.state_mut().0.added = Some(added);
@@ -8080,6 +8229,27 @@ mod tests {
         assert!(
             harness.query_by_label("Open: Pay the toll").is_some(),
             "a result in the footer does not fold the scenes"
+        );
+        // Round 30 B7d: the Add result and its Undo end by the frame clock: 29 s of frames
+        // after the add they stand, 31 s after they are gone.
+        let added_at = harness
+            .state()
+            .0
+            .added
+            .as_ref()
+            .map(|added| added.at)
+            .unwrap();
+        crate::frame_clock::set(added_at + 29.0);
+        harness.run_steps(2);
+        assert!(
+            harness.query_by_label("Undo add").is_some(),
+            "29 s of frames later the Undo stands"
+        );
+        crate::frame_clock::set(added_at + 31.0);
+        harness.run_steps(2);
+        assert!(
+            harness.query_by_label("Undo add").is_none(),
+            "31 s of frames later the result has ended"
         );
         harness.state_mut().0.added = None;
         harness.set_size(egui::vec2(design::FORM_WIDTH, 800.0));
@@ -8782,8 +8952,46 @@ mod tests {
         harness.state_mut().0.draft.as_mut().unwrap().follow_disk();
         harness.run_steps(2);
 
-        // A run that cannot be read: nothing is written, and the row says why.
+        // R41 (round 30): a run folder that is gone says so in its own words, not that the
+        // run cannot be read; nothing is written.
         let before = read();
+        let aside = runs.with_file_name("Runs set aside");
+        fs::rename(&runs, &aside).unwrap();
+        harness.get_by_label("Add rewards: Shrine").click();
+        harness.run_steps(2);
+        assert_eq!(read(), before);
+        assert!(shown(&harness, "Splat cannot find the run folder "));
+        assert!(!shown(&harness, REWARDS_BLOCKED));
+        let tone = |harness: &egui_kittest::Harness<'_, (Sessions, Book)>| {
+            harness
+                .state()
+                .0
+                .rewards
+                .fault
+                .as_ref()
+                .map(|fault| fault.4)
+        };
+        assert_eq!(
+            tone(&harness),
+            Some(Severity::NeedsFixing),
+            "missing: a warning"
+        );
+        // R41 (round 30 review F4): a folder that cannot be read (here a file stands where it
+        // should be) says so, as an error in the footer too.
+        fs::write(&runs, "not a folder").unwrap();
+        harness.get_by_label("Add rewards: Shrine").click();
+        harness.run_steps(2);
+        assert_eq!(read(), before);
+        assert!(shown(&harness, "Splat cannot read the run folder "));
+        assert_eq!(
+            tone(&harness),
+            Some(Severity::CannotRead),
+            "unreadable: an error"
+        );
+        fs::remove_file(&runs).unwrap();
+        fs::rename(&aside, &runs).unwrap();
+
+        // A run that cannot be read: nothing is written, and the row says why.
         fs::remove_file(crate::encounter_run::find_run(&runs, campaign, shrine.id).unwrap())
             .unwrap();
         harness.get_by_label("Add rewards: Shrine").click();
@@ -8862,6 +9070,7 @@ mod tests {
                 encounter: "Bridge Ambush".into(),
                 label: String::new(),
                 standing: crate::encounter_run::Standing::Unfinished,
+                setup: false,
                 saved_at: None,
                 unsent: Vec::new(),
             };
