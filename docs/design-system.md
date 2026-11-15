@@ -378,9 +378,14 @@ Lookup has no file line: there an empty value block draws nothing, and the prose
 the kind line, as a spell's does, and so does a plain note's prose. Lookup's reader keeps the app's row spacing whether a search or a link
 opened the entry. Library draws no value block. `design::reader` holds the typographic parts. Library shows quiet Back whenever it has reading
 history. Every way to open another entry records the entry it leaves: a link, a list row, the About row and the header
-count's menu. Back returns to the entry just left in one action, and a new entry ends Forward. Its toolbar stays on one line: Read and Edit Markdown at the left, then visible copy, creation and
-campaign-choice actions (`Choose for this campaign`, `Choose all`), then Back. Drop Back's key hint first; fold Copy, Make NPC note and the campaign choice into quiet More when needed, with
-Back before More. Every toolbar action, Make NPC note and the actions in More included, is a Read control
+count's menu. Back returns to the entry just left in one action, and a new entry ends Forward. Its toolbar stays on one line and is one closed part (`design::ReaderToolbar`, ruling R38): Read and the source
+mode at the left, keeping the room of the wider source label (`Markdown source`), then Back, then the copy, creation
+and campaign-choice actions (`Choose for this campaign`, `Choose all`). Back's place is fixed: it does not move
+between entry kinds or with the count of actions after it. Back shows its key hint when the modes, Back with its key
+and a `More` fit; else it drops the hint. The actions follow Back when they fit, else they fold into quiet More
+at the row's right end. A steady reason an action waits for (no place to copy to) is painted once under the row; the
+open draft's reason is painted once in the slot under the save row, its room kept while the draft has no changes,
+or under the row when the pane has no save row. Every toolbar action, Make NPC note and the actions in More included, is a Read control
 (28 px), so the toolbar row has one height and a campaign creature's title sits where a campaign spell's does. Lookup keeps its Back hint; its Back is a Read control (28 px), as its title line's icon buttons are, so the title line has one height with or without Back and the search field below never moves. Both use Alt+Left, and Alt+Right for Forward, which has no button. Lookup takes the key when focus is there. Beside the Library, the mouse's Back and Forward buttons act on the side under the pointer.
 
 Library omits `Library / <kind>` above the title. Its kind line does not repeat the package name: where two
@@ -711,7 +716,7 @@ definition changes, and a collapsed section draws nothing.
 A copy starts with the original name selected. Destination and dependency preview update with its fields. Copy
 to… requires a campaign or package destination (one places policy with New entry). While it waits for one, its
 reason is painted in `Small` muted words under the reader's toolbar, in the same pane, from the same value that
-disables it (ruling R35; `design::ActionGroup`); hover and the accessible description say it too. A disabled
+disables it (ruling R35; `design::ReaderToolbar`); hover and the accessible description say it too. A disabled
 control outside a menu always has its reason in painted words in the same pane; a cause that blocks several
 controls is still said once at its cause, such as the save row. Create copy saves in one step.
 Edit the copy selects it and opens Markdown editing. An open encounter draft keeps Add to its encounter as the
