@@ -3406,9 +3406,8 @@ impl Body {
                     .row_choices()
                     .map(|(at, choice)| self.choice_width(ui, at, choice) + gap)
                     .sum();
-                let one_line =
-                    inset + undo.as_ref().map_or(0.0, |form| form.width + L) + choices
-                        <= ui.available_width();
+                let one_line = inset + undo.as_ref().map_or(0.0, |form| form.width + L) + choices
+                    <= ui.available_width();
                 if undo.is_some() || one_line {
                     ui.horizontal(|ui| {
                         space(ui, inset);
