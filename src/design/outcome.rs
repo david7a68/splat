@@ -569,8 +569,9 @@ enum Step {
 /// form (`label`: `Undo discard of Bridge Ambush`); the visible words are `fit`'s, for the room
 /// the footer line has: the whole form when it fits, else, for a verb with a joining word, the
 /// short form (`Undo discard`), and for the others the object cut by whole words
-/// (`Undo remove Ravenholm…`). The message part gives the action the whole form as its name
-/// whenever the visible words differ.
+/// (`Undo remove Ravenholm…`); a lone Undo of its verb in its footer uses `alone`, which also
+/// measures the whole form first and gives up the object only when it does not fit. The message
+/// part gives the action the whole form as its name whenever the visible words differ.
 ///
 /// ```
 /// let _ = splat::outcome::UndoStep::act("Undo it");
@@ -658,13 +659,21 @@ impl UndoStep {
         label
     }
 
-    /// The form while no other kept result of its verb stands in its footer: `Undo tick`, with
-    /// no object and no part that tells steps apart, as nothing needs telling apart. Its
-    /// accessible name stays `label`. An act's step (`Undo: Take seal`) has no such form.
-    pub fn alone(&self) -> String {
+    /// The visible words for `width` in the action's font while no other kept result of its
+    /// verb stands in its footer (ruling M9): the whole label when it fits, measured first, as
+    /// `fit` does; only when it does not, `Undo tick`, with no object and no part that tells
+    /// steps apart, as nothing needs telling apart and its result names the object. A step with
+    /// no object keeps its whole label. Its accessible name stays `label`. An act's step
+    /// (`Undo: Take seal`) and the app's fixed words are never alone (`counted`).
+    pub fn alone(&self, ui: &Ui, width: f32) -> String {
+        let whole = self.label();
         match &self.step {
-            Step::Verb(verb, Some(_)) => format!("Undo {}", verb.word()),
-            _ => self.label(),
+            Step::Verb(verb, Some(_))
+                if number_width(ui, &whole, &Type::Strong.font(ui)) > width =>
+            {
+                format!("Undo {}", verb.word())
+            }
+            _ => whole,
         }
     }
 
@@ -1953,10 +1962,11 @@ pub fn kept_result<A>(
 }
 
 /// The kept results that one legacy footer shows in this pass, for the footer's one short-Undo
-/// rule: the part counts their Undos' verbs, and a lone Undo of its verb paints its short form
-/// (`Undo write`) while two of one verb paint their whole words; the accessible name is always
-/// whole. Made from every step that footer draws (`of`), in the pass that draws them; it holds
-/// no app state and ends with that pass.
+/// rule: the part counts their Undos' verbs, and a lone Undo of its verb paints its whole words
+/// where they fit and only else `Undo write` (`UndoStep::alone`), while two of one verb keep
+/// what tells them apart (`UndoStep::fit`); the accessible name is always whole. Made from
+/// every step that footer draws (`of`), in the pass that draws them; it holds no app state and
+/// ends with that pass.
 pub struct KeptGroup {
     verbs: Vec<Verb>,
 }
@@ -1987,13 +1997,14 @@ struct Body {
     /// The file it is about, on a line under the words (`FileLine`).
     file: Option<FileLine>,
     /// No other kept result of its Undo's verb stands in its footer (`undo_alone`): the Undo
-    /// paints `UndoStep::alone`.
+    /// paints `UndoStep::alone` for its room, else `UndoStep::fit`.
     undo_alone: bool,
 }
 
 /// Whether `undo` is the only kept Undo of its verb among a footer's kept Undos (`kept`): the
-/// one rule for every footer and row of messages, so a lone `Undo tick` does not repeat its
-/// result's object, and two ticks keep the words that tell them apart.
+/// one rule for every footer and row of messages, so a lone Undo whose whole words do not fit
+/// gives up its object (`Undo tick`, its result names it) rather than cut it, and two ticks
+/// keep the words that tell them apart.
 fn undo_alone(kept: &[Verb], undo: Option<&UndoStep>) -> bool {
     undo.and_then(UndoStep::counted)
         .is_some_and(|verb| kept.iter().filter(|&&kind| kind == verb).count() == 1)
@@ -3505,20 +3516,28 @@ impl Body {
         }
     }
 
-    /// Undo's label for the room after the message's icon.
+    /// Undo's label for the room after the message's icon. The room is measured before any
+    /// form is chosen, so a lone Undo shows its whole form wherever it fits (`UndoStep::alone`).
     fn undo_words(&self, ui: &Ui, step: &UndoStep) -> String {
+        let room = undo_room(ui, self.tone, &step.label());
         if self.undo_alone {
-            return step.alone();
+            return step.alone(ui, room);
         }
-        let label = step.label();
-        let action = Action::quiet(&label)
-            .icon(icons::UNDO)
-            .density(Density::Read);
-        let chrome = action.natural_width(ui) - number_width(ui, &label, &Type::Strong.font(ui));
-        let inset = S + 1.0 + number_width(ui, self.tone.parts().0, &Type::Body.font(ui)) + XS;
-        let room = ui.available_width().min(LIST_MEASURE) - inset - chrome;
         step.fit(ui, room)
     }
+}
+
+/// The room for an Undo's words on a line of its own under a message of `tone`: the line
+/// (capped at `LIST_MEASURE`) less the inset of the message's icon and the action's own icon and
+/// padding around `label`. The one measure of every message's Undo, typed or legacy
+/// (`components::draft_discarded`).
+pub(super) fn undo_room(ui: &Ui, tone: Tone, label: &str) -> f32 {
+    let action = Action::quiet(label)
+        .icon(icons::UNDO)
+        .density(Density::Read);
+    let chrome = action.natural_width(ui) - number_width(ui, label, &Type::Strong.font(ui));
+    let inset = S + 1.0 + number_width(ui, tone.parts().0, &Type::Body.font(ui)) + XS;
+    ui.available_width().min(LIST_MEASURE) - inset - chrome
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -4628,6 +4647,15 @@ mod tests {
                 );
                 assert_eq!(discard.fit(ui, whole - 1.0), "Undo discard");
                 assert_eq!(discard.fit(ui, 1.0), "Undo discard");
+                // Ruling M9: a lone Undo measures its whole form first; only where that does not
+                // fit does it give up its object and the part that tells steps apart, never cut.
+                let whole = number_width(ui, "Undo copy Ravenholm Ironside Wardens 2", &font);
+                assert_eq!(
+                    step.alone(ui, whole + 1.0),
+                    "Undo copy Ravenholm Ironside Wardens 2"
+                );
+                assert_eq!(step.alone(ui, whole - 1.0), "Undo copy");
+                assert_eq!(step.alone(ui, 1.0), "Undo copy");
             });
         });
     }
@@ -4661,8 +4689,8 @@ mod tests {
                 .collect();
             (node.accesskit_node().id(), shown)
         };
-        // Two Undos of one verb (round 30: a lone one paints `Undo discard`, below), so the
-        // footer must tell them apart.
+        // Two Undos of one verb (a lone one follows `UndoStep::alone`, below), so the footer
+        // must tell them apart.
         let discard = || {
             let mut app = two();
             app.older_line = OlderLine::Discard("Bridge Ambush");
@@ -4693,17 +4721,41 @@ mod tests {
             ["Undo discard of Shrine of Cinders"],
             "two of one verb: the other paints its whole form too"
         );
-        // Round 30 FE11: the only Undo of its verb in its footer paints `Undo discard`, as its
-        // result names the object; its accessible name stays whole.
-        let mut lone = two();
-        lone.older_line = OlderLine::Discard("Bridge Ambush");
-        let h = harness_sized(lone, 960.0);
+        // Ruling M9 (it replaces round 30 FE11's lone short form): the only Undo of its verb in
+        // its footer measures its whole form first. Wide, it paints the whole form; narrow,
+        // where that does not fit, `Undo remove` without its object (its result names it),
+        // never a cut object. Its accessible name stays whole, and its press reaches its entry.
+        let lone = |line| {
+            let mut app = two();
+            app.older_line = line;
+            app
+        };
+        let h = harness_sized(lone(OlderLine::Discard("Bridge Ambush")), 960.0);
         let (_, shown) = visible(&h, "Undo discard of Bridge Ambush");
         assert_eq!(
             shown,
-            ["Undo discard"],
-            "lone: the short form, the whole name"
+            ["Undo discard of Bridge Ambush"],
+            "lone, wide: the whole form"
         );
+        let long = "Bridge Ambush at the Ravenholm Ironside Crossing";
+        let name = format!("Undo remove {long}");
+        let h = harness_sized(lone(OlderLine::Remove(long)), 960.0);
+        assert_eq!(
+            visible(&h, &name).1,
+            [name.as_str()],
+            "lone, wide: a long object whole"
+        );
+        let mut narrow = lone(OlderLine::Remove(long));
+        narrow.narrow = Some(320.0);
+        let mut h = harness_sized(narrow, 960.0);
+        assert_eq!(
+            visible(&h, &name).1,
+            ["Undo remove"],
+            "lone, narrow: the object goes whole, never cut"
+        );
+        h.get_by_label(&name).click();
+        h.run_steps(2);
+        assert_eq!(h.state().acted, [Ok("Campaign link saved")]);
         // Round 30 final review F2: one verb with and without an object in one footer. The
         // step with an object is not alone, so it keeps its object beside the other.
         let mut mixed = two();
@@ -4719,14 +4771,13 @@ mod tests {
             ),
             "mixed: Undo add scene beside Undo add"
         );
-        // A long object with no joining word: cut by whole words in the visible words only.
-        let long = "Bridge Ambush at the Ravenholm Ironside Crossing";
+        // A long object with no joining word beside another Undo of its verb: cut by whole
+        // words in the visible words only, at the width where the lone one gives it up.
         let mut narrow = two();
         narrow.older_line = OlderLine::Remove(long);
         narrow.same_verb = true;
         narrow.narrow = Some(320.0);
         let h = harness_sized(narrow, 960.0);
-        let name = format!("Undo remove {long}");
         let (_, shown) = visible(&h, &name);
         assert!(
             shown.len() == 1
@@ -6041,18 +6092,27 @@ mod tests {
         );
     }
 
-    /// The join with PR 402: a kept result drawn by the adapter follows the footer's one
-    /// short-Undo rule. A lone `Undo write …` paints `Undo write`; two writes paint their whole
-    /// words; a fixed-word step stays whole either way; every accessible name is whole.
+    /// The join with PR 402, under ruling M9: a kept result drawn by the adapter follows the
+    /// footer's one short-Undo rule. A lone `Undo write …` paints its whole words where they fit
+    /// and `Undo write` only where they do not; two writes paint their whole words, or their
+    /// objects cut, never `Undo write`; a fixed-word step stays whole either way.
     #[test]
     fn a_kept_result_follows_the_footer_short_undo_rule() {
         const FIXED: UndoStep = UndoStep::words("Undo package registration");
-        for writes in [1, 2] {
+        // Too narrow for `Undo write File 0.md` after the message's icon; room for `Undo write`.
+        const NARROW: f32 = 200.0;
+        for (writes, width) in [(1, None), (2, None), (1, Some(NARROW)), (2, Some(NARROW))] {
             let ctx = egui::Context::default();
             crate::design::theme::install(&ctx);
+            let input = || egui::RawInput {
+                screen_rect: width.map(|width| {
+                    egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, 600.0))
+                }),
+                ..Default::default()
+            };
             let mut painted = Vec::new();
             for _ in 0..3 {
-                let output = ctx.run(egui::RawInput::default(), |ctx| {
+                let output = ctx.run(input(), |ctx| {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         let steps: Vec<UndoStep> = (0..writes)
                             .map(|at| UndoStep::of(Verb::Write, format!("File {at}.md")))
@@ -6076,16 +6136,28 @@ mod tests {
                     .collect::<Vec<_>>();
             }
             let has = |words: &str| painted.iter().any(|text| text.as_str() == words);
-            if writes == 1 {
-                assert!(
-                    has("Undo write") && !has("Undo write File 0.md"),
-                    "{painted:?}"
-                );
-            } else {
-                assert!(
+            let writes_shown = painted
+                .iter()
+                .filter(|text| text.starts_with("Undo write"))
+                .count();
+            assert_eq!(writes_shown, writes, "one Undo each: {painted:?}");
+            match (writes, width) {
+                (1, None) => assert!(
+                    has("Undo write File 0.md"),
+                    "lone, wide: the whole words: {painted:?}"
+                ),
+                (1, Some(_)) => assert!(
+                    has("Undo write"),
+                    "lone, narrow: the object goes whole: {painted:?}"
+                ),
+                (_, None) => assert!(
                     has("Undo write File 0.md") && has("Undo write File 1.md"),
-                    "{painted:?}"
-                );
+                    "two, wide: the whole words: {painted:?}"
+                ),
+                (_, Some(_)) => assert!(
+                    !has("Undo write") && !has("Undo write File 0.md"),
+                    "two, narrow: each object cut, never dropped: {painted:?}"
+                ),
             }
             assert!(
                 has("Undo package registration"),
