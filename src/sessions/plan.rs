@@ -775,12 +775,103 @@ fn planned_summary(
 /// `planned_summary` with a journey's day after the summary (`road_day`). Round 28 FE6: the day
 /// ties the fight to its journey, so it gives way last: the party's size first, then the
 /// roster's members from the end, then the day.
+/// A planned fight's line, laid out once for its room and kept (`Kept`): what an unchanged
+/// frame paints, with no fitting and no string building.
+#[derive(Clone)]
+pub(super) struct KeptPlanLine {
+    text: PlanText,
+    name: String,
+    hover: PlanHover,
+}
+
+#[derive(Clone)]
+enum PlanText {
+    /// No form: the summary alone.
+    Alone(String),
+    Form(egui::text::LayoutJob),
+}
+
+#[derive(Clone)]
+enum PlanHover {
+    None,
+    Text(String),
+    /// The word's budget, after the whole summary where it was cut.
+    Rating(crate::difficulty::Rating, Option<String>),
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Test builds: how many plan lines were fitted (laid out), so a test can see that an
+    /// unchanged frame fits none.
+    static PLAN_FITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The plan's kept lines: one per planned fight, by the session, the fight's place in the plan
+/// and its note. The Sessions page owns them (`Sessions::plan_lines`).
+pub(super) type PlanLines = crate::difficulty::Kept<(Option<Uuid>, usize, Uuid), KeptPlanLine>;
+
+/// `planned_summary` with a journey's day after the summary (`road_day`), not kept (tests).
+#[cfg(test)]
 fn planned_summary_on_road(
     ui: &mut egui::Ui,
     typed: &crate::difficulty::Summary,
     day: Option<&str>,
     difficulty: Option<&crate::difficulty::Difficulty>,
 ) {
+    let line = prepare_plan_line(ui, typed, day, difficulty);
+    show_plan_line(ui, &line);
+}
+
+/// A kept plan line: fitted again only when its fight's roster key, its day, its room, its
+/// font or the display scale changes.
+fn kept_plan_line(
+    ui: &mut egui::Ui,
+    kept: &mut PlanLines,
+    id: (Option<Uuid>, usize, Uuid),
+    fight: &PlanFight,
+    day: Option<&str>,
+) {
+    let font = Type::Small.font(ui);
+    let room = ui.available_width();
+    let line = kept.answer(ui, &id, (fight.key, day), room, &font, || {
+        let words = fight.summary.text();
+        let day = road_day(ui, &words, day);
+        prepare_plan_line(ui, &fight.summary, day.as_deref(), Some(&fight.difficulty))
+    });
+    show_plan_line(ui, &line);
+}
+
+fn show_plan_line(ui: &mut egui::Ui, line: &KeptPlanLine) {
+    let response = match &line.text {
+        PlanText::Alone(alone) => ui.add(
+            egui::Label::new(Type::Small.rich(ui, alone.clone()).color(colors().muted)).wrap(),
+        ),
+        PlanText::Form(job) => ui.add(egui::Label::new(job.clone()).wrap()),
+    };
+    design::named(ui, &response, &line.name);
+    match &line.hover {
+        PlanHover::None => {}
+        PlanHover::Text(hover) => {
+            response.on_hover_text(hover);
+        }
+        PlanHover::Rating(rating, cut) => {
+            let response = match cut {
+                Some(summary) => response.on_hover_text(summary),
+                None => response,
+            };
+            crate::difficulty::describe(ui, response, rating);
+        }
+    }
+}
+
+fn prepare_plan_line(
+    ui: &egui::Ui,
+    typed: &crate::difficulty::Summary,
+    day: Option<&str>,
+    difficulty: Option<&crate::difficulty::Difficulty>,
+) -> KeptPlanLine {
+    #[cfg(test)]
+    PLAN_FITS.with(|fits| fits.set(fits.get() + 1));
     // G118: the roster's typed parts; its words only for the layout and the name.
     let words = typed.text();
     let roster = words.as_str();
@@ -804,10 +895,12 @@ fn planned_summary_on_road(
     };
     let alone = laid(fight_summary_text(summary));
     let Some(parts) = difficulty.and_then(crate::difficulty::Difficulty::parts) else {
-        let response = ui.add(egui::Label::new(Type::Small.rich(ui, alone).color(c.muted)).wrap());
         // The breaks only steer the wrap; the name keeps the summary's words.
-        design::named(ui, &response, summary);
-        return;
+        return KeptPlanLine {
+            text: PlanText::Alone(alone),
+            name: summary.to_owned(),
+            hover: PlanHover::None,
+        };
     };
     // The form keeps its words together and wraps whole. Where the row has no room for it,
     // the word's limit gives way first, then the summary from its end.
@@ -997,7 +1090,6 @@ fn planned_summary_on_road(
     crate::difficulty::append_form(&mut job, ui, Type::Small, &parts);
     job.wrap.max_width = width;
     let job = even_separators(ui, job);
-    let response = ui.add(egui::Label::new(job).wrap());
     // The accessible name keeps the whole summary and the whole form.
     let plain_form = missing.map_or_else(
         || {
@@ -1011,17 +1103,10 @@ fn planned_summary_on_road(
                 .unwrap_or_else(|| missing.short().to_owned())
         },
     );
-    design::named(ui, &response, &format!("{summary} · {plain_form}"));
+    let name = format!("{summary} · {plain_form}");
     let difficulty = difficulty.expect("the form came from it");
-    match (&difficulty.rating, &difficulty.missing) {
-        (Some(rating), _) => {
-            let response = if cut {
-                response.on_hover_text(summary)
-            } else {
-                response
-            };
-            crate::difficulty::describe(ui, response, rating);
-        }
+    let hover = match (&difficulty.rating, &difficulty.missing) {
+        (Some(rating), _) => PlanHover::Rating(rating.clone(), cut.then(|| summary.to_owned())),
         // W1-D2: whose input is not known, on hover.
         (None, Some(missing)) => {
             let names = missing.words().unwrap_or_default();
@@ -1030,11 +1115,18 @@ fn planned_summary_on_road(
                 (true, false) => format!("{summary}\n{names}"),
                 (false, _) => names,
             };
-            if !hover.is_empty() {
-                response.on_hover_text(hover);
+            if hover.is_empty() {
+                PlanHover::None
+            } else {
+                PlanHover::Text(hover)
             }
         }
-        (None, None) => {}
+        (None, None) => PlanHover::None,
+    };
+    KeptPlanLine {
+        text: PlanText::Form(job),
+        name,
+        hover,
     }
 }
 
@@ -2165,6 +2257,7 @@ fn plan_fight_stubs(names: &[String]) -> Vec<PlanFight> {
             name: name.clone(),
             path: String::new(),
             summary: Default::default(),
+            key: 0,
             difficulty: Default::default(),
         })
         .collect()
@@ -3389,6 +3482,14 @@ impl Sessions {
         );
     }
 
+    /// G118: the one end of the plan's kept lines. Only the lines of the planned fights in
+    /// `ids` stay (none at a campaign switch); a fight removed or replaced, another session or
+    /// another campaign ends its line.
+    pub(super) fn forget_plan_lines(&mut self, ids: &[(Option<Uuid>, usize, Uuid)]) {
+        self.plan_lines.retain(|id| ids.contains(id));
+        self.plan_lines_seen = ids.to_vec();
+    }
+
     /// The session as a list, top to bottom: what happened, then what is still to come. It
     /// replaces a walk between Encounters, Timeline and the note.
     #[allow(
@@ -3948,6 +4049,8 @@ impl Sessions {
                     reveal.after(ui, Some(&event.id), row.response.rect);
                 }
                 let days = self.planned_days(book, session, plan);
+                let ids: Vec<_> = planned.iter().enumerate().map(|(at, fight)| (session, at, fight.id)).collect();
+                if ids != self.plan_lines_seen { self.forget_plan_lines(&ids); }
                 for (position, fight) in planned.iter().enumerate() {
                     let day = planned_day(&days, &planned, position);
                     self.removed_fight_message(ui, session, position);
@@ -3973,7 +4076,7 @@ impl Sessions {
                                 }
                             } else if let Some(saved) = saved {
                                 design::status(ui, Status { icon: icons::RUN, word: &plan_saved_status(saved), color: c.muted });
-                            } else { let words = fight.summary.text(); planned_summary_on_road(ui, &fight.summary, road_day(ui, &words, day.as_deref()).as_deref(), Some(&fight.difficulty)); }
+                            } else { kept_plan_line(ui, &mut self.plan_lines, (session, position, fight.id), fight, day.as_deref()); }
                         }, |ui| {
                             design::row_menu(ui, &fight.name, |ui| {
                                 if Action::quiet("Remove from tonight").show(ui).clicked() {
@@ -5131,6 +5234,7 @@ mod tests {
             name: name.into(),
             path: path.into(),
             summary: Default::default(),
+            key: 0,
             difficulty: Default::default(),
         }
     }
@@ -6691,6 +6795,46 @@ mod tests {
             }
         }
         assert!(says_whose > 0, "no width cut Wolf alone: {lines:?}");
+        // G118 (re-check of PR 390): the plan keeps each fitted line. An unchanged redraw fits
+        // none; a new width or a new roster fits again; a removed fight's line goes.
+        let mut sessions = super::super::Sessions::default();
+        let fight = |key: u64, summary: &crate::difficulty::Summary| PlanFight {
+            saved: None,
+            id: Uuid::from_u128(1),
+            name: "Mill Road".into(),
+            path: "Encounters/Mill Road.md".into(),
+            summary: summary.clone(),
+            key,
+            difficulty: unknown(Unknown::Xp),
+        };
+        let id = (None, 0, Uuid::from_u128(1));
+        let fitted = || PLAN_FITS.with(std::cell::Cell::get);
+        let mut draw = |fight: &PlanFight, width: f32| {
+            let _ = ctx.run(Default::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    ui.scope(|ui| {
+                        ui.set_width(width);
+                        kept_plan_line(ui, &mut sessions.plan_lines, id, fight, None);
+                    });
+                });
+            });
+        };
+        let first = fight(1, &mixed);
+        draw(&first, 400.0);
+        let before = fitted();
+        draw(&first, 400.0);
+        draw(&first, 400.0);
+        assert_eq!(fitted(), before, "an unchanged redraw fits no line");
+        draw(&first, 300.0);
+        assert_eq!(fitted(), before + 1, "a new width fits again");
+        draw(&fight(2, &two), 300.0);
+        assert_eq!(fitted(), before + 2, "a new roster fits again");
+        assert!(sessions.plan_lines.holds(&id));
+        sessions.forget_plan_lines(&[(None, 0, Uuid::from_u128(2))]);
+        assert!(
+            !sessions.plan_lines.holds(&id),
+            "a removed fight's line goes"
+        );
     }
 
     #[test]

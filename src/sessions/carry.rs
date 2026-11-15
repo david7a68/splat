@@ -1194,6 +1194,7 @@ mod tests {
             name: name.into(),
             path: format!("Encounters/{name}.md"),
             summary: Default::default(),
+            key: 0,
             difficulty: Default::default(),
         }
     }

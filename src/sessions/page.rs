@@ -546,6 +546,11 @@ fn new_notice(
 
 #[derive(Default)]
 pub struct Sessions {
+    /// G118: the plan's kept lines, one per planned fight (`plan::PlanLines`), and the
+    /// planned fights they were last trimmed to. Ended by `forget_plan_lines` (plan change,
+    /// session change, campaign change); a new content key replaces an entry.
+    plan_lines: plan::PlanLines,
+    plan_lines_seen: Vec<(Option<Uuid>, usize, Uuid)>,
     /// `<file> is now a separate session.` and its Undo.
     separate: design::Results<kept::Page, kept::Separate>,
     /// The DM showed or hid the party bar. Otherwise it shows while a session is played.
@@ -2288,6 +2293,7 @@ impl Sessions {
         // Row 123: a journey's acts, results and plan line are the campaign's: the change ends
         // them here, as it happens.
         self.travel = plan::Travel::default();
+        self.forget_plan_lines(&[]);
         self.campaign = active.cloned();
         self.folder_error = None;
         match active {
@@ -8683,6 +8689,7 @@ mod tests {
             name: "Bridge Ambush".into(),
             path: String::new(),
             summary: Default::default(),
+            key: 0,
             difficulty: Default::default(),
         }];
         let source = "## Plan for tonight\n\n- [[Bridge Ambush]]\n- [[Bridge Ambush]]\n\n## What happened\n\nWe crossed the bridge.\n";
@@ -8763,6 +8770,7 @@ mod tests {
             name: "Bridge Ambush".into(),
             path: String::new(),
             summary: Default::default(),
+            key: 0,
             difficulty: Default::default(),
         }];
         for (links, count) in [

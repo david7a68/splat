@@ -3011,6 +3011,9 @@ pub struct PlanFight {
     pub path: String,
     /// Its roster's typed parts (G118), so the plan's row names a member once.
     pub summary: crate::difficulty::Summary,
+    /// The roster's line key (`Roster::key`: its parts and its difficulty), for the plan's
+    /// kept line.
+    pub key: u64,
     pub difficulty: crate::difficulty::Difficulty,
 }
 /// What the page needs from the story: where each run's event is, and which sessions exist.
@@ -3448,6 +3451,7 @@ impl Encounters {
                         .as_ref()
                         .map(|roster| roster.parts.clone())
                         .unwrap_or_default(),
+                    key: template.summary.as_ref().map_or(0, |roster| roster.key),
                     difficulty: template.difficulty.clone(),
                 })
                 .collect()

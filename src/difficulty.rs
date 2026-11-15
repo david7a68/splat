@@ -974,10 +974,21 @@ impl<'a> Line<'a> {
 /// owner and no other run can read its answers. Each line is kept under its own id with one
 /// key: its content key, its room, its font and the display scale. On a frame where the key is
 /// unchanged, the line is not built and nothing is measured; a new key replaces the entry.
-#[derive(Default)]
-pub(crate) struct Kept<K> {
-    fits: std::collections::HashMap<K, (u64, Option<Fitted>)>,
+///
+/// The kept answer is a fitted line (`V`'s default), or an owner's own answer for a line it
+/// lays out itself (the session plan's row keeps its laid-out line).
+pub(crate) struct Kept<K, V = Option<Fitted>> {
+    fits: std::collections::HashMap<K, (u64, V)>,
     shortest: std::collections::HashMap<K, (u64, f32)>,
+}
+
+impl<K, V> Default for Kept<K, V> {
+    fn default() -> Self {
+        Self {
+            fits: std::collections::HashMap::new(),
+            shortest: std::collections::HashMap::new(),
+        }
+    }
 }
 
 impl<K: std::hash::Hash + Eq + Clone> Kept<K> {
@@ -994,28 +1005,6 @@ impl<K: std::hash::Hash + Eq + Clone> Kept<K> {
         self.answer(ui, id, content, room, font, || {
             line().fit_or_wrap(|text| crate::design::number_width(ui, text, font) <= room)
         })
-    }
-
-    /// As `fit`, for an owner whose answer is more than the line (G118: the Ready row's
-    /// words where the fight has no form). `answer` runs only when the key changes.
-    pub(crate) fn answer(
-        &mut self,
-        ui: &egui::Ui,
-        id: &K,
-        content: impl std::hash::Hash,
-        room: f32,
-        font: &egui::FontId,
-        answer: impl FnOnce() -> Option<Fitted>,
-    ) -> Option<Fitted> {
-        let key = key(ui, (content, room.to_bits(), font));
-        if let Some((kept, answer)) = self.fits.get(id)
-            && *kept == key
-        {
-            return answer.clone();
-        }
-        let answer = answer();
-        self.fits.insert(id.clone(), (key, answer.clone()));
-        answer
     }
 
     /// The width of [`Line::shortest`] in `font` (0 with no line).
@@ -1041,16 +1030,40 @@ impl<K: std::hash::Hash + Eq + Clone> Kept<K> {
         width
     }
 
-    /// Test builds: whether a line is kept for `id`, and a kept entry put in by hand.
-    #[cfg(test)]
-    pub(crate) fn holds(&self, id: &K) -> bool {
-        self.fits.contains_key(id) || self.shortest.contains_key(id)
-    }
-
     #[cfg(test)]
     pub(crate) fn seed(&mut self, id: K) {
         self.fits.insert(id.clone(), (0, None));
         self.shortest.insert(id, (0, 0.0));
+    }
+}
+
+impl<K: std::hash::Hash + Eq + Clone, V: Clone> Kept<K, V> {
+    /// As `fit`, for an owner whose answer is more than the line (G118: the Ready row's
+    /// words where the fight has no form). `answer` runs only when the key changes.
+    pub(crate) fn answer(
+        &mut self,
+        ui: &egui::Ui,
+        id: &K,
+        content: impl std::hash::Hash,
+        room: f32,
+        font: &egui::FontId,
+        answer: impl FnOnce() -> V,
+    ) -> V {
+        let key = key(ui, (content, room.to_bits(), font));
+        if let Some((kept, answer)) = self.fits.get(id)
+            && *kept == key
+        {
+            return answer.clone();
+        }
+        let answer = answer();
+        self.fits.insert(id.clone(), (key, answer.clone()));
+        answer
+    }
+
+    /// Test builds: whether a line is kept for `id`, and a kept entry put in by hand.
+    #[cfg(test)]
+    pub(crate) fn holds(&self, id: &K) -> bool {
+        self.fits.contains_key(id) || self.shortest.contains_key(id)
     }
 
     /// Drop the lines whose owner no longer shows them (a group no longer offered).
