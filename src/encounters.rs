@@ -3000,6 +3000,9 @@ enum KeptResult {
     EncounterRemoved,
     /// `Encounter saved.` or `Group saved.` (`message`), with no Undo.
     Saved,
+    /// `Rules and runs draft discarded.` with its Undo (`discarded_options`): only Rules and runs
+    /// shows it (`run_settings`).
+    OptionsDiscarded,
 }
 
 /// Whose kept result it is: the campaign and its kind. One of each kind per campaign, as each
@@ -3258,9 +3261,9 @@ pub struct Encounters {
     message: Option<String>,
     /// The draft `Discard changes` last dropped, for one step of undo.
     discarded: Option<Draft>,
+    /// The Rules and runs draft that Discard set aside; its result is in `kept`
+    /// (`KeptResult::OptionsDiscarded`), which issued its order at the discard.
     discarded_options: Option<crate::encounter_settings::Options>,
-    /// When `discarded_options` was discarded, for the footer's order.
-    discarded_options_order: Option<design::ResultOrder>,
     pub saved: bool,
     run: Option<crate::encounter_run::Run>,
     /// The encounter editor's last frame found that Save would refuse its changed draft, so
@@ -5345,6 +5348,12 @@ impl Encounters {
                 page,
             ),
             (KeptResult::Saved, self.message.is_some(), page),
+            // Only Rules and runs shows it (`run_settings`).
+            (
+                KeptResult::OptionsDiscarded,
+                self.discarded_options.is_some(),
+                false,
+            ),
         ];
         let Some(root) = self.active.as_ref().map(|active| active.path.clone()) else {
             return Vec::new();
@@ -5442,6 +5451,7 @@ impl Encounters {
                     .unwrap_or(crate::sentence!("Saved.")),
             )
             .into(),
+            KeptResult::OptionsDiscarded => options_discarded(),
         }
     }
 
@@ -5831,6 +5841,18 @@ impl Encounters {
     fn undo_kept(&mut self, kind: KeptResult, campaign: Option<(&Campaign, &[Module])>) -> bool {
         match kind {
             KeptResult::Saved => false,
+            KeptResult::OptionsDiscarded => {
+                match (self.discarded_options.take(), self.snapshot.as_mut()) {
+                    (Some(options), Some(snapshot)) => {
+                        snapshot.options = options;
+                        true
+                    }
+                    (options, _) => {
+                        self.discarded_options = options;
+                        false
+                    }
+                }
+            }
             KeptResult::Discarded => {
                 self.undo_discard();
                 true
@@ -8099,51 +8121,53 @@ impl Encounters {
         };
         let discard_shown =
             snapshot.options == snapshot.saved_options && self.discarded_options.is_some();
-        // The tab's footer: the discard's Undo, the reasons, then the notices. The pane places
-        // it `S` below the form while the form fits, and at the tab's bottom only when the form
+        // The tab's footer, typed (layout PR 2b): the discard's result and its Undo (the page's
+        // store keeps it, by its ticket), the reasons, then the notices. The pane places it `S`
+        // below the form while the form fits, and at the tab's bottom only when the form
         // scrolls, so the form keeps its place whatever the footer holds.
-        let undo_discard = std::cell::Cell::new(false);
-        let undo = &undo_discard;
-        let mut footer =
-            design::Footer::new(("run_settings_footer", active.id), design::FORM_WIDTH);
-        if discard_shown && let Some(order) = self.discarded_options_order {
-            let words = "Rules and runs draft discarded.";
-            footer.result(order, words, true, move |ui| {
-                if design::draft_discarded(ui, "Rules and runs") {
-                    undo.set(true);
-                }
-            });
+        let discarded = KeptOwner {
+            root: active.path.clone(),
+            kind: KeptResult::OptionsDiscarded,
+        };
+        if self.discarded_options.is_none() {
+            // Its draft was dropped (an edit, a save, another campaign): the Undo ends.
+            self.kept.owner_changed(&discarded);
         }
-        if let Some(e) = self.error.clone() {
-            footer.reason(e.clone(), move |ui| {
-                design::message(ui, Tone::Error, &e);
-            });
+        let frame = design::outcome::PaneFrame::new(ui);
+        let mut messages = design::outcome::Messages::new(
+            &frame,
+            ("run_settings_footer", active.id),
+            design::FORM_WIDTH,
+        );
+        if discard_shown && let Some(shown) = self.kept.get(&discarded) {
+            messages.kept(shown.outcome(&frame, |_| options_discarded()));
         }
-        // The warning names the line; the file's path and links start at the last warning's
-        // words.
+        if let Some(e) = &self.error {
+            messages.outcome(design::outcome::FaultMessage::new(&EncounterFault::Failed(
+                e.clone(),
+            )));
+        }
+        // Each warning names its line; the file's path and links follow the last one.
         if let Some((last, before)) = rule_words.split_last() {
-            let (last, before, root) = (last.clone(), before.to_vec(), active.path.clone());
-            footer.reason(rule_words.join(" "), move |ui| {
-                for text in &before {
-                    design::message(ui, Tone::Warning, text);
-                }
-                design::message_with_actions(ui, Tone::Warning, &last, |ui| {
-                    file_line(ui, &root, "Campaign.md");
-                });
-            });
+            for words in before {
+                messages.outcome(design::outcome::FaultMessage::new(
+                    &EncounterFault::FileWarning(words.clone()),
+                ));
+            }
+            messages.outcome(
+                design::outcome::FaultMessage::new(&EncounterFault::FileWarning(last.clone()))
+                    .file(design::outcome::FileLine::new(&active.path, "Campaign.md")),
+            );
         }
         if let Some(words) = folder_warning {
-            footer.notice(words.clone(), move |ui| {
-                design::message(ui, Tone::Warning, &words);
-            });
+            messages.outcome(design::outcome::Notice::warning(outcome_words(&words)));
         }
         if draft_open {
-            let words = "Save or discard the open encounter to change run settings.";
-            footer.notice(words, move |ui| {
-                design::message(ui, Tone::Info, words);
-            });
+            messages.outcome(design::outcome::Notice::new(crate::sentence!(
+                "Save or discard the open encounter to change run settings."
+            )));
         }
-        footer.pane(ui, design::Body::Content, |ui| {
+        let paned = messages.pane(ui, design::Body::Content, |ui| {
         ui.vertical(|ui| {
         // The form is as wide as the tab, at most `FORM_WIDTH`.
         ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
@@ -8264,7 +8288,11 @@ impl Encounters {
                             &mut snapshot.options,
                             snapshot.saved_options.clone(),
                         ));
-                        self.discarded_options_order = Some(design::ResultOrder::issue());
+                        Self::record_kept(
+                            &mut self.kept,
+                            self.active.as_ref(),
+                            KeptResult::OptionsDiscarded,
+                        );
                     }
                 }
                 if !changed && !rule_flags.is_empty() {
@@ -8365,13 +8393,24 @@ impl Encounters {
         if let Some(e) = error {
             self.error = Some(e);
         }
-        if undo_discard.get()
-            && let Some(options) = self.discarded_options.take()
-            && let Some(snapshot) = self.snapshot.as_mut()
+        // `Undo discard of Rules and runs`: the page's store acts by the press's ticket, and only
+        // then is the draft put back.
+        if let Some(press) = paned.pressed
+            && press.id == FooterPress::Undo
+            && let Some(ticket) = press.ticket
         {
-            snapshot.options = options;
+            self.undo_by_ticket(ticket, None);
         }
     }
+}
+
+/// `Rules and runs draft discarded.` with `Undo discard of Rules and runs`.
+fn options_discarded() -> design::outcome::KeptOutcome<FooterPress> {
+    design::outcome::KeptOutcome::Notice(
+        design::outcome::Notice::new(crate::sentence!("Rules and runs draft discarded.")),
+        design::outcome::UndoStep::of(design::outcome::Verb::Discard, "Rules and runs")
+            .pressed_as(FooterPress::Undo),
+    )
 }
 
 /// The widest a list row grows, so that its actions stay near the name they belong to.

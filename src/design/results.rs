@@ -1710,7 +1710,6 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/campaigns.rs", 9),
             ("src/design/components.rs", 16),
             ("src/dndbeyond.rs", 1),
-            ("src/encounters.rs", 1),
             ("src/encounters/groups.rs", 1),
             ("src/library.rs", 14),
             ("src/sessions/carry.rs", 1),
