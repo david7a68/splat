@@ -1167,6 +1167,8 @@ pub struct Choice<A> {
     id: A,
     lock: Lock,
     hover: Option<String>,
+    /// What pressing it does, painted in a help line under it (ruling M8).
+    help: Option<Sentence>,
 }
 
 /// A control's lock: its reason, and whether it holds now. A control made with `locked_when`
@@ -1189,6 +1191,7 @@ impl<A> Choice<A> {
             id,
             lock: None,
             hover: None,
+            help: None,
         }
     }
 
@@ -1211,12 +1214,21 @@ impl<A> Choice<A> {
             id,
             lock: None,
             hover: None,
+            help: None,
         }
     }
 
     /// Words on hover made at run time, owned (a link's path).
     pub fn hover(mut self, words: String) -> Self {
         self.hover = Some(words);
+        self
+    }
+
+    /// What pressing it does, in a help line under it, as a body fault's [`Repair`] says it
+    /// (ruling M8): painted, never only on hover. A message whose choices have help draws each
+    /// choice on a line of its own (`action_help`).
+    pub fn help(mut self, help: Sentence) -> Self {
+        self.help = Some(help);
         self
     }
 
@@ -1994,6 +2006,8 @@ struct Body {
     named: Vec<Option<(ChoiceKind, ChoiceWords)>>,
     locks: Vec<Lock>,
     hovers: Vec<Option<String>>,
+    /// Each choice's help line (`Choice::help`), by index.
+    helps: Vec<Option<Sentence>>,
     /// The file it is about, on a line under the words (`FileLine`).
     file: Option<FileLine>,
     /// No other kept result of its Undo's verb stands in its footer (`undo_alone`): the Undo
@@ -2054,6 +2068,7 @@ impl<A> Typed<A> {
         };
         let mut ids = Vec::with_capacity(choices.len());
         let (mut whats, mut locks, mut hovers) = (Vec::new(), Vec::new(), Vec::new());
+        let mut helps = Vec::new();
         let mut named = Vec::new();
         // Safe first: a choice that loses something follows every other (a stable order).
         let mut choices = choices;
@@ -2063,6 +2078,7 @@ impl<A> Typed<A> {
             named.push(choice.named);
             locks.push(choice.lock);
             hovers.push(choice.hover);
+            helps.push(choice.help);
             ids.push(choice.id);
         }
         Self {
@@ -2075,6 +2091,7 @@ impl<A> Typed<A> {
                 named,
                 locks,
                 hovers,
+                helps,
                 file: None,
                 undo_alone: false,
             },
@@ -3431,8 +3448,12 @@ impl Body {
                     .row_choices()
                     .map(|(at, choice)| self.choice_width(ui, at, choice) + gap)
                     .sum();
-                let one_line = inset + undo.as_ref().map_or(0.0, |form| form.width + L) + choices
-                    <= ui.available_width();
+                // Ruling M8: a choice with help stands on a line of its own, its help under it, as
+                // a body fault's repair does; then so does every choice of the message.
+                let stacked = self.helps.iter().any(Option::is_some);
+                let one_line = !stacked
+                    && inset + undo.as_ref().map_or(0.0, |form| form.width + L) + choices
+                        <= ui.available_width();
                 if undo.is_some() || one_line {
                     ui.horizontal(|ui| {
                         space(ui, inset);
@@ -3461,7 +3482,21 @@ impl Body {
                         }
                     });
                 }
-                if !one_line {
+                if stacked {
+                    for (at, choice) in self.row_choices() {
+                        if at > 0 && self.loses(at, choice) {
+                            space(ui, (M - ui.spacing().item_spacing.y).max(0.0));
+                        }
+                        let clicked = message_choice_row(ui, self.tone, |ui| {
+                            let room = ui.available_width();
+                            self.draw_choice(ui, at, choice, room, None)
+                        });
+                        activated(ui, pressed, clicked, words, Pressed::Choice(at));
+                        if let Some(help) = self.helps.get(at).and_then(Option::as_ref) {
+                            action_help(ui, self.tone, help);
+                        }
+                    }
+                } else if !one_line {
                     ui.horizontal_top(|ui| {
                         space(ui, inset);
                         ui.horizontal_wrapped(|ui| {
@@ -3617,60 +3652,13 @@ impl Body {
         }
     }
 
-    /// The choices, in order: a red one keeps exactly `L` from the one before it on its line, or
-    /// starts a line of its own `M` below the others (`before_lose`). The pressed choice's index.
+    /// The choices, in order, on wrapped lines: a red one keeps exactly `L` from the one before it
+    /// on its line, or starts a line of its own `M` below the others (`before_lose`).
     fn draw_choices(&self, ui: &mut Ui, pressed: &mut Option<Pressed>) {
         let gap = ui.spacing().item_spacing.x;
         for (at, choice) in self.row_choices() {
-            let lock = self.locks.get(at).and_then(holding);
-            let clicked = match (choice, self.named.get(at).and_then(Option::as_ref)) {
-                // Words with objects: whole, cut (named and tipped with the whole words) or
-                // wrapped to the row's width.
-                // Words with objects: cut to the row's width, named with the whole words.
-                (_, Some((kind, words))) => {
-                    if *kind == ChoiceKind::Lose && at > 0 {
-                        before_lose(ui, kind.action(&words.label()).natural_width(ui), gap);
-                    }
-                    data_choice(ui, words, *kind, ui.max_rect().width(), lock).clicked()
-                }
-                (MessageChoice::Choice(word), None) => Action::secondary(word)
-                    .density(Density::Read)
-                    .blocked(lock)
-                    .show(ui)
-                    .clicked(),
-                (MessageChoice::Lose(word), None) => {
-                    if at > 0 {
-                        let width = Action::destructive(word)
-                            .density(Density::Read)
-                            .natural_width(ui);
-                        before_lose(ui, width, gap);
-                    }
-                    Action::destructive(word)
-                        .density(Density::Read)
-                        .blocked(lock)
-                        .show(ui)
-                        .clicked()
-                }
-                (MessageChoice::Link { word, hover }, None) => match lock {
-                    // A locked link is drawn disabled, with its reason, as a blocked action is.
-                    Some(reason) => {
-                        ui.add_enabled_ui(false, |ui| link(ui, word))
-                            .inner
-                            .on_disabled_hover_text(reason);
-                        false
-                    }
-                    None => {
-                        let response = link(ui, word);
-                        let owned = self.hovers.get(at).and_then(Option::as_deref);
-                        match owned.or(hover) {
-                            Some(hover) => response.on_hover_text(hover),
-                            None => response,
-                        }
-                        .clicked()
-                    }
-                },
-                (MessageChoice::Dismiss(_), None) => false,
-            };
+            let room = ui.max_rect().width();
+            let clicked = self.draw_choice(ui, at, choice, room, Some(gap));
             activated(
                 ui,
                 pressed,
@@ -3678,6 +3666,78 @@ impl Body {
                 self.words.as_str(),
                 Pressed::Choice(at),
             );
+        }
+    }
+
+    /// Whether the choice at `at` loses something (red).
+    fn loses(&self, at: usize, choice: MessageChoice<'_>) -> bool {
+        match self.named.get(at).and_then(Option::as_ref) {
+            Some((kind, _)) => *kind == ChoiceKind::Lose,
+            None => matches!(choice, MessageChoice::Lose(_)),
+        }
+    }
+
+    /// One choice, in `room`; on a wrapped line (`wrapped`: the item gap), a red one keeps its
+    /// `L` or starts a line of its own (`before_lose`). Whether it was pressed.
+    fn draw_choice(
+        &self,
+        ui: &mut Ui,
+        at: usize,
+        choice: MessageChoice<'_>,
+        room: f32,
+        wrapped: Option<f32>,
+    ) -> bool {
+        let lock = self.locks.get(at).and_then(holding);
+        match (choice, self.named.get(at).and_then(Option::as_ref)) {
+            // Words with objects: cut to the row's width, named with the whole words.
+            (_, Some((kind, words))) => {
+                if let Some(gap) = wrapped
+                    && *kind == ChoiceKind::Lose
+                    && at > 0
+                {
+                    before_lose(ui, kind.action(&words.label()).natural_width(ui), gap);
+                }
+                data_choice(ui, words, *kind, room, lock).clicked()
+            }
+            (MessageChoice::Choice(word), None) => Action::secondary(word)
+                .density(Density::Read)
+                .blocked(lock)
+                .show(ui)
+                .clicked(),
+            (MessageChoice::Lose(word), None) => {
+                if let Some(gap) = wrapped
+                    && at > 0
+                {
+                    let width = Action::destructive(word)
+                        .density(Density::Read)
+                        .natural_width(ui);
+                    before_lose(ui, width, gap);
+                }
+                Action::destructive(word)
+                    .density(Density::Read)
+                    .blocked(lock)
+                    .show(ui)
+                    .clicked()
+            }
+            (MessageChoice::Link { word, hover }, None) => match lock {
+                // A locked link is drawn disabled, with its reason, as a blocked action is.
+                Some(reason) => {
+                    ui.add_enabled_ui(false, |ui| link(ui, word))
+                        .inner
+                        .on_disabled_hover_text(reason);
+                    false
+                }
+                None => {
+                    let response = link(ui, word);
+                    let owned = self.hovers.get(at).and_then(Option::as_deref);
+                    match owned.or(hover) {
+                        Some(hover) => response.on_hover_text(hover),
+                        None => response,
+                    }
+                    .clicked()
+                }
+            },
+            (MessageChoice::Dismiss(_), None) => false,
         }
     }
 
@@ -4036,6 +4096,15 @@ impl<A> Repair<A> {
     }
 }
 
+/// The help line under an action (ruling M8): what pressing it does, in the help words, from
+/// the message's words, painted, never only on hover. The one help line of a body fault's
+/// [`Repair`] and of a footer [`Choice`].
+fn action_help(ui: &mut Ui, tone: Tone, help: &Sentence) {
+    message_choice_row(ui, tone, |ui| {
+        super::components::help(ui, help.as_str());
+    });
+}
+
 /// A fault in a page's body that the DM can repair from where it is (Campaign content's package
 /// and dependency faults): the fault's words and tone, then each [`Repair`] on its own line from
 /// the words, with its lock's reason and its help line under it. Its tone and words come from the
@@ -4096,9 +4165,7 @@ impl<A> BodyFault<A> {
                         });
                     }
                     if let Some(help) = &repair.help {
-                        message_choice_row(ui, tone, |ui| {
-                            super::components::help(ui, help.as_str());
-                        });
+                        action_help(ui, tone, help);
                     }
                 }
             })
