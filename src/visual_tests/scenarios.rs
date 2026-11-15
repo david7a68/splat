@@ -14817,6 +14817,7 @@ pub mod session_notes {
         d.state("timeline-disk-conflict", Sizes::All);
         links_beside_lookup(d);
         note_warnings_beside_other_editors(d);
+        header_menu_boundaries(d);
     }
 
     /// Round 30 re-check of PR 400 (follow-up B7b): the session note's warnings stand in the
@@ -15192,6 +15193,11 @@ pub mod session_notes {
                 ),
             );
         }
+    }
+
+    /// R40's extra states follow every main witness, so closing Lookup here cannot change
+    /// the later banner witnesses' layout or remove their existing scrollbar records.
+    fn header_menu_boundaries(d: &mut Driver<'_>) {
         // R40: the migrated Adds to popup shows full session names. Append the state so
         // every existing capture keeps its number. No test scroll prepares the popup.
         d.press(Key::Escape);

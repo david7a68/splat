@@ -5668,8 +5668,14 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         ),
     );
     // Append the popup witness after the original Add and its checks: resizing or focusing
-    // this extra menu must never change the scroll seen by those existing steps.
-    d.click(&format!("Add {PACKAGE_NPC} to the fight"));
+    // this extra menu must never change the scroll seen by those existing steps. A separate
+    // NPC has no stat block and has not joined this run, so its form can open without Undo.
+    const POPUP_NPC: &str = "Popup witness";
+    entry(d, "NPCs/Popup witness.md", POPUP_NPC, "npc", "");
+    reload(d);
+    show(d, POPUP_NPC);
+    d.wait_for_text(POPUP_NPC);
+    d.click(&format!("Add {POPUP_NPC} to the fight"));
     d.type_into("Stat block", "Guard");
     d.click("Guard");
     d.state_prepared("add-to-fight-side-menu-boundary", Sizes::Small, |d| {
