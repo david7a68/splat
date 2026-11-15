@@ -2291,139 +2291,136 @@ impl Run {
         let p = &self.state.participants[index];
         let key = p.key.clone();
         let run_id = self.id;
-        egui::ScrollArea::vertical()
-            .id_salt("run_conditions")
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                // A form, not the pane: the grid, the effects and Add stay within its width.
-                ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
-                ui.spacing_mut().item_spacing = vec2(design::XS, design::XS);
-                let found = |name: &str| {
-                    p.conditions.iter().position(|c| {
-                        c.same(name) || (name == "Exhaustion" && c.name().starts_with("Exhaustion"))
-                    })
-                };
-                // Fixed columns, `S` apart: never spread across the form, never moved by a toggle.
-                // X11: a condition with a count shows it on its tick, `✓ Frightened 10`.
-                let label = |name: &str| {
-                    found(name).map(|at| {
-                        let c = &p.conditions[at];
-                        c.count().map_or_else(|| name.to_owned(), |_| c.words())
-                    })
-                };
-                let (pressed, counts) = conditions_grid_counted(ui, "official_conditions", &label);
-                if let Some(name) = pressed {
-                    command = Some(found(name).map_or_else(
-                        || Command::Condition(index, name.to_owned()),
-                        |i| Command::RemoveCondition(index, i),
-                    ));
-                }
-                // One level, not a pile of lines. Each step replaces the last.
-                let exhausted = p
-                    .conditions
-                    .iter()
-                    .position(|c| c.name().starts_with("Exhaustion"));
-                if let Some(at) = exhausted {
-                    let start = exhaustion_level(p.conditions[at].name());
-                    // A drag shows its level here and commits one step when it ends, from the
-                    // level it started at. A drag that the run no longer matches is dropped.
-                    let frame = ui.ctx().cumulative_frame_nr();
-                    let drag = self.exhaustion_drag.take().filter(|drag| {
-                        (drag.index, drag.at, drag.start) == (index, at, start)
-                            && drag.frame + 1 >= frame
+        design::ScrollColumn::new("run_conditions").show(ui, |ui| {
+            // A form, not the pane: the grid, the effects and Add stay within its width.
+            ui.set_max_width(ui.available_width().min(design::FORM_WIDTH));
+            ui.spacing_mut().item_spacing = vec2(design::XS, design::XS);
+            let found = |name: &str| {
+                p.conditions.iter().position(|c| {
+                    c.same(name) || (name == "Exhaustion" && c.name().starts_with("Exhaustion"))
+                })
+            };
+            // Fixed columns, `S` apart: never spread across the form, never moved by a toggle.
+            // X11: a condition with a count shows it on its tick, `✓ Frightened 10`.
+            let label = |name: &str| {
+                found(name).map(|at| {
+                    let c = &p.conditions[at];
+                    c.count().map_or_else(|| name.to_owned(), |_| c.words())
+                })
+            };
+            let (pressed, counts) = conditions_grid_counted(ui, "official_conditions", &label);
+            if let Some(name) = pressed {
+                command = Some(found(name).map_or_else(
+                    || Command::Condition(index, name.to_owned()),
+                    |i| Command::RemoveCondition(index, i),
+                ));
+            }
+            // One level, not a pile of lines. Each step replaces the last.
+            let exhausted = p
+                .conditions
+                .iter()
+                .position(|c| c.name().starts_with("Exhaustion"));
+            if let Some(at) = exhausted {
+                let start = exhaustion_level(p.conditions[at].name());
+                // A drag shows its level here and commits one step when it ends, from the
+                // level it started at. A drag that the run no longer matches is dropped.
+                let frame = ui.ctx().cumulative_frame_nr();
+                let drag = self.exhaustion_drag.take().filter(|drag| {
+                    (drag.index, drag.at, drag.start) == (index, at, start)
+                        && drag.frame + 1 >= frame
+                });
+                let mut level = drag.map_or(i64::from(start), |drag| drag.level);
+                let stepper = ui.horizontal(|ui| {
+                    ui.label(Type::Body.rich(ui, "Exhaustion level").color(colors().text));
+                    design::stepper_with_density(
+                        ui,
+                        "Exhaustion level",
+                        &mut level,
+                        0..=EXHAUSTION_MAX,
+                        Density::Scan,
+                        Some(EXHAUSTION_AT_LOW),
+                        Some(EXHAUSTION_AT_HIGH),
+                    )
+                });
+                let dragging = ui.ctx().dragged_id().is_some()
+                    && ui
+                        .input(|i| i.pointer.press_origin())
+                        .is_some_and(|origin| stepper.response.rect.contains(origin));
+                // A level above the usual top (from a file or a sync) stays until the DM
+                // changes it.
+                let level = level.clamp(0, EXHAUSTION_MAX.max(i64::from(start)));
+                if dragging {
+                    self.exhaustion_drag = Some(ExhaustionDrag {
+                        index,
+                        at,
+                        start,
+                        level,
+                        frame,
                     });
-                    let mut level = drag.map_or(i64::from(start), |drag| drag.level);
-                    let stepper = ui.horizontal(|ui| {
-                        ui.label(Type::Body.rich(ui, "Exhaustion level").color(colors().text));
-                        design::stepper_with_density(
-                            ui,
-                            "Exhaustion level",
-                            &mut level,
-                            0..=EXHAUSTION_MAX,
-                            Density::Scan,
-                            Some(EXHAUSTION_AT_LOW),
-                            Some(EXHAUSTION_AT_HIGH),
-                        )
+                } else if (stepper.inner || drag.is_some()) && level != i64::from(start) {
+                    command = Some(if level == 0 {
+                        Command::RemoveCondition(index, at)
+                    } else {
+                        set_exhaustion(index, level as u8)
                     });
-                    let dragging = ui.ctx().dragged_id().is_some()
-                        && ui
-                            .input(|i| i.pointer.press_origin())
-                            .is_some_and(|origin| stepper.response.rect.contains(origin));
-                    // A level above the usual top (from a file or a sync) stays until the DM
-                    // changes it.
-                    let level = level.clamp(0, EXHAUSTION_MAX.max(i64::from(start)));
-                    if dragging {
-                        self.exhaustion_drag = Some(ExhaustionDrag {
-                            index,
-                            at,
-                            start,
-                            level,
-                            frame,
-                        });
-                    } else if (stepper.inner || drag.is_some()) && level != i64::from(start) {
-                        command = Some(if level == 0 {
-                            Command::RemoveCondition(index, at)
-                        } else {
-                            set_exhaustion(index, level as u8)
-                        });
-                    }
                 }
-                // Each other effect with its whole words. An official condition's count is on
-                // its tick; it is here only when the tick cannot show it.
-                let listed = |c: &super::Condition| {
-                    super::recognized_condition(c.name()).is_none()
-                        || (c.is_effect() && !(counts && c.count().is_some()))
-                };
-                let custom: Vec<_> = p
-                    .conditions
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, c)| listed(c))
-                    .map(|(at, c)| (at, c.words()))
-                    .collect();
-                // The list's heading adds its own space above it; an empty list has no heading.
-                if custom.is_empty() {
-                    design::gap(ui, design::Gap::S);
-                }
-                let width = (ui.available_width() - 80.0).max(100.0);
-                if let Some(at) =
-                    other_effects_list(ui, custom.iter().map(|(_, words)| words.as_str()), width)
-                {
-                    command = Some(Command::RemoveCondition(index, custom[at].0));
-                }
-                let focus = std::mem::take(&mut self.focus_other_effect);
-                // The participant's one draft: the dock's field shows the same words.
-                let draft = self.effect_fields.entry(p.key.clone()).or_default();
-                // X8: where the dock has no room for `Effect`, this field is the way, and its
-                // words say that a time counts.
-                let placeholder = if self.state.phase == Phase::Running && !self.effect_in_dock {
-                    OTHER_EFFECT_TIMED
-                } else {
-                    "Other effect…"
-                };
-                // The draft is this participant's, in this run: its field keeps its own cursor
-                // and Undo (two runs can reuse a roster slot's key).
-                let owner = design::TextKey::from_data(format!("{}:{}", run_id, p.key));
-                let (add, field) =
-                    other_effect_field(ui, owner, &mut draft.words, (width, placeholder), focus);
-                // Escape clears the participant's draft, as in the dock's field.
-                if field.lost_focus() && ui.input(|i| i.key_pressed(Key::Escape)) {
-                    draft.words.clear();
-                }
-                if add {
-                    // Typed as a level, it is still the one Exhaustion a creature has.
-                    // Words with a time go through the one reader, which keeps the level.
-                    let typed = draft.words.trim().to_owned();
-                    let level = typed.starts_with("Exhaustion")
-                        && !super::Condition::read(&typed).is_effect();
-                    command = Some(match exhausted.filter(|_| level) {
-                        Some(_) => set_exhaustion(index, exhaustion_level(&typed)),
-                        None => Command::Condition(index, typed),
-                    });
-                    added = true;
-                }
-                design::help(ui, CONDITIONS_HELP);
-            });
+            }
+            // Each other effect with its whole words. An official condition's count is on
+            // its tick; it is here only when the tick cannot show it.
+            let listed = |c: &super::Condition| {
+                super::recognized_condition(c.name()).is_none()
+                    || (c.is_effect() && !(counts && c.count().is_some()))
+            };
+            let custom: Vec<_> = p
+                .conditions
+                .iter()
+                .enumerate()
+                .filter(|(_, c)| listed(c))
+                .map(|(at, c)| (at, c.words()))
+                .collect();
+            // The list's heading adds its own space above it; an empty list has no heading.
+            if custom.is_empty() {
+                design::gap(ui, design::Gap::S);
+            }
+            let width = (ui.available_width() - 80.0).max(100.0);
+            if let Some(at) =
+                other_effects_list(ui, custom.iter().map(|(_, words)| words.as_str()), width)
+            {
+                command = Some(Command::RemoveCondition(index, custom[at].0));
+            }
+            let focus = std::mem::take(&mut self.focus_other_effect);
+            // The participant's one draft: the dock's field shows the same words.
+            let draft = self.effect_fields.entry(p.key.clone()).or_default();
+            // X8: where the dock has no room for `Effect`, this field is the way, and its
+            // words say that a time counts.
+            let placeholder = if self.state.phase == Phase::Running && !self.effect_in_dock {
+                OTHER_EFFECT_TIMED
+            } else {
+                "Other effect…"
+            };
+            // The draft is this participant's, in this run: its field keeps its own cursor
+            // and Undo (two runs can reuse a roster slot's key).
+            let owner = design::TextKey::from_data(format!("{}:{}", run_id, p.key));
+            let (add, field) =
+                other_effect_field(ui, owner, &mut draft.words, (width, placeholder), focus);
+            // Escape clears the participant's draft, as in the dock's field.
+            if field.lost_focus() && ui.input(|i| i.key_pressed(Key::Escape)) {
+                draft.words.clear();
+            }
+            if add {
+                // Typed as a level, it is still the one Exhaustion a creature has.
+                // Words with a time go through the one reader, which keeps the level.
+                let typed = draft.words.trim().to_owned();
+                let level =
+                    typed.starts_with("Exhaustion") && !super::Condition::read(&typed).is_effect();
+                command = Some(match exhausted.filter(|_| level) {
+                    Some(_) => set_exhaustion(index, exhaustion_level(&typed)),
+                    None => Command::Condition(index, typed),
+                });
+                added = true;
+            }
+            design::help(ui, CONDITIONS_HELP);
+        });
         if let Some(command) = command {
             self.run_command(command);
             // Added words leave the draft; words the run refused stay, with the reason. In a
@@ -3209,64 +3206,57 @@ impl Run {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn notes_tab(&mut self, ui: &mut egui::Ui) {
         let (prep, technical) = self.prep();
         let mut pressed = false;
-        egui::ScrollArea::vertical()
-            .id_salt("run_encounter_notes")
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                if prep.is_empty() {
-                    // Round 30 AP1: a sentence that names an act offers it. The run's own
-                    // record of its encounter decides, not Lookup's index, which can lag behind
-                    // a fight made a moment ago. With no saved encounter, it says why.
-                    match self.source {
-                        Some(id) => design::empty_state(
-                            ui,
-                            icons::SESSIONS,
-                            "No prep notes yet",
-                            "Add read-aloud text or notes when you edit the encounter.",
-                            |ui| {
-                                if Action::quiet("Edit encounter")
-                                    .line_start()
-                                    .show(ui)
-                                    .clicked()
-                                {
-                                    pressed = true;
-                                    ui.ctx().data_mut(|data| {
-                                        data.insert_temp(egui::Id::new("edit_run_encounter"), id);
-                                    });
-                                }
-                                // R35: why the press did not open it, under the action, until
-                                // the next press. The run owns it and ends with the run.
-                                if let Some(refusal) = &self.prep_refusal {
-                                    design::blocked_reason(ui, Some(refusal.reason()));
-                                }
-                            },
-                        ),
-                        None => design::empty_state(
-                            ui,
-                            icons::SESSIONS,
-                            "No prep notes",
-                            "This fight did not start from a saved encounter, so it has no prep notes.",
-                            |_| {},
-                        ),
-                    }
-                } else {
-                    design::heading(ui, design::Heading::Label(READ_ALOUD));
-                    style::markdown(ui, prep);
+        design::ScrollColumn::new("run_encounter_notes").show(ui, |ui| {
+            if prep.is_empty() {
+                // Round 30 AP1: a sentence that names an act offers it. The run's own
+                // record of its encounter decides, not Lookup's index, which can lag behind
+                // a fight made a moment ago. With no saved encounter, it says why.
+                match self.source {
+                    Some(id) => design::empty_state(
+                        ui,
+                        icons::SESSIONS,
+                        "No prep notes yet",
+                        "Add read-aloud text or notes when you edit the encounter.",
+                        |ui| {
+                            if Action::quiet("Edit encounter")
+                                .line_start()
+                                .show(ui)
+                                .clicked()
+                            {
+                                pressed = true;
+                                ui.ctx().data_mut(|data| {
+                                    data.insert_temp(egui::Id::new("edit_run_encounter"), id);
+                                });
+                            }
+                            // R35: why the press did not open it, under the action, until
+                            // the next press. The run owns it and ends with the run.
+                            if let Some(refusal) = &self.prep_refusal {
+                                design::blocked_reason(ui, Some(refusal.reason()));
+                            }
+                        },
+                    ),
+                    None => design::empty_state(
+                        ui,
+                        icons::SESSIONS,
+                        "No prep notes",
+                        "This fight did not start from a saved encounter, so it has no prep notes.",
+                        |_| {},
+                    ),
                 }
-                if let Some(technical) = technical {
-                    design::gap(ui, design::Gap::M);
-                    design::quiet_section(ui, "Technical details", |ui| {
-                        style::markdown(ui, technical);
-                    });
-                }
-            });
+            } else {
+                design::heading(ui, design::Heading::Label(READ_ALOUD));
+                style::markdown(ui, prep);
+            }
+            if let Some(technical) = technical {
+                design::gap(ui, design::Gap::M);
+                design::quiet_section(ui, "Technical details", |ui| {
+                    style::markdown(ui, technical);
+                });
+            }
+        });
         if pressed {
             self.prep_refusal = None;
         }
@@ -4859,10 +4849,7 @@ impl Run {
     )]
     fn record_tab(&mut self, ui: &mut egui::Ui, index: usize) {
         let mut command = None;
-        egui::ScrollArea::vertical()
-            .id_salt("run_record")
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
+        design::ScrollColumn::new("run_record").show(ui, |ui| {
                 ui.spacing_mut().item_spacing.y = design::S;
                 let p = &self.state.participants[index];
                 let mut hp = p.hp;
@@ -5022,29 +5009,22 @@ impl Run {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
-    )]
     fn log_tab(&mut self, ui: &mut egui::Ui) {
         let c = colors();
-        egui::ScrollArea::vertical()
-            .id_salt("run_log")
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                if self.state.log.is_empty() {
-                    design::empty_state(
-                        ui,
-                        icons::SESSIONS,
-                        "No log entries yet",
-                        "Begin combat, or add a note on the Correct tab, to record what happens.",
-                        |_| {},
-                    );
-                }
-                for line in self.state.log.iter().rev() {
-                    ui.add(egui::Label::new(Type::Small.rich(ui, line).color(c.text)).wrap());
-                }
-            });
+        design::ScrollColumn::new("run_log").show(ui, |ui| {
+            if self.state.log.is_empty() {
+                design::empty_state(
+                    ui,
+                    icons::SESSIONS,
+                    "No log entries yet",
+                    "Begin combat, or add a note on the Correct tab, to record what happens.",
+                    |_| {},
+                );
+            }
+            for line in self.state.log.iter().rev() {
+                ui.add(egui::Label::new(Type::Small.rich(ui, line).color(c.text)).wrap());
+            }
+        });
     }
 
     // ---- Setup ------------------------------------------------------------------
