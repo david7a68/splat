@@ -726,9 +726,10 @@ struct State {
 /// kept or taken back, and the revisions of the two reads (never an address, which a freed read
 /// can hand to the next one).
 type ArrivalKey = (u64, u64, u64);
-/// The typed totals' revision, the groups' revision and the run's encounter, for the Arrivals
-/// reasons.
-type ReasonsKey = (u64, u64, Option<Uuid>);
+/// The typed totals' revision, the groups' revision, the run's encounter, the count of steps
+/// kept or taken back and the grouping rule, for the Arrivals reasons (a step or the rule can
+/// give a side the initiative that a group without a bonus joins).
+type ReasonsKey = (u64, u64, Option<Uuid>, u64, Grouping);
 /// The groups' revision, and the widths and type size a summary was wrapped for.
 type SummaryKey = (u64, u32, u32, u32);
 /// A group's member summary in Arrivals: the wrapped words, and whether they take a full-width
@@ -900,8 +901,8 @@ pub(crate) struct Run {
     scale_seen: Option<Arc<crate::difficulty::Scale>>,
     /// Bumped whenever `scale` is a read other than `scale_seen`.
     scale_revision: u64,
-    /// The Arrivals reasons for typed totals that cannot be read (FI5), for one
-    /// `totals_revision`, one read of the groups and one encounter. Never saved.
+    /// The Arrivals reasons of each Add that waits for the DM (FI5, R35: a typed total that
+    /// cannot be read, a roll with no bonus), for one `ReasonsKey`. Never saved.
     arrival_reasons: Option<(ReasonsKey, Arc<[String]>)>,
     /// Never saved.
     carried: Option<CarriedHp>,

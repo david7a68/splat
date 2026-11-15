@@ -1495,8 +1495,9 @@ to any encounter is the direct way to remove ownership; keep it distinct from De
 saving.
 
 Arrivals reserves one Add slot as wide as the widest Add label in the panel. Arrivals shares one group block, at
-the pane's left edge: as wide as the widest group heading, or member summary with its Initiative and Add, and no
-wider than `LIST_MEASURE`. Each group's Initiative and Add block ends at that block's right edge, so every
+the pane's left edge: as wide as the widest group heading (its name, then its facts with the widest join status it
+can show, so a join widens nothing), or member summary with its Initiative and Add, and no wider than
+`LIST_MEASURE`. Each group's Initiative and Add block ends at that block's right edge, so every
 Initiative field shares one left edge and every Add one right edge; the member summary takes the rest. A group's
 faults and their repair links may use the list's width (`LIST_MEASURE`), so a link stays on its fault's line. List, editor and Arrivals resolve the same joining members and XP. Partial groups say `1 of 3 can join · XP 50 · Will add: 1 × Goblin Warrior`; XP covers joining members only; `+ unknown` means a joining member lacks XP. Flagged list rows retain member summaries and Edit.
 Flagged members name their line, with a file line (path, Edit in Obsidian, Show file), Edit and a Remove member row menu
@@ -1910,7 +1911,10 @@ Exclude missing, unread and invalid members. Say `1 of 3 can join`, `Will add: 1
 `Add 1` using only joining members. Keep excluded members under Cannot join with reason and Edit group repair.
 Only zero valid members blocks Initiative and Add. Invalid Initiative retains text, blocks Add and drop, and says why
 in the footer below the list, named by its group (`Rival Team: Enter a whole number, or clear the field to roll.`), as
-a warning `small_message` (amber icon and bar, text-colour words) after the newest result, so no group row moves. Campaign → Packages opens repair.
+a warning `small_message` (amber icon and bar, text-colour words) after the newest result, so no group row moves. A
+blank Initiative rolls; when the group's first member has no initiative bonus and its side has no initiative to join,
+Add and drop wait for a typed total, and the footer says so in the same form (`Mist Riders: The first member has no
+initiative bonus. Type a total.`). One value locks Add, its drop and Enter, and gives the footer's words (R35). Campaign → Packages opens repair.
 In the group editor, an unread Changes cell (`Changes “HP lots” not read. …`) is a warning `small_message`, as
 every unread value is, and its example line starts at the message words. `No members can join.` in the Encounters
 list is a warning `message`, in the same form as the member faults above it.
@@ -1920,7 +1924,7 @@ Encounters list draw a member fault with its repair (`Campaign → Packages` or 
 `groups::member_fault_row` (`message_with_action`): a bordered secondary button beside the fault after an `L` gap, or
 below it at the words when there is no room. A message action without an icon is never a link.
 
-Join status parts on one line with dot separators beside the group name when they fit, else before the first member. Use a separate line only when neither has room. `Changed` keeps its muted pencil. Member names stay intact. A line never ends with a separator: the `·` moves to the next line with the part after it. Keep `at`
+Join status parts sit on one line with dot separators before the first member, in every group: never beside the group name, so no heading gives a fact of its `Fight after` line to a status and every heading gives way in one order. Use a separate line only when the member slot has no room. `Changed` keeps its muted pencil. Member names stay intact. A line never ends with a separator: the `·` moves to the next line with the part after it. Keep `at`
 with its total in arrival messages. Live group notices name only the group and its initiative totals. Member names and roll details stay in Log. Arrival faults use the shared message form (icon and bar in the fault's tone, text-colour words) and the tone recorded for that fault. The same fault keeps its tone in the editor, the Encounters list, Arrivals and the session plan: an invalid value, such as `Maximum HP would become −28. It must be 1 or more.`, is an error, and so is a member row or a creature file that cannot be read (R41); a member that is missing (not in this campaign's packages) or that cannot join (a D&D Beyond link, no maximum HP) is a warning. Every view draws each member fault in its own tone. The group adds its own reason (`No members can join.`) as a warning message only when no member fault shows; with faults, `0 of N can join` and the faults already say it. Live initiative notices name who joins and the total. Before the current turn,
 add acts next round. Tied arrivals name both participants and offer Move before with Undo, before the first
 member of a shared-roll block. Keep tie details in Arrivals and Log, outside the Undo label.
