@@ -2474,20 +2474,20 @@ impl Splat {
                 encounters::PlanOpen::Opened => {}
                 // B4 review F1: the plan paints why under the group's line.
                 encounters::PlanOpen::Refused(_) => {
-                    self.sessions.plan_group_refused = Some((self.sessions.selected_id(), path));
+                    self.sessions.plan_group_refused = self
+                        .encounters
+                        .plan_group_id(&path)
+                        .map(|id| (self.sessions.selected_id(), id));
                 }
                 encounters::PlanOpen::Failed => self.page = Page::Encounters,
             }
         }
-        // The end events of the plan's refusal, delivered every frame on any page: nothing
-        // unsaved refuses any more (saved, discarded, campaign changed), or another session is
-        // selected.
-        if self.encounters.plan_group_blocked().is_none()
-            || self
-                .sessions
-                .plan_group_refused
-                .as_ref()
-                .is_some_and(|(session, _)| *session != self.sessions.selected_id())
+        // The end events of the plan's refusal, on any page, read only while one is stored
+        // (B4b N1: no draft is compared on a frame with nothing to end): another session is
+        // selected, or nothing unsaved refuses any more (saved, discarded, campaign changed).
+        if let Some((session, _)) = self.sessions.plan_group_refused
+            && (session != self.sessions.selected_id()
+                || self.encounters.plan_group_blocked().is_none())
         {
             self.sessions.plan_group_refused = None;
         }
