@@ -326,6 +326,22 @@ impl File {
     }
 }
 
+/// A folder an act writes into.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Folder {
+    /// The campaign's run folder, where a saved run's file lives.
+    Runs,
+}
+
+impl Folder {
+    /// The folder inside a sentence: `the run folder`.
+    fn object(self) -> &'static str {
+        match self {
+            Self::Runs => "the run folder",
+        }
+    }
+}
+
 /// A part of a tracker or of its history that an act needs as it was read.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Part {
@@ -377,13 +393,20 @@ pub enum FailedAct {
     NotStarted { encounter: Name },
     /// Continue fight: `Bridge Ambush did not go on.`
     NotContinued { fight: Name },
+    /// The Undo of an ending, which also makes the fight live again: `The ending of Bridge
+    /// Ambush was not undone.`
+    EndingNotUndone { fight: Name },
     /// Carry over: `Nothing was carried over from Session 1 into Session 2.`
     NotCarried { from: Name, into: Name },
+    /// The Undo of Carry over: `The carry-over from Session 1 was not undone in Session 2.`
+    CarryNotUndone { from: Name, into: Name },
     /// A scene, a creature or an NPC: `The scene “Talk to Hobb” was not added to Session 2.`,
     /// `The creature Cinder Wolf was not added to Bridge Ambush.`
     NotAdded { what: Thing, to: Name },
     /// A scene ticked: `The scene “Talk to Hobb” was not ticked in Session 2.`
     NotTicked { what: Thing, within: Name },
+    /// A scene's tick cleared: `The scene “Talk to Hobb” was not unticked in Session 2.`
+    NotUnticked { what: Thing, within: Name },
     /// The Undo of a removal: `The entry “Take seal” was not put back into Trackers.md.`
     NotPutBack { what: Thing, into: Name },
     /// The plan's links: `No links to Hobb were changed.`
@@ -410,8 +433,19 @@ pub enum Cause {
     NotSaved(File),
     /// `Splat could not change the run file.` An error: the system refused the write.
     NotChanged(File),
-    /// `That line of the session note changed on disk.` A warning.
+    /// `That line of the session note changed.` A warning: in Splat or on disk.
     LineChanged(File),
+    /// `The session note changed after the act.` A warning: an Undo would lose that change.
+    ChangedAfter(File),
+    /// `What Carry over adds changed after it was shown.` A warning: the last session's note,
+    /// its recordings or the plan changed.
+    OfferChanged,
+    /// `Splat cannot find the run folder.` A warning (R41: missing).
+    FolderGone(Folder),
+    /// `Splat cannot write in the run folder.` An error: the system refused the write.
+    FolderNotWritable(Folder),
+    /// `Another file now stands where the run file was.` A warning: Splat never writes over it.
+    Occupied(File),
     /// `That entry changed on disk.` A warning.
     PartChanged(Part),
     /// `The entry before it is no longer in Trackers.md.` A warning.
@@ -464,6 +498,14 @@ pub enum Step {
     Resolve(Name),
     /// `Choose the group in each note`
     ChooseGroups,
+    /// `Check what the Last time line offers now`
+    CheckOffer,
+    /// `Put the run folder back`
+    PutFolderBack(Folder),
+    /// `Fix the run folder outside Splat`
+    FixOutside(Folder),
+    /// `Move the other file away`
+    MoveAside,
 }
 
 impl Step {
@@ -482,6 +524,10 @@ impl Step {
             Self::Remove(name) => format!("Remove {}", name.as_str()),
             Self::Resolve(name) => format!("Resolve {}", name.as_str()),
             Self::ChooseGroups => "Choose the group in each note".to_owned(),
+            Self::CheckOffer => "Check what the Last time line offers now".to_owned(),
+            Self::PutFolderBack(folder) => format!("Put {} back", folder.object()),
+            Self::FixOutside(folder) => format!("Fix {} outside Splat", folder.object()),
+            Self::MoveAside => "Move the other file away".to_owned(),
         }
     }
 }
@@ -555,6 +601,10 @@ impl Refusal {
             | Cause::Gone(_)
             | Cause::Replaced(_)
             | Cause::LineChanged(_)
+            | Cause::ChangedAfter(_)
+            | Cause::OfferChanged
+            | Cause::FolderGone(_)
+            | Cause::Occupied(_)
             | Cause::PartChanged(_)
             | Cause::PartGone(..)
             | Cause::DependsOn(_)
@@ -570,6 +620,7 @@ impl Refusal {
             Cause::Unreadable(_)
             | Cause::NotSaved(_)
             | Cause::NotChanged(_)
+            | Cause::FolderNotWritable(_)
             | Cause::CreatureUnreadable(_) => Tone::Error,
         }
     }
@@ -604,8 +655,16 @@ impl Refusal {
             FailedAct::NotContinued { fight } => {
                 crate::sentence!("{} did not go on.", place(fight))
             }
+            FailedAct::EndingNotUndone { fight } => {
+                crate::sentence!("The ending of {} was not undone.", place(fight))
+            }
             FailedAct::NotCarried { from, into } => crate::sentence!(
                 "Nothing was carried over from {} into {}.",
+                from.as_str(),
+                place(into)
+            ),
+            FailedAct::CarryNotUndone { from, into } => crate::sentence!(
+                "The carry-over from {} was not undone in {}.",
                 from.as_str(),
                 place(into)
             ),
@@ -615,6 +674,11 @@ impl Refusal {
             FailedAct::NotTicked { what, within } => {
                 crate::sentence!("The {} was not ticked in {}.", what.phrase(), place(within))
             }
+            FailedAct::NotUnticked { what, within } => crate::sentence!(
+                "The {} was not unticked in {}.",
+                what.phrase(),
+                place(within)
+            ),
             FailedAct::NotPutBack { what, into } => crate::sentence!(
                 "The {} was not put back into {}.",
                 what.phrase(),
@@ -645,7 +709,22 @@ impl Refusal {
                 crate::sentence!("Splat could not change {}.", file.object())
             }
             Cause::LineChanged(file) => {
-                crate::sentence!("That line of {} changed on disk.", file.object())
+                crate::sentence!("That line of {} changed.", file.object())
+            }
+            Cause::ChangedAfter(file) => {
+                crate::sentence!("{} changed after the act.", file.subject())
+            }
+            Cause::OfferChanged => {
+                crate::sentence!("What Carry over adds changed after it was shown.")
+            }
+            Cause::FolderGone(folder) => {
+                crate::sentence!("Splat cannot find {}.", folder.object())
+            }
+            Cause::FolderNotWritable(folder) => {
+                crate::sentence!("Splat cannot write in {}.", folder.object())
+            }
+            Cause::Occupied(file) => {
+                crate::sentence!("Another file now stands where {} was.", file.object())
             }
             Cause::PartChanged(part) => crate::sentence!("{} changed on disk.", part.subject()),
             Cause::PartGone(part, file) => {
@@ -747,11 +826,23 @@ mod tests {
                     FailedAct::NotContinued {
                         fight: name("Bridge Ambush"),
                     },
-                    Cause::Changed(File::Timeline),
+                    Cause::Conflict(File::Timeline),
                     Recovery::First(Step::SettleTimeline),
                 ),
-                "Bridge Ambush did not go on. Timeline.md changed on disk. Settle Timeline.md on \
-                 the Timeline page first.",
+                "Bridge Ambush did not go on. Timeline.md has unsaved words, and its file changed \
+                 on disk. Settle Timeline.md on the Timeline page first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::EndingNotUndone {
+                        fight: name("Bridge Ambush"),
+                    },
+                    Cause::LaterPlayed,
+                    Recovery::StartNewRun,
+                ),
+                "The ending of Bridge Ambush was not undone. A later fight or rest was played. \
+                 Start a new run to play it again.",
                 Tone::Warning,
             ),
             (
@@ -797,11 +888,25 @@ mod tests {
                         from: name("Session 1: The Road"),
                         into: session(),
                     },
-                    Cause::Changed(File::LastSessionNote),
-                    Recovery::First(Step::Check(File::LastSessionNote)),
+                    Cause::OfferChanged,
+                    Recovery::First(Step::CheckOffer),
                 ),
                 "Nothing was carried over from Session 1: The Road into Session 2: The Crossing. \
-                 The last session’s note changed on disk. Check the last session’s note first.",
+                 What Carry over adds changed after it was shown. Check what the Last time line \
+                 offers now first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::CarryNotUndone {
+                        from: name("Session 1: The Road"),
+                        into: session(),
+                    },
+                    Cause::ChangedAfter(File::SessionNote),
+                    Recovery::First(Step::Check(File::SessionNote)),
+                ),
+                "The carry-over from Session 1: The Road was not undone in Session 2: The \
+                 Crossing. The session note changed after the act. Check the session note first.",
                 Tone::Warning,
             ),
             (
@@ -855,7 +960,20 @@ mod tests {
                     Recovery::First(Step::Check(File::SessionNote)),
                 ),
                 "The scene “Talk to Hobb” was not ticked in Session 2: The Crossing. That line of \
-                 the session note changed on disk. Check the session note first.",
+                 the session note changed. Check the session note first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotUnticked {
+                        what: Thing::new(Kind::Scene, name("Talk to Hobb")),
+                        within: session(),
+                    },
+                    Cause::LineChanged(File::SessionNote),
+                    Recovery::First(Step::Check(File::SessionNote)),
+                ),
+                "The scene “Talk to Hobb” was not unticked in Session 2: The Crossing. That line \
+                 of the session note changed. Check the session note first.",
                 Tone::Warning,
             ),
             (
@@ -1000,6 +1118,32 @@ mod tests {
             ),
             (
                 Refusal::new(
+                    FailedAct::LinksNotPutBack {
+                        to: name("Hobb"),
+                        within: name("Session 1: The Road"),
+                    },
+                    Cause::NotSaved(File::SessionNote),
+                    Recovery::First(Step::Check(File::SessionNote)),
+                ),
+                "The links to Hobb were not put back in Session 1: The Road. The session note \
+                 could not be saved. Check the session note first.",
+                Tone::Error,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::LinksNotPutBack {
+                        to: name("Hobb"),
+                        within: name("Session 1: The Road"),
+                    },
+                    Cause::Gone(File::SessionNote),
+                    Recovery::First(Step::Check(File::SessionNote)),
+                ),
+                "The links to Hobb were not put back in Session 1: The Road. The session note is \
+                 gone from its folder. Check the session note first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
                     FailedAct::NotDeleted {
                         what: Thing::new(Kind::Run, name("Bridge Ambush")),
                         from: session(),
@@ -1017,12 +1161,38 @@ mod tests {
                         what: Thing::new(Kind::Run, name("Bridge Ambush")),
                         into: session(),
                     },
-                    Cause::Gone(File::RunFile),
-                    Recovery::First(Step::Check(File::RunFile)),
+                    Cause::FolderGone(Folder::Runs),
+                    Recovery::First(Step::PutFolderBack(Folder::Runs)),
                 ),
-                "The run of Bridge Ambush was not put back into Session 2: The Crossing. The run \
-                 file is gone from its folder. Check the run file first.",
+                "The run of Bridge Ambush was not put back into Session 2: The Crossing. Splat \
+                 cannot find the run folder. Put the run folder back first.",
                 Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotPutBack {
+                        what: Thing::new(Kind::Run, name("Bridge Ambush")),
+                        into: session(),
+                    },
+                    Cause::Occupied(File::RunFile),
+                    Recovery::First(Step::MoveAside),
+                ),
+                "The run of Bridge Ambush was not put back into Session 2: The Crossing. Another \
+                 file now stands where the run file was. Move the other file away first.",
+                Tone::Warning,
+            ),
+            (
+                Refusal::new(
+                    FailedAct::NotPutBack {
+                        what: Thing::new(Kind::Run, name("Bridge Ambush")),
+                        into: session(),
+                    },
+                    Cause::FolderNotWritable(Folder::Runs),
+                    Recovery::First(Step::FixOutside(Folder::Runs)),
+                ),
+                "The run of Bridge Ambush was not put back into Session 2: The Crossing. Splat \
+                 cannot write in the run folder. Fix the run folder outside Splat first.",
+                Tone::Error,
             ),
         ];
         for (refusal, words, tone) in cases {

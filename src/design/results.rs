@@ -194,8 +194,8 @@ mod refusal;
 pub(crate) use projection::work as projection_work;
 pub use projection::{Mismatch, Projection, Retained};
 pub use refusal::{
-    Cause, Change, FailedAct, Fallback, File, Kind, Name, Part, Recovery, Refusal, Rows, Step,
-    Thing, Way,
+    Cause, Change, FailedAct, Fallback, File, Folder, Kind, Name, Part, Recovery, Refusal, Rows,
+    Step, Thing, Way,
 };
 
 /// A new order for an act done now: a result recorded, an Undo attempt refused.
