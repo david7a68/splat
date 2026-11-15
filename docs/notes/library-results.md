@@ -1,6 +1,6 @@
 # Library results onto the typed footer (M-L0.4 design note, rulings M14, M14a)
 
-Lane M-L0. Revised after Astra's REJECT of e7ccab77. Base `origin/main` f21f2473 (line numbers below are
+Lane M-L0. Revised after Astra's REJECTs of e7ccab77 and ab9f6987. Base `origin/main` f21f2473 (line numbers below are
 from it). Built against PR 452's typed footer (head c8921177). Code starts after PR 452 lands and this note
 is accepted. PR 463 no longer holds the three M9 Undo labels: they move here (PR 4b).
 
@@ -13,8 +13,10 @@ is accepted. PR 463 no longer holds the three M9 Undo labels: they move here (PR
 - No new `ByOwner` row (M12). The existing ones (`apply_page_press` 3, `undo_package_registration` 1) go to
   0, because every press comes back with its `Ticket`.
 - ONE mark store (Astra's answer to Q1), behind ONE mutation boundary for data and mark (§3).
-- Each kept result has a complete owner and named end events. Heading and Vital have neither on main
-  today; PR 4a fixes that, with a red witness (§4, proof 4).
+- Each kept result has a complete owner and named end events. One file is one `FileId` (owner kind, owner
+  id, path): main's `FileKey` drops the kind, so a campaign and a package with the same UUID merge (§3).
+  PR 4a fixes that with red witnesses (proof 4) and keeps every lifecycle of main exactly (no behaviour
+  change in 4a; the existing gate stays green).
 - A valid ticket never lets an Undo replace text typed after the footer was built. The same-frame draft
   guards of `editor_pane` (`library.rs:8998`, `:9025`, `:9073`) stay, and the ticket path goes through them.
 - M9 (PR 4b): `Undo copy <entry>`, `Undo unregister <package>`, `Undo remove <name>` through
@@ -42,7 +44,9 @@ pub(super) struct Kept {
     heading: Option<FixUndo>, vital: Option<FixUndo>, copies: Vec<DependencyUndo>,
     scope_notice: Option<String>, unregistered: Option<Module>,
 }
-struct KeptOwner { kind: KeptKind, copy: Option<(FileKey, String)> } // copy: linked file + copied path
+struct KeptOwner { kind: KeptKind, copy: Option<(FileId, String)> } // copy: linked file + copied path
+enum OwnerKey { Builtin, Package(Uuid), Campaign(Uuid) }
+struct FileId { owner: OwnerKey, path: String }                       // replaces `FileKey`
 ```
 
 Each kind has `set_<kind>(data)` (stores the data and records its mark in one call), `end_<kind>()` (drops
@@ -51,7 +55,12 @@ both), a read `<kind>()`, and its Undo: `undo_<kind>(run)` in 4a (flag press), `
 field, so a writer cannot skip the mark (privacy is the static rung), and no sync pass is needed. Every kind
 but Copy holds one result: its owner is its kind, a new `set` replaces the old result, and the old ticket is
 `Gone`. Scope is `()`: today's slots are not hidden by a campaign switch; their own end events decide.
-`FileKey` is `(owner id, path)` (`Loaded::file_key`), a complete file identity across packages.
+**One file identity.** Main's `FileKey` is `(Owner::id(), path)`: `Owner::id` drops the owner's kind, and
+settings check package and campaign UUIDs apart (`persistence.rs:56-72`), so a campaign and a package may
+share a UUID. `FileId` keeps the kind. PR 4a makes `FileKey` this type for every user in `library.rs`: the
+kept payloads (Heading, Vital, Discarded via `discard_is_for`, Removed), the reselection after a reload
+(`start_load` / `library.rs:5105`, which today takes the first note with that UUID and path) and the
+diagnostics' file key. Nothing else changes.
 
 ## 4. Each kept result: payload, writer, end events, Undo
 
@@ -63,23 +72,33 @@ but Copy holds one result: its owner is its kind, a new `set` replaces the old r
 | Manifest | `ManifestWrite` (absolute path) | repair write | reload when the file changed | `Undo write <path>`; a failure keeps it |
 | Identities | edits (root) | separate entries | reload when the edits are off disk | `Undo separate entries`; keeps on failure |
 | Identity | root + path | `give_new_identity` | reload when the file changed | `Undo separate entry`; keeps on failure |
-| Discarded | owner id + path + draft | reload, Discard | a new draft, file changed or unowned, campaign switch, a selection while Remove holds it | `Undo discard of <name>` |
-| Removed | `LetGo` (owner + path) | `reload_note_from_disk` | any selection, campaign switch, file changed | `Undo remove <name>` |
-| Heading | **`FileKey`** + before + after | heading fix | **another file selected; its draft leaves `after` (edit, Discard, reload); campaign switch** | `Undo heading change` |
-| Vital | **`FileKey`** + before + after + words | stat fix | **as Heading** | `Undo stat change` |
+| Discarded | `FileId` + draft | reload, Discard | a new draft, file changed or unowned, campaign switch, a selection while Remove holds it | `Undo discard of <name>` |
+| Removed | `LetGo` (`FileId`) | `reload_note_from_disk` | any selection, campaign switch, file changed | `Undo remove <name>` |
+| Heading | `FileId` + before + after | heading fix | see below (main's rules, unchanged) | `Undo heading change` |
+| Vital | `FileId` + before + after + words | stat fix | see below (main's rules, unchanged) | `Undo stat change` |
 | Copy | root + path + copied path | copy dependency | reload when either file changed | `Undo copy <entry>`; keeps on failure |
 
-**Heading and Vital (P1, a fault on main).** `heading_undo`/`vital_undo` hold a relative path
-(`library.rs:4103`), and the display and press checks compare that path and the draft text (`:389`,
-`:8376`, `:9025`, `:9073`). A's heading fix in one package, then B with the same path and text in another:
-A's Undo shows for B and can replace B's draft. PR 4a keys both by `FileKey` in the payload and in both
-checks, and makes "shown for its file only" end events: selecting another file, its draft leaving `after`
-(checked at the frame's end, as Discard's `draft != text` is today), a campaign switch. Behaviour change:
-switching away and back no longer brings the Undo back. Witness: proof 4.
+**Heading and Vital: when shown, when ended (main's lifecycle, kept exactly in 4a).** Two separate slots:
+one never ends the other (a heading fix after a stat fix keeps the stat Undo in its slot, hidden while the
+draft is not its text, and the other way round).
+- (a) SHOWN while the selected file's `FileId` equals the fix's AND the draft text equals the fix's text
+  (`after`). It hides while either differs and comes back when both match again: on the exact text after an
+  edit, an invalid draft, Discard or Undo discard (`package-rename`, `world_build.rs:6215-6243`), and after
+  switching to another file and back. Its press acts only under the same two checks, in the same frame
+  (`library.rs:9025`, `:9073`): typed text is never replaced.
+- (b) ENDS when its Undo is applied (the draft becomes `before`), and when a newer fix of the SAME kind
+  replaces it (one slot per kind, on any file: today's `heading_undo`/`vital_undo` overwrite). Nothing else
+  ends it on main, and 4a adds nothing: a campaign switch, the owner removed or re-registered, the file gone or
+  moved, a reload, a press that the checks turn away (no change; it stays) leave it in its slot, hidden unless
+  (a) holds again. That is safe because (a) needs the full identity and the exact text. Ending it at those
+  events is a lifecycle change; it is not in this plan (it needs its own ruling).
+- The fault on main is only the identity: main compares a relative path (`library.rs:4103`, `:389`, `:8376`,
+  `:9025`, `:9073`) and its reselection merges kinds, so B can show A's Undo and a press can replace B's
+  draft. 4a fixes the identity only (proof 4).
 
 **PackageUse failure (P2).** `apply_package_results` (`library.rs:7539`) takes `selection_undo` before it
-loads, checks or saves the campaign, and drops it on failure. The policy in 4a: the Undo clears its payload
-only after the save works. A failed read or save keeps the result and its Undo with the error (as Manifest's
+loads, checks or saves the campaign, and drops it on failure. The policy, in PR 4b (4a keeps main's Undo
+behaviour): the Undo clears its payload only after the save works (`undo_by` keeps an entry on `Err`). A failed read or save keeps the result and its Undo with the error (as Manifest's
 Undo does now), so the DM can retry. Choices changed since (the check) end it with the refusal's words,
 as a reload would. Behaviour change; witness: proof 5.
 
@@ -103,11 +122,13 @@ line a `Retained` projection. Words use `sentence!`/`choice!`; no new `Sentence:
   production issue sites become `set_*`, and the fixture moves to the store. The legacy hosts draw every kept
   result through the one existing `legacy_kept_line` call (`add_reader_result`), made from `Shown::footer`,
   so `.result(` falls and no count rises. Presses stay legacy flags and call `undo_<kind>`; `ByOwner`
-  unchanged. It also carries the Heading/Vital identity fix and the PackageUse failure policy. Per kind it
-  proves the visible order and the Undo unchanged (proofs 2, 3).
+  unchanged. It also carries the one-identity fix (`FileId`: kept payloads, reselection, diagnostics),
+  which changes nothing but the cross-owner fault. Every lifecycle stays main's (no behaviour change; the
+  existing gate stays green). Per kind it proves the visible order and the Undo unchanged (proofs 2, 3),
+  and the identity fix with red witnesses (proof 4).
 - **PR 4b, the typed footers (about 950).** Every host in §5 to `Messages` at once (a footer is all typed or
   all legacy in PR 452, and one kind shows in several hosts); presses by ticket through the draft guards;
-  the M9 labels. Counts: legacy footer calls → 0; `ByOwner` → 0; `reader_messages`, `add_results`,
+  the M9 labels; PackageUse's failure policy (its one intended Undo change, proof 5). Counts: legacy footer calls → 0; `ByOwner` → 0; `reader_messages`, `add_results`,
   `show_result`, `form_footer` and `page_error` go with their rows; the M2 locks inside messages become
   typed.
 
@@ -126,9 +147,20 @@ line a `Retained` projection. Words use `sentence!`/`choice!`; no new `Sentence:
    `package-about`, Identities `package-folder-copied`, Identity `package-duplicate-id`, Heading and Vital
    `package-rename`, Discarded `library-author`; ScopeNotice has no state: a new end check in
    `library-scope` (open an entry outside the scope).
-4. 4a, Heading and Vital per file: A's fix in package 1 `Rules/X.md`, then B with the same path and text in
-   package 2: no Undo line for B, and a press cannot replace B's draft. Red on main (relative path).
-5. 4a, PackageUse: Choose all, campaign file unwritable, Undo → the error shows and the Undo stays; access
+4. 4a, one file identity, with Heading and Vital (unit tests through the real fix writers and the real
+   reload, each red when one owner check goes):
+   - same UUID, other kind: campaign A and a registered package with A's UUID (settings allow it) both hold
+     `Rules/X.md`; fix A's heading and A's stat; the package's file gets A's fixed text; reload. The
+     selection stays A's file (reselection by `FileId`), A's Undos show, and on the package's file no Undo
+     shows and a press cannot replace its draft. Red when the kind leaves the identity (the reselection or the
+     kept check: main's code).
+   - same path, other owner: packages P1 and P2 both hold `Rules/X.md` with the same text; fix P1's; open
+     P2's: no Undo, no replacement. Red when the owner id leaves the check (path only).
+   - A → B → A: fix A, open B (no Undo; a press does nothing), open A again: both Undos show again, on the
+     exact text, as on main. Red when a selection ends them.
+   - Two slots: a heading fix after a stat fix keeps the stat Undo (and the other way round). Red when one
+     kind's `set` ends the other.
+5. 4b, PackageUse: Choose all, campaign file unwritable, Undo → the error shows and the Undo stays; access
    back, Undo → choices restored. Red on main (the payload is gone).
 6. 4b, A, unrelated B, Undo A by ticket: extend `iter-26-L-copy-owner`: a ticket of a replaced result is
    `Gone` and writes nothing. Mutant: undo by owner → B's copy undone.
