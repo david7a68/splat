@@ -684,6 +684,16 @@ mod tests {
             .unwrap(),
             2
         );
+        // Each call's line, and the pattern it matched (the legacy host freeze's spellings).
+        let freeze = [Shape::of(".scroll_to_me"), Shape::of("Fills::because")];
+        assert_eq!(
+            calls(
+                "fn f() {\n    let w = \"ui.scroll_to_me()\";\n    ui.scroll_to_me(None);\n    Fills::because(r);\n}",
+                &freeze
+            )
+            .unwrap(),
+            [(3, 0), (4, 1)]
+        );
     }
 
     #[test]
@@ -721,6 +731,10 @@ mod tests {
             // Round 29 P-1: a free function through a module that re-exports it.
             "#[allow(clippy::disallowed_methods)] fn add_row() { use crate::design::add_field_keys as keys; }",
             "use crate::design::{add_field_keys as keys, AddField};",
+            // Migration 32 (ruling L12): the paths the legacy host freeze counts.
+            "use crate::design::ScrollColumn as Rows;",
+            "use crate::design::register_row as mark;",
+            "type Main = egui::CentralPanel;",
         ] {
             assert_eq!(rules(text), ["banned-alias"], "{text}");
         }
@@ -729,6 +743,7 @@ mod tests {
             "use egui::accesskit::Action as Access;",
             "type Groups = BTreeMap<String, Value>;",
             "use splat::content::formats::patch_model as patch_fields;",
+            "use crate::design::{Column, ScrollColumn};",
         ] {
             assert!(rules(text).is_empty(), "{text}");
         }

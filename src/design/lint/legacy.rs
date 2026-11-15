@@ -18,12 +18,11 @@
 //!   its status. It claims no geometry. A row is never removed; its owning step closes it.
 use crate::design::layout::bans::{Shape, calls};
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::{Read, Write};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use syn::spanned::Spanned;
 use syn::visit::{self, Visit};
 
-pub(super) const MANIFEST: &str = include_str!("../legacy_hosts.tsv");
+const MANIFEST: &str = include_str!("../legacy_hosts.tsv");
 const LEDGER: &str = include_str!("../c3_ledger.tsv");
 const LEDGER_PATH: &str = "src/design/c3_ledger.tsv";
 
@@ -37,123 +36,85 @@ enum Scope {
 }
 
 /// The capabilities the pane mechanism replaces (layout design §4.3), each with how its calls
-/// are written (`bans::Shape::of`: `.name` a method, `.name/n` one with at least `n`
-/// arguments, `Owner::name` a path, a bare name a free function).
-const CAPABILITIES: [(&str, Scope, &[&str]); 11] = [
+/// are written, split at spaces (`bans::Shape::of`: `.name` a method, `.name/n` one with at
+/// least `n` arguments, `Owner::name` a path, a bare name a free function).
+const CAPABILITIES: [(&str, Scope, &str); 11] = [
     // A body drawn by a closure into a pane (`Footer::pane`, `Messages::pane` and kin).
     (
         "pane-host",
         Scope::Everywhere,
-        &[
-            ".pane/3",
-            ".pane_content/3",
-            ".pane_editor/2",
-            "Footer::pane",
-            "Footer::pane_content",
-            "Footer::pane_editor",
-            "Messages::pane",
-            "Messages::pane_content",
-            "Messages::pane_editor",
-        ],
+        ".pane/3 .pane_content/3 .pane_editor/2 Footer::pane Footer::pane_content \
+         Footer::pane_editor Messages::pane Messages::pane_content Messages::pane_editor",
     ),
     // A footer placed by hand.
     (
         "hand-footer",
         Scope::Everywhere,
-        &[".show_by_hand", "Footer::show_by_hand"],
+        ".show_by_hand Footer::show_by_hand",
     ),
-    // A body that manages its own room, also through the Sessions wrapper `fills(reason)`,
-    // which each Sessions pane that invokes it counts.
-    ("fills", Scope::Everywhere, &["Fills::because", "fills"]),
+    // A body that manages its own room, also through the Sessions wrapper `fills(reason)`:
+    // each Sessions pane that invokes it counts.
+    ("fills", Scope::Everywhere, "Fills::because fills"),
     // Rows drawn by a closure for the part of a list in view.
     (
         "virtual-rows",
         Scope::App,
-        &[
-            ".show_rows",
-            ".show_viewport",
-            "ScrollColumn::show_rows",
-            "ScrollColumn::show_viewport",
-        ],
+        ".show_rows .show_viewport ScrollColumn::show_rows ScrollColumn::show_viewport",
     ),
     // A row registered after it painted, for the old whole-row mask.
-    ("row-register", Scope::App, &["register_row"]),
+    ("row-register", Scope::App, "register_row"),
     // A clip that a caller sets.
     (
         "row-clip",
         Scope::App,
-        &[".set_clip_rect", ".with_clip_rect", ".shrink_clip_rect"],
+        ".set_clip_rect .with_clip_rect .shrink_clip_rect",
     ),
     // A scroll request outside the reveal part (B6's list, PR 403).
     (
         "scroll-request",
         Scope::App,
-        &[
-            ".scroll_to_rect",
-            ".scroll_to_rect_animation",
-            ".scroll_to_cursor",
-            ".scroll_to_cursor_animation",
-            ".scroll_to_me",
-            ".scroll_to_me_animation",
-            ".scroll_with_delta",
-            ".scroll_with_delta_animation",
-        ],
+        ".scroll_to_rect .scroll_to_rect_animation .scroll_to_cursor .scroll_to_cursor_animation \
+         .scroll_to_me .scroll_to_me_animation .scroll_with_delta .scroll_with_delta_animation",
     ),
     // An offset that a caller writes into a scroll area.
     (
         "scroll-offset",
         Scope::App,
-        &[
-            ".vertical_scroll_offset",
-            ".horizontal_scroll_offset",
-            ".scroll_offset",
-        ],
+        ".vertical_scroll_offset .horizontal_scroll_offset .scroll_offset",
     ),
-    // A raw scroll area (Clippy refuses it unless its item is a counted row; here it also
-    // cannot grow).
+    // A raw scroll area: Clippy refuses it outside a counted row, and here it cannot grow.
     (
         "scroll-area",
         Scope::App,
-        &[
-            "ScrollArea::vertical",
-            "ScrollArea::both",
-            "ScrollArea::horizontal",
-            "ScrollArea::neither",
-            "ScrollArea::new",
-        ],
+        "ScrollArea::vertical ScrollArea::both ScrollArea::horizontal ScrollArea::neither \
+         ScrollArea::new",
     ),
     // The allowed host composition: the page regions that hold panes.
     (
         "host-region",
         Scope::App,
-        &[
-            "CentralPanel::default",
-            "SidePanel::left",
-            "SidePanel::right",
-            "TopBottomPanel::top",
-            "TopBottomPanel::bottom",
-            "Column::panel",
-        ],
+        "CentralPanel::default SidePanel::left SidePanel::right TopBottomPanel::top \
+         TopBottomPanel::bottom Column::panel",
     ),
     // The messages of more than one owner fed into one footer: a mixed task footer. A function
     // that feeds one counts nothing.
     (
         "mixed-footer",
         Scope::App,
-        &[".footer_messages", "footer_messages"],
+        ".footer_messages footer_messages",
     ),
 ];
 
 /// A counted site: capability, file, function.
-pub(super) type Site = (String, String, String);
-pub(super) type Counts = BTreeMap<Site, usize>;
+type Site = (String, String, String);
+type Counts = BTreeMap<Site, usize>;
 
 /// The owner and the name of each path the freeze counts, for the source lint's `banned-alias`
 /// rule (`layout::bans::syntax_rules`): an alias would hide a call from the count.
 pub(crate) fn alias_paths() -> Vec<(String, String)> {
     CAPABILITIES
         .iter()
-        .flat_map(|(_, _, spellings)| spellings.iter())
+        .flat_map(|(_, _, spellings)| spellings.split_whitespace())
         .filter_map(|spelling| Shape::of(spelling).path())
         .collect()
 }
@@ -284,11 +245,15 @@ fn child(path: &str, name: &str) -> String {
 }
 
 /// Each counted call in `files` (path, text), by capability and the function that holds it.
-pub(super) fn counts(files: &[(String, String)]) -> Result<Counts, String> {
+fn counts(files: &[(String, String)]) -> Result<Counts, String> {
     let patterns: Vec<(usize, Shape)> = CAPABILITIES
         .iter()
         .enumerate()
-        .flat_map(|(at, (_, _, spellings))| spellings.iter().map(move |s| (at, Shape::of(s))))
+        .flat_map(|(at, (_, _, spellings))| {
+            spellings
+                .split_whitespace()
+                .map(move |s| (at, Shape::of(s)))
+        })
         .collect();
     let shapes: Vec<Shape> = patterns.iter().map(|(_, shape)| shape.clone()).collect();
     let mut read = Vec::new();
@@ -330,7 +295,7 @@ pub(super) fn counts(files: &[(String, String)]) -> Result<Counts, String> {
 }
 
 /// The manifest's rows (`capability	file	function	count	owner	note`) by site.
-pub(super) fn manifest(text: &str) -> Result<Counts, Vec<String>> {
+fn manifest(text: &str) -> Result<Counts, Vec<String>> {
     let (mut rows, mut faults) = (Counts::new(), Vec::new());
     for (at, line) in text.lines().enumerate() {
         if line.trim().is_empty() || line.starts_with('#') {
@@ -374,7 +339,7 @@ fn site_name((capability, file, function): &Site) -> String {
 }
 
 /// The calls found against the manifest: more calls than a row fails; fewer ask to lower it.
-pub(super) fn against_manifest(found: &Counts, listed: &Counts) -> Vec<String> {
+fn against_manifest(found: &Counts, listed: &Counts) -> Vec<String> {
     let sites: BTreeSet<&Site> = found.keys().chain(listed.keys()).collect();
     let mut problems = Vec::new();
     for site in sites {
@@ -383,7 +348,7 @@ pub(super) fn against_manifest(found: &Counts, listed: &Counts) -> Vec<String> {
         let name = site_name(site);
         if now > allowed {
             problems.push(format!(
-                "{name}: {now} calls, {allowed} in src/design/legacy_hosts.tsv. The pane mechanism replaces this path (migration 32); a row raised with its calls still fails against the base (ruling L12)."
+                "{name}: {now} here, {allowed} in src/design/legacy_hosts.tsv. The pane mechanism replaces this path (migration 32); a row raised with its calls still fails against the base (ruling L12)."
             ));
         } else if now < allowed {
             problems.push(format!(
@@ -396,7 +361,7 @@ pub(super) fn against_manifest(found: &Counts, listed: &Counts) -> Vec<String> {
 
 /// Each site with more calls than in the base, unless a raise line names it
 /// (`<site> => <reason>`, the gate's `SPLAT_STILLNESS_RAISE`).
-pub(super) fn growth(found: &Counts, base: &Counts, raises: &str, base_name: &str) -> Vec<String> {
+fn growth(found: &Counts, base: &Counts, raises: &str, base_name: &str) -> Vec<String> {
     let raised: BTreeSet<&str> = raises
         .lines()
         .filter_map(|line| line.split_once(" => "))
@@ -409,7 +374,7 @@ pub(super) fn growth(found: &Counts, base: &Counts, raises: &str, base_name: &st
         let name = site_name(site);
         if *now > then && !raised.contains(name.as_str()) {
             problems.push(format!(
-                "{name}: {now} calls; the base {base_name} holds {then}. A legacy site never grows, also when its row grows with it, and a new function around a counted call is a new site (ruling L12). Only the lead raises one: `{name} => <reason>` in the gate's raise file."
+                "{name}: {now} here, {then} in the base {base_name}. A legacy site never grows, also when its row grows with it, and a new function around a counted call is a new site (ruling L12). Only the lead raises one: `{name} => <reason>` in the gate's raise file."
             ));
         }
     }
@@ -434,13 +399,13 @@ fn git(args: &[&str]) -> Result<String, String> {
 }
 
 /// The base commit: the merge base of `HEAD` and `origin/main`, or of `SPLAT_LEGACY_BASE`.
-pub(super) fn base_commit() -> Result<String, String> {
+fn base_commit() -> Result<String, String> {
     let named = std::env::var("SPLAT_LEGACY_BASE").unwrap_or_else(|_| "origin/main".to_owned());
     git(&["merge-base", "HEAD", &named])
 }
 
-/// The Rust files of `src/` and `crates/core/src/` at `commit`, read in one `git cat-file`.
-pub(super) fn files_at(commit: &str) -> Result<Vec<(String, String)>, String> {
+/// The Rust files of `src/` and `crates/core/src/` at `commit`.
+fn files_at(commit: &str) -> Result<Vec<(String, String)>, String> {
     let listed = git(&[
         "ls-tree",
         "-r",
@@ -450,57 +415,16 @@ pub(super) fn files_at(commit: &str) -> Result<Vec<(String, String)>, String> {
         "src",
         "crates/core/src",
     ])?;
-    let paths: Vec<&str> = listed
+    listed
         .lines()
         .filter(|path| path.ends_with(".rs") && !path.ends_with("tests.rs"))
-        .collect();
-    let mut child = Command::new("git")
-        .args(["cat-file", "--batch"])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .map_err(|error| format!("git cat-file: {error}"))?;
-    let asks: String = paths
-        .iter()
-        .map(|path| format!("{commit}:{path}\n"))
-        .collect();
-    let mut input = child.stdin.take().expect("a piped stdin");
-    let writer = std::thread::spawn(move || input.write_all(asks.as_bytes()));
-    let mut out = Vec::new();
-    let read = child
-        .stdout
-        .take()
-        .expect("a piped stdout")
-        .read_to_end(&mut out);
-    let written = writer.join().expect("the writer thread");
-    child
-        .wait()
-        .map_err(|error| format!("git cat-file: {error}"))?;
-    read.and(written)
-        .map_err(|error| format!("git cat-file: {error}"))?;
-    // Each answer is `<object> blob <size>\n<bytes>\n`.
-    let mut files = Vec::new();
-    let mut at = 0;
-    for path in paths {
-        let end = out[at..]
-            .iter()
-            .position(|byte| *byte == b'\n')
-            .map(|offset| at + offset)
-            .ok_or_else(|| format!("git cat-file: no answer for {path}"))?;
-        let head = String::from_utf8_lossy(&out[at..end]);
-        let size: usize = match head.split(' ').collect::<Vec<_>>().as_slice() {
-            [_, "blob", size] => size.parse().ok(),
-            _ => None,
-        }
-        .ok_or_else(|| format!("git cat-file {commit}:{path}: {head}"))?;
-        let body = out
-            .get(end + 1..end + 1 + size)
-            .ok_or_else(|| format!("git cat-file: {path} is cut"))?;
-        files.push((path.to_owned(), String::from_utf8_lossy(body).into_owned()));
-        at = end + 1 + size + 1;
-    }
-    Ok(files)
+        .map(|path| {
+            Ok((
+                path.to_owned(),
+                git(&["show", &format!("{commit}:{path}")])?,
+            ))
+        })
+        .collect()
 }
 
 /// What the lint test reports for the freeze: the manifest against the calls of `files` (the
@@ -647,7 +571,7 @@ fn the_legacy_freeze_finds_what_it_should() {
     assert!(against_manifest(&two, &two).is_empty());
     let raised = growth(&two, &base, "", "B0");
     assert!(
-        raised.len() == 1 && raised[0].contains("draw: 2 calls; the base B0 holds 1"),
+        raised.len() == 1 && raised[0].contains("draw: 2 here, 1 in the base B0"),
         "{raised:?}"
     );
     // The lead's raise line lets exactly that site pass.
