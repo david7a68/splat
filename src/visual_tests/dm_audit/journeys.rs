@@ -773,7 +773,8 @@ fn broken_evening(a: &mut Audit<'_, '_>) {
         },
     );
     a.task("A sync conflict on Kestrel Dunmoor: review it and choose");
-    a.click(Do, "Review");
+    // Q-j (iter-29 G134): the conflict's own words are its one review link.
+    a.click(Do, "Sync conflict: Kestrel Dunmoor");
     a.click(Do, USE_REMOTE);
     a.act(Find, "select the wolf again", |d| {
         d.click_row("Cinder Wolf 2")
