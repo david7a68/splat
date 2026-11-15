@@ -11453,8 +11453,7 @@ mod tests {
         }
         for word in ["Read", "Back", "More"] {
             assert!(
-                // `More` is a menu button: its words, then room for its caret.
-                rendered.iter().any(|text| text.trim_end() == word),
+                rendered.iter().any(|text| text == word),
                 "Missing {word}: {rendered:?}"
             );
         }

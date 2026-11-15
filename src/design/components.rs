@@ -295,9 +295,7 @@ impl<'a, A: Copy> ReaderToolbar<'a, A> {
         let mut pressed = None;
         let mut source = self.source;
         let gap = ui.spacing().item_spacing.x;
-        let more_width = Action::quiet(&format!("{MORE}    "))
-            .density(Density::Read)
-            .natural_width(ui);
+        let more_width = Action::quiet(MORE).density(Density::Read).natural_width(ui);
         let mode_reason = match &self.mode {
             ModeLock::BodyStatesFault(reason) => Some(reason.as_str()),
             ModeLock::Open => None,
@@ -350,16 +348,10 @@ impl<'a, A: Copy> ReaderToolbar<'a, A> {
                 }
             } else {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    let response = Action::quiet(&format!("{MORE}    "))
-                        .name(MORE)
+                    let response = Action::quiet(MORE)
                         .density(Density::Read)
                         .min_width(more_width)
                         .show(ui);
-                    let caret = Rect::from_min_max(
-                        pos2(response.rect.right() - L - XS, response.rect.top()),
-                        response.rect.right_bottom(),
-                    );
-                    super::combo_icon(ui, caret, ui.style().interact(&response), false);
                     super::menu_popup(&*ui, &response).show(|ui| {
                         for action in &self.actions {
                             if action.action(draft_reason).show(ui).clicked() {
