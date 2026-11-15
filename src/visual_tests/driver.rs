@@ -1672,18 +1672,6 @@ impl<'a> Driver<'a> {
         out.join(" ")
     }
 
-    /// Whether `label` is painted whole on one line inside `area`: the laid-out line that
-    /// holds it lies fully inside its pane's clip and is not the elided last line, also when
-    /// the pane cuts another line of the same text (a wrapped paragraph at a scroll area's
-    /// bottom). `painted_in` skips such a text; this reads the label's own line.
-    pub fn painted_line_with(&self, label: &str, area: egui::Rect) -> bool {
-        let mut found = false;
-        self.each_painted_text(|text, clip| {
-            found |= label_line_whole(text, clip, area, label);
-        });
-        found
-    }
-
     /// Each text painted across `area` that its pane's clip cuts: part of its letters show and
     /// part do not. A list that ends at a whole row has none.
     pub fn cut_texts_in(&self, area: egui::Rect) -> Vec<String> {
@@ -3672,97 +3660,6 @@ fn save_png(image: &image::RgbaImage, path: &Path) -> image::ImageResult<()> {
 }
 
 const FILTER: image::codecs::png::FilterType = image::codecs::png::FilterType::Paeth;
-
-/// See `Driver::painted_line_with`: the line of `text` that holds `label`, inside `area` and
-/// whole inside `clip`, and not cut to an ellipsis.
-fn label_line_whole(
-    text: &egui::epaint::TextShape,
-    clip: egui::Rect,
-    area: egui::Rect,
-    label: &str,
-) -> bool {
-    let rows = &text.galley.rows;
-    rows.iter().enumerate().any(|(at, row)| {
-        let words: String = row.glyphs.iter().map(|glyph| glyph.chr).collect();
-        let rect = row.rect().translate(text.pos.to_vec2());
-        words.contains(label)
-            && !(text.galley.elided && at + 1 == rows.len())
-            && area.contains(rect.center())
-            && clip.expand(1.0).contains_rect(rect)
-    })
-}
-
-#[cfg(test)]
-mod label_line_tests {
-    use super::label_line_whole;
-    use eframe::egui;
-
-    /// A two-line paragraph, as the Log entry wraps in Lookup at 960: the label on its first line.
-    fn paragraph(ctx: &egui::Context, elide: bool) -> egui::epaint::TextShape {
-        let mut job = egui::text::LayoutJob::simple(
-            "Session 1: The Crossing: Status away to missing.".into(),
-            egui::FontId::proportional(14.0),
-            egui::Color32::WHITE,
-            200.0,
-        );
-        if elide {
-            job.wrap.max_rows = 1;
-        }
-        let mut galley = None;
-        let _ = ctx.run(Default::default(), |ctx| {
-            galley = Some(ctx.fonts_mut(|fonts| fonts.layout_job(job.clone())));
-        });
-        let galley = galley.unwrap();
-        assert!(elide || galley.rows.len() >= 2, "the fixture wraps");
-        egui::epaint::TextShape::new(egui::pos2(0.0, 0.0), galley, egui::Color32::WHITE)
-    }
-
-    #[test]
-    fn a_label_line_is_read_whole_in_a_cut_block() {
-        let ctx = egui::Context::default();
-        let text = paragraph(&ctx, false);
-        let first = text.galley.rows[0].rect();
-        let area = egui::Rect::EVERYTHING;
-        // The pane cuts the second line, not the first: the label is painted whole.
-        let cut_below = egui::Rect::from_min_max(
-            egui::pos2(-10.0, -10.0),
-            egui::pos2(400.0, first.bottom() + 2.0),
-        );
-        assert!(label_line_whole(
-            &text,
-            cut_below,
-            area,
-            "Session 1: The Crossing"
-        ));
-        // The pane cuts the label's own line: red.
-        let cut_label = egui::Rect::from_min_max(
-            egui::pos2(-10.0, -10.0),
-            egui::pos2(400.0, first.center().y),
-        );
-        assert!(!label_line_whole(
-            &text,
-            cut_label,
-            area,
-            "Session 1: The Crossing"
-        ));
-        // No such label: red.
-        assert!(!label_line_whole(
-            &text,
-            cut_below,
-            area,
-            "Session 1 - The Crossing"
-        ));
-        // The label's line elided to one row with an ellipsis: red.
-        let elided = paragraph(&ctx, true);
-        assert!(elided.galley.elided);
-        assert!(!label_line_whole(
-            &elided,
-            egui::Rect::EVERYTHING,
-            area,
-            "Session 1: The Crossing"
-        ));
-    }
-}
 
 #[cfg(test)]
 mod driver_tests {

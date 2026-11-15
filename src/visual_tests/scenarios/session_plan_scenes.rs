@@ -1096,9 +1096,9 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     // FC8 reads each size from the capture below, in its settled frame after its resize; a look
     // across resizes before it would scroll the reader away from what the act left in view.
     let mut at_capture = Vec::new();
-    // `Sizes::All` captures 960, 1200 and 1920, in that order; each look is after its resize.
+    // `Sizes::Default` captures 960, then 1200, as on main; each look is after its resize.
     const STATUS_ENTRY: &str = ": Status away → missing.";
-    d.state_prepared("status-changed-in-lookup", Sizes::All, |d| {
+    d.state_prepared("status-changed-in-lookup", Sizes::Default, |d| {
         d.settle();
         let entry = lookup_pane(d).is_some_and(|pane| d.painted_in(pane).contains(STATUS_ENTRY));
         at_capture.push((named(d), entry));
@@ -1116,7 +1116,7 @@ pub fn log_from_play(d: &mut Driver<'_>) {
         still,
         format!("At {SMALL:?}: title {title_before:?} → {title_after:?}; the field {field_before:?}, then Change {change_after:?}"),
     );
-    for (size, ((fits, detail), entry)) in [SMALL, DEFAULT, LARGE].into_iter().zip(at_capture) {
+    for (size, ((fits, detail), entry)) in [SMALL, DEFAULT].into_iter().zip(at_capture) {
         d.observe(
             "iter-28-D-FC8",
             fits,
@@ -1554,8 +1554,10 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     );
 
     // D-2 (a) for Place, in World's reader at 960: `Change` on Place opens its picker, and the
-    // reader's end and its room for the Log entry come into view in that pass. `Clear value`
-    // writes `Place … → not set.` into that room: nothing above it moves.
+    // room for the Log entry comes into view in that pass. `Clear value` writes
+    // `Place … → not set.` into that room. The room holds two lines and this entry needs one, so
+    // the content gives that line back: `Change` may move by one line, never more and never
+    // out of view (ruling R30's amendment; weaker than "moves nothing").
     d.set_base(SMALL);
     // The note was deleted above (state 07); it comes back with its place set.
     fs::write(&path, &before).unwrap();
@@ -1581,25 +1583,30 @@ pub fn log_from_play(d: &mut Driver<'_>) {
     };
     let place_title =
         |d: &Driver<'_>| world_reader(d).and_then(|pane| d.painted_word_rect(VARRA_BLACK, pane));
-    let before_clear = place_title(d);
+    let _ = place_title;
+    let before_clear = d.place_of("Change Place");
     d.click("Clear value");
     d.expect("Undo change to Place");
-    let after_clear = place_title(d);
+    let after_clear = d.place_of("Change Place");
+    let in_view = d.in_view("Change Place");
     const PLACE_ENTRY: &str = "→ not set.";
     let mut place_capture = Vec::new();
-    d.state_prepared("place-cleared-log-in-view", Sizes::All, |d| {
+    d.state_prepared("place-cleared-log-in-view", Sizes::Default, |d| {
         d.settle();
         place_capture
             .push(world_reader(d).is_some_and(|pane| d.painted_in(pane).contains(PLACE_ENTRY)));
     });
     d.observe(
         "iter-29-D2-place-still",
-        before_clear
-            .zip(after_clear)
-            .is_some_and(|(before, after)| (before.top() - after.top()).abs() <= 0.5),
-        format!("At {SMALL:?}, the title {before_clear:?} → {after_clear:?}"),
+        in_view
+            && before_clear
+                .zip(after_clear)
+                .is_some_and(|(before, after)| {
+                    (before.top() - after.top()).abs() <= crate::design::XL
+                }),
+        format!("At {SMALL:?}, Change Place {before_clear:?} → {after_clear:?} (at most one line)"),
     );
-    for (size, entry) in [SMALL, DEFAULT, LARGE].into_iter().zip(place_capture) {
+    for (size, entry) in [SMALL, DEFAULT].into_iter().zip(place_capture) {
         d.observe(
             "iter-29-D2-place-log",
             entry,

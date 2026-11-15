@@ -2316,17 +2316,26 @@ fn log_room_space(ui: &mut egui::Ui) -> egui::Rect {
 /// Scroll the enclosing column the least, at once, so that `rect` is whole inside `view` (the
 /// pane's clip). A rect taller than the view is not scrolled to: then its top would leave.
 fn scroll_least(ui: &egui::Ui, view: egui::Rect, rect: egui::Rect) {
-    if rect.height() > view.height() {
-        return;
+    if let Some(delta) = least_scroll(view, rect) {
+        ui.scroll_with_delta_animation(
+            egui::vec2(0.0, delta),
+            egui::style::ScrollAnimation::none(),
+        );
     }
-    let delta = if rect.bottom() > view.bottom() {
-        view.bottom() - rect.bottom()
+}
+
+/// The least scroll (`scroll_with_delta`'s sign) that puts `rect` whole inside `view`; `None`
+/// when it is already, or when it is taller than the view.
+fn least_scroll(view: egui::Rect, rect: egui::Rect) -> Option<f32> {
+    if rect.height() > view.height() {
+        None
+    } else if rect.bottom() > view.bottom() {
+        Some(view.bottom() - rect.bottom())
     } else if rect.top() < view.top() {
-        view.top() - rect.top()
+        Some(view.top() - rect.top())
     } else {
-        return;
-    };
-    ui.scroll_with_delta_animation(egui::vec2(0.0, delta), egui::style::ScrollAnimation::none());
+        None
+    }
 }
 
 /// Lookup's and the World page's reader, and its controls for the item on show.
@@ -6553,6 +6562,62 @@ mod tests {
     }
 
     /// Section 4.1 of the session-cycle design for `Add to Log`'s write, and its Undo.
+    /// D-2: opening a field whose act writes a Log line (Status, Place: one helper) brings the
+    /// field and the Log room into view in the opening pass, by the least scroll; when they
+    /// cannot both be in view, or are already, nothing scrolls; nothing of the opening is kept
+    /// after its pass, so later passes move nothing.
+    #[test]
+    fn a_log_field_opens_with_its_room_in_view_once() {
+        use egui_kittest::kittest::Queryable;
+        let view = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(500.0, 500.0));
+        let span = |top: f32, bottom: f32| {
+            egui::Rect::from_min_max(egui::pos2(0.0, top), egui::pos2(500.0, bottom))
+        };
+        // The room ends 40 below the view: scroll up by 40, the field stays whole in view.
+        assert_eq!(least_scroll(view, span(200.0, 540.0)), Some(-40.0));
+        // Already in view: nothing.
+        assert_eq!(least_scroll(view, span(200.0, 480.0)), None);
+        // Field and room taller than the view: nothing, the field keeps its place.
+        assert_eq!(least_scroll(view, span(100.0, 640.0)), None);
+
+        // Through the real draw: the opening is consumed in its own pass, for Status and Place.
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = sample_campaign(dir.path());
+        create_entry(&campaign, "Gate", "location").unwrap();
+        let hob = create_entry(&campaign, "Hob", "npc").unwrap();
+        let path = dir.path().join("NPCs/Hob.md");
+        let text = fs::read_to_string(&path).unwrap();
+        let text = text.replacen("---\n", "---\nsplat_in: '[[Gate]]'\n", 1);
+        fs::write(&path, text).unwrap();
+        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        let at = index
+            .position(hob)
+            .unwrap_or_else(|| panic!("fixture: {:?}", index.broken_world));
+        for change in ["Change Status", "Change Place"] {
+            let mut harness = egui_kittest::Harness::builder()
+                .with_size(egui::vec2(520.0, 600.0))
+                .build_ui_state(
+                    |ui, reader: &mut Reader| {
+                        reader.read_with(ui, &index.items[at], &index, Some(&campaign), None);
+                    },
+                    Reader::default(),
+                );
+            crate::design::theme::install(&harness.ctx);
+            harness.run_steps(2);
+            harness.get_by_label(change).click();
+            harness.run_steps(2);
+            let reader = harness.state();
+            assert!(
+                reader.log_act_open(),
+                "{change}: the field is open, with its room"
+            );
+            assert!(
+                !reader.log_opening && reader.opening_field.is_none(),
+                "{change}: nothing of the opening is kept after its pass"
+            );
+        }
+    }
+
     #[test]
     fn a_log_line_follows_the_disk_and_a_failed_write_keeps_the_words() {
         use std::os::unix::fs::PermissionsExt;
