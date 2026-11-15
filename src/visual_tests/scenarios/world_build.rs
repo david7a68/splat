@@ -5567,6 +5567,11 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     d.click(&format!("Add {PACKAGE_NPC} to the fight"));
     d.type_into("Stat block", "Guard");
     d.click("Guard");
+    // Last capture of this scenario: inspect the shared NPC add form's side menu at 960.
+    d.state_prepared("add-to-fight-side-menu-boundary", Sizes::Small, |d| {
+        d.click_starting("Side:");
+    });
+    d.press(Key::Escape);
     let one_save = !d.has("Save this as their stat block");
     // The form's own button, not the run header's.
     d.click_below("Leave empty to roll it.", "Add to fight");

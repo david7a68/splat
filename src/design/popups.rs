@@ -483,7 +483,7 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
             egui::Popup::toggle_id(ui.ctx(), list);
         }
         let drawn = egui::Popup::is_id_open(ui.ctx(), list)
-            .then(|| self.list(ui, response, current, rect, width, was_open, revealed))
+            .then(|| self.list(ui, response, current, rect, width, (was_open, revealed)))
             .flatten();
         let ListFrame {
             picked,
@@ -529,7 +529,6 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
         clippy::disallowed_methods,
         reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
     )]
-    #[allow(clippy::too_many_arguments)]
     fn list(
         &self,
         ui: &mut Ui,
@@ -537,9 +536,9 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
         current: &T,
         rect: Rect,
         width: f32,
-        was_open: bool,
-        revealed: Option<Id>,
+        previous: (bool, Option<Id>),
     ) -> Option<ListFrame<T>> {
+        let (was_open, revealed) = previous;
         let list = self.id.id().with("list");
         let mut reveal = None;
         // The list's frame draws its stroke outside its content: the content is that much
@@ -596,7 +595,7 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
                     .iter()
                     .flat_map(|(label, reason)| {
                         label.split_whitespace().map(|word| (word, &font)).chain(
-                            reason.into_iter().flat_map(|reason| {
+                            reason.iter().flat_map(|reason| {
                                 reason.split_whitespace().map(|word| (word, &small))
                             }),
                         )

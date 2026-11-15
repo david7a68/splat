@@ -356,15 +356,29 @@ mod tests {
                     before.set(column.width_within(ctx, ui.available_width()));
                     assert_eq!(column_widths(ctx), saved, "the width read saves nothing");
                     column.show_inside(ui, |ui| after.set(ui.max_rect().width()));
+                    assert_eq!(
+                        before.get(),
+                        after.get(),
+                        "the header width agrees before the end of every draw pass"
+                    );
                 });
             });
         harness.run_steps(2);
         harness.ctx.memory_mut(|memory| {
             memory.request_focus(Id::new("timeline_detail_panel").with("__resize"))
         });
-        for key in [egui::Key::ArrowLeft, egui::Key::ArrowRight, egui::Key::Home] {
+        for (key, expected) in [
+            (egui::Key::ArrowLeft, PANEL_MIN_WIDTH + L),
+            (egui::Key::ArrowRight, PANEL_MIN_WIDTH),
+            (egui::Key::Home, PANEL_MIN_WIDTH),
+        ] {
             harness.key_press(key);
             harness.step();
+            assert_eq!(
+                drawn.get(),
+                expected,
+                "the resize key takes effect: {key:?}"
+            );
             assert_eq!(
                 predicted.get(),
                 drawn.get(),

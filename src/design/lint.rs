@@ -513,9 +513,7 @@ fn scan(
         let path = item.expect("read source entry").path();
         let relative = path.to_string_lossy().replace('\\', "/");
         if path.is_dir() {
-            if !relative.ends_with("src/design") && !relative.ends_with("src/visual_tests") {
-                scan(&path, counts, levels);
-            }
+            scan(&path, counts, levels);
         } else if path.extension().is_some_and(|e| e == "rs")
             // A file of unit tests, such as `formats_tests.rs`, does not ship either.
             && !relative.ends_with("tests.rs")
@@ -526,6 +524,17 @@ fn scan(
             let code = text.split("#[cfg(test)]\nmod tests {").next().unwrap_or("");
             let root = concat!(env!("CARGO_MANIFEST_DIR"), "/");
             let key = relative.strip_prefix(root).unwrap_or(&relative);
+            // Design and capture code owns raw drawing values. Only the popup classification
+            // marker is restricted there, to its part and the gate that reads it.
+            if key.starts_with("src/design/") || key.starts_with("src/visual_tests/") {
+                for rule in format_rules(key, &text, code.lines().count())
+                    .into_iter()
+                    .filter(|rule| *rule == "popup-marker-owner")
+                {
+                    *counts.entry(format!("{key} {rule}")).or_default() += 1;
+                }
+                continue;
+            }
             for line in code.lines() {
                 for rule in violations(line) {
                     *counts.entry(format!("{key} {rule}")).or_default() += 1;
@@ -884,7 +893,13 @@ fn format_owners_reject_old_fractions_and_sheet_separators() {
         r#"fn f() { let _ = Dropdown::CHOICES_ROLE; }"#,
         r#"fn f() { let _ = "Dropdown choices"; }"#,
     ] {
-        assert_eq!(rules("src/party.rs", code), ["popup-marker-owner"]);
+        for path in [
+            "src/party.rs",
+            "src/design/components.rs",
+            "src/visual_tests/driver.rs",
+        ] {
+            assert_eq!(rules(path, code), ["popup-marker-owner"]);
+        }
         assert!(rules("src/design/popups.rs", code).is_empty());
         assert!(rules("src/visual_tests/ergonomics.rs", code).is_empty());
     }

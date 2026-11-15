@@ -14941,6 +14941,27 @@ pub mod session_notes {
         // every existing capture keeps its number. No test scroll prepares the popup.
         d.press(Key::Escape);
         d.click(NAV_TIMELINE);
+        let menu_boundary = |d: &mut Driver<'_>, name: &str| {
+            let menu = d.place_of(&format!("{name} choices"));
+            let control = d
+                .nodes()
+                .into_iter()
+                .find(|node| {
+                    node.role == egui::accesskit::Role::ComboBox && node.name.starts_with(name)
+                })
+                .map(|node| node.rect);
+            let splitter = d.place_of("Resize timeline details column");
+            let (_, height) = d.window_size();
+            d.observe(
+                "s30-B10-header-menu-boundary",
+                menu.zip(control).is_some_and(|(menu, control)| {
+                    menu.top() >= control.bottom()
+                        && menu.bottom() <= height
+                        && splitter.is_none_or(|edge| menu.right() <= edge.left())
+                }),
+                format!("{name}: menu {menu:?}, control {control:?}, detail splitter {splitter:?}, window height {height}"),
+            );
+        };
         d.state_prepared("adds-to-session-menu", Sizes::All, |d| {
             if !d.has("No session") {
                 d.click("Session for new events");
@@ -14950,6 +14971,14 @@ pub mod session_notes {
                 d.visible_text("No session") && d.visible_text("Session 4: Ferry Watch"),
                 "The menu shows full session names at every size",
             );
+            menu_boundary(d, "Session for new events");
+        });
+        d.press(Key::Escape);
+        d.state_prepared("session-filter-menu-boundary", Sizes::All, |d| {
+            if !d.has("Show one session choices") {
+                d.click_starting("Show one session:");
+            }
+            menu_boundary(d, "Show one session");
         });
         d.press(Key::Escape);
     }
@@ -17895,6 +17924,12 @@ pub mod session_recording {
         assert!(d.in_view(&process));
         d.click(&process);
         d.expect("Summary");
+        d.click("Summary");
+        d.press_ctrl(Key::K);
+        d.state_prepared("recording-view-menu-boundary", Sizes::Small, |d| {
+            d.click_starting("Recording view:");
+        });
+        d.press(Key::Escape);
     }
 }
 
@@ -21698,6 +21733,11 @@ pub mod run_add_creature {
         }
         d.clear_text_in(FIELD);
         d.begin_task();
+        d.type_into(FIELD, "Boundary visitor");
+        d.state_prepared("new-creature-side-menu-boundary", Sizes::Small, |d| {
+            d.click_starting("Side of the new creature:");
+        });
+        d.press(Key::Escape);
     }
 }
 
