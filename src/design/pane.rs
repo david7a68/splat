@@ -1446,10 +1446,18 @@ impl Footer<'_> {
         let (id, width) = self.id_and_width(room.width());
         claim(ui, id);
         let key = id.with("height");
-        let stored = ui
-            .ctx()
-            .data(|data| data.get_temp::<f32>(key))
-            .unwrap_or(0.0);
+        // A typed footer whose retained plan holds knows its demand now (layout PR 2b); else the
+        // last pass's demand, which this pass measures again.
+        let stored = match self.planned(ui, width) {
+            Some(demand) => {
+                ui.ctx().data_mut(|data| data.insert_temp(key, demand));
+                demand
+            }
+            None => ui
+                .ctx()
+                .data(|data| data.get_temp::<f32>(key))
+                .unwrap_or(0.0),
+        };
         let shown = !self.is_empty();
         if !shown && stored != 0.0 {
             ui.ctx().data_mut(|data| data.remove::<f32>(key));

@@ -3423,7 +3423,8 @@ impl Sessions {
             }
             live.recorder.heard_just_now()
         });
-        self.timed_words.0.set((self.saved_at.is_some(), hearing));
+        // The word as its readers show it: also its campaign's (`just_saved`).
+        self.timed_words.0.set((self.just_saved(), hearing));
     }
 
     /// A job finished, and the DM has not looked at it yet.
@@ -9094,6 +9095,42 @@ mod tests {
         assert_eq!(fs::read(&note_b).unwrap(), original[1]);
         assert_eq!(fs::read(&note_a).unwrap(), a_linked);
         assert!(sessions.updated_links.is_none() && sessions.link_problem.is_none());
+        // (f) Review of PR 459, item 4 (the M7 caller map): a partial Undo whose failure is a
+        // save, not an edit. A and B are written; then B's folder takes no new file, and B
+        // itself does not change. Undo puts A back; B's save fails, so B stays byte for byte as
+        // the update wrote it, and only B's Undo waits. B was not edited: its typed cause is
+        // `Cause::NotSaved(File::SessionNote)`, an error, never `Cause::EditedSince` (lane N0).
+        fs::write(&note_a, &original[0]).unwrap();
+        fs::write(&note_b, &original[1]).unwrap();
+        let mut sessions = Sessions::default();
+        sessions.update_event_link_notes(vec![open(&note_a), open(&note_b)]);
+        assert_eq!(sessions.updated_links.as_ref().map(Vec::len), Some(2));
+        let b_written = fs::read(&note_b).unwrap();
+        assert_ne!(b_written, original[1], "the update wrote B");
+        fs::set_permissions(&folder_b, fs::Permissions::from_mode(0o555)).unwrap();
+        sessions.undo_event_link_notes();
+        let left = temporary_files();
+        fs::set_permissions(&folder_b, fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(left, Vec::<String>::new());
+        assert_eq!(fs::read(&note_a).unwrap(), original[0], "A is put back");
+        assert_eq!(
+            fs::read(&note_b).unwrap(),
+            b_written,
+            "B did not change: no edit is the cause"
+        );
+        let waiting: Option<Vec<_>> = sessions.updated_links.as_ref().map(|writes| {
+            writes
+                .iter()
+                .map(|write| write.before.path.clone())
+                .collect()
+        });
+        assert_eq!(waiting, Some(vec![note_b.clone()]), "only B's Undo waits");
+        let b_name = note_b.file_name().unwrap().to_string_lossy().into_owned();
+        let problem = sessions.link_problem.clone().unwrap_or_default();
+        assert!(
+            problem.contains(&b_name) && !problem.contains(&a_name),
+            "{problem}"
+        );
     }
 
     #[test]
@@ -9615,6 +9652,15 @@ mod tests {
         harness.state_mut().0.finish_recording(&ctx);
         harness.run_steps(2);
         assert_eq!(saved(&harness), Some("Recording saved"), "A's own rail");
+        // Review F1 of PR 444: the timed words' revision changes with each visible change of the
+        // word (here a campaign switch and back), and not on an idle poll.
+        let in_a = harness.state().0.recording_revision();
+        harness.step();
+        assert_eq!(
+            harness.state().0.recording_revision(),
+            in_a,
+            "an idle poll is no change"
+        );
         // Round 30 review of PR 400 (F3): the footer's `Recording saved: …` is kept by A's
         // session until the campaign changes; the change ends it, and coming back does not
         // bring it back (only the rail's word, its own fact, returns).
@@ -9632,12 +9678,19 @@ mod tests {
             None,
             "B's rail says nothing of A's recording"
         );
+        let in_b = harness.state().0.recording_revision();
+        assert_ne!(in_b, in_a, "the word went: a new revision");
         switch(&mut harness, &a);
         assert!(
             harness.state().0.saved.is_empty(),
             "back in A, the ended result stays ended"
         );
         assert_eq!(saved(&harness), Some("Recording saved"), "back in A");
+        assert_ne!(
+            harness.state().0.recording_revision(),
+            in_b,
+            "the word came back: a new revision"
+        );
         // Round 30 re-check N1 of PR 400: with no input, a kept `Recording saved: …` still ends
         // with its file. X and Y record in two sessions; the idle frame asks to wake by the next
         // disk check; X's file goes; that wake ends X, and Y stays.

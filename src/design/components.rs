@@ -3338,7 +3338,7 @@ pub const PART_INSET: f32 = FOCUS_WIDTH + HAIRLINE_WIDTH;
     clippy::disallowed_methods,
     reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
 )]
-fn scroll_part<R>(
+pub(super) fn scroll_part<R>(
     ui: &mut Ui,
     rect: Rect,
     id: Id,
@@ -3520,7 +3520,24 @@ type FooterMessage<'a> = (
 pub struct Footer<'a> {
     id: Id,
     width: f32,
+    /// The legacy lines: each lowered to a closure (`result`, `legacy_reason`, `legacy_notice`,
+    /// `legacy_kept`, `legacy_kept_line`). Banned and counted (`clippy.toml`, `Ban::Footer`).
     messages: Vec<FooterMessage<'a>>,
+    /// A typed footer's lines (`outcome::Messages`): data, drawn in the order of the footer's
+    /// retained plan (layout PR 2b).
+    typed: Option<Box<dyn FooterLines + 'a>>,
+}
+
+/// A typed footer's lines, as the pane places and draws them (`outcome::Messages`).
+pub(super) trait FooterLines {
+    fn is_empty(&self) -> bool;
+    /// Before the pane places the footer: its whole demand at `width`, when its retained plan
+    /// was made from these lines at this width, scale and style. Then the pane knows the
+    /// footer's height before it draws, and the footer draws from the plan.
+    fn planned(&mut self, ui: &Ui, id: Id, width: f32) -> Option<f32>;
+    /// Draw the lines in `rect`, as `Footer::draw_messages` does: from the plan, or measuring
+    /// them and making the plan.
+    fn draw(&mut self, ui: &mut Ui, id: Id, rect: Rect, cut: bool, most: f32, stored: f32);
 }
 
 impl<'a> Footer<'a> {
@@ -3531,7 +3548,24 @@ impl<'a> Footer<'a> {
             id: Id::new(id),
             width,
             messages: Vec::new(),
+            typed: None,
         }
+    }
+
+    /// A typed footer (`outcome::Messages`): its lines are data, not closures.
+    pub(super) fn typed(id: Id, width: f32, lines: Box<dyn FooterLines + 'a>) -> Self {
+        Self {
+            id,
+            width,
+            messages: Vec::new(),
+            typed: Some(lines),
+        }
+    }
+
+    /// A typed footer's whole demand at `width`, when its retained plan holds (`FooterLines`).
+    pub(super) fn planned(&mut self, ui: &Ui, width: f32) -> Option<f32> {
+        let id = self.id;
+        self.typed.as_mut()?.planned(ui, id, width)
     }
 
     /// A result, made by the action done at `order`. `has_undo` is true while its Undo is live:
@@ -3562,7 +3596,7 @@ impl<'a> Footer<'a> {
     #[deprecated(
         note = "Give the footer a typed `Outcome` with `Footer::outcome` (src/design/outcome.rs)."
     )]
-    pub fn reason(
+    pub fn legacy_reason(
         &mut self,
         words: impl Into<std::borrow::Cow<'a, str>>,
         draw: impl FnOnce(&mut Ui) + 'a,
@@ -3576,7 +3610,7 @@ impl<'a> Footer<'a> {
     #[deprecated(
         note = "Give the footer a typed `Outcome` with `Footer::outcome` (src/design/outcome.rs)."
     )]
-    pub fn notice(
+    pub fn legacy_notice(
         &mut self,
         words: impl Into<std::borrow::Cow<'a, str>>,
         draw: impl FnOnce(&mut Ui) + 'a,
@@ -3729,7 +3763,7 @@ impl<'a> Footer<'a> {
 
     /// Whether the footer holds a message.
     pub(super) fn is_empty(&self) -> bool {
-        self.messages.is_empty()
+        self.messages.is_empty() && self.typed.as_ref().is_none_or(|typed| typed.is_empty())
     }
 
     /// Scope the footer's id to `parent` (a pane's parent `Ui`); returns the id the caller gave.
@@ -3758,6 +3792,10 @@ impl<'a> Footer<'a> {
         most: f32,
         stored: f32,
     ) {
+        if let Some(typed) = self.typed.as_mut() {
+            typed.draw(ui, self.id, rect, cut, most, stored);
+            return;
+        }
         // The one footer order (`outcome::footer_order`): results with a live Undo newest
         // first, reasons and notices in the caller's order, then results with no live Undo.
         super::outcome::footer_order(&mut self.messages);
@@ -6517,7 +6555,7 @@ mod tests {
                             });
                         }
                         if count > 1 {
-                            footer.reason("Line 3 opens a list.", |ui| {
+                            footer.legacy_reason("Line 3 opens a list.", |ui| {
                                 message(ui, Tone::Error, "Line 3 opens a list.");
                             });
                         }
@@ -6775,10 +6813,10 @@ mod tests {
                 .with_size(vec2(960.0, 640.0))
                 .build_ui(move |ui| {
                     let mut footer = Footer::new("order_footer", ui.available_width());
-                    footer.notice("Notice.", |ui| {
+                    footer.legacy_notice("Notice.", |ui| {
                         ui.label("Notice.");
                     });
-                    footer.reason("Reason.", |ui| {
+                    footer.legacy_reason("Reason.", |ui| {
                         ui.label("Reason.");
                     });
                     for (words, order, undo) in &results {
@@ -6966,7 +7004,7 @@ mod tests {
                                     let _ = ui.button(format!("Undo extra {at}"));
                                 });
                             }
-                            footer.reason(REASON, |ui| {
+                            footer.legacy_reason(REASON, |ui| {
                                 message(ui, Tone::Error, REASON);
                             });
                         }
@@ -7493,7 +7531,7 @@ mod tests {
                             .build_ui(move |ui| {
                                 ui.label("Title");
                                 let mut footer = Footer::new("shape_footer", ui.available_width());
-                                footer.reason(REASON, |ui| {
+                                footer.legacy_reason(REASON, |ui| {
                                     message(ui, Tone::Error, REASON);
                                 });
                                 let body = match shape {
@@ -7570,7 +7608,7 @@ mod tests {
                                     Shape::Nested => {
                                         let mut inner =
                                             Footer::new("inner_footer", ui.available_width());
-                                        inner.reason("Inner reason.", |ui| {
+                                        inner.legacy_reason("Inner reason.", |ui| {
                                             message(ui, Tone::Warning, "Inner reason.");
                                         });
                                         inner.pane(ui, Body::Content, |ui| {
@@ -7726,7 +7764,7 @@ mod tests {
                     .build_ui(move |ui| {
                         ui.label("Title");
                         let mut footer = Footer::new("small_footer", ui.available_width());
-                        footer.reason(REASON, |ui| {
+                        footer.legacy_reason(REASON, |ui| {
                             message(ui, Tone::Error, REASON);
                         });
                         footer.pane(ui, Body::Content, |ui| {
@@ -7796,7 +7834,7 @@ mod tests {
                         let mut footer = Footer::new("qc_footer", ui.available_width());
                         for at in 0..reasons_in.get() {
                             let words = format!("Reason {at} of this footer.");
-                            footer.reason(words.clone(), move |ui| {
+                            footer.legacy_reason(words.clone(), move |ui| {
                                 message(ui, Tone::Error, &words);
                             });
                         }
@@ -7922,7 +7960,7 @@ mod tests {
                     let mut footer = Footer::new("shared_footer", ui.available_width());
                     if message {
                         let undone = &undone_in;
-                        footer.reason(REASON, move |ui| {
+                        footer.legacy_reason(REASON, move |ui| {
                             if ui.button(format!("Undo {side}")).clicked() {
                                 let (a, b) = undone.get();
                                 undone.set(if side == 0 { (a + 1, b) } else { (a, b + 1) });
@@ -8024,7 +8062,7 @@ mod tests {
                 .with_size(vec2(960.0, 640.0))
                 .build_ui(move |ui| {
                     let mut footer = Footer::new("inline_footer", ui.available_width());
-                    footer.reason(REASON, |ui| {
+                    footer.legacy_reason(REASON, |ui| {
                         message(ui, Tone::Error, REASON);
                     });
                     footer.pane(ui, Body::Content, |ui| {
@@ -8082,7 +8120,7 @@ mod tests {
             .build_ui(move |ui| {
                 if present_in.get() {
                     let mut footer = Footer::new("toggled_footer", ui.available_width());
-                    footer.reason(REASON, |ui| {
+                    footer.legacy_reason(REASON, |ui| {
                         message(ui, Tone::Error, REASON);
                     });
                     footer.pane(ui, Body::Content, |ui| ui.label("A row"));

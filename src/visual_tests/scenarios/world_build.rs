@@ -8542,6 +8542,14 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
 }
 
 /// Deleting a file leaves its uses visible and its reader link unresolved.
+/// Whether Remove's Undo shows, whatever its label's form (`Undo remove`, or a later form that
+/// names its entry), so a check that it is gone cannot pass on a label that changed.
+fn has_undo_remove(d: &Driver<'_>) -> bool {
+    d.nodes()
+        .iter()
+        .any(|node| node.name.starts_with("Undo remove"))
+}
+
 pub fn package_delete_entry(d: &mut Driver<'_>) {
     let package = d.root.join("modules/ashen-marches");
     let rules = package.join("Rules/Ash Exposure.md");
@@ -8983,7 +8991,7 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.expect("Undo remove");
     d.state("deleted-draft-let-go", Sizes::All);
     let let_go_count = files_to_fix(d);
-    d.click("Undo remove");
+    d.click_starting("Undo remove");
     d.expect("Remove entry and lose draft");
     d.expect("A draft to let go.");
     // Round 23 FD1: Undo remove gives back the entry's campaign use and the header count with
@@ -9043,7 +9051,7 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     let b_after = wraith_chosen(d);
     go_library(d);
     d.wait_for_text("Undo remove");
-    d.click("Undo remove");
+    d.click_starting("Undo remove");
     d.expect("Remove entry and lose draft");
     let a_back = d.has_containing("A draft to let go.")
         && d.visible_text("Ashen Marches · Chosen for this campaign");
@@ -9076,7 +9084,7 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     let removed = |d: &mut Driver<'_>| {
         d.click("Remove entry and lose draft");
         d.wait_for_text("No entry open");
-        d.has("Undo remove")
+        has_undo_remove(d)
     };
     // Lookup: Open in Library selects another entry.
     let lookup_offered = removed(d);
@@ -9088,14 +9096,14 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         d.press_ctrl(Key::K);
     }
     go_library(d);
-    let lookup_ended = !d.has("Undo remove") && !d.has_containing("Ash Exposure · ");
+    let lookup_ended = !has_undo_remove(d) && !d.has_containing("Ash Exposure · ");
     // The list: a row selects another entry.
     gone_draft(d);
     let list_offered = removed(d);
     search_library(d, "Ash Wraith");
     d.click_starting("Ash Wraith · ");
     d.settle();
-    let list_ended = !d.has("Undo remove") && !d.has_containing("Ash Exposure · ");
+    let list_ended = !has_undo_remove(d) && !d.has_containing("Ash Exposure · ");
     // Another campaign: Undo would put A into its catalogue with this campaign's choice. The
     // encounter draft from earlier in this scenario would block the switch: let it go first.
     go_encounters(d);
@@ -9107,11 +9115,11 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     switch_campaign(d, QUIET_CAMPAIGN);
     go_library(d);
     d.settle();
-    let in_other = d.has("Undo remove");
+    let in_other = has_undo_remove(d);
     switch_campaign(d, CAMPAIGN);
     go_library(d);
     d.settle();
-    let switch_ended = !in_other && !d.has("Undo remove") && !d.has_containing("Ash Exposure · ");
+    let switch_ended = !in_other && !has_undo_remove(d) && !d.has_containing("Ash Exposure · ");
     // Astra re-check 2: the same round trip while the Library is hidden. The switch itself ends
     // the Undo; coming back to the first campaign does not bring it back.
     gone_draft(d);
@@ -9123,7 +9131,7 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     d.settle();
     go_library(d);
     d.settle();
-    let hidden_ended = !d.has("Undo remove") && !d.has_containing("Ash Exposure · ");
+    let hidden_ended = !has_undo_remove(d) && !d.has_containing("Ash Exposure · ");
     d.observe(
         "iter-25-L-undo-remove-owner",
         lookup_offered
@@ -13339,13 +13347,17 @@ pub fn campaign_copy_registered(d: &mut Driver<'_>) {
                 d.place_of("Undo register campaign"),
             )
         });
-        // Round 23 FB3: the same bordered action as after a plain add, on its own line below
-        // the Undo line, its border at the message words.
+        // Round 23 FB3: the same bordered action as after a plain add, under the message's
+        // words. Migration-32 L2b: the registration is a typed footer line (layout PR 2b), so its
+        // choice takes the typed message's one place: `L` after the Undo, on the Undo's line
+        // (the hand-drawn closure put it on a line of its own below the Undo).
         let placed = message.zip(build).zip(words).zip(undo).is_some_and(
             |(((message, build), words), undo)| {
                 build.top() >= message.bottom() - 1.0
-                    && build.top() >= undo.bottom()
-                    && (build.left() - message.left()).abs() <= 1.0
+                    && (build.center().y - undo.center().y).abs() <= 1.0
+                    // `L` after the Undo's slot, which ends `S` (its item spacing) past its
+                    // accessible rect.
+                    && (build.left() - (undo.right() + design::L + design::S)).abs() <= 1.0
                     && words > build.left()
             },
         );
@@ -13353,7 +13365,7 @@ pub fn campaign_copy_registered(d: &mut Driver<'_>) {
             "iter-23-C-FB3-build",
             placed && frame == Some(design::colors().field_border) && clear.is_ok(),
             format!(
-                "At {size:?}, Build an encounter {build:?} (border {frame:?}, words {words:?}) starts at the message words {message:?}, below Undo {undo:?}; press area: {clear:?}"
+                "At {size:?}, Build an encounter {build:?} (border {frame:?}, words {words:?}) under the message words {message:?}, `L` after Undo {undo:?} on its line; press area: {clear:?}"
             ),
         );
     }
