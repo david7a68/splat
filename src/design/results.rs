@@ -1356,8 +1356,15 @@ mod suppressions;
 ///   (`design::save_row` decides them from a `DraftState`).
 /// - `ptr_eq(`: a cache keyed by a pointer address. Key it by a `Revision` in a
 ///   `design::memo::Memo`, which takes no other key.
-/// - `LEGACY_BACK`: the bare back arrow (`design::icons`). A back link that starts a line is
-///   `design::TitleLine::back`, whose word is always shown (K4b, FL7). The name is spelled at
+/// - `TitleLine::back(`: the old back link part, which a caller can place inside a row and block
+///   with its reason on hover only. Its five page sites (Sessions 4, Timeline 1) keep it; an
+///   editor uses `design::EditorHead` (R38).
+/// - `BackEdge::Segments`: the Recordings row's named escape (its back link in one row with
+///   `Add to notes`); its one use is counted, so a second row back link fails.
+/// - `LEGACY_BACK`: the bare back arrow (`design::icons`). An editor's back is
+///   `design::EditorHead` (R38); a back link that starts a line is `design::TitleLine::back`,
+///   whose word is always shown (K4b, FL7). The lint's `arrow-label` finds the arrow given as
+///   an action's whole label, by name or as a literal. The name is spelled at
 ///   each use, also in an alias or a grouped import, so the text count sees every one.
 #[cfg(test)]
 pub(crate) type Staged = (&'static str, &'static str, &'static [(&'static str, usize)]);
@@ -1410,13 +1417,30 @@ pub(crate) const STAGED: &[Staged] = &[
     ),
     (
         "LEGACY_BACK",
-        "A back link that starts a line is `design::TitleLine::back(word!(…), BackEdge)`.",
+        "An editor's back is `design::EditorHead` above its name row; a back link that starts a line is `design::TitleLine::back(word!(…), BackEdge)`.",
         &[
             ("src/design/icons.rs", 1),
-            ("src/encounters.rs", 1),
-            ("src/encounters/groups.rs", 1),
             ("src/library.rs", 1),
             ("src/lookup.rs", 2),
+        ],
+    ),
+    (
+        "TitleLine::back(",
+        "An editor's back is `design::EditorHead` (R38); a new page's back link that starts a line asks the lead for a row here.",
+        &[
+            ("src/design/layout.rs", 2),
+            ("src/design/layout/tests.rs", 2),
+            ("src/sessions/page.rs", 4),
+            ("src/timeline/page.rs", 1),
+        ],
+    ),
+    (
+        "BackEdge::Segments",
+        "The Recordings row's escape: its back link and `Add to notes` share one row. No other back link is drawn inside a row.",
+        &[
+            ("src/design/layout.rs", 1),
+            ("src/design/layout/tests.rs", 1),
+            ("src/sessions/page.rs", 1),
         ],
     ),
 ];
