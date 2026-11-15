@@ -670,7 +670,7 @@ pub fn broken(d: &mut Driver<'_>) {
     reload(d);
     d.click_containing("Old Warden · ");
     d.click("Rename the note to Gate Warden");
-    d.wait_for_text("Undo change to Name");
+    d.wait_for_control("Undo change to Name");
     let renamed = fs::read_to_string(&warden).unwrap();
     d.click_containing("Things to check · ");
     fs::write(&path, "---\nsplat_schema: 2\nsplat_id: [\n---\n").unwrap();
@@ -1409,7 +1409,7 @@ pub fn broken(d: &mut Driver<'_>) {
     d.click("Discard");
     let discard = d.name_starting("Undo discard of ");
     d.click("Rename the note to Lamp");
-    d.wait_for_text("Undo change to Name");
+    d.wait_for_control("Undo change to Name");
     let first = newer_above(d, "Undo change to Name", &discard);
     d.click("Undo change to Name");
     d.settle();
@@ -1419,7 +1419,7 @@ pub fn broken(d: &mut Driver<'_>) {
         "A's rename undone"
     );
     d.click("Rename the note to Lamp");
-    d.wait_for_text("Undo change to Name");
+    d.wait_for_control("Undo change to Name");
     d.click("Edit Lamp");
     d.type_into("Status", "asleep");
     d.click("Discard");
@@ -1481,7 +1481,7 @@ pub fn broken(d: &mut Driver<'_>) {
         ),
     );
     d.click("Rename the note to Lamp");
-    d.wait_for_text("Undo change to Name");
+    d.wait_for_control("Undo change to Name");
     assert_eq!(
         fs::read_to_string(&lamp).unwrap(),
         lamp_renamed,
@@ -1533,7 +1533,7 @@ pub fn broken(d: &mut Driver<'_>) {
         "Emberfall's file rename offers no Undo on Quiet Harbor's note at the same path",
     );
     d.click("Rename the note to Repaired watchkeeper");
-    d.wait_for_text("Undo change to Name");
+    d.wait_for_control("Undo change to Name");
     let quiet_after = fs::read_to_string(&quiet_note).unwrap();
     assert!(
         quiet_after.contains("splat_name: Repaired watchkeeper\n"),
@@ -2612,6 +2612,87 @@ pub fn facts(d: &mut Driver<'_>) {
         "The problems name an entry with no summary and an entry that shows on no other page",
     );
     d.state("world-problems", Sizes::All);
+
+    // Round 30 FE11, SE7, AE8: a lone tick's Undo paints `Undo tick`, as its result already
+    // names the question and the note; two ticks paint the whole form, which tells them apart.
+    // The accessible name is always the whole form. A second note with its own question.
+    let pact = root(d).join("Lore/Ash Pact.md");
+    let pact_open = open
+        .replace(id, "splat_id: 00000000-0000-4000-8000-0000000000ab")
+        .replace("Horn Rings", "Ash Pact")
+        .replace("Can a horn ring be sold?", "Who signed the pact?");
+    fs::write(&pact, &pact_open).unwrap();
+    reload(d);
+    d.click_containing("Open questions · ");
+    let horn_undo = "Undo tick \u{201c}Can a horn ring be sold?\u{201d} in Horn Rings";
+    let pact_undo = "Undo tick \u{201c}Who signed the pact?\u{201d} in Ash Pact";
+    // The words an Undo paints inside its own target, by its whole accessible name.
+    let painted = |d: &Driver<'_>, name: &str| {
+        let rect = d.place_of(name)?;
+        if d.painted_size(rect, name).is_some() {
+            Some("whole")
+        } else if d.painted_size(rect, "Undo tick").is_some()
+            && d.painted_size(rect, "Undo tick \u{201c}").is_none()
+        {
+            Some("short")
+        } else {
+            None
+        }
+    };
+    d.click(question);
+    let one = painted(d, horn_undo);
+    d.click("Open: Who signed the pact?");
+    let two = (painted(d, horn_undo), painted(d, pact_undo));
+    // A second tick makes both Undos paint their whole labels, so an Undo may move from beside
+    // its result to the line below it. At 960 nothing is lost: each result's words and each
+    // Undo stay whole in view.
+    let whole_at_960 = d.at_size(SMALL, |d| {
+        let nodes = d.nodes();
+        let undo_whole = |name: &str| {
+            nodes
+                .iter()
+                .any(|node| node.name == name && node.fully_in_view())
+        };
+        let words = |words: &str| d.painted_rect_in(words, egui::Rect::EVERYTHING);
+        (
+            undo_whole(horn_undo)
+                && undo_whole(pact_undo)
+                && words("\u{201c}Can a horn ring be sold?\u{201d} ticked in Horn Rings.")
+                    .is_some()
+                && words("\u{201c}Who signed the pact?\u{201d} ticked in Ash Pact.").is_some(),
+            format!(
+                "{:?}",
+                nodes
+                    .iter()
+                    .filter(|node| node.name.starts_with("Undo tick"))
+                    .map(|node| (&node.name, node.shown))
+                    .collect::<Vec<_>>()
+            ),
+        )
+    });
+    d.observe(
+        "s30-FE11-two-ticks-whole-at-960",
+        whole_at_960.0,
+        format!(
+            "Both results and both whole Undos are whole in view at 960: {}",
+            whole_at_960.1
+        ),
+    );
+    d.click(horn_undo);
+    let after = painted(d, pact_undo);
+    d.observe(
+        "s30-FE11-undo-alone",
+        one == Some("short")
+            && two == (Some("whole"), Some("whole"))
+            && after == Some("short")
+            && fs::read_to_string(&horn).unwrap() == open
+            && fs::read_to_string(&pact).unwrap()
+                == pact_open.replacen("- [ ] Who signed", "- [x] Who signed", 1),
+        format!(
+            "One tick's Undo {one:?}; two ticks' Undos {two:?}; after Undo of the first, the \
+             other's {after:?}, and only the first note's box opened again"
+        ),
+    );
 }
 
 pub fn places(d: &mut Driver<'_>) {
@@ -4918,7 +4999,7 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
     );
     d.observe(
         "W2",
-        d.in_view(NEXT_TURN) && d.has("Guard") && !d.has("Change Stat block"),
+        d.in_view(NEXT_TURN) && d.has("Guard") && d.has("Change Stat block"),
         "The compact NPC reader shows its stat block and place beside the run",
     );
     // Round 24 FI6: the one match is the entry on screen, so no `Show 1 result` line shows.
@@ -5246,7 +5327,7 @@ pub fn npc_in_lookup(d: &mut Driver<'_>) {
         "W2",
         d.has("North Gate")
             && d.visible_text("Never names the captain. Owes Nell a favour.")
-            && !d.has("Change Place"),
+            && d.has("Change Place"),
         "After Save, Lookup reads the NPC again with the new place and text",
     );
     body_kept(
@@ -6593,7 +6674,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.state("package-wrong-folder-picked", Sizes::All);
     crate::hermetic::closed::next_folder(moved.clone());
     d.click("Find the folder…");
-    d.wait_for_text("Undo recover modules/watch-package");
+    d.wait_for_control("Undo recover modules/watch-package");
     d.expect("Ashen Marches found in modules/watch-package/.");
     d.state_prepared("package-correct-folder-picked", Sizes::All, |d| {
         check_undo_icon(d, "Undo recover modules/watch-package", "iter-6-C-AD3");
@@ -6601,7 +6682,7 @@ pub fn package_rename(d: &mut Driver<'_>) {
     d.click("Undo recover modules/watch-package");
     d.wait_for_text("Use this folder");
     d.click("Use this folder");
-    d.wait_for_text("Undo recover modules/watch-package");
+    d.wait_for_control("Undo recover modules/watch-package");
     go_library(d);
     d.click("Packages");
     d.click("Reload from disk");
@@ -6907,7 +6988,7 @@ pub fn package_about(d: &mut Driver<'_>) {
     d.click("Reload from disk");
     d.expect("Module.md cannot be read (line 4)");
     d.click("Replace with a basic Module.md");
-    d.wait_for_text("Undo write Module.md");
+    d.wait_for_control("Undo write Module.md");
     d.state_prepared("legacy-manifest-replaced-in-campaign", Sizes::All, |d| {
         check_undo_icon(d, "Undo write Module.md", "iter-8-E-FD7-campaign-undo");
         d.observe(
@@ -6934,7 +7015,7 @@ pub fn package_about(d: &mut Driver<'_>) {
     d.click("Open in Library");
     d.expect("Markdown editor");
     d.click("Replace with a basic Module.md");
-    d.wait_for_text("Undo write Module.md");
+    d.wait_for_control("Undo write Module.md");
     // The result takes the slot below the save row, so the editor keeps its place.
     let with_result = editor_below_read(d);
     d.observe(
@@ -7246,7 +7327,7 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
     let creatures = folder.join("Creatures/Cinder Wolf.md");
     let creature_before = fs::read_to_string(&creatures).unwrap();
     d.click("Replace with a basic Package.md");
-    d.wait_for_text("Undo write Package.md");
+    d.wait_for_control("Undo write Package.md");
     let basic = fs::read_to_string(&path).unwrap();
     assert_eq!(
         crate::content_workspace::note_id(&basic),
@@ -7310,7 +7391,7 @@ pub fn package_manifest_broken(d: &mut Driver<'_>) {
         "Ashen Marches: Package.md cannot be read",
         "Replace with a basic Package.md",
     );
-    d.wait_for_text("Undo write Package.md");
+    d.wait_for_control("Undo write Package.md");
     d.click_below(
         "Ember Reach: Package.md cannot be read",
         "Replace with a basic Package.md",
@@ -9684,21 +9765,58 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
     d.observe("iter-24-D-AG1", marked, detail);
     d.state("npc-place-deleted-in-world", Sizes::All);
     look_up(d, "Watchkeeper");
-    d.wait_for_text("Watch House · Not found");
-    // Round 24 FD6: the compact reader's link fault reads as its other values: the muted label
-    // `Place`, then the value in the warning tone. The label is not in the warning colour.
-    let missing = format!("{} Watch House · Not found", design::icons::WARN);
-    d.observe(
-        "iter-24-D-FD6",
-        d.painted_color("Place") == Some(design::colors().muted)
-            && d.painted_color(&missing) == Some(design::colors().result.warning)
-            && !d.has_containing("Place Watch House"),
-        format!(
-            "Place is {:?} and its value is {:?}",
-            d.painted_color("Place"),
-            d.painted_color(&missing)
-        ),
-    );
+    let missing = format!("{} Watch House", design::icons::WARN);
+    d.wait_for_text(&missing);
+    // Round 24 FD6 caught a link fault that did not read as its other values: it wants the
+    // muted label `Place`, then the value in the warning tone, on one line. Round 30: Lookup's
+    // value rows now carry Change (one function draws them for World and Lookup), so a missing
+    // link there takes the narrow reader's form, which replaces round 24's one-line form: the
+    // name in the warning tone on Change's line, and `Not found` on its own line directly
+    // below it, at the same text edge. Change stays whole on the name's line.
+    let value_form = |d: &Driver<'_>| {
+        let lookup = egui::Rect::from_min_max(
+            egui::pos2(d.place_of(LOOKUP_SPLITTER)?.right(), f32::NEG_INFINITY),
+            egui::pos2(f32::INFINITY, f32::INFINITY),
+        );
+        let name = d.painted_rect_in(&missing, lookup)?;
+        let below = d.painted_rect_in("Not found", lookup)?;
+        let change = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.name == "Change Place" && lookup.contains(node.rect.center()))?
+            .rect;
+        let whole = d.painted_rect_in("Change", change).is_some();
+        Some((name, below, change, whole))
+    };
+    for size in [SMALL, DEFAULT, LARGE] {
+        let form = d.at_size(size, value_form);
+        // Narrow (960): the two-line form. Wider, Lookup's row has room for one line, as World's
+        // wide reader has; either way Change is whole and level with the name's line.
+        let stacked = form.is_some_and(|(name, below, change, whole)| {
+            let one_line = name == below;
+            let two_lines = (below.top() - name.bottom()).abs() <= 1.0
+                && (below.left() - name.left()).abs() <= 1.0;
+            (two_lines || (one_line && size != SMALL))
+                && whole
+                && change.top() <= name.center().y
+                && name.center().y <= change.bottom()
+        });
+        d.observe(
+            "iter-24-D-FD6",
+            d.painted_color("Place") == Some(design::colors().muted)
+                && d.painted_color(&missing) == Some(design::colors().result.warning)
+                && d.painted_color("Not found") == Some(design::colors().result.warning)
+                && !d.has_containing("Place Watch House")
+                && stacked,
+            format!(
+                "At {size:?}: Place is {:?}, its value {:?} and Not found {:?}; name, Not found, \
+                 Change and whether Change is whole: {form:?}",
+                d.painted_color("Place"),
+                d.painted_color(&missing),
+                d.painted_color("Not found"),
+            ),
+        );
+    }
     // Round 26 AE2: Lookup's result says the fault that World's row says, with its warning
     // mark, before the note's summary. Neighbour: the stat block's result has no mark.
     let mark = format!("{} Place not found", design::icons::WARN);
@@ -9733,7 +9851,9 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
     d.type_into("Search the world", "Watchkeeper");
     d.state("npc-stat-block-deleted-in-world", Sizes::All);
     look_up(d, "Watchkeeper");
-    d.wait_for_text("Watchkeeper Guard · Not found");
+    // Lookup's missing stat block takes the narrow reader's form (round 30, FD6 above): its
+    // name line, with `Not found` on the line below.
+    d.wait_for_text(&format!("{} Watchkeeper Guard", design::icons::WARN));
     // Round 23 FG1, SG1: with Lookup open, World's rows stack each label above its value. The
     // value keeps the label column's room, so each missing link stays on one line. Must stay
     // true: Change still starts an `L` gap after its value.
@@ -9808,7 +9928,16 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
                 ));
             }
             detail.push(format!("Not found texts {not_found:?}"));
-            let change = d.place_of("Change Stat block");
+            // World's Change Stat block: Lookup, to the right, has its own of the same name.
+            let change = {
+                let lookup = d
+                    .place_of(SEARCH_LOOKUP)
+                    .map_or(f32::INFINITY, |field| field.left());
+                d.nodes()
+                    .into_iter()
+                    .find(|node| node.name == "Change Stat block" && node.rect.right() < lookup)
+                    .map(|node| node.rect)
+            };
             // Round 25 AA2: Change lines up with the name's line, not between the name and
             // `Not found`. The name line is the one-galley value, or the name alone above
             // `Not found` (stacked), each one row; Lookup's copy is right of the pane.
@@ -9822,7 +9951,15 @@ pub fn world_note_deleted(d: &mut Driver<'_>) {
                     .chain(painted(&format!("{} {name}", design::icons::WARN)))
                     .find(|(rows, _)| *rows == 1)
                     .map(|(_, rect)| rect.center().y);
-                let target = d.place_of(label).map(|rect| rect.center().y);
+                // World's Change: Lookup, to the right, has its own of the same name.
+                let lookup = d
+                    .place_of(SEARCH_LOOKUP)
+                    .map_or(f32::INFINITY, |field| field.left());
+                let target = d
+                    .nodes()
+                    .into_iter()
+                    .find(|node| node.name == label && node.rect.right() < lookup)
+                    .map(|node| node.rect.center().y);
                 level.push((name, line, target));
             }
             let level = (
@@ -10072,7 +10209,7 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     };
     let search_before = tops(d);
     d.click("Make Rook Ambry copy.md a separate note");
-    d.wait_for_text("Undo separate Rook Ambry copy.md");
+    d.wait_for_control("Undo separate Rook Ambry copy.md");
     d.expect("Rook Ambry copy.md is now a separate note.");
     // iter-27-B FF8, AF1, SF1: the result and its Undo are in the editor's footer, below the
     // search's results, and the search and its filter do not move.
@@ -10422,7 +10559,7 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     d.state("duplicate-world-files-in-lookup", Sizes::All);
     d.press(Key::Escape);
     d.click("Make Rook Ambry copy.md a separate note");
-    d.wait_for_text("Undo separate Rook Ambry copy.md");
+    d.wait_for_control("Undo separate Rook Ambry copy.md");
     d.expect("Rook Ambry copy.md is now a separate note.");
     assert_eq!(
         crate::content_workspace::note_id(&fs::read_to_string(&original).unwrap()),
@@ -10453,7 +10590,7 @@ pub fn world_note_duplicated(d: &mut Driver<'_>) {
     d.click_starting("Rook Ambry.md ·");
     d.expect("Make Rook Ambry copy.md a separate note");
     d.click("Make Rook Ambry copy.md a separate note");
-    d.wait_for_text("Undo separate Rook Ambry copy.md");
+    d.wait_for_control("Undo separate Rook Ambry copy.md");
     d.expect("Rook Ambry copy.md is now a separate note.");
     let same_name = before.replace("splat_name: Rook Ambry", "splat_name: Rook Ambry copy");
     fs::write(&original, same_name).unwrap();
@@ -10486,9 +10623,10 @@ pub fn world_note_renamed(d: &mut Driver<'_>) {
     // the header's count, so the DM finds it without opening the note.
     d.observe(
         "iter-29-D-FI2",
-        d.has_containing("File: Mara Vell.md")
+        d.has_containing("File name differs")
+            && !d.has_containing("File: Mara Vell.md")
             && d.has_containing("1 note needs fixing"),
-        "The renamed note's row says ⚠ File: Mara Vell.md and the header counts 1 note needs fixing",
+        "The renamed note's row says ⚠ File name differs and the header counts 1 note needs fixing",
     );
     d.state("renamed-npc-keeps-old-name-in-world", Sizes::All);
     look_up(d, "Rook Ambry");
@@ -10496,7 +10634,7 @@ pub fn world_note_renamed(d: &mut Driver<'_>) {
     d.state("renamed-npc-keeps-old-name-in-lookup", Sizes::All);
     d.press(Key::Escape);
     d.click("Rename the note to Mara Vell");
-    d.wait_for_text("Undo change to Name");
+    d.wait_for_control("Undo change to Name");
     let (success, detail) = finished_change_tone(d, "Name changed to Mara Vell.");
     d.observe("iter-20-D-FD5-name", success, detail);
     for size in [SMALL, DEFAULT, LARGE] {
@@ -10517,6 +10655,54 @@ pub fn world_note_renamed(d: &mut Driver<'_>) {
     d.press(Key::Escape);
     d.click("Undo change to Name");
     d.wait_for_text("Rename the note to Mara Vell");
+    // Round 30 final review F3: two different notes with one name, each in a file of another
+    // name, so both rows have this fault. Where the fault's words and the file do not fit a
+    // row whole, each row keeps its own file's name, so the two rows stay apart.
+    entry(
+        d,
+        "NPCs/Iron Vey of the Northern Watch.md",
+        "Iron Vey",
+        "npc",
+        "",
+    );
+    entry(
+        d,
+        "NPCs/Iron Vey of the Southern Ford.md",
+        "Iron Vey",
+        "npc",
+        "",
+    );
+    reload(d);
+    d.click(NAV_WORLD);
+    for size in [SMALL, DEFAULT, LARGE] {
+        let apart = d.at_size(size, |d| {
+            let rows: Vec<_> = d
+                .nodes()
+                .into_iter()
+                .filter(|node| node.name.starts_with("Iron Vey · ") && node.in_view())
+                .collect();
+            let told = |file: &str, word: &str| {
+                rows.iter()
+                    .find(|row| row.name.contains(file))
+                    .and_then(|row| d.painted_rect_in(word, row.rect))
+                    .is_some()
+            };
+            (
+                rows.len() == 2
+                    && told("Iron Vey of the Northern Watch.md", "Northern")
+                    && told("Iron Vey of the Southern Ford.md", "Southern"),
+                rows.iter().map(|row| row.name.clone()).collect::<Vec<_>>(),
+            )
+        });
+        d.observe(
+            "s30-F3-same-name-renamed-rows",
+            apart.0,
+            format!(
+                "At {size:?}, the two same-name rows paint their own files: {:?}",
+                apart.1
+            ),
+        );
+    }
 }
 
 pub fn package_folder_copied(d: &mut Driver<'_>) {

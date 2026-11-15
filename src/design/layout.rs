@@ -1922,6 +1922,7 @@ impl<'a> TitleLine<'a> {
             edge,
             context: None,
             blocked: None,
+            name: None,
         }
     }
 }
@@ -1970,6 +1971,8 @@ pub struct BackLink<'a> {
     edge: BackEdge,
     context: Option<&'a str>,
     blocked: Option<&'a str>,
+    /// The accessible name when it is longer than the word (only [`EditorHead`] sets it).
+    name: Option<&'static str>,
 }
 
 impl<'a> BackLink<'a> {
@@ -1999,9 +2002,12 @@ impl<'a> BackLink<'a> {
     fn draw(self, ui: &mut Ui) -> Response {
         let icon_font = Type::Body.font(ui);
         let icon = number_width(ui, BACK_LINK_ICON, &icon_font).ceil();
-        let action = Action::quiet(self.word.as_str())
+        let mut action = Action::quiet(self.word.as_str())
             .density(Density::Read)
             .blocked(self.blocked);
+        if let Some(name) = self.name {
+            action = action.name(name);
+        }
         let action = match self.edge {
             BackEdge::Text => action.line_start(),
             BackEdge::Segments => action,
@@ -2026,6 +2032,253 @@ impl<'a> BackLink<'a> {
             ui.label(Type::Small.rich(ui, context).color(colors().muted));
         }
         response
+    }
+}
+
+/// An unsaved draft that holds an editor, so that its back line cannot be followed. Each one
+/// owns the words of its reason (R35: the same value disables Back and gives the painted words),
+/// in a long and a short form, both whole sentences.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Unsaved {
+    /// The group editor's draft.
+    Group,
+    /// The encounter editor's draft.
+    Encounter,
+    /// A creature being edited inside an Encounters editor.
+    Creature,
+}
+
+impl Unsaved {
+    #[cfg(test)]
+    const ALL: [Self; 3] = [Self::Group, Self::Encounter, Self::Creature];
+
+    /// The reason in its long form: what to do before Back can be followed.
+    pub const fn reason(self) -> &'static str {
+        match self {
+            Self::Group => "Save or discard this group first.",
+            Self::Encounter => "Save or discard the open encounter first.",
+            Self::Creature => "Save or discard the changes to this creature first.",
+        }
+    }
+
+    /// The same reason, whole and shorter, for a back line that has no room for the long form.
+    pub const fn short_reason(self) -> &'static str {
+        match self {
+            Self::Group => "Save or discard the group first.",
+            Self::Encounter => "Save or discard it first.",
+            Self::Creature => "Save or discard the creature first.",
+        }
+    }
+}
+
+/// Where an editor's back line goes. Each destination gives both the painted word (R17) and the
+/// accessible name, so the two cannot disagree.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BackTo {
+    /// The Encounters page's list.
+    Encounters,
+    /// The Session page's plan (the group editor's second host).
+    Plan,
+    /// The session the encounter was opened from.
+    Session,
+}
+
+impl BackTo {
+    #[cfg(test)]
+    const ALL: [Self; 3] = [Self::Encounters, Self::Plan, Self::Session];
+
+    /// The painted word.
+    pub const fn word(self) -> Word {
+        match self {
+            Self::Encounters => crate::word!("Encounters"),
+            Self::Plan => crate::word!("Plan"),
+            Self::Session => crate::word!("Session"),
+        }
+    }
+
+    /// The accessible name.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Encounters => "Back to encounters",
+            Self::Plan => "Back to the plan",
+            Self::Session => "Back to session",
+        }
+    }
+}
+
+/// The owner of an editor's drafts: it says which drafts are unsaved, from the same values its
+/// Save and its guards read. It is implemented once, by the owner, not by the view that draws
+/// the head.
+pub trait DraftOwner {
+    /// Whether `draft` has unsaved changes.
+    fn unsaved(&self, draft: Unsaved) -> bool;
+}
+
+/// The first unsaved draft of all an owner holds, encounter first, then its group, then a
+/// creature: the reason a plan act or a replacement of the open draft is refused, from the same
+/// recipe as the back lines.
+pub fn first_unsaved(owner: &impl DraftOwner) -> Option<Unsaved> {
+    [Unsaved::Encounter, Unsaved::Group, Unsaved::Creature]
+        .into_iter()
+        .find(|&draft| owner.unsaved(draft))
+}
+
+/// The two editors that have a back line, with the host each is drawn in. Each has a fixed
+/// recipe of drafts that hold it, in order of priority, and its destination follows from the
+/// host.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EditorKind {
+    /// The group editor: its group, then a creature open beside it. Drawn in the Session
+    /// plan, Back goes to the plan; else to the Encounters list.
+    Group {
+        /// Drawn as a part of the Session page's plan.
+        in_plan: bool,
+    },
+    /// The encounter editor: its encounter, then a creature open beside it. Opened from a
+    /// session, Back goes to that session; else to the Encounters list.
+    Encounter {
+        /// Opened from a session.
+        from_session: bool,
+    },
+}
+
+impl EditorKind {
+    /// The drafts that can hold this editor, first first.
+    const fn recipe(self) -> &'static [Unsaved] {
+        match self {
+            Self::Group { .. } => &[Unsaved::Group, Unsaved::Creature],
+            Self::Encounter { .. } => &[Unsaved::Encounter, Unsaved::Creature],
+        }
+    }
+
+    /// Where Back goes.
+    const fn back_to(self) -> BackTo {
+        match self {
+            Self::Group { in_plan: true } => BackTo::Plan,
+            Self::Encounter { from_session: true } => BackTo::Session,
+            Self::Group { in_plan: false }
+            | Self::Encounter {
+                from_session: false,
+            } => BackTo::Encounters,
+        }
+    }
+}
+
+/// The head of an Encounters editor (R38): its back line on a line of its own, then the name
+/// row that the caller draws, both in one top-down child that this part makes, so the back line
+/// is above the name row whatever the parent's layout.
+///
+/// The back line is ONE row of 28 px in every state: the destination's word at the text edge,
+/// then the return arrow, and, while a draft holds the editor, that draft's reason after the
+/// link in muted `Small` words: its long form when it fits, else its short form, measured
+/// before paint, never wrapped or cut. Both forms fit from the narrowest pane
+/// ([`NARROWEST_PANE`], 316 px) up; a part test proves it. So the head adds 28 px and one item
+/// gap (34 px) above the name row, and no state reserves more.
+///
+/// ```
+/// # use splat::layout::{DraftOwner, EditorHead, EditorKind, Unsaved};
+/// # struct Owner;
+/// # impl DraftOwner for Owner {
+/// #     fn unsaved(&self, _: Unsaved) -> bool { false }
+/// # }
+/// # fn draw(ui: &mut eframe::egui::Ui, owner: &Owner) {
+/// let (back, name) = EditorHead::new(EditorKind::Group { in_plan: false }, owner).show(ui, |ui| {
+///     ui.horizontal(|ui| ui.label("the name field")).inner
+/// });
+/// # let _ = (back, name);
+/// # }
+/// ```
+#[must_use = "call show"]
+#[derive(Clone, Copy, Debug)]
+pub struct EditorHead {
+    to: BackTo,
+    held: Option<Unsaved>,
+}
+
+impl EditorHead {
+    /// The head of `editor`, from its owner's destination and drafts.
+    pub fn new(editor: EditorKind, owner: &impl DraftOwner) -> Self {
+        Self {
+            to: editor.back_to(),
+            held: editor
+                .recipe()
+                .iter()
+                .copied()
+                .find(|&draft| owner.unsaved(draft)),
+        }
+    }
+
+    /// The draft that holds Back now, if any.
+    pub fn held_by(&self) -> Option<Unsaved> {
+        self.held
+    }
+
+    /// Draw the back line, then `name_row` under it. True when the DM follows the link (never
+    /// while it is held), and what `name_row` returned.
+    pub fn show<R>(self, ui: &mut Ui, name_row: impl FnOnce(&mut Ui) -> R) -> (bool, R) {
+        ui.scope_builder(
+            UiBuilder::new().layout(Layout::top_down(Align::Min)),
+            |ui| {
+                let back = self.back_line(ui);
+                (back, name_row(ui))
+            },
+        )
+        .inner
+    }
+
+    /// The reason's words at this room: the long form if it fits, else the short one.
+    fn reason_words(ui: &Ui, draft: Unsaved, room: f32) -> &'static str {
+        let font = Type::Small.font(ui);
+        if number_width(ui, draft.reason(), &font) <= room {
+            draft.reason()
+        } else {
+            draft.short_reason()
+        }
+    }
+
+    /// The room after the link for a reason, at the line's width.
+    fn reason_room(ui: &Ui, to: BackTo, width: f32) -> f32 {
+        let icon = number_width(ui, BACK_LINK_ICON, &Type::Body.font(ui)).ceil();
+        let link = Action::quiet(to.word().as_str())
+            .density(Density::Read)
+            .line_start()
+            .natural_width(ui)
+            .ceil()
+            + XS
+            + icon;
+        width - link - L
+    }
+
+    fn back_line(self, ui: &mut Ui) -> bool {
+        let width = ui.available_width();
+        let room = Self::reason_room(ui, self.to, width);
+        let reason = self.held.map(|draft| Self::reason_words(ui, draft, room));
+        let link = BackLink {
+            word: self.to.word(),
+            edge: BackEdge::Text,
+            context: None,
+            blocked: self.held.map(Unsaved::reason),
+            name: Some(self.to.name()),
+        };
+        let gap = ui.spacing().item_spacing.x;
+        ui.allocate_ui_with_layout(
+            vec2(width, Density::Read.control()),
+            Layout::left_to_right(Align::Center),
+            |ui| {
+                ui.set_min_size(vec2(width, Density::Read.control()));
+                ui.set_max_height(Density::Read.control());
+                let response = link.draw(ui);
+                if let Some(reason) = reason {
+                    space(ui, (L - gap).max(0.0));
+                    ui.add(
+                        egui::Label::new(Type::Small.rich(ui, reason).color(colors().muted))
+                            .wrap_mode(egui::TextWrapMode::Extend),
+                    );
+                }
+                response.clicked() && self.held.is_none()
+            },
+        )
+        .inner
     }
 }
 
