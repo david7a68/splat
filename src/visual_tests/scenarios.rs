@@ -3073,6 +3073,25 @@ pub mod campaign_content {
             format!("An unchanged invalid repair says Invalid, and Save is blocked; No changes is painted {clean} times"),
         );
         d.state("repair-open", Sizes::Default);
+        // s30 B11 (R41): the note does not parse, so it cannot be read: an error in the body's
+        // message, in the repair's `Invalid` and in the footer's cause, at each size.
+        let tones = [SMALL, DEFAULT, LARGE].map(|size| {
+            d.at_size(size, |d| {
+                [
+                    tones_beside(d, "Notes/Broken.md cannot be read."),
+                    status_tones(d, "Invalid"),
+                    tones_beside(d, "Line 3 opens a list with ["),
+                ]
+            })
+        });
+        d.observe(
+            "s30-B11-tone-repair",
+            tones
+                .iter()
+                .flatten()
+                .all(|place| place.as_slice() == ["error"]),
+            format!("Body, Invalid and footer at 960, 1200 and 1920: {tones:?}"),
+        );
         d.observe(
             "Repair says why",
             d.visible_text("Line 3 opens a list"),
@@ -3408,7 +3427,23 @@ pub mod campaign_content {
                 })
             },
         );
-        d.state("missing-campaign-manifest-needs-explicit-write", Sizes::All);
+        d.state_prepared(
+            "missing-campaign-manifest-needs-explicit-write",
+            Sizes::All,
+            |d| {
+                // s30 B11 (R41): a missing file is a warning, as the missing manifests and
+                // folders are.
+                let tones = tones_beside(d, "Campaign.md is missing.");
+                d.observe(
+                    "s30-B11-tone-missing-campaign",
+                    tones == ["warning"],
+                    format!(
+                        "At {:?}, Campaign.md is missing: {tones:?}",
+                        d.window_size()
+                    ),
+                );
+            },
+        );
         d.click("Write Campaign.md again");
         d.wait_for_control("Undo write Campaign.md");
         assert_eq!(std::fs::read_to_string(&manifest).unwrap(), before);
