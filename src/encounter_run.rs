@@ -4241,9 +4241,31 @@ struct Storage {
 }
 
 pub fn find_run(directory: &Path, campaign: Uuid, id: Uuid) -> Result<PathBuf, String> {
+    find_run_typed(directory, campaign, id).map_err(|fault| match fault {
+        FindRunFault::Folder(folder) => folder.message(),
+        FindRunFault::File(words) => words,
+    })
+}
+
+/// Why a run's file was not found: its folder (R41: missing or unreadable), or the folder
+/// holds no single file for it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum FindRunFault {
+    Folder(RunFolderFault),
+    File(String),
+}
+
+/// `find_run`, keeping the folder's cause typed, so a page says it as Encounters does.
+pub(crate) fn find_run_typed(
+    directory: &Path,
+    campaign: Uuid,
+    id: Uuid,
+) -> Result<PathBuf, FindRunFault> {
+    let folder = |fault| FindRunFault::Folder(fault);
+    let unreadable = |error: std::io::Error| folder(RunFolderFault::unreadable(directory, &error));
     let mut found = Vec::new();
-    for file in fs::read_dir(directory).map_err(|e| format!("{}: {e}", directory.display()))? {
-        let path = file.map_err(|e| e.to_string())?.path();
+    for file in RunFolderFault::read(directory).map_err(folder)? {
+        let path = file.map_err(unreadable)?.path();
         if path.extension().is_some_and(|ext| ext == "json")
             && read_saved(&path, campaign).is_ok_and(|run| run.id == id)
         {
@@ -4252,18 +4274,18 @@ pub fn find_run(directory: &Path, campaign: Uuid, id: Uuid) -> Result<PathBuf, S
     }
     match found.as_slice() {
         [path] => Ok(path.clone()),
-        [] => Err(format!(
+        [] => Err(FindRunFault::File(format!(
             "Run {id} was not found in {}.",
             directory.display()
-        )),
-        _ => Err(format!(
+        ))),
+        _ => Err(FindRunFault::File(format!(
             "Several files use run {id}: {}. Keep one identity before carrying HP.",
             found
                 .iter()
                 .map(|path| path.display().to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
-        )),
+        ))),
     }
 }
 impl Run {
@@ -4840,18 +4862,12 @@ impl Run {
     /// there against one that is there and cannot be read).
     pub fn list(directory: &Path, campaign: Uuid) -> Result<Vec<SavedRunInfo>, RunFolderFault> {
         let unreadable = |error: std::io::Error| RunFolderFault::unreadable(directory, &error);
-        match fs::metadata(directory) {
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Err(RunFolderFault::Missing(directory.to_path_buf()));
-            }
-            Err(error) => return Err(unreadable(error)),
-            Ok(_) => {}
-        }
+        let entries = RunFolderFault::read(directory)?;
         let mut runs = Vec::new();
         let mut close_order = BTreeMap::new();
         let mut copy_numbers = BTreeMap::new();
         let mut changed_elsewhere = BTreeSet::new();
-        for file in fs::read_dir(directory).map_err(unreadable)? {
+        for file in entries {
             let path = file.map_err(unreadable)?.path();
             if path.extension().is_some_and(|e| e == "json") {
                 let modified = crate::hermetic::file_time(&path);
@@ -4917,7 +4933,7 @@ impl Run {
             }
         }
         // The run closed last owns Resume, including recovery copies. Q-o: the list's heading
-        // says this order (`unfinished_order_words`); no row carries an order word.
+        // says the order (`Arranged::in_progress_order`); no row carries an order word.
         runs.sort_by(|a, b| {
             close_order
                 .get(&b.path)
@@ -5055,6 +5071,18 @@ pub(crate) enum RunFolderFault {
 }
 
 impl RunFolderFault {
+    /// The one read of a run folder's files: a folder that is not there is `Missing`, any
+    /// other failure `Unreadable`. `Run::list` and `find_run` both read through it.
+    fn read(folder: &Path) -> Result<fs::ReadDir, Self> {
+        match fs::metadata(folder) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                Err(Self::Missing(folder.to_path_buf()))
+            }
+            Err(error) => Err(Self::unreadable(folder, &error)),
+            Ok(_) => fs::read_dir(folder).map_err(|error| Self::unreadable(folder, &error)),
+        }
+    }
+
     fn unreadable(folder: &Path, error: &std::io::Error) -> Self {
         let cause = match error.kind() {
             std::io::ErrorKind::PermissionDenied => "Splat has no permission to open it",
@@ -5092,6 +5120,15 @@ impl RunFolderFault {
         }
     }
 
+    /// The tone of `message` where a page paints it as a message: the tone of `severity`.
+    pub(crate) fn tone(&self) -> crate::design::Tone {
+        match self.severity() {
+            crate::design::outcome::Severity::NeedsFixing => crate::design::Tone::Warning,
+            crate::design::outcome::Severity::CannotRead
+            | crate::design::outcome::Severity::NotSaved => crate::design::Tone::Error,
+        }
+    }
+
     /// What In progress (`ended` false) or History (`ended` true) says in place of its rows.
     pub(crate) fn list_words(&self, ended: bool) -> &'static str {
         match (self, ended) {
@@ -5115,14 +5152,6 @@ impl RunFolderFault {
             }
         }
     }
-}
-
-/// Q-o: the order of a list of unfinished runs, in the words its heading says
-/// (`IN PROGRESS 2 · last closed first`). `Run::list` puts the run closed last first. One row
-/// has no order, so it gets no words. This is the only place that words the order: no row's
-/// label carries an order word.
-pub(crate) fn unfinished_order_words(count: usize) -> Option<&'static str> {
-    (count >= 2).then_some("last closed first")
 }
 
 /// One saved run, as the Encounters page lists it.
@@ -7228,8 +7257,9 @@ mod tests {
             [bytes.as_slice(), b"\n"].concat()
         );
         // FM8 (review of PR 326), Q-o (round 30 G181): a run opened and not closed (B) does not
-        // take first place from A, which was closed last. The heading says that order
-        // (`unfinished_order_words`); no row's label carries an order word.
+        // take first place in the list on disk from A, which was closed last. The heading says
+        // the order of the rows as the page arranges them (`Arranged::in_progress_order`); no
+        // row's label carries an order word.
         {
             let _opened = Run::open(&original, campaign).unwrap();
             let rows = Run::list(dir.path(), campaign).unwrap();
@@ -7240,11 +7270,6 @@ mod tests {
                 "Q-o: no row carries an order word: {:?}",
                 rows.iter().map(|row| &row.label).collect::<Vec<_>>()
             );
-            assert_eq!(
-                unfinished_order_words(rows.len()),
-                Some("last closed first")
-            );
-            assert_eq!(unfinished_order_words(1), None, "one row has no order");
         }
         let mut old = Run::open(&original, campaign).unwrap();
         assert!(old.close_run());

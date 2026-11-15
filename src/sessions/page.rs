@@ -618,7 +618,13 @@ pub struct Sessions {
     /// The note's plan as rows, built when the note, the content or the encounters change.
     plan_model: plan::PlanModelCache,
     /// The fight behind the open event, read once.
-    fight: Option<(Uuid, Result<FightSummary, String>)>,
+    /// The open played fight's summary, kept with the run's file as last found (or why not):
+    /// a different answer from the folder reads it again (R41, round 30 review F2).
+    fight: Option<(
+        Uuid,
+        Option<Result<PathBuf, crate::encounter_run::FindRunFault>>,
+        Result<FightSummary, plan::FightFault>,
+    )>,
     /// What the session before the selected one left, read once for each selection.
     last_time: Option<(Uuid, Option<LastTime>)>,
     /// The results of carry-over acts, by the session each changed.

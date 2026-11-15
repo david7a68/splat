@@ -209,11 +209,11 @@ fn heading(ui: &mut egui::Ui, word: &str, count: usize) {
     design::group_heading(ui, word, count);
 }
 
-/// Q-o: the In progress heading says the list's order after its count, in the count's muted
-/// form, from `unfinished_order_words` (only with two or more runs).
-fn in_progress_heading(ui: &mut egui::Ui, count: usize) {
-    let mut job = design::group_heading_text(ui, "IN PROGRESS", count);
-    if let Some(order) = crate::encounter_run::unfinished_order_words(count)
+/// Q-o: the In progress heading says the rows' order after its count, in the count's muted
+/// form, from `Arranged::in_progress_order` (the rows as arranged, the open run first).
+fn in_progress_heading(ui: &mut egui::Ui, page: &history::Arranged<'_>) {
+    let mut job = design::group_heading_text(ui, "IN PROGRESS", page.in_progress.len());
+    if let Some(order) = page.in_progress_order()
         && let Some(format) = job.sections.last().map(|section| section.format.clone())
     {
         job.append(&format!(" · {order}"), 0.0, format);
@@ -579,7 +579,7 @@ pub(super) fn in_progress_list(
     action: &mut Option<ListAction>,
 ) {
     let (blocked, loading) = availability;
-    in_progress_heading(ui, page.in_progress.len());
+    in_progress_heading(ui, page);
     // AB1, R41: while the run list cannot be read, the list says why in the fault's words
     // (`cannot find` against `cannot read`); the footer names the folder and offers Choose folder.
     if let Some(fault) = page.runs_unread {

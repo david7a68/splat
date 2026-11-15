@@ -669,6 +669,14 @@ fn plan_row_with(
     design::register_row(ui, row.response.rect);
 }
 
+/// Why a played fight's summary cannot show: its run folder's cause (R41, in Encounters' words
+/// and tone), or another cause in words.
+#[derive(Debug)]
+pub(crate) enum FightFault {
+    Folder(crate::encounter_run::RunFolderFault),
+    Other(String),
+}
+
 /// A paused run needs its state here; the whole saved-run record stays in Encounters.
 fn plan_saved_status(saved: &crate::encounter_run::SavedRunInfo) -> String {
     crate::encounters::run_state_word(saved, true)
@@ -4998,21 +5006,47 @@ impl Sessions {
         rewards: Option<bool>,
     ) -> bool {
         let mut add_rewards = false;
-        let path = plan.run_directory.as_ref().and_then(|directory| {
-            crate::encounter_run::find_run(directory, self.campaign.as_ref()?.id, run).ok()
-        });
-        if self.fight.as_ref().map(|(id, _)| *id) != Some(run) {
-            let result = match (&path, &self.campaign) {
-                (Some(path), Some(campaign)) => fight_summary(path, campaign.id),
-                _ => Err("The run folder is not available.".to_owned()),
+        // R41 (round 30 review F2): the run's file as the folder says now, with the folder's
+        // cause typed. The kept summary belongs to this run AND this answer: when the answer
+        // changes (the folder comes back, goes, or the file moves), the summary is read again.
+        let found = match (&plan.run_directory, &self.campaign) {
+            (Some(directory), Some(campaign)) => Some(crate::encounter_run::find_run_typed(
+                directory,
+                campaign.id,
+                run,
+            )),
+            _ => None,
+        };
+        if self
+            .fight
+            .as_ref()
+            .is_none_or(|(id, kept, _)| *id != run || *kept != found)
+        {
+            let result = match (&found, &self.campaign) {
+                (Some(Ok(path)), Some(campaign)) => {
+                    fight_summary(path, campaign.id).map_err(FightFault::Other)
+                }
+                (Some(Err(crate::encounter_run::FindRunFault::Folder(folder))), _) => {
+                    Err(FightFault::Folder(folder.clone()))
+                }
+                (Some(Err(crate::encounter_run::FindRunFault::File(words))), _) => {
+                    Err(FightFault::Other(words.clone()))
+                }
+                _ => Err(FightFault::Other(
+                    "The run folder is not available.".to_owned(),
+                )),
             };
-            self.fight = Some((run, result));
+            self.fight = Some((run, found, result));
         }
-        let Some((_, result)) = &self.fight else {
+        let Some((_, _, result)) = &self.fight else {
             return false;
         };
         match result {
-            Err(error) => {
+            // R41: the folder's cause in Encounters' words and tone.
+            Err(FightFault::Folder(folder)) => {
+                design::message(ui, folder.tone(), &folder.message());
+            }
+            Err(FightFault::Other(error)) => {
                 design::message(
                     ui,
                     Tone::Info,
