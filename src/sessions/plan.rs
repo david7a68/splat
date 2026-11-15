@@ -3169,13 +3169,11 @@ impl Sessions {
             let mut undo = planned.undo.clone();
             let result = if let Some(draft) = draft {
                 // A draft that waits for a move or a choice refuses through `undo` itself. R45:
-                // in the selected draft the Undo is done once the draft holds the reversal; a
-                // save that then fails is the note's own fault, which its warning says.
+                // when the draft holds the reversal and only its save failed, the note no longer
+                // holds the line, so the refusal ends at once (`follow_plan_line`, below); the
+                // failed save is the note's own fault, which its warning says.
                 undo.follow_save(draft);
-                match undo.undo(draft) {
-                    Err(ActFault::NotSaved(..)) => Ok(()),
-                    result => result,
-                }
+                undo.undo(draft)
             } else {
                 // R45: only the exact file the act recorded (its path, its session's id and the
                 // words the act left), through the note's checked path.
