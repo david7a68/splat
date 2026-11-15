@@ -2308,8 +2308,7 @@ impl Lookup {
         needed <= ui.available_width()
     }
 
-    /// The open action, locked while a Library draft is unsaved. `line_start` when it starts a
-    /// line of its own. Returns whether it was pressed.
+    /// The open action, locked while a Library draft is unsaved. Returns whether it was pressed.
     fn open_action(&self, ui: &mut egui::Ui, own_line: bool) -> bool {
         let Some(words) = self.open_action_words() else {
             return false;
@@ -2319,11 +2318,17 @@ impl Lookup {
             self.library_draft
                 .then_some("Save or discard the Library draft first."),
             |ui| {
-                let action = Self::open_action_of(words);
+                // On a line of its own the action has no icon, as `Show N results` has: the
+                // panel's margin is narrower than an icon's hang, so its words start at the
+                // text edge (N4).
                 if own_line {
-                    action.line_start().show(ui).clicked()
+                    Action::quiet(words)
+                        .density(Density::Read)
+                        .line_start()
+                        .show(ui)
+                        .clicked()
                 } else {
-                    action.show(ui).clicked()
+                    Self::open_action_of(words).show(ui).clicked()
                 }
             },
         )
