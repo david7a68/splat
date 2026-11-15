@@ -660,10 +660,10 @@ impl TransferFault {
     }
 }
 
-/// A test's failing transfers: the first `n` succeed, then each fails with this system error
-/// code before anything moves.
 #[cfg(test)]
 thread_local! {
+    /// A test's failing transfers: the first `n` succeed, then each fails with this system
+    /// error code before anything moves.
     pub(crate) static FAILING_TRANSFERS: std::cell::Cell<Option<(u32, i32)>> =
         const { std::cell::Cell::new(None) };
 }
@@ -760,8 +760,8 @@ pub fn create_note(folder: &Path, new: &NewNote<'_>) -> Result<Note, String> {
     Ok(note)
 }
 
-/// A new file, never replacing one, with the system error kept, so a note's save can say what happened in plain
-/// words (`not_saved`).
+/// A new file, never replacing one, with the system error kept, so the caller can say what
+/// happened in plain words (`not_created`).
 fn write_new_io(path: &Path, text: &str) -> std::io::Result<()> {
     #[cfg(test)]
     if let Some(code) = FAILING_WRITES.with(std::cell::Cell::get) {
