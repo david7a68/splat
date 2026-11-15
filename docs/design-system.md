@@ -343,9 +343,14 @@ Several safe choices after a message share one line when they fit. Put a destruc
 after an `L` gap, or on its own line below after an `M` gap.
 
 Library, Lookup and encounter search rank equal names in this order: campaign entries, book and package
-entries, then character sheet copies. A creature search (the encounter editor, the group editor and Arrivals) has
-one order, `matching::creature_tier`: the exact name, then names that start with the search, then names that hold it
-anywhere, in the list's order (`wolf`: Wolf, then Werewolf before Winter Wolf). Creature results keep names close to stats with an `S` gap between
+entries, then character sheet copies. The creature searches (Lookup, World's creature pickers, the encounter
+editor, the group editor and Arrivals; not yet Library's entry search) rank a creature's name in one order, which one
+function owns
+(`matching::Typed::creature`; Arrivals' `matching::creature_tier` is its first three tiers): the exact name, then
+names that start with the search, then names that hold it anywhere, in the list's order (`wolf`: Wolf, then Werewolf
+before Winter Wolf), then the typed words in any order, then a typo. In Lookup's mixed results other kinds keep their
+word, section and note-text tiers (a whole word before a word that only holds the search), and results of one tier, of
+any kind, sort by origin and then by name. Creature results keep names close to stats with an `S` gap between
 results. The CR column fits `CR 1/8` plus an `M` gap. Paths shorten before file actions wrap; hover keeps the
 full path.
 

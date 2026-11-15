@@ -7145,15 +7145,16 @@ impl Encounters {
                     .facets
                     .as_ref()
                     .is_some_and(|f| parsed.words_in(&c.name, f));
-                Some((crate::matching::with_other(typed.name(&c.lower), facts)?, c))
+                // FI5, M3: the one creature order, as Lookup and Arrivals rank its names.
+                let name = typed.creature(&c.lower, crate::matching::words(&c.lower));
+                Some((crate::matching::with_other(name, facts)?, c))
             })
             .collect();
         // The plain name first, so "wolf" finds Wolf before Dire Wolf. A fact match comes
         // after every name match as typed, and a typo in the name comes last. The sort is
         // stable, so the list's order stays inside each rank.
         if !parsed.words.is_empty() {
-            // FI5: the one creature order, as Arrivals sorts its names.
-            ranked.sort_by_key(|&(rank, c)| (rank.creature(), c.origin));
+            ranked.sort_by_key(|&(rank, c)| (rank, c.origin));
         }
         let as_typed = ranked.iter().take_while(|(rank, _)| !rank.typo).count();
         let matches: Vec<&Creature> = ranked.into_iter().map(|(_, c)| c).collect();
