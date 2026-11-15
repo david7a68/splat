@@ -21233,7 +21233,11 @@ pub mod encounter_owned_groups {
         // painted beside it, once, while the group blocks Save.
         d.click("Discard");
         d.expect(&format!("Group name: {GROUP_GOBLINS}"));
-        d.type_into("Read-aloud and notes", " The fire is out.");
+        // The name field is in the head, always in view: a change Save must write.
+        d.type_into(&format!("Encounter name: {SHRINE}"), " ");
+        d.press_ctrl(Key::A);
+        d.type_text(&format!("{SHRINE} at night"));
+        d.expect(&format!("Encounter name: {SHRINE} at night"));
         let folder = file.parent().unwrap().parent().unwrap().join("Encounters");
         let open = std::fs::metadata(&folder).unwrap().permissions();
         let mut closed = open.clone();
