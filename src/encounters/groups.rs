@@ -302,6 +302,30 @@ mod refusal {
 }
 pub(super) use refusal::Refusal;
 
+/// Why a member's creature does not resolve, with the words its fault says: a file that is there
+/// and cannot be read is unreadable, an error; else the creature is not in this campaign's
+/// packages, a warning (R41). The roster's classification (`super::creature_unreadable`), read by
+/// Save's check, the editor's member row, the list and Arrivals.
+fn unresolved_member(catalogue: &Catalogue, reference: &EntryRef) -> (FaultKind, &'static str) {
+    if super::creature_unreadable(catalogue, reference) {
+        (FaultKind::Unreadable, "its file cannot be read")
+    } else {
+        (FaultKind::NotInPackages, "not in this campaign’s packages")
+    }
+}
+
+/// The `EntryRef` of a member's stored reference, for the catalogue's questions about it.
+fn member_ref(reference: &splat::content::Reference) -> EntryRef {
+    match reference {
+        splat::content::Reference::Id(id) => EntryRef::id(*id),
+        splat::content::Reference::Key(key) => EntryRef {
+            id: None,
+            key: Some(key.clone()),
+            link: None,
+        },
+    }
+}
+
 /// Save's refusal of a group whose encounter is gone: a missing thing, so a warning (R41). The
 /// one value that both the check and the message under Belongs to read.
 fn gone_encounter() -> Refusal {
@@ -839,10 +863,8 @@ impl GroupDraft {
             )));
         }
         let id = resolved_id.map_err(|_| {
-            in_place(
-                fault("not in this campaign’s packages"),
-                FaultKind::NotInPackages,
-            )
+            let (kind, cause) = unresolved_member(&snapshot.catalogue, &member.creature);
+            in_place(fault(cause), kind)
         })?;
         let creature = snapshot
             .creatures
@@ -1193,14 +1215,10 @@ fn resolve_group(
             let name = missing_member_name(member.overrides.name.as_deref(), link);
             // The base is the name the note links, when it gives one.
             let base = missing_member_name(None, link);
+            let (kind, cause) = unresolved_member(catalogue, &member_ref(&member.creature));
             warnings.push(MemberFault::new(
-                FaultKind::NotInPackages,
-                member_fault(
-                    &name,
-                    link.is_some().then_some(base.as_str()),
-                    line,
-                    "not in this campaign’s packages",
-                ),
+                kind,
+                member_fault(&name, link.is_some().then_some(base.as_str()), line, cause),
             ));
             unavailable_members.push((index, member.count, name.to_owned()));
             unavailable = unavailable.saturating_add(member.count);
@@ -1264,7 +1282,9 @@ fn resolve_group(
             &member.name
         };
         warnings.push(MemberFault::new(
-            FaultKind::CannotJoin,
+            // R41 (lead ruling, s30 B11): a member row that cannot be read is unreadable data,
+            // an error in the list, Arrivals and the editor alike.
+            FaultKind::Unreadable,
             // The row, its line and the cause, as a roster row says them; the help stays in the
             // editor. A flag without its parts (read back from a saved run) says its own
             // sentence, which already starts with its line.
@@ -3767,16 +3787,18 @@ fn members(
                     .and_then(Value::as_str)
                     .map(str::trim)
                     .filter(|changed| !changed.is_empty());
+                // R41: the kind Save's check and the list give this member, its tone and words.
+                let (kind, cause) = unresolved_member(&snapshot.catalogue, &member.creature);
                 let words = member_fault(
                     changed.unwrap_or(&name),
                     member.creature.link.is_some().then_some(name.as_str()),
                     line,
-                    "not in this campaign’s packages",
+                    cause,
                 );
                 // The actions start under the message's words: the words end there.
                 let mut words_end = None;
                 let repair = ui.scope(|ui| {
-                    design::message_with_actions(ui, Tone::Warning, &words, |ui| {
+                    design::message_with_actions(ui, kind.tone(), &words, |ui| {
                         words_end = Some(ui.min_rect().top());
                         design::help(ui, MISSING_MEMBER_HELP);
                         packages_repair(ui)

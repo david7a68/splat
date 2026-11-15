@@ -20522,6 +20522,43 @@ pub mod encounter_owned_groups {
         });
         d.observe("iter-29-BC5-G122-off-screen", once, detail);
         d.observe("iter-29-BC5-G122-member-off-screen", member, member_detail);
+        // s30 B11 F3 (R41, lead ruling): a member whose creature file is there and cannot be
+        // read is unreadable, an error, as the encounter roster says it; a deleted file stays a
+        // warning (above). The member row and the save row's `Invalid` take the error.
+        let unread = d.aside(|d| {
+            d.type_into(&format!("Group name: {GROUP_ORPHAN}"), " 2");
+            d.click("Belongs to: Deleted encounter");
+            d.click("Any encounter");
+            let wolf = d
+                .root
+                .join("modules/ashen-marches/Creatures/Cinder Wolf.md");
+            let text = std::fs::read_to_string(&wolf).unwrap();
+            let broken = text.replace("splat_name: Cinder Wolf", "splat_name: [Cinder Wolf");
+            assert_ne!(broken, text);
+            std::fs::write(&wolf, broken).unwrap();
+            d.focus_window(false);
+            d.focus_window(true);
+            d.wait_for_text("Its file cannot be read.");
+            let tones = (
+                status_tones(d, "Invalid"),
+                tones_where(d, |words| words.contains("Its file cannot be read.")),
+                tones_where(d, |words| words.contains("Not in this campaign’s packages")),
+            );
+            std::fs::write(&wolf, text).unwrap();
+            d.focus_window(false);
+            d.focus_window(true);
+            d.click("Discard");
+            d.expect("Deleted encounter");
+            tones
+        });
+        d.observe(
+            "s30-B11-F3-unreadable-member",
+            unread.0 == ["error"] && unread.1 == ["error"] && unread.2.is_empty(),
+            format!(
+                "An unreadable creature file: Invalid {:?}, the member row {:?}, a missing-creature line {:?}",
+                unread.0, unread.1, unread.2
+            ),
+        );
         let inset = notes_inset(
             d,
             &format!("Group notes for {GROUP_ORPHAN}"),

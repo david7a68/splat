@@ -2054,6 +2054,17 @@ fn missing_creature_tone(unreadable: Option<&crate::content_workspace::Unreadabl
     }
 }
 
+/// R41 (lead ruling, s30 B11): whether a creature reference that does not resolve names a file
+/// that is there and cannot be read (unreadable, an error), as against a creature that is gone (a
+/// warning). The roster's one classification (`missing_creature_tone`), which a group's members
+/// share.
+pub(super) fn creature_unreadable(
+    catalogue: &crate::content_workspace::Catalogue,
+    reference: &crate::content_workspace::EntryRef,
+) -> bool {
+    missing_creature_tone(catalogue.unreadable_ref(reference)) == Tone::Error
+}
+
 /// The icon and colour of that tone inside the row's muted words, as `design::message` draws it.
 fn missing_creature_mark(
     unreadable: Option<&crate::content_workspace::UnreadableNote>,
