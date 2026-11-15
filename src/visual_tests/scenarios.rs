@@ -11566,7 +11566,9 @@ pub mod signed_in {
         d.observe(
             "iter-30-B6-G138-first-open",
             opened,
-            format!("At the first open, `Will create …/{REMOTE_NAME}` and Cancel whole and in view"),
+            format!(
+                "At the first open, `Will create …/{REMOTE_NAME}` and Cancel whole and in view"
+            ),
         );
         // Round 23 AM2/FM7: quiet Cancel starts the form's last row at the labels' text edge.
         let (add, labels) = d.at_size(DEFAULT, |d| {
