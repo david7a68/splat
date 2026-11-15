@@ -6880,6 +6880,7 @@ pub mod run_lookup {
         d.begin_task();
         look_up(d, &OTHER_NOTE.to_lowercase());
         d.state("lookup-with-draft-open", Sizes::All);
+        lookup_open_action_painted(d, "s30-SK8-open-words", &[SMALL, DEFAULT, LARGE]);
         d.goal("try a lookup with a draft open");
         d.press(Key::Escape);
         let kept = d
@@ -22886,6 +22887,7 @@ pub mod session_plan {
                 );
             }
             if lookup {
+                lookup_open_action_painted(d, "s30-FM4-open-words", &[SMALL]);
                 d.state("rewards-offered-beside-lookup", Sizes::Small);
                 d.click(NAV_LOOKUP);
             }
@@ -23676,6 +23678,30 @@ pub mod session_plan {
             d.visible_text("Hobb the miller says") && d.in_view(NEXT_TURN),
             "Lookup finds last session's note, and the run stays in view",
         );
+        // Round 30 FM13: a found note is prose in the Reader's prose role, as a rule in the
+        // same panel is (`ProseCompact` at Lookup's width), never the stat block's 13 px.
+        for size in [SMALL, DEFAULT, LARGE] {
+            let painted = d.at_size(size, |d| {
+                let panel = d.place_of(LOOKUP_SPLITTER)?;
+                let lookup = egui::Rect::from_min_max(
+                    egui::pos2(panel.right(), f32::NEG_INFINITY),
+                    egui::pos2(f32::INFINITY, f32::INFINITY),
+                );
+                d.painted_size(lookup, "Hobb the miller says")
+            });
+            d.observe(
+                "s30-FM13-found-note-prose",
+                painted.is_some_and(|painted| {
+                    [
+                        crate::design::Type::ProseCompact,
+                        crate::design::Type::Prose,
+                    ]
+                    .iter()
+                    .any(|role| role.size() == painted)
+                }),
+                format!("At {size:?}, the found note's words are {painted:?} px"),
+            );
+        }
         // Reading a result closes the list. `N results`, which opens it again, starts a line at
         // the search field's edge.
         let first = lookup_results(d).first().map(|row| row.name.clone());
@@ -26527,6 +26553,30 @@ fn lookup_row_text_left(d: &Driver<'_>) -> Option<f32> {
 }
 
 const LOOKUP_SPLITTER: &str = "Resize Lookup column";
+
+/// Round 30 FM4, SK8: Lookup's open action paints its words, `Open in Library` or `Open in
+/// World`, inside its own target at each size, never its icon alone.
+fn lookup_open_action_painted(d: &mut Driver<'_>, id: &str, sizes: &[(f32, f32)]) {
+    for &size in sizes {
+        let (painted, detail) = d.at_size(size, |d| {
+            let found = ["Open in Library", "Open in World"]
+                .into_iter()
+                .find_map(|words| d.place_of(words).map(|rect| (words, rect)));
+            match found {
+                Some((words, rect)) => (
+                    d.painted_size(rect, words).is_some(),
+                    format!("{words} at {rect:?}"),
+                ),
+                None => (false, "no open action".to_owned()),
+            }
+        });
+        d.observe(
+            id,
+            painted,
+            format!("At {size:?}, Lookup's open action paints its words: {detail}"),
+        );
+    }
+}
 
 /// How a link with an icon paints `<icon> <words>`: whether the icon is underlined, whether the
 /// words are, and the icon's colour. An underline counts whether the text paints it or the link

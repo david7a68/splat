@@ -616,7 +616,7 @@ such line. An action that shows hidden items starts with a verb; a bare count re
 label. Its accessible name stays `Show the results`. `Show all N` is quiet and lists every match in place,
 in Lookup and in Arrivals: a scroll list at most eight rows tall that follows Tab and the arrow keys. New words
 return to five. Lookup's `Show all` line is as tall as a row, so six matches show as six rows, with no `Show all`. Clear sits beside nonempty search only. Back, Open in Library (Open in World for every World note,
-typed or plain; a session note has neither) and the close icon share the title line. Creation actions follow results with the proposed name, only without an exact
+typed or plain; a session note has neither) and the close icon share the title line. The open action always shows its icon and its words, never the icon alone: when the title line's declared widths (the title, Back with its key whether or not Back shows, the action and Close) do not fit, it stands on a line of its own under the search field, from the text edge (`line_start`). A found note's words are prose in the Reader's prose role (`ProseCompact` in the panel), as a rule's are. Creation actions follow results with the proposed name, only without an exact
 match. Generate NPC appears only for empty search. When no creation action shows, their row takes no room: the rule
 above the entry follows the results or `Show N results` at the normal gap. While Lookup holds an unsaved generated
 NPC, its card is the view until an entry or a found note opens (a result, a link, typed words, `Back`). That view then
@@ -1028,7 +1028,7 @@ warning icon, list warning and count in the header. A Part of target that is not
 (`Group not found`); the header counts its note once, and the count's menu opens it. A place link that
 matches more than one note also needs fixing: its list row says `Place has 2 matches`, and the header
 count and its menu include the note until `Always use this one` picks one. A note whose file name is not its name
-(`The file is Mara Vell.md, but the name is Rook Ambry.`) says `File: Mara Vell.md` on its list row, and the header
+(`The file is Mara Vell.md, but the name is Rook Ambry.`) says `File name differs: Mara Vell.md` on its list row (the fault first, then the file; the reader's warning offers the two renames), and the header
 count and its menu include it. A note whose `Place` chain leads back to it is in a place loop: each note in the
 loop says `Place loop` on its list row, the header count and its menu include it, and its reader says
 `Loop One is in Loop Two, and Loop Two is in Loop One. Change one of them.` A row with more than one link
