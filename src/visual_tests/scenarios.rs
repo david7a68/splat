@@ -22327,7 +22327,7 @@ pub mod session_plan_groups {
             .filter(|(_, member)| !*member)
             .map(|(at, _)| *at)
             .next_back();
-        let example_words = example.map(|line| format!("Line {line}: this link names no entry."));
+        let example_words = example.map(|line| format!("Line {line}: This link names no entry."));
         let each_named = |d: &Driver<'_>| {
             example_words
                 .as_deref()
@@ -22340,7 +22340,7 @@ pub mod session_plan_groups {
             "iter-25-L-FH6",
             each_named(d)
                 && row.is_some_and(|row| {
-                    !d.has_containing(&format!("Line {row}: this link names no entry."))
+                    !d.has_containing(&format!("Line {row}: This link names no entry."))
                 }),
             format!("Both broken links are named, each once: example {example_words:?}, member {named:?}"),
         );

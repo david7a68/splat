@@ -3856,7 +3856,7 @@ fn broken_words(warnings: &[String]) -> String {
 }
 
 /// Edit Markdown's warning for each link to no entry in a draft, as the row's `N broken links`
-/// counts them (`Line 17: this link names no entry.`), outside the front matter and code fences.
+/// counts them (`Line 17: This link names no entry.`), outside the front matter and code fences.
 /// `skip` is the line the link Campaign sent the DM to fix, which has its own words. The whole
 /// preparation (the scan and the words) goes through here, and the test count is kept here.
 fn broken_link_warnings(
@@ -3889,7 +3889,7 @@ fn broken_link_warnings(
         }
         for target in crate::world::links_in(line) {
             if index.link_is_missing(&target, entry.id) && skip != Some(at + 1) {
-                lines.push(format!("Line {}: this link names no entry.", at + 1));
+                lines.push(format!("Line {}: This link names no entry.", at + 1));
             }
         }
     }
@@ -9937,13 +9937,10 @@ mod tests {
                 .toggled(),
             Some(egui::accesskit::Toggled::False)
         );
-        assert_eq!(
-            harness
-                .get_by_label("All entries   1")
-                .accesskit_node()
-                .toggled(),
-            Some(egui::accesskit::Toggled::True)
-        );
+        // Round 30 AI4: back from About, the list shows every entry and All entries, which
+        // would only repeat the header's count, hides again (it shows with a search or About).
+        assert!(harness.state().section == Section::All);
+        assert!(harness.query_by_label("All entries   1").is_none());
     }
 
     #[test]
