@@ -1075,7 +1075,13 @@ impl SheetNow {
             let slots: Vec<_> = self
                 .slots
                 .iter()
-                .map(|slot| format!("L{} {}/{}", slot.level, slot.left, slot.max))
+                .map(|slot| {
+                    format!(
+                        "L{} {}",
+                        slot.level,
+                        crate::combat_sync::fraction(slot.left, slot.max)
+                    )
+                })
                 .collect();
             parts.push(format!("Slots {}", slots.join(", ")));
         }
@@ -1101,7 +1107,7 @@ pub fn party_line(sheets: &[&EntitySnapshot], connected: bool) -> Option<String>
         (left + slot.left, max + slot.max)
     });
     if max > 0 {
-        parts.push(format!("Slots {left}/{max}"));
+        parts.push(format!("Slots {}", crate::combat_sync::fraction(left, max)));
     }
     parts.push(freshness(oldest, connected).word);
     Some(parts.join(" · "))
