@@ -2489,11 +2489,15 @@ readable, and offer Add for transcript markers rather than placing them automati
 
 A sheet’s labelled fact has one form, `Label: value`. Multiple values follow the colon, joined by
 ` · ` (`Coins: 12 cp · 40 sp`). The shared part `design::fact::line` draws these lines (ruling M5); callers supply no
-separator. Where a line wraps, each middle dot moves to the next line with the value after it, so no line ends at
-a dot; the accessible name has plain spaces. A stat tile whose label holds its own number takes the same form,
-`Str: 8` over `+1` (`design::fact::tile_label`), and a tile whose value rolls is `design::fact::roll_tile`, with the same
-label line as `stat_tile`. Party's local copies (`sheet_label`, `roll_metric`, the ability label) are counted in
-`design::results::STAGED` until they move.
+separator. An empty value is left out with its dot (`Resistance: Fire`; with no value left, `Resistance: —`). Each
+value after the first is one unit with its dot (`· Elvish`), laid out whole: a line breaks only between units, and a
+unit or a word wider than a line breaks inside itself with its dot kept on a letter, so no line ends at a dot, in
+any script. The fact is a label: the DM can select and copy it, and a screen reader can focus it; its accessible
+value is the plain words on one line. A stat tile whose label holds its own number takes the same form, `Str: 8`
+over `+1` (`design::fact::tile_label`), and a tile whose value rolls is `design::fact::roll_tile`, with the same
+label line as `stat_tile`. The source lint's `fact-owner` rule finds a local copy by what it does, under any name:
+a `{…}: {…}` format of values joined by the dot, a tile label of placeholders and spaces only, a rolling tile by
+hand. Party's three and two others are named exceptions in the allowlist until they move.
 
 Overview uses one group-heading style, with `L` above sheet groups. Saving throws and skills start at tile
 edges, in two or three columns; skills sort A to Z and fill columns top to bottom. Skills use muted Small words `Proficient`, `Expertise` and `Half` after the skill name. Paired cells share the
