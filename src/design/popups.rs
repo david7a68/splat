@@ -482,7 +482,8 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
         if response.clicked() {
             egui::Popup::toggle_id(ui.ctx(), list);
         }
-        let drawn = egui::Popup::is_id_open(ui.ctx(), list)
+        let requested_open = egui::Popup::is_id_open(ui.ctx(), list);
+        let drawn = requested_open
             .then(|| self.list(ui, response, current, rect, width, (was_open, revealed)))
             .flatten();
         let ListFrame {
@@ -500,7 +501,7 @@ impl<T: PartialEq + Clone> Dropdown<'_, T, HasChoices> {
         let open_now = shown && egui::Popup::is_id_open(ui.ctx(), list);
         // Focus goes back to the control when the list closes with the keyboard on it, or on
         // nothing (Escape, a chosen row).
-        if was_open && !open_now {
+        if (was_open || requested_open) && !open_now {
             let last_rows = ui
                 .ctx()
                 .data(|data| data.get_temp::<Vec<Id>>(rows_id))
