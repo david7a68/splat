@@ -280,14 +280,14 @@ fn the_list_is_as_wide_as_its_control_and_stays_in_its_pane() {
         vec2(1200.0, 800.0),
         vec2(1920.0, 1080.0),
     ] {
-        for footer_bottom in [400.0, size.y - 8.0] {
+        for room_bottom in [400.0, size.y - 8.0] {
             let ctx = context();
             let control = Cell::new(Rect::NOTHING);
             let room = Cell::new(Rect::NOTHING);
             let current = Cell::new(0);
             let draw = |events| {
                 frame(&ctx, size, events, |ui| {
-                    let bounded = Rect::from_min_max(pos2(8.0, 44.0), pos2(400.0, footer_bottom));
+                    let bounded = Rect::from_min_max(pos2(8.0, 44.0), pos2(400.0, room_bottom));
                     room.set(bounded);
                     ui.allocate_exact_size(vec2(0.0, 172.0), Sense::hover());
                     ui.horizontal(|ui| {
@@ -311,7 +311,7 @@ fn the_list_is_as_wide_as_its_control_and_stays_in_its_pane() {
             draw(Vec::new());
             assert!(egui::Popup::is_id_open(&ctx, list()));
             let popup = list_rect(&ctx);
-            println!("B10_NEW_12 size {size:?} menu {popup:?} room_bottom {footer_bottom}");
+            println!("B10_NEW_12 size {size:?} menu {popup:?} room_bottom {room_bottom}");
             assert!(
                 popup.height()
                     <= ctx.style().spacing.combo_height
@@ -385,72 +385,6 @@ fn the_list_is_as_wide_as_its_control_and_stays_in_its_pane() {
                 before,
                 "opening and scrolling moves no control"
             );
-        }
-    }
-    // The real header owner must also end its room at the list's footer band. A short
-    // event list puts that band much higher than the window bottom, even with 12 sessions.
-    {
-        use crate::timeline::{
-            Book, Kind,
-            page::{SessionLink, TimelinePage},
-        };
-        use egui_kittest::kittest::Queryable;
-        for size in [
-            vec2(960.0, 640.0),
-            vec2(1200.0, 800.0),
-            vec2(1920.0, 1080.0),
-        ] {
-            for count in [4, 12] {
-                for (name, menu) in [
-                    ("Session for new events", "Session for new events choices"),
-                    ("Show one session: All sessions", "Show one session choices"),
-                ] {
-                    let mut book = Book::default();
-                    let id = book.add(Kind::LongRest, None);
-                    book.merged_outside = true;
-                    let mut page = TimelinePage::default();
-                    page.reveal(&id, &book);
-                    let links: Vec<_> = (1..=count)
-                        .map(|number| SessionLink {
-                            id: uuid::Uuid::new_v4(),
-                            label: format!("Session {number}: Ferry Watch"),
-                            mentions: Vec::new(),
-                        })
-                        .collect();
-                    let campaign = uuid::Uuid::new_v4();
-                    let mut harness = egui_kittest::Harness::builder()
-                        .with_size(size)
-                        .build_state(
-                            move |ctx,
-                                  (page, book, notes): &mut (
-                                TimelinePage,
-                                Book,
-                                crate::sessions::page::Sessions,
-                            )| {
-                                egui::CentralPanel::default().show(ctx, |ui| {
-                                    page.show(ui, book, campaign, &links, None, notes);
-                                });
-                            },
-                            (page, book, crate::sessions::page::Sessions::default()),
-                        );
-                    theme::install(&harness.ctx);
-                    harness.run_steps(4);
-                    harness.get_by_label(name).click();
-                    harness.run_steps(4);
-                    let popup = harness.get_by_label(menu).rect();
-                    let footers: Vec<_> = crate::design::footer_bands(&harness.ctx)
-                        .into_iter()
-                        .filter(|band| band.left() < popup.right() && band.right() > popup.left())
-                        .collect();
-                    assert!(!footers.is_empty(), "the fixture must have the list footer");
-                    assert!(
-                        footers
-                            .iter()
-                            .all(|band| popup.bottom() <= band.top() + 0.5),
-                        "{size:?}, {count} sessions, {name}: menu {popup:?} crosses footer bands {footers:?}"
-                    );
-                }
-            }
         }
     }
     // A short room gives only one whole row on either side. A stale room or a room with

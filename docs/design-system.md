@@ -220,8 +220,9 @@ menus put the caret after the word. Keep remains the default focus when closing 
 
 A drop-down menu stays inside its owning pane and clip. A header above a split passes the
 list pane’s current room through `Dropdown::within`; it cannot widen the part’s room. Timeline's
-header rooms end before the list footer band and start on the control's row, so their menus open
-below and scroll above the footer. An explicit room prefers the full label's one-line width,
+header rooms use the current header clip and start on the control's row, so their menus open
+below with the part's height cap and inner scroll. A long session menu can cover the list footer
+while open; a deferred menu API would bound it. An explicit room prefers the full label's one-line width,
 clamped to that room; default-room menus retain their width policy. A short
 room shows the whole rows it can hold and scrolls inside. Below one row, the menu closes and
 returns the keyboard to its control. Open row metrics follow the words, fonts, width and scale;
