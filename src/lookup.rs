@@ -1391,21 +1391,36 @@ impl ContentIndex {
         output
     }
 
+    /// Creatures of packages the campaign does not use whose names the lower-case `query` finds
+    /// as typed (no typo), for the encounter search's `Use it`: the best five in the one
+    /// creature order (M3, `Typed::creature`), then by origin, as every creature list ranks
+    /// them. Ranked before the five are taken, so the exact name is never left out.
     pub fn unused_creatures(&self, query: &str) -> Vec<(Uuid, Uuid, String, String)> {
         if query.trim().is_empty() {
             return Vec::new();
         }
-        self.items
+        let typed = Typed::new(query);
+        let mut found: Vec<(Rank, Origin, usize)> = self
+            .creatures
             .iter()
-            .filter(|item| {
-                item.entry.kind == "creature"
-                    && !item.private
-                    && item.lower.contains(query)
+            .filter_map(|&at| {
+                let item = &self.items[at];
+                let unused = !item.private
                     && self
                         .usable
                         .as_ref()
-                        .is_some_and(|usable| !usable.contains(&item.entry.id))
+                        .is_some_and(|usable| !usable.contains(&item.entry.id));
+                let rank = unused
+                    .then(|| item.name_rank(&typed))
+                    .flatten()
+                    .filter(|rank| !rank.typo)?;
+                Some((rank, item.origin(), at))
             })
+            .collect();
+        found.sort_unstable();
+        found
+            .into_iter()
+            .map(|(.., at)| &self.items[at])
             .filter_map(|item| {
                 // Owner IDs come from the loaded package manifest, kept in the index.
                 self.package_owners.get(&item.entry.id).map(|&owner| {
@@ -4615,7 +4630,43 @@ mod tests {
             ("Bad Wolf.md", "# Bad Wolf\n\nA story.\n"),
             ("Werewolf Lore.md", "# Werewolf Lore\n\nSilver.\n"),
         ]);
-        let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+        // A package that the campaign does not use, for `unused_creatures`: five names that hold
+        // `fenstalker` sort before the exact name.
+        let fens = tempfile::tempdir().unwrap();
+        let book = Uuid::new_v4();
+        std::fs::write(
+            fens.path().join("Module.md"),
+            splat::content::formats::fixture(
+                "Module.md",
+                &format!(
+                    "splat_id: {book}\nsplat_kind: package\nsplat_name: Fen Book\nsplat_namespace: fen_book\n"
+                ),
+                "\n# Fen Book\n",
+            )
+            .expect("schema-2 fixture"),
+        )
+        .unwrap();
+        std::fs::create_dir(fens.path().join("Creatures")).unwrap();
+        for name in [
+            "Ancient Fenstalker",
+            "Bog Fenstalker",
+            "Cave Fenstalker",
+            "Dread Fenstalker",
+            "Elder Fenstalker",
+            "Fenstalker",
+        ] {
+            std::fs::write(
+                fens.path().join(format!("Creatures/{name}.md")),
+                creature(name),
+            )
+            .unwrap();
+        }
+        let modules = [Module {
+            id: book,
+            name: "Fen Book".into(),
+            path: fens.path().to_owned(),
+        }];
+        let index = ContentIndex::load(&modules, Some(&campaign)).unwrap();
         let kinds: Vec<(&str, &str)> = index
             .search("wolf")
             .into_iter()
@@ -4655,6 +4706,36 @@ mod tests {
         assert_ne!(
             kinds[1].1, kinds[2].1,
             "the tie is between two kinds: {kinds:?}"
+        );
+        // F1 (review of PR 450): the encounter search's `Use it` offers an unused package's
+        // creatures in the same order, ranked before it takes five, so the exact name is first
+        // also after five names that hold it. The campaign's own Ashwolf is in use, never offered.
+        let unused = |query: &str| -> Vec<String> {
+            index
+                .unused_creatures(query)
+                .into_iter()
+                .map(|(_, _, name, _)| name)
+                .collect()
+        };
+        assert_eq!(
+            unused("fenstalker"),
+            [
+                "Fenstalker",
+                "Ancient Fenstalker",
+                "Bog Fenstalker",
+                "Cave Fenstalker",
+                "Dread Fenstalker",
+            ]
+        );
+        assert_eq!(
+            unused("wolf"),
+            [
+                "Wolf",
+                "Dire Wolf",
+                "Giant Wolf Spider",
+                "Werewolf",
+                "Winter Wolf"
+            ]
         );
     }
     #[test]

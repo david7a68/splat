@@ -4049,10 +4049,11 @@ impl Sessions {
                         note,
                         ui.available_width(),
                     );
-                    let paned =
-                        messages.pane(ui, super::fills(design::pane::FillsReason::Columns), |ui| {
-                            draw(ui, book)
-                        });
+                    let paned = messages.pane(
+                        ui,
+                        super::fills_body(design::pane::FillsReason::Columns),
+                        |ui| draw(ui, book),
+                    );
                     if let Some(press) = paned.pressed {
                         self.session_press(press, book, plan);
                     }
