@@ -684,6 +684,14 @@ mod tests {
         /// Another owner's request in the column, which waits for a target never drawn.
         older: Reveal,
         waiting: bool,
+        /// `Open`'s id, as last drawn.
+        open_id: Option<Id>,
+    }
+
+    impl Page {
+        fn saved_id(&self) -> Id {
+            self.open_id.expect("Open is drawn")
+        }
     }
 
     impl Page {
@@ -706,6 +714,7 @@ mod tests {
                 focus_open: false,
                 older: Reveal::default(),
                 waiting: false,
+                open_id: None,
             }
         }
     }
@@ -741,6 +750,7 @@ mod tests {
     fn content(ui: &mut Ui, page: &mut Page) {
         ui.label("Outer top");
         let open = ui.add_enabled(!page.disabled, egui::Button::new("Open"));
+        page.open_id = Some(open.id);
         let other = ui.button("Other");
         if page.focus_open {
             open.request_focus();
@@ -856,53 +866,78 @@ mod tests {
         );
     }
 
-    /// A real press asks once: a second `Act::clicked` in the pass gives nothing, and a saved
-    /// `Response` gives nothing on a later pass.
+    /// The events of one raw input pass, then that pass.
+    fn pass(h: &mut egui_kittest::Harness<'_, Page>, events: Vec<egui::Event>) {
+        h.input_mut().events.extend(events);
+        h.step();
+    }
+
+    fn button(pos: egui::Pos2, pressed: bool) -> egui::Event {
+        egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        }
+    }
+
+    fn key(key: egui::Key) -> egui::Event {
+        egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        }
+    }
+
+    fn access_click(id: Id) -> egui::Event {
+        egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+            action: egui::accesskit::Action::Click,
+            target: egui::accesskit::NodeId::from(id.value()),
+            data: None,
+        })
+    }
+
+    /// A real press asks once: a second `Act::clicked` in the pass gives nothing. A saved
+    /// `Response` of a key activation (a copy keeps its click flag) gives nothing on a later
+    /// pass: with a release inside its old rect, or with an accessibility click while the
+    /// control is disabled.
     #[test]
     fn one_press_gives_one_act() {
-        let mut h = harness(quiet());
-        h.get_by_label("Open").click();
+        let mut page = quiet();
+        page.focus_open = true;
+        let mut h = harness(page);
+        pass(&mut h, vec![key(egui::Key::Enter)]);
         h.run_steps(8);
-        assert!(in_view(&h), "the press did not reveal the form");
+        assert!(in_view(&h), "the key did not reveal the form");
         assert!(
             h.state().second.ended().is_none() && !h.state().second.running(),
             "one press gave two acts"
         );
+        h.state_mut().focus_open = false;
         wheel(&mut h, 2000.0);
         h.run_steps(6);
         let away = top(&h, "Target top");
-        h.state_mut().replay = true;
-        h.run_steps(8);
-        assert!(
-            away > HEIGHT && (top(&h, "Target top") - away).abs() < 0.5,
-            "a saved Response asked again: {away} then {}",
-            top(&h, "Target top")
-        );
-        // The saved Response (an accessibility click, whose flag a copy keeps) on a later pass
-        // with a release inside its old rect after a press elsewhere (a drag); then with the
-        // control disabled and clicked again.
         let open = h.get_by_label("Open").rect();
+        let id = h.state().saved.as_ref().expect("a saved Response").id;
         for disabled in [false, true] {
             h.state_mut().disabled = disabled;
             h.step();
-            if disabled {
-                h.get_by_label("Open").click();
-            } else {
-                let outside = egui::pos2(WIDTH - 10.0, HEIGHT - 10.0);
-                for (pos, pressed) in [(outside, true), (open.center(), false)] {
-                    h.event(egui::Event::PointerMoved(pos));
-                    h.event(egui::Event::PointerButton {
-                        pos,
-                        button: egui::PointerButton::Primary,
-                        pressed,
-                        modifiers: egui::Modifiers::NONE,
-                    });
-                }
-            }
             h.state_mut().replay = true;
+            let event = if disabled {
+                access_click(id)
+            } else {
+                button(open.center(), false)
+            };
+            pass(
+                &mut h,
+                vec![egui::Event::PointerMoved(open.center()), event],
+            );
             h.run_steps(8);
             assert!(
                 h.state().reveal.ended() == Some(End::ByTheDm)
+                    && away > HEIGHT
                     && (top(&h, "Target top") - away).abs() < 0.5,
                 "a saved Response made an act (disabled: {disabled}): {:?}, {away} then {}",
                 h.state().reveal.ended(),
@@ -911,66 +946,51 @@ mod tests {
         }
     }
 
-    /// In the act's frame only the input that made it is exempt: a second click, a second
-    /// press in the same rect, or `Space` with the `Enter` that pressed, cancel. Alone, each
-    /// act reveals.
+    /// In the act's pass only the input that made it is exempt: a second accessibility click,
+    /// a second press on the control, or `Space` with the `Enter` that pressed, cancel. Alone,
+    /// each act reveals.
     #[test]
     fn only_the_acts_own_input_is_exempt() {
         for extra in [false, true] {
-            // Two accessibility clicks.
-            let mut h = harness(quiet());
-            h.get_by_label("Open").click();
-            if extra {
-                h.get_by_label("Open").click();
-            }
-            h.run_steps(8);
             let expected = if extra { End::ByTheDm } else { End::Whole };
+            // Accessibility clicks.
+            let mut h = harness(quiet());
+            let id = h.state().saved_id();
+            let mut events = vec![access_click(id)];
+            if extra {
+                events.push(access_click(id));
+            }
+            pass(&mut h, events);
+            h.run_steps(8);
             assert_eq!(
                 h.state().reveal.ended(),
                 Some(expected),
                 "access, extra {extra}"
             );
-            // A pointer press and release on `Open`, then a press again in one pass.
+            // A press and release on `Open`, then a press again.
             let mut h = harness(quiet());
             let at = h.get_by_label("Open").rect().center();
-            h.event(egui::Event::PointerMoved(at));
-            let presses: &[bool] = if extra {
-                &[true, false, true]
-            } else {
-                &[true, false]
-            };
-            for &pressed in presses {
-                h.event(egui::Event::PointerButton {
-                    pos: at,
-                    button: egui::PointerButton::Primary,
-                    pressed,
-                    modifiers: egui::Modifiers::NONE,
-                });
+            pass(&mut h, vec![egui::Event::PointerMoved(at)]);
+            let mut events = vec![button(at, true), button(at, false)];
+            if extra {
+                events.push(button(at, true));
             }
+            pass(&mut h, events);
             h.run_steps(8);
             assert_eq!(
                 h.state().reveal.ended(),
                 Some(expected),
                 "pointer, extra {extra}"
             );
-            // `Enter` with `Open` focused, and `Space` in the same pass.
+            // `Enter` with `Open` focused, and `Space`.
             let mut page = quiet();
             page.focus_open = true;
             let mut h = harness(page);
-            let keys: &[egui::Key] = if extra {
-                &[egui::Key::Enter, egui::Key::Space]
-            } else {
-                &[egui::Key::Enter]
-            };
-            for &key in keys {
-                h.event(egui::Event::Key {
-                    key,
-                    physical_key: None,
-                    pressed: true,
-                    repeat: false,
-                    modifiers: egui::Modifiers::NONE,
-                });
+            let mut events = vec![key(egui::Key::Enter)];
+            if extra {
+                events.push(key(egui::Key::Space));
             }
+            pass(&mut h, events);
             h.run_steps(8);
             assert_eq!(
                 h.state().reveal.ended(),
@@ -980,8 +1000,8 @@ mod tests {
         }
     }
 
-    /// N5: an older owner's request waits in the column; a real act replaces it with typed text
-    /// in the act's own pass: the newer request ends for the text, and nothing moves.
+    /// N5: an older owner's request waits in the column; a real press replaces it, with typed
+    /// text in the same pass: the newer request ends for the text, and nothing moves.
     #[test]
     fn a_replacing_act_sees_its_own_pass_input() {
         let mut h = harness(quiet());
@@ -989,8 +1009,16 @@ mod tests {
         h.step();
         assert!(h.state().older.running(), "the older request does not wait");
         let before = top(&h, "Target top");
-        h.get_by_label("Open").click();
-        h.event(egui::Event::Text("s".into()));
+        let at = h.get_by_label("Open").rect().center();
+        pass(&mut h, vec![egui::Event::PointerMoved(at)]);
+        pass(
+            &mut h,
+            vec![
+                button(at, true),
+                button(at, false),
+                egui::Event::Text("s".into()),
+            ],
+        );
         h.run_steps(8);
         assert_eq!(h.state().older.ended(), Some(End::Replaced));
         assert_eq!(h.state().reveal.ended(), Some(End::ByTheDm));
