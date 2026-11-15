@@ -2257,7 +2257,9 @@ mod tests {
         );
         // A form taller than its view: its top shows and the reveal ends within its bound.
         let mut h = scrolled(120.0);
-        let mut frames = 0;
+        // The open act's frame.
+        h.step();
+        let mut frames = 1;
         while h.state().reveal_running() && frames < 20 {
             h.step();
             frames += 1;
