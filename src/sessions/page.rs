@@ -19,7 +19,6 @@ use crate::{
         },
         results::ByTicket,
     },
-    encounter_run::FightSummary,
     encounters::PlanFight,
     lookup::{Written, WrittenIn},
     markdown_view,
@@ -687,7 +686,9 @@ pub struct Sessions {
     /// The note's plan as rows, built when the note, the content or the encounters change.
     plan_model: plan::PlanModelCache,
     /// The fight behind the open event, read once.
-    fight: Option<(Uuid, Result<FightSummary, String>)>,
+    /// The open played fight's summary, kept with the run's file as last found (or why not):
+    /// a different answer from the folder reads it again (R41, round 30 review F2).
+    fight: Option<plan::KeptFight>,
     /// What the session before the selected one left, read once for each selection.
     last_time: Option<(Uuid, Option<LastTime>)>,
     /// The results of carry-over acts, by the session each changed.
@@ -775,6 +776,9 @@ pub struct Sessions {
     note_scroll_to_top: bool,
     last_check: Option<Instant>,
     last_scan: Option<Instant>,
+    /// Row 123: a count that changes when a listing of the folder (`refresh`) finds other notes
+    /// (an id, a file or a label), so a plan line's owner is checked against the notes only then.
+    pub(super) notes_revision: u64,
     /// The campaign's manifest changed, so what holds a copy of it must reload.
     pub manifest_changed: Option<PathBuf>,
     /// The Sessions page is showing, so a button there need not lead here.
@@ -1770,8 +1774,10 @@ impl Sessions {
             .iter()
             .map(|note| (note.id, note.link()))
             .collect();
-        // Row 123: the note's own events end a plan line's result, on every page.
+        // Row 123: the note's own events end a plan line's result, and its journey's removal
+        // ends a refused Undo's answer, on every page.
         self.follow_plan_line();
+        self.end_plan_answers_of_lost_journeys(book);
         book.poll(ctx);
     }
 
@@ -2510,6 +2516,9 @@ impl Sessions {
         self.end_folder_listing();
         self.folder_moves.disk_changed(|moved| moved.to.is_dir());
         let Some(folder) = &self.folder else {
+            if !self.notes.is_empty() {
+                self.notes_revision += 1;
+            }
             self.notes.clear();
             self.mentions.clear();
             self.templates.clear();
@@ -2530,7 +2539,12 @@ impl Sessions {
                 .map(|note| (note.id, note.path.clone(), note.label()))
                 .collect()
         };
-        self.wants_index_refresh |= place(&notes) != place(&self.notes);
+        let changed = place(&notes) != place(&self.notes);
+        self.wants_index_refresh |= changed;
+        if changed {
+            // Row 123: a plan line's owners are checked again only now.
+            self.notes_revision += 1;
+        }
         self.notes = notes;
         // A new, renamed or removed note can change which titles are shared.
         self.last_time = None;

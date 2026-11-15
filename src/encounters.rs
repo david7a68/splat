@@ -1456,10 +1456,6 @@ pub(super) fn lane_help(ui: &mut egui::Ui, text: &str) {
 
 /// The run folder is known not to be there. A folder that cannot be looked for (a parent
 /// without permission) is not "missing": it cannot be read.
-fn folder_missing(directory: &std::path::Path) -> bool {
-    matches!(directory.try_exists(), Ok(false))
-}
-
 fn grouped(value: u64) -> String {
     design::count(value as usize, "", "").trim().to_owned()
 }
@@ -2437,14 +2433,13 @@ struct Snapshot {
     saved_options: crate::encounter_settings::Options,
     campaign_text: String,
     runs: Vec<crate::encounter_run::SavedRunInfo>,
-    /// AB1: the run list could not be read, and an issue says why. In progress and History then
-    /// say they cannot be read instead of their empty states. It ends when a read succeeds.
-    runs_unread: bool,
+    /// AB1, R41: the run list could not be read, and why. The footer says it in its tone, and
+    /// In progress and History say it instead of their empty states. It ends when a read
+    /// succeeds.
+    runs_unread: Option<crate::encounter_run::RunFolderFault>,
     /// The run folder is not there and nothing names a run, so it may never have been made. The
     /// page turns this into `runs_unread` when it has seen this campaign's folder hold runs.
-    runs_missing: Option<String>,
-    /// The issue `runs_unread` added, so a later read that succeeds takes exactly it away.
-    runs_error: Option<String>,
+    runs_missing: Option<crate::encounter_run::RunFolderFault>,
     groups: Arc<Vec<Arc<crate::encounter_run::RunGroup>>>,
     run_creatures: Arc<Vec<Arc<crate::encounter_run::RunCreature>>>,
     /// The campaign's XP budget table and its party's levels, for each fight's difficulty.
@@ -2675,8 +2670,7 @@ impl Snapshot {
         let directory = options.directory(campaign)?;
         let read = crate::encounter_run::Run::list(&directory, campaign.id);
         // A folder the timeline names runs in is not one that was never made.
-        let missing = read.is_err()
-            && folder_missing(&directory)
+        let missing = matches!(read, Err(crate::encounter_run::RunFolderFault::Missing(_)))
             && !crate::sessions::folder(campaign)
                 .ok()
                 .and_then(|folder| fs::read_to_string(folder.join("Timeline.md")).ok())
@@ -2714,9 +2708,8 @@ impl Snapshot {
             saved_options: options,
             campaign_text: document.text,
             runs: Vec::new(),
-            runs_unread: false,
+            runs_unread: None,
             runs_missing: None,
-            runs_error: None,
             catalogue,
             creatures,
             templates,
@@ -2728,17 +2721,15 @@ impl Snapshot {
     /// AB1: the one classification of a run list read, for the first load, a reload and every
     /// refresh. Runs that read replace the list. A folder known not to be there may never have
     /// been made, so it is `runs_missing` until the page knows it held runs. Any other failure
-    /// (an unreadable folder or parent) is `runs_unread`, with its issue, until a read succeeds.
+    /// (an unreadable folder or parent) is `runs_unread` until a read succeeds. The fault is
+    /// said by the footer and the two lists, never again as a content issue.
     fn take_run_list(
         &mut self,
-        read: Result<Vec<crate::encounter_run::SavedRunInfo>, String>,
+        read: Result<Vec<crate::encounter_run::SavedRunInfo>, crate::encounter_run::RunFolderFault>,
         missing: bool,
     ) {
-        if let Some(old) = self.runs_error.take() {
-            self.issues.retain(|issue| *issue != old);
-        }
         self.runs_missing = None;
-        self.runs_unread = false;
+        self.runs_unread = None;
         match read {
             Ok(runs) => self.runs = runs,
             Err(error) => {
@@ -2746,17 +2737,10 @@ impl Snapshot {
                 if missing {
                     self.runs_missing = Some(error);
                 } else {
-                    self.runs_unread(error);
+                    self.runs_unread = Some(error);
                 }
             }
         }
-    }
-    fn runs_unread(&mut self, error: String) {
-        self.runs_unread = true;
-        if !self.issues.contains(&error) {
-            self.issues.push(error.clone());
-        }
-        self.runs_error = Some(error);
     }
     /// The encounters a group can belong to, in the list's order.
     fn encounter_choices(&self) -> impl Iterator<Item = (Uuid, &str)> {
@@ -2937,8 +2921,9 @@ enum EncounterFault {
     /// A deleted run had changes that never reached D&D Beyond: the result says so, in the
     /// warning tone, and keeps its Undo.
     RunDeletedUnsent(String),
-    /// The campaign's run folder is not there: the DM chooses another.
-    RunFolderMissing(String),
+    /// R41: the campaign's run folder is not there, cannot be read, or is not set: the DM
+    /// chooses another. Its words and tone come from the fault.
+    RunFolder(crate::encounter_run::RunFolderFault),
     /// A copied note's separation, or its Undo, failed: the reason.
     SeparationFailed(String),
     /// A warning of a group's file that no member row states.
@@ -2952,8 +2937,8 @@ impl design::outcome::Fault for EncounterFault {
     fn severity(&self) -> design::outcome::Severity {
         match self {
             Self::Failed(_) => design::outcome::Severity::NotSaved,
+            Self::RunFolder(fault) => fault.severity(),
             Self::RunDeletedUnsent(_)
-            | Self::RunFolderMissing(_)
             | Self::SeparationFailed(_)
             | Self::FileWarning(_)
             | Self::Invalid(_) => design::outcome::Severity::NeedsFixing,
@@ -2969,8 +2954,8 @@ impl design::outcome::Fault for EncounterFault {
                 .unwrap_or(crate::sentence!("The act did not work.")),
             Self::RunDeletedUnsent(words) => design::outcome::Sentence::outside(words.as_str())
                 .unwrap_or(crate::sentence!("The run was deleted.")),
-            Self::RunFolderMissing(words) => design::outcome::Sentence::outside(words.as_str())
-                .unwrap_or(crate::sentence!("The run folder is not there.")),
+            Self::RunFolder(fault) => design::outcome::Sentence::outside(fault.message().as_str())
+                .unwrap_or(crate::sentence!("Splat cannot list the run folder.")),
             Self::SeparationFailed(words) => design::outcome::Sentence::outside(words.as_str())
                 .unwrap_or(crate::sentence!("The note was not changed.")),
             Self::FileWarning(words) => design::outcome::Sentence::outside(words.as_str())
@@ -3403,6 +3388,18 @@ impl Encounters {
     /// first refused change (named `Group <name>: …`, as Save says it) outranks the first missing
     /// part, whose group's origin comes with it. Checked again only when the campaign's read or a
     /// changed group's own revision changes.
+    /// F5 (B3b): the owned-group check's key inputs now, and whether a campaign read is still
+    /// pending: a test holds them fixed and names the input that changed.
+    #[cfg(test)]
+    pub(crate) fn owned_group_inputs(&self) -> Option<(Uuid, usize, u64, bool)> {
+        let (snapshot, draft) = (self.snapshot.as_ref()?, self.draft.as_ref()?);
+        Some((
+            snapshot.revision,
+            draft.groups.len(),
+            groups::revisions_issued(),
+            self.pending.is_some(),
+        ))
+    }
     fn owned_groups_diagnosis(&mut self) -> OwnedGroupsFound {
         let (Some(snapshot), Some(draft)) = (self.snapshot.as_ref(), self.draft.as_ref()) else {
             return OwnedGroupsFound {
@@ -3981,21 +3978,6 @@ impl Encounters {
         self.from_session = None;
         self.plan_on_save = false;
         self.creature = None;
-    }
-    /// Start a fight from a saved encounter, with no editor left open.
-    pub fn edit_path(&mut self, path: &str, active: &Campaign) {
-        self.clear_notice();
-        match Draft::open(&active.path, path) {
-            Ok(draft) => {
-                self.search.clear();
-                self.draft = Some(draft);
-                self.from_session = None;
-                self.plan_on_save = false;
-                self.error = None;
-                self.message = None;
-            }
-            Err(error) => self.error = Some(error),
-        }
     }
 
     /// A planned fight's `Edit encounter` (W1-D1): that encounter, found by its ID, opens in the
@@ -4931,9 +4913,9 @@ impl Encounters {
             && campaign.is_some()
             && self.runs_known == campaign
         {
-            snapshot.runs_unread(error);
+            snapshot.runs_unread = Some(error);
         }
-        if !snapshot.runs.is_empty() || snapshot.runs_unread {
+        if !snapshot.runs.is_empty() || snapshot.runs_unread.is_some() {
             self.runs_known = campaign;
         }
     }
@@ -4948,8 +4930,10 @@ impl Encounters {
             return;
         };
         let directory = s.saved_options.directory(active);
-        let missing = directory.as_deref().is_ok_and(folder_missing);
-        let read = directory.and_then(|dir| crate::encounter_run::Run::list(&dir, active.id));
+        let read = directory
+            .map_err(crate::encounter_run::RunFolderFault::Setting)
+            .and_then(|dir| crate::encounter_run::Run::list(&dir, active.id));
+        let missing = matches!(read, Err(crate::encounter_run::RunFolderFault::Missing(_)));
         s.take_run_list(read, missing);
         self.note_run_folder(&mut s);
         self.snapshot = Some(s);
@@ -5762,7 +5746,7 @@ impl Encounters {
             story.events,
             story.sessions,
         );
-        page.runs_unread = snapshot.runs_unread;
+        page.runs_unread = snapshot.runs_unread.as_ref();
         let start_blocked = self.start_blocked();
         let mut action = None;
         // The list is the pane's scroll column, which keeps the scroll bar's lane (FB2).
@@ -5983,23 +5967,16 @@ impl Encounters {
         };
         if let Some(error) = &self.error {
             let fault = design::outcome::FaultMessage::new(&EncounterFault::Failed(error.clone()));
-            messages.outcome(if error.starts_with("Run folder not found") {
-                fault.choice(choose_folder())
-            } else {
-                fault
-            });
+            messages.outcome(fault);
         }
-        for issue in self.snapshot.iter().flat_map(|snapshot| {
-            snapshot
-                .issues
-                .iter()
-                .filter(|issue| issue.starts_with("Run folder not found"))
-        }) {
+        if let Some(folder) = self
+            .snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.runs_unread.clone())
+        {
             messages.outcome(
-                design::outcome::FaultMessage::new(&EncounterFault::RunFolderMissing(
-                    issue.clone(),
-                ))
-                .choice(choose_folder()),
+                design::outcome::FaultMessage::new(&EncounterFault::RunFolder(folder))
+                    .choice(choose_folder()),
             );
         }
         // R2: History's `Open` scrolls the list once.
@@ -8109,7 +8086,7 @@ use crate::design::LIST_MEASURE;
 mod list;
 pub(crate) use list::run_state_word;
 #[cfg(test)]
-pub(crate) use list::{ENDED_UNREAD, FIGHT_OPEN, GO_TO_RUN, UNFINISHED_UNREAD};
+pub(crate) use list::{FIGHT_OPEN, GO_TO_RUN};
 use list::{
     blocked_reason, choice_note, group_list, history_list, in_progress_list, menu_action,
     ready_list, row_menu, side_control,
@@ -11404,29 +11381,29 @@ mod tests {
         assert!(editor.paused_run().is_none());
         assert_eq!(editor.paused_run_count(), 0);
         assert!(editor.error.is_none());
-        assert_eq!(
-            editor
-                .snapshot
-                .as_ref()
-                .unwrap()
+        // R41: the snapshot holds the typed cause, a folder that is not there; it is said by the
+        // footer and the lists, never again as a content issue.
+        let snapshot = editor.snapshot.as_ref().unwrap();
+        assert!(
+            matches!(
+                snapshot.runs_unread,
+                Some(crate::encounter_run::RunFolderFault::Missing(_))
+            ),
+            "{:?}",
+            snapshot.runs_unread
+        );
+        assert!(
+            !snapshot
                 .issues
                 .iter()
-                .filter(|issue| issue.starts_with("Run folder not found"))
-                .count(),
-            1
+                .any(|issue| issue.contains("run folder") || issue.contains("Run folder")),
+            "{:?}",
+            snapshot.issues
         );
         fs::rename(dir.path().join("Moved runs"), &folder).unwrap();
         editor.read_runs_again(&campaign);
         assert_eq!(editor.paused_run_count(), 1);
-        assert!(
-            !editor
-                .snapshot
-                .as_ref()
-                .unwrap()
-                .issues
-                .iter()
-                .any(|issue| issue.starts_with("Run folder not found"))
-        );
+        assert!(editor.snapshot.as_ref().unwrap().runs_unread.is_none());
 
         // AB1 (Astra review of PR 259): on a first load, with nothing known about earlier runs,
         // a run folder whose parent cannot be looked in is unread, not "never made"; a folder
@@ -11439,10 +11416,17 @@ mod tests {
             fs::write(&blocker, "").unwrap();
             std::os::unix::fs::symlink(blocker.join("runs"), &folder).unwrap();
             let snapshot = Snapshot::load(&campaign, &[]).unwrap();
-            assert!(snapshot.runs_unread && snapshot.runs_missing.is_none());
+            assert!(
+                matches!(
+                    snapshot.runs_unread,
+                    Some(crate::encounter_run::RunFolderFault::Unreadable { .. })
+                ) && snapshot.runs_missing.is_none(),
+                "{:?}",
+                snapshot.runs_unread
+            );
             fs::remove_file(&folder).unwrap();
             let snapshot = Snapshot::load(&campaign, &[]).unwrap();
-            assert!(!snapshot.runs_unread && snapshot.runs_missing.is_some());
+            assert!(snapshot.runs_unread.is_none() && snapshot.runs_missing.is_some());
             fs::rename(&aside, &folder).unwrap();
         }
     }

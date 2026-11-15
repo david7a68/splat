@@ -36,7 +36,7 @@ pub(crate) const FIGHT_AFTER: &str = "Fight after: ";
 /// Two lines of controls in a frame.
 pub(super) const DOCK_HEIGHT: f32 = 36.0 + 4.0 + 28.0 + 8.0;
 /// The dock's width from which Damage has its key hint, and Temp HP and Roll their full forms.
-pub(super) const DOCK_ALL_WORDS_FROM: f32 = 500.0;
+pub(super) const DOCK_ALL_WORDS_FROM: f32 = design::turn_heading::ADD_WORDS_FROM;
 /// FK1 (iter-27-R): the dock's name slot, one width in every fight and for every row, so the
 /// controls after it keep one x. A name that `Heading` does not hold on one line wraps in it.
 pub(super) const DOCK_NAME_WIDTH: f32 = 8.0 * design::L;
@@ -3115,16 +3115,11 @@ impl Run {
     /// panel's tabs, so that the DM finds it when something arrives. It takes the height of
     /// the controls in its row. Narrow layouts keep the icon and the word Add.
     pub(super) fn add_to_fight(&self, words: bool, density: Density) -> Action<'static> {
-        let action = if words {
-            Action::secondary("Add to fight").icon(icons::ADD)
-        } else {
-            Action::secondary("Add").icon(icons::ADD)
-        };
-        action
-            .name("Add to fight")
-            .hint("Add an encounter group or a creature (Ctrl+G)")
-            .density(density)
-            .selected(self.panel == Panel::Groups && !self.hide_panel)
+        design::turn_heading::add_to_fight(
+            words,
+            density,
+            self.panel == Panel::Groups && !self.hide_panel,
+        )
     }
 
     /// One row, with participant controls on the left and fight controls on the right.
@@ -3218,38 +3213,49 @@ impl Run {
         clippy::disallowed_methods,
         reason = "staged: raw egui calls that a design part replaces (design::results::STAGED_ALLOWS)"
     )]
-    fn notes_tab(&self, ui: &mut egui::Ui) {
+    fn notes_tab(&mut self, ui: &mut egui::Ui) {
         let (prep, technical) = self.prep();
+        let mut pressed = false;
         egui::ScrollArea::vertical()
             .id_salt("run_encounter_notes")
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 if prep.is_empty() {
-                    design::empty_state(
-                        ui,
-                        icons::SESSIONS,
-                        "No prep notes yet",
-                        "Add read-aloud text or notes when you edit the encounter.",
-                        |ui| {
-                            if let Some(item) = self.content.as_ref().and_then(|index| {
-                                index.items.iter().find(|item| {
-                                    Some(item.entry.id) == self.source
-                                        && item.entry.kind == "encounter"
-                                })
-                            }) && Action::quiet("Edit encounter")
-                                .line_start()
-                                .show(ui)
-                                .clicked()
-                            {
-                                ui.ctx().data_mut(|data| {
-                                    data.insert_temp(
-                                        egui::Id::new("edit_run_encounter"),
-                                        item.entry.path.clone(),
-                                    )
-                                });
-                            }
-                        },
-                    );
+                    // Round 30 AP1: a sentence that names an act offers it. The run's own
+                    // record of its encounter decides, not Lookup's index, which can lag behind
+                    // a fight made a moment ago. With no saved encounter, it says why.
+                    match self.source {
+                        Some(id) => design::empty_state(
+                            ui,
+                            icons::SESSIONS,
+                            "No prep notes yet",
+                            "Add read-aloud text or notes when you edit the encounter.",
+                            |ui| {
+                                if Action::quiet("Edit encounter")
+                                    .line_start()
+                                    .show(ui)
+                                    .clicked()
+                                {
+                                    pressed = true;
+                                    ui.ctx().data_mut(|data| {
+                                        data.insert_temp(egui::Id::new("edit_run_encounter"), id);
+                                    });
+                                }
+                                // R35: why the press did not open it, under the action, until
+                                // the next press. The run owns it and ends with the run.
+                                if let Some(refusal) = &self.prep_refusal {
+                                    design::blocked_reason(ui, Some(refusal.reason()));
+                                }
+                            },
+                        ),
+                        None => design::empty_state(
+                            ui,
+                            icons::SESSIONS,
+                            "No prep notes",
+                            "This fight did not start from a saved encounter, so it has no prep notes.",
+                            |_| {},
+                        ),
+                    }
                 } else {
                     design::heading(ui, design::Heading::Label(READ_ALOUD));
                     style::markdown(ui, prep);
@@ -3261,6 +3267,9 @@ impl Run {
                     });
                 }
             });
+        if pressed {
+            self.prep_refusal = None;
+        }
     }
 
     /// The campaign's encounter groups. A group is dragged to the initiative list, or added
@@ -5028,7 +5037,7 @@ impl Run {
                         ui,
                         icons::SESSIONS,
                         "No log entries yet",
-                        "Begin combat or add a note to record what happens.",
+                        "Begin combat, or add a note on the Correct tab, to record what happens.",
                         |_| {},
                     );
                 }
@@ -7548,37 +7557,9 @@ fn dock_name_fit(ui: &egui::Ui, text: &str, room: f32) -> Option<Arc<Galley>> {
         .then_some(galley)
 }
 
+/// Whole words of a name that fit, then `…`, as the turn heading shortens it.
 pub(super) fn dock_name(ui: &egui::Ui, name: &str, font: &egui::FontId, width: f32) -> String {
-    let fitted = design::words_that_fit(ui, name, font, width);
-    if fitted == name {
-        return fitted;
-    }
-    let fitted = fitted.trim_end_matches('…');
-    let last = name.split_whitespace().last().unwrap_or(name);
-    if !last.chars().all(|c| c.is_ascii_digit()) && last.chars().count() != 1 {
-        let mut words: Vec<_> = fitted.split_whitespace().collect();
-        while words
-            .last()
-            .is_some_and(|word| ["of", "the", "de", "von"].contains(word))
-        {
-            words.pop();
-        }
-        while words.len() > 1
-            && design::number_width(ui, &format!("{}…", words.join(" ")), font) > width
-        {
-            words.pop();
-        }
-        return format!("{}…", words.join(" "));
-    }
-    let prefix_room = width - design::number_width(ui, &format!("… {last}"), font);
-    let prefix = design::words_that_fit(ui, name, font, prefix_room);
-    let prefix = prefix.trim_end_matches('…');
-    let candidate = format!("{prefix}… {last}");
-    if design::number_width(ui, &candidate, font) <= width {
-        candidate
-    } else {
-        format!("… {last}")
-    }
+    design::turn_heading::whole_words_name(ui, name, font, width)
 }
 
 pub(super) fn presence_action(present: bool) -> (&'static str, &'static str) {
@@ -8026,7 +8007,7 @@ struct RowLayout {
 }
 
 pub(super) fn header_height(scale: RunScale) -> f32 {
-    (scale.hp * 1.6).max(36.0)
+    design::TurnHeading::height(scale)
 }
 
 impl RowLayout {
