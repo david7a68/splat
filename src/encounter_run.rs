@@ -871,6 +871,9 @@ pub(crate) struct Run {
     /// Arrivals' difficulty lines, fitted and kept by group (point 1 of the round 29 review):
     /// this run's own, so they die with it and no other run reads them.
     arrival_lines: crate::difficulty::Kept<Uuid>,
+    /// The turn heading's one kept candidate (M5): this run's own, so it ends with the run.
+    /// The part chooses again when the heading's data or metrics change.
+    turn_heading: crate::design::KeptTurnHeading,
     /// The groups' revision that `arrival_lines` was last trimmed to.
     arrival_lines_seen: Option<u64>,
     /// Each pending sync's line in the ended view, by row, with the sync values' revision it
@@ -1407,6 +1410,7 @@ impl Run {
             loot_copied: None,
             arrival_words: None,
             arrival_lines: crate::difficulty::Kept::default(),
+            turn_heading: crate::design::KeptTurnHeading::new(),
             arrival_lines_seen: None,
             pending_lines: BTreeMap::new(),
             #[cfg(test)]
@@ -4742,6 +4746,7 @@ impl Run {
             loot_copied: None,
             arrival_words: None,
             arrival_lines: crate::difficulty::Kept::default(),
+            turn_heading: crate::design::KeptTurnHeading::new(),
             arrival_lines_seen: None,
             pending_lines: BTreeMap::new(),
             #[cfg(test)]
