@@ -5144,7 +5144,7 @@ pub mod encounter_run {
         d.observe_both(
             "iter-12-F2",
             "The run card shows current and maximum HP after damage",
-            |d| d.visible_text("26 / 33"),
+            |d| d.visible_text("26/33"),
         );
         d.goal_within("T1.2", "damage a named participant who is not current", 3);
 
@@ -21347,7 +21347,7 @@ pub mod run_add_creature {
         d.expect("Made up in this fight. It has no stat block.");
         d.observe(
             "F1",
-            d.visible_text("22 / 22") && d.visible_text("9") && !d.visible_text("printed +0"),
+            d.visible_text("22/22") && d.visible_text("9") && !d.visible_text("printed +0"),
             "A made-up card shows typed HP and an unsigned initiative total",
         );
         // FK7: the trio keeps the stat block's columns when the DM selects one after the other.
@@ -21377,7 +21377,7 @@ pub mod run_add_creature {
         d.press(Key::Enter);
         d.observe(
             "F1",
-            d.visible_text("17 / 22"),
+            d.visible_text("17/22"),
             "Damage keeps the made-up creature's maximum HP",
         );
         d.state("made-up-creature-after-damage", Sizes::Default);
