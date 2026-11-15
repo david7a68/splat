@@ -3631,7 +3631,7 @@ pub fn generator(d: &mut Driver<'_>) {
     d.click("Generate NPC");
     d.observe(
         "W14",
-        d.visible_text("the name table stops at 1, but 1d6 rolls up to 6.")
+        d.visible_text("The name table stops at 1, but 1d6 rolls up to 6.")
             && d.visible_text("Built-in names stand in until it is fixed."),
         "A bad campaign table states why the built-in list stands in",
     );
@@ -3643,7 +3643,7 @@ pub fn generator(d: &mut Driver<'_>) {
             let warning = d
                 .nodes()
                 .into_iter()
-                .find(|n| n.role == Role::Label && n.name.contains("the name table stops at 1"))
+                .find(|n| n.role == Role::Label && n.name.contains("The name table stops at 1"))
                 .unwrap();
             action.top() >= warning.rect.bottom()
                 && (action.left() - warning.rect.left()).abs() <= 1.0
@@ -7998,9 +7998,22 @@ pub fn package_file_changed(d: &mut Driver<'_>) {
     assert!(!d.app_mut().encounters.has_run());
     d.state("invalid-package-blocks-new-fight", Sizes::All);
     // iter-19-B-FD5: the message and the two rows that state the same fault share its error tone.
+    // SC7, FC3: the rows say the cause and `Open in Library`; the message says only the next act,
+    // and neither the cause nor the link again.
+    let fix_words = "Fix the file of the 2 Cinder Wolf rows before you save or start a fight.";
+    let mut repeats = 0;
+    d.each_painted_text(|text, _| {
+        let words = text.galley.job.text.as_str();
+        repeats += usize::from(words.contains("Open in Library to fix it"));
+    });
+    d.observe(
+        "s30-B3-encounter-fault-repeat",
+        repeats == 0 && d.visible_text(fix_words),
+        format!("The message says the next act once ({fix_words:?}); old cause-and-link words painted {repeats} times"),
+    );
     let (one_tone, detail) = fault_tone(
         d,
-        "Cinder Wolf.md cannot be read (line 4). Open in Library to fix it.",
+        fix_words,
         "Cinder Wolf.md cannot be read (line 4)",
         (design::icons::ERROR, design::colors().result.error),
     );
@@ -8267,7 +8280,8 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
     assert!(!d.app_mut().encounters.has_run());
     // iter-29 G125 (AD5): the rows keep the cause; the message says only the next act, naming
     // and counting the rows, whole and in view at every size.
-    let next_act = "Choose replacements for the 2 Cinder Wolf rows.";
+    let next_act =
+        "Choose replacements for the 2 Cinder Wolf rows before you save or start a fight.";
     d.state_prepared("deleted-package-blocks-new-fight", Sizes::All, |d| {
         let mut messages = Vec::new();
         d.each_painted_text(|text, _| {
@@ -8555,7 +8569,9 @@ pub fn package_delete_entry(d: &mut Driver<'_>) {
         invalid
             && fs::read(&bridge).unwrap() == on_disk
             && d.visible_text("Invalid")
-            && d.has_containing("Choose replacements for the 2 Cinder Wolf rows."),
+            && d.has_containing(
+                "Choose replacements for the 2 Cinder Wolf rows before you save or start a fight.",
+            ),
         format!("Invalid before Ctrl+S: {invalid}; the file and the state stay after it"),
     );
     d.replace_text_in("Encounter name", "Bridge Ambush");

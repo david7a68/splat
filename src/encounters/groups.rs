@@ -124,6 +124,12 @@ pub(super) struct GroupDraft {
     /// recovery. Its fields take it as their key; the path changes at the first save.
     id: Uuid,
     path: String,
+    /// Whether this group was ever saved (R37). Its own fact, owned by the draft: `New` from
+    /// [`GroupDraft::new`], `Saved` from [`GroupDraft::open`] and from the first successful write
+    /// (`saved_text`). A failed write, a lost file, an accepted recovery or an outside edit leave
+    /// it as it is; Discard and Undo carry it with the draft; it ends with the draft. It is not
+    /// `baseline`, which is only the text to compare with the disk.
+    origin: design::save_row::DraftOrigin,
     baseline: Option<String>,
     source: String,
     /// The line of each readable member in `source`, read when `source` or `flags` change (never
@@ -158,14 +164,102 @@ pub(super) struct GroupDraft {
     repair_error: Option<String>,
 }
 
-/// Why Save would refuse a group draft (FN5, AI2).
-#[derive(Clone, Debug, PartialEq)]
-pub(super) struct Refusal {
-    pub(super) text: String,
-    /// The one place that says this fault. Save, by its button or by the keyboard, keeps it
-    /// there: no other place repeats it.
-    pub(super) place: RefusalPlace,
+/// A refusal lives in its own module, so that even this file reads its words and place only
+/// through accessors, and cannot change them after its kind is set.
+///
+/// F4: a group's check never meets unreadable data, so a refusal is only a refused change or a
+/// missing part. `GroupDraft::open` builds a draft only from a note that reads and parses (else
+/// it gives an error and no editor opens), and the check reads the draft's typed fields, not the
+/// file; `an_empty_group_or_a_missing_creature_cannot_be_saved` tests the first part. Open debt,
+/// "post-open read failure of a group file": when the file is replaced by bytes that do not read
+/// AFTER it was opened, the read fails before `disk::Recovery` records a change, so the disk view
+/// does not take over. Save's write is then refused safely, the draft is kept, and the message is
+/// a generic failed save.
+mod refusal {
+    use super::{RefusalPlace, design};
+
+    /// Why Save would refuse a group draft (FN5, AI2). Its fields are private and read-only: a
+    /// refusal is made only by [`Refusal::refused`] or [`Refusal::incomplete`], which also make its
+    /// owned typed diagnosis, so the words, the place and the kind cannot drift apart.
+    #[derive(Clone, Debug, PartialEq)]
+    pub(in crate::encounters) struct Refusal {
+        text: String,
+        /// The one place that says this fault. Save, by its button or by the keyboard, keeps it
+        /// there: no other place repeats it.
+        place: RefusalPlace,
+        /// The save row's typed diagnosis (`design::save_row::Diagnosis`), owned, so the cached
+        /// check carries it whole to `DraftState`.
+        diagnosis: design::save_row::Diagnosis<'static>,
+        /// The member's row that says this fault, by the name it shows (N2): the next step
+        /// that a pane with the row out of view names.
+        row: Option<Box<str>>,
+    }
+
+    impl Refusal {
+        /// The words the footer shows for this refusal: none when another place says it.
+        pub(in crate::encounters) fn footer(&self) -> Option<&str> {
+            (self.place == RefusalPlace::Footer).then_some(self.text.as_str())
+        }
+
+        /// A change that cannot stand (a member's change, a missing creature, a taken name).
+        pub(in crate::encounters) fn refused(text: impl Into<String>, place: RefusalPlace) -> Self {
+            let text = text.into();
+            Self {
+                diagnosis: design::save_row::Diagnosis::refused(text.clone()),
+                text,
+                place,
+                row: None,
+            }
+        }
+
+        /// A change that cannot stand in one member's row, which shows it by `row`.
+        pub(in crate::encounters) fn in_row(
+            text: impl Into<String>,
+            place: RefusalPlace,
+            row: &str,
+        ) -> Self {
+            Self {
+                row: Some(row.into()),
+                ..Self::refused(text, place)
+            }
+        }
+
+        /// The name of the member's row that says this fault, if it is a row's.
+        pub(in crate::encounters) fn row(&self) -> Option<&str> {
+            self.row.as_deref()
+        }
+
+        /// A required part is missing (no name, no side, no creature). With the draft's origin it
+        /// gives the save row's word (R37).
+        pub(in crate::encounters) fn incomplete(
+            text: impl Into<String>,
+            place: RefusalPlace,
+        ) -> Self {
+            let text = text.into();
+            Self {
+                diagnosis: design::save_row::Diagnosis::incomplete(text.clone()),
+                text,
+                place,
+                row: None,
+            }
+        }
+
+        pub(in crate::encounters) fn text(&self) -> &str {
+            &self.text
+        }
+
+        pub(in crate::encounters) fn place(&self) -> RefusalPlace {
+            self.place
+        }
+
+        /// The save row's typed diagnosis of this refusal: the adapter that the tone lane (B11)
+        /// can carry to a member's row and the footer in place of a separate `Tone`.
+        pub(in crate::encounters) fn diagnosis(&self) -> &design::save_row::Diagnosis<'static> {
+            &self.diagnosis
+        }
+    }
 }
+pub(super) use refusal::Refusal;
 
 /// Where the group editor says a refusal of Save.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -179,13 +273,6 @@ pub(super) enum RefusalPlace {
     /// A member's row: the member's identity (`MemberId`'s own id, since `MemberId` itself
     /// compares equal to every other) and the tone its row says the fault in.
     Member(Uuid, Tone),
-}
-
-impl Refusal {
-    /// The words the footer shows for this refusal: none when another place says it.
-    pub(super) fn footer(&self) -> Option<&str> {
-        (self.place == RefusalPlace::Footer).then_some(self.text.as_str())
-    }
 }
 
 /// What a member result's Undo gives back, held in the page's store with the result's ticket.
@@ -260,6 +347,7 @@ impl GroupDraft {
             recovery: Default::default(),
             id,
             path: format!("{FOLDER}/{id}.md"),
+            origin: design::save_row::DraftOrigin::New,
             baseline: None,
             source: format!(
                 "---\nsplat_schema: 2\nsplat_id: {id}\nsplat_kind: encounter_group\nsplat_name: New group\nsplat_side: enemies\n---\n\n## Members\n\n| Count | Creature | Name | Changes | Note |\n| --- | --- | --- | --- | --- |\n"
@@ -305,6 +393,7 @@ impl GroupDraft {
             recovery: Default::default(),
             id: entry.id,
             path: path.into(),
+            origin: design::save_row::DraftOrigin::Saved,
             baseline: Some(text.clone()),
             member_lines: splat::content::list_formats::group_member_lines(&text, &entry.flags),
             source: text,
@@ -424,6 +513,7 @@ impl GroupDraft {
 
     pub(super) fn set_new_path(&mut self, path: String) {
         self.path = path;
+        self.touch();
     }
     pub(super) fn path(&self) -> &str {
         &self.path
@@ -437,6 +527,10 @@ impl GroupDraft {
             .encounter
             .as_ref()
             .is_some_and(|reference| reference.id == Some(encounter))
+    }
+    /// Whether this group was ever saved: its stored origin (see the field).
+    pub(super) fn origin(&self) -> design::save_row::DraftOrigin {
+        self.origin
     }
     pub(super) fn dirty(&self) -> bool {
         self.baseline.is_none()
@@ -626,7 +720,8 @@ impl GroupDraft {
     }
     /// An encounter being saved with this group counts as there, though it is not on disk yet.
     pub(super) fn validate(&self, snapshot: &Snapshot, saving: Option<Uuid>) -> Result<(), String> {
-        self.check(snapshot, saving).map_err(|refusal| refusal.text)
+        self.check(snapshot, saving)
+            .map_err(|refusal| refusal.text().to_owned())
     }
     /// Save's check, without writing. A refusal says whether the editor already shows the fault
     /// in its place (a member row's missing creature or change that cannot stand, or the empty
@@ -634,14 +729,10 @@ impl GroupDraft {
     pub(super) fn check(&self, snapshot: &Snapshot, saving: Option<Uuid>) -> Result<(), Refusal> {
         #[cfg(test)]
         GROUP_CHECKS.with(|counts| counts.set((counts.get().0, counts.get().1 + 1)));
-        self.check_group(snapshot, saving)?;
+        let missing = self.check_group(snapshot, saving)?;
         for member in &self.setup.members {
             // The row says a missing creature as a warning, a change that cannot stand as an
             // error (`FaultKind::InvalidChange`).
-            let in_place = |text: String, tone: Tone| Refusal {
-                text,
-                place: RefusalPlace::Member(member.id.0, tone),
-            };
             // FA1: Save's check names a member as every view does. A draft's lines may have
             // moved since the note was read, so it names no line.
             let changed = member
@@ -660,11 +751,11 @@ impl GroupDraft {
                 (_, Some(base)) => base.clone(),
                 _ => missing_member_name(None, member.creature.link.as_deref()),
             };
-            let fault = |cause: &str| member_fault(&shown, base.as_deref(), None, cause);
-            let not_in_place = |cause: &str| Refusal {
-                text: fault(cause),
-                place: RefusalPlace::Footer,
+            let in_place = |text: String, tone: Tone| {
+                Refusal::in_row(text, RefusalPlace::Member(member.id.0, tone), &shown)
             };
+            let fault = |cause: &str| member_fault(&shown, base.as_deref(), None, cause);
+            let not_in_place = |cause: &str| Refusal::refused(fault(cause), RefusalPlace::Footer);
             if !(1..=MAX_COUNT).contains(&member.count) {
                 return Err(not_in_place(&format!(
                     "count must be from 1 to {MAX_COUNT}"
@@ -690,23 +781,31 @@ impl GroupDraft {
                 return Err(not_in_place(NO_MAX_HP_CAUSE));
             }
         }
-        Ok(())
+        missing.map_or(Ok(()), Err)
     }
     /// The group's own fields, before its members.
-    fn check_group(&self, snapshot: &Snapshot, saving: Option<Uuid>) -> Result<(), Refusal> {
-        let refuse = |text: String| {
-            Err(Refusal {
-                text,
-                place: RefusalPlace::Footer,
-            })
-        };
+    /// `Err` for a change that cannot stand; `Ok(Some(..))` for the first missing part, which the
+    /// caller says only when no member's fault outranks it.
+    fn check_group(
+        &self,
+        snapshot: &Snapshot,
+        saving: Option<Uuid>,
+    ) -> Result<Option<Refusal>, Refusal> {
+        let refuse = |text: String| Err(Refusal::refused(text, RefusalPlace::Footer));
+        // E2: a missing part does not end the check. A change that cannot stand outranks it,
+        // so the first missing part is kept and said only when nothing is refused.
+        let mut missing = None;
         let name = self.name.trim();
         if name.is_empty() {
-            return refuse("Enter a group name.".into());
+            missing = Some(Refusal::incomplete(
+                "Enter a group name.",
+                RefusalPlace::Footer,
+            ));
         }
         // A plan links a group for any encounter by its name, so that name must mean one thing.
         // A group that belongs to an encounter is not linked, and each can have "Reinforcements".
-        let linkable = self.setup.encounter.is_none();
+        // A blank name has nothing to compare: it is a missing part, above.
+        let linkable = self.setup.encounter.is_none() && !name.is_empty();
         if linkable
             && snapshot.groups.iter().any(|group| {
                 group.encounter.is_none()
@@ -729,14 +828,17 @@ impl GroupDraft {
             ));
         }
         if self.setup.side.trim().is_empty() {
-            return refuse("Enter a default side for this group.".into());
+            missing.get_or_insert(Refusal::incomplete(
+                "Enter a default side for this group.",
+                RefusalPlace::Footer,
+            ));
         }
         if self.setup.members.is_empty() {
             // Its reason (`Add a creature first.`) is beside Save.
-            return Err(Refusal {
-                text: "This group is empty. Add at least one creature.".into(),
-                place: RefusalPlace::SaveRow,
-            });
+            missing.get_or_insert(Refusal::incomplete(
+                "This group is empty. Add at least one creature.",
+                RefusalPlace::SaveRow,
+            ));
         }
         if self
             .setup
@@ -748,12 +850,9 @@ impl GroupDraft {
             })
         {
             // Its words are under Belongs to (`belongs_to`).
-            return Err(Refusal {
-                text: GONE_ENCOUNTER.into(),
-                place: RefusalPlace::BelongsTo,
-            });
+            return Err(Refusal::refused(GONE_ENCOUNTER, RefusalPlace::BelongsTo));
         }
-        Ok(())
+        Ok(missing)
     }
     /// The note's new text, if this group can be saved as it is.
     pub(super) fn checked(
@@ -830,6 +929,8 @@ impl GroupDraft {
                         self.source = text;
                         self.reread_lines();
                     }
+                    // N1: the comparison text decides `dirty`, which decides what Save checks.
+                    self.touch();
                 }
             } else if !self.recovery.file_gone() {
                 *self = Self::open(root, &self.path)?;
@@ -867,6 +968,7 @@ impl GroupDraft {
         }
         self.reread_lines();
         self.baseline = Some(text.to_owned());
+        self.origin = design::save_row::DraftOrigin::Saved;
         self.saved_name = self.name.clone();
         self.saved_setup = self.setup.clone();
         self.notes = self.notes.trim().to_owned();
@@ -915,7 +1017,11 @@ pub(crate) fn member_fault(
         // `line 15` wraps whole.
         text.push_str(&format!(" · line\u{a0}{line}"));
     }
-    format!("{text}: {}.", cause.trim().trim_end_matches('.'))
+    // R36: the cause starts with a capital (`layout::cause_words`) and ends with one full stop.
+    format!(
+        "{text}: {}.",
+        splat::content::layout::cause_words(cause.trim().trim_end_matches('.'))
+    )
 }
 
 fn missing_member_name(changed: Option<&str>, link: Option<&str>) -> String {
@@ -1304,6 +1410,7 @@ impl Encounters {
                         draft.source = text;
                         draft.reread_lines();
                     }
+                    draft.touch();
                     self.save_group_draft(ui.ctx(), campaign, modules);
                 }
             } else {
@@ -1412,6 +1519,8 @@ pub(super) fn of_encounter(
                                     {
                                         if super::menu_action(ui, name, None) {
                                             group.setup.encounter = Some(EntryRef::id(id));
+                                            // N1: who owns the group is checked by Save.
+                                            group.touch();
                                         }
                                     }
                                 });
@@ -1467,6 +1576,11 @@ pub(super) fn of_encounter(
                                         &response,
                                         &format!("Group name: {}", group.name),
                                     );
+                                    // F1: a name edit is an edit of the group: its revision
+                                    // keys Save's checks, as in the group's own editor.
+                                    if response.changed() {
+                                        group.touch();
+                                    }
                                     name_right = response.rect.right();
                                     if focus_group.as_deref() == Some(path.as_str()) {
                                         *focus_group = None;
@@ -1502,6 +1616,8 @@ pub(super) fn of_encounter(
             deleted_groups.push(groups.remove(index));
         } else {
             groups[index].setup.encounter = None;
+            // N1: a group for any encounter is checked against the others' names.
+            groups[index].touch();
         }
         new_results.push(super::DraftUndo::RemovedGroup {
             index,
@@ -2403,7 +2519,7 @@ impl Encounters {
                     .snapshot
                     .as_ref()
                     .and_then(|snapshot| draft.check(snapshot, None).err())
-                    .filter(|refusal| refusal.text == e)
+                    .filter(|refusal| refusal.text() == e)
                 {
                     Some(refusal) => self.refuse_group_save(&refusal),
                     None => {
@@ -2418,7 +2534,7 @@ impl Encounters {
     /// Save's check refused the group draft: the watch starts, and the footer says the fault
     /// only when no other place does.
     fn refuse_group_save(&mut self, refusal: &Refusal) {
-        self.refused(Some(refusal.text.clone().into()));
+        self.refused(Some(refusal.text().to_owned().into()));
         self.error = refusal.footer().map(str::to_owned);
     }
 
@@ -2483,15 +2599,17 @@ impl Encounters {
             } else {
                 design::save_row::Primary::Draft
             };
-            let mut state = design::DraftState::new(changed, primary).locks_campaign();
-            if empty {
-                state = state.refused(EMPTY_REASON);
-            } else if let Some(refusal) = &refusal {
-                state = state.refused(refusal.text.clone());
-            } else if self.shows_validation_error() {
-                // AH1: the last refusal still shows: Invalid, as the encounter editor says.
-                state = state.invalid();
-            }
+            // R37: the origin is the draft's own stored fact (`GroupDraft::origin`), so a new
+            // group with only its name says `New`, and a saved group an edit emptied stays a
+            // refused change. With no draft open the row shows nothing of a draft.
+            let origin = self
+                .group_draft
+                .as_ref()
+                .map_or(design::save_row::DraftOrigin::Saved, GroupDraft::origin);
+            let mut state = design::DraftState::new(origin, changed, primary).locks_campaign();
+            // E2: the check's one ranked result; an empty group says its reason beside Save
+            // (`Add a creature first.`) only while nothing outranks the missing part.
+            state = state.check(save_row_diagnosis(refusal.as_ref(), empty));
             if self.message.is_some() {
                 // FC1: the shared `Saved`; the list keeps the full sentence for after Back.
                 state = state.just_saved();
@@ -2596,7 +2714,7 @@ impl Encounters {
         // they are on main. The body draws first; then that place shows these words when the
         // fault's own place is not whole on screen (another tab, scrolled away), else the switch
         // reason as before. So the fault is said once, by the mouse and the keyboard alike.
-        let elsewhere: Option<(Tone, &'static str)> = match refusal.as_ref().map(|r| r.place) {
+        let elsewhere: Option<(Tone, &'static str)> = match refusal.as_ref().map(Refusal::place) {
             Some(RefusalPlace::BelongsTo) => Some((Tone::Warning, GONE_BESIDE_SAVE)),
             Some(RefusalPlace::Member(_, tone)) => Some((tone, MEMBER_BESIDE_SAVE)),
             _ => None,
@@ -2611,7 +2729,16 @@ impl Encounters {
                 super::editor_save_state(ui, state.word().status(), state.discard_shown(), None);
             let gap = ui.spacing().item_spacing.x;
             let font = Type::Small.font(ui);
-            let mut room = reasons_right - ui.cursor().left();
+            // R37: `New` is shorter than the words it turns into (`Unsaved`, or `Invalid`), so
+            // the reasons' places are measured as if the word were the wider of those: the first
+            // member then moves no reason and no field.
+            let word_width =
+                |word: design::save_row::SaveWord| design::number_width(ui, word.words(), &font);
+            let widest = word_width(design::save_row::SaveWord::Unsaved).max(word_width(
+                design::save_row::SaveWord::Invalid(design::save_row::InvalidCause::Refused),
+            ));
+            let mut room =
+                reasons_right - ui.cursor().left() - (widest - word_width(state.word())).max(0.0);
             // Save's own reason first: it stays at the row's end, under Save, while there is
             // room. A dirty group blocks the campaign switch wherever it is open, so it says so,
             // as the encounter editor does.
@@ -2788,7 +2915,7 @@ impl Encounters {
                     compact,
                     name_right,
                     &separated,
-                    refusal.as_ref().map(|refusal| refusal.place),
+                    refusal.as_ref().map(Refusal::place),
                 ));
             },
         );
@@ -3152,9 +3279,17 @@ pub(crate) fn member_comparisons() -> (usize, usize) {
 }
 
 /// A new revision for a group draft (`GroupDraft::touch`): larger than every one before it.
+static NEXT_REVISION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
 fn next_revision() -> u64 {
-    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    NEXT_REVISION.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
+/// F5: the count of group revisions issued so far. Every edit of any group draft (`touch`), a
+/// new draft and an opened one issue a revision, so an unchanged count means that no group
+/// changed: a stored edit generation that a cache reads in constant time.
+pub(super) fn revisions_issued() -> u64 {
+    NEXT_REVISION.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 /// What a group is, in its own editor and in the frame an encounter's editor gives it. There,
@@ -3237,6 +3372,10 @@ fn group_fields(
             &output.response,
             &format!("{NOTES_FIELD} for {}", draft.name),
         );
+        // F1: notes make a group changed, so Save checks it: an edit of them is an edit.
+        if output.response.changed() {
+            draft.touch();
+        }
     });
     gone_shown || member_shown
 }
@@ -3884,6 +4023,21 @@ pub(crate) const EDIT_GROUP: &str = "Edit group";
 
 /// Where a missing creature's package is chosen.
 pub(super) const PACKAGES_LINK: &str = "Campaign → Packages";
+
+/// The group editor's save-row diagnosis: the cached check's one ranked result (E2), owned and
+/// passed through whole (E4). An empty group says its reason beside Save (`Add a creature
+/// first.`) only while nothing outranks the missing part.
+fn save_row_diagnosis(refusal: Option<&Refusal>, empty: bool) -> design::save_row::Diagnosis<'_> {
+    use design::save_row::Diagnosis;
+    match refusal {
+        Some(refusal) if empty && refusal.diagnosis().only_incomplete() => {
+            Diagnosis::incomplete(EMPTY_REASON)
+        }
+        Some(refusal) => refusal.diagnosis().clone(),
+        None if empty => Diagnosis::incomplete(EMPTY_REASON),
+        None => Diagnosis::valid(),
+    }
+}
 
 /// The repair form's reason. It names the words it could not read in curly quotation marks.
 fn unread_changes(raw: &str) -> String {
@@ -4954,8 +5108,8 @@ mod tests {
                 .map(|warning| warning.text.as_str())
                 .collect::<Vec<_>>(),
             [
-                "Picket (as Lost scout) · line\u{a0}15: not in this campaign’s packages.",
-                "Lookout (as Scout) · line\u{a0}13: the change “HP lots” was not read.",
+                "Picket (as Lost scout) · line\u{a0}15: Not in this campaign’s packages.",
+                "Lookout (as Scout) · line\u{a0}13: The change “HP lots” was not read.",
             ]
         );
         assert!(
@@ -4977,7 +5131,7 @@ mod tests {
         assert_eq!(unread.len(), 1);
         assert_eq!(
             unread[0].flag.message,
-            "Line 13: the change “HP lots” was not read. Use a number, such as HP +5.",
+            "Line 13: The change “HP lots” was not read. Use a number, such as HP +5.",
             "the editor's words keep the example"
         );
         assert_eq!(
@@ -5111,8 +5265,98 @@ mod tests {
         assert!(error.contains("empty"), "{error}");
         draft.add(Uuid::new_v4());
         let error = draft.save(&campaign, &[]).unwrap_err();
-        assert_eq!(error, "Unknown creature: not in this campaign’s packages.");
+        assert_eq!(error, "Unknown creature: Not in this campaign’s packages.");
         assert!(!dir.path().join(&draft.path).exists());
+
+        // E2, R37: a missing part never hides a change that cannot stand. A blank name does
+        // not end the check before the member's fault is read, and the save row says the
+        // refusal, not a new draft's `New`.
+        use design::save_row::{Changed, DraftState, Primary, SaveWord};
+        let word = |draft: &GroupDraft, refusal: Option<&Refusal>| {
+            DraftState::new(draft.origin(), Changed::Yes, Primary::Draft)
+                .check(save_row_diagnosis(refusal, draft.is_empty()))
+                .word()
+        };
+        let snapshot = Snapshot::load(&campaign, &[]).unwrap();
+        draft.name.clear();
+        let refusal = draft.check(&snapshot, None).unwrap_err();
+        assert_eq!(
+            refusal.text(),
+            "Unknown creature: Not in this campaign’s packages.",
+            "a blank name and a member's fault: the member's fault"
+        );
+        assert!(matches!(word(&draft, Some(&refusal)), SaveWord::Invalid(_)));
+        // An empty new group whose name another group has: the taken name, not `New`.
+        let scout = creature(dir.path(), "Scout");
+        let mut other = GroupDraft::new();
+        other.name = "Ash Pack".into();
+        other.add(scout);
+        other.save(&campaign, &[]).unwrap();
+        let snapshot = Snapshot::load(&campaign, &[]).unwrap();
+        let mut empty = GroupDraft::new();
+        empty.name = "Ash Pack".into();
+        let refusal = empty.check(&snapshot, None).unwrap_err();
+        assert!(
+            refusal.text().starts_with("Another group is named"),
+            "{}",
+            refusal.text()
+        );
+        assert!(matches!(word(&empty, Some(&refusal)), SaveWord::Invalid(_)));
+        // With a name of its own it is a new group with only its name: `New`.
+        empty.name = "Ember Pack".into();
+        let refusal = empty.check(&snapshot, None).unwrap_err();
+        assert_eq!(word(&empty, Some(&refusal)), SaveWord::New);
+
+        // N1: in an encounter, a changed group's refusal is not hidden by another, new and
+        // empty group: the encounter says Invalid, not New. The new group alone is New.
+        let encounter_word = |groups: &[GroupDraft]| {
+            let super::super::OwnedGroupsFound { found, origin, .. } =
+                super::super::owned_groups_found(groups, &snapshot, Uuid::new_v4());
+            DraftState::new(
+                origin.unwrap_or(design::save_row::DraftOrigin::Saved),
+                Changed::Yes,
+                Primary::Draft,
+            )
+            .check(found)
+            .word()
+        };
+        let mut faulty = GroupDraft::new();
+        faulty.name = "Picket".into();
+        faulty.add(Uuid::new_v4());
+        let mut fresh = GroupDraft::new();
+        fresh.name = "Ash Hounds".into();
+        assert_eq!(encounter_word(std::slice::from_ref(&fresh)), SaveWord::New);
+        assert!(matches!(
+            encounter_word(&[faulty, fresh]),
+            SaveWord::Invalid(design::save_row::InvalidCause::Refused)
+        ));
+
+        // F4: no editor opens a group whose note does not read: open gives an error.
+        let unreadable = dir.path().join(FOLDER).join("Broken.md");
+        fs::create_dir_all(unreadable.parent().unwrap()).unwrap();
+        fs::write(&unreadable, "---\nsplat_kind: [encounter_group\n---\n").unwrap();
+        assert!(GroupDraft::open(dir.path(), &format!("{FOLDER}/Broken.md")).is_err());
+        fs::write(&unreadable, [0xff_u8, 0xfe, 0x00]).unwrap();
+        assert!(GroupDraft::open(dir.path(), &format!("{FOLDER}/Broken.md")).is_err());
+        fs::remove_file(&unreadable).unwrap();
+
+        // E3: the origin is the group's own fact. A saved group whose file is lost, whose
+        // lost file the DM accepted (the comparison text goes, as `disk_choice` does), and
+        // whose write then fails, is still a saved group: emptied, it says `Invalid`.
+        let mut saved = GroupDraft::open(&campaign.path, &other.path).unwrap();
+        fs::remove_file(dir.path().join(&saved.path)).unwrap();
+        saved.baseline = None;
+        let folder = dir.path().join(FOLDER);
+        fs::remove_dir_all(&folder).unwrap();
+        fs::write(&folder, "not a folder").unwrap();
+        assert!(saved.write(&campaign, "text").is_err(), "the write fails");
+        saved.setup.members.clear();
+        saved.touch();
+        let refusal = saved.check(&snapshot, None).unwrap_err();
+        assert_eq!(
+            word(&saved, Some(&refusal)),
+            SaveWord::Invalid(design::save_row::InvalidCause::Incomplete)
+        );
     }
 
     #[test]
@@ -5133,7 +5377,7 @@ mod tests {
             .overrides
             .insert("level".into(), 3.into());
         let error = draft.save(&campaign, &[]).unwrap_err();
-        assert!(error.contains("unknown override level"), "{error}");
+        assert!(error.contains("Unknown override level"), "{error}");
         assert!(!dir.path().join(&draft.path).exists());
     }
 
@@ -5224,12 +5468,12 @@ mod tests {
         // FA1: the one member-fault form, with the member's line in the note.
         assert!(
             problem
-                .starts_with("Unknown creature · line\u{a0}13: not in this campaign’s packages."),
+                .starts_with("Unknown creature · line\u{a0}13: Not in this campaign’s packages."),
             "{problem}"
         );
         assert_eq!(snapshot.groups[0].member_summary(), "Will add: none");
         assert!(
-            problem.contains("not in this campaign’s packages"),
+            problem.contains("Not in this campaign’s packages"),
             "{problem}"
         );
         assert!(snapshot.issues.iter().any(|issue| issue.contains("Stray")));
@@ -5276,7 +5520,7 @@ mod tests {
                 .problem
                 .as_ref()
                 .unwrap()
-                .starts_with("Captain Varra · line\u{a0}13: not in this campaign’s packages.")
+                .starts_with("Captain Varra · line\u{a0}13: Not in this campaign’s packages.")
         );
         assert!(!group.problem.as_ref().unwrap().contains(&id.to_string()));
         assert_eq!(group.member_summary(), "Will add: none");
@@ -5396,10 +5640,7 @@ mod tests {
         );
         assert_eq!(
             reopened.check(&snapshot, None),
-            Err(Refusal {
-                text: GONE_ENCOUNTER.into(),
-                place: RefusalPlace::BelongsTo,
-            })
+            Err(Refusal::refused(GONE_ENCOUNTER, RefusalPlace::BelongsTo))
         );
         // The keyboard's Save goes the same way as the blocked button: the refusal starts the
         // watch and the footer stays empty. A check after the next edit keeps it so.
@@ -5911,7 +6152,7 @@ mod tests {
         draft.add(id);
         let error = draft.save(&campaign, &[]).unwrap_err();
         assert!(
-            error == "Blank: it has no maximum HP. Set it with this member’s Edit button.",
+            error == "Blank: It has no maximum HP. Set it with this member’s Edit button.",
             "{error}"
         );
         draft.setup.members[0].overrides = serde_yaml_ng::from_str("{max_hp: {set: 9}}").unwrap();
