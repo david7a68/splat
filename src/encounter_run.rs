@@ -790,8 +790,8 @@ impl crate::design::results::Kept for StepResult {
     }
 }
 
-/// How many timeline facts (`Run::timeline_fact`, which copies the run's name) this thread made,
-/// for a test that an unchanged poll copies none.
+// How many timeline facts (`Run::timeline_fact`, which copies the run's name) this thread made,
+// for a test that an unchanged poll copies none.
 #[cfg(test)]
 thread_local! {
     pub(crate) static TIMELINE_FACTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };

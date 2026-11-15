@@ -3333,7 +3333,7 @@ pub const PART_INSET: f32 = FOCUS_WIDTH + HAIRLINE_WIDTH;
     clippy::disallowed_methods,
     reason = "owner: the design system and its capture harness draw with egui (design::results::OWNED_ALLOWS)"
 )]
-fn scroll_part<R>(
+pub(super) fn scroll_part<R>(
     ui: &mut Ui,
     rect: Rect,
     id: Id,
@@ -3515,7 +3515,24 @@ type FooterMessage<'a> = (
 pub struct Footer<'a> {
     id: Id,
     width: f32,
+    /// The legacy lines: each lowered to a closure (`result`, `reason`, `notice`, `kept`,
+    /// `kept_line`). Counted and staged out.
     messages: Vec<FooterMessage<'a>>,
+    /// A typed footer's lines (`outcome::Messages`): data, drawn in the order of the footer's
+    /// retained plan (layout PR 2b).
+    typed: Option<Box<dyn FooterLines + 'a>>,
+}
+
+/// A typed footer's lines, as the pane places and draws them (`outcome::Messages`).
+pub(super) trait FooterLines {
+    fn is_empty(&self) -> bool;
+    /// Before the pane places the footer: its whole demand at `width`, when its retained plan
+    /// was made from these lines at this width, scale and style. Then the pane knows the
+    /// footer's height before it draws, and the footer draws from the plan.
+    fn planned(&mut self, ui: &Ui, id: Id, width: f32) -> Option<f32>;
+    /// Draw the lines in `rect`, as `Footer::draw_messages` does: from the plan, or measuring
+    /// them and making the plan.
+    fn draw(&mut self, ui: &mut Ui, id: Id, rect: Rect, cut: bool, most: f32, stored: f32);
 }
 
 impl<'a> Footer<'a> {
@@ -3526,7 +3543,24 @@ impl<'a> Footer<'a> {
             id: Id::new(id),
             width,
             messages: Vec::new(),
+            typed: None,
         }
+    }
+
+    /// A typed footer (`outcome::Messages`): its lines are data, not closures.
+    pub(super) fn typed(id: Id, width: f32, lines: Box<dyn FooterLines + 'a>) -> Self {
+        Self {
+            id,
+            width,
+            messages: Vec::new(),
+            typed: Some(lines),
+        }
+    }
+
+    /// A typed footer's whole demand at `width`, when its retained plan holds (`FooterLines`).
+    pub(super) fn planned(&mut self, ui: &Ui, width: f32) -> Option<f32> {
+        let id = self.id;
+        self.typed.as_mut()?.planned(ui, id, width)
     }
 
     /// A result, made by the action done at `order`. `has_undo` is true while its Undo is live:
@@ -3724,7 +3758,7 @@ impl<'a> Footer<'a> {
 
     /// Whether the footer holds a message.
     pub(super) fn is_empty(&self) -> bool {
-        self.messages.is_empty()
+        self.messages.is_empty() && self.typed.as_ref().is_none_or(|typed| typed.is_empty())
     }
 
     /// Scope the footer's id to `parent` (a pane's parent `Ui`); returns the id the caller gave.
@@ -3753,6 +3787,10 @@ impl<'a> Footer<'a> {
         most: f32,
         stored: f32,
     ) {
+        if let Some(typed) = self.typed.as_mut() {
+            typed.draw(ui, self.id, rect, cut, most, stored);
+            return;
+        }
         // The one footer order (`outcome::footer_order`): results with a live Undo newest
         // first, reasons and notices in the caller's order, then results with no live Undo.
         super::outcome::footer_order(&mut self.messages);
