@@ -1300,7 +1300,18 @@ pub fn plan_act(d: &mut Driver<'_>) {
     show_plan(d);
     let in_plan = |d: &Driver<'_>| {
         let nodes = d.nodes();
-        let shown: Vec<_> = nodes.iter().filter(|node| node.name == REFUSED).collect();
+        // The message, not the footer's group: the group is named with every message's words,
+        // so with one message it has the same name, around the message's rect.
+        let named: Vec<_> = nodes.iter().filter(|node| node.name == REFUSED).collect();
+        let shown: Vec<_> = named
+            .iter()
+            .copied()
+            .filter(|node| {
+                !named
+                    .iter()
+                    .any(|inner| inner.rect != node.rect && node.rect.contains_rect(inner.rect))
+            })
+            .collect();
         let whole = shown.len() == 1 && shown[0].fully_in_view();
         let tone = shown.first().and_then(|node| {
             d.typed_messages()
