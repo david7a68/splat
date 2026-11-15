@@ -631,19 +631,22 @@ impl<O: Owner, T: Kept<Owner = O>> Results<O, T> {
 
     /// The refused attempt of each entry for which `ends` is true ends (its object went away;
     /// another act on its owner). The entry itself then stays only while `holds` says its result
-    /// still holds.
+    /// still holds. How many refusals ended.
     pub fn end_refusals(
         &mut self,
         mut ends: impl FnMut(&T) -> bool,
         mut holds: impl FnMut(&T) -> bool,
-    ) {
+    ) -> usize {
+        let mut ended = 0;
         self.entries.retain_mut(|entry| {
             if entry.refused.is_some() && ends(&entry.value) {
                 entry.refused = None;
+                ended += 1;
                 return holds(&entry.value);
             }
             true
         });
+        ended
     }
 
     /// The offer `ticket` names, used up by its press; `None` when it was replaced or ended.
@@ -1815,12 +1818,15 @@ mod tests {
         results.record(done(A, "A."));
         let a = results.get(&A).unwrap().order();
         let _ = results.undo_or_refuse(Ticket { order: a }, |_| Err::<(), _>(changed()));
-        results.end_refusals(|value| value.note == B, |_| false);
+        assert_eq!(results.end_refusals(|value| value.note == B, |_| false), 0);
         assert!(
             results.get(&A).unwrap().refusal().is_some(),
             "another owner's end: A stays"
         );
-        results.end_refusals(|value| value.note == A, |value| value.words == "B.");
+        assert_eq!(
+            results.end_refusals(|value| value.note == A, |value| value.words == "B."),
+            1
+        );
         assert_eq!(words(&results, "Tidewater"), ["B."]);
     }
 

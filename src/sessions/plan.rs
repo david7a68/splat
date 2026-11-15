@@ -3486,21 +3486,25 @@ impl Sessions {
         }
         #[cfg(test)]
         PLAN_OWNER_SCANS.with(|scans| scans.set(scans.get() + 1));
-        self.travel.planned.end_refusals(
+        if self.travel.planned.end_refusals(
             |planned| !book.events.iter().any(|event| event.id == planned.journey),
             |planned| planned.live,
-        );
-        self.travel.followed = None;
+        ) > 0
+        {
+            self.travel.followed = None;
+        }
     }
 
     /// Row 123: an act on the plan line of `note` and `journey` ends that line's refused Undo,
     /// whatever the act does; another line's answer stays.
     fn end_plan_answer_of(&mut self, note: Uuid, journey: &str) {
-        self.travel.planned.end_refusals(
+        if self.travel.planned.end_refusals(
             |planned| planned.note == note && planned.journey == journey,
             |planned| planned.live,
-        );
-        self.travel.followed = None;
+        ) > 0
+        {
+            self.travel.followed = None;
+        }
     }
 
     /// Row 123: Timeline's view of the plan of `journey`'s session, for its check results'
