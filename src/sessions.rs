@@ -330,7 +330,7 @@ pub(crate) fn remember_notes(folder: &Path, notes: &[Note]) -> Result<(), String
     if fs::read(&path).is_ok_and(|bytes| bytes == text.as_bytes()) {
         return Ok(());
     }
-    replace_file(&path, &text)
+    replace_file_io(&path, &text).map_err(|error| not_saved(&error))
 }
 
 /// Notes that claim a session but cannot be read, by file name. Their files are safe.
