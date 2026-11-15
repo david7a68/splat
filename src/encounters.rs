@@ -1563,7 +1563,8 @@ fn roster_summary(
     known: &BTreeMap<String, String>,
 ) -> crate::difficulty::Summary {
     let mut party = 0;
-    let mut creatures = std::collections::BTreeMap::<String, usize>::new();
+    // By the words shown; each with the member made once from its shown and base names.
+    let mut creatures = std::collections::BTreeMap::<String, (usize, (String, String))>::new();
     for slot in &setup.roster {
         let side = slot
             .overrides
@@ -1585,21 +1586,29 @@ fn roster_summary(
             );
             // FL2: a renamed creature names its base, as a group's member summary does.
             let shown = groups::shown_name(&slot.overrides, name.clone());
-            let shown = if shown == name {
-                shown
+            let words = if shown == name {
+                shown.clone()
             } else {
                 format!("{shown} (as {name})")
             };
-            *creatures.entry(shown).or_default() += 1;
+            creatures.entry(words).or_insert((0, (shown, name))).0 += 1;
         }
     }
     // G118: typed parts, never built words, so the difficulty line knows which members the
     // summary shows. FL2: the words are a group's form, `2 × Cinder Wolf, 1 × Ember Cultist`
     // (`Summary::text`): every member with its count, joined by commas, so ` · ` separates
     // facts only.
+    // G118: a renamed member is CALLED by its shown name, the name `roster_name` gives the
+    // difficulty's reason, so the line matches it and does not name it again.
     let members = creatures
-        .into_iter()
-        .map(|(name, count)| crate::difficulty::Member { count, name })
+        .into_values()
+        .map(|(count, (shown, name))| {
+            if shown == name {
+                crate::difficulty::Member::new(count, name)
+            } else {
+                crate::difficulty::Member::renamed(count, &shown, &name)
+            }
+        })
         .collect();
     // Loot alone does not change a creature.
     let changed = setup.roster.iter().any(|slot| {
@@ -1609,7 +1618,10 @@ fn roster_summary(
     crate::difficulty::Summary {
         party,
         members,
-        facts: changed.then(|| "Changed".to_owned()).into_iter().collect(),
+        facts: changed
+            .then_some(crate::difficulty::Fact::Changed)
+            .into_iter()
+            .collect(),
     }
 }
 /// Keep a stat label with its value. A second line can break between facts.
@@ -2952,7 +2964,8 @@ pub struct PlanFight {
     pub id: uuid::Uuid,
     pub name: String,
     pub path: String,
-    pub summary: String,
+    /// Its roster's typed parts (G118), so the plan's row names a member once.
+    pub summary: crate::difficulty::Summary,
     pub difficulty: crate::difficulty::Difficulty,
 }
 /// What the page needs from the story: where each run's event is, and which sessions exist.
@@ -3378,7 +3391,7 @@ impl Encounters {
                     summary: template
                         .summary
                         .as_ref()
-                        .map(|roster| roster.words.clone())
+                        .map(|roster| roster.parts.clone())
                         .unwrap_or_default(),
                     difficulty: template.difficulty.clone(),
                 })
@@ -3902,9 +3915,16 @@ impl Encounters {
         self.group_draft = None;
         self.group_in_plan = false;
         self.snapshot = None;
+        self.forget_ready_lines();
         self.error = None;
         self.refreshing = false;
         self.start_load(ctx, campaign, modules);
+    }
+    /// G118: the Ready rows' kept lines end with the snapshot they were fitted for: at a
+    /// reload or a campaign switch, and when a load fails.
+    fn forget_ready_lines(&mut self) {
+        self.ready_lines = crate::difficulty::Kept::default();
+        self.ready_lines_seen = None;
     }
     fn start_load(&mut self, ctx: &egui::Context, campaign: Campaign, modules: Vec<Module>) {
         let (tx, rx) = mpsc::channel();
@@ -3961,11 +3981,15 @@ impl Encounters {
                             self.note_run_folder(&mut s);
                             self.snapshot = Some(s);
                         }
-                        Err(e) => self.error = Some(e),
+                        Err(e) => {
+                            self.forget_ready_lines();
+                            self.error = Some(e);
+                        }
                     }
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
                     self.pending = None;
+                    self.forget_ready_lines();
                     self.error = Some("Loading stopped. Reload to retry.".into());
                 }
                 Err(mpsc::TryRecvError::Empty) => {}
@@ -4182,7 +4206,10 @@ impl Encounters {
                 self.note_run_folder(&mut snapshot);
                 self.snapshot = Some(snapshot);
             }
-            Err(e) => self.error = Some(e),
+            Err(e) => {
+                self.forget_ready_lines();
+                self.error = Some(e);
+            }
         }
     }
     /// The DM did what the message asked, so it goes.
@@ -11133,6 +11160,58 @@ mod tests {
         assert_eq!(
             summary(&d),
             "1 party · 1 × Alpha (as Wolf), 1 × Rival, 2 × Wolf · Changed"
+        );
+        // G118: the Ready row's line from the roster as the list loads it. No creature here has
+        // a known XP; each is shown, the renamed one too, so none is named after the reason.
+        let snapshot = Snapshot::load(&campaign, &[]).unwrap();
+        let (catalogue, known) = (&snapshot.catalogue, &snapshot.known_creature_names);
+        // This campaign has no party, so the reason is put in by hand, with each foe named as
+        // `roster_difficulty` names it (`roster_name`): the renamed wolf is `Alpha`.
+        let names: Vec<String> = d
+            .setup
+            .roster
+            .iter()
+            .filter(|slot| {
+                let side = slot.overrides.get("side").and_then(Value::as_str);
+                side.unwrap_or(&slot.side).trim() != "party"
+            })
+            .map(|slot| {
+                let entry = slot
+                    .creature
+                    .as_ref()
+                    .and_then(|reference| catalogue.resolve_ref(reference).ok())
+                    .and_then(|id| catalogue.entries.get(&id))
+                    .map(|entry| &entry.entry);
+                roster_name(slot, entry, known)
+            })
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        assert_eq!(names, ["Alpha", "Rival", "Wolf"]);
+        let difficulty = crate::difficulty::Difficulty {
+            unknown: 4,
+            missing: Some(crate::difficulty::Missing {
+                what: crate::difficulty::Unknown::Xp,
+                at: vec![0, 1, 2, 3],
+                names,
+            }),
+            ..Default::default()
+        };
+        let parts = roster_summary(&d.setup, catalogue, known);
+        let line = |room: usize| {
+            crate::difficulty::Line::roster(&difficulty, &parts)
+                .fit(|text| text.chars().count() <= room)
+                .unwrap()
+                .text()
+        };
+        assert_eq!(
+            line(200),
+            "1 party · 1 × Alpha (as Wolf), 1 × Rival, 2 × Wolf · Changed · XP not known"
+        );
+        // Where the summary gave way, the members it no longer shows follow the reason.
+        assert_eq!(
+            line(56),
+            "1 × Alpha (as Wolf), 1 × Rival, … · XP not known: Wolf"
         );
         d.setup.roster.truncate(1);
         slot_override(&mut d, 0, "{side: party}");

@@ -383,12 +383,71 @@ pub struct Line<'a> {
     label: Option<&'static str>,
 }
 
-/// One creature of a roster's summary: how many, and its name as the roster shows it. The name
-/// is an opaque value; it may hold any characters, commas too.
+/// One creature of a roster's summary: how many, its words as the roster shows them, and the
+/// name it is CALLED by (the name a missing-XP reason uses for it). Both come from one
+/// constructor, so they cannot drift: a renamed creature shows `Shade (as Nameless Thing)` and
+/// is called `Shade`. The names are opaque values; they may hold any characters, commas too.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Member {
-    pub count: usize,
-    pub name: String,
+    count: usize,
+    name: String,
+    called: String,
+}
+
+impl Member {
+    /// A creature shown and called by one name.
+    pub fn new(count: usize, name: impl Into<String>) -> Self {
+        let name = name.into();
+        Self {
+            count,
+            called: name.clone(),
+            name,
+        }
+    }
+
+    /// A renamed creature (FL2): shown as `Shade (as Nameless Thing)`, called `Shade`.
+    pub fn renamed(count: usize, shown: &str, base: &str) -> Self {
+        Self {
+            count,
+            name: format!("{shown} (as {base})"),
+            called: shown.to_owned(),
+        }
+    }
+
+    /// The name a reason uses for it, which the line matches against.
+    pub fn called(&self) -> &str {
+        &self.called
+    }
+
+    /// The member as the line shows it: `1,000 × Wolf` (counts grouped, `design::count`).
+    pub fn words(&self) -> String {
+        format!(
+            "{} × {}",
+            crate::design::count(self.count, "", ""),
+            self.name
+        )
+    }
+}
+
+/// A roster's fact after its members. Typed, so that no caller can put roster words here
+/// where the line could not see the members in them.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Fact {
+    /// A creature of the roster is changed from its entry.
+    Changed,
+    /// Built words, for this module's tests of opaque text (`Summary::from_built`).
+    #[cfg(test)]
+    Built(String),
+}
+
+impl Fact {
+    pub fn words(&self) -> &str {
+        match self {
+            Self::Changed => "Changed",
+            #[cfg(test)]
+            Self::Built(words) => words,
+        }
+    }
 }
 
 /// A roster's summary as typed parts, in the line's order: the party count, the members, then
@@ -397,7 +456,7 @@ pub struct Member {
 pub struct Summary {
     pub party: usize,
     pub members: Vec<Member>,
-    pub facts: Vec<String>,
+    pub facts: Vec<Fact>,
 }
 
 impl Summary {
@@ -410,10 +469,10 @@ impl Summary {
             parts.push(party_words(self.party));
         }
         if !self.members.is_empty() {
-            let members: Vec<String> = self.members.iter().map(member_words).collect();
+            let members: Vec<String> = self.members.iter().map(Member::words).collect();
             parts.push(members.join(", "));
         }
-        parts.extend(self.facts.iter().cloned());
+        parts.extend(self.facts.iter().map(|fact| fact.words().to_owned()));
         parts.join(" · ")
     }
 
@@ -442,7 +501,7 @@ impl Summary {
             party,
             members: Vec::new(),
             facts: (!rest.is_empty())
-                .then(|| rest.to_owned())
+                .then(|| Fact::Built(rest.to_owned()))
                 .into_iter()
                 .collect(),
         }
@@ -457,10 +516,6 @@ impl From<&Summary> for Summary {
 
 fn party_words(party: usize) -> String {
     crate::design::count(party, "party", "party")
-}
-
-fn member_words(member: &Member) -> String {
-    format!("{} × {}", member.count, member.name)
 }
 
 /// Arrivals' heading line of a group, after its name (the name is the heading's own and never
@@ -605,10 +660,10 @@ impl<'a> Line<'a> {
         for (at, member) in summary.members.iter().enumerate() {
             units.push(Unit {
                 before: if at == 0 { " · " } else { ", " },
-                words: member_words(member),
+                words: member.words(),
                 gives: None,
                 summary: true,
-                member: Some(member.name.clone()),
+                member: Some(member.called.clone()),
                 opaque: false,
                 _line: std::marker::PhantomData,
             });
@@ -616,7 +671,7 @@ impl<'a> Line<'a> {
         for fact in &summary.facts {
             units.push(Unit {
                 before: " · ",
-                words: fact.clone(),
+                words: fact.words().to_owned(),
                 gives: None,
                 summary: true,
                 member: None,
@@ -914,13 +969,29 @@ impl<K: std::hash::Hash + Eq + Clone> Kept<K> {
         font: &egui::FontId,
         line: impl FnOnce() -> Line<'a>,
     ) -> Option<Fitted> {
+        self.answer(ui, id, content, room, font, || {
+            line().fit_or_wrap(|text| crate::design::number_width(ui, text, font) <= room)
+        })
+    }
+
+    /// As `fit`, for an owner whose answer is more than the line (G118: the Ready row's
+    /// words where the fight has no form). `answer` runs only when the key changes.
+    pub(crate) fn answer(
+        &mut self,
+        ui: &egui::Ui,
+        id: &K,
+        content: impl std::hash::Hash,
+        room: f32,
+        font: &egui::FontId,
+        answer: impl FnOnce() -> Option<Fitted>,
+    ) -> Option<Fitted> {
         let key = key(ui, (content, room.to_bits(), font));
         if let Some((kept, answer)) = self.fits.get(id)
             && *kept == key
         {
             return answer.clone();
         }
-        let answer = line().fit_or_wrap(|text| crate::design::number_width(ui, text, font) <= room);
+        let answer = answer();
         self.fits.insert(id.clone(), (key, answer.clone()));
         answer
     }
@@ -1084,10 +1155,7 @@ mod tests {
             party,
             members: members
                 .iter()
-                .map(|(count, name)| Member {
-                    count: *count,
-                    name: (*name).to_owned(),
-                })
+                .map(|(count, name)| Member::new(*count, *name))
                 .collect(),
             facts: Vec::new(),
         };
@@ -1241,14 +1309,8 @@ mod tests {
         let comma = Summary {
             party: 5,
             members: vec![
-                Member {
-                    count: 2,
-                    name: "Cinder Wolf".into(),
-                },
-                Member {
-                    count: 1,
-                    name: "Ghost, of the Mill".into(),
-                },
+                Member::new(2, "Cinder Wolf"),
+                Member::new(1, "Ghost, of the Mill"),
             ],
             facts: Vec::new(),
         };
@@ -1380,10 +1442,7 @@ mod tests {
         let summary = Summary {
             party: 5,
             members: (0..40)
-                .map(|at| Member {
-                    count: 1,
-                    name: format!("Creature {at}"),
-                })
+                .map(|at| Member::new(1, format!("Creature {at}")))
                 .collect(),
             facts: Vec::new(),
         };

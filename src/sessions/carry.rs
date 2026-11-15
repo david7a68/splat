@@ -1193,7 +1193,7 @@ mod tests {
             id: uuid::Uuid::nil(),
             name: name.into(),
             path: format!("Encounters/{name}.md"),
-            summary: String::new(),
+            summary: Default::default(),
             difficulty: Default::default(),
         }
     }

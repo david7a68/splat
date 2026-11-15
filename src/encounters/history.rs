@@ -29,6 +29,8 @@ pub(crate) struct Template {
 pub(crate) struct Roster {
     pub parts: crate::difficulty::Summary,
     pub words: String,
+    /// The row's hover: the words, then the difficulty's form (`… · XP not known`).
+    pub hover: String,
     /// The Ready row's line key: a hash of the parts and the fight's difficulty, so the kept
     /// line is built again when, and only when, what it says changes. One hash per build here,
     /// none per frame.
@@ -43,8 +45,13 @@ impl Roster {
         use std::hash::{Hash, Hasher};
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         (&parts, difficulty).hash(&mut hasher);
+        let words = parts.text();
         Self {
-            words: parts.text(),
+            hover: match difficulty.form() {
+                Some(form) if !words.is_empty() => format!("{words} · {form}"),
+                _ => words.clone(),
+            },
+            words,
             key: hasher.finish(),
             parts,
         }

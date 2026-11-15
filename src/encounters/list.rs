@@ -282,6 +282,10 @@ pub(super) fn list_row(
                         // number. Hover and the accessible name keep the whole line (V7).
                         let font = Type::Small.font(ui);
                         let difficulty = line.as_ref().map(|line| line.difficulty);
+                        // G118: the Ready row's whole line is kept with its roster; other rows
+                        // say their detail and form.
+                        let kept_hover = line.as_ref().map(|line| line.roster.hover.as_str());
+                        let ready = line.is_some();
                         let fitted = line.and_then(|line| {
                             let ReadyLine {
                                 id,
@@ -289,18 +293,34 @@ pub(super) fn list_row(
                                 roster,
                                 kept,
                             } = line;
-                            kept.fit(ui, &id, roster.key, room, &font, || {
+                            // Where the fight has no form, the kept answer is the words alone,
+                            // so no frame fits the summary again.
+                            kept.answer(ui, &id, roster.key, room, &font, || {
                                 crate::difficulty::Line::roster(difficulty, &roster.parts)
+                                    .fit(|text| design::number_width(ui, text, &font) <= room)
+                                    .or_else(|| {
+                                        Some(crate::difficulty::Fitted {
+                                            lead: fit_detail(ui, detail, &font, room),
+                                            form: Vec::new(),
+                                            cut: false,
+                                            wrap: false,
+                                        })
+                                    })
                             })
                         });
-                        let form = difficulty.and_then(crate::difficulty::Difficulty::form);
                         let (visible_detail, parts) = match fitted {
+                            Some(fitted) if ready && fitted.form.is_empty() => (fitted.lead, None),
                             Some(fitted) => (fitted.lead, Some(fitted.form)),
                             None => (fit_detail(ui, detail, &font, room), None),
                         };
-                        let whole = match &form {
-                            Some(form) => format!("{detail} · {form}"),
-                            None => detail.to_owned(),
+                        let whole: std::borrow::Cow<'_, str> = match kept_hover {
+                            Some(hover) => hover.into(),
+                            None => {
+                                match difficulty.and_then(crate::difficulty::Difficulty::form) {
+                                    Some(form) => format!("{detail} · {form}").into(),
+                                    None => detail.into(),
+                                }
+                            }
                         };
                         let warning = visible_detail.split(" · ").position(|part| {
                             matches!(part, "Changed on disk" | "Offered in no fight")
@@ -353,8 +373,9 @@ pub(super) fn list_row(
                             );
                         }
                         let Some(parts) = parts else {
-                            let response =
-                                ui.add(egui::Label::new(job).extend()).on_hover_text(&whole);
+                            let response = ui
+                                .add(egui::Label::new(job).extend())
+                                .on_hover_text(&*whole);
                             design::row_detail(ui, &response);
                             design::named(ui, &response, &format!("{name} · {whole}"));
                             return;
@@ -367,7 +388,7 @@ pub(super) fn list_row(
                         let response = if visible_detail == detail {
                             response
                         } else {
-                            response.on_hover_text(&whole)
+                            response.on_hover_text(&*whole)
                         };
                         if let Some(rating) = difficulty.and_then(|d| d.rating.as_ref()) {
                             crate::difficulty::describe(ui, response, rating);
@@ -1125,16 +1146,16 @@ mod iter_2_c_tests {
             party: 5,
             members: members
                 .iter()
-                .map(|&(count, name)| crate::difficulty::Member {
-                    count,
-                    name: name.into(),
-                })
+                .map(|&(count, name)| crate::difficulty::Member::new(count, name))
                 .collect(),
             facts: Vec::new(),
         };
         let summary = roster(&[(1, "Cinder Tyrant"), (2, "Ember Cultist")]);
         let detail = &summary.text();
         assert_eq!(detail, "5 party · 1 × Cinder Tyrant, 2 × Ember Cultist");
+        // The counts in `design::count`'s grouped form, as the summary always said them.
+        assert_eq!(roster(&[(999, "Wolf")]).text(), "5 party · 999 × Wolf");
+        assert_eq!(roster(&[(1000, "Wolf")]).text(), "5 party · 1,000 × Wolf");
         let widths: Vec<f32> = (200..=520).step_by(4).map(|width| width as f32).collect();
         let lines = |rating: &crate::difficulty::Difficulty,
                      summary: &crate::difficulty::Summary,
@@ -1216,14 +1237,18 @@ mod iter_2_c_tests {
             ..Default::default()
         };
         let unknown = lines(&nameless, &roster(&[(1, "Nameless Thing")]), "XP not known");
+        let mut named_after = 0;
         for line in &unknown {
             assert!(line.matches("Nameless Thing").count() <= 1, "{line:?}");
             if line.contains("1 × Nameless Thing") {
                 assert!(line.ends_with(" · XP not known"), "{line:?}");
             } else {
                 assert!(line.contains("XP not known: Na"), "{line:?}");
+                named_after += 1;
             }
         }
+        // The sweep reaches the width where the summary gave way and the name follows.
+        assert!(named_after > 0, "{unknown:?}");
         assert!(
             unknown.contains(&"5 party · 1 × Nameless Thing · XP not known".to_owned()),
             "{unknown:?}"
@@ -1310,10 +1335,7 @@ mod iter_2_c_tests {
             name: name.into(),
             summary: Some(super::super::history::Roster::new(
                 crate::difficulty::Summary {
-                    members: vec![crate::difficulty::Member {
-                        count: 1,
-                        name: "Wolf".into(),
-                    }],
+                    members: vec![crate::difficulty::Member::new(1, "Wolf")],
                     ..Default::default()
                 },
                 &Default::default(),
