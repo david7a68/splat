@@ -4690,6 +4690,9 @@ impl Reader {
         go.and_then(|go| self.settle(go))
     }
 
+    /// The value rows of a campaign entry: Stat block, Place and Part of, each with its Change
+    /// (blocked by its reason while its value is not read). World's reader and Lookup's both
+    /// call this, so the same value shows the same row and the same act in both (FH3, FE15).
     fn relationships(
         &mut self,
         ui: &mut egui::Ui,
@@ -4702,6 +4705,14 @@ impl Reader {
         let stacked = Self::stacked(ui);
         for (key, label) in [("creature", "Stat block"), ("in", "Place")] {
             if key == "creature" && !fights(&item.entry) {
+                continue;
+            }
+            // While the join form is open, its own Stat block row is the one way to set an
+            // unset stat block (review of PR 355), so the reader's row waits.
+            if key == "creature"
+                && reader_field(&item.entry, key).is_none()
+                && self.adding.is_some()
+            {
                 continue;
             }
             let target = if key == "in" {
@@ -4752,7 +4763,9 @@ impl Reader {
                 }
             });
             if key == "in" && self.place_choices_open {
-                let (followed, chosen) = self.place_chooser(ui, item, index, Some(value_width));
+                // World's choice files share the value column; Lookup's measure their own.
+                let column = (!self.compact).then_some(value_width);
+                let (followed, chosen) = self.place_chooser(ui, item, index, column);
                 go = go.or(followed);
                 if let Some(at) = chosen {
                     let path = index.items[at].entry.path.trim_end_matches(".md");
@@ -4960,146 +4973,9 @@ impl Reader {
         let Some(campaign) = campaign.filter(|_| item.is_private()) else {
             return self.join_form(ui, item, index, None);
         };
-        let mut go = None;
-        if self.compact {
-            let mut targets = vec![
-                ("Stat block", index.world_target(&item.entry, "creature")),
-                ("Place", index.place_of(item.entry.id)),
-            ];
-            targets.extend(
-                index
-                    .groups_of(&item.entry)
-                    .iter()
-                    .map(|(_, group)| ("Part of", *group)),
-            );
-            // One value per row, in the label column that the Status row below uses (FF3): every
-            // value of the block starts at one edge. A label with several groups (Part of) is
-            // one row whose links wrap. With no target, no row, so no gap.
-            let mut rows: Vec<(&str, Vec<usize>)> = Vec::new();
-            for (label, at) in targets
-                .into_iter()
-                .filter_map(|(label, target)| target.map(|at| (label, at)))
-            {
-                match rows.last_mut() {
-                    Some((last, ats)) if *last == label => ats.push(at),
-                    _ => rows.push((label, vec![at])),
-                }
-            }
-            let width = self.relationship_value_width(ui, item, index);
-            // An NPC with no stat block says so here too, with its Change, as World's reader
-            // does (SF3): a reader never hides a missing value or the act that sets it.
-            // While the join form is open, its own Stat block row is the one way to set it
-            // (review of PR 355), so the reader's row waits.
-            if fights(&item.entry)
-                && reader_field(&item.entry, "creature").is_none()
-                && self.adding.is_none()
-            {
-                ui.push_id("creature", |ui| {
-                    if Self::relationship_row(
-                        ui,
-                        "Stat block",
-                        width,
-                        |ui| {
-                            ui.label(Type::Small.rich(ui, "not set").color(colors().muted));
-                        },
-                        None,
-                    ) {
-                        self.picker = Some(Picker {
-                            key: "creature",
-                            focus: true,
-                            ..Default::default()
-                        });
-                    }
-                });
-                if self.picker.as_ref().is_some_and(|p| p.key == "creature")
-                    && let Some(value) = self.pick(ui, item, index, campaign, None)
-                {
-                    return self.change(campaign, item, index, "creature", value);
-                }
-            }
-            for (label, ats) in rows {
-                Self::value_row(
-                    ui,
-                    label,
-                    width,
-                    |ui| {
-                        for (n, at) in ats.into_iter().enumerate() {
-                            if n > 0 {
-                                ui.label(Type::Small.rich(ui, "·").color(colors().muted));
-                            }
-                            if design::link(ui, &index.items[at].entry.name).clicked() {
-                                go = Some(Go::Item(at, None));
-                            }
-                        }
-                    },
-                    None,
-                );
-            }
-            // A link fault reads as every value does (FD6): the muted label in its column, then
-            // the value in the warning tone, `⚠ <name> · Not found`.
-            if broken_links(item, index).contains(&LinkProblem::StatBlockNotFound) {
-                let name = reader_field(&item.entry, "creature")
-                    .map(|v| link_name(v, "Stat block"))
-                    .unwrap_or_else(|| "Stat block".into());
-                // Its name and `Not found` share a line when they fit, as before (FD6).
-                let room = width.max(missing_width(ui, &name, false));
-                Self::value_row(
-                    ui,
-                    "Stat block",
-                    room,
-                    |ui| missing_link(ui, &name, false),
-                    None,
-                );
-            }
-            let choices = index.place_choices(item.entry.id);
-            if !choices.is_empty() {
-                let name = world_field(&item.entry, "in")
-                    .map(|value| link_name(value, "Place"))
-                    .unwrap_or_default();
-                let mut open = false;
-                Self::value_row(
-                    ui,
-                    "Place",
-                    width,
-                    |ui| {
-                        open =
-                            warning_link(ui, &place_choices_words(&name, choices.len())).clicked();
-                    },
-                    None,
-                );
-                if open {
-                    self.place_choices_open = !self.place_choices_open;
-                }
-                if self.place_choices_open {
-                    let (followed, chosen) = self.place_chooser(ui, item, index, None);
-                    go = go.or(followed);
-                    if let Some(at) = chosen {
-                        let path = index.items[at].entry.path.trim_end_matches(".md");
-                        return self.change(
-                            campaign,
-                            item,
-                            index,
-                            "in",
-                            format!("[[{path}]]").into(),
-                        );
-                    }
-                }
-            }
-            if index.place_of(item.entry.id).is_none()
-                && index.place_choices(item.entry.id).is_empty()
-                && let Some(place) = reader_field(&item.entry, "in").and_then(Value::as_str)
-            {
-                let name = place.trim_matches(['[', ']']);
-                let room = width.max(missing_width(ui, name, false));
-                Self::value_row(ui, "Place", room, |ui| missing_link(ui, name, false), None);
-            }
-            if go.is_some() {
-                return go;
-            }
-        }
-        if !self.compact
-            && let Some(go) = self.relationships(ui, item, index, campaign)
-        {
+        // World's reader and Lookup's show the same value rows, each with its Change, from one
+        // function (`relationships`): a value's state decides its row, not the reader.
+        if let Some(go) = self.relationships(ui, item, index, campaign) {
             return Some(go);
         }
         // Status and its Change show in both readers, World's and Lookup's: one act, one write
@@ -5986,6 +5862,97 @@ mod tests {
             actual, expected,
             "D2-compact: empty optional links have no warning; unresolved links keep it"
         );
+    }
+
+    /// Round 30 FH3, SH2, AH3, FB14, FE15: World's reader and Lookup's show the same value rows
+    /// with the same Change for one entry, whatever the value's state: set, not found, unset,
+    /// or a Part of list that was not read.
+    #[test]
+    fn s30_both_readers_show_the_same_value_rows_and_change() {
+        let dir = tempfile::tempdir().unwrap();
+        let campaign = sample_campaign(dir.path());
+        create_entry(&campaign, "Gate", "location").unwrap();
+        create_entry(&campaign, "Ash Guild", "faction").unwrap();
+        let rows = |head: &str, unread: bool| {
+            let id = create_entry(&campaign, "Rook", "npc").unwrap();
+            let path = dir.path().join("NPCs/Rook.md");
+            let file =
+                fs::read_to_string(&path)
+                    .unwrap()
+                    .replacen("---\n", &format!("---\n{head}"), 1);
+            fs::write(&path, file).unwrap();
+            let index = ContentIndex::load(&[], Some(&campaign)).unwrap();
+            let item = &index.items[index.position(id).unwrap()];
+            let drawn = [false, true].map(|compact| {
+                let mut reader = Reader {
+                    compact,
+                    sides: Some(Vec::new()),
+                    group_fault: unread.then(|| GroupFault {
+                        id,
+                        generation: 0,
+                        unread: Some(fields::Unread {
+                            line: 9,
+                            reason: "Line 9: Part of was not read.".into(),
+                            whole: "Line 9: Part of was not read.".into(),
+                        }),
+                        notices: Vec::new(),
+                        entry: None,
+                    }),
+                    ..Default::default()
+                };
+                let ctx = egui::Context::default();
+                crate::design::theme::install(&ctx);
+                ctx.enable_accesskit();
+                let output = ctx.run(Default::default(), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        reader.entry_controls(ui, item, &index, Some(&campaign));
+                    });
+                });
+                let nodes = output.platform_output.accesskit_update.unwrap().nodes;
+                let mut changes: Vec<String> = nodes
+                    .iter()
+                    .filter_map(|(_, node)| node.label())
+                    .filter(|label| label.starts_with("Change "))
+                    .map(str::to_owned)
+                    .collect();
+                changes.sort();
+                changes
+            });
+            fs::remove_file(&path).unwrap();
+            drawn
+        };
+        for (head, unread, wanted) in [
+            // A set place and group, and an NPC's unset stat block.
+            (
+                "splat_in: '[[Gate]]'\nsplat_part_of: ['[[Ash Guild]]']\n",
+                false,
+                &[
+                    "Change Part of",
+                    "Change Place",
+                    "Change Stat block",
+                    "Change Status",
+                ][..],
+            ),
+            // A stat block and a place that are not found.
+            (
+                "splat_in: '[[Nowhere]]'\nsplat_stat_block: '[[Nobody]]'\n",
+                false,
+                &["Change Place", "Change Stat block", "Change Status"][..],
+            ),
+            // A Part of list that was not read keeps its row and its blocked Change.
+            (
+                "",
+                true,
+                &["Change Part of", "Change Stat block", "Change Status"][..],
+            ),
+        ] {
+            let [page, lookup] = rows(head, unread);
+            assert_eq!(page, wanted, "S30-rows-fixture: World's rows for {head:?}");
+            assert_eq!(
+                lookup, page,
+                "S30-rows: Lookup's rows for {head:?} are World's"
+            );
+        }
     }
 
     #[test]
