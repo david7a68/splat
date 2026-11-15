@@ -8290,6 +8290,7 @@ mod tests {
     /// keeps `This note`.
     #[test]
     fn a_session_note_warning_names_its_note_in_every_state() {
+        use egui_kittest::kittest::Queryable;
         let folder = tempfile::tempdir().unwrap();
         let path = folder.path().join("Session 1 - Ash.md");
         fs::write(&path, "---\nsession_id: 1\n---\n# Ash\n").unwrap();
@@ -8310,7 +8311,11 @@ mod tests {
             harness.run_steps(2);
             let shown: Vec<String> = harness
                 .query_all_by_label_contains("The note of ")
-                .map(|node| node.label().unwrap_or_default())
+                .map(|node| {
+                    node.label()
+                        .map(|label| label.to_string())
+                        .unwrap_or_default()
+                })
                 .collect();
             let unnamed = harness
                 .query_all_by_label_contains("This note ")
