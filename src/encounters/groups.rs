@@ -3966,7 +3966,8 @@ fn unread_member(
         |cause| member_fault(&name, Some(&base_name), Some(member.flag.line), cause),
     );
     let help = member.flag.help();
-    design::message_with_actions(ui, Tone::Warning, &words, |ui| {
+    // R41: the tone of the fault the list and Arrivals give this row (`FaultKind::Unreadable`).
+    design::message_with_actions(ui, FaultKind::Unreadable.tone(), &words, |ui| {
         if !help.is_empty() {
             design::help(ui, help);
         }
@@ -4027,9 +4028,9 @@ fn unread_member(
     if let Some((repair_line, block)) = &mut draft.repair
         && *repair_line == line
     {
-        // An unread value is a message, as every other unread value is: a warning mark and bar,
-        // and words in text colour.
-        let unread = design::small_message(ui, Tone::Warning, &unread_changes(&raw));
+        // An unread value is a message, as every other unread value is: a mark and bar in the
+        // unread row's tone (R41: an error), and words in text colour.
+        let unread = design::small_message(ui, FaultKind::Unreadable.tone(), &unread_changes(&raw));
         if ui
             .data_mut(|data| data.remove_temp::<bool>(egui::Id::new(("unread_form_opened", line))))
             .is_some()

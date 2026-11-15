@@ -592,7 +592,8 @@ pub fn run(d: &mut Driver<'_>) {
             ),
         );
     }
-    // FD2: the unread value is a warning message, and its example starts at its words.
+    // FD2: the unread value is a message, and its example starts at its words. s30 B11 F2 (R41,
+    // lead ruling): an unread member row is unreadable data, so the message is an error.
     for size in [SMALL, DEFAULT, (1920.0, 1080.0)] {
         let (tones, words, example) = d.at_size(size, |d| {
             let words = super::glyph_spans(d, "Changes “HP lots” not read.", "Changes");
@@ -608,7 +609,7 @@ pub fn run(d: &mut Driver<'_>) {
         );
         d.observe(
             "iter-22-B-FD2",
-            tones == ["warning"]
+            tones == ["error"]
                 && colour == Some(crate::design::colors().text)
                 && words
                     .first()
@@ -931,6 +932,34 @@ pub fn run(d: &mut Driver<'_>) {
                 .any(|row| row.starts_with("Kestrel Dunmoor") && !row.contains("not read"))
             && d.visible_text("Line\u{a0}20\u{a0}not\u{a0}read"),
         format!("Rows from line 20 say so, others do not: {marked:?} of {rows:?}"),
+    );
+    // s30 B11 F2 (R41, lead ruling): run setup says the unread roster row as an error, in its
+    // cause and in the row's own mark, as the encounter editor and Save's reason do.
+    let cause = super::tones_beside(
+        d,
+        "Ember Cultist · line 20: The change “HP lots” was not read",
+    );
+    let mut mark = Vec::new();
+    d.each_painted_text(|text, clip| {
+        let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+        if clip.intersects(rect) {
+            for section in &text.galley.job.sections {
+                if text.galley.job.text[section.byte_range.clone()]
+                    .contains("Line\u{a0}20\u{a0}not")
+                {
+                    mark.push(section.format.color);
+                }
+            }
+        }
+    });
+    d.observe(
+        "s30-B11-F2-run-setup",
+        cause == ["error"]
+            && !mark.is_empty()
+            && mark
+                .iter()
+                .all(|color| *color == crate::design::colors().result.error),
+        format!("Run setup: the cause {cause:?}, the row marks' colours {mark:?}"),
     );
     // iter-26-R FA11: the setup file line names the file by its path in the campaign, as the
     // encounter editor does.

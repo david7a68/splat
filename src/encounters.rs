@@ -371,15 +371,16 @@ fn unread_rows_found(reason: String) -> design::save_row::Diagnosis<'static> {
     design::save_row::Diagnosis::refused(reason)
 }
 
-/// The tone of every place that says an unread roster row: its diagnosis's.
-fn unread_row_tone() -> Tone {
+/// The tone of every place that says an unread roster row: its diagnosis's. Run setup reads it
+/// too.
+pub(crate) fn unread_row_tone() -> Tone {
     unread_rows_found(String::new())
         .tone()
         .unwrap_or(Tone::Error)
 }
 
 /// The icon and colour of that tone inside the row's muted words, as `design::message` draws it.
-fn unread_row_mark() -> (&'static str, egui::Color32) {
+pub(crate) fn unread_row_mark() -> (&'static str, egui::Color32) {
     match unread_row_tone() {
         Tone::Error => (icons::ERROR, colors().result.error),
         _ => (icons::WARN, colors().result.warning),

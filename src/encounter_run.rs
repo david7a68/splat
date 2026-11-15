@@ -173,16 +173,19 @@ pub(crate) enum FaultKind {
     NotInPackages,
     /// The member's changes make a creature that cannot be, such as a maximum HP below 1.
     InvalidChange,
-    /// The member can be read but not run: a D&D Beyond sheet, no maximum HP, an unread row.
+    /// The member can be read but not run: a D&D Beyond sheet, no maximum HP.
     CannotJoin,
+    /// The member's row, or its creature's file, is there and cannot be read (R41, lead ruling
+    /// s30 B11): an error wherever it shows.
+    Unreadable,
 }
 
 impl FaultKind {
-    /// An invalid value is an error wherever it shows. A member that is only left out is a
-    /// warning: the group still loads, and its other members can join.
+    /// An invalid value and unreadable data are errors wherever they show (R41). A member that is
+    /// only left out is a warning: the group still loads, and its other members can join.
     pub(crate) fn tone(self) -> crate::design::Tone {
         match self {
-            Self::InvalidChange => crate::design::Tone::Error,
+            Self::InvalidChange | Self::Unreadable => crate::design::Tone::Error,
             Self::NotInPackages | Self::CannotJoin => crate::design::Tone::Warning,
         }
     }
