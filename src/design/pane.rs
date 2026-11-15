@@ -121,6 +121,9 @@
 
 pub use super::components::Footer;
 use super::{layout::ScrollColumn, tokens::S};
+
+/// The whole-block plan of a body and its index (layout step 3a; step 3b draws from it).
+mod plan;
 use eframe::egui::{self, Id, LayerId, Rect, Sense, Ui, pos2, vec2};
 
 /// What a pane's body is, for the footer's place.
@@ -2174,6 +2177,185 @@ mod row_cut_tests {
         assert!(
             plain_fills_cut > 0,
             "n12-plain-fills: with no edge a `Fills` column keeps its plain cut"
+        );
+
+        // Migration-32 layout step 3a: the same rule from the whole-block plan, before anything
+        // paints (`plan`). Checked against the blocks' own spans, never against the mask itself.
+        use super::plan::{Block, BlockPlan, MeasureEnv, PlanState, Row};
+        // Whether block `at` lies whole in the view.
+        let inside = |plan: &BlockPlan, at: usize, offset: f32, view: f32| {
+            let (top, end) = plan.span(at);
+            top >= offset - 0.5 && end <= offset + view + 0.5
+        };
+        // I1 at one offset and view: a block that fits is eligible exactly when it is whole in
+        // the view; nothing eligible lies outside the view; a view that holds a whole block that
+        // fits has eligible blocks.
+        let i1 = |plan: &BlockPlan, offset: f32, view: f32, case: &str| {
+            let mask = plan.mask("plan_test", offset, view);
+            let mut any_whole = false;
+            for at in 0..plan.len() {
+                let (top, end) = plan.span(at);
+                let whole = inside(plan, at, offset, view);
+                any_whole |= whole && end - top <= view;
+                let eligible = mask
+                    .eligible
+                    .is_some_and(|(from, to)| top >= from - 0.5 && end <= to + 0.5);
+                if end - top <= view + 0.5 {
+                    assert_eq!(
+                        (eligible, mask.whole.contains(&at)),
+                        (whole, whole),
+                        "plan-i1 {case}: block {at} {top}..{end} at offset {offset} in a view of {view}: {mask:?}"
+                    );
+                }
+            }
+            if let Some((from, to)) = mask.eligible {
+                assert!(
+                    from >= offset - 0.5 && to <= offset + view + 0.5,
+                    "plan-i1 {case}: eligible {from}..{to} lies in the view {offset}+{view}"
+                );
+            }
+            assert!(
+                !any_whole || !mask.whole.is_empty(),
+                "plan-i1 {case}: a whole block at offset {offset} in {view} is eligible: {mask:?}"
+            );
+            mask
+        };
+        let mut content = crate::design::memo::Revised::new(
+            std::iter::once(Block::Section(Row::TwoLine))
+                .chain(std::iter::repeat_n(Block::Row(Row::TwoLine), 29))
+                .chain([Block::Section(Row::Empty)])
+                .chain(std::iter::repeat_n(Block::Row(Row::OneLine), 10))
+                .collect::<Vec<_>>(),
+        );
+        let env = MeasureEnv {
+            width: 600.0,
+            fonts: 1,
+            scale: 1.0,
+        };
+        let mut state = PlanState::new("plan_test");
+        let plan = state.plan(&content, env);
+        let n = plan.len();
+        let extent = plan.extent();
+        assert_eq!(n, 41, "plan-setup: 41 blocks");
+        for view in [100.0, 300.0, 333.0] {
+            // Top and bottom edges at every offset, with a footer that comes, grows and goes
+            // (the view shrinks and comes back; the plan does not change).
+            let mut offset = 0.0;
+            while offset <= plan.max_offset(view) {
+                i1(plan, offset, view, "sweep");
+                offset += 7.0;
+            }
+            // I2: the native range is the whole extent, whatever the mask; at the largest offset
+            // the last block is whole and eligible.
+            let last = plan.max_offset(view);
+            let mask = i1(plan, last, view, "max offset");
+            assert!(
+                (last - (extent - view)).abs() <= 0.5
+                    && mask.whole.end == n
+                    && plan.extent() == extent,
+                "plan-i2: at the largest offset {last} of {extent} in {view} the last block is whole: {mask:?}"
+            );
+        }
+        // A section taller than the view splits at its heading (ruling L6); a row taller than
+        // the view is a counted `TooTall`, never eligible.
+        let section = plan.span(0).1;
+        let split = plan.mask("plan_test", 0.0, section - 10.0);
+        let row_end = plan.span(1).1;
+        assert!(
+            split.whole.is_empty()
+                && split
+                    .eligible
+                    .is_some_and(|(from, to)| from == 0.0 && to < section)
+                && split.too_tall.is_none(),
+            "plan-l6: a section of {section} in a view of {} shows its heading whole: {split:?}",
+            section - 10.0
+        );
+        let tall = plan.mask("plan_test", section, 30.0);
+        assert!(
+            tall.eligible.is_none() && tall.too_tall.is_some_and(|tall| tall.block == 1),
+            "plan-l6: a row of {} in a view of 30 is too tall: {tall:?} (ends {row_end})",
+            row_end - section
+        );
+
+        // Ruling L7: two 90 px blocks in a 100 px view at offset 40 leave neither whole. The
+        // offset stays, the diagnostic is there, and its routes show each block whole.
+        let pair = BlockPlan::of_heights(&[(90.0, None), (90.0, None)]);
+        let mask = i1(&pair, 40.0, 100.0, "90/100/40");
+        let gap = mask
+            .no_whole
+            .expect("plan-l7: the 90/100/40 case reports no whole block");
+        assert_eq!(
+            (gap.offset, gap.view, gap.above, gap.below),
+            (
+                40.0,
+                100.0,
+                (0, 90.0, Some(0.0)),
+                Some((1, 90.0, Some(80.0)))
+            ),
+            "plan-l7: the diagnostic names the offset, the view and both blocks with their routes"
+        );
+        for (at, route) in [(0, 0.0), (1, 80.0)] {
+            assert_eq!(
+                i1(&pair, route, 100.0, "route").whole,
+                at..at + 1,
+                "plan-l7: the route {route} shows block {at} whole"
+            );
+        }
+
+        // I12 and M6: a quiet frame (same content, same environment) measures nothing and a
+        // mask reads O(log n) entries; a new width and a new content revision measure again.
+        let quiet = state.work();
+        assert_eq!(
+            (quiet.builds, quiet.blocks_measured),
+            (1, n),
+            "plan-i12: one plan"
+        );
+        for frame in 0..10 {
+            let _ = state.plan(&content, env);
+            let mask = state
+                .mask(7.0 * frame as f32, 300.0)
+                .expect("plan-i12: a mask");
+            assert!(
+                mask.read <= 2 * (usize::BITS - n.leading_zeros()) as usize + 2,
+                "plan-i12: a mask reads O(log n) entries: {}",
+                mask.read
+            );
+        }
+        let after = state.work();
+        assert_eq!(
+            (after.builds, after.blocks_measured, after.bytes_indexed),
+            (quiet.builds, quiet.blocks_measured, quiet.bytes_indexed),
+            "plan-i12: ten quiet frames measure and index nothing"
+        );
+        let wider = MeasureEnv {
+            width: 640.0,
+            ..env
+        };
+        let _ = state.plan(&content, wider);
+        assert_eq!(
+            state.work().builds,
+            2,
+            "plan-m6: a new width measures the plan again"
+        );
+        // Content that shrinks while scrolled: the new revision measures again, the offset is
+        // kept in the new range (never snapped), and there the last block is whole.
+        let far = state.plan(&content, wider).max_offset(300.0);
+        content.revise(|blocks| {
+            blocks.truncate(12);
+            crate::design::memo::Changed::Yes
+        });
+        let shrunk = state.plan(&content, wider);
+        let kept = shrunk.clamp(far, 300.0);
+        assert!(
+            shrunk.len() == 12
+                && kept == shrunk.max_offset(300.0)
+                && i1(shrunk, kept, 300.0, "shrunk").whole.end == 12,
+            "plan-shrink: offset {far} kept at {kept} in the shrunk content, its last block whole"
+        );
+        assert_eq!(
+            state.work().builds,
+            3,
+            "plan-m6: a new content revision measures again"
         );
     }
 
