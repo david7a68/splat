@@ -194,8 +194,8 @@ mod refusal;
 pub(crate) use projection::work as projection_work;
 pub use projection::{Mismatch, Projection, Retained};
 pub use refusal::{
-    Cause, Change, FailedAct, Fallback, File, Folder, Kind, Name, Part, Recovery, Refusal, Rows,
-    Step, Thing, Way,
+    AtLimit, Cause, Change, FailedAct, Fallback, File, Folder, Kind, Limit, Name, Part, Recovery,
+    Refusal, Rows, RunRule, Step, Thing, Way,
 };
 
 /// A new order for an act done now: a result recorded, an Undo attempt refused.
@@ -1699,6 +1699,10 @@ mod suppressions;
 ///   part's own examples and tests. The text count sees a call written by this path, not one
 ///   through an alias of the type or a bare function reference: that gap closes when the path
 ///   becomes a Clippy ban after the callers move (the inventory's closing rule).
+/// - `Refusal::at_limit(`: a refusal with no next step (rulings M13, M15), only at a limit the DM
+///   cannot change (`design::results::Limit`: a tracker's `min`, every name rolled, the run rule
+///   after the fight's encounter was deleted). Each production use is a reviewed raise of its
+///   file's row; the part's own doc test and test hold the rest.
 #[cfg(test)]
 pub(crate) type Staged = (&'static str, &'static str, &'static [(&'static str, usize)]);
 
@@ -1818,6 +1822,11 @@ pub(crate) const STAGED: &[Staged] = &[
             ("src/world.rs", 1),
             ("src/world/repair.rs", 1),
         ],
+    ),
+    (
+        "Refusal::at_limit(",
+        "A refusal ends at its cause only at a limit the DM cannot change: a tracker's `min`, every name rolled (M13), or the run rule after the fight's encounter was deleted (M15). A fault in the tracker rules, and every other cause, gets its next step: `Refusal::new`.",
+        &[("src/design/results/refusal.rs", 5)],
     ),
 ];
 
