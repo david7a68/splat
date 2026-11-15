@@ -12501,6 +12501,38 @@ pub fn library_file_fault(d: &mut Driver<'_>) {
                 && d.has("Technical details"),
             "The draft's choices never save over the unreadable file",
         );
+        // Lead ruling (B2, library-file-fault 02): the body states the cause and its choices,
+        // so the toolbar adds no line for the draft; its waiting actions cite the body on hover
+        // and as their accessible description; the draft's editor is whole in view.
+        let toolbar_line = d.painted_rect_in(
+            crate::design::save_row::CHANGED_ON_DISK,
+            egui::Rect::EVERYTHING,
+        );
+        let editor = d
+            .nodes()
+            .into_iter()
+            .find(|node| node.role == egui::accesskit::Role::MultilineTextInput);
+        let cites = d
+            .descriptions()
+            .iter()
+            .any(|words| words == crate::design::save_row::CHANGED_ON_DISK);
+        d.observe(
+            "s30-B2-body-states-cause",
+            d.visible_text(&conflict)
+                && d.has("Try again")
+                && toolbar_line.is_none()
+                && cites
+                && editor.as_ref().is_some_and(|editor| {
+                    editor.shown.min.distance(editor.rect.min) <= 0.5
+                        && editor.shown.max.distance(editor.rect.max) <= 0.5
+                        && editor.rect.bottom() + crate::design::S <= d.window_size().1
+                }),
+            format!(
+                "The body says {conflict:?} with its choices; no toolbar line ({toolbar_line:?}); \
+                 the actions cite it ({cites}); the editor is whole: {:?}",
+                editor.as_ref().map(|editor| (editor.rect, editor.shown))
+            ),
+        );
     });
     assert!(d.app_mut().library.dirty(), "the draft stays");
     assert_eq!(fs::read(&path).unwrap(), not_text);

@@ -380,7 +380,12 @@ impl<'a, A: Copy> ReaderToolbar<'a, A> {
             .iter()
             .any(|action| action.availability == Availability::Draft);
         let layout = row(source);
-        if layout == DraftRow::None && cites && held {
+        // With no save row, the draft's reason goes under the toolbar, unless the draft's own
+        // state says the file changed on disk: then the comparison or fault body that owns the
+        // pane states the cause and its choices in painted words, and the actions cite it on
+        // hover and as their accessible description, with no second line (lead ruling on
+        // library-file-fault 02). No caller can choose this: it comes from `DraftState` alone.
+        if layout == DraftRow::None && cites && held && !on_disk {
             blocked_reason(ui, Some(long));
         }
         between(ui);

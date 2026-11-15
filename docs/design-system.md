@@ -385,7 +385,9 @@ between entry kinds or with the count of actions after it. Back shows its key hi
 and a `More` fit; else it drops the hint. The actions follow Back when they fit, else they fold into quiet More
 at the row's right end. A steady reason an action waits for (no place to copy to) is painted once under the row; the
 open draft's reason is painted once in the slot under the save row, its room kept while the draft has no changes,
-or under the row when the pane has no save row. Every toolbar action, Make NPC note and the actions in More included, is a Read control
+or under the row when the pane has no save row. When the file changed on disk, the comparison or fault body that
+owns the pane states the cause and its choices, so the toolbar adds no line: its waiting actions cite the body on
+hover and as their accessible description. Every toolbar action, Make NPC note and the actions in More included, is a Read control
 (28 px), so the toolbar row has one height and a campaign creature's title sits where a campaign spell's does. Lookup keeps its Back hint; its Back is a Read control (28 px), as its title line's icon buttons are, so the title line has one height with or without Back and the search field below never moves. Both use Alt+Left, and Alt+Right for Forward, which has no button. Lookup takes the key when focus is there. Beside the Library, the mouse's Back and Forward buttons act on the side under the pointer.
 
 Library omits `Library / <kind>` above the title. Its kind line does not repeat the package name: where two
